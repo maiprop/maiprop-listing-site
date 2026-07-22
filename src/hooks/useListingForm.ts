@@ -36,6 +36,10 @@ import {
   parseMutationInput,
 } from "@/lib/mutationSchemas";
 import { calculatePricePerSqm, positiveFiniteNumber } from "@/lib/priceCalculations";
+import {
+  createListingForUser,
+  updateListingForUser,
+} from "@/hooks/listingManagementBoundary";
 
 // Re-export the types so existing callers (`import { type ListingFormData }
 // from "@/hooks/useListingForm"`) keep working.
@@ -578,23 +582,12 @@ export function useListingForm(options?: UseListingFormOptions) {
       let savedListing: { id: string };
       if (isEditMode) {
         if (!listingId) throw new Error(tr("createListing.validation.missingListing", "Listing could not be loaded for editing"));
-        const { data, error } = await supabase
-          .from("listings")
-          .update(validatedPayload as ListingUpdate)
-          .eq("id", listingId)
-          .eq("owner_id", user.id)
-          .select()
-          .single();
-        if (error) throw error;
-        savedListing = data as { id: string };
+        savedListing = await updateListingForUser(
+          listingId,
+          validatedPayload as ListingUpdate,
+        );
       } else {
-        const { data, error } = await supabase
-          .from("listings")
-          .insert(validatedPayload as ListingInsert)
-          .select()
-          .single();
-        if (error) throw error;
-        savedListing = data as { id: string };
+        savedListing = await createListingForUser(validatedPayload as ListingInsert);
       }
 
       const additionalImages = images.filter(img => img.url !== coverImageUrl && !img.uploading && !img.error);

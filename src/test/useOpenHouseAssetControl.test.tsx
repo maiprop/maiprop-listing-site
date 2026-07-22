@@ -930,7 +930,7 @@ describe("useRevealAllOffers", () => {
     const eq = vi.fn().mockResolvedValue({ error: null });
     const inFn = vi.fn().mockReturnValue({ eq });
     fromMock.mockImplementation((table: string) => {
-      if (table === "listings") {
+      if (table === "listing_management_catalogue") {
         return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) };
       }
       if (table === "open_house_offers") {

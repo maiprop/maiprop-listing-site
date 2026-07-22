@@ -26,7 +26,6 @@ type ListingRowWithOwner = Database["public"]["Tables"]["listings"]["Row"] & {
   listing_images?: { url: string; sort_order: number }[];
 };
 
-const LISTING_CARD_IMAGE_LIMIT = 3;
 const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
 const LISTING_PROJECT_CARD_SELECT = [
   "name",
@@ -85,7 +84,7 @@ const LISTING_CARD_SELECT = [
   `project:projects!listings_project_id_fkey(${LISTING_PROJECT_CARD_SELECT})`,
 ].join(",");
 
-const LISTING_CARD_SELECT_WITH_IMAGES = `${LISTING_CARD_SELECT}, listing_images(url, sort_order)`;
+const LISTING_MANAGEMENT_CARD_SELECT = `${LISTING_CARD_SELECT}, listing_images`;
 const PUBLIC_LISTING_CARD_SELECT = [...LISTING_CARD_SCALAR_COLUMNS, "project", "listing_images"].join(",");
 /** Paginated listings for grid view — loads the first visible cards fast, then fills the 40-card window. */
 export const PAGE_SIZE = 40;
@@ -345,10 +344,8 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   let query = publicQuery;
   if (ownerScoped) {
     const ownerQuery = supabase
-      .from("listings")
-      .select(LISTING_CARD_SELECT_WITH_IMAGES)
-      .order("sort_order", { referencedTable: "listing_images", ascending: true })
-      .limit(LISTING_CARD_IMAGE_LIMIT, { referencedTable: "listing_images" });
+      .from("listing_management_catalogue")
+      .select(LISTING_MANAGEMENT_CARD_SELECT);
     query = ownerQuery as unknown as typeof publicQuery;
   }
 
@@ -824,11 +821,8 @@ const fetchListingById = async (
   }
 
   const { data, error } = await withAbortSignal(supabase
-    .from("listings")
-    .select(`
-      *,
-      listing_images(url, sort_order)
-    `)
+    .from("listing_management_catalogue")
+    .select("*")
     .eq("id", id)
     .maybeSingle(), signal);
 
@@ -836,8 +830,9 @@ const fetchListingById = async (
   if (error) throw error;
   if (!data) return null;
 
-  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(data.owner_id, signal);
-  return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
+  const row = data as unknown as Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>;
+  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(row.owner_id, signal);
+  return normalizeListingWithJoins({ ...row, profiles, ownerParticipantType });
 };
 
 export const useListing = (id: string, options: UseListingOptions = {}) => {

@@ -597,14 +597,36 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: accessibleListing, error: listingAccessError } = await callerSupabase
-      .from("listings")
-      .select("id,address,city,latitude,longitude,sqm,property_type,floor,year_built")
+    const listingSelect = "id,address,city,latitude,longitude,sqm,property_type,floor,year_built";
+    const { data: publicListing, error: publicListingError } = await callerSupabase
+      .from("public_listing_catalogue")
+      .select(listingSelect)
       .eq("id", listing_id)
       .maybeSingle();
 
+    if (publicListingError) {
+      log.warn("public listing access check failed", {
+        listing_id,
+        error: publicListingError.message,
+      });
+      return new Response(JSON.stringify({ error: "Listing access unavailable" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const privateListingResult = publicListing
+      ? { data: null, error: null }
+      : await callerSupabase
+        .from("listing_management_catalogue")
+        .select(listingSelect)
+        .eq("id", listing_id)
+        .maybeSingle();
+    const accessibleListing = publicListing ?? privateListingResult.data;
+    const listingAccessError = privateListingResult.error;
+
     if (listingAccessError) {
-      log.warn("listing access check failed", {
+      log.warn("private listing access check failed", {
         listing_id,
         error: listingAccessError.message,
       });

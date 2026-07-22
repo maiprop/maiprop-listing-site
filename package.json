@@ -130,6 +130,7 @@
     "perf:k6:baseline": "node scripts/perf-k6-run.mjs --profile baseline_100",
     "perf:k6:growth": "node scripts/perf-k6-run.mjs --profile growth_10x",
     "perf:k6:soak": "node scripts/perf-k6-run.mjs --profile enterprise_soak",
+    "staging:load-dataset": "node scripts/staging-load-dataset.mjs",
     "lighthouse": "lhci autorun",
     "lighthouse:collect": "lhci collect",
     "lighthouse:assert": "lhci assert",

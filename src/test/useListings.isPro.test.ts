@@ -69,7 +69,7 @@ describe("useListing detail loading and owner Pro status", () => {
     };
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "listings") {
+      if (table === "listing_management_catalogue") {
         return mockTableQuery({ data: listingRow, error: null }) as unknown as ReturnType<typeof supabase.from>;
       }
       throw new Error(`unexpected table: ${table}`);
@@ -91,7 +91,7 @@ describe("useListing detail loading and owner Pro status", () => {
     };
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "listings") {
+      if (table === "listing_management_catalogue") {
         return mockTableQuery({ data: listingRow, error: null }) as unknown as ReturnType<typeof supabase.from>;
       }
       if (table === "profiles_public") {
@@ -153,7 +153,7 @@ describe("useListing detail loading and owner Pro status", () => {
 
   it("returns null when the listing does not exist", async () => {
     vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "listings") {
+      if (table === "listing_management_catalogue") {
         return mockTableQuery({ data: null, error: null }) as unknown as ReturnType<typeof supabase.from>;
       }
       throw new Error(`unexpected table: ${table}`);

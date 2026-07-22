@@ -11,15 +11,25 @@ import {
   projectUpdateMutationSchema,
   rowIdSchema,
 } from "@/lib/mutationSchemas";
+import { fetchProjectListingReferences } from "@/lib/listingReferences";
 
 const PROJECT_SELECT = `
   id, owner_id, organization_id, name, description, city, address, municipality, cover_image_url,
   status, latitude, longitude, building_permit_number, developer_company,
   architect_group, construction_company, area_description, permit_approval_date,
   construction_start_date, structural_completion_date, delivery_date,
-  archived_at, created_at, updated_at,
-  listings: listings(id, title, price, sqm, cover_image_url, listing_type, project_id, views_count)
+  archived_at, created_at, updated_at
 `;
+
+async function attachProjectListings<T extends { id: string | null }>(projects: T[]) {
+  const listingRows = await fetchProjectListingReferences(
+    projects.map((project) => project.id),
+  );
+  return projects.map((project) => ({
+    ...project,
+    listings: project.id ? listingRows.get(project.id) ?? [] : [],
+  }));
+}
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useProjects(ownerId?: string) {
@@ -34,7 +44,7 @@ export function useProjects(ownerId?: string) {
       if (ownerId) query = query.eq("owner_id", ownerId);
       const { data, error } = await query;
       if (error) throw error;
-      return data || [];
+      return attachProjectListings(data ?? []);
     },
     enabled: !!user,
     staleTime: USER_SCOPED_QUERY_STALE_TIME,
@@ -53,7 +63,8 @@ export function useProject(id: string | undefined) {
         .eq("id", id)
         .single();
       if (error) throw error;
-      return data;
+      const [project] = await attachProjectListings([data]);
+      return project ?? null;
     },
     enabled: !!id,
     staleTime: USER_SCOPED_QUERY_STALE_TIME,

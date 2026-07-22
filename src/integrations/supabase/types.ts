@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -751,6 +751,20 @@ export type Database = {
             foreignKeyName: "contacts_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
@@ -798,6 +812,20 @@ export type Database = {
           participant_b?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "conversations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "conversations_listing_id_fkey"
             columns: ["listing_id"]
@@ -963,6 +991,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "favorites_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favorites_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "favorites_listing_id_fkey"
             columns: ["listing_id"]
@@ -1425,28 +1467,42 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "leads_listing_id_fkey1"
+            foreignKeyName: "leads_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_listing_id_fkey1"
+            foreignKeyName: "leads_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "public_listing_catalogue"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_professional_id_fkey1"
+            foreignKeyName: "leads_professional_id_fkey"
             columns: ["professional_id"]
             isOneToOne: false
             referencedRelation: "professionals"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_project_id_fkey1"
+            foreignKeyName: "leads_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -1477,6 +1533,20 @@ export type Database = {
           url?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "listing_images_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_images_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "listing_images_listing_id_fkey"
             columns: ["listing_id"]
@@ -1583,6 +1653,20 @@ export type Database = {
             foreignKeyName: "listing_promotion_allocations_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_promotion_allocations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_promotion_allocations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
@@ -1649,6 +1733,20 @@ export type Database = {
           viewer_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "listing_view_events_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_view_events_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "listing_view_events_listing_id_fkey"
             columns: ["listing_id"]
@@ -2056,102 +2154,49 @@ export type Database = {
         Row: {
           created_at: string
           email: string
-          follow_up_at: string | null
           followup_step: number
           full_name: string
           id: string
           investment_budget: number
           investment_timeline: string
-          listing_id: string | null
-          message: string | null
           nationality: string
-          notes: string | null
           owner_id: string | null
           phone: string
           preferred_location: string
-          professional_id: string | null
-          project_id: string | null
           property_type: string
-          source: string
           status: string
-          updated_at: string
         }
         Insert: {
           created_at?: string
           email: string
-          follow_up_at?: string | null
           followup_step?: number
           full_name: string
           id?: string
           investment_budget: number
           investment_timeline?: string
-          listing_id?: string | null
-          message?: string | null
           nationality: string
-          notes?: string | null
           owner_id?: string | null
           phone: string
           preferred_location?: string
-          professional_id?: string | null
-          project_id?: string | null
           property_type?: string
-          source?: string
           status?: string
-          updated_at?: string
         }
         Update: {
           created_at?: string
           email?: string
-          follow_up_at?: string | null
           followup_step?: number
           full_name?: string
           id?: string
           investment_budget?: number
           investment_timeline?: string
-          listing_id?: string | null
-          message?: string | null
           nationality?: string
-          notes?: string | null
           owner_id?: string | null
           phone?: string
           preferred_location?: string
-          professional_id?: string | null
-          project_id?: string | null
           property_type?: string
-          source?: string
           status?: string
-          updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "leads_listing_id_fkey"
-            columns: ["listing_id"]
-            isOneToOne: false
-            referencedRelation: "listings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_listing_id_fkey"
-            columns: ["listing_id"]
-            isOneToOne: false
-            referencedRelation: "public_listing_catalogue"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "professionals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       message_attachments: {
         Row: {
@@ -2280,6 +2325,20 @@ export type Database = {
             foreignKeyName: "new_building_leads_new_building_id_fkey"
             columns: ["new_building_id"]
             isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "new_building_leads_new_building_id_fkey"
+            columns: ["new_building_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "new_building_leads_new_building_id_fkey"
+            columns: ["new_building_id"]
+            isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
@@ -2372,6 +2431,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "open_house_offers_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "open_house_offers_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "open_house_offers_listing_id_fkey"
@@ -2503,6 +2576,20 @@ export type Database = {
             foreignKeyName: "open_house_registrations_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "open_house_registrations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "open_house_registrations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
@@ -2569,6 +2656,20 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "open_house_settings_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: true
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "open_house_settings_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: true
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "open_house_settings_listing_id_fkey"
             columns: ["listing_id"]
@@ -3680,6 +3781,20 @@ export type Database = {
             foreignKeyName: "project_units_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_units_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_units_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
@@ -3945,6 +4060,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "property_report_cache_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_report_cache_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "property_report_cache_listing_id_fkey"
             columns: ["listing_id"]
@@ -4252,6 +4381,20 @@ export type Database = {
             foreignKeyName: "usage_ai_valuations_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_ai_valuations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_ai_valuations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
@@ -4288,6 +4431,20 @@ export type Database = {
             foreignKeyName: "usage_priority_ads_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_priority_ads_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_priority_ads_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
@@ -4320,6 +4477,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "usage_property_reports_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_property_reports_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "usage_property_reports_listing_id_fkey"
             columns: ["listing_id"]
@@ -4372,17 +4543,17 @@ export type Database = {
       user_roles: {
         Row: {
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: Database["public"]["Enums"]["user_role"]
           user_id: string
         }
         Insert: {
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: Database["public"]["Enums"]["user_role"]
           user_id: string
         }
         Update: {
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: Database["public"]["Enums"]["user_role"]
           user_id?: string
         }
         Relationships: []
@@ -4479,6 +4650,20 @@ export type Database = {
             foreignKeyName: "viewings_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
+            referencedRelation: "listing_management_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "viewings_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listing_reference_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "viewings_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
@@ -4493,6 +4678,465 @@ export type Database = {
       }
     }
     Views: {
+      listing_management_catalogue: {
+        Row: {
+          address: string | null
+          agent_fee_included: boolean | null
+          ai_score: number | null
+          auction_court: string | null
+          auction_date: string | null
+          auction_starting_bid: number | null
+          available_from: string | null
+          bathrooms: number | null
+          bedrooms: number | null
+          building_allowance: number | null
+          cadastre_number: string | null
+          city: string | null
+          commercial_subtype: string | null
+          construction_status: string | null
+          cover_image_url: string | null
+          coverage_ratio: number | null
+          created_at: string | null
+          deposit_months: number | null
+          description: string | null
+          distance_from_city: number | null
+          distance_from_sea: number | null
+          energy_class: string | null
+          enfia_zone: string | null
+          facade_length: number | null
+          featured_until: string | null
+          floor: number | null
+          floor_height: number | null
+          has_ac: boolean | null
+          has_alarm: boolean | null
+          has_attic: boolean | null
+          has_awning: boolean | null
+          has_balcony: boolean | null
+          has_cctv: boolean | null
+          has_disability_access: boolean | null
+          has_double_glazing: boolean | null
+          has_electricity_supply: boolean | null
+          has_elevator: boolean | null
+          has_equipped: boolean | null
+          has_facade: boolean | null
+          has_fireplace: boolean | null
+          has_furnished: boolean | null
+          has_garden: boolean | null
+          has_internal_staircase: boolean | null
+          has_land_concession: boolean | null
+          has_loading_dock: boolean | null
+          has_night_power: boolean | null
+          has_painted: boolean | null
+          has_parking: boolean | null
+          has_pool: boolean | null
+          has_satellite: boolean | null
+          has_secure_door: boolean | null
+          has_security: boolean | null
+          has_smart_home: boolean | null
+          has_solar_water: boolean | null
+          has_storage: boolean | null
+          has_structured_cabling: boolean | null
+          has_three_phase_power: boolean | null
+          has_underfloor_heating: boolean | null
+          has_video_tour: boolean | null
+          has_view: boolean | null
+          has_virtual_tour: boolean | null
+          has_water_supply: boolean | null
+          has_window_screens: boolean | null
+          heating_system: string | null
+          id: string | null
+          is_buildable: boolean | null
+          is_corner: boolean | null
+          is_featured: boolean | null
+          is_neoclassical: boolean | null
+          is_off_market: boolean | null
+          is_penthouse: boolean | null
+          is_pre_sale: boolean | null
+          is_preserved: boolean | null
+          kitchens: number | null
+          land_use: string | null
+          latitude: number | null
+          levels: number | null
+          listing_images: Json | null
+          listing_type: Database["public"]["Enums"]["listing_type"] | null
+          living_rooms: number | null
+          location_search_text: string | null
+          longitude: number | null
+          min_rental_months: number | null
+          monthly_expenses: number | null
+          noise_score: number | null
+          open_house_date: string | null
+          open_house_settings: Json | null
+          open_house_transaction_type: string | null
+          organization_id: string | null
+          owner_id: string | null
+          pets_allowed: boolean | null
+          plot_depth: number | null
+          plot_surface: number | null
+          postal_code: string | null
+          price: number | null
+          price_per_sqm: number | null
+          priority_placement: number | null
+          priority_until: string | null
+          project_id: string | null
+          property_type: Database["public"]["Enums"]["property_type"] | null
+          region: string | null
+          road_type: string | null
+          safety_score: number | null
+          short_term_rental: boolean | null
+          slope: string | null
+          sqm: number | null
+          status: Database["public"]["Enums"]["listing_status"] | null
+          suitable_commercial_use: boolean | null
+          suitable_holiday: boolean | null
+          suitable_investment: boolean | null
+          suitable_student: boolean | null
+          tags: string[] | null
+          title: string | null
+          total_floors: number | null
+          updated_at: string | null
+          views_count: number | null
+          walkability_score: number | null
+          wc_count: number | null
+          website_url: string | null
+          within_city_plan: boolean | null
+          within_settlement: boolean | null
+          year_built: number | null
+          zone_type: string | null
+        }
+        Insert: {
+          address?: string | null
+          agent_fee_included?: boolean | null
+          ai_score?: number | null
+          auction_court?: string | null
+          auction_date?: string | null
+          auction_starting_bid?: number | null
+          available_from?: string | null
+          bathrooms?: number | null
+          bedrooms?: number | null
+          building_allowance?: number | null
+          cadastre_number?: string | null
+          city?: string | null
+          commercial_subtype?: string | null
+          construction_status?: string | null
+          cover_image_url?: string | null
+          coverage_ratio?: number | null
+          created_at?: string | null
+          deposit_months?: number | null
+          description?: string | null
+          distance_from_city?: number | null
+          distance_from_sea?: number | null
+          energy_class?: string | null
+          enfia_zone?: string | null
+          facade_length?: number | null
+          featured_until?: string | null
+          floor?: number | null
+          floor_height?: number | null
+          has_ac?: boolean | null
+          has_alarm?: boolean | null
+          has_attic?: boolean | null
+          has_awning?: boolean | null
+          has_balcony?: boolean | null
+          has_cctv?: boolean | null
+          has_disability_access?: boolean | null
+          has_double_glazing?: boolean | null
+          has_electricity_supply?: boolean | null
+          has_elevator?: boolean | null
+          has_equipped?: boolean | null
+          has_facade?: boolean | null
+          has_fireplace?: boolean | null
+          has_furnished?: boolean | null
+          has_garden?: boolean | null
+          has_internal_staircase?: boolean | null
+          has_land_concession?: boolean | null
+          has_loading_dock?: boolean | null
+          has_night_power?: boolean | null
+          has_painted?: boolean | null
+          has_parking?: boolean | null
+          has_pool?: boolean | null
+          has_satellite?: boolean | null
+          has_secure_door?: boolean | null
+          has_security?: boolean | null
+          has_smart_home?: boolean | null
+          has_solar_water?: boolean | null
+          has_storage?: boolean | null
+          has_structured_cabling?: boolean | null
+          has_three_phase_power?: boolean | null
+          has_underfloor_heating?: boolean | null
+          has_video_tour?: boolean | null
+          has_view?: boolean | null
+          has_virtual_tour?: boolean | null
+          has_water_supply?: boolean | null
+          has_window_screens?: boolean | null
+          heating_system?: string | null
+          id?: string | null
+          is_buildable?: boolean | null
+          is_corner?: boolean | null
+          is_featured?: boolean | null
+          is_neoclassical?: boolean | null
+          is_off_market?: boolean | null
+          is_penthouse?: boolean | null
+          is_pre_sale?: boolean | null
+          is_preserved?: boolean | null
+          kitchens?: number | null
+          land_use?: string | null
+          latitude?: number | null
+          levels?: number | null
+          listing_images?: never
+          listing_type?: Database["public"]["Enums"]["listing_type"] | null
+          living_rooms?: number | null
+          location_search_text?: string | null
+          longitude?: number | null
+          min_rental_months?: number | null
+          monthly_expenses?: number | null
+          noise_score?: number | null
+          open_house_date?: string | null
+          open_house_settings?: never
+          open_house_transaction_type?: string | null
+          organization_id?: string | null
+          owner_id?: string | null
+          pets_allowed?: boolean | null
+          plot_depth?: number | null
+          plot_surface?: number | null
+          postal_code?: string | null
+          price?: number | null
+          price_per_sqm?: number | null
+          priority_placement?: number | null
+          priority_until?: string | null
+          project_id?: string | null
+          property_type?: Database["public"]["Enums"]["property_type"] | null
+          region?: string | null
+          road_type?: string | null
+          safety_score?: number | null
+          short_term_rental?: boolean | null
+          slope?: string | null
+          sqm?: number | null
+          status?: Database["public"]["Enums"]["listing_status"] | null
+          suitable_commercial_use?: boolean | null
+          suitable_holiday?: boolean | null
+          suitable_investment?: boolean | null
+          suitable_student?: boolean | null
+          tags?: string[] | null
+          title?: string | null
+          total_floors?: number | null
+          updated_at?: string | null
+          views_count?: number | null
+          walkability_score?: number | null
+          wc_count?: number | null
+          website_url?: string | null
+          within_city_plan?: boolean | null
+          within_settlement?: boolean | null
+          year_built?: number | null
+          zone_type?: string | null
+        }
+        Update: {
+          address?: string | null
+          agent_fee_included?: boolean | null
+          ai_score?: number | null
+          auction_court?: string | null
+          auction_date?: string | null
+          auction_starting_bid?: number | null
+          available_from?: string | null
+          bathrooms?: number | null
+          bedrooms?: number | null
+          building_allowance?: number | null
+          cadastre_number?: string | null
+          city?: string | null
+          commercial_subtype?: string | null
+          construction_status?: string | null
+          cover_image_url?: string | null
+          coverage_ratio?: number | null
+          created_at?: string | null
+          deposit_months?: number | null
+          description?: string | null
+          distance_from_city?: number | null
+          distance_from_sea?: number | null
+          energy_class?: string | null
+          enfia_zone?: string | null
+          facade_length?: number | null
+          featured_until?: string | null
+          floor?: number | null
+          floor_height?: number | null
+          has_ac?: boolean | null
+          has_alarm?: boolean | null
+          has_attic?: boolean | null
+          has_awning?: boolean | null
+          has_balcony?: boolean | null
+          has_cctv?: boolean | null
+          has_disability_access?: boolean | null
+          has_double_glazing?: boolean | null
+          has_electricity_supply?: boolean | null
+          has_elevator?: boolean | null
+          has_equipped?: boolean | null
+          has_facade?: boolean | null
+          has_fireplace?: boolean | null
+          has_furnished?: boolean | null
+          has_garden?: boolean | null
+          has_internal_staircase?: boolean | null
+          has_land_concession?: boolean | null
+          has_loading_dock?: boolean | null
+          has_night_power?: boolean | null
+          has_painted?: boolean | null
+          has_parking?: boolean | null
+          has_pool?: boolean | null
+          has_satellite?: boolean | null
+          has_secure_door?: boolean | null
+          has_security?: boolean | null
+          has_smart_home?: boolean | null
+          has_solar_water?: boolean | null
+          has_storage?: boolean | null
+          has_structured_cabling?: boolean | null
+          has_three_phase_power?: boolean | null
+          has_underfloor_heating?: boolean | null
+          has_video_tour?: boolean | null
+          has_view?: boolean | null
+          has_virtual_tour?: boolean | null
+          has_water_supply?: boolean | null
+          has_window_screens?: boolean | null
+          heating_system?: string | null
+          id?: string | null
+          is_buildable?: boolean | null
+          is_corner?: boolean | null
+          is_featured?: boolean | null
+          is_neoclassical?: boolean | null
+          is_off_market?: boolean | null
+          is_penthouse?: boolean | null
+          is_pre_sale?: boolean | null
+          is_preserved?: boolean | null
+          kitchens?: number | null
+          land_use?: string | null
+          latitude?: number | null
+          levels?: number | null
+          listing_images?: never
+          listing_type?: Database["public"]["Enums"]["listing_type"] | null
+          living_rooms?: number | null
+          location_search_text?: string | null
+          longitude?: number | null
+          min_rental_months?: number | null
+          monthly_expenses?: number | null
+          noise_score?: number | null
+          open_house_date?: string | null
+          open_house_settings?: never
+          open_house_transaction_type?: string | null
+          organization_id?: string | null
+          owner_id?: string | null
+          pets_allowed?: boolean | null
+          plot_depth?: number | null
+          plot_surface?: number | null
+          postal_code?: string | null
+          price?: number | null
+          price_per_sqm?: number | null
+          priority_placement?: number | null
+          priority_until?: string | null
+          project_id?: string | null
+          property_type?: Database["public"]["Enums"]["property_type"] | null
+          region?: string | null
+          road_type?: string | null
+          safety_score?: number | null
+          short_term_rental?: boolean | null
+          slope?: string | null
+          sqm?: number | null
+          status?: Database["public"]["Enums"]["listing_status"] | null
+          suitable_commercial_use?: boolean | null
+          suitable_holiday?: boolean | null
+          suitable_investment?: boolean | null
+          suitable_student?: boolean | null
+          tags?: string[] | null
+          title?: string | null
+          total_floors?: number | null
+          updated_at?: string | null
+          views_count?: number | null
+          walkability_score?: number | null
+          wc_count?: number | null
+          website_url?: string | null
+          within_city_plan?: boolean | null
+          within_settlement?: boolean | null
+          year_built?: number | null
+          zone_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_reference_catalogue: {
+        Row: {
+          address: string | null
+          city: string | null
+          cover_image_url: string | null
+          id: string | null
+          is_pre_sale: boolean | null
+          listing_type: Database["public"]["Enums"]["listing_type"] | null
+          organization_id: string | null
+          owner_id: string | null
+          price: number | null
+          project_id: string | null
+          sqm: number | null
+          status: Database["public"]["Enums"]["listing_status"] | null
+          title: string | null
+          views_count: number | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          cover_image_url?: string | null
+          id?: string | null
+          is_pre_sale?: boolean | null
+          listing_type?: Database["public"]["Enums"]["listing_type"] | null
+          organization_id?: string | null
+          owner_id?: string | null
+          price?: number | null
+          project_id?: string | null
+          sqm?: number | null
+          status?: Database["public"]["Enums"]["listing_status"] | null
+          title?: string | null
+          views_count?: number | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          cover_image_url?: string | null
+          id?: string | null
+          is_pre_sale?: boolean | null
+          listing_type?: Database["public"]["Enums"]["listing_type"] | null
+          organization_id?: string | null
+          owner_id?: string | null
+          price?: number | null
+          project_id?: string | null
+          sqm?: number | null
+          status?: Database["public"]["Enums"]["listing_status"] | null
+          title?: string | null
+          views_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_listing_catalogue: {
         Row: {
           address: string | null
@@ -5301,6 +5945,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: undefined
       }
+      bulk_update_project_unit_prices: {
+        Args: { p_percentage: number; p_project_id: string }
+        Returns: number
+      }
       bulk_update_project_unit_prices_for_user: {
         Args: { _user_id: string; p_percentage: number; p_project_id: string }
         Returns: number
@@ -5365,6 +6013,7 @@ export type Database = {
         Args: { p_bucket: string; p_user_id: string }
         Returns: boolean
       }
+      create_listing_for_user: { Args: { p_payload: Json }; Returns: Json }
       create_open_house_registration: {
         Args: {
           p_contact_email?: string
@@ -5487,6 +6136,7 @@ export type Database = {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
       }
+      delete_listing_for_user: { Args: { p_id: string }; Returns: boolean }
       delete_project_and_unlink_listings: {
         Args: { p_project_id: string }
         Returns: undefined
@@ -5899,40 +6549,23 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      submit_agent_data_input:
-        | {
-            Args: {
-              p_buyer_name?: string
-              p_closed_at: string
-              p_closing_price: number
-              p_kaek?: string
-              p_notes?: string
-              p_property_address: string
-              p_property_city: string
-              p_property_postal_code?: string
-              p_property_type?: string
-              p_seller_name?: string
-              p_transaction_type: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_agent_side?: string
-              p_buyer_name?: string
-              p_closed_at: string
-              p_closing_price: number
-              p_kaek?: string
-              p_notes?: string
-              p_property_address: string
-              p_property_city: string
-              p_property_postal_code?: string
-              p_property_type?: string
-              p_seller_name?: string
-              p_transaction_type: string
-            }
-            Returns: string
-          }
+      submit_agent_data_input: {
+        Args: {
+          p_agent_side?: string
+          p_buyer_name?: string
+          p_closed_at: string
+          p_closing_price: number
+          p_kaek?: string
+          p_notes?: string
+          p_property_address: string
+          p_property_city: string
+          p_property_postal_code?: string
+          p_property_type?: string
+          p_seller_name?: string
+          p_transaction_type: string
+        }
+        Returns: string
+      }
       submit_firesale_interest: {
         Args: {
           p_deal_id: string
@@ -6040,6 +6673,10 @@ export type Database = {
         Args: { p_role: string; p_user_id: string }
         Returns: undefined
       }
+      update_listing_for_user: {
+        Args: { p_id: string; p_updates: Json }
+        Returns: Json
+      }
       uuid_from_realtime_topic: {
         Args: { p_prefix: string; p_topic: string }
         Returns: string
@@ -6139,10 +6776,10 @@ export type Database = {
         | "agent"
         | "professional"
         | "seller"
-        | "admin"
         | "investor"
         | "institutional"
         | "developer"
+        | "admin"
       viewing_status: "pending" | "confirmed" | "cancelled" | "completed"
       viewing_type: "in_person" | "video"
     }
@@ -6367,10 +7004,10 @@ export const Constants = {
         "agent",
         "professional",
         "seller",
-        "admin",
         "investor",
         "institutional",
         "developer",
+        "admin",
       ],
       viewing_status: ["pending", "confirmed", "cancelled", "completed"],
       viewing_type: ["in_person", "video"],

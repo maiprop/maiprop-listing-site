@@ -12,6 +12,11 @@ import {
   parseMutationInput,
 } from "@/lib/mutationSchemas";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
+import {
+  createListingForUser,
+  deleteListingForUser,
+  updateListingForUser,
+} from "@/hooks/listingManagementBoundary";
 
 export const useTrackListingView = () => {
   return useMutation({
@@ -68,11 +73,7 @@ export const useCreateListing = () => {
         listing_type: listing.listing_type as TablesInsert<"listings">["listing_type"],
         property_type: listing.property_type as TablesInsert<"listings">["property_type"],
       }, "listing") as TablesInsert<"listings">;
-      const { data, error } = await supabase.from("listings").insert(payload)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return createListingForUser(payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["listings"] });
@@ -93,15 +94,10 @@ export const useUpdateListing = () => {
     mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"listings"> }) => {
       if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(listingUpdateMutationSchema, { id, updates }, "listing update");
-      const { data, error } = await supabase
-        .from("listings")
-        .update(payload.updates as TablesUpdate<"listings">)
-        .eq("id", payload.id)
-        .eq("owner_id", user.id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return updateListingForUser(
+        payload.id,
+        payload.updates as TablesUpdate<"listings">,
+      );
     },
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ["listings"] });
@@ -120,8 +116,7 @@ export const useDeleteListing = () => {
     mutationFn: async (id: string) => {
       if (!user) throw new Error("Must be logged in");
       const listingId = parseMutationInput(listingIdSchema, id, "listing id");
-      const { error } = await supabase.from("listings").delete().eq("id", listingId).eq("owner_id", user.id);
-      if (error) throw error;
+      await deleteListingForUser(listingId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["listings"] });

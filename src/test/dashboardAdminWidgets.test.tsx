@@ -235,7 +235,7 @@ describe("AdminDashboard tab routing", () => {
 
   it("loads platform-wide open-house listings for admin moderation", async () => {
     fromMock.mockImplementation((table: string) => {
-      if (table === "listings") {
+      if (table === "listing_management_catalogue") {
         return selectBuilder([
           {
             id: "oh-admin-1",
@@ -536,7 +536,7 @@ describe("AdminPanel", () => {
         { id: "log-1", direction: "os_to_hub", entity_type: "auction", entity_id: "a1", status: "success", error_message: null, records_affected: 3, payload: {}, created_at: "2026-04-02T10:00:00Z" },
         { id: "log-2", direction: "hub_to_os", entity_type: "listing", entity_id: "l1", status: "error", error_message: "bad payload", records_affected: 0, payload: {}, created_at: "2026-04-01T10:00:00Z" },
       ],
-      listings: [{ id: "listing-1", title: "Admin Listing", city: "Athens", status: "active" }],
+      listing_management_catalogue: [{ id: "listing-1", title: "Admin Listing", city: "Athens", status: "active" }],
       firesale_requests: [{ id: "fire-1", address: "1 Demo St", city: "Athens", status: "pending" }],
     }));
     invokeMock.mockImplementation((name: string) => {
@@ -566,7 +566,7 @@ describe("AdminPanel", () => {
   });
 
   it("surfaces disconnected credentials hints and advanced tester failures", async () => {
-    fromMock.mockImplementation(tableBuilder({ sync_log: [], listings: [], firesale_requests: [] }, { sync_log: { error: new Error("db") } }));
+    fromMock.mockImplementation(tableBuilder({ sync_log: [], listing_management_catalogue: [], firesale_requests: [] }, { sync_log: { error: new Error("db") } }));
     invokeMock.mockImplementation((name: string) => {
       if (name === "os-diagnose") return Promise.resolve({ data: null, error: new Error("offline") });
       return Promise.resolve({ data: null, error: new Error("fn failed") });

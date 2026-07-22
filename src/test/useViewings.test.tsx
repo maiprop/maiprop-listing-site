@@ -84,7 +84,7 @@ describe("useViewings (query)", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(fromMock).toHaveBeenCalledWith("viewings");
     expect(eq).toHaveBeenCalledWith("requester_id", "u-1");
-    expect(result.current.data).toEqual([{ id: "v-1" }]);
+    expect(result.current.data).toEqual([{ id: "v-1", listings: null }]);
   });
 
   it("queries by owner_id when role is 'owner'", async () => {

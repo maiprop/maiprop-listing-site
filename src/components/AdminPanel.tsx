@@ -137,12 +137,12 @@ export default function AdminPanel() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
       const { data } = await supabase
-        .from("listings")
+        .from("listing_management_catalogue")
         .select("id, title, city, status")
         .eq("owner_id", user.id)
         .eq("status", "active")
         .limit(20);
-      return data ?? [];
+      return (data ?? []).filter((listing) => Boolean(listing.id)) as AdminListing[];
     },
   });
 

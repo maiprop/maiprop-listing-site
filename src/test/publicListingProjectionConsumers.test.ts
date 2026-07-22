@@ -51,12 +51,13 @@ describe("public listing projection consumers", () => {
     expect(contents).not.toMatch(/projects!listings_project_id_fkey/);
   });
 
-  it("uses the public catalogue for public listing search and detail while retaining owner reads", () => {
+  it("uses scoped catalogues for public and owner listing reads", () => {
     const contents = source("src/hooks/useListings.ts");
 
     expect(contents).toContain('.from("public_listing_catalogue")');
     expect(contents).toContain("PUBLIC_LISTING_CARD_SELECT");
     expect(contents).toContain("PUBLIC_LISTING_DETAIL_SELECT");
-    expect(contents).toContain('.from("listings")');
+    expect(contents).toContain('.from("listing_management_catalogue")');
+    expect(contents).not.toContain('.from("listings")');
   });
 });

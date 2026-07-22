@@ -40,7 +40,7 @@ describe("useCreateListingConnections", () => {
     const { result } = renderHook(() => useCreateListingConnections());
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
     expect(storageFromMock).toHaveBeenCalledWith("listing-images");
     expect(result.current).toEqual({
       supabaseOk: true,

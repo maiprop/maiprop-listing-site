@@ -11,6 +11,7 @@ import {
   messageCreateSchema,
   parseMutationInput,
 } from "@/lib/mutationSchemas";
+import { attachListingReferences } from "@/lib/listingReferences";
 
 type ConversationCandidate = { id: string; listing_id: string | null };
 type StartConversationInput = { other_user_id: string; listing_id?: string };
@@ -316,7 +317,6 @@ export function useConversations() {
         .from("conversations")
         .select(`
           *,
-          listings(id, title, city, cover_image_url, listing_type, is_pre_sale, project_id),
           messages(content, created_at, sender_id)
         `)
         .or(`participant_a.eq.${user.id},participant_b.eq.${user.id}`)
@@ -327,7 +327,7 @@ export function useConversations() {
         })
         .limit(1, { referencedTable: "messages" });
       if (convError) throw convError;
-      const list = convs || [];
+      const list = await attachListingReferences(convs ?? []);
       const userIds = new Set<string>();
       list.forEach((c) => {
         if (c.participant_a) userIds.add(c.participant_a);

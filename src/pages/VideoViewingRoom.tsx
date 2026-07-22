@@ -16,6 +16,7 @@ import {
   normalizeVideoLink,
 } from "@/lib/videoRooms";
 import type { Tables } from "@/integrations/supabase/types";
+import { attachListingReferences } from "@/lib/listingReferences";
 
 type ViewingVideoRoom = Tables<"viewings"> & {
   listings?: {
@@ -38,11 +39,12 @@ export default function VideoViewingRoom() {
       if (!isUuid(viewingId)) return null;
       const { data, error: queryError } = await supabase
         .from("viewings")
-        .select("*, listings(title, city, cover_image_url, address)")
+        .select("*")
         .eq("id", viewingId)
         .single();
       if (queryError) throw queryError;
-      return data as ViewingVideoRoom;
+      const [viewingWithListing] = await attachListingReferences([data]);
+      return viewingWithListing as ViewingVideoRoom;
     },
     enabled: Boolean(viewingId),
   });

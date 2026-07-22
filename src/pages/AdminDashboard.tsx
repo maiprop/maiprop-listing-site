@@ -51,7 +51,7 @@ export default function AdminDashboard() {
     enabled: activeTab === "open-houses",
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("listings")
+        .from("listing_management_catalogue")
         .select("id,title,listing_type,status,open_house_date,views_count,cover_image_url,price")
         .eq("listing_type", "open_house")
         .order("open_house_date", { ascending: true, nullsFirst: false });

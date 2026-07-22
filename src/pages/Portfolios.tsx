@@ -19,10 +19,11 @@ import { dbListingToCard } from "@/lib/listingUtils";
 import { toast } from "sonner";
 import { ProGate } from "@/components/gates/ProGate";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import type { DbListingCardRow } from "@/lib/domainContracts";
 
 /** Shape returned by useFavorites(): a favorites row with the joined listing. */
 type FavoriteRow = Database["public"]["Tables"]["favorites"]["Row"] & {
-  listings: Database["public"]["Tables"]["listings"]["Row"] | null;
+  listings: DbListingCardRow | null;
 };
 
 const Portfolios = () => { // skipcq: JS-R1005 - Portfolio list actions share one confirmation and rename state for a compact dashboard page.

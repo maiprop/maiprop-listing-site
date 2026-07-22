@@ -75,7 +75,10 @@ Deno.test("does not return a cached report for a listing hidden by caller RLS", 
         headers: { "Content-Type": "application/json" },
       });
     }
-    if (url.includes("/rest/v1/listings")) {
+    if (
+      url.includes("/rest/v1/public_listing_catalogue") ||
+      url.includes("/rest/v1/listing_management_catalogue")
+    ) {
       return new Response(JSON.stringify([]), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -139,7 +142,7 @@ Deno.test("denies an ineligible user before checking provider configuration", as
         headers: { "Content-Type": "application/json" },
       });
     }
-    if (url.includes("/rest/v1/listings")) {
+    if (url.includes("/rest/v1/public_listing_catalogue")) {
       return new Response(JSON.stringify({
         id: "11111111-1111-4111-8111-111111111111",
         city: "Athens",
@@ -305,7 +308,7 @@ Deno.test("valuation HTML reports are sanitized before returning to the browser"
         headers: { "Content-Type": "application/json" },
       }));
     }
-    if (url.includes("/rest/v1/listings")) {
+    if (url.includes("/rest/v1/public_listing_catalogue")) {
       return Promise.resolve(new Response(JSON.stringify({
         id: listingId,
         city: "Athens",

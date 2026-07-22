@@ -68,7 +68,7 @@ function openAdvanced() {
 beforeEach(() => {
   rows = {
     sync_log: [],
-    listings: [],
+    listing_management_catalogue: [],
     firesale_requests: [],
   };
   errors = {};
@@ -142,7 +142,7 @@ describe("AdminPanel branch coverage", () => {
   });
 
   it("handles listing and firesale success, skipped credentials, and failures", async () => {
-    rows.listings = [{ id: "listing-1", title: null, city: "Athens", status: "active" }];
+    rows.listing_management_catalogue = [{ id: "listing-1", title: null, city: "Athens", status: "active" }];
     rows.firesale_requests = [{ id: "fire-1", address: null, city: "Piraeus", status: "pending" }];
     let listingCalls = 0;
     let fireCalls = 0;
@@ -178,7 +178,7 @@ describe("AdminPanel branch coverage", () => {
   });
 
   it("does not query an admin's listing inventory when no authenticated user exists", async () => {
-    rows.listings = [{ id: "should-not-show", title: "Private row", city: "Athens", status: "active" }];
+    rows.listing_management_catalogue = [{ id: "should-not-show", title: "Private row", city: "Athens", status: "active" }];
     mocks.getUser.mockResolvedValue({ data: { user: null }, error: null });
 
     renderPanel();
@@ -266,7 +266,7 @@ describe("AdminPanel branch coverage", () => {
 
   it("uses empty defaults when database and OS responses omit optional payloads", async () => {
     rows.sync_log = null;
-    rows.listings = null;
+    rows.listing_management_catalogue = null;
     rows.firesale_requests = null;
     mocks.invoke.mockImplementation((name: string, options?: { body?: Record<string, unknown> }) => {
       if (name === "os-diagnose") return Promise.resolve({ data: { osReachable: false }, error: null });
@@ -296,7 +296,7 @@ describe("AdminPanel branch coverage", () => {
   });
 
   it("surfaces the pending state for pull, listing, and firesale mutations", async () => {
-    rows.listings = [{ id: "listing-1", title: "Pending Listing", city: "Athens", status: "active" }];
+    rows.listing_management_catalogue = [{ id: "listing-1", title: "Pending Listing", city: "Athens", status: "active" }];
     rows.firesale_requests = [{ id: "fire-1", address: "Pending Fire", city: "Athens", status: "pending" }];
     const resolvers: Array<(value: { data: { status: string }; error: null }) => void> = [];
     mocks.invoke.mockImplementation((name: string) => {

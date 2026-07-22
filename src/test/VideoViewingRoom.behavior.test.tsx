@@ -61,13 +61,26 @@ vi.mock("@/components/video/MaiPropVideoRoom", () => ({
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: vi.fn(() => {
+    from: vi.fn((table: string) => {
+      if (table === "listing_reference_catalogue") {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: mocks.viewing.listings
+                ? [{ id: mocks.viewing.listing_id, ...mocks.viewing.listings }]
+                : [],
+              error: null,
+            })),
+          })),
+        };
+      }
       const query = {
         select: vi.fn(() => query),
         eq: vi.fn(() => query),
         single: vi.fn(async () => {
           if (mocks.queryError) return { data: null, error: mocks.queryError };
-          return { data: mocks.viewing, error: null };
+          const { listings: _listing, ...viewingRow } = mocks.viewing;
+          return { data: viewingRow, error: null };
         }),
       };
       return query;

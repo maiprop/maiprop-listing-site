@@ -288,7 +288,7 @@ describe("public listings API fallback behavior", () => {
     ]);
   });
 
-  it("preserves direct Supabase reads for owner-scoped listing data", async () => {
+  it("uses the scoped management projection for owner listing data", async () => {
     publicApiMock.mockResolvedValue(null);
     fromMock.mockReturnValue(makeThenableBuilder([]));
 
@@ -296,7 +296,7 @@ describe("public listings API fallback behavior", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(publicApiMock).not.toHaveBeenCalled();
-    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(fromMock).toHaveBeenCalledWith("listing_management_catalogue");
   });
 
   it("keeps non-owner non-active status queries inside the public projection", async () => {

@@ -35,13 +35,30 @@ describe("useFavorites", () => {
   });
 
   it("fetches favorites with user_id filter", async () => {
-    const mockData = [{ id: "f1", listing_id: "l1", listings: { title: "Test" } }];
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
-        }),
-      }),
+    const favoriteRows = [{ id: "f1", listing_id: "l1", user_id: "u1" }];
+    const listingRows = [{
+      id: "l1",
+      title: "Test",
+      city: "Athens",
+      listing_type: "sale",
+      property_type: "apartment",
+      listing_images: [],
+    }];
+    const listingIn = vi.fn().mockResolvedValue({ data: listingRows, error: null });
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "favorites") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({ data: favoriteRows, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "public_listing_catalogue") {
+        return { select: vi.fn().mockReturnValue({ in: listingIn }) };
+      }
+      throw new Error(`unexpected table: ${table}`);
     });
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({ user: { id: "u1" } });
 
@@ -49,5 +66,8 @@ describe("useFavorites", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(1);
     expect(mockFrom).toHaveBeenCalledWith("favorites");
+    expect(mockFrom).toHaveBeenCalledWith("public_listing_catalogue");
+    expect(listingIn).toHaveBeenCalledWith("id", ["l1"]);
+    expect(result.current.data?.[0].listings).toMatchObject({ id: "l1", title: "Test" });
   });
 });
