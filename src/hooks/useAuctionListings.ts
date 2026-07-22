@@ -158,7 +158,7 @@ const fetchAuctionByIdFromSupabase = async (
 ): Promise<AuctionListingRow | null> => {
   const auctionId = id.trim();
   let query = supabase
-    .from("public_listing_catalogue")
+    .rpc("get_public_listing_catalogue")
     .select(`
       id,title,city,address,price,auction_starting_bid,auction_date,auction_court,
       property_type,listing_type,cover_image_url,sqm,bedrooms,bathrooms,floor,total_floors,

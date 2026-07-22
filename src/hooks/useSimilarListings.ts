@@ -105,7 +105,7 @@ async function fetchSimilarListingsFallback({
   signal?: AbortSignal;
 }): Promise<SimilarListingRow[]> {
   let query = supabase
-    .from("public_listing_catalogue")
+    .rpc("get_public_listing_catalogue")
     .select(SIMILAR_LISTINGS_SELECT)
     .eq("status", "active")
     .eq("is_off_market", false)

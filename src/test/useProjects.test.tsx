@@ -54,6 +54,12 @@ function renderHookWithQuery<T>(hook: () => T, queryClient?: QueryClient) {
 beforeEach(() => {
   fromMock.mockReset();
   rpcMock.mockReset();
+  rpcMock.mockImplementation((fn: string) => {
+    if (fn === "get_listing_reference_catalogue") {
+      return fromMock("listing_reference_catalogue");
+    }
+    return Promise.resolve({ data: null, error: null });
+  });
   functionsInvokeMock.mockReset();
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });

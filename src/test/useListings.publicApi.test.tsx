@@ -4,6 +4,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
 const fromMock = vi.fn();
+const rpcMock = vi.fn((fn: string) => {
+  const viewByFunction: Record<string, string> = {
+    get_public_listing_catalogue: "public_listing_catalogue",
+    get_listing_management_catalogue: "listing_management_catalogue",
+  };
+  return fromMock(viewByFunction[fn] ?? fn);
+});
 const publicApiMock = vi.fn();
 const publicAbortMock = vi.fn(() => false);
 const initialListingsPageMock = vi.fn();
@@ -11,6 +18,7 @@ const initialListingsPageMock = vi.fn();
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args),
   },
 }));
 
@@ -60,6 +68,7 @@ const makeMaybeSingleBuilder = (data: unknown) => {
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockClear();
   publicApiMock.mockReset();
   publicAbortMock.mockReset();
   publicAbortMock.mockReturnValue(false);

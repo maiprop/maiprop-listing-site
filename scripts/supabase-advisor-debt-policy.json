@@ -45,6 +45,56 @@
     },
     {
       "match": {
+        "name": "anon_security_definer_function_executable",
+        "cache_key_contains": "public_get_public_listing_catalogue"
+      },
+      "owner": "listings/security",
+      "reason": "Anonymous catalogue traffic needs the fixed active/non-off-market projection. The no-argument RPC returns only the allowlisted public view row type and retains no raw-table grants.",
+      "next_action": "Keep the output allowlist, anonymous denial tests for raw tables, and public API projection tests as hard release gates.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "authenticated_security_definer_function_executable",
+        "cache_key_contains": "public_get_public_listing_catalogue"
+      },
+      "owner": "listings/security",
+      "reason": "Signed-in catalogue traffic uses the same allowlisted public projection as anonymous users; the RPC does not expose tenancy, cadastral, billing, or internal workflow fields.",
+      "next_action": "Keep the output allowlist and raw-table denial matrix covered by staging RLS tests.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "authenticated_security_definer_function_executable",
+        "cache_key_contains": "public_get_listing_management_catalogue"
+      },
+      "owner": "listings/security",
+      "reason": "Owner, organization and platform-admin screens require full listing records, while the RPC view predicate checks auth.uid(), ownership, listing:view organization permission, or authoritative platform administration before returning rows.",
+      "next_action": "Keep owner, organization-member, outsider and administrator read tests as hard staging gates; never grant this RPC to anon.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "anon_security_definer_function_executable",
+        "cache_key_contains": "public_get_listing_reference_catalogue"
+      },
+      "owner": "listings/security",
+      "reason": "Public relationship surfaces need a minimal listing identity projection for active listings. The RPC returns only route/card reference fields and applies the fixed public-or-caller-related predicate.",
+      "next_action": "Keep the reference-field allowlist and anonymous inactive-listing denial tests as hard gates.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "authenticated_security_definer_function_executable",
+        "cache_key_contains": "public_get_listing_reference_catalogue"
+      },
+      "owner": "listings/security",
+      "reason": "Authenticated favorites, conversations, viewings, contacts, leads and project screens need minimal listing references without receiving raw listing-table access.",
+      "next_action": "Keep each relationship predicate covered by role/action regression tests and retain the minimal return type.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
         "name": "authenticated_security_definer_function_executable",
         "cache_key_contains": "public_get_open_house_capacity"
       },

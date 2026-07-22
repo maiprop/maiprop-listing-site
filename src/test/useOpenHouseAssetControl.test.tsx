@@ -104,6 +104,12 @@ const renderHookWithQuery = <T,>(hook: () => T) =>
 beforeEach(() => {
   fromMock.mockReset();
   rpcMock.mockReset();
+  rpcMock.mockImplementation((fn: string) => {
+    if (fn === "get_listing_management_catalogue") {
+      return fromMock("listing_management_catalogue");
+    }
+    return Promise.resolve({ data: null, error: null });
+  });
   invokeMock.mockReset();
   getUserMock.mockReset();
   getUserMock.mockResolvedValue({ data: { user: { id: "u-1" } } });

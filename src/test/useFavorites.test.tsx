@@ -8,8 +8,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
 const mockFrom = vi.fn();
+const mockRpc = vi.fn((fn: string) =>
+  mockFrom(fn === "get_public_listing_catalogue" ? "public_listing_catalogue" : fn));
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: (...args: unknown[]) => mockFrom(...args) },
+  supabase: {
+    from: (...args: unknown[]) => mockFrom(...args),
+    rpc: (...args: unknown[]) => mockRpc(...args),
+  },
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: vi.fn() }));
 

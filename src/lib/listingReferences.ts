@@ -32,7 +32,7 @@ export async function fetchListingReferenceMap(
   if (ids.length === 0) return new Map();
 
   const { data, error } = await supabase
-    .from("listing_reference_catalogue")
+    .rpc("get_listing_reference_catalogue")
     .select(LISTING_REFERENCE_SELECT)
     .in("id", ids);
   if (error) throw error;
@@ -64,7 +64,7 @@ export async function fetchProjectListingReferences(
   if (ids.length === 0) return new Map();
 
   const { data, error } = await supabase
-    .from("listing_reference_catalogue")
+    .rpc("get_listing_reference_catalogue")
     .select(LISTING_REFERENCE_SELECT)
     .in("project_id", ids);
   if (error) throw error;

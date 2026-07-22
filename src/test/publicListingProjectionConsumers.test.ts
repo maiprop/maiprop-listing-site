@@ -45,7 +45,7 @@ describe("public listing projection consumers", () => {
   it.each(browserFallbackConsumers)("routes browser fallback %s through the allowlisted catalogue", (path) => {
     const contents = source(path);
 
-    expect(contents).toContain('.from("public_listing_catalogue")');
+    expect(contents).toContain('.rpc("get_public_listing_catalogue")');
     expect(contents).not.toContain('.from("listings")');
     expect(contents).not.toMatch(/listing_images\s*\(/);
     expect(contents).not.toMatch(/projects!listings_project_id_fkey/);
@@ -54,10 +54,10 @@ describe("public listing projection consumers", () => {
   it("uses scoped catalogues for public and owner listing reads", () => {
     const contents = source("src/hooks/useListings.ts");
 
-    expect(contents).toContain('.from("public_listing_catalogue")');
+    expect(contents).toContain('.rpc("get_public_listing_catalogue")');
     expect(contents).toContain("PUBLIC_LISTING_CARD_SELECT");
     expect(contents).toContain("PUBLIC_LISTING_DETAIL_SELECT");
-    expect(contents).toContain('.from("listing_management_catalogue")');
+    expect(contents).toContain('.rpc("get_listing_management_catalogue")');
     expect(contents).not.toContain('.from("listings")');
   });
 });

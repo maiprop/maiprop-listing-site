@@ -76,8 +76,8 @@ Deno.test("does not return a cached report for a listing hidden by caller RLS", 
       });
     }
     if (
-      url.includes("/rest/v1/public_listing_catalogue") ||
-      url.includes("/rest/v1/listing_management_catalogue")
+      url.includes("/rest/v1/rpc/get_public_listing_catalogue") ||
+      url.includes("/rest/v1/rpc/get_listing_management_catalogue")
     ) {
       return new Response(JSON.stringify([]), {
         status: 200,
@@ -142,8 +142,8 @@ Deno.test("denies an ineligible user before checking provider configuration", as
         headers: { "Content-Type": "application/json" },
       });
     }
-    if (url.includes("/rest/v1/public_listing_catalogue")) {
-      return new Response(JSON.stringify({
+    if (url.includes("/rest/v1/rpc/get_public_listing_catalogue")) {
+      return new Response(JSON.stringify([{
         id: "11111111-1111-4111-8111-111111111111",
         city: "Athens",
         address: "Kolonaki 12",
@@ -153,7 +153,7 @@ Deno.test("denies an ineligible user before checking provider configuration", as
         property_type: "apartment",
         floor: 4,
         year_built: 2010,
-      }), {
+      }]), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
@@ -308,8 +308,8 @@ Deno.test("valuation HTML reports are sanitized before returning to the browser"
         headers: { "Content-Type": "application/json" },
       }));
     }
-    if (url.includes("/rest/v1/public_listing_catalogue")) {
-      return Promise.resolve(new Response(JSON.stringify({
+    if (url.includes("/rest/v1/rpc/get_public_listing_catalogue")) {
+      return Promise.resolve(new Response(JSON.stringify([{
         id: listingId,
         city: "Athens",
         address: "Kolonaki 12",
@@ -319,7 +319,7 @@ Deno.test("valuation HTML reports are sanitized before returning to the browser"
         property_type: "apartment",
         floor: 4,
         year_built: 2010,
-      }), {
+      }]), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }));

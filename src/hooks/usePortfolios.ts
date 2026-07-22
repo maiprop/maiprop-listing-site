@@ -62,7 +62,7 @@ export function usePortfolio(id: string | undefined) {
       if (ids.length === 0) return { ...portfolio, listings: [] };
 
       const { data: listings, error: le } = await supabase
-        .from("public_listing_catalogue")
+        .rpc("get_public_listing_catalogue")
         .select("id, title, city, price, sqm, property_type, cover_image_url, listing_type, status")
         .in("id", ids);
       if (le) throw le;

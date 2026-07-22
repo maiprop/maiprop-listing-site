@@ -14,6 +14,7 @@ import React from "react";
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn(),
     functions: {
       invoke: vi.fn(),
     },
@@ -58,6 +59,13 @@ function mockTableQuery(resolved: { data: unknown; error: null }) {
 describe("useListing detail loading and owner Pro status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(supabase.rpc).mockImplementation((fn: string) => {
+      const viewByFunction: Record<string, string> = {
+        get_public_listing_catalogue: "public_listing_catalogue",
+        get_listing_management_catalogue: "listing_management_catalogue",
+      };
+      return supabase.from(viewByFunction[fn] ?? fn) as never;
+    });
   });
 
   it("returns ownerIsPro=false when listing has no owner_id", async () => {

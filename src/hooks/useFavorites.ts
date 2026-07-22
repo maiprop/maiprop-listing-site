@@ -24,7 +24,7 @@ export function useFavorites() {
       if (listingIds.length === 0) return [];
 
       const { data: listingRows, error: listingError } = await supabase
-        .from("public_listing_catalogue")
+        .rpc("get_public_listing_catalogue")
         .select("*")
         .in("id", listingIds);
       if (listingError) throw listingError;

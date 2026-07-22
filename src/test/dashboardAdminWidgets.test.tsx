@@ -198,7 +198,12 @@ beforeEach(() => {
   getUserMock.mockResolvedValue({ data: { user: { id: "admin-user" } } });
   invokeMock.mockResolvedValue({ data: { status: "ok" }, error: null });
   fromMock.mockImplementation(tableBuilder({}));
-  rpcMock.mockResolvedValue({ data: null, error: null });
+  rpcMock.mockImplementation((fn: string) => {
+    if (fn === "get_listing_management_catalogue") {
+      return fromMock("listing_management_catalogue");
+    }
+    return Promise.resolve({ data: null, error: null });
+  });
 });
 
 afterEach(() => {

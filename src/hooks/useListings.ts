@@ -339,12 +339,12 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   const sort = filters?.sort ?? "featured";
   const ownerScoped = Boolean(filters?.owner_id) && !scope.publicScope;
   const publicQuery = supabase
-    .from("public_listing_catalogue")
+    .rpc("get_public_listing_catalogue")
     .select(PUBLIC_LISTING_CARD_SELECT);
   let query = publicQuery;
   if (ownerScoped) {
     const ownerQuery = supabase
-      .from("listing_management_catalogue")
+      .rpc("get_listing_management_catalogue")
       .select(LISTING_MANAGEMENT_CARD_SELECT);
     query = ownerQuery as unknown as typeof publicQuery;
   }
@@ -786,7 +786,7 @@ type PublicListingResponse = {
 
 const fetchPublicListingFromSupabase = async (id: string, signal?: AbortSignal): Promise<ListingWithJoins | null> => {
   const { data, error } = await withAbortSignal(supabase
-    .from("public_listing_catalogue")
+    .rpc("get_public_listing_catalogue")
     .select(PUBLIC_LISTING_DETAIL_SELECT)
     .eq("id", id)
     .eq("status", "active")
@@ -821,7 +821,7 @@ const fetchListingById = async (
   }
 
   const { data, error } = await withAbortSignal(supabase
-    .from("listing_management_catalogue")
+    .rpc("get_listing_management_catalogue")
     .select("*")
     .eq("id", id)
     .maybeSingle(), signal);

@@ -61,19 +61,22 @@ vi.mock("@/components/video/MaiPropVideoRoom", () => ({
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: vi.fn((table: string) => {
-      if (table === "listing_reference_catalogue") {
-        return {
-          select: vi.fn(() => ({
-            in: vi.fn(async () => ({
-              data: mocks.viewing.listings
-                ? [{ id: mocks.viewing.listing_id, ...mocks.viewing.listings }]
-                : [],
-              error: null,
-            })),
-          })),
-        };
+    rpc: vi.fn((fn: string) => {
+      if (fn !== "get_listing_reference_catalogue") {
+        throw new Error(`Unexpected RPC: ${fn}`);
       }
+      return {
+        select: vi.fn(() => ({
+          in: vi.fn(async () => ({
+            data: mocks.viewing.listings
+              ? [{ id: mocks.viewing.listing_id, ...mocks.viewing.listings }]
+              : [],
+            error: null,
+          })),
+        })),
+      };
+    }),
+    from: vi.fn((_table: string) => {
       const query = {
         select: vi.fn(() => query),
         eq: vi.fn(() => query),

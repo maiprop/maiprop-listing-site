@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
+  rpc: vi.fn(),
   invoke: vi.fn(),
   getUser: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => mocks.from(...args),
+    rpc: (...args: unknown[]) => mocks.rpc(...args),
     functions: { invoke: (...args: unknown[]) => mocks.invoke(...args) },
     auth: { getUser: (...args: unknown[]) => mocks.getUser(...args) },
   },
@@ -75,6 +77,9 @@ beforeEach(() => {
   throwingTables = new Set();
   mocks.from.mockReset();
   mocks.from.mockImplementation((table: string) => queryFor(table));
+  mocks.rpc.mockReset();
+  mocks.rpc.mockImplementation((fn: string) =>
+    queryFor(fn === "get_listing_management_catalogue" ? "listing_management_catalogue" : fn));
   mocks.getUser.mockReset();
   mocks.getUser.mockResolvedValue({ data: { user: { id: "admin-1" } }, error: null });
   mocks.invoke.mockReset();

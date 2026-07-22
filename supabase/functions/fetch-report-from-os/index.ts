@@ -598,11 +598,12 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
     const listingSelect = "id,address,city,latitude,longitude,sqm,property_type,floor,year_built";
-    const { data: publicListing, error: publicListingError } = await callerSupabase
-      .from("public_listing_catalogue")
-      .select(listingSelect)
+    const { data: publicListings, error: publicListingError } = await callerSupabase
+      .rpc("get_public_listing_catalogue")
       .eq("id", listing_id)
-      .maybeSingle();
+      .select(listingSelect)
+      .limit(1);
+    const publicListing = publicListings?.[0] ?? null;
 
     if (publicListingError) {
       log.warn("public listing access check failed", {
@@ -618,11 +619,12 @@ Deno.serve(async (req) => {
     const privateListingResult = publicListing
       ? { data: null, error: null }
       : await callerSupabase
-        .from("listing_management_catalogue")
-        .select(listingSelect)
+        .rpc("get_listing_management_catalogue")
         .eq("id", listing_id)
-        .maybeSingle();
-    const accessibleListing = publicListing ?? privateListingResult.data;
+        .select(listingSelect)
+        .limit(1);
+    const privateListing = privateListingResult.data?.[0] ?? null;
+    const accessibleListing = publicListing ?? privateListing;
     const listingAccessError = privateListingResult.error;
 
     if (listingAccessError) {

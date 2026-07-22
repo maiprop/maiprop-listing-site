@@ -9,12 +9,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 
 const fromMock = vi.fn();
+const rpcMock = vi.fn((fn: string) =>
+  fromMock(fn === "get_public_listing_catalogue" ? "public_listing_catalogue" : fn));
 const invokeMock = vi.fn();
 const publicApiMock = vi.fn();
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args),
     functions: { invoke: (...args: unknown[]) => invokeMock(...args) },
   },
 }));
@@ -87,6 +90,7 @@ const makeThenableBuilder = (data: unknown[] = []) => {
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockClear();
   invokeMock.mockReset();
   publicApiMock.mockReset();
   publicApiMock.mockResolvedValue(null);

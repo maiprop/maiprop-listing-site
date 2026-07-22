@@ -556,7 +556,7 @@ export function useRevealAllOffers() {
       const uid = (await supabase.auth.getUser()).data.user?.id;
       if (!uid) throw new Error("Not authenticated");
       const { data: listing, error: listingErr } = await supabase
-        .from("listing_management_catalogue")
+        .rpc("get_listing_management_catalogue")
         .select(OPEN_HOUSE_REVEAL_LISTING_SELECT)
         .eq("id", _listingId)
         .maybeSingle();

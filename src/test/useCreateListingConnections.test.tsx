@@ -1,8 +1,9 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { fromMock, storageFromMock } = vi.hoisted(() => ({
+const { fromMock, rpcMock, storageFromMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
+  rpcMock: vi.fn(),
   storageFromMock: vi.fn(),
 }));
 
@@ -14,6 +15,7 @@ vi.mock("@/lib/config", () => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args),
     storage: {
       from: (...args: unknown[]) => storageFromMock(...args),
     },
@@ -24,6 +26,9 @@ import { useCreateListingConnections } from "@/hooks/useCreateListingConnections
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockReset();
+  rpcMock.mockImplementation((fn: string) =>
+    fromMock(fn === "get_public_listing_catalogue" ? "public_listing_catalogue" : fn));
   storageFromMock.mockReset();
 });
 
