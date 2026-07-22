@@ -60,7 +60,15 @@ async function listUsersByEmail(admin, expectedEmails) {
   return usersByEmail;
 }
 
-async function ensureAuthUser(admin, existingUser, email, password) {
+async function ensureAuthUser(admin, existingUser, email, password, { replace = false } = {}) {
+  if (existingUser && replace) {
+    const { error: deleteError } = await admin.auth.admin.deleteUser(existingUser.id);
+    if (deleteError) {
+      throw new Error(`Could not reset disposable staging Auth user ${email}: ${deleteError.message}`);
+    }
+    existingUser = null;
+  }
+
   const attributes = {
     password,
     email_confirm: true,
@@ -85,13 +93,26 @@ async function ensureAuthUser(admin, existingUser, email, password) {
   return data.user;
 }
 
-async function normalizeNonAdminIdentity(admin, user, role, participantType) {
+async function normalizeNonAdminIdentity(admin, user, { requireIncompleteOnboarding = false } = {}) {
+  const { data: currentProfile, error: readProfileError } = await admin
+    .from("profiles")
+    .select("role, participant_type, is_platform_admin")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readProfileError) {
+    throw new Error(`Could not inspect staging profile ${user.email}: ${readProfileError.message}`);
+  }
+  if (currentProfile?.role === "admin" || currentProfile?.is_platform_admin === true) {
+    throw new Error(`Refusing to use admin identity ${user.email} as an RLS fixture.`);
+  }
+  if (requireIncompleteOnboarding && currentProfile?.participant_type != null) {
+    throw new Error(`Onboarding fixture ${user.email} was not reset to an incomplete profile.`);
+  }
+
   const now = new Date().toISOString();
   const { error: profileError } = await admin.from("profiles").upsert(
     {
       user_id: user.id,
-      role,
-      participant_type: participantType,
       account_status: "active",
       account_moderated_at: null,
       account_moderated_by: null,
@@ -145,11 +166,12 @@ export async function prepareIsolatedSecurityFixtures() {
     existingByEmail.get(onboardingEmail),
     onboardingEmail,
     onboardingPassword,
+    { replace: true },
   );
 
-  await normalizeNonAdminIdentity(admin, userA, "buyer", "buyer");
-  await normalizeNonAdminIdentity(admin, userB, "seller", "seller");
-  await normalizeNonAdminIdentity(admin, onboardingUser, "buyer", null);
+  await normalizeNonAdminIdentity(admin, userA);
+  await normalizeNonAdminIdentity(admin, userB);
+  await normalizeNonAdminIdentity(admin, onboardingUser, { requireIncompleteOnboarding: true });
 
   console.log(`Prepared three isolated staging security identities for project ${requireEnv("VITE_SUPABASE_PROJECT_ID")}.`);
 }

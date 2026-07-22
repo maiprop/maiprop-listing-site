@@ -123,6 +123,8 @@ describe("CI live-safe security workflow", () => {
       'requireEnv("E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS")',
     );
     expect(stagingFixtureScript).toContain("is_platform_admin: false");
+    expect(stagingFixtureScript).toContain('currentProfile?.role === "admin"');
+    expect(stagingFixtureScript).toContain("{ replace: true }");
     expect(stagingFixtureScript).toContain('.from("user_roles")');
     expect(stagingFixtureScript).toContain(".delete()");
     expect(stagingFixtureScript).toContain("realtime: { transport: WebSocket }");
