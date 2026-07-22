@@ -8,7 +8,7 @@ const migration = readFileSync(
     "supabase/migrations/20260722060307_replace_definer_listing_views_with_scoped_rpcs.sql",
   ),
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 
 describe("listing catalogue RPC boundary migration", () => {
   it("makes catalogue views invoker-scoped and unavailable to API roles", () => {
