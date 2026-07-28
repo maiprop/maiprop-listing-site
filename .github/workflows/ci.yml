@@ -924,15 +924,14 @@ jobs:
           retention-days: 30
 
   deploy:
-    name: Deploy to Cloudflare Pages
+    name: Production deployment disabled
     needs: [quality, release-safety, e2e, e2e-security-staging, migrations-validate, lighthouse]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    uses: ./.github/workflows/reusable-cloudflare-production-deploy.yml
-    secrets: inherit
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::error::Production deployment is disabled pending the exact-SHA release train."
+          exit 1
 
   deploy-supabase-staging:
     name: Prepare Supabase
