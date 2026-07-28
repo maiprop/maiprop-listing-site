@@ -29,6 +29,7 @@ concurrency:
 jobs:
   deploy:
     name: Production database migration gate
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment: production
 

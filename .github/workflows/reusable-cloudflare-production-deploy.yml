@@ -11,10 +11,10 @@ permissions:
 jobs:
   deploy:
     name: Deploy to Cloudflare Pages
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     concurrency:
       group: cloudflare-pages-production
       cancel-in-progress: false

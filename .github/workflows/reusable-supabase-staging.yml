@@ -91,6 +91,7 @@ jobs:
             else
               echo "deploy=false" >> "$GITHUB_OUTPUT"
               echo "No Supabase DB/function changes detected: Supabase prep skipped."
+              echo "eligible=false" >> "$GITHUB_OUTPUT"
             fi
             exit 0
           fi
@@ -136,7 +137,8 @@ jobs:
             echo "Supabase changes detected."
           else
             echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "No Supabase DB/function diff detected; isolated staging parity remains enabled."
+            echo "No Supabase DB/function diff detected: Supabase prep skipped."
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Resolve Supabase staging target
