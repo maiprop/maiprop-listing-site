@@ -7,11 +7,11 @@ const cloudflareHttpMutationWorkflows = new Set([
 const currentMainMutationWorkflowDigests = new Map([
   [
     ".github/workflows/ci.yml",
-    "b1b70d247d74deac1a56bcfefa0faf72e7806d063a0d39e277b77431b9d402e0",
+    "48f7797862c145bb528dbf44fe9c8292ff9843fbfabb37a3953378b0180be4f7",
   ],
   [
     ".github/workflows/reusable-cloudflare-production-deploy.yml",
-    "5ec7f75c365e3f645ae77be405ae15f5e798069ba6a42df91a082f97a9dc8f8a",
+    "d37f0a6f6adbf6938037d561056a36452736363a364b2d979bd495d700ab0c23",
   ],
 ]);
 
@@ -67,7 +67,7 @@ function matchesCurrentMainMutationWorkflow(workflowPath, text) {
   );
   if (!expectedDigest) return false;
   const actualDigest = createHash("sha256")
-    .update(String(text ?? ""))
+    .update(String(text ?? "").replace(/\r\n?/g, "\n"))
     .digest("hex");
   return (
     actualDigest === expectedDigest &&

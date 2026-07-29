@@ -161,4 +161,29 @@ steps:
       }),
     ).toMatch(/unauthorized/i);
   });
+
+  it.each([
+    ".github/workflows/ci.yml",
+    ".github/workflows/reusable-cloudflare-production-deploy.yml",
+  ])(
+    "accepts LF and CRLF forms of pinned %s but rejects altered content",
+    (workflowPath) => {
+      const root = resolve(import.meta.dirname, "..");
+      const baseline = readFileSync(resolve(root, workflowPath), "utf8");
+      const lf = baseline.replace(/\r\n?/g, "\n");
+      const crlf = lf.replace(/\n/g, "\r\n");
+
+      for (const text of [lf, crlf]) {
+        expect(
+          cloudflareHttpMutationViolation({ workflowPath, text }),
+        ).toBeNull();
+        expect(
+          cloudflareHttpMutationViolation({
+            workflowPath,
+            text: `${text}# altered\n`,
+          }),
+        ).toMatch(/unauthorized/i);
+      }
+    },
+  );
 });

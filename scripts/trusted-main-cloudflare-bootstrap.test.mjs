@@ -149,6 +149,53 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     expect(control.run).toContain('"preview_deployment_setting": "none"');
   });
 
+  it("proves current main before credentials and immediately before every PATCH", () => {
+    const parsed = parsedWorkflow("lock-cloudflare-pages-git-deploys.yml");
+    const preflight = parsed.jobs["verify-lock-environment"];
+    const lock = parsed.jobs.lock;
+    const identity = preflight.steps[0];
+    const environmentPolicy = preflight.steps[1];
+    const control = lock.steps.find(
+      (step) => step.name === "Lock both Cloudflare Pages Git integrations",
+    );
+
+    expect(lock.needs).toBe("verify-lock-environment");
+    expect(identity.name).toBe("Verify current main workflow identity");
+    expect(identity.env).toEqual({ GH_TOKEN: "${{ github.token }}" });
+    expect(identity.run).toContain(
+      'CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq \'.commit.sha\')"',
+    );
+    expect(identity.run).toContain(
+      'if [ "$CURRENT_MAIN" != "$GITHUB_WORKFLOW_SHA" ]; then',
+    );
+    expect(JSON.stringify(identity)).not.toContain("CLOUDFLARE_");
+    expect(environmentPolicy.name).toBe("Verify main-only lock namespace");
+
+    expect(control.env.GH_TOKEN).toBe("${{ github.token }}");
+    const patchFunction = control.run.slice(
+      control.run.indexOf("patch_project()"),
+      control.run.indexOf("PRODUCTION_PRE="),
+    );
+    expect(patchFunction).toContain(
+      'CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq \'.commit.sha\')"',
+    );
+    expect(patchFunction.indexOf('CURRENT_MAIN="$(gh api')).toBeLessThan(
+      patchFunction.indexOf("--request PATCH"),
+    );
+    expect(patchFunction).toContain(
+      'if [ "$CURRENT_MAIN" != "$GITHUB_WORKFLOW_SHA" ]; then',
+    );
+    expect(
+      control.run.match(/if ! patch_project \\/g),
+    ).toHaveLength(2);
+    expect(lock.steps.some((step) => step.uses?.includes("checkout"))).toBe(
+      false,
+    );
+    expect(lock.steps.some((step) => /npm\s/.test(step.run ?? ""))).toBe(
+      false,
+    );
+  });
+
   it("documents the bootstrap token and pinned project ID contracts", () => {
     const envSetup = readFileSync(resolve(root, "docs", "ENV_SETUP.md"), "utf8");
     const rotation = readFileSync(

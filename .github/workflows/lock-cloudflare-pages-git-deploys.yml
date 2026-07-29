@@ -19,6 +19,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Verify current main workflow identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if [ "$CURRENT_MAIN" != "$GITHUB_WORKFLOW_SHA" ]; then
+            echo "::error::Lock workflow SHA $GITHUB_WORKFLOW_SHA is not current main $CURRENT_MAIN."
+            exit 1
+          fi
+
       - name: Verify main-only lock namespace
         env:
           GH_TOKEN: ${{ github.token }}
@@ -58,6 +69,7 @@ jobs:
     steps:
       - name: Lock both Cloudflare Pages Git integrations
         env:
+          GH_TOKEN: ${{ github.token }}
           CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_PAGES_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -174,6 +186,7 @@ jobs:
             local source_type="$2"
             local out="$3"
             local body="$RAW_DIR/$name-patch-body.json"
+            local CURRENT_MAIN
             jq -n --arg source_type "$source_type" '{
               source: {
                 "type": $source_type,
@@ -184,6 +197,11 @@ jobs:
                 }
               }
             }' > "$body"
+            CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+            if [ "$CURRENT_MAIN" != "$GITHUB_WORKFLOW_SHA" ]; then
+              echo "::error::Lock workflow SHA $GITHUB_WORKFLOW_SHA is not current main $CURRENT_MAIN."
+              return 1
+            fi
             curl -fsS --retry 3 \
               --request PATCH \
               -H "Authorization: Bearer $CLOUDFLARE_PAGES_EDIT_TOKEN" \
