@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import yaml from "js-yaml";
 
 const root = process.cwd();
@@ -219,12 +220,54 @@ function scanEnvNames() {
   };
 }
 
+export function findCloudflareHttpMutations(text) {
+  const source = String(text ?? "");
+  if (
+    !/https:\/\/api\.cloudflare\.com\/client\/v4/i.test(source) &&
+    !/\bCLOUDFLARE_(?:ACCOUNT|API|PAGES)[A-Z0-9_]*\b/.test(source)
+  ) {
+    return [];
+  }
+
+  const methods = new Set();
+  for (const match of source.matchAll(
+    /(?:--request(?:=|\s+)|-X\s*)["']?(POST|PUT|PATCH|DELETE)\b/gi,
+  )) {
+    methods.add(match[1].toUpperCase());
+  }
+  if (
+    /\bcurl\b/i.test(source) &&
+    /--data(?:-raw|-binary)?(?:=|\s+)/i.test(source) &&
+    methods.size === 0
+  ) {
+    methods.add("POST");
+  }
+  return [...methods].sort();
+}
+
+export function cloudflareHttpMutationViolation({
+  workflowPath,
+  text,
+  authorized,
+}) {
+  const methods = findCloudflareHttpMutations(text);
+  if (methods.length === 0) return null;
+  if (/evidence/i.test(workflowPath)) {
+    return `${workflowPath} contains Cloudflare HTTP mutation wiring in an evidence workflow`;
+  }
+  if (!authorized) {
+    return `${workflowPath} contains unauthorized Cloudflare HTTP mutation wiring`;
+  }
+  return null;
+}
+
 function scanWorkflows() {
   const files = readdirSync(workflowDir)
     .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
     .map((name) => join(workflowDir, name));
 
   const violations = [];
+  const providerHttpMutations = [];
   const secrets = new Set();
   const workflowText = {};
   const workflowYaml = {};
@@ -269,12 +312,27 @@ function scanWorkflows() {
   }
 
   const authorizedMutationWorkflows = new Set([
+    ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
     ".github/workflows/stage-release.yml",
     ".github/workflows/reusable-supabase-staging.yml",
   ]);
   const forbiddenMutationWiring =
     /\bI_KNOW_THIS_IS_PROD\b|\bSUPABASE_SERVICE_ROLE_KEY\b|\bSUPABASE_STAGING_DB_URL\b|\bstaging-load-dataset\.mjs\b|\bsupabase\s+(?:db\s+push|functions\s+deploy|migration\s+repair)\b|\bpages\s+deploy\b/;
   for (const [workflowPath, text] of Object.entries(workflowText)) {
+    const cloudflareMethods = findCloudflareHttpMutations(text);
+    for (const method of cloudflareMethods) {
+      providerHttpMutations.push({
+        provider: "cloudflare",
+        workflow: workflowPath,
+        method,
+      });
+    }
+    const cloudflareViolation = cloudflareHttpMutationViolation({
+      workflowPath,
+      text,
+      authorized: authorizedMutationWorkflows.has(workflowPath),
+    });
+    if (cloudflareViolation) violations.push(cloudflareViolation);
     if (authorizedMutationWorkflows.has(workflowPath)) continue;
     if (forbiddenMutationWiring.test(text)) {
       violations.push(
@@ -595,6 +653,7 @@ function scanWorkflows() {
 
   return {
     violations,
+    provider_http_mutations: providerHttpMutations,
     secrets: [...secrets].sort(),
     undocumented_secrets: undocumentedSecrets,
   };
@@ -860,13 +919,20 @@ function collectInventory() {
   };
 }
 
-const inventory = collectInventory();
-if (outPath) {
-  writeFileSync(join(root, outPath), `${JSON.stringify(inventory, null, 2)}\n`);
-}
-console.log(JSON.stringify(inventory, null, 2));
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  const inventory = collectInventory();
+  if (outPath) {
+    writeFileSync(
+      join(root, outPath),
+      `${JSON.stringify(inventory, null, 2)}\n`,
+    );
+  }
+  console.log(JSON.stringify(inventory, null, 2));
 
-if (checkMode) {
+  if (checkMode) {
   const failures = [
     ...inventory.function_inventory_gaps.source_without_config.map(
       (name) => `Function source without config: ${name}`,
@@ -935,10 +1001,11 @@ if (checkMode) {
     }
   }
 
-  if (failures.length) {
-    console.error("\n[release-safety] FAIL");
-    for (const failure of failures) console.error(`- ${failure}`);
-    process.exit(1);
+    if (failures.length) {
+      console.error("\n[release-safety] FAIL");
+      for (const failure of failures) console.error(`- ${failure}`);
+      process.exit(1);
+    }
+    console.error("\n[release-safety] OK");
   }
-  console.error("\n[release-safety] OK");
 }

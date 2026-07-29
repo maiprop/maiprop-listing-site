@@ -56,10 +56,19 @@ add a row here in the same PR.
 | `LHCI_GITHUB_APP_TOKEN` | Lighthouse CI workflow | GH repo secrets | **365 days** | CI owner |
 | `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` | Playwright e2e | GH repo secrets | On demo-account password change | CI owner |
 | `CLOUDFLARE_API_TOKEN` | GitHub Actions Cloudflare Pages deploys, env sync, rollback | GH repo secrets | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_PAGES_READ_TOKEN` | Isolated read-only Pages posture verification | GH repo secrets | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Isolated manual lock of Pages Git deployments | GH repo secrets | **90 days** or on compromise | Platform lead |
 | `CF_ACCESS_CLIENT_ID` / `CLOUDFLARE_ACCESS_CLIENT_ID` | Deploy smoke checks against Cloudflare Access-protected previews | GH repo or environment secrets | **90 days** or on compromise | Platform lead |
 | `CF_ACCESS_CLIENT_SECRET` / `CLOUDFLARE_ACCESS_CLIENT_SECRET` | Deploy smoke checks against Cloudflare Access-protected previews | GH repo or environment secrets | **90 days** or on compromise | Platform lead |
 | `CF_ACCESS_TOKEN` / `CLOUDFLARE_ACCESS_TOKEN` | Optional pre-issued Cloudflare Access JWT for deploy diagnostics | GH repo or environment secrets | On expiry or compromise | Platform lead |
 | `VITE_STRIPE_PRICE_*` (8 IDs) | `rolePlanMap.ts` fallbacks | Cloudflare Pages env | Only if Stripe products replaced | Finance lead |
+
+The isolated main-only Cloudflare control steps may use
+`CLOUDFLARE_API_TOKEN` as an explicit temporary fallback while the named
+read/edit tokens are absent. After project identity bootstrap, create
+least-privilege `CLOUDFLARE_PAGES_READ_TOKEN` and
+`CLOUDFLARE_PAGES_EDIT_TOKEN`, verify both workflows use them, then rotate the
+legacy token so it is no longer a usable control-plane fallback.
 
 ---
 

@@ -73,6 +73,44 @@ describe("production release validation", () => {
     })).toThrow(/newest exact-SHA CI run/i);
   });
 
+  it("orders exact-SHA readiness runs by newest run ID before run attempt", () => {
+    const run = selectReadinessRun({
+      sha,
+      runs: [
+        {
+          id: 300,
+          run_attempt: 99,
+          head_sha: sha,
+          event: "push",
+          status: "completed",
+          conclusion: "success",
+        },
+        {
+          id: 301,
+          run_attempt: 1,
+          head_sha: sha,
+          event: "push",
+          status: "completed",
+          conclusion: "success",
+        },
+      ],
+      jobsByRun: new Map([
+        [300, [{
+          name: "Immutable release candidate built",
+          status: "completed",
+          conclusion: "success",
+        }]],
+        [301, [{
+          name: "Immutable release candidate built",
+          status: "completed",
+          conclusion: "success",
+        }]],
+      ]),
+    });
+
+    expect(run.id).toBe(301);
+  });
+
   it("requires the latest main-only staging run and its attestation job", () => {
     const run = selectStagingProofRun({
       sha,
@@ -97,6 +135,44 @@ describe("production release validation", () => {
         [{ name: "Release candidate attested", status: "completed", conclusion: "success" }],
       ]]),
     })).toThrow(/newest exact-SHA staging run/i);
+  });
+
+  it("orders exact-SHA staging runs by newest run ID before run attempt", () => {
+    const run = selectStagingProofRun({
+      sha,
+      runs: [
+        {
+          id: 400,
+          run_attempt: 99,
+          head_sha: sha,
+          event: "workflow_run",
+          status: "completed",
+          conclusion: "success",
+        },
+        {
+          id: 401,
+          run_attempt: 1,
+          head_sha: sha,
+          event: "workflow_run",
+          status: "completed",
+          conclusion: "success",
+        },
+      ],
+      jobsByRun: new Map([
+        [400, [{
+          name: "Release candidate attested",
+          status: "completed",
+          conclusion: "success",
+        }]],
+        [401, [{
+          name: "Release candidate attested",
+          status: "completed",
+          conclusion: "success",
+        }]],
+      ]),
+    });
+
+    expect(run.id).toBe(401);
   });
 
   it("selects CI and staging proof from the same exact release SHA", () => {
@@ -480,69 +556,63 @@ describe("production release validation", () => {
   it("requires a non-self, allowlisted, unexpired, non-revoked approval", () => {
     const approval = {
       schema_version: 1,
+      repository: "maiprop/maiprop-listing-site",
       release_sha: sha,
+      source_tree: "b".repeat(40),
+      source_run_id: "40",
+      source_run_attempt: "2",
       artifact_sha256: "a".repeat(64),
       staging_run_id: "50",
+      staging_run_attempt: "1",
       approval_run_id: "60",
+      approval_run_attempt: "3",
       approver: "release-reviewer",
+      nonce: "c".repeat(64),
       approved_at: "2026-07-28T12:00:00.000Z",
       expires_at: "2026-07-28T13:00:00.000Z",
       revoked: false,
     };
-
-    expect(validateReleaseApproval({
-      approval,
+    const expected = {
       sha,
+      repository: "maiprop/maiprop-listing-site",
+      sourceTree: "b".repeat(40),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
       artifactSha256: "a".repeat(64),
       stagingRunId: "50",
+      stagingRunAttempt: "1",
       approvalRunId: "60",
+      approvalRunAttempt: "3",
       deployActor: "release-operator",
       allowedApprovers: ["release-reviewer"],
       now: new Date("2026-07-28T12:30:00.000Z"),
+    };
+
+    expect(validateReleaseApproval({
+      approval,
+      ...expected,
     })).toEqual(approval);
 
     expect(() => validateReleaseApproval({
       approval,
-      sha,
-      artifactSha256: "a".repeat(64),
-      stagingRunId: "50",
-      approvalRunId: "60",
+      ...expected,
       deployActor: "release-reviewer",
-      allowedApprovers: ["release-reviewer"],
-      now: new Date("2026-07-28T12:30:00.000Z"),
     })).toThrow(/independent/i);
 
     expect(() => validateReleaseApproval({
       approval: { ...approval, revoked: true },
-      sha,
-      artifactSha256: "a".repeat(64),
-      stagingRunId: "50",
-      approvalRunId: "60",
-      deployActor: "release-operator",
-      allowedApprovers: ["release-reviewer"],
-      now: new Date("2026-07-28T12:30:00.000Z"),
+      ...expected,
     })).toThrow(/revoked/i);
 
     expect(() => validateReleaseApproval({
       approval,
-      sha,
-      artifactSha256: "a".repeat(64),
-      stagingRunId: "50",
-      approvalRunId: "60",
-      deployActor: "release-operator",
-      allowedApprovers: ["release-reviewer"],
+      ...expected,
       now: new Date("2026-07-28T13:00:00.000Z"),
     })).toThrow(/expired/i);
 
     expect(() => validateReleaseApproval({
       approval: { ...approval, revoked: undefined },
-      sha,
-      artifactSha256: "a".repeat(64),
-      stagingRunId: "50",
-      approvalRunId: "60",
-      deployActor: "release-operator",
-      allowedApprovers: ["release-reviewer"],
-      now: new Date("2026-07-28T12:30:00.000Z"),
+      ...expected,
     })).toThrow(/revoked.*false/i);
 
     expect(() => validateReleaseApproval({
@@ -550,14 +620,75 @@ describe("production release validation", () => {
         ...approval,
         expires_at: "2026-07-28T14:00:00.001Z",
       },
+      ...expected,
+    })).toThrow(/two hours/i);
+
+    expect(() => validateReleaseApproval({
+      approval: {
+        ...approval,
+        approved_at: "2026-07-28T12:31:01.000Z",
+        expires_at: "2026-07-28T13:00:00.000Z",
+      },
+      ...expected,
+    })).toThrow(/future/i);
+  });
+
+  it("binds approval schema v1 to the full release tuple and a cryptographic nonce", () => {
+    const approval = {
+      schema_version: 1,
+      repository: "maiprop/maiprop-listing-site",
+      release_sha: sha,
+      source_tree: "b".repeat(40),
+      source_run_id: "40",
+      source_run_attempt: "2",
+      artifact_sha256: "a".repeat(64),
+      staging_run_id: "50",
+      staging_run_attempt: "1",
+      approval_run_id: "60",
+      approval_run_attempt: "3",
+      approver: "release-reviewer",
+      nonce: "c".repeat(64),
+      approved_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T13:00:00.000Z",
+      revoked: false,
+    };
+    const expected = {
+      approval,
       sha,
+      repository: "maiprop/maiprop-listing-site",
+      sourceTree: "b".repeat(40),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
       artifactSha256: "a".repeat(64),
       stagingRunId: "50",
+      stagingRunAttempt: "1",
       approvalRunId: "60",
+      approvalRunAttempt: "3",
       deployActor: "release-operator",
       allowedApprovers: ["release-reviewer"],
       now: new Date("2026-07-28T12:30:00.000Z"),
-    })).toThrow(/two hours/i);
+    };
+
+    for (const [field, value, pattern] of [
+      ["repository", "other/repository", /repository/i],
+      ["source_tree", "d".repeat(40), /source tree/i],
+      ["source_run_id", "41", /source run/i],
+      ["source_run_attempt", "3", /source run attempt/i],
+      ["staging_run_id", "51", /staging run/i],
+      ["staging_run_attempt", "2", /staging run attempt/i],
+      ["approval_run_id", "61", /approval run/i],
+      ["approval_run_attempt", "4", /approval run attempt/i],
+      ["artifact_sha256", "d".repeat(64), /artifact/i],
+      ["nonce", "not-a-cryptographic-nonce", /nonce/i],
+    ]) {
+      expect(
+        () => validateReleaseApproval({
+          ...expected,
+          approval: { ...approval, [field]: value },
+        }),
+        field,
+      ).toThrow(pattern);
+    }
   });
 
   it("revalidates the exact mutation lease before every production boundary", () => {
@@ -565,32 +696,121 @@ describe("production release validation", () => {
       schema_version: 1,
       release_sha: sha,
       artifact_sha256: "b".repeat(64),
+      source_run_id: "40",
+      source_run_attempt: "2",
       staging_run_id: "50",
+      staging_run_attempt: "1",
       approval_run_id: "60",
+      approval_run_attempt: "1",
       production_run_id: "70",
+      production_run_attempt: "3",
       issued_at: "2026-07-28T12:00:00.000Z",
-      expires_at: "2026-07-28T12:45:00.000Z",
+      expires_at: "2026-07-28T12:15:00.000Z",
     };
 
     expect(validateMutationLease({
       lease,
       sha,
       artifactSha256: "b".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
       stagingRunId: "50",
+      stagingRunAttempt: "1",
       approvalRunId: "60",
+      approvalRunAttempt: "1",
       productionRunId: "70",
-      now: new Date("2026-07-28T12:30:00.000Z"),
+      productionRunAttempt: "3",
+      now: new Date("2026-07-28T12:05:00.000Z"),
     })).toEqual(lease);
 
     expect(() => validateMutationLease({
       lease,
       sha,
       artifactSha256: "c".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
       stagingRunId: "50",
+      stagingRunAttempt: "1",
       approvalRunId: "60",
+      approvalRunAttempt: "1",
       productionRunId: "70",
-      now: new Date("2026-07-28T12:30:00.000Z"),
+      productionRunAttempt: "3",
+      now: new Date("2026-07-28T12:05:00.000Z"),
     })).toThrow(/artifact/i);
+
+    expect(() => validateMutationLease({
+      lease,
+      sha,
+      artifactSha256: "b".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "3",
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      productionRunId: "70",
+      productionRunAttempt: "3",
+      now: new Date("2026-07-28T12:05:00.000Z"),
+    })).toThrow(/source run attempt/i);
+
+    for (const [overrides, pattern] of [
+      [{ sourceRunId: "41" }, /source run/i],
+      [{ stagingRunAttempt: "2" }, /staging run attempt/i],
+      [{ approvalRunAttempt: "2" }, /approval run attempt/i],
+    ]) {
+      expect(() => validateMutationLease({
+        lease,
+        sha,
+        artifactSha256: "b".repeat(64),
+        sourceRunId: "40",
+        sourceRunAttempt: "2",
+        stagingRunId: "50",
+        stagingRunAttempt: "1",
+        approvalRunId: "60",
+        approvalRunAttempt: "1",
+        productionRunId: "70",
+        productionRunAttempt: "3",
+        now: new Date("2026-07-28T12:05:00.000Z"),
+        ...overrides,
+      })).toThrow(pattern);
+    }
+
+    expect(() => validateMutationLease({
+      lease: {
+        ...lease,
+        expires_at: "2026-07-28T12:15:00.001Z",
+      },
+      sha,
+      artifactSha256: "b".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      productionRunId: "70",
+      productionRunAttempt: "3",
+      now: new Date("2026-07-28T12:05:00.000Z"),
+    })).toThrow(/15 minutes/i);
+
+    expect(() => validateMutationLease({
+      lease: {
+        ...lease,
+        issued_at: "2026-07-28T12:01:01.000Z",
+        expires_at: "2026-07-28T12:10:00.000Z",
+      },
+      sha,
+      artifactSha256: "b".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      productionRunId: "70",
+      productionRunAttempt: "3",
+      now: new Date("2026-07-28T12:00:00.000Z"),
+    })).toThrow(/future/i);
   });
 
   it("exposes approval and mutation-lease validation through the CLI", () => {
@@ -599,11 +819,18 @@ describe("production release validation", () => {
     const leasePath = resolve(directory, "lease.json");
     writeFileSync(approvalPath, JSON.stringify({
       schema_version: 1,
+      repository: "maiprop/maiprop-listing-site",
       release_sha: sha,
+      source_tree: "b".repeat(40),
+      source_run_id: "40",
+      source_run_attempt: "2",
       artifact_sha256: "a".repeat(64),
       staging_run_id: "50",
+      staging_run_attempt: "1",
       approval_run_id: "60",
+      approval_run_attempt: "3",
       approver: "release-reviewer",
+      nonce: "c".repeat(64),
       approved_at: "2026-07-28T12:00:00.000Z",
       expires_at: "2026-07-28T13:00:00.000Z",
       revoked: false,
@@ -612,11 +839,16 @@ describe("production release validation", () => {
       schema_version: 1,
       release_sha: sha,
       artifact_sha256: "a".repeat(64),
+      source_run_id: "40",
+      source_run_attempt: "2",
       staging_run_id: "50",
+      staging_run_attempt: "1",
       approval_run_id: "60",
+      approval_run_attempt: "1",
       production_run_id: "70",
+      production_run_attempt: "3",
       issued_at: "2026-07-28T12:00:00.000Z",
-      expires_at: "2026-07-28T12:45:00.000Z",
+      expires_at: "2026-07-28T12:15:00.000Z",
     }));
 
     try {
@@ -627,12 +859,24 @@ describe("production release validation", () => {
         approvalPath,
         "--sha",
         sha,
+        "--repository",
+        "maiprop/maiprop-listing-site",
+        "--source-tree",
+        "b".repeat(40),
+        "--source-run-id",
+        "40",
+        "--source-run-attempt",
+        "2",
         "--artifact-sha256",
         "a".repeat(64),
         "--staging-run-id",
         "50",
+        "--staging-run-attempt",
+        "1",
         "--approval-run-id",
         "60",
+        "--approval-run-attempt",
+        "3",
         "--deploy-actor",
         "release-operator",
         "--allowed-approvers",
@@ -652,14 +896,24 @@ describe("production release validation", () => {
         sha,
         "--artifact-sha256",
         "a".repeat(64),
+        "--source-run-id",
+        "40",
+        "--source-run-attempt",
+        "2",
         "--staging-run-id",
         "50",
+        "--staging-run-attempt",
+        "1",
         "--approval-run-id",
         "60",
+        "--approval-run-attempt",
+        "1",
         "--production-run-id",
         "70",
+        "--production-run-attempt",
+        "3",
         "--now",
-        "2026-07-28T12:30:00.000Z",
+        "2026-07-28T12:05:00.000Z",
       ], { cwd: root, encoding: "utf8" });
       expect(leaseResult.status, leaseResult.stderr).toBe(0);
       expect(leaseResult.stdout).toContain("Verified production mutation lease");

@@ -17,6 +17,8 @@ const APPROVAL_JOB = "Production release approved";
 const DATABASE_JOB = "Production database migration gate";
 const EDGE_JOB = "Deploy to Supabase";
 const GITHUB_API = "https://api.github.com";
+const MAX_CLOCK_SKEW_MS = 60 * 1000;
+const MAX_MUTATION_LEASE_MS = 15 * 60 * 1000;
 
 export function normalizeReleaseSha(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
@@ -45,8 +47,8 @@ export function selectReadinessRun({ sha, runs, jobsByRun }) {
       String(run?.head_sha ?? "").toLowerCase() === expectedSha &&
       run?.event === "push")
     .sort((a, b) =>
-      Number(b.run_attempt ?? 0) - Number(a.run_attempt ?? 0) ||
-      Number(b.id ?? 0) - Number(a.id ?? 0));
+      Number(b.id ?? 0) - Number(a.id ?? 0) ||
+      Number(b.run_attempt ?? 0) - Number(a.run_attempt ?? 0));
 
   const latest = candidates[0];
   if (!latest) {
@@ -73,8 +75,8 @@ export function selectStagingProofRun({ sha, runs, jobsByRun }) {
       String(run?.head_sha ?? "").toLowerCase() === expectedSha &&
       run?.event === "workflow_run")
     .sort((a, b) =>
-      Number(b.run_attempt ?? 0) - Number(a.run_attempt ?? 0) ||
-      Number(b.id ?? 0) - Number(a.id ?? 0));
+      Number(b.id ?? 0) - Number(a.id ?? 0) ||
+      Number(b.run_attempt ?? 0) - Number(a.run_attempt ?? 0));
 
   const latest = candidates[0];
   if (!latest) {
@@ -406,12 +408,34 @@ function requireDate(value, label) {
   return date;
 }
 
+function requireRepository(value, label) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/.test(normalized)) {
+    throw new Error(`${label} must be in owner/name form.`);
+  }
+  return normalized;
+}
+
+function requireFullSha(value, label) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!FULL_SHA.test(normalized)) {
+    throw new Error(`${label} must be a full 40-character Git SHA.`);
+  }
+  return normalized;
+}
+
 export function validateReleaseApproval({
   approval,
   sha,
+  repository,
+  sourceTree,
+  sourceRunId,
+  sourceRunAttempt,
   artifactSha256,
   stagingRunId,
+  stagingRunAttempt,
   approvalRunId,
+  approvalRunAttempt,
   deployActor,
   allowedApprovers,
   now = new Date(),
@@ -438,27 +462,39 @@ export function validateReleaseApproval({
     throw new Error("Release approval SHA does not match.");
   }
   if (
+    requireRepository(record.repository, "Approval repository") !==
+    requireRepository(repository, "Expected repository")
+  ) {
+    throw new Error("Release approval repository does not match.");
+  }
+  if (
+    requireFullSha(record.source_tree, "Approval source tree") !==
+    requireFullSha(sourceTree, "Expected source tree")
+  ) {
+    throw new Error("Release approval source tree does not match.");
+  }
+  if (
     requireSha256(record.artifact_sha256, "Approval artifact digest") !==
     expectedArtifact
   ) {
     throw new Error("Release approval artifact digest does not match.");
   }
-  if (
-    requirePositiveIntegerString(
-      record.staging_run_id,
-      "Approval staging run ID",
-    ) !== expectedStagingRunId
-  ) {
-    throw new Error("Release approval staging run does not match.");
+  for (const [field, expected, label] of [
+    ["source_run_id", sourceRunId, "source run"],
+    ["source_run_attempt", sourceRunAttempt, "source run attempt"],
+    ["staging_run_id", expectedStagingRunId, "staging run"],
+    ["staging_run_attempt", stagingRunAttempt, "staging run attempt"],
+    ["approval_run_id", expectedApprovalRunId, "approval run"],
+    ["approval_run_attempt", approvalRunAttempt, "approval run attempt"],
+  ]) {
+    if (
+      requirePositiveIntegerString(record[field], `Approval ${label}`) !==
+      requirePositiveIntegerString(expected, `Expected ${label}`)
+    ) {
+      throw new Error(`Release approval ${label} does not match.`);
+    }
   }
-  if (
-    requirePositiveIntegerString(
-      record.approval_run_id,
-      "Approval run ID",
-    ) !== expectedApprovalRunId
-  ) {
-    throw new Error("Release approval run does not match.");
-  }
+  requireSha256(record.nonce, "Approval nonce");
   if (record.revoked !== false) {
     throw new Error("Release approval revoked must be false.");
   }
@@ -488,6 +524,9 @@ export function validateReleaseApproval({
   if (approvedAt >= expiresAt) {
     throw new Error("Release approval expiry must follow approval time.");
   }
+  if (approvedAt.getTime() > nowDate.getTime() + MAX_CLOCK_SKEW_MS) {
+    throw new Error("Release approval time is materially in the future.");
+  }
   if (expiresAt.getTime() - approvedAt.getTime() > 2 * 60 * 60 * 1000) {
     throw new Error("Release approval expiry must be no more than two hours.");
   }
@@ -501,9 +540,14 @@ export function validateMutationLease({
   lease,
   sha,
   artifactSha256,
+  sourceRunId,
+  sourceRunAttempt,
   stagingRunId,
+  stagingRunAttempt,
   approvalRunId,
+  approvalRunAttempt,
   productionRunId,
+  productionRunAttempt,
   now = new Date(),
 }) {
   const record = requireRecord(lease, "Mutation lease");
@@ -521,9 +565,18 @@ export function validateMutationLease({
   }
 
   for (const [field, expected, label] of [
+    ["source_run_id", sourceRunId, "source run"],
+    ["source_run_attempt", sourceRunAttempt, "source run attempt"],
     ["staging_run_id", stagingRunId, "staging run"],
+    ["staging_run_attempt", stagingRunAttempt, "staging run attempt"],
     ["approval_run_id", approvalRunId, "approval run"],
+    ["approval_run_attempt", approvalRunAttempt, "approval run attempt"],
     ["production_run_id", productionRunId, "production run"],
+    [
+      "production_run_attempt",
+      productionRunAttempt,
+      "production run attempt",
+    ],
   ]) {
     if (
       requirePositiveIntegerString(record[field], `Mutation lease ${label}`) !==
@@ -538,6 +591,12 @@ export function validateMutationLease({
   const nowDate = now instanceof Date ? now : new Date(now);
   if (issuedAt >= expiresAt) {
     throw new Error("Mutation lease expiry must follow issue time.");
+  }
+  if (issuedAt.getTime() > nowDate.getTime() + MAX_CLOCK_SKEW_MS) {
+    throw new Error("Mutation lease issue time is materially in the future.");
+  }
+  if (expiresAt.getTime() - issuedAt.getTime() > MAX_MUTATION_LEASE_MS) {
+    throw new Error("Mutation lease expiry must be no more than 15 minutes.");
   }
   if (nowDate >= expiresAt) {
     throw new Error("Mutation lease has expired.");
@@ -912,9 +971,15 @@ async function main() {
     validateReleaseApproval({
       approval,
       sha,
+      repository: argValue("--repository"),
+      sourceTree: argValue("--source-tree"),
+      sourceRunId: argValue("--source-run-id"),
+      sourceRunAttempt: argValue("--source-run-attempt"),
       artifactSha256: argValue("--artifact-sha256"),
       stagingRunId: argValue("--staging-run-id"),
+      stagingRunAttempt: argValue("--staging-run-attempt"),
       approvalRunId: argValue("--approval-run-id"),
+      approvalRunAttempt: argValue("--approval-run-attempt"),
       deployActor: argValue("--deploy-actor"),
       allowedApprovers: argValue("--allowed-approvers")
         .split(",")
@@ -935,9 +1000,14 @@ async function main() {
       lease,
       sha,
       artifactSha256: argValue("--artifact-sha256"),
+      sourceRunId: argValue("--source-run-id"),
+      sourceRunAttempt: argValue("--source-run-attempt"),
       stagingRunId: argValue("--staging-run-id"),
+      stagingRunAttempt: argValue("--staging-run-attempt"),
       approvalRunId: argValue("--approval-run-id"),
+      approvalRunAttempt: argValue("--approval-run-attempt"),
       productionRunId: argValue("--production-run-id"),
+      productionRunAttempt: argValue("--production-run-attempt"),
       now: argValue("--now") || undefined,
     });
     process.stdout.write(

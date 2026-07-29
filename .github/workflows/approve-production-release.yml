@@ -20,8 +20,71 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify-approval-environment:
+    name: Verify production approval environment
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'APPROVE_PRODUCTION_RELEASE'
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify main-only approval namespace
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ENVIRONMENT_FILE="$RUNNER_TEMP/production-approval-environment.json"
+          POLICIES_FILE="$RUNNER_TEMP/production-approval-branch-policies.json"
+          EVIDENCE_DIR="$RUNNER_TEMP/production-approval-environment-posture"
+          mkdir -p "$EVIDENCE_DIR"
+
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/environments/production-approval" \
+            > "$ENVIRONMENT_FILE"
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/environments/production-approval/deployment-branch-policies?per_page=100" \
+            > "$POLICIES_FILE"
+          jq -e '
+            .name == "production-approval" and
+            .can_admins_bypass == false and
+            .deployment_branch_policy.protected_branches == false and
+            .deployment_branch_policy.custom_branch_policies == true
+          ' "$ENVIRONMENT_FILE" > /dev/null
+          jq -e '
+            .total_count == 1 and
+            (.branch_policies | length) == 1 and
+            .branch_policies[0].name == "main"
+          ' "$POLICIES_FILE" > /dev/null
+
+          jq -n \
+            --slurpfile environment "$ENVIRONMENT_FILE" \
+            --slurpfile policies "$POLICIES_FILE" \
+            '{
+              schema_version: 1,
+              evidence_type: "production-approval-environment-posture",
+              environment: $environment[0].name,
+              can_admins_bypass: $environment[0].can_admins_bypass,
+              deployment_branch_policy: $environment[0].deployment_branch_policy,
+              branch_policies: $policies[0].branch_policies,
+              "required_reviewers_available": false,
+              plan_constraint: "private-repository-on-free-organization-plan",
+              "compensating_control": "signed-allowlisted-independent-actor",
+              verified: true
+            }' \
+            > "$EVIDENCE_DIR/production-approval-environment-posture.json"
+
+      - name: Upload production approval environment posture
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-approval-environment-posture-${{ github.run_id }}
+          path: ${{ runner.temp }}/production-approval-environment-posture/
+          if-no-files-found: error
+          retention-days: 7
+
   approve:
     name: Production release approved
+    needs: verify-approval-environment
     if: github.ref == 'refs/heads/main' && inputs.confirm == 'APPROVE_PRODUCTION_RELEASE'
     environment: production-approval
     permissions:
@@ -60,8 +123,9 @@ jobs:
             exit 1
           fi
 
-          git fetch --no-tags origin main
-          CURRENT_MAIN="$(git rev-parse origin/main)"
+          CURRENT_MAIN="$(
+            gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha'
+          )"
           if [ "$CURRENT_MAIN" != "$RELEASE_SHA" ]; then
             echo "::error::Release SHA $RELEASE_SHA is no longer current main ($CURRENT_MAIN)."
             exit 1
@@ -121,29 +185,47 @@ jobs:
             exit 1
           fi
           echo "artifact_sha256=$ARTIFACT_SHA256" >> "$GITHUB_OUTPUT"
+          echo "source_tree=$SOURCE_TREE" >> "$GITHUB_OUTPUT"
+          echo "source_run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "source_run_attempt=$SOURCE_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
           echo "staging_run_id=$STAGING_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "staging_run_attempt=$STAGING_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
 
       - name: Create short-lived exact-SHA approval
         env:
           APPROVAL_RUN_ID: ${{ github.run_id }}
+          APPROVAL_RUN_ATTEMPT: ${{ github.run_attempt }}
           APPROVER: ${{ github.actor }}
           ARTIFACT_SHA256: ${{ steps.evidence.outputs.artifact_sha256 }}
           RELEASE_SHA: ${{ inputs.release_sha }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_TREE: ${{ steps.evidence.outputs.source_tree }}
+          SOURCE_RUN_ID: ${{ steps.evidence.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ steps.evidence.outputs.source_run_attempt }}
           STAGING_RUN_ID: ${{ steps.evidence.outputs.staging_run_id }}
+          STAGING_RUN_ATTEMPT: ${{ steps.evidence.outputs.staging_run_attempt }}
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
+          import { randomBytes } from "node:crypto";
           import { writeFileSync } from "node:fs";
 
           const approvedAt = new Date();
           const expiresAt = new Date(approvedAt.getTime() + 2 * 60 * 60 * 1000);
           const approval = {
             schema_version: 1,
+            repository: process.env.REPOSITORY,
             release_sha: process.env.RELEASE_SHA,
+            source_tree: process.env.SOURCE_TREE,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
             artifact_sha256: process.env.ARTIFACT_SHA256,
             staging_run_id: process.env.STAGING_RUN_ID,
+            staging_run_attempt: process.env.STAGING_RUN_ATTEMPT,
             approval_run_id: process.env.APPROVAL_RUN_ID,
+            approval_run_attempt: process.env.APPROVAL_RUN_ATTEMPT,
             approver: process.env.APPROVER,
+            nonce: randomBytes(32).toString("hex"),
             revoked: false,
             approved_at: approvedAt.toISOString(),
             expires_at: expiresAt.toISOString(),

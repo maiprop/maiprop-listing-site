@@ -23,6 +23,45 @@ lease. A release is never cancelled after it starts.
 
 ## Required GitHub Environments
 
+The repository is private on a GitHub Free organization plan. Native
+environment required reviewers and prevent-self-review are unavailable and
+must not be claimed as release controls. Before either control workflow is
+dispatched, create these namespaces manually:
+
+- `production-approval`
+- `cloudflare-git-deploy-lock`
+
+Both namespaces must disable administrator bypass, use custom deployment branch
+policies, and contain exactly one branch policy named `main`. Their preflight
+jobs query the GitHub API and fail closed when a namespace is absent or any of
+those controls differs. Do not dispatch either workflow until this posture has
+been independently verified.
+
+`production-approval` is a main-only namespace, not a native reviewer gate. Its
+compensating control is a signed exact-SHA approval created by an allowlisted
+dispatcher whose login must differ from the later deployment actor. Downstream
+validation binds the repository, release SHA, source tree, source CI run ID and
+attempt, staging run ID and attempt, approval run ID and attempt, immutable
+artifact digest, approver, timestamps, and a 256-bit cryptographic nonce.
+Validation rejects future, revoked, expired, malformed, replay-ambiguous, or
+self-approved records and requires a separately validated mutation lease with
+a maximum 15-minute lifetime.
+
+The Cloudflare lock workflow additionally requires repository secrets
+`CLOUDFLARE_PAGES_READ_TOKEN` and `CLOUDFLARE_PAGES_EDIT_TOKEN`, plus exact
+repository variables `CLOUDFLARE_PAGES_PROJECT_ID` and
+`CLOUDFLARE_STAGING_PAGES_PROJECT_ID`. Merge the workflow safely to `main`
+before its first dispatch; candidate-branch execution is rejected. Until the
+least-privilege secrets are provisioned, the isolated main-only read and edit
+steps may temporarily fall back to the existing `CLOUDFLARE_API_TOKEN`; rotate
+to the named read/edit tokens after bootstrap.
+
+When the project-ID variables are absent, the read-only standards workflow
+still GETs both fixed project names and uploads minimized evidence containing
+their IDs, then fails with a bootstrap instruction. Set both variables from
+that evidence and rerun. The mutation workflow never bootstraps identity:
+both distinct pinned IDs are mandatory and validated before either PATCH.
+
 The `production` environment must contain:
 
 - `SUPABASE_ACCESS_TOKEN`

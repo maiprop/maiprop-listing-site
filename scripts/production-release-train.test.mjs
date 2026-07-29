@@ -17,6 +17,8 @@ describe("production release train", () => {
     for (const name of [
       "ci.yml",
       "approve-production-release.yml",
+      "compliance-evidence.yml",
+      "lock-cloudflare-pages-git-deploys.yml",
       "stage-release.yml",
       "reusable-supabase-staging.yml",
       "deploy-edge-functions.yml",
@@ -42,94 +44,214 @@ describe("production release train", () => {
     );
   });
 
-  it("verifies or explicitly locks Git deploys for both Pages projects before minimized evidence upload", () => {
+  it("keeps compliance evidence read-only and isolates its Cloudflare read token", () => {
     const compliance = workflow("compliance-evidence.yml");
     const parsed = yaml.load(compliance);
+    const control = parsed.jobs["cloudflare-pages-verify"];
     const collect = parsed.jobs.collect;
     const dispatch = parsed.on.workflow_dispatch;
-    const lockStep = collect.steps.find(
-      (step) => step.name === "Lock Cloudflare Pages Git deployments",
+    const controlStep = control.steps.find(
+      (step) => step.name === "Verify Cloudflare Pages Git deployment lockout",
     );
-    const postureStep = collect.steps.find(
-      (step) => step.name === "Capture strict two-project Cloudflare Pages posture",
+    const controlUpload = control.steps.find(
+      (step) => step.name === "Upload minimized Cloudflare Pages posture evidence",
+    );
+    const controlEnforcement = control.steps.find(
+      (step) => step.name === "Enforce Cloudflare Pages posture verification",
+    );
+    const controlSource = JSON.stringify(control);
+    const collectSource = JSON.stringify(collect);
+    const evidenceDownload = collect.steps.find(
+      (step) => step.name === "Download minimized Cloudflare Pages posture evidence",
     );
 
     expect(parsed.concurrency["cancel-in-progress"]).toBe(false);
-    expect(dispatch.inputs.cloudflare_git_deploy_action).toMatchObject({
-      type: "choice",
-      default: "verify",
-      options: ["verify", "lock"],
+    expect(dispatch).toEqual({});
+    expect(control.if).toBe("${{ github.ref == 'refs/heads/main' }}");
+    expect(control.concurrency).toEqual({
+      group: "maiprop-cloudflare-pages-git-deploy-verify",
+      "cancel-in-progress": false,
     });
+    expect(controlSource).not.toContain("actions/checkout");
+    expect(controlSource).not.toContain("actions/setup-node");
+    expect(controlSource).not.toContain("npm ");
+    expect(controlSource).not.toContain("node scripts/");
+    expect(control.env).toBeUndefined();
+    expect(controlStep.env.CLOUDFLARE_PAGES_READ_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}",
+    );
+    expect(controlStep.env.CLOUDFLARE_ACCOUNT_ID).toBe(
+      "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+    );
+    expect(collect.env.CLOUDFLARE_API_TOKEN).toBeUndefined();
+    expect(collect.env.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
+    expect(collectSource).not.toContain("secrets.CLOUDFLARE_PAGES_EDIT_TOKEN");
+    expect(controlStep.run).toContain(
+      'PRODUCTION_PROJECT="maiprop-listing-site"',
+    );
+    expect(controlStep.run).toContain(
+      'STAGING_PROJECT="maiprop-listing-site-staging"',
+    );
+    expect(controlStep.run).toContain(
+      '.success == true and .result.name == $name',
+    );
+    expect(controlStep.run).toContain(
+      '($id == "" or .result.id == $id)',
+    );
+    expect(controlStep.run).toContain(
+      '.result | has("source")',
+    );
+    expect(controlStep.run).toContain(
+      '.result.source.type == "github" or .result.source.type == "gitlab"',
+    );
+    expect(controlStep.run).toContain(
+      "cloudflare-pages-git-auto-deploy-post-state.json",
+    );
+    expect(controlStep.run).toContain(
+      '.result.source.config.deployments_enabled == false',
+    );
+    expect(controlStep.run).toContain(
+      '.result.source.config.production_deployments_enabled == false',
+    );
+    expect(controlStep.run).toContain(
+      '.result.source.config.preview_deployment_setting == "none"',
+    );
+    expect(controlStep["continue-on-error"]).toBe(true);
+    expect(controlStep.run).toContain("bootstrap_required");
+    expect(controlStep.run).toContain(
+      "Set CLOUDFLARE_PAGES_PROJECT_ID and CLOUDFLARE_STAGING_PAGES_PROJECT_ID",
+    );
+    expect(controlUpload.if).toBe("${{ always() }}");
+    expect(controlUpload.with.path).toBe(
+      "${{ runner.temp }}/cloudflare-pages-posture-evidence/",
+    );
+    expect(controlUpload.with.path).not.toContain("raw");
+    expect(controlEnforcement.if).toBe("${{ always() }}");
+    expect(controlEnforcement.run).toContain("VERIFY_OUTCOME");
+    expect(control.steps.indexOf(controlUpload)).toBeLessThan(
+      control.steps.indexOf(controlEnforcement),
+    );
+    expect(evidenceDownload.uses).toContain("actions/download-artifact@");
+    expect(evidenceDownload.with.path).toBe("compliance-evidence/");
+    expect(compliance).not.toMatch(
+      /(?:--request|-X)\s*(?:POST|PUT|PATCH|DELETE)\b/i,
+    );
+    expect(compliance).not.toContain("CLOUDFLARE_PAGES_EDIT_TOKEN");
+  });
+
+  it("isolates Cloudflare Pages PATCH operations in a manual trusted-main workflow", () => {
+    const lock = workflow("lock-cloudflare-pages-git-deploys.yml");
+    const parsed = yaml.load(lock);
+    const triggerNames = Object.keys(parsed.on);
+    const preflight = parsed.jobs["verify-lock-environment"];
+    const job = parsed.jobs.lock;
+    const controlStep = job.steps.find(
+      (step) => step.name === "Lock both Cloudflare Pages Git integrations",
+    );
+    const upload = job.steps.find(
+      (step) => step.name === "Upload minimized Cloudflare Pages lock evidence",
+    );
+    const jobSource = JSON.stringify(job);
+
+    expect(triggerNames).toEqual(["workflow_dispatch"]);
     expect(
-      dispatch.inputs.cloudflare_git_deploy_confirmation,
+      parsed.on.workflow_dispatch.inputs.confirm,
     ).toMatchObject({
-      required: false,
+      required: true,
       type: "string",
     });
-    expect(collect.env.CLOUDFLARE_PAGES_PROJECT).toBe(
-      "${{ vars.CLOUDFLARE_PAGES_PROJECT }}",
+    expect(preflight.if).toContain("github.ref == 'refs/heads/main'");
+    expect(preflight).not.toHaveProperty("environment");
+    expect(lock).toContain(
+      "environments/cloudflare-git-deploy-lock",
     );
-    expect(collect.env.CLOUDFLARE_STAGING_PAGES_PROJECT).toBe(
-      "${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}",
+    expect(lock).toContain(".can_admins_bypass == false");
+    expect(lock).toContain(
+      ".deployment_branch_policy.custom_branch_policies == true",
     );
-    expect(lockStep.if).toBe(
-      "${{ github.event_name == 'workflow_dispatch' && inputs.cloudflare_git_deploy_action == 'lock' }}",
+    expect(lock).toContain(
+      ".deployment_branch_policy.protected_branches == false",
     );
-    expect(lockStep.run).toContain("DISABLE_CLOUDFLARE_GIT_DEPLOYS");
-    expect(lockStep.run).toContain(
-      'if [ "$CLOUDFLARE_PAGES_PROJECT" != "maiprop-listing-site" ]',
+    expect(lock).toContain(".total_count == 1");
+    expect(lock).toContain('.branch_policies[0].name == "main"');
+    expect(job.if).toContain("github.ref == 'refs/heads/main'");
+    expect(job.if).toContain(
+      "inputs.confirm == 'DISABLE_CLOUDFLARE_GIT_DEPLOYS'",
     );
-    expect(lockStep.run).toContain(
-      '[ "$CLOUDFLARE_STAGING_PAGES_PROJECT" != "maiprop-listing-site-staging" ]',
+    expect(job.needs).toBe("verify-lock-environment");
+    expect(job.environment).toBe("cloudflare-git-deploy-lock");
+    expect(job.concurrency).toEqual({
+      group: "maiprop-cloudflare-pages-git-deploy-lock",
+      "cancel-in-progress": false,
+    });
+    expect(jobSource).not.toContain("actions/checkout");
+    expect(jobSource).not.toContain("actions/setup-node");
+    expect(jobSource).not.toContain("npm ");
+    expect(jobSource).not.toContain("node scripts/");
+    expect(job.env).toBeUndefined();
+    expect(controlStep.env.CLOUDFLARE_PAGES_READ_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}",
     );
-    expect(lockStep.run).toContain("--request PATCH");
-    expect(lockStep.run).toContain(
-      '{"source":{"config":{"deployments_enabled":false,"production_deployments_enabled":false,"preview_deployment_setting":"none"}}}',
+    expect(controlStep.env.CLOUDFLARE_PAGES_EDIT_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}",
     );
-    expect(lockStep.run).toContain(
-      'lock_project "$CLOUDFLARE_PAGES_PROJECT"',
+    expect(controlStep.run).toContain(
+      'PRODUCTION_PROJECT="maiprop-listing-site"',
     );
-    expect(lockStep.run).toContain(
-      'lock_project "$CLOUDFLARE_STAGING_PAGES_PROJECT"',
+    expect(controlStep.run).toContain(
+      'STAGING_PROJECT="maiprop-listing-site-staging"',
     );
-    expect(postureStep.if).toBe(
-      "${{ always() && github.event_name == 'workflow_dispatch' }}",
+    expect(controlStep.run).toContain(
+      '.success == true and .result.name == $name and .result.id == $id',
     );
-    expect(postureStep["continue-on-error"]).not.toBe(true);
-    expect(postureStep.run).toContain(
-      "/pages/projects/$CLOUDFLARE_STAGING_PAGES_PROJECT",
+    expect(controlStep.run).toContain(
+      '.result | has("source")',
     );
-    expect(postureStep.run).toContain(
-      "/pages/projects/$CLOUDFLARE_PAGES_PROJECT",
+    expect(controlStep.run).toContain(
+      '.result.source.type == "github" or .result.source.type == "gitlab"',
     );
-    expect(postureStep.run).toContain(
-      "validate-cloudflare-pages-staging-posture.mjs",
+    expect(controlStep.run.indexOf(
+      '[ -z "$EXPECTED_PRODUCTION_PROJECT_ID" ]',
+    )).toBeLessThan(controlStep.run.indexOf("patch_project()"));
+    expect(controlStep.run.indexOf(
+      '[ -z "$EXPECTED_STAGING_PROJECT_ID" ]',
+    )).toBeLessThan(controlStep.run.indexOf("patch_project()"));
+    expect(controlStep.run).toContain('"type": $source_type');
+    expect(controlStep.run).toContain('"deployments_enabled": false');
+    expect(controlStep.run).toContain(
+      '"production_deployments_enabled": false',
     );
-    expect(postureStep.run).toContain(
-      "compliance-evidence/cloudflare-pages-git-auto-deploy-posture.json",
+    expect(controlStep.run).toContain(
+      '"preview_deployment_setting": "none"',
     );
-    expect(postureStep.run).toContain(
-      "--post-state-out compliance-evidence/cloudflare-pages-git-auto-deploy-post-state.json",
+    expect(controlStep.run).toContain(
+      "cloudflare-pages-git-auto-deploy-pre-state.json",
     );
-    expect(postureStep.run).toContain(
-      'STAGING_PROJECT_FILE="$RUNNER_TEMP/cloudflare-staging-project.json"',
+    expect(controlStep.run).toContain(
+      "cloudflare-pages-git-auto-deploy-post-state.json",
     );
-    expect(postureStep.run).toContain(
-      'PRODUCTION_PROJECT_FILE="$RUNNER_TEMP/cloudflare-production-project.json"',
+    expect(controlStep.run).toContain('"capture_status": "failed"');
+    expect(controlStep.run).toContain(
+      '.result.source.config.deployments_enabled == false',
     );
-    expect(postureStep.run).not.toMatch(
-      /curl[\s\S]*?(?:-X|--request)\s+(?:POST|PUT|PATCH|DELETE)|pages deploy|wrangler-action@/i,
+    expect(controlStep.run).toContain(
+      '.result.source.config.production_deployments_enabled == false',
     );
-    const upload = collect.steps.find(
-      (step) => step.name === "Upload standards evidence",
+    expect(controlStep.run).toContain(
+      '.result.source.config.preview_deployment_setting == "none"',
     );
-    expect(upload.with.path).toBe("compliance-evidence/");
+    expect(upload.if).toBe("${{ always() }}");
+    expect(upload.with.path).toBe(
+      "${{ runner.temp }}/cloudflare-pages-lock-evidence/",
+    );
+    expect(upload.with.path).not.toContain("raw");
   });
 
   it("creates an independently protected exact-SHA production approval artifact", () => {
     const approval = workflow("approve-production-release.yml");
     const parsed = yaml.load(approval);
     const triggerNames = Object.keys(parsed.on);
+    const preflight = parsed.jobs["verify-approval-environment"];
     const job = parsed.jobs.approve;
 
     expect(triggerNames).toEqual(["workflow_dispatch"]);
@@ -141,6 +263,12 @@ describe("production release train", () => {
       required: true,
       type: "string",
     });
+    expect(preflight.name).toBe(
+      "Verify production approval environment",
+    );
+    expect(preflight.if).toContain("github.ref == 'refs/heads/main'");
+    expect(preflight.permissions.actions).toBe("read");
+    expect(job.needs).toBe("verify-approval-environment");
     expect(job.name).toBe("Production release approved");
     expect(job.environment).toBe("production-approval");
     expect(job.if).toContain("github.ref == 'refs/heads/main'");
@@ -154,18 +282,58 @@ describe("production release train", () => {
       "id-token": "write",
     });
     expect(approval).toContain("github-release-evidence");
-    expect(approval).toContain("git fetch --no-tags origin main");
+    expect(approval).not.toContain("git fetch --no-tags origin main");
+    expect(approval).toContain(
+      'gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq \'.commit.sha\'',
+    );
+    expect(approval).toContain(
+      "environments/production-approval",
+    );
+    expect(approval).toContain(
+      "deployment-branch-policies?per_page=100",
+    );
+    expect(approval).toContain(
+      '.can_admins_bypass == false',
+    );
+    expect(approval).toContain(
+      '.deployment_branch_policy.custom_branch_policies == true',
+    );
+    expect(approval).toContain(
+      '.deployment_branch_policy.protected_branches == false',
+    );
+    expect(approval).toContain(
+      '.total_count == 1',
+    );
+    expect(approval).toContain(
+      '.branch_policies[0].name == "main"',
+    );
+    expect(approval).toContain(
+      '"required_reviewers_available": false',
+    );
+    expect(approval).toContain(
+      '"compensating_control": "signed-allowlisted-independent-actor"',
+    );
+    expect(approval).toContain(
+      "production-approval-environment-posture-${{ github.run_id }}",
+    );
     expect(approval).toContain("gh attestation verify");
     expect(approval).toContain(
       ".github/workflows/stage-release.yml",
     );
     for (const field of [
       "schema_version: 1",
+      "repository:",
       "release_sha:",
+      "source_tree:",
+      "source_run_id:",
+      "source_run_attempt:",
       "artifact_sha256:",
       "staging_run_id:",
+      "staging_run_attempt:",
       "approval_run_id:",
+      "approval_run_attempt:",
       "approver:",
+      "nonce:",
       "revoked: false",
       "approved_at:",
       "expires_at:",

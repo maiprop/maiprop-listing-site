@@ -253,9 +253,13 @@ or override it in repository secrets.
 | `LHCI_GITHUB_APP_TOKEN` | Lighthouse CI status checks | repo. See `LIGHTHOUSE_CI_SETUP.md` |
 | `GITHUB_TOKEN` | GitHub-provided token used by secret scanning | automatic |
 | `GITLEAKS_LICENSE` | optional Gitleaks license for enhanced scanning | repo |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare Pages production/preview deploy | production environment |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account for Pages deploy | production environment |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Pages production/preview deploy; temporary fallback for isolated Pages lock verification/mutation until least-privilege tokens are provisioned | repository secret and production environment as required |
+| `CLOUDFLARE_PAGES_READ_TOKEN` | Preferred read-only token for isolated Pages posture verification; rotate away from the legacy fallback after bootstrap | GitHub repository secret |
+| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Preferred Pages project edit token used only by the isolated, manual Git-deploy lock workflow; exact ID pins remain mandatory | GitHub repository secret |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account for Pages deploy and isolated posture control jobs | GitHub repository secret and production environment as required |
 | `CLOUDFLARE_PAGES_PROJECT` | Cloudflare Pages project used by live posture capture | audit environment |
+| `CLOUDFLARE_PAGES_PROJECT_ID` | Exact immutable ID for `maiprop-listing-site`; read-only verification uploads the discovered ID then fails when absent, while mutation requires it before PATCH | repository variable |
+| `CLOUDFLARE_STAGING_PAGES_PROJECT_ID` | Exact immutable ID for `maiprop-listing-site-staging`; bootstrapped through minimized read evidence and required to differ from production before mutation | repository variable |
 | `CLOUDFLARE_DNS_MODE` | `registrar` for the accepted current posture, or `cloudflare-authoritative` only after an approved nameserver migration | audit environment |
 | `CLOUDFLARE_ZONE_ID` | Zone queried by live posture capture whenever `CLOUDFLARE_DNS_MODE` is set | audit environment |
 | `CF_ACCESS_CLIENT_ID` / `CLOUDFLARE_ACCESS_CLIENT_ID` | optional Cloudflare Access service-token client id for protected preview/production deploy smoke checks | repo or environment scoped to deploy jobs |
