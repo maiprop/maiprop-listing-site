@@ -16,6 +16,7 @@ describe("production release train", () => {
   it("parses every production release workflow as valid YAML", () => {
     for (const name of [
       "ci.yml",
+      "approve-production-release.yml",
       "stage-release.yml",
       "reusable-supabase-staging.yml",
       "deploy-edge-functions.yml",
@@ -38,6 +39,147 @@ describe("production release train", () => {
     expect(ci).toContain("No staging or production service was mutated");
     expect(ci).not.toContain(
       "uses: ./.github/workflows/reusable-cloudflare-production-deploy.yml",
+    );
+  });
+
+  it("verifies or explicitly locks Git deploys for both Pages projects before minimized evidence upload", () => {
+    const compliance = workflow("compliance-evidence.yml");
+    const parsed = yaml.load(compliance);
+    const collect = parsed.jobs.collect;
+    const dispatch = parsed.on.workflow_dispatch;
+    const lockStep = collect.steps.find(
+      (step) => step.name === "Lock Cloudflare Pages Git deployments",
+    );
+    const postureStep = collect.steps.find(
+      (step) => step.name === "Capture strict two-project Cloudflare Pages posture",
+    );
+
+    expect(parsed.concurrency["cancel-in-progress"]).toBe(false);
+    expect(dispatch.inputs.cloudflare_git_deploy_action).toMatchObject({
+      type: "choice",
+      default: "verify",
+      options: ["verify", "lock"],
+    });
+    expect(
+      dispatch.inputs.cloudflare_git_deploy_confirmation,
+    ).toMatchObject({
+      required: false,
+      type: "string",
+    });
+    expect(collect.env.CLOUDFLARE_PAGES_PROJECT).toBe(
+      "${{ vars.CLOUDFLARE_PAGES_PROJECT }}",
+    );
+    expect(collect.env.CLOUDFLARE_STAGING_PAGES_PROJECT).toBe(
+      "${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}",
+    );
+    expect(lockStep.if).toBe(
+      "${{ github.event_name == 'workflow_dispatch' && inputs.cloudflare_git_deploy_action == 'lock' }}",
+    );
+    expect(lockStep.run).toContain("DISABLE_CLOUDFLARE_GIT_DEPLOYS");
+    expect(lockStep.run).toContain(
+      'if [ "$CLOUDFLARE_PAGES_PROJECT" != "maiprop-listing-site" ]',
+    );
+    expect(lockStep.run).toContain(
+      '[ "$CLOUDFLARE_STAGING_PAGES_PROJECT" != "maiprop-listing-site-staging" ]',
+    );
+    expect(lockStep.run).toContain("--request PATCH");
+    expect(lockStep.run).toContain(
+      '{"source":{"config":{"deployments_enabled":false,"production_deployments_enabled":false,"preview_deployment_setting":"none"}}}',
+    );
+    expect(lockStep.run).toContain(
+      'lock_project "$CLOUDFLARE_PAGES_PROJECT"',
+    );
+    expect(lockStep.run).toContain(
+      'lock_project "$CLOUDFLARE_STAGING_PAGES_PROJECT"',
+    );
+    expect(postureStep.if).toBe(
+      "${{ always() && github.event_name == 'workflow_dispatch' }}",
+    );
+    expect(postureStep["continue-on-error"]).not.toBe(true);
+    expect(postureStep.run).toContain(
+      "/pages/projects/$CLOUDFLARE_STAGING_PAGES_PROJECT",
+    );
+    expect(postureStep.run).toContain(
+      "/pages/projects/$CLOUDFLARE_PAGES_PROJECT",
+    );
+    expect(postureStep.run).toContain(
+      "validate-cloudflare-pages-staging-posture.mjs",
+    );
+    expect(postureStep.run).toContain(
+      "compliance-evidence/cloudflare-pages-git-auto-deploy-posture.json",
+    );
+    expect(postureStep.run).toContain(
+      "--post-state-out compliance-evidence/cloudflare-pages-git-auto-deploy-post-state.json",
+    );
+    expect(postureStep.run).toContain(
+      'STAGING_PROJECT_FILE="$RUNNER_TEMP/cloudflare-staging-project.json"',
+    );
+    expect(postureStep.run).toContain(
+      'PRODUCTION_PROJECT_FILE="$RUNNER_TEMP/cloudflare-production-project.json"',
+    );
+    expect(postureStep.run).not.toMatch(
+      /curl[\s\S]*?(?:-X|--request)\s+(?:POST|PUT|PATCH|DELETE)|pages deploy|wrangler-action@/i,
+    );
+    const upload = collect.steps.find(
+      (step) => step.name === "Upload standards evidence",
+    );
+    expect(upload.with.path).toBe("compliance-evidence/");
+  });
+
+  it("creates an independently protected exact-SHA production approval artifact", () => {
+    const approval = workflow("approve-production-release.yml");
+    const parsed = yaml.load(approval);
+    const triggerNames = Object.keys(parsed.on);
+    const job = parsed.jobs.approve;
+
+    expect(triggerNames).toEqual(["workflow_dispatch"]);
+    expect(parsed.on.workflow_dispatch.inputs.release_sha).toMatchObject({
+      required: true,
+      type: "string",
+    });
+    expect(parsed.on.workflow_dispatch.inputs.confirm).toMatchObject({
+      required: true,
+      type: "string",
+    });
+    expect(job.name).toBe("Production release approved");
+    expect(job.environment).toBe("production-approval");
+    expect(job.if).toContain("github.ref == 'refs/heads/main'");
+    expect(job.if).toContain(
+      "inputs.confirm == 'APPROVE_PRODUCTION_RELEASE'",
+    );
+    expect(job.permissions).toMatchObject({
+      actions: "read",
+      attestations: "write",
+      contents: "read",
+      "id-token": "write",
+    });
+    expect(approval).toContain("github-release-evidence");
+    expect(approval).toContain("git fetch --no-tags origin main");
+    expect(approval).toContain("gh attestation verify");
+    expect(approval).toContain(
+      ".github/workflows/stage-release.yml",
+    );
+    for (const field of [
+      "schema_version: 1",
+      "release_sha:",
+      "artifact_sha256:",
+      "staging_run_id:",
+      "approval_run_id:",
+      "approver:",
+      "revoked: false",
+      "approved_at:",
+      "expires_at:",
+    ]) {
+      expect(approval).toContain(field);
+    }
+    expect(approval).toContain(
+      "actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373",
+    );
+    expect(approval).toContain(
+      "production-release-approval-${{ inputs.release_sha }}-${{ github.run_id }}",
+    );
+    expect(approval).not.toMatch(
+      /secrets\.(?:SUPABASE|VITE_SUPABASE|CLOUDFLARE|SITE_LOCK)|supabase (?:db push|functions deploy)|pages deploy|wrangler-action@/,
     );
   });
 

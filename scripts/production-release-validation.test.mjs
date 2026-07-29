@@ -1,9 +1,14 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   assertCloudflareDeployment,
   assertEdgeBundleParity,
   assertSupabaseTargetIdentity,
   normalizeReleaseSha,
+  selectApprovalRun,
   selectBackendProofRun,
   selectReleaseProofs,
   selectReadinessRun,
@@ -15,6 +20,7 @@ import {
 } from "./production-release-validation.mjs";
 
 const sha = "0123456789abcdef0123456789abcdef01234567";
+const root = resolve(import.meta.dirname, "..");
 
 describe("production release validation", () => {
   it("requires a full immutable Git SHA", () => {
@@ -124,6 +130,97 @@ describe("production release validation", () => {
         [{ name: "Release candidate attested", status: "completed", conclusion: "success" }],
       ]]),
     })).toEqual({ readiness, staging });
+  });
+
+  it("selects the newest successful exact-SHA manual approval run", () => {
+    const selected = selectApprovalRun({
+      sha,
+      runs: [
+        {
+          id: 69,
+          run_attempt: 9,
+          head_sha: sha,
+          event: "workflow_dispatch",
+          status: "completed",
+          conclusion: "success",
+        },
+        {
+          id: 70,
+          run_attempt: 1,
+          head_sha: sha,
+          event: "workflow_dispatch",
+          status: "completed",
+          conclusion: "success",
+        },
+        {
+          id: 71,
+          run_attempt: 2,
+          head_sha: sha,
+          event: "workflow_dispatch",
+          status: "completed",
+          conclusion: "failure",
+        },
+        {
+          id: 72,
+          run_attempt: 3,
+          head_sha: "f".repeat(40),
+          event: "workflow_dispatch",
+          status: "completed",
+          conclusion: "success",
+        },
+      ],
+      jobsByRun: new Map([
+        [
+          69,
+          [{
+            name: "Production release approved",
+            status: "completed",
+            conclusion: "success",
+          }],
+        ],
+        [
+          70,
+          [{
+            name: "Production release approved",
+            status: "completed",
+            conclusion: "success",
+          }],
+        ],
+        [
+          71,
+          [{
+            name: "Production release approved",
+            status: "completed",
+            conclusion: "failure",
+          }],
+        ],
+        [
+          72,
+          [{
+            name: "Production release approved",
+            status: "completed",
+            conclusion: "success",
+          }],
+        ],
+      ]),
+    });
+
+    expect(selected.id).toBe(70);
+    expect(() => selectApprovalRun({
+      sha,
+      runs: [{
+        id: 73,
+        head_sha: sha,
+        event: "workflow_dispatch",
+        status: "completed",
+        conclusion: "success",
+      }],
+      jobsByRun: new Map([[73, [{
+        name: "Different job",
+        status: "completed",
+        conclusion: "success",
+      }]]]),
+    })).toThrow(/Production release approved/);
   });
 
   it("rejects unsigned aggregate content that does not match the selected staging run", () => {
@@ -436,6 +533,31 @@ describe("production release validation", () => {
       allowedApprovers: ["release-reviewer"],
       now: new Date("2026-07-28T13:00:00.000Z"),
     })).toThrow(/expired/i);
+
+    expect(() => validateReleaseApproval({
+      approval: { ...approval, revoked: undefined },
+      sha,
+      artifactSha256: "a".repeat(64),
+      stagingRunId: "50",
+      approvalRunId: "60",
+      deployActor: "release-operator",
+      allowedApprovers: ["release-reviewer"],
+      now: new Date("2026-07-28T12:30:00.000Z"),
+    })).toThrow(/revoked.*false/i);
+
+    expect(() => validateReleaseApproval({
+      approval: {
+        ...approval,
+        expires_at: "2026-07-28T14:00:00.001Z",
+      },
+      sha,
+      artifactSha256: "a".repeat(64),
+      stagingRunId: "50",
+      approvalRunId: "60",
+      deployActor: "release-operator",
+      allowedApprovers: ["release-reviewer"],
+      now: new Date("2026-07-28T12:30:00.000Z"),
+    })).toThrow(/two hours/i);
   });
 
   it("revalidates the exact mutation lease before every production boundary", () => {
@@ -469,6 +591,81 @@ describe("production release validation", () => {
       productionRunId: "70",
       now: new Date("2026-07-28T12:30:00.000Z"),
     })).toThrow(/artifact/i);
+  });
+
+  it("exposes approval and mutation-lease validation through the CLI", () => {
+    const directory = mkdtempSync(resolve(tmpdir(), "maiprop-release-"));
+    const approvalPath = resolve(directory, "approval.json");
+    const leasePath = resolve(directory, "lease.json");
+    writeFileSync(approvalPath, JSON.stringify({
+      schema_version: 1,
+      release_sha: sha,
+      artifact_sha256: "a".repeat(64),
+      staging_run_id: "50",
+      approval_run_id: "60",
+      approver: "release-reviewer",
+      approved_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T13:00:00.000Z",
+      revoked: false,
+    }));
+    writeFileSync(leasePath, JSON.stringify({
+      schema_version: 1,
+      release_sha: sha,
+      artifact_sha256: "a".repeat(64),
+      staging_run_id: "50",
+      approval_run_id: "60",
+      production_run_id: "70",
+      issued_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T12:45:00.000Z",
+    }));
+
+    try {
+      const approvalResult = spawnSync(process.execPath, [
+        "scripts/production-release-validation.mjs",
+        "release-approval",
+        "--file",
+        approvalPath,
+        "--sha",
+        sha,
+        "--artifact-sha256",
+        "a".repeat(64),
+        "--staging-run-id",
+        "50",
+        "--approval-run-id",
+        "60",
+        "--deploy-actor",
+        "release-operator",
+        "--allowed-approvers",
+        "release-reviewer,backup-reviewer",
+        "--now",
+        "2026-07-28T12:30:00.000Z",
+      ], { cwd: root, encoding: "utf8" });
+      expect(approvalResult.status, approvalResult.stderr).toBe(0);
+      expect(approvalResult.stdout).toContain("Verified release approval");
+
+      const leaseResult = spawnSync(process.execPath, [
+        "scripts/production-release-validation.mjs",
+        "mutation-lease",
+        "--file",
+        leasePath,
+        "--sha",
+        sha,
+        "--artifact-sha256",
+        "a".repeat(64),
+        "--staging-run-id",
+        "50",
+        "--approval-run-id",
+        "60",
+        "--production-run-id",
+        "70",
+        "--now",
+        "2026-07-28T12:30:00.000Z",
+      ], { cwd: root, encoding: "utf8" });
+      expect(leaseResult.status, leaseResult.stderr).toBe(0);
+      expect(leaseResult.stdout).toContain("Verified production mutation lease");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("requires exact staging and production Supabase Edge bundle parity", () => {

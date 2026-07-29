@@ -1,0 +1,182 @@
+name: Approve Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Full 40-character current main SHA with successful CI and signed staging evidence"
+        required: true
+        type: string
+      confirm:
+        description: "Type APPROVE_PRODUCTION_RELEASE to approve this exact release SHA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maiprop-production-approval-${{ inputs.release_sha }}
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    name: Production release approved
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'APPROVE_PRODUCTION_RELEASE'
+    environment: production-approval
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+
+      - name: Verify exact current-main release evidence
+        id: evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$RELEASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::release_sha must be a full 40-character Git SHA."
+            exit 1
+          fi
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          if [ "$ACTUAL_SHA" != "$RELEASE_SHA" ]; then
+            echo "::error::Checked out $ACTUAL_SHA, expected release SHA $RELEASE_SHA."
+            exit 1
+          fi
+
+          git fetch --no-tags origin main
+          CURRENT_MAIN="$(git rev-parse origin/main)"
+          if [ "$CURRENT_MAIN" != "$RELEASE_SHA" ]; then
+            echo "::error::Release SHA $RELEASE_SHA is no longer current main ($CURRENT_MAIN)."
+            exit 1
+          fi
+
+          node scripts/production-release-validation.mjs github-release-evidence \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            > release-proof-selection.json
+
+          SOURCE_RUN_ID="$(jq -r '.readiness_run_id' release-proof-selection.json)"
+          SOURCE_RUN_ATTEMPT="$(jq -r '.readiness_run_attempt' release-proof-selection.json)"
+          STAGING_RUN_ID="$(jq -r '.staging_run_id' release-proof-selection.json)"
+          STAGING_RUN_ATTEMPT="$(jq -r '.staging_run_attempt' release-proof-selection.json)"
+          SOURCE_TREE="$(git rev-parse "${RELEASE_SHA}^{tree}")"
+          if ! [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]] ||
+             ! [[ "$SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] ||
+             ! [[ "$STAGING_RUN_ID" =~ ^[1-9][0-9]*$ ]] ||
+             ! [[ "$STAGING_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Selected source or staging run identity is invalid."
+            exit 1
+          fi
+
+          mkdir -p staging-evidence
+          gh run download "$STAGING_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "release-candidate-attestation-${RELEASE_SHA}" \
+            --dir staging-evidence
+
+          gh attestation verify \
+            staging-evidence/release-candidate-attestation.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/stage-release.yml" \
+            --signer-digest "$RELEASE_SHA" \
+            --source-digest "$RELEASE_SHA" \
+            --source-ref "refs/heads/main" \
+            --deny-self-hosted-runners \
+            --format json \
+            > staging-evidence/cryptographic-verification.json
+          jq -e 'length > 0' staging-evidence/cryptographic-verification.json > /dev/null
+
+          node scripts/production-release-validation.mjs release-candidate-attestation \
+            --file staging-evidence/release-candidate-attestation.json \
+            --sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            > staging-evidence/content-verification.json
+
+          ARTIFACT_SHA256="$(
+            jq -r '.artifact_sha256' staging-evidence/content-verification.json
+          )"
+          if ! [[ "$ARTIFACT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Signed staging evidence has an invalid artifact digest."
+            exit 1
+          fi
+          echo "artifact_sha256=$ARTIFACT_SHA256" >> "$GITHUB_OUTPUT"
+          echo "staging_run_id=$STAGING_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Create short-lived exact-SHA approval
+        env:
+          APPROVAL_RUN_ID: ${{ github.run_id }}
+          APPROVER: ${{ github.actor }}
+          ARTIFACT_SHA256: ${{ steps.evidence.outputs.artifact_sha256 }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          STAGING_RUN_ID: ${{ steps.evidence.outputs.staging_run_id }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from "node:fs";
+
+          const approvedAt = new Date();
+          const expiresAt = new Date(approvedAt.getTime() + 2 * 60 * 60 * 1000);
+          const approval = {
+            schema_version: 1,
+            release_sha: process.env.RELEASE_SHA,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            staging_run_id: process.env.STAGING_RUN_ID,
+            approval_run_id: process.env.APPROVAL_RUN_ID,
+            approver: process.env.APPROVER,
+            revoked: false,
+            approved_at: approvedAt.toISOString(),
+            expires_at: expiresAt.toISOString(),
+          };
+          writeFileSync(
+            "production-release-approval.json",
+            `${JSON.stringify(approval, null, 2)}\n`,
+          );
+          NODE
+
+      - name: Attest production release approval
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v3.3.0
+        with:
+          subject-path: production-release-approval.json
+
+      - name: Upload production release approval
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-release-approval-${{ inputs.release_sha }}-${{ github.run_id }}
+          path: production-release-approval.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Summarize approval
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          STAGING_RUN_ID: ${{ steps.evidence.outputs.staging_run_id }}
+        run: |
+          {
+            echo "### Production release approval"
+            echo "- Exact SHA: $RELEASE_SHA"
+            echo "- Signed staging run: $STAGING_RUN_ID"
+            echo "- Approval run: $GITHUB_RUN_ID"
+            echo "- Expires no more than two hours after approval"
+            echo "- Production mutations remain disabled"
+          } >> "$GITHUB_STEP_SUMMARY"

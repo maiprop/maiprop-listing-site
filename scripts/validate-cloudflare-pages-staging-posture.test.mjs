@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCloudflarePagesStagingPostureEvidence } from "./validate-cloudflare-pages-staging-posture.mjs";
+import {
+  buildCloudflarePagesGitAutoDeployPostStateEvidence,
+  buildCloudflarePagesStagingPostureEvidence,
+} from "./validate-cloudflare-pages-staging-posture.mjs";
 
 const stagingValues = {
   SUPABASE_URL: "https://staging-ref.supabase.co",
@@ -233,6 +236,53 @@ describe("Cloudflare staging Pages posture validation", () => {
     ).toThrow(
       "Both staging and production Pages projects must have Git automatic deployments disabled.",
     );
+  });
+
+  it("captures redacted two-project post-state before strict lock validation", () => {
+    const privateSource = {
+      type: "github",
+      config: {
+        owner: "private-owner",
+        repo_name: "private-repository",
+        production_deployments_enabled: false,
+        preview_deployment_setting: "all",
+      },
+    };
+    const evidence = buildCloudflarePagesGitAutoDeployPostStateEvidence({
+      stagingApi: projectEnvelope({
+        name: options.stagingProjectName,
+        values: stagingValues,
+      }),
+      productionApi: projectEnvelope({
+        name: options.productionProjectName,
+        source: privateSource,
+        values: productionValues,
+      }),
+      stagingProjectName: options.stagingProjectName,
+      productionProjectName: options.productionProjectName,
+    });
+
+    expect(evidence).toMatchObject({
+      schema_version: 1,
+      evidence_type: "maiprop-pages-git-auto-deploy-post-state",
+      status: "not-locked",
+      projects: [
+        {
+          role: "staging",
+          all_automatic_deployments_disabled: true,
+        },
+        {
+          role: "production",
+          production_deployments_enabled: false,
+          preview_deployment_setting: "all",
+          all_automatic_deployments_disabled: false,
+        },
+      ],
+    });
+    const serialized = JSON.stringify(evidence);
+    expect(serialized).not.toContain("private-owner");
+    expect(serialized).not.toContain("private-repository");
+    expect(serialized).not.toContain("production-publishable");
   });
 
   it("rejects production-valued bindings on the staging project", () => {

@@ -69,6 +69,40 @@ function redactedProjectPosture(role, project) {
   };
 }
 
+export function buildCloudflarePagesGitAutoDeployPostStateEvidence({
+  stagingApi,
+  productionApi,
+  stagingProjectName,
+  productionProjectName,
+}) {
+  assertOk(
+    stagingProjectName &&
+      productionProjectName &&
+      stagingProjectName !== productionProjectName,
+    "Dedicated staging and production Pages project names must be different.",
+  );
+  const projects = [
+    redactedProjectPosture(
+      "staging",
+      apiProject(stagingApi, stagingProjectName),
+    ),
+    redactedProjectPosture(
+      "production",
+      apiProject(productionApi, productionProjectName),
+    ),
+  ];
+  return {
+    schema_version: 1,
+    evidence_type: "maiprop-pages-git-auto-deploy-post-state",
+    status: projects.every(
+      (project) => project.all_automatic_deployments_disabled,
+    )
+      ? "locked"
+      : "not-locked",
+    projects,
+  };
+}
+
 function productionBindings(project) {
   return project?.deployment_configs?.production?.env_vars ?? {};
 }
@@ -296,19 +330,35 @@ function main() {
     "--production-project-file",
   );
   const outputPath = resolve(required(args.out, "--out"));
+  const stagingApi = JSON.parse(readFileSync(stagingProjectFile, "utf8"));
+  const productionApi = JSON.parse(
+    readFileSync(productionProjectFile, "utf8"),
+  );
+  const stagingProjectName = required(
+    process.env.STAGING_PROJECT,
+    "STAGING_PROJECT",
+  );
+  const productionProjectName = required(
+    process.env.PRODUCTION_PROJECT,
+    "PRODUCTION_PROJECT",
+  );
+  if (args["post-state-out"]) {
+    const postStatePath = resolve(args["post-state-out"]);
+    const postState =
+      buildCloudflarePagesGitAutoDeployPostStateEvidence({
+        stagingApi,
+        productionApi,
+        stagingProjectName,
+        productionProjectName,
+      });
+    mkdirSync(dirname(postStatePath), { recursive: true });
+    writeFileSync(postStatePath, `${JSON.stringify(postState, null, 2)}\n`);
+  }
   const evidence = buildCloudflarePagesStagingPostureEvidence({
-    stagingApi: JSON.parse(readFileSync(stagingProjectFile, "utf8")),
-    productionApi: JSON.parse(
-      readFileSync(productionProjectFile, "utf8"),
-    ),
-    stagingProjectName: required(
-      process.env.STAGING_PROJECT,
-      "STAGING_PROJECT",
-    ),
-    productionProjectName: required(
-      process.env.PRODUCTION_PROJECT,
-      "PRODUCTION_PROJECT",
-    ),
+    stagingApi,
+    productionApi,
+    stagingProjectName,
+    productionProjectName,
     stagingAppUrl: required(
       process.env.STAGING_APP_URL,
       "STAGING_APP_URL",

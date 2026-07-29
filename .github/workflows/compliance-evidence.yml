@@ -2,6 +2,19 @@ name: Standards Evidence
 
 on:
   workflow_dispatch:
+    inputs:
+      cloudflare_git_deploy_action:
+        description: "Verify Git deploy lockout, or explicitly lock both Pages projects before verification"
+        required: true
+        default: verify
+        type: choice
+        options:
+          - verify
+          - lock
+      cloudflare_git_deploy_confirmation:
+        description: "For lock mode only, type DISABLE_CLOUDFLARE_GIT_DEPLOYS"
+        required: false
+        type: string
   schedule:
     - cron: "23 4 1 * *"
 
@@ -13,7 +26,7 @@ permissions:
 
 concurrency:
   group: standards-evidence-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   collect:
@@ -32,7 +45,8 @@ jobs:
       SENTRY_ENVIRONMENT: production
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_PAGES_PROJECT: maiprop-listing-site
+      CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+      CLOUDFLARE_STAGING_PAGES_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
       CLOUDFLARE_DNS_MODE: registrar
       CLOUDFLARE_ZONE_NAME: maiprop.co
 
@@ -98,6 +112,81 @@ jobs:
           set -euo pipefail
           mkdir -p compliance-evidence
           npm run capture:sentry-live-evidence -- --strict --out compliance-evidence/sentry-live-evidence.json
+
+      - name: Lock Cloudflare Pages Git deployments
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.cloudflare_git_deploy_action == 'lock' }}
+        env:
+          LOCK_CONFIRMATION: ${{ inputs.cloudflare_git_deploy_confirmation }}
+        run: |
+          set -euo pipefail
+          if [ "$LOCK_CONFIRMATION" != "DISABLE_CLOUDFLARE_GIT_DEPLOYS" ]; then
+            echo "::error::Lock mode requires exact confirmation DISABLE_CLOUDFLARE_GIT_DEPLOYS."
+            exit 1
+          fi
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Cloudflare credentials are required to lock Git deployments."
+            exit 1
+          fi
+          if [ "$CLOUDFLARE_PAGES_PROJECT" != "maiprop-listing-site" ] ||
+             [ "$CLOUDFLARE_STAGING_PAGES_PROJECT" != "maiprop-listing-site-staging" ]; then
+            echo "::error::Lock mode is restricted to the fixed MaiProp production and staging Pages projects."
+            exit 1
+          fi
+
+          lock_project() {
+            local project="$1"
+            curl -fsS --retry 3 \
+              --request PATCH \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data '{"source":{"config":{"deployments_enabled":false,"production_deployments_enabled":false,"preview_deployment_setting":"none"}}}' \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project" \
+              | jq -e '.success == true' > /dev/null
+          }
+
+          lock_project "$CLOUDFLARE_PAGES_PROJECT"
+          lock_project "$CLOUDFLARE_STAGING_PAGES_PROJECT"
+
+      - name: Capture strict two-project Cloudflare Pages posture
+        if: ${{ always() && github.event_name == 'workflow_dispatch' }}
+        env:
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Cloudflare credentials are required to verify Git deployment posture."
+            exit 1
+          fi
+          if [ -z "$STAGING_PROJECT" ] || [ -z "$PRODUCTION_PROJECT" ] ||
+             [ "$STAGING_PROJECT" = "$PRODUCTION_PROJECT" ]; then
+            echo "::error::Distinct production and staging Pages projects are required."
+            exit 1
+          fi
+
+          mkdir -p compliance-evidence
+          STAGING_PROJECT_FILE="$RUNNER_TEMP/cloudflare-staging-project.json"
+          PRODUCTION_PROJECT_FILE="$RUNNER_TEMP/cloudflare-production-project.json"
+          trap 'rm -f "$STAGING_PROJECT_FILE" "$PRODUCTION_PROJECT_FILE"' EXIT
+
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CLOUDFLARE_STAGING_PAGES_PROJECT" \
+            > "$STAGING_PROJECT_FILE"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CLOUDFLARE_PAGES_PROJECT" \
+            > "$PRODUCTION_PROJECT_FILE"
+
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --staging-project-file "$STAGING_PROJECT_FILE" \
+            --production-project-file "$PRODUCTION_PROJECT_FILE" \
+            --post-state-out compliance-evidence/cloudflare-pages-git-auto-deploy-post-state.json \
+            --out compliance-evidence/cloudflare-pages-git-auto-deploy-posture.json
 
       - name: Capture Cloudflare admin posture
         continue-on-error: true

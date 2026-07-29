@@ -13,6 +13,7 @@ const STAGING_SECURITY_SPECS = [
 ];
 const READINESS_JOB = "Immutable release candidate built";
 const STAGING_ATTESTATION_JOB = "Release candidate attested";
+const APPROVAL_JOB = "Production release approved";
 const DATABASE_JOB = "Production database migration gate";
 const EDGE_JOB = "Deploy to Supabase";
 const GITHUB_API = "https://api.github.com";
@@ -94,6 +95,28 @@ export function selectStagingProofRun({ sha, runs, jobsByRun }) {
     );
   }
   return latest;
+}
+
+export function selectApprovalRun({ sha, runs, jobsByRun }) {
+  const expectedSha = normalizeReleaseSha(sha);
+  const candidates = (runs ?? [])
+    .filter((run) =>
+      String(run?.head_sha ?? "").toLowerCase() === expectedSha &&
+      run?.event === "workflow_dispatch" &&
+      run?.status === "completed" &&
+      run?.conclusion === "success")
+    .sort((a, b) =>
+      Number(b.id ?? 0) - Number(a.id ?? 0) ||
+      Number(b.run_attempt ?? 0) - Number(a.run_attempt ?? 0));
+
+  const match = candidates.find((run) =>
+    successfulJob(jobsByRun.get(run.id), APPROVAL_JOB));
+  if (!match) {
+    throw new Error(
+      `No successful exact-SHA approval run has a successful "${APPROVAL_JOB}" job for ${expectedSha}.`,
+    );
+  }
+  return match;
 }
 
 export function selectReleaseProofs({
@@ -436,8 +459,8 @@ export function validateReleaseApproval({
   ) {
     throw new Error("Release approval run does not match.");
   }
-  if (record.revoked === true) {
-    throw new Error("Release approval was revoked.");
+  if (record.revoked !== false) {
+    throw new Error("Release approval revoked must be false.");
   }
 
   const approver = String(record.approver ?? "").trim();
@@ -449,10 +472,11 @@ export function validateReleaseApproval({
   if (!approver || !allowlist.has(approver.toLowerCase())) {
     throw new Error("Release approver is not allowlisted.");
   }
-  if (
-    approver.toLowerCase() ===
-    String(deployActor ?? "").trim().toLowerCase()
-  ) {
+  const normalizedDeployActor = String(deployActor ?? "").trim().toLowerCase();
+  if (!normalizedDeployActor) {
+    throw new Error("Production deploy actor is required.");
+  }
+  if (approver.toLowerCase() === normalizedDeployActor) {
     throw new Error(
       "Production deployment requires independent approval by a different actor.",
     );
@@ -463,6 +487,9 @@ export function validateReleaseApproval({
   const nowDate = now instanceof Date ? now : new Date(now);
   if (approvedAt >= expiresAt) {
     throw new Error("Release approval expiry must follow approval time.");
+  }
+  if (expiresAt.getTime() - approvedAt.getTime() > 2 * 60 * 60 * 1000) {
+    throw new Error("Release approval expiry must be no more than two hours.");
   }
   if (nowDate >= expiresAt) {
     throw new Error("Release approval has expired.");
@@ -763,6 +790,17 @@ async function verifyGithubReleaseEvidence({ repository, sha, token }) {
   });
 }
 
+async function verifyGithubReleaseApproval({ repository, sha, token }) {
+  const runs = await workflowRuns({
+    repository,
+    workflow: "approve-production-release.yml",
+    sha,
+    token,
+  });
+  const jobsByRun = await jobsForRuns({ repository, runs, token });
+  return selectApprovalRun({ sha, runs, jobsByRun });
+}
+
 async function verifyGithubStagingLease({
   repository,
   sha,
@@ -867,6 +905,46 @@ async function main() {
     );
     return;
   }
+  if (mode === "release-approval") {
+    const approval = JSON.parse(
+      readFileSync(argValue("--file"), "utf8"),
+    );
+    validateReleaseApproval({
+      approval,
+      sha,
+      artifactSha256: argValue("--artifact-sha256"),
+      stagingRunId: argValue("--staging-run-id"),
+      approvalRunId: argValue("--approval-run-id"),
+      deployActor: argValue("--deploy-actor"),
+      allowedApprovers: argValue("--allowed-approvers")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+      now: argValue("--now") || undefined,
+    });
+    process.stdout.write(
+      `Verified release approval ${approval.approval_run_id} for ${sha}.\n`,
+    );
+    return;
+  }
+  if (mode === "mutation-lease") {
+    const lease = JSON.parse(
+      readFileSync(argValue("--file"), "utf8"),
+    );
+    validateMutationLease({
+      lease,
+      sha,
+      artifactSha256: argValue("--artifact-sha256"),
+      stagingRunId: argValue("--staging-run-id"),
+      approvalRunId: argValue("--approval-run-id"),
+      productionRunId: argValue("--production-run-id"),
+      now: argValue("--now") || undefined,
+    });
+    process.stdout.write(
+      `Verified production mutation lease ${lease.production_run_id} for ${sha}.\n`,
+    );
+    return;
+  }
 
   const repository = argValue("--repository");
   const token = process.env.GITHUB_TOKEN ?? "";
@@ -900,6 +978,23 @@ async function main() {
     );
     return;
   }
+  if (mode === "github-release-approval") {
+    const run = await verifyGithubReleaseApproval({
+      repository,
+      sha,
+      token,
+    });
+    process.stdout.write(
+      `${JSON.stringify({
+        evidence_type: "maiprop-github-release-approval-selection",
+        release_sha: sha,
+        approval_run_id: String(run.id),
+        approval_run_attempt: String(run.run_attempt),
+        approver: String(run.actor?.login ?? ""),
+      }, null, 2)}\n`,
+    );
+    return;
+  }
   if (mode === "github-staging-lease") {
     const run = await verifyGithubStagingLease({
       repository,
@@ -922,7 +1017,7 @@ async function main() {
     return;
   }
   throw new Error(
-    "Usage: production-release-validation.mjs <github-readiness|github-release-evidence|github-staging-lease|github-recovery|cloudflare-deployment|release-candidate-attestation|supabase-target>",
+    "Usage: production-release-validation.mjs <github-readiness|github-release-evidence|github-release-approval|github-staging-lease|github-recovery|cloudflare-deployment|release-candidate-attestation|release-approval|mutation-lease|supabase-target>",
   );
 }
 
