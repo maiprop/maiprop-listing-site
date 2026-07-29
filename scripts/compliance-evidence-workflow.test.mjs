@@ -15,18 +15,82 @@ describe("standards evidence workflow", () => {
     expect(step("Capture Supabase live security evidence", "Capture Sentry live telemetry status")).toContain(
       "continue-on-error: true",
     );
-    expect(step("Capture Sentry live telemetry status", "Capture Cloudflare admin posture")).toContain(
+    expect(step("Capture Sentry live telemetry status", "Check ECAS live evidence rollup")).toContain(
       "continue-on-error: true",
     );
-    expect(step("Capture Cloudflare admin posture", "Check ECAS live evidence rollup")).toContain(
+    expect(step("Download minimized Cloudflare Pages posture evidence", "Check ECAS live evidence rollup")).toContain(
       "continue-on-error: true",
     );
     expect(step("Check ECAS live evidence rollup", "Upload standards evidence")).toContain("if: always()");
     expect(step("Upload standards evidence", null)).toContain("if: always()");
   });
 
-  it("captures the accepted registrar-authoritative DNS posture", () => {
-    expect(workflow).toContain("CLOUDFLARE_DNS_MODE: registrar");
-    expect(workflow).toContain("CLOUDFLARE_ZONE_NAME: maiprop.co");
+  it("keeps Cloudflare credentials in the isolated main-only control job", () => {
+    expect(workflow).toContain("cloudflare-pages-verify:");
+    expect(workflow).toContain("github.ref == 'refs/heads/main'");
+    expect(workflow).toContain(
+      "group: maiprop-cloudflare-pages-git-deploy-verify",
+    );
+    expect(workflow).toContain(
+      "CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}",
+    );
+    expect(workflow).toContain("bootstrap_required");
+    expect(workflow).toContain(
+      "Set CLOUDFLARE_PAGES_PROJECT_ID and CLOUDFLARE_STAGING_PAGES_PROJECT_ID",
+    );
+    expect(workflow).not.toContain("CLOUDFLARE_PAGES_EDIT_TOKEN");
+    expect(workflow).not.toMatch(
+      /(?:--request|-X)\s*(?:POST|PUT|PATCH|DELETE)\b/i,
+    );
+
+    const collectStart = workflow.indexOf("  collect:");
+    const collectJob = workflow.slice(collectStart);
+    expect(collectJob).not.toMatch(/^\s{4}env:\s*$/m);
+    expect(collectJob).not.toContain("CLOUDFLARE_PAGES_EDIT_TOKEN");
+    expect(collectJob).not.toContain("CLOUDFLARE_PAGES_READ_TOKEN");
+    expect(collectJob).not.toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(step("Install dependencies", "Run local standards gates")).not.toContain(
+      "secrets.",
+    );
+    expect(step("Run local standards gates", "Capture GitHub governance evidence")).not.toContain(
+      "secrets.",
+    );
+    expect(step("Capture GitHub governance evidence", "Capture Supabase live security evidence")).toContain(
+      "GH_TOKEN: ${{ github.token }}",
+    );
+    expect(step("Capture Supabase live security evidence", "Capture Sentry live telemetry status")).toContain(
+      "SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+    );
+    expect(step("Capture Sentry live telemetry status", "Download minimized Cloudflare Pages posture evidence")).toContain(
+      "SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}",
+    );
+  });
+
+  it("never exposes provider secrets or candidate code on a non-main dispatch", () => {
+    expect(workflow).toContain("verify-current-main:");
+    expect(workflow).toContain(
+      "CURRENT_MAIN=\"$(gh api \"repos/${GITHUB_REPOSITORY}/branches/main\" --jq '.commit.sha')\"",
+    );
+    expect(workflow).toContain(
+      'if [ "$CURRENT_MAIN" != "$GITHUB_WORKFLOW_SHA" ]; then',
+    );
+
+    const collectStart = workflow.indexOf("  collect:");
+    const collectJob = workflow.slice(collectStart);
+    expect(collectJob).toContain(
+      "github.ref == 'refs/heads/main'",
+    );
+    expect(collectJob).toContain(
+      "needs.verify-current-main.result == 'success'",
+    );
+    expect(collectJob).toContain(
+      "ref: ${{ needs.verify-current-main.outputs.main_sha }}",
+    );
+    expect(collectJob).toContain("persist-credentials: false");
+  });
+
+  it("keeps the Pages read token out of unrelated DNS posture collection", () => {
+    expect(workflow).not.toContain("CLOUDFLARE_DNS_MODE");
+    expect(workflow).not.toContain("CLOUDFLARE_ZONE_NAME");
   });
 });
