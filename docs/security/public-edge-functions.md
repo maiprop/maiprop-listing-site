@@ -32,3 +32,4 @@ abuse control, and an owning area.
 | `fetch-os-auctions` | Public-facing auction fetch integration. | Source validation and sanitized published auction output. | Rate-limit and cache imported results. | auctions/integrations |
 | `record-listing-view` | Anonymous listing view analytics. | Listing-id validation and aggregate-only writes. | Bot/rate controls and duplicate suppression. | analytics/listings |
 | `scheduled-followups` | Scheduled follow-up notification worker. | Scheduler token and idempotent writes. | Cron-only invocation policy and alerting. | crm/notifications |
+| `process-storage-cleanup` | Scheduled compensating worker for abandoned listing/project uploads. | Exact `CRON_SECRET` match in `x-cron-secret`, service-role-only queue RPCs, lease tokens, and exact bucket/path deletion. | Cron-only invocation, bounded 25-job claims, exponential retry, dead-letter status, and failure alerting. | storage/platform |

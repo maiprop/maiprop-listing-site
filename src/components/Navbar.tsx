@@ -41,7 +41,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuth();
-  const { isPro } = useSubscription();
+  const { isPro, loading: subscriptionLoading } = useSubscription();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const { t } = useTranslation();
 
@@ -338,7 +338,12 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                       to="/pricing"
                       className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary hover:bg-primary/15"
                     >
-                      <Zap className="w-3 h-3" /> {isPro ? t("common.proActive") : t("common.upgrade")}
+                      <Zap className="w-3 h-3" />{" "}
+                      {subscriptionLoading
+                        ? t("dashboard.billing")
+                        : isPro
+                          ? t("common.proActive")
+                          : t("common.upgrade")}
                     </Link>
                     {isInvestorMode(profile) && (
                       <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-[10px] font-bold text-destructive">
@@ -393,7 +398,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
               </DropdownMenu>
 
               {/* Keep the upgrade CTA visible, while active Pro status lives in the account menu. */}
-              {!isPro && (
+              {!isPro && !subscriptionLoading && (
                 <Link
                   to="/pricing"
                   className={`flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-bold transition-all ${

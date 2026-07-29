@@ -1,22 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchPublicApi, PublicApiError, shouldLogPublicApiFallback } from "@/lib/publicApi";
+import { fetchPublicApi } from "@/lib/publicApi";
 
-describe("public API fallback logging", () => {
+describe("public API request cancellation", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-  });
-
-  it("does not warn for dev-only transient fetch aborts", () => {
-    expect(shouldLogPublicApiFallback(new TypeError("Failed to fetch"))).toBe(false);
-    expect(shouldLogPublicApiFallback(new DOMException("Aborted", "AbortError"))).toBe(false);
-  });
-
-  it("still warns for structured public API contract failures", () => {
-    expect(
-      shouldLogPublicApiFallback(
-        new PublicApiError("/api/public/listings", "Public API returned a non-JSON response", 200),
-      ),
-    ).toBe(true);
   });
 
   it("propagates caller cancellation into the underlying fetch", async () => {
@@ -35,7 +22,7 @@ describe("public API fallback logging", () => {
 
     await expect(request).rejects.toMatchObject({ name: "AbortError" });
     expect(fetchMock).toHaveBeenCalledWith(
-      new URL("/api/public/listings", window.location.origin).toString(),
+      "/api/public/listings",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });

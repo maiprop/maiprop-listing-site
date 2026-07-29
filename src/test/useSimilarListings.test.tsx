@@ -1,7 +1,6 @@
 /**
  * Tests for useSimilarListings. Public detail pages read related cards through
- * the cached public API first, then use bounded Supabase reads when Cloudflare
- * Pages Functions fail open.
+ * the canonical cached API and never switch ranking authority during an outage.
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -43,15 +42,6 @@ beforeEach(() => {
   fromMock.mockReset();
   rpcMock.mockClear();
 });
-
-const makeThenableBuilder = (data: unknown[] = [], error: unknown = null) => {
-  const b: Record<string, unknown> = {};
-  const chain = ["select", "eq", "neq", "ilike", "order", "limit"];
-  for (const method of chain) b[method] = vi.fn().mockReturnValue(b);
-  b.then = (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
-    Promise.resolve({ data, error }).then(resolve, reject);
-  return b;
-};
 
 describe("useSimilarListings", () => {
   it("stays disabled until at least a city or propertyType is provided", () => {
@@ -154,33 +144,16 @@ describe("useSimilarListings", () => {
     expect(result.current.data?.map((row) => row.id)).toEqual(["auction-a", "auction-c"]);
   });
 
-  it("falls back to constrained Supabase reads when the public API is unavailable", async () => {
+  it("surfaces canonical API failures without changing catalogue authority", async () => {
     publicApiMock.mockRejectedValue(new Error("upstream unavailable"));
-    const builder = makeThenableBuilder([
-      { id: "db-similar", city: "Athens", property_type: "apartment", listing_type: "sale", price: 310000 },
-    ]);
-    fromMock.mockReturnValue(builder);
 
     const { result } = renderHookWithQuery(() =>
       useSimilarListings({ city: "Athens", propertyType: "apartment", listingType: "sale", price: 320000 }),
     );
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(result.current.data?.[0]).toMatchObject({ id: "db-similar" });
-    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
-    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("featured_until"));
-    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("priority_until"));
-    expect(builder.order).not.toHaveBeenCalledWith("is_featured", expect.anything());
-    expect(builder.order).not.toHaveBeenCalledWith("priority_placement", expect.anything());
-  });
-
-  it("propagates errors when both public API and fallback reads fail", async () => {
-    publicApiMock.mockRejectedValue(new Error("upstream unavailable"));
-    fromMock.mockReturnValue(makeThenableBuilder([], new Error("db unavailable")));
-
-    const { result } = renderHookWithQuery(() =>
-      useSimilarListings({ city: "Athens" }),
-    );
     await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(result.current.error).toEqual(expect.objectContaining({ message: "upstream unavailable" }));
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 });

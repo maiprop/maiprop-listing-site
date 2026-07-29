@@ -1,13 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchPublicApi, isPublicApiAbort } from "@/lib/publicApi";
-import { logger } from "@/lib/logger";
-import { fetchAuctionsFallback } from "@/lib/publicListingFallbacks";
+import { fetchPublicApi } from "@/lib/publicApi";
 
 const QUERY_TIMEOUT_MS = 15_000;
 const PORTAL_AUCTION_FETCH_LIMIT = 600;
-const AUCTION_RANDOMIZATION_SALT = "maiprop-auctions-v1";
+const PUBLIC_AUCTION_FETCH_LIMIT = 60;
 const AUCTION_QUERY_STALE_TIME = 5 * 60_000;
 const AUCTION_QUERY_GC_TIME = 30 * 60_000;
 
@@ -52,11 +50,22 @@ export type AuctionListingRow = Pick<
 };
 
 type PublicAuctionsResponse = {
-  data?: AuctionListingRow[];
-};
-
-type PublicAuctionDetailResponse = {
-  data?: AuctionListingRow | null;
+  data: AuctionListingRow[];
+  revision: string;
+  page: number;
+  pageSize: number;
+  total: number;
+  totalRaw: number;
+  totalPages: number;
+  facets: {
+    cities: string[];
+    rounds: number[];
+  };
+  stats: {
+    thisWeek: number;
+    avgBid: number;
+    mappableCount: number;
+  };
 };
 
 const getTodayDate = (): string => {
@@ -66,25 +75,8 @@ const getTodayDate = (): string => {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const normalizeAuctionFetchLimit = (maxRows?: number): number => {
-  if (!Number.isFinite(maxRows)) return PORTAL_AUCTION_FETCH_LIMIT;
+  if (!Number.isFinite(maxRows)) return PUBLIC_AUCTION_FETCH_LIMIT;
   return Math.max(1, Math.min(PORTAL_AUCTION_FETCH_LIMIT, Math.floor(Number(maxRows))));
-};
-
-const hashString = (value: string): number => {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-};
-
-const getAuctionRotationSeed = (date = new Date()): string => {
-  return `${AUCTION_RANDOMIZATION_SALT}:${date.toISOString().slice(0, 10)}`;
-};
-
-const getAuctionShuffleScore = (row: AuctionListingRow, seed: string): number => {
-  return hashString(`${seed}:${row.id}:${row.auction_date ?? ""}:${row.city ?? ""}`);
 };
 
 const hasFuturePromotionExpiry = (value: string | null, nowMs: number): boolean => {
@@ -105,78 +97,22 @@ const normalizeAuctionPromotionState = (
       : 0,
 });
 
-export const randomizeAuctionPresentation = (
-  rows: AuctionListingRow[],
-  seed = getAuctionRotationSeed(),
-): AuctionListingRow[] => {
-  const nowMs = Date.now();
-  const normalized = rows.map((row) => normalizeAuctionPromotionState(row, nowMs));
-  const byDailyRotation = (a: AuctionListingRow, b: AuctionListingRow) =>
-    getAuctionShuffleScore(a, seed) - getAuctionShuffleScore(b, seed);
-  const priorityRows = normalized.filter((row) => row.priority_placement > 0).sort(byDailyRotation);
-  const organicRows = normalized.filter((row) => row.priority_placement === 0).sort(byDailyRotation);
-  const ranked: AuctionListingRow[] = [];
-  let priorityIndex = 0;
-  let organicIndex = 0;
-
-  while (ranked.length < normalized.length) {
-    const prioritySlot = ranked.length % 12 < 3;
-    const priority = priorityRows[priorityIndex];
-    const organic = organicRows[organicIndex];
-    const next = prioritySlot ? priority ?? organic : organic ?? priority;
-    if (!next) break;
-    if (next === priority) priorityIndex += 1;
-    else organicIndex += 1;
-    ranked.push(next);
-  }
-
-  return ranked;
-};
-
 const fetchAuctionByIdFromPublicApi = async (
   id: string,
   today: string,
   signal?: AbortSignal,
 ): Promise<AuctionListingRow | null> => {
   const query = UUID_RE.test(id)
-    ? `id=${encodeURIComponent(id)}`
+    ? `ids=${encodeURIComponent(id)}`
     : `osTag=${encodeURIComponent(id)}`;
-  const response = await fetchPublicApi<PublicAuctionDetailResponse>(
-    `/api/public/listing?${query}`,
+  const response = await fetchPublicApi<PublicAuctionsResponse>(
+    `/api/public/auctions?limit=60&page=1&pageSize=1&${query}`,
     { throwOnError: true, signal },
   );
-  const row = response?.data ?? null;
+  const row = response?.data?.[0] ?? null;
   if (!row || row.listing_type !== "auction") return null;
   if (row.auction_date && row.auction_date < today) return null;
   return normalizeAuctionPromotionState(row, Date.now());
-};
-
-const fetchAuctionByIdFromSupabase = async (
-  id: string,
-  today: string,
-  signal?: AbortSignal,
-): Promise<AuctionListingRow | null> => {
-  const auctionId = id.trim();
-  let query = supabase
-    .rpc("get_public_listing_catalogue")
-    .select(`
-      id,title,city,address,price,auction_starting_bid,auction_date,auction_court,
-      property_type,listing_type,cover_image_url,sqm,bedrooms,bathrooms,floor,total_floors,
-      latitude,longitude,tags,year_built,construction_status,website_url,region,
-      is_featured,featured_until,priority_placement,priority_until,listing_images
-    `)
-    .eq("status", "active")
-    .eq("is_off_market", false)
-    .eq("listing_type", "auction")
-    .or(`auction_date.gte.${today},auction_date.is.null`);
-
-  query = UUID_RE.test(auctionId)
-    ? query.eq("id", auctionId)
-    : query.contains("tags", [`os_auction:${auctionId}`]);
-
-  const { data, error } = await (signal ? query.abortSignal(signal) : query).maybeSingle();
-  if (error) throw error;
-  return data ? normalizeAuctionPromotionState(data as AuctionListingRow, Date.now()) : null;
 };
 
 export const fetchAuctionListingById = async (id: string, signal?: AbortSignal): Promise<AuctionListingRow | null> => {
@@ -184,79 +120,123 @@ export const fetchAuctionListingById = async (id: string, signal?: AbortSignal):
   if (!auctionId) return null;
 
   const today = getTodayDate();
-  try {
-    return await fetchAuctionByIdFromPublicApi(auctionId, today, signal);
-  } catch (error) {
-    if (isPublicApiAbort(error)) throw error;
-    logger.warn("Public auction detail API failed; falling back to constrained Supabase read:", error);
-    return fetchAuctionByIdFromSupabase(auctionId, today, signal);
-  }
+  return fetchAuctionByIdFromPublicApi(auctionId, today, signal);
 };
 
-const fetchPublicAuctionListings = async (maxRows: number, signal?: AbortSignal): Promise<AuctionListingRow[]> => {
-  const response = await fetchPublicApi<PublicAuctionsResponse | AuctionListingRow[]>(
-    `/api/public/auctions?limit=${maxRows}`,
-    { throwOnError: true, signal },
-  );
-  if (!response) throw new Error("Public auctions API returned no data");
-  const rows = Array.isArray(response) ? response : response.data;
-  return Array.isArray(rows) ? rows.slice(0, maxRows) : [];
+export type AuctionListingFilters = {
+  city?: string;
+  propertyType?: string;
+  bidRange?: string;
+  yearRange?: string;
+  sqmRange?: string;
+  ownership?: string;
+  round?: string;
+  yield?: string;
+  ids?: string[];
 };
 
-const fetchAuctionListings = async (maxRows: number, signal?: AbortSignal): Promise<AuctionListingRow[]> => {
-  try {
-    return await fetchPublicAuctionListings(maxRows, signal);
-  } catch (error) {
-    if (isPublicApiAbort(error)) throw error;
-    logger.warn("Public auctions API failed; falling back to constrained Supabase read:", error);
-    return randomizeAuctionPresentation(await fetchAuctionsFallback<AuctionListingRow>(maxRows, signal));
-  }
-};
-
-const getTimeoutRejection = (
-  setTimer: (timer: ReturnType<typeof setTimeout>) => void,
-): Promise<never> => {
-  return new Promise((_, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error("Request timeout"));
-    }, QUERY_TIMEOUT_MS);
-    setTimer(timer);
-  });
-};
-
-const withAuctionTimeout = async (
-  request: Promise<AuctionListingRow[]>,
-  signal?: AbortSignal,
-): Promise<AuctionListingRow[]> => {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  try {
-    if (signal?.aborted) return [];
-    return await Promise.race([
-      request,
-      getTimeoutRejection((timer) => {
-        timeout = timer;
-      }),
-    ]);
-  } finally {
-    if (timeout) clearTimeout(timeout);
-  }
-};
-
-const getAuctionQuery = (maxRows: number, signal?: AbortSignal): Promise<AuctionListingRow[]> => {
-  return withAuctionTimeout(fetchAuctionListings(maxRows, signal), signal);
-};
+export type AuctionListingsPage = PublicAuctionsResponse;
 
 export type UseAuctionListingsOptions = {
   enabled?: boolean;
+  page?: number;
+  pageSize?: number;
+  revision?: string;
+  filters?: AuctionListingFilters;
 };
+
+function appendTextParam(params: URLSearchParams, name: string, value: string | undefined): void {
+  const normalized = value?.trim();
+  if (normalized) params.set(name, normalized);
+}
+
+function buildAuctionListingsPath(
+  maxRows: number,
+  options: UseAuctionListingsOptions,
+): string {
+  const params = new URLSearchParams([["limit", String(maxRows)]]);
+  if (options.page != null) params.set("page", String(Math.max(1, Math.trunc(options.page))));
+  if (options.pageSize != null) {
+    params.set("pageSize", String(Math.max(1, Math.trunc(options.pageSize))));
+  }
+  appendTextParam(params, "revision", options.revision);
+  appendTextParam(params, "city", options.filters?.city);
+  appendTextParam(params, "propertyType", options.filters?.propertyType);
+  appendTextParam(params, "bidRange", options.filters?.bidRange);
+  appendTextParam(params, "yearRange", options.filters?.yearRange);
+  appendTextParam(params, "sqmRange", options.filters?.sqmRange);
+  appendTextParam(params, "ownership", options.filters?.ownership);
+  appendTextParam(params, "round", options.filters?.round);
+  appendTextParam(params, "yield", options.filters?.yield);
+  const ids = [...new Set(options.filters?.ids ?? [])]
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .sort();
+  if (ids.length > 0) params.set("ids", ids.join(","));
+  return `/api/public/auctions?${params.toString()}`;
+}
+
+async function authenticatedAuctionRequest(
+  path: string,
+  signal?: AbortSignal,
+): Promise<PublicAuctionsResponse> {
+  const sessionResult = await supabase.auth.getSession();
+  if (sessionResult.error) throw sessionResult.error;
+  const accessToken = sessionResult.data.session?.access_token;
+  if (!accessToken) {
+    throw new Error("Authentication is required for the expanded auction catalogue");
+  }
+
+  const response = await fetchPublicApi<PublicAuctionsResponse>(
+    path,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      signal,
+      throwOnError: true,
+      timeoutMs: QUERY_TIMEOUT_MS,
+    },
+  );
+  if (!response) {
+    throw new Error("Authenticated auction catalogue returned no data");
+  }
+  return response;
+}
 
 export const useAuctionListings = (maxRows?: number, options: UseAuctionListingsOptions = {}) => {
   const fetchLimit = normalizeAuctionFetchLimit(maxRows);
-  return useQuery({
-    queryKey: ["auction-listings", fetchLimit],
-    queryFn: ({ signal }) => getAuctionQuery(fetchLimit, signal),
+  const requestPath = buildAuctionListingsPath(fetchLimit, options);
+  const query = useQuery({
+    queryKey: ["auction-listings", requestPath],
+    queryFn: async ({ signal }): Promise<PublicAuctionsResponse> => {
+      const response = fetchLimit > PUBLIC_AUCTION_FETCH_LIMIT
+        ? await authenticatedAuctionRequest(requestPath, signal)
+        : await fetchPublicApi<PublicAuctionsResponse>(requestPath, {
+          throwOnError: true,
+          signal,
+        });
+      if (!response || !Array.isArray(response.data)) {
+        throw new Error("Public auctions API returned an invalid payload");
+      }
+      const nowMs = Date.now();
+      const responseLimit = options.pageSize == null
+        ? fetchLimit
+        : Math.max(1, Math.min(fetchLimit, Math.trunc(options.pageSize)));
+      return {
+        ...response,
+        data: response.data
+          .slice(0, responseLimit)
+          .map((row) => normalizeAuctionPromotionState(row, nowMs)),
+      };
+    },
     enabled: options.enabled ?? true,
     staleTime: AUCTION_QUERY_STALE_TIME,
     gcTime: AUCTION_QUERY_GC_TIME,
   });
+  return {
+    ...query,
+    data: query.data?.data,
+    auctionPage: query.data,
+  };
 };

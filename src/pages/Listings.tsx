@@ -53,6 +53,9 @@ import {
 } from "@/lib/listingsConfig";
 import { mapListingFromCard } from "@/lib/listingsPerformance";
 import { APP_ORIGIN } from "@/lib/config";
+import type { MapPolygon, MapViewportBounds } from "@/components/MapView";
+
+const LISTINGS_NUMERIC_FILTER_DEBOUNCE_MS = 300;
 
 const getListingsResultLabel = ({ // skipcq: JS-R1005 - Result labels intentionally branch by map, area, viewport, and pagination states.
   viewMode,
@@ -73,18 +76,22 @@ const getListingsResultLabel = ({ // skipcq: JS-R1005 - Result labels intentiona
 }) => {
   if (viewMode === "split" && polygonFilterIds !== null) {
     const count = filtered.filter((property) => polygonFilterIds.has(property.id)).length;
-    return isGreek ? `${count} στην περιοχή` : `${count} in area`;
+    const displayCount = `${count}${hasNextPage ? "+" : ""}`;
+    return isGreek ? `${displayCount} στην περιοχή` : `${displayCount} in area`;
   }
   if (viewMode === "map" && polygonFilterIds !== null) {
     const count = filtered.filter((property) => polygonFilterIds.has(property.id)).length;
-    return isGreek ? `${count} στην περιοχή` : `${count} in area`;
+    const displayCount = `${count}${hasNextPage ? "+" : ""}`;
+    return isGreek ? `${displayCount} στην περιοχή` : `${displayCount} in area`;
   }
   if (viewMode === "split" && viewportIds !== null) {
     const count = filtered.filter((property) => viewportIds.has(property.id)).length;
-    return isGreek ? `${count} στον χάρτη` : `${count} in view`;
+    const displayCount = `${count}${hasNextPage ? "+" : ""}`;
+    return isGreek ? `${displayCount} στον χάρτη` : `${displayCount} in view`;
   }
   if (viewMode === "map") {
-    return isGreek ? `${mapListings.length} αποτελέσματα χάρτη` : `${mapListings.length} map result${mapListings.length !== 1 ? "s" : ""}`;
+    const count = hasNextPage ? `${mapListings.length}+` : String(mapListings.length);
+    return isGreek ? `${count} αποτελέσματα χάρτη` : `${count} map result${mapListings.length !== 1 ? "s" : ""}`;
   }
   if (hasNextPage) {
     return isGreek ? `${filtered.length} φορτωμένα ακίνητα` : `${filtered.length} loaded propert${filtered.length === 1 ? "y" : "ies"}`;
@@ -122,6 +129,8 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
   const [compareList, setCompareList] = useState<ListingCardWithRaw[]>([]);
   const [viewportIds, setViewportIds] = useState<Set<string> | null>(null);
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
+  const [polygonPoints, setPolygonPoints] = useState<MapPolygon | null>(null);
+  const [mapBounds, setMapBounds] = useState<MapViewportBounds | null>(null);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
   const splitListRef = useRef<HTMLDivElement | null>(null);
   const isMobileViewport = useIsMobile();
@@ -138,6 +147,27 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     activeFilterCount, currentFilters,
     setParam, setParams, toggleMulti, clearAllFilters, applyAIFilters, getParam,
   } = useListingsFilters();
+  const [minSqmInput, setMinSqmInput] = useState(minSqm);
+  const [maxSqmInput, setMaxSqmInput] = useState(maxSqm);
+
+  useEffect(() => {
+    setMinSqmInput(minSqm);
+  }, [minSqm]);
+
+  useEffect(() => {
+    setMaxSqmInput(maxSqm);
+  }, [maxSqm]);
+
+  useEffect(() => {
+    if (minSqmInput === minSqm && maxSqmInput === maxSqm) return;
+    const timer = window.setTimeout(() => {
+      setParams([
+        ["sqm_min", minSqmInput],
+        ["sqm_max", maxSqmInput],
+      ]);
+    }, LISTINGS_NUMERIC_FILTER_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [maxSqm, maxSqmInput, minSqm, minSqmInput, setParams]);
 
   // AI-powered smart filters — fetch once per type/subtype combo, cached in memory
   const { config: aiFilterConfig } = useSmartFilters(
@@ -210,8 +240,11 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     totalLoaded,
     isLoading,
     isError,
+    isFetchNextPageError,
     hasNextPage,
+    isMapWindowIncomplete,
     isFetchingNextPage,
+    fetchNextPage,
     sentinelRef,
   } = useListingsPipeline({
     filters,
@@ -221,7 +254,20 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     hasVirtualTour,
     minAiScore,
     minWalkability,
+    mapBounds,
   });
+
+  const handleViewportBoundsChange = useCallback((nextBounds: MapViewportBounds) => {
+    setMapBounds((previousBounds) => (
+      previousBounds
+      && previousBounds.west === nextBounds.west
+      && previousBounds.south === nextBounds.south
+      && previousBounds.east === nextBounds.east
+      && previousBounds.north === nextBounds.north
+        ? previousBounds
+        : nextBounds
+    ));
+  }, []);
 
   const currentFiltersKey = JSON.stringify(currentFilters);
   useEffect(() => {
@@ -342,7 +388,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
   const statsStatus = (
     <div className="flex items-center gap-3">
       {resultSummary}
-      {totalLoaded === 0 && !isLoading && (
+      {totalLoaded === 0 && !isLoading && !isError && (
         <span className="text-muted-foreground text-sm">{isGreek ? "Δεν βρέθηκαν αγγελίες με αυτά τα φίλτρα" : "No listings matched your filters"}</span>
       )}
       {(viewMode === "split" || viewMode === "map") && polygonFilterIds !== null && (
@@ -354,6 +400,20 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
         <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
           {isGreek ? "Συγχρονισμός χάρτη" : "Map synced"}
         </span>
+      )}
+      {isMapWindowIncomplete && (
+        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-800 border border-amber-500/25 dark:text-amber-300">
+          {isGreek ? "Κάντε μεγέθυνση για να φορτωθούν όλα τα αποτελέσματα" : "Zoom in to load all map results"}
+        </span>
+      )}
+      {isFetchNextPageError && (
+        <button
+          type="button"
+          onClick={() => void fetchNextPage()}
+          className="text-xs px-2 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/25 hover:bg-destructive/15"
+        >
+          {isGreek ? "Αποτυχία φόρτωσης περισσότερων. Δοκιμάστε ξανά" : "Retry loading more listings"}
+        </button>
       )}
     </div>
   );
@@ -491,11 +551,11 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                   <div className="space-y-1.5">
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Εμβαδόν (τ.μ.)" : "Size (m²)"}</span>
                     <div className="grid grid-cols-2 gap-2">
-                      <input type="number" placeholder={isGreek ? "Ελάχ. τ.μ." : "Min m²"} value={minSqm}
-                        onChange={e => setParam("sqm_min", e.target.value)}
+                      <input type="number" placeholder={isGreek ? "Ελάχ. τ.μ." : "Min m²"} value={minSqmInput}
+                        onChange={e => setMinSqmInput(e.target.value)}
                         className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-border bg-secondary text-foreground outline-none focus:border-primary" />
-                      <input type="number" placeholder={isGreek ? "Μέγ. τ.μ." : "Max m²"} value={maxSqm}
-                        onChange={e => setParam("sqm_max", e.target.value)}
+                      <input type="number" placeholder={isGreek ? "Μέγ. τ.μ." : "Max m²"} value={maxSqmInput}
+                        onChange={e => setMaxSqmInput(e.target.value)}
                         className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-border bg-secondary text-foreground outline-none focus:border-primary" />
                     </div>
                   </div>
@@ -708,6 +768,19 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                     ? <EmptyState icon={Building2} title={isGreek ? "Δεν φορτώθηκαν οι αγγελίες" : "Failed to load listings"} subtitle={isGreek ? "Δοκιμάστε ξανά" : "Please try again"} action={{ label: isGreek ? "Επανάληψη" : "Retry", onClick: () => window.location.reload() }} />
                     : gridCards
                   }
+                  {!isLoading && !isError && !isFetchNextPageError && mapBounds && hasNextPage && !isFetchingNextPage && (
+                    <div
+                      ref={sentinelRef}
+                      data-testid="split-pagination-sentinel"
+                      aria-hidden="true"
+                      className="h-8 mt-2"
+                    />
+                  )}
+                  {!isLoading && !isError && isFetchingNextPage && (
+                    <div className="space-y-3 mt-3">
+                      {MORE_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
+                    </div>
+                  )}
                 </div>
 
                 {/* Right: map — hidden on mobile when list tab active */}
@@ -717,7 +790,12 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                       <MapView
                         listings={mapListings}
                         onVisibleListingsChange={setViewportIds}
-                        onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
+                        onViewportBoundsChange={handleViewportBoundsChange}
+                        onPolygonFilter={setPolygonFilterIds}
+                        polygonPoints={polygonPoints}
+                        onPolygonChange={setPolygonPoints}
+                        isLoading={isLoading}
+                        resultsIncomplete={hasNextPage}
                         height="100%"
                       />
                     </Suspense>
@@ -765,14 +843,14 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                     data-testid="listing-grid"
                   />
                 )}
-                {hasNextPage && !isFetchingNextPage && (
+                {hasNextPage && !isFetchingNextPage && !isFetchNextPageError && (
                   <div ref={sentinelRef} aria-hidden="true" className="h-8 mt-2" />
                 )}
                 {/* Searching state: every loaded row was excluded by the
                  * client-side filters but more pages exist. Render a few
                  * skeletons so the user sees progress while the sentinel
                  * keeps fetching pages. */}
-                {filtered.length === 0 && hasNextPage && (
+                {filtered.length === 0 && hasNextPage && !isFetchNextPageError && (
                   <div className="grid grid-cols-1 min-[360px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4">
                     {SEARCHING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
                   </div>
@@ -789,6 +867,14 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 )}
               </>
             )
+          ) : isError ? (
+            <EmptyState
+              icon={Building2}
+              title={isGreek ? "Δεν ήταν δυνατή η φόρτωση αγγελιών" : "Could not load listings"}
+              subtitle={isGreek ? "Δοκιμάστε ξανά αργότερα" : "Please try again later"}
+              action={{ label: isGreek ? "Επανάληψη" : "Retry", onClick: () => window.location.reload() }}
+              testId="empty-listings"
+            />
           ) : (
             /* Full map view */
             <MapGate consent={consent} accept={accept} height="clamp(360px, calc(100svh - var(--bottom-nav-h, 56px) - env(safe-area-inset-bottom, 0px) - 9.5rem), 620px)">
@@ -796,7 +882,12 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 <MapView
                   listings={mapListings}
                   onVisibleListingsChange={setViewportIds}
+                  onViewportBoundsChange={handleViewportBoundsChange}
                   onPolygonFilter={setPolygonFilterIds}
+                  polygonPoints={polygonPoints}
+                  onPolygonChange={setPolygonPoints}
+                  isLoading={isLoading}
+                  resultsIncomplete={hasNextPage}
                   height="clamp(360px, calc(100svh - var(--bottom-nav-h, 56px) - env(safe-area-inset-bottom, 0px) - 9.5rem), 620px)"
                 />
               </Suspense>

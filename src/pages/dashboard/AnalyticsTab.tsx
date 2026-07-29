@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ProGate } from "@/components/gates/ProGate";
 import { useAuth } from "@/contexts/AuthContext";
-import { useMyListings } from "@/hooks/useListings";
+import { useManageableListingSummary, useMyListings } from "@/hooks/useListings";
 import { useListingViewTrends, useLeadFunnel } from "@/hooks/useAnalytics";
 import { useMyProfessional } from "@/hooks/useProfessionalServices";
 import { useConversations } from "@/hooks/useMessages";
@@ -100,6 +100,7 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
   const [selectedDays, setSelectedDays] = useState(14);
 
   const { data: myListings = [], isLoading: listingsLoading } = useMyListings();
+  const { data: listingSummary, isLoading: listingSummaryLoading } = useManageableListingSummary();
   const { data: myProfessional, isLoading: profLoading } = useMyProfessional();
   const { data: conversations = [] } = useConversations();
   const { data: viewings = [] } = useViewings("owner");
@@ -112,13 +113,22 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
   const { data: leadFunnel, isLoading: funnelLoading } = useLeadFunnel(myProfessional?.id);
 
   const isProfessional = participantType === "professional";
-  const isLoading = listingsLoading || trendsLoading || (isProfessional && (profLoading || funnelLoading));
+  const isLoading =
+    listingsLoading ||
+    listingSummaryLoading ||
+    trendsLoading ||
+    (isProfessional && (profLoading || funnelLoading));
 
   // ── Derived metrics ────────────────────────────────────────────────────────────
-  const totalViews = myListings.reduce((s: number, l: { views_count?: number }) => s + (l.views_count || 0), 0);
-  const totalListings = myListings.length;
-  const avgViews = totalListings > 0 ? Math.round(totalViews / totalListings) : 0;
-  const bestListing = [...myListings]
+  const loadedTotalViews = myListings.reduce(
+    (sum: number, listing: { views_count?: number }) => sum + (listing.views_count || 0),
+    0,
+  );
+  const totalViews = listingSummary?.totalViews ?? loadedTotalViews;
+  const totalListings = listingSummary?.totalListings ?? myListings.length;
+  const avgViews = listingSummary?.averageViews ??
+    (totalListings > 0 ? Math.round(totalViews / totalListings) : 0);
+  const bestListing = listingSummary?.bestListing ?? [...myListings]
     .sort((a: { views_count?: number }, b: { views_count?: number }) => (b.views_count || 0) - (a.views_count || 0))[0];
 
   const messagesReceived = conversations.length;
@@ -126,7 +136,7 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
   const enquiryRate = totalViews > 0 ? ((viewingRequests / totalViews) * 100).toFixed(1) : "0.0";
 
   // Avg days listed — approximate from created_at if available
-  const avgDaysListed = (() => {
+  const avgDaysListed = listingSummary?.averageActiveDays ?? (() => {
     const now = Date.now();
     const listings = myListings as Array<{ created_at?: string; status?: string }>;
     const active = listings.filter(

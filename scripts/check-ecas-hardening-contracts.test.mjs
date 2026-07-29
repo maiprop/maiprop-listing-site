@@ -129,6 +129,35 @@ describe("ECAS hardening contracts", () => {
     expect(result.failures).toEqual([]);
   });
 
+  it("rejects malformed and expired module-size exception review dates", () => {
+    const malformedRoot = makeFixture();
+    const malformedBudgetPath = join(
+      malformedRoot,
+      "docs",
+      "governance",
+      "module-size-budget.json",
+    );
+    const malformedBudget = JSON.parse(readFileSync(malformedBudgetPath, "utf8"));
+    malformedBudget.legacyExceptions[0].reviewBy = "2026-02-30";
+    writeFileSync(malformedBudgetPath, JSON.stringify(malformedBudget));
+
+    const malformed = checkModuleSizeBudget(malformedRoot, {
+      now: new Date("2026-07-29T12:00:00.000Z"),
+    });
+
+    expect(malformed.ok).toBe(false);
+    expect(malformed.failures.join("\n")).toContain("reviewBy must be a real ISO date");
+
+    const expiredRoot = makeFixture();
+    writeFileSync(join(expiredRoot, "src", "pages", "LargePage.tsx"), "export const nowSmall = true;\n");
+    const expired = checkModuleSizeBudget(expiredRoot, {
+      now: new Date("2026-08-01T00:00:00.000Z"),
+    });
+
+    expect(expired.ok).toBe(false);
+    expect(expired.failures.join("\n")).toContain("reviewBy 2026-07-31 has expired");
+  });
+
   it("fails when a browser mutation touches a blocked table", () => {
     const root = makeFixture();
     writeFileSync(

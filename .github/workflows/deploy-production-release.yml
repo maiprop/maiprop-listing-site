@@ -1,0 +1,120 @@
+name: Deploy Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Full 40-character current main SHA with an Immutable release candidate built result"
+        required: true
+        type: string
+      confirm:
+        description: "Type DEPLOY_PRODUCTION_RELEASE to validate this exact main SHA"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  attestations: read
+  contents: read
+
+concurrency:
+  group: maiprop-production-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate exact production release SHA
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY_PRODUCTION_RELEASE'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+
+      - name: Require current main and final exact-SHA readiness
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          PRODUCTION_RELEASE_ENABLED: ${{ vars.PRODUCTION_RELEASE_ENABLED }}
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          if [ "$ACTUAL_SHA" != "$RELEASE_SHA" ]; then
+            echo "::error::Checked out $ACTUAL_SHA, expected release SHA $RELEASE_SHA."
+            exit 1
+          fi
+
+          git fetch --no-tags origin main
+          CURRENT_MAIN="$(git rev-parse origin/main)"
+          if [ "$CURRENT_MAIN" != "$RELEASE_SHA" ]; then
+            echo "::error::Release SHA $RELEASE_SHA is no longer current main ($CURRENT_MAIN). Start a new release."
+            exit 1
+          fi
+
+          node scripts/production-release-validation.mjs github-release-evidence \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            > release-proof-selection.json
+
+          SOURCE_RUN_ID="$(jq -r '.readiness_run_id' release-proof-selection.json)"
+          SOURCE_RUN_ATTEMPT="$(jq -r '.readiness_run_attempt' release-proof-selection.json)"
+          STAGING_RUN_ID="$(jq -r '.staging_run_id' release-proof-selection.json)"
+          STAGING_RUN_ATTEMPT="$(jq -r '.staging_run_attempt' release-proof-selection.json)"
+          SOURCE_TREE="$(git rev-parse "${RELEASE_SHA}^{tree}")"
+          if ! [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]] ||
+             ! [[ "$SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] ||
+             ! [[ "$STAGING_RUN_ID" =~ ^[1-9][0-9]*$ ]] ||
+             ! [[ "$STAGING_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::The selected source or staging run identity is invalid."
+            exit 1
+          fi
+
+          gh run download "$STAGING_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "release-candidate-attestation-${RELEASE_SHA}" \
+            --dir staging-evidence
+
+          gh attestation verify \
+            staging-evidence/release-candidate-attestation.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/stage-release.yml" \
+            --signer-digest "$RELEASE_SHA" \
+            --source-digest "$RELEASE_SHA" \
+            --source-ref "refs/heads/main" \
+            --deny-self-hosted-runners \
+            --format json \
+            > staging-evidence/cryptographic-verification.json
+          jq -e 'length > 0' staging-evidence/cryptographic-verification.json > /dev/null
+
+          node scripts/production-release-validation.mjs release-candidate-attestation \
+            --file staging-evidence/release-candidate-attestation.json \
+            --sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            > staging-evidence/content-verification.json
+
+          {
+            echo "### Production release validation"
+            echo "- Exact SHA: $RELEASE_SHA"
+            echo "- Static gate: Immutable release candidate built"
+            echo "- Signed staging evidence run: $STAGING_RUN_ID (attempt $STAGING_RUN_ATTEMPT)"
+            echo "- Production mutations remain disabled"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$PRODUCTION_RELEASE_ENABLED" != "true" ]; then
+            echo "::error::Production mutations remain disabled. PRODUCTION_RELEASE_ENABLED is not true."
+            exit 1
+          fi
+          echo "::error::Production mutations remain disabled until independent approval and immutable Edge bundle promotion are implemented."
+          exit 1

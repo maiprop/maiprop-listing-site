@@ -34,12 +34,13 @@ describe("Cloudflare admin posture capture", () => {
           status: 200,
           json: async () => ({
             success: true,
-            result: {
-              id: "project-id",
-              name: "maiprop-listing-site",
-              production_branch: "main",
-              domains: ["portal.maiprop.co"],
-              latest_deployment: {
+             result: {
+               id: "project-id",
+               name: "maiprop-listing-site",
+               production_branch: "main",
+               source: null,
+               domains: ["portal.maiprop.co"],
+               latest_deployment: {
                 id: "deployment-id",
                 environment: "production",
                 aliases: ["portal.maiprop.co"],
@@ -58,14 +59,146 @@ describe("Cloudflare admin posture capture", () => {
     expect(JSON.stringify(evidence)).not.toContain("cf_secret");
     expect(evidence.status).toBe("captured");
     expect(evidence.pagesProject.productionBranch).toBe("main");
-    expect(evidence.pagesProject.domains).toEqual(["portal.maiprop.co"]);
-    expect(evidence.pagesProject.latestProductionDeployment).toEqual({
-      status: "success",
-      commitHash: "66326673d2eea057f16584795655572974f97f99",
-    });
-  });
+     expect(evidence.pagesProject.domains).toEqual(["portal.maiprop.co"]);
+     expect(evidence.pagesProject.gitAutoDeploy).toEqual({
+       sourceConnected: false,
+       productionDeploymentsEnabled: false,
+       previewDeploymentSetting: "none",
+       allAutomaticDeploymentsDisabled: true,
+       status: "disabled",
+     });
+     expect(evidence.pagesProject.latestProductionDeployment).toEqual({
+       status: "success",
+       commitHash: "66326673d2eea057f16584795655572974f97f99",
+     });
+   });
 
-  it("accepts CF_PROJECT as the legacy project env alias", () => {
+   it("captures a redacted disabled Git integration posture", async () => {
+     const evidence = await buildCloudflarePostureEvidence({
+       env: {
+         CLOUDFLARE_API_TOKEN: "cf_secret",
+         CLOUDFLARE_ACCOUNT_ID: "account_123",
+         CLOUDFLARE_PAGES_PROJECT: "maiprop-listing-site-staging",
+       },
+       fetchImpl: async () => ({
+         ok: true,
+         status: 200,
+         json: async () => ({
+           success: true,
+           result: {
+             id: "project-id",
+             name: "maiprop-listing-site-staging",
+             production_branch: "main",
+             source: {
+               type: "github",
+               config: {
+                 owner: "private-owner",
+                 repo_name: "private-repository",
+                 production_deployments_enabled: false,
+                 preview_deployment_setting: "none",
+               },
+             },
+           },
+         }),
+       }),
+     });
+
+     expect(evidence).toMatchObject({
+       status: "captured",
+       pagesProject: {
+         gitAutoDeploy: {
+           sourceConnected: true,
+           productionDeploymentsEnabled: false,
+           previewDeploymentSetting: "none",
+           allAutomaticDeploymentsDisabled: true,
+           status: "disabled",
+         },
+       },
+     });
+     expect(JSON.stringify(evidence)).not.toContain("private-owner");
+     expect(JSON.stringify(evidence)).not.toContain("private-repository");
+     expect(JSON.stringify(evidence)).not.toContain("cf_secret");
+   });
+
+   it.each([
+     [
+       "production deployments",
+       {
+         production_deployments_enabled: true,
+         preview_deployment_setting: "none",
+       },
+     ],
+     [
+       "preview deployments",
+       {
+         production_deployments_enabled: false,
+         preview_deployment_setting: "all",
+       },
+     ],
+   ])("fails closed when Git-connected Pages enables %s", async (_label, config) => {
+     const evidence = await buildCloudflarePostureEvidence({
+       env: {
+         CLOUDFLARE_API_TOKEN: "cf_secret",
+         CLOUDFLARE_ACCOUNT_ID: "account_123",
+         CLOUDFLARE_PAGES_PROJECT: "maiprop-listing-site-staging",
+       },
+       fetchImpl: async () => ({
+         ok: true,
+         status: 200,
+         json: async () => ({
+           success: true,
+           result: {
+             id: "project-id",
+             name: "maiprop-listing-site-staging",
+             production_branch: "main",
+             source: { type: "github", config },
+           },
+         }),
+       }),
+     });
+
+     expect(evidence).toMatchObject({
+       provider: "cloudflare",
+       status: "failed",
+       errors: [
+         "Pages Git integration must disable production and preview automatic deployments",
+       ],
+     });
+   });
+
+   it("fails closed when the Pages API omits source posture", async () => {
+     const evidence = await buildCloudflarePostureEvidence({
+       env: {
+         CLOUDFLARE_API_TOKEN: "cf_secret",
+         CLOUDFLARE_ACCOUNT_ID: "account_123",
+         CLOUDFLARE_PAGES_PROJECT: "maiprop-listing-site-staging",
+       },
+       fetchImpl: async () => ({
+         ok: true,
+         status: 200,
+         json: async () => ({
+           success: true,
+           result: {
+             id: "project-id",
+             name: "maiprop-listing-site-staging",
+             production_branch: "main",
+           },
+         }),
+       }),
+     });
+
+     expect(evidence).toMatchObject({
+       status: "failed",
+       pagesProject: {
+         gitAutoDeploy: {
+           allAutomaticDeploymentsDisabled: false,
+           status: "unknown",
+         },
+       },
+     });
+   });
+
+   it("accepts CF_PROJECT as the legacy project env alias", () => {
     expect(
       validateCloudflareEnv({
         CLOUDFLARE_API_TOKEN: "x",
@@ -130,11 +263,12 @@ describe("Cloudflare admin posture capture", () => {
           json: async () => ({
             success: true,
             result: {
-              id: "project-id",
-              name: "maiprop-listing-site",
-              production_branch: "main",
-              domains: ["portal.maiprop.co"],
-            },
+               id: "project-id",
+               name: "maiprop-listing-site",
+               production_branch: "main",
+               source: null,
+               domains: ["portal.maiprop.co"],
+             },
           }),
         };
       },
@@ -189,11 +323,12 @@ describe("Cloudflare admin posture capture", () => {
           json: async () => ({
             success: true,
             result: {
-              id: "project-id",
-              name: "maiprop-listing-site",
-              production_branch: "main",
-              domains: ["portal.maiprop.co"],
-            },
+               id: "project-id",
+               name: "maiprop-listing-site",
+               production_branch: "main",
+               source: null,
+               domains: ["portal.maiprop.co"],
+             },
           }),
         };
       },
@@ -237,7 +372,12 @@ describe("Cloudflare admin posture capture", () => {
           success: true,
           result: String(url).includes("/zones/zone_123")
             ? { id: "zone_123", name: "maiprop.co", status: "initializing" }
-            : { id: "project-id", name: "maiprop-listing-site", production_branch: "main" },
+            : {
+                id: "project-id",
+                name: "maiprop-listing-site",
+                production_branch: "main",
+                source: null,
+              },
         }),
       }),
     });

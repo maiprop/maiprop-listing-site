@@ -2,9 +2,8 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { queryCache, mutationCache } from "@/lib/queryObserver";
-import { DEFAULT_QUERY_GC_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { appQueryClient } from "@/lib/appQueryClient";
 import { BrowserRouter, Routes, Route, useLocation, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { HelmetProvider } from "react-helmet-async";
@@ -59,19 +58,6 @@ const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 const DocumentTemplates = lazy(() => import("./pages/DocumentTemplates"));
 const Contact = lazy(() => import("./pages/Contact"));
 const CookieConsentBanner = lazy(() => import("@/components/CookieConsentBanner").then(m => ({ default: m.CookieConsentBanner })));
-
-const queryClient = new QueryClient({
-  queryCache,
-  mutationCache,
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-      staleTime: USER_SCOPED_QUERY_STALE_TIME,
-      gcTime: DEFAULT_QUERY_GC_TIME,
-    },
-  },
-});
 
 /** Triggers AI translation loading whenever the active locale changes */
 function I18nLoader() {
@@ -159,7 +145,7 @@ function GlobalAIWidget() {
 const App = () => (
   <HelmetProvider>
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
-      <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={appQueryClient}>
         <AuthProvider>
           <TooltipProvider>
                 <Toaster />

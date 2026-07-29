@@ -65,7 +65,7 @@ describe("getPlanLimits", () => {
 
   it("investor is pro-only", () => {
     const limits = getPlanLimits("investor", "pro");
-    expect(limits.auctionListingsVisible).toBeNull(); // unlimited
+    expect(limits.auctionListingsVisible).toBe(600);
     expect(limits.valuationsPerMonth).toBe(50);
     const unresolved = getPlanLimits("investor", "free");
     expect(unresolved.valuationsPerMonth).toBe(0);
@@ -89,6 +89,7 @@ describe("getPlanLimits", () => {
     expect(limits.viewingsPerMonth).toBeNull();
     expect(limits.valuationsPerMonth).toBeNull();
     expect(limits.reportsPerMonth).toBeNull();
+    expect(limits.auctionListingsVisible).toBe(600);
   });
 });
 

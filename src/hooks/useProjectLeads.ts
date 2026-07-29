@@ -11,6 +11,7 @@ import {
   projectLeadUpdateMutationSchema,
   scopedRowDeleteMutationSchema,
 } from "@/lib/mutationSchemas";
+import { accountQueryKey } from "@/lib/identityQueryBoundary";
 
 export type ProjectLeadInsert = {
   project_id: string;
@@ -32,8 +33,9 @@ export type ProjectLead = Pick<
 >;
 
 export function useProjectLeads(projectId: string | undefined) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["project_leads", projectId],
+    queryKey: accountQueryKey(user?.id, "project_leads", projectId),
     queryFn: async () => {
       if (!projectId) return [];
       const { data, error } = await supabase
@@ -44,7 +46,7 @@ export function useProjectLeads(projectId: string | undefined) {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!projectId,
+    enabled: Boolean(user && projectId),
     staleTime: FAST_CHANGING_QUERY_STALE_TIME,
   });
 }
@@ -63,7 +65,9 @@ export function useCreateProjectLead() {
       });
     },
     onSuccess: (_: unknown, { project_id }: ProjectLeadInsert) => {
-      qc.invalidateQueries({ queryKey: ["project_leads", project_id] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project_leads", project_id),
+      });
       toast.success("Lead added");
     },
     onError: () => toast.error("Failed to add lead. Please try again."),
@@ -89,7 +93,9 @@ export function useUpdateProjectLead() {
       });
     },
     onSuccess: (_: unknown, { projectId }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
-      qc.invalidateQueries({ queryKey: ["project_leads", projectId] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project_leads", projectId),
+      });
       toast.success("Lead updated");
     },
     onError: () => toast.error("Failed to update lead. Please try again."),
@@ -110,7 +116,9 @@ export function useDeleteProjectLead() {
       });
     },
     onSuccess: (_: unknown, { projectId }: { id: string; projectId: string }) => {
-      qc.invalidateQueries({ queryKey: ["project_leads", projectId] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project_leads", projectId),
+      });
       toast.success("Lead removed");
     },
     onError: () => toast.error("Failed to remove lead. Please try again."),

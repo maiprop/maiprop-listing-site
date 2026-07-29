@@ -58,14 +58,6 @@ const makeThenableBuilder = (data: unknown[] | null = [], error: unknown = null)
   return b;
 };
 
-const makeMaybeSingleBuilder = (data: unknown) => {
-  const b: Record<string, unknown> = {};
-  const chain = ["select", "eq", "order", "limit"];
-  for (const method of chain) b[method] = vi.fn().mockReturnValue(b);
-  b.maybeSingle = vi.fn().mockResolvedValue({ data, error: null });
-  return b;
-};
-
 beforeEach(() => {
   fromMock.mockReset();
   rpcMock.mockClear();
@@ -76,7 +68,7 @@ beforeEach(() => {
   initialListingsPageMock.mockReturnValue(undefined);
 });
 
-describe("public listings API fallback behavior", () => {
+describe("public listings API source continuity", () => {
   it("returns successful public map data without touching Supabase", async () => {
     publicApiMock.mockResolvedValue({
       data: [{ id: "api-listing", owner_id: null, listing_images: [] }],
@@ -105,75 +97,56 @@ describe("public listings API fallback behavior", () => {
     expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("falls back to constrained Supabase rows when the public grid read is unavailable", async () => {
-    publicApiMock.mockRejectedValue(new Error("Public API returned 503"));
-    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-listing", owner_id: null, listing_images: [] }]));
+  it("surfaces public grid failures without switching catalogue authority", async () => {
+    const failure = new Error("Public API returned 503");
+    publicApiMock.mockRejectedValue(failure);
 
     const { result } = renderHookWithQuery(() => useListings({ listing_type: "sale" }));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(publicApiMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/public/listings?"),
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
-    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
-    expect(result.current.data).toEqual([
-      expect.objectContaining({ id: "db-listing", profiles: null }),
-    ]);
+    expect(result.current.error).toBe(failure);
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
-  it("enriches fallback rows with one public owner lookup and handles ownerless rows", async () => {
+  it("treats an empty public response as a contract failure without a direct database read", async () => {
     publicApiMock.mockResolvedValue(null);
-    const listingBuilder = makeThenableBuilder([
-      { id: "owned-1", owner_id: "owner-1", listing_images: [] },
-      { id: "owned-2", owner_id: "owner-1", listing_images: [] },
-      { id: "ownerless", owner_id: null, listing_images: [] },
-    ]);
-    const profileBuilder = makeThenableBuilder([
-      { user_id: "owner-1", display_name: "Owner One", avatar_url: "avatar.jpg" },
-    ]);
-    fromMock.mockImplementation((table: string) => {
-      if (table === "public_listing_catalogue") return listingBuilder;
-      if (table === "profiles_public") return profileBuilder;
-      throw new Error(`unexpected table: ${table}`);
-    });
 
     const { result } = renderHookWithQuery(() => useListings({ listing_type: "sale", limit: 3 }));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isError).toBe(true));
 
-    expect(profileBuilder.in).toHaveBeenCalledWith("user_id", ["owner-1"]);
-    expect(result.current.data).toEqual([
-      expect.objectContaining({ id: "owned-1", profiles: expect.objectContaining({ display_name: "Owner One" }) }),
-      expect.objectContaining({ id: "owned-2", profiles: expect.objectContaining({ display_name: "Owner One" }) }),
-      expect.objectContaining({ id: "ownerless", profiles: null }),
-    ]);
+    expect(result.current.error).toEqual(expect.objectContaining({
+      message: "Public listings API returned no data",
+    }));
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("surfaces constrained database errors instead of returning a misleading empty catalogue", async () => {
+  it("preserves the canonical API error instead of replacing it with a second-source error", async () => {
     publicApiMock.mockRejectedValue(new Error("gateway unavailable"));
-    fromMock.mockReturnValue(makeThenableBuilder(null, new Error("database unavailable")));
 
     const { result } = renderHookWithQuery(() => useListings({ listing_type: "sale" }));
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error).toEqual(expect.objectContaining({ message: "database unavailable" }));
+    expect(result.current.error).toEqual(expect.objectContaining({ message: "gateway unavailable" }));
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("falls back to constrained Supabase pages when the public paginated read is unavailable", async () => {
+  it("surfaces paginated API failures without switching page source", async () => {
     publicApiMock.mockRejectedValue(new Error("Public API returned 503"));
-    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-listing", owner_id: null, listing_images: [] }]));
 
     const { result } = renderHookWithQuery(() => useListingsPaginated({ listing_type: "sale" }));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(publicApiMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/public/listings?"),
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
     expect(publicApiMock.mock.calls[0][0]).toContain("pageSize=12");
-    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
-    expect(result.current.data?.pages[0]?.data).toEqual([
-      expect.objectContaining({ id: "db-listing", profiles: null }),
-    ]);
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it("loads the first grid paint in 12 rows and fills the 40-row window with a 28-row follow-up", async () => {
@@ -358,44 +331,17 @@ describe("public listings API fallback behavior", () => {
     expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("falls back to the constrained public Supabase detail query when same-origin public detail is unavailable", async () => {
-    const listingBuilder = makeMaybeSingleBuilder({
-      id: "listing-1",
-      owner_id: "owner-1",
-      status: "active",
-      is_off_market: false,
-      title: "Fallback listing",
-      listing_images: [],
-    });
-    const profileBuilder = makeMaybeSingleBuilder({
-      user_id: "owner-1",
-      display_name: "Fallback Owner",
-      avatar_url: null,
-      role: "seller",
-    });
+  it("surfaces public detail failures without switching to a direct Supabase query", async () => {
     publicApiMock.mockRejectedValue(new Error("Public API returned a non-JSON response"));
-    fromMock.mockImplementation((table: string) => {
-      if (table === "public_listing_catalogue") return listingBuilder;
-      if (table === "profiles_public") return profileBuilder;
-      throw new Error(`unexpected table: ${table}`);
-    });
 
     const { result } = renderHookWithQuery(() => useListing("listing-1", { publicScope: true }));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/listing?id=listing-1",
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
-    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
-    expect(listingBuilder.eq).toHaveBeenCalledWith("id", "listing-1");
-    expect(listingBuilder.eq).toHaveBeenCalledWith("status", "active");
-    expect(listingBuilder.eq).toHaveBeenCalledWith("is_off_market", false);
-    expect(profileBuilder.select).toHaveBeenCalledWith("user_id, display_name, avatar_url");
-    expect(result.current.data).toMatchObject({
-      id: "listing-1",
-      profiles: { display_name: "Fallback Owner" },
-      ownerParticipantType: null,
-    });
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 });

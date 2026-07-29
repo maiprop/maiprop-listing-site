@@ -597,8 +597,8 @@ VALUES
     'fixture_partial_refund',
     2,
     2,
-    'test',
-    false
+    public.current_billing_runtime_mode(),
+    public.current_billing_runtime_mode() = 'live'
   ),
   (
     '40000000-0000-4000-8000-000000000002',
@@ -612,8 +612,8 @@ VALUES
     'fixture_bundle_refund',
     1,
     1,
-    'test',
-    false
+    public.current_billing_runtime_mode(),
+    public.current_billing_runtime_mode() = 'live'
   ),
   (
     '40000000-0000-4000-8000-000000000003',
@@ -627,8 +627,8 @@ VALUES
     'fixture_unavailable_refunded_credit',
     1,
     0,
-    'test',
-    false
+    public.current_billing_runtime_mode(),
+    public.current_billing_runtime_mode() = 'live'
   ),
   (
     '40000000-0000-4000-8000-000000000004',
@@ -642,8 +642,8 @@ VALUES
     'fixture_admin_provenance',
     1,
     1,
-    'test',
-    false
+    public.current_billing_runtime_mode(),
+    public.current_billing_runtime_mode() = 'live'
   );
 
 UPDATE public.addon_purchases
@@ -1089,14 +1089,13 @@ SELECT is(
     SELECT count(*)::integer
     FROM public.listing_promotion_allocations
     WHERE listing_id = '30000000-0000-4000-8000-000000000009'
-      AND promotion_type IN ('spotlight', 'priority')
-      AND source_type = 'admin'
-      AND billing_subscription_id IS NULL
-      AND addon_purchase_id IS NULL
-      AND plan_cycle_start IS NULL
+      AND promotion_type = 'spotlight'
+      AND source_type = 'addon'
+      AND addon_purchase_id = '40000000-0000-4000-8000-000000000004'
+      AND request_key = 'admin-provenance-addon'
   ),
-  2,
-  'admin grants overwrite paid provenance for both products'
+  1,
+  'admin re-enable preserves the existing paid Spotlight provenance'
 );
 
 SELECT is(
@@ -1109,10 +1108,9 @@ SELECT is(
       AND starts_at < ends_at
       AND revoked_at IS NULL
       AND revoke_reason IS NULL
-      AND created_by = '10000000-0000-4000-8000-000000000001'
   ),
   2,
-  'admin grants reset lifecycle and actor fields consistently'
+  'admin re-enable keeps both products active without rewriting campaign identity'
 );
 
 SELECT is(
@@ -1328,11 +1326,12 @@ SELECT is(
 SET LOCAL ROLE authenticated;
 SELECT lives_ok(
   $$
-    UPDATE public.listings
-    SET title = 'Ordinary listing edit still works'
-    WHERE id = '30000000-0000-4000-8000-000000000006'
+    SELECT public.update_listing_for_user(
+      '30000000-0000-4000-8000-000000000006',
+      jsonb_build_object('title', 'Ordinary listing edit still works')
+    )
   $$,
-  'promotion projection guards preserve ordinary listing edits'
+  'promotion projection guards preserve ordinary listing edits through the mutation RPC'
 );
 RESET ROLE;
 

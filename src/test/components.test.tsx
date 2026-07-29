@@ -217,6 +217,8 @@ vi.mock("@/hooks/useProfessionalReviews", () => ({
 vi.mock("@/hooks/useListings", () => ({
   useListings: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useMyListings: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useActorOwnedListings: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useManageableListingSummary: vi.fn().mockReturnValue({ data: null, isLoading: false }),
   useListingsPaginated: vi.fn().mockReturnValue({ data: { pages: [] }, isLoading: false, fetchNextPage: vi.fn(), hasNextPage: false, isFetchingNextPage: false }),
   useListing: vi.fn().mockReturnValue({ data: null, isLoading: false, isError: false, error: null }),
   useOwnerProStatus: vi.fn().mockReturnValue({ data: false, isLoading: false }),

@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useState, useMemo, lazy, Suspense, useCallback, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -11,15 +11,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import type { MapListing } from "@/components/MapView";
+import type { MapListing, MapPolygon, MapViewportBounds } from "@/components/MapView";
+import { pointInPolygon } from "@/components/map/mapConfig";
 const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { MAIPROP_LOGO_FALLBACK_URL } from "@/lib/imageFallbacks";
 import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
-import { fetchPublicApi, isPublicApiAbort } from "@/lib/publicApi";
-import { logger } from "@/lib/logger";
-import { fetchOpenHousesFallback } from "@/lib/publicListingFallbacks";
+import { fetchPublicApi } from "@/lib/publicApi";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 import {
   fmtDate,
@@ -81,6 +80,9 @@ const OPEN_HOUSES_FALLBACKS: Record<string, string> = {
   "openHouses.page.mapLabelPlural": "open houses",
   "openHouses.page.noMapListings": "No open houses with location data to display on map.",
   "openHouses.page.switchToList": "Switch to list view",
+  "openHouses.page.mapWindowIncomplete": "Zoom in to load all open houses",
+  "openHouses.page.loadMoreError": "Could not load more open houses.",
+  "openHouses.page.retryLoadMore": "Retry loading more open houses",
   "openHouses.page.errorTitle": "Could not load open houses",
   "openHouses.page.retryPrompt": "Please try again.",
   "openHouses.page.emptyFilteredTitle": "No open houses match your filters",
@@ -198,8 +200,30 @@ type OpenHouseListingRow = Pick<
   | "has_secure_door"
   | "has_alarm"
 > & {
+  publicationId?: number;
   listing_images?: Array<Pick<Database["public"]["Tables"]["listing_images"]["Row"], "url" | "sort_order">> | null;
 };
+
+type PublicOpenHouseWindow = {
+  data: OpenHouseListingRow[];
+  hasMore: boolean;
+  limit: number;
+  nextCursor: string | null;
+};
+
+const OPEN_HOUSE_PAGE_SIZE = 60;
+const OPEN_HOUSE_NUMERIC_FILTER_DEBOUNCE_MS = 300;
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [delayMs, value]);
+
+  return debouncedValue;
+}
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordinates filters, map/list view, query state, and card projection in one route shell.
@@ -224,7 +248,12 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
   const [cityInput, setCityInput] = useState(cityParam);
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
   const [showPast, setShowPast] = useState(false);
-  const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
+  const [polygonPoints, setPolygonPoints] = useState<MapPolygon | null>(null);
+  const [mapBounds, setMapBounds] = useState<MapViewportBounds | null>(null);
+  const queryMinPrice = useDebouncedValue(minPrice, OPEN_HOUSE_NUMERIC_FILTER_DEBOUNCE_MS);
+  const queryMaxPrice = useDebouncedValue(maxPrice, OPEN_HOUSE_NUMERIC_FILTER_DEBOUNCE_MS);
+  const queryMinSqm = useDebouncedValue(minSqm, OPEN_HOUSE_NUMERIC_FILTER_DEBOUNCE_MS);
+  const queryMaxSqm = useDebouncedValue(maxSqm, OPEN_HOUSE_NUMERIC_FILTER_DEBOUNCE_MS);
 
   const YEAR_RANGES = [
     { label: getTranslatedValue(t, "openHouses.page.yearRanges.any"), value: "" },
@@ -265,37 +294,120 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
   };
 
   const normalizeOpenHouseRows = (rows: OpenHouseListingRow[]) =>
-    rows.filter(isProductionVisibleOpenHouse).sort((a, b) => {
-      const aHasImg = Boolean(a.cover_image_url || a.listing_images?.length);
-      const bHasImg = Boolean(b.cover_image_url || b.listing_images?.length);
-      return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
-    });
+    rows.filter(isProductionVisibleOpenHouse);
 
-  const { data: listings = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ["open-houses", showPast, transactionFilter],
-    queryFn: async ({ signal }) => { // skipcq: JS-R1005 - Query keeps time filtering, production cleanup, and media-first sorting together.
-      try {
-        const transactionParam = transactionFilter ? `&transactionType=${transactionFilter}` : "";
-        const cached = await fetchPublicApi<OpenHouseListingRow[]>(
-          `/api/public/open-houses?showPast=${showPast ? "1" : "0"}&limit=200${transactionParam}`,
-          { throwOnError: true, signal },
-        );
-        if (cached) return normalizeOpenHouseRows(cached);
-        throw new Error("Public open houses API returned no data");
-      } catch (error) {
-        if (isPublicApiAbort(error)) throw error;
-        logger.warn("Public open houses API failed; falling back to constrained Supabase read:", error);
-        const fallback = await fetchOpenHousesFallback({
-          showPast,
-          transactionType: transactionFilter || null,
-          limit: 200,
-          signal,
-        });
-        return normalizeOpenHouseRows(fallback as OpenHouseListingRow[]);
+  const activeMapBounds = viewMode === "map" ? mapBounds : null;
+  const {
+    data: listingWindow,
+    isLoading,
+    isError,
+    isFetchNextPageError,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetching,
+  } = useInfiniteQuery({
+    queryKey: [
+      "open-houses",
+      showPast,
+      transactionFilter,
+      cityFilter,
+      propertyType,
+      queryMinPrice,
+      queryMaxPrice,
+      queryMinSqm,
+      queryMaxSqm,
+      bedroomsMin,
+      energyClass,
+      filterYearRange,
+      selectedFeatures,
+      activeMapBounds?.west,
+      activeMapBounds?.south,
+      activeMapBounds?.east,
+      activeMapBounds?.north,
+    ],
+    initialPageParam: null as string | null,
+    queryFn: async ({ signal, pageParam }) => { // skipcq: JS-R1005 - Query serializes the complete server-side Open House filter contract.
+      const params = new URLSearchParams([
+        ["showPast", showPast ? "1" : "0"],
+        ["limit", String(OPEN_HOUSE_PAGE_SIZE)],
+        ["includeMeta", "1"],
+      ]);
+      if (pageParam) params.set("cursor", pageParam);
+      if (transactionFilter) params.set("transactionType", transactionFilter);
+      if (cityFilter) params.set("city", cityFilter);
+      if (propertyType) params.set("propertyType", propertyType);
+      if (queryMinPrice) params.set("priceMin", queryMinPrice);
+      if (queryMaxPrice) params.set("priceMax", queryMaxPrice);
+      if (queryMinSqm) params.set("sqmMin", queryMinSqm);
+      if (queryMaxSqm) params.set("sqmMax", queryMaxSqm);
+      if (bedroomsMin != null) params.set("bedroomsMin", String(bedroomsMin));
+      if (energyClass) params.set("energyClass", energyClass);
+      if (filterYearRange) {
+        const [yearMin, yearMax] = filterYearRange.split("-");
+        if (yearMin) params.set("yearMin", yearMin);
+        if (yearMax) params.set("yearMax", yearMax);
       }
+      for (const feature of selectedFeatures) params.append("features", feature);
+      if (activeMapBounds) {
+        params.set("boundsWest", String(activeMapBounds.west));
+        params.set("boundsSouth", String(activeMapBounds.south));
+        params.set("boundsEast", String(activeMapBounds.east));
+        params.set("boundsNorth", String(activeMapBounds.north));
+      }
+
+      const cached = await fetchPublicApi<PublicOpenHouseWindow>(
+        `/api/public/open-houses?${params.toString()}`,
+        { throwOnError: true, signal },
+      );
+      if (!cached) throw new Error("Public open houses API returned no data");
+      return {
+        ...cached,
+        data: normalizeOpenHouseRows(cached.data),
+      };
     },
+    getNextPageParam: (lastPage) => (
+      lastPage.hasMore && lastPage.nextCursor ? lastPage.nextCursor : undefined
+    ),
+    placeholderData: (previousData) => previousData,
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
+  const loadedPageCount = listingWindow?.pages.length ?? 0;
+  const listings = useMemo(
+    () => listingWindow?.pages.flatMap((page) => page.data) ?? [],
+    [listingWindow],
+  );
+  const hasMoreListings = Boolean(hasNextPage);
+  const isInitialLoadError = isError && !isFetchNextPageError;
+
+  const handleViewportBoundsChange = useCallback((nextBounds: MapViewportBounds) => {
+    setMapBounds((previousBounds) => (
+      previousBounds
+      && previousBounds.west === nextBounds.west
+      && previousBounds.south === nextBounds.south
+      && previousBounds.east === nextBounds.east
+      && previousBounds.north === nextBounds.north
+        ? previousBounds
+        : nextBounds
+    ));
+  }, []);
+
+  useEffect(() => {
+    if (
+      viewMode !== "map" ||
+      !mapBounds ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      isError ||
+      loadedPageCount >= 3
+    ) return;
+    void fetchNextPage();
+  }, [fetchNextPage, hasNextPage, isError, isFetchingNextPage, loadedPageCount, mapBounds, viewMode]);
+  const isMapWindowIncomplete =
+    viewMode === "map" &&
+    Boolean(hasNextPage) &&
+    loadedPageCount >= 3;
 
   // Client-side filtering
   const filtered = useMemo(() => { // skipcq: JS-R1005 - Client filters intentionally mirror the visible filter controls in one memoized pass.
@@ -333,7 +445,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
     setPropertyType(""); setMinPrice(""); setMaxPrice("");
     setMinSqm(""); setMaxSqm(""); setBedroomsMin(null);
     setEnergyClass(""); setFilterYearRange(""); setSelectedFeatures([]);
-    setPolygonFilterIds(null);
+    setPolygonPoints(null);
   }
 
   function toggleFeature(key: string) {
@@ -368,13 +480,13 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
           sqm: l.sqm,
           storedPricePerSqm: l.price_per_sqm,
         }) ?? undefined,
-        bedrooms: l.bedrooms,
-        bathrooms: l.bathrooms,
+        bedrooms: l.bedrooms ?? undefined,
+        bathrooms: l.bathrooms ?? undefined,
         sqm: Number(l.sqm),
-        floor: l.floor,
-        totalFloors: l.total_floors,
-        yearBuilt: l.year_built,
-        energyClass: l.energy_class,
+        floor: l.floor ?? undefined,
+        totalFloors: l.total_floors ?? undefined,
+        yearBuilt: l.year_built ?? undefined,
+        energyClass: l.energy_class ?? undefined,
         images: imgs,
         type: l.property_type,
         listingType: "open_house" as const,
@@ -383,14 +495,28 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
           ? `${fmtDate(l.open_house_date)} · ${fmtTime(l.open_house_date)}`
           : undefined,
         openHouseDateIso: l.open_house_date || undefined,
-        aiScore: l.ai_score,
-        views: l.views_count,
+        aiScore: l.ai_score ?? undefined,
+        views: l.views_count ?? undefined,
         tags: l.tags || [],
-        latitude: l.latitude,
-        longitude: l.longitude,
+        latitude: l.latitude ?? undefined,
+        longitude: l.longitude ?? undefined,
       },
     };
   });
+
+  const polygonFilterIds = useMemo(() => {
+    if (!polygonPoints) return null;
+    return new Set(cards
+      .filter(({ card }) => (
+        card.longitude != null
+        && card.latitude != null
+        && pointInPolygon(
+          [Number(card.longitude), Number(card.latitude)],
+          polygonPoints,
+        )
+      ))
+      .map(({ card }) => card.id));
+  }, [cards, polygonPoints]);
 
   const areaFilteredCards = useMemo(() => {
     if (!polygonFilterIds) return cards;
@@ -398,24 +524,24 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
   }, [cards, polygonFilterIds]);
 
   const isEmpty = listings.length === 0;
-  const displayData = isError ? [] : areaFilteredCards;
+  const displayData = isInitialLoadError ? [] : areaFilteredCards;
   const pageTitle = getTranslatedValue(t, "openHouses.page.pageTitle");
   const areaSuffix = polygonFilterIds ? getTranslatedValue(t, "openHouses.page.countAreaSuffix") : "";
   const resultCountText = interpolateTranslation(
     t,
     displayData.length === 1 ? "openHouses.page.countOne" : "openHouses.page.countOther",
-    { count: String(displayData.length), areaSuffix },
+    { count: `${displayData.length}${hasMoreListings ? "+" : ""}`, areaSuffix },
   );
   const areaActiveText = interpolateTranslation(
     t,
     displayData.length === 1 ? "openHouses.page.areaActiveOne" : "openHouses.page.areaActiveOther",
-    { count: String(displayData.length) },
+    { count: `${displayData.length}${hasMoreListings ? "+" : ""}` },
   );
 
   // MapListing format for MapView
-  const mapListings: MapListing[] = displayData
+  const mapListings: MapListing[] = cards
     .filter(({ card }) => card.latitude != null && card.longitude != null)
-    .map(({ card }) => ({
+    .map(({ card, listing }) => ({
       id: card.id,
       title: card.title,
       price: card.price,
@@ -427,6 +553,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
       images: card.images,
       listingType: "open_house",
       city: card.city,
+      _raw: listing,
     }));
 
   return (
@@ -450,7 +577,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                   {showPast ? getTranslatedValue(t, "openHouses.page.headingPast") : getTranslatedValue(t, "openHouses.page.headingUpcoming")}
                 </h1>
                 <p className="text-muted-foreground text-sm mt-1 min-h-5">
-                  {isError
+                  {isInitialLoadError
                     ? getTranslatedValue(t, "openHouses.page.loadError")
                     : isEmpty
                     ? showPast ? getTranslatedValue(t, "openHouses.page.emptyPast") : getTranslatedValue(t, "openHouses.page.emptyUpcoming")
@@ -720,7 +847,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 </span>
                 <button
                   type="button"
-                  onClick={() => setPolygonFilterIds(null)}
+                  onClick={() => setPolygonPoints(null)}
                   className="font-medium text-primary hover:underline"
                 >
                   {getTranslatedValue(t, "openHouses.page.clearArea")}
@@ -732,7 +859,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
         {/* ── Content ────────────────────────────────────────────────────────── */}
         <div className={viewMode === "map" ? "mobile-map-panel" : "container py-8 pb-mobile-nav-room lg:pb-8"}>
-          {isLoading ? (
+          {isLoading && viewMode !== "map" ? (
             <div className="space-y-4" aria-busy="true" aria-label={getTranslatedValue(t, "openHouses.page.loading")}>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
@@ -746,18 +873,61 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 ))}
               </div>
             </div>
+          ) : isInitialLoadError && (viewMode !== "map" || mapListings.length === 0) ? (
+            <div className="glass-card rounded-xl p-16 text-center">
+              <AlertCircle className="w-14 h-14 text-destructive mx-auto mb-4" />
+              <h2 className="font-display text-lg font-semibold mb-2">{getTranslatedValue(t, "openHouses.page.errorTitle")}</h2>
+              <p className="text-sm text-muted-foreground mb-4">{getTranslatedValue(t, "openHouses.page.retryPrompt")}</p>
+              <Button variant="outline" onClick={() => refetch()}>{getTranslatedValue(t, "openHouses.page.retryButton")}</Button>
+            </div>
           ) : viewMode === "map" ? (
             /* ── Map view ── */
-            mapListings.length > 0 ? (
-              <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
-                <MapView
-                  listings={mapListings}
-                  height="100%"
-                  itemLabelSingular={getTranslatedValue(t, "openHouses.page.mapLabelSingular")}
-                  itemLabelPlural={getTranslatedValue(t, "openHouses.page.mapLabelPlural")}
-                  onPolygonFilter={setPolygonFilterIds}
-                />
-              </Suspense>
+            mapListings.length > 0 || hasNextPage || isFetching ? (
+              <div className="relative h-full">
+                <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
+                  <MapView
+                    listings={mapListings}
+                    height="100%"
+                    itemLabelSingular={getTranslatedValue(t, "openHouses.page.mapLabelSingular")}
+                    itemLabelPlural={getTranslatedValue(t, "openHouses.page.mapLabelPlural")}
+                    onViewportBoundsChange={handleViewportBoundsChange}
+                    polygonPoints={polygonPoints}
+                    onPolygonChange={setPolygonPoints}
+                    isLoading={isLoading}
+                    resultsIncomplete={hasMoreListings}
+                  />
+                </Suspense>
+                {isFetching && !isFetchingNextPage && (
+                  <div
+                    className="absolute right-3 top-3 z-20 flex items-center gap-2 rounded-md border border-border bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm"
+                    role="status"
+                  >
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                    <span>{getTranslatedValue(t, "openHouses.page.loading")}</span>
+                  </div>
+                )}
+                {isMapWindowIncomplete && (
+                  <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-md border border-amber-500/25 bg-background/95 px-3 py-1.5 text-xs font-medium text-amber-800 shadow-sm dark:text-amber-300">
+                    {getTranslatedValue(t, "openHouses.page.mapWindowIncomplete")}
+                  </div>
+                )}
+                {(isFetchNextPageError || isInitialLoadError) && (
+                  <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-md border border-destructive/25 bg-background/95 px-3 py-1.5 text-xs text-destructive shadow-sm">
+                    <span>{isFetchNextPageError
+                      ? getTranslatedValue(t, "openHouses.page.loadMoreError")
+                      : getTranslatedValue(t, "openHouses.page.loadError")}</span>
+                    <button
+                      type="button"
+                      className="font-semibold underline"
+                      onClick={() => isFetchNextPageError ? void fetchNextPage() : void refetch()}
+                    >
+                      {isFetchNextPageError
+                        ? getTranslatedValue(t, "openHouses.page.retryLoadMore")
+                        : getTranslatedValue(t, "openHouses.page.retryButton")}
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
                 <MapPin className="w-10 h-10 text-muted-foreground" />
@@ -767,14 +937,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 </Button>
               </div>
             )
-          ) : isError ? (
-            <div className="glass-card rounded-xl p-16 text-center">
-              <AlertCircle className="w-14 h-14 text-destructive mx-auto mb-4" />
-              <h2 className="font-display text-lg font-semibold mb-2">{getTranslatedValue(t, "openHouses.page.errorTitle")}</h2>
-              <p className="text-sm text-muted-foreground mb-4">{getTranslatedValue(t, "openHouses.page.retryPrompt")}</p>
-              <Button variant="outline" onClick={() => refetch()}>{getTranslatedValue(t, "openHouses.page.retryButton")}</Button>
-            </div>
-          ) : displayData.length === 0 ? (
+          ) : displayData.length === 0 && !hasNextPage ? (
             <div className="glass-card rounded-xl p-16 text-center">
               <Calendar className="w-14 h-14 text-muted-foreground mx-auto mb-4" />
               <h2 className="font-display text-lg font-semibold mb-2">{getTranslatedValue(t, "openHouses.page.emptyFilteredTitle")}</h2>
@@ -782,16 +945,40 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
               <Button variant="outline" onClick={clearFilters}>{getTranslatedValue(t, "openHouses.page.clearFilters")}</Button>
             </div>
           ) : (
-            <VirtualizedListingGrid
-              items={displayData}
-              className="grid grid-cols-1 min-[420px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4 items-stretch"
-              gap={16}
-              estimateItemHeight={332}
-              data-testid="open-house-grid"
-              renderItem={({ listing, card }, index) => (
-                <OpenHouseCard key={card.id} listing={listing} card={card} imagePriority={index < 6} />
+            <>
+              {displayData.length > 0 && (
+                <VirtualizedListingGrid
+                  items={displayData}
+                  className="grid grid-cols-1 min-[420px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4 items-stretch"
+                  gap={16}
+                  estimateItemHeight={332}
+                  data-testid="open-house-grid"
+                  renderItem={({ listing, card }, index) => (
+                    <OpenHouseCard key={card.id} listing={listing} card={card} imagePriority={index < 6} />
+                  )}
+                />
               )}
-            />
+              {isFetchNextPageError && (
+                <div className="flex items-center justify-center gap-3 pt-6 text-sm text-destructive" role="status">
+                  <span>{getTranslatedValue(t, "openHouses.page.loadMoreError")}</span>
+                  <Button variant="outline" onClick={() => void fetchNextPage()}>
+                    {getTranslatedValue(t, "openHouses.page.retryLoadMore")}
+                  </Button>
+                </div>
+              )}
+              {hasNextPage && !isFetchNextPageError && (
+                <div className="flex justify-center pt-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => void fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                  >
+                    {isFetchingNextPage && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {getTranslatedValue(t, "listings.loadMore", "Load more")}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>

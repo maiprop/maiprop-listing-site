@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   MapPin, Calendar, ChevronLeft, ChevronRight, Eye,
@@ -36,6 +36,7 @@ import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { PropertyHeroSpecsBar } from "@/components/property/PropertyHeroSpecsBar";
 import { buildListingHeroSpecs } from "@/components/property/propertyHeroSpecs";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
+import { getListingDetailPath } from "@/lib/listingRoutes";
 
 const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
 const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
@@ -52,9 +53,19 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   const hasValidListingId = Boolean(id && UUID_RE.test(id));
   const listingIdParam = hasValidListingId ? id ?? "" : "";
   const navigate = useNavigate();
+  const { state } = useLocation() as {
+    state?: { listing?: ListingWithJoins };
+  };
   const { user } = useAuth();
   const { isPro } = useSubscription();
-  const { data: listing, isLoading } = useListing(listingIdParam, { publicScope: true });
+  const routeListing = state?.listing?.id === listingIdParam
+    ? state.listing
+    : undefined;
+  const { data: listing, isLoading } = useListing(listingIdParam, {
+    initialData: routeListing,
+    publicScope: true,
+    publicationId: routeListing?.publicationId,
+  });
   const trackView = useTrackListingView();
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
@@ -123,9 +134,12 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   useEffect(() => {
     // Redirect if not an open house listing
     if (db?.listing_type && db.listing_type !== "open_house") {
-      navigate(`/property/${listingIdParam}`, { replace: true });
+      navigate(getListingDetailPath(db), {
+        replace: true,
+        state: { listing: db },
+      });
     }
-  }, [db?.listing_type, listingIdParam, navigate]);
+  }, [db, navigate]);
 
   useEffect(() => {
     if (db?.open_house_date) {

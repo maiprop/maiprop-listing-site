@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useListings, useListingsPaginated, type ListingsFilters, type ListingWithJoins } from "@/hooks/useListings";
-import { listingToCard, type ListingCardWithRaw } from "@/lib/listingsCardUtils";
+import { useListingsPaginated, type ListingsFilters, type ListingWithJoins } from "@/hooks/useListings";
+import { listingToCard } from "@/lib/listingsCardUtils";
 import { toast } from "sonner";
+
+const MAP_AUTO_PAGE_BUDGET = 3;
 
 /** Sort modes the listings UI exposes. Mirrors `selectedSort` in `useListingsFilters`. */
 export type ListingsSort =
@@ -18,7 +20,7 @@ export type ListingsViewMode = "grid" | "split" | "map";
 export interface UseListingsPipelineOptions {
   /** Server-side filters constructed from `useListingsFilters()` URL state. */
   filters: ListingsFilters;
-  /** Selected view — only `"grid"` paginates; `"split"` / `"map"` use the full-fetch (200 cap). */
+  /** Selected view. All views use the same cursor-backed catalogue. */
   viewMode: ListingsViewMode;
   /** Selected sort, used as the final tiebreak inside the pipeline. */
   selectedSort: ListingsSort;
@@ -30,51 +32,19 @@ export interface UseListingsPipelineOptions {
   minAiScore?: number;
   /** Client-side filter: minimum walkability score (0..100), 0 disables. */
   minWalkability?: number;
+  /** Current map viewport. Spatial filters are applied before catalogue ranking. */
+  mapBounds?: {
+    west: number;
+    south: number;
+    east: number;
+    north: number;
+  } | null;
 }
-
-const isPriority = (p: ListingCardWithRaw) => (p.priorityPlacement ?? 0) > 0;
-
-const byUserSort = (selectedSort: ListingsSort) =>
-  (a: ListingCardWithRaw, b: ListingCardWithRaw) => {
-    if (selectedSort === "featured") {
-      const aPri = Number(a.priorityPlacement ?? 0);
-      const bPri = Number(b.priorityPlacement ?? 0);
-      if (bPri !== aPri) return bPri - aPri;
-      return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
-    }
-    if (selectedSort === "price-asc") return a.price - b.price;
-    if (selectedSort === "price-desc") return b.price - a.price;
-    if (selectedSort === "newest") {
-      return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
-    }
-    if (selectedSort === "ai-score") return (b.aiScore || 0) - (a.aiScore || 0);
-    if (selectedSort === "views") return (b.views || 0) - (a.views || 0);
-    return 0;
-  };
-
-const sortListings = (rows: ListingCardWithRaw[], selectedSort: ListingsSort): ListingCardWithRaw[] => {
-  const userSort = byUserSort(selectedSort);
-  return [...rows].sort((a, b) => {
-    // The legacy "featured" key is the default relevance sort. Priority ranks;
-    // Spotlight remains visual-only.
-    if (selectedSort === "featured") return userSort(a, b);
-    const aPromo = isPriority(a);
-    const bPromo = isPriority(b);
-    if (aPromo && !bPromo) return -1;
-    if (!aPromo && bPromo) return 1;
-    if (aPromo && bPromo) {
-      const pri = (b.priorityPlacement ?? 0) - (a.priorityPlacement ?? 0);
-      if (pri !== 0) return pri;
-    }
-    return userSort(a, b);
-  });
-};
 
 /**
  * Encapsulates the data pipeline that powers `/listings`:
  *
- *   server filters → dual fetch (paginated grid OR full-fetch map/split)
- *     → cards → client-side post-filter → promo-aware sort
+ *   server filters → cursor-backed catalogue → cards → client-side post-filter
  *
  * Also wires up the infinite-scroll `IntersectionObserver` and emits a single
  * toast on fetch error. Returns the pipeline output plus a `sentinelRef` the
@@ -84,49 +54,97 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
   const {
     filters,
     viewMode,
-    selectedSort,
     hasVideoViewing = false,
     hasVirtualTour = false,
     minAiScore = 0,
     minWalkability = 0,
+    mapBounds = null,
   } = opts;
 
-  // Grid view paginates 40 at a time (infinite scroll). Map / split views need
-  // every visible marker at once, so they use the bounded full-fetch (200 cap).
-  // Only one query is enabled at a time to avoid wasting bandwidth.
   const isGrid = viewMode === "grid";
-  const paginated = useListingsPaginated(filters, { enabled: isGrid });
-  const fullFetch = useListings(filters, { enabled: !isGrid });
+  const serverFilters = useMemo<ListingsFilters>(() => ({
+    ...filters,
+    has_video_tour: hasVideoViewing || undefined,
+    has_virtual_tour: hasVirtualTour || undefined,
+    ai_score_min: minAiScore > 0 ? minAiScore : undefined,
+    walkability_min: minWalkability > 0 ? minWalkability : undefined,
+    boundsWest: !isGrid && mapBounds ? mapBounds.west : undefined,
+    boundsSouth: !isGrid && mapBounds ? mapBounds.south : undefined,
+    boundsEast: !isGrid && mapBounds ? mapBounds.east : undefined,
+    boundsNorth: !isGrid && mapBounds ? mapBounds.north : undefined,
+  }), [filters, hasVideoViewing, hasVirtualTour, isGrid, mapBounds, minAiScore, minWalkability]);
+
+  const paginated = useListingsPaginated(serverFilters, { enabled: true });
+  const loadedPageCount = paginated.data?.pages.length ?? 0;
+  const fetchNextPage = paginated.fetchNextPage;
+  const hasNextPage = !!paginated.hasNextPage;
+  const isFetchingNextPage = !!paginated.isFetchingNextPage;
+  const queryIsError = !!paginated.isError;
 
   const dbListings = useMemo<ListingWithJoins[]>(() => {
-    // Both paths produce rows with the same shape that listingToCard() reads.
-    // The type cast matches how useListings() casts its enriched rows internally
-    // (ownerIsPro / ownerParticipantType are only set by the single-listing path).
-    if (isGrid) return (paginated.data?.pages.flatMap((p) => p.data) ?? []) as ListingWithJoins[];
-    return fullFetch.data ?? [];
-  }, [isGrid, paginated.data, fullFetch.data]);
+    return (paginated.data?.pages.flatMap((page) => page.data) ?? []) as ListingWithJoins[];
+  }, [paginated.data]);
 
-  const isLoading = isGrid ? paginated.isLoading : fullFetch.isLoading;
-  const isError = isGrid ? paginated.isError : fullFetch.isError;
-  const error = isGrid ? paginated.error : fullFetch.error;
+  const isLoading = paginated.isLoading;
+  const isFetchNextPageError = !!paginated.isFetchNextPageError;
+  const isError = queryIsError && !isFetchNextPageError;
+  const error = paginated.error;
+
+  useEffect(() => {
+    if (
+      viewMode !== "map" ||
+      !mapBounds ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      queryIsError ||
+      loadedPageCount >= MAP_AUTO_PAGE_BUDGET
+    ) {
+      return;
+    }
+    void fetchNextPage();
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    mapBounds,
+    queryIsError,
+    loadedPageCount,
+    viewMode,
+  ]);
 
   // Infinite-scroll sentinel — load the next page when the user nears it.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (!isGrid) return;
+    if (
+      viewMode === "map"
+      || (viewMode === "split" && !mapBounds)
+      || isFetchNextPageError
+    ) return;
     const el = sentinelRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && paginated.hasNextPage && !paginated.isFetchingNextPage) {
-          paginated.fetchNextPage();
+        if (
+          entries[0]?.isIntersecting
+          && hasNextPage
+          && !isFetchingNextPage
+          && !isFetchNextPageError
+        ) {
+          fetchNextPage();
         }
       },
       { rootMargin: "400px 0px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [isGrid, paginated]);
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetchNextPageError,
+    isFetchingNextPage,
+    mapBounds,
+    viewMode,
+  ]);
 
   useEffect(() => {
     if (isError && error) {
@@ -152,12 +170,10 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
       return true;
     });
 
-    // Grid pages arrive in the server's stable Priority/organic order. Re-sorting
-    // after pages append would collapse paid cards back into a block and make
-    // already-rendered cards jump. Map/split mode uses the bounded direct read,
-    // so it still needs the local ordering fallback.
-    return isGrid ? afterFilter : sortListings(afterFilter, selectedSort);
-  }, [sourceListings, hasVideoViewing, hasVirtualTour, minAiScore, minWalkability, selectedSort, isGrid]);
+    // Every view now preserves the canonical edge order. Re-sorting a bounded
+    // map window would change paid-slot fairness and make it disagree with grid.
+    return afterFilter;
+  }, [sourceListings, hasVideoViewing, hasVirtualTour, minAiScore, minWalkability]);
 
   return {
     /** Final post-filter, post-sort listings cards — what the UI iterates. */
@@ -170,16 +186,23 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
      * empty-state vs. a "still searching, fetching more pages" state.
      */
     totalLoaded: dbListings.length,
-    /** True while the active fetch (paginated or full) is loading its first page. */
+    /** True while the active cursor query is loading its first page. */
     isLoading,
     /** True if the active fetch errored. */
     isError,
-    /** Whether the paginated fetch has more pages to load. Always false in non-grid views. */
-    hasNextPage: !!paginated.hasNextPage,
+    /** True when a later cursor page failed after earlier rows loaded successfully. */
+    isFetchNextPageError,
+    /** Whether the cursor-backed fetch has more pages to load. */
+    hasNextPage,
+    /** True when the automatic map request budget was reached before exhausting the viewport. */
+    isMapWindowIncomplete:
+      viewMode === "map" &&
+      hasNextPage &&
+      loadedPageCount >= MAP_AUTO_PAGE_BUDGET,
     /** Whether the next-page fetch is currently in-flight. */
-    isFetchingNextPage: !!paginated.isFetchingNextPage,
-    /** Trigger fetching the next page (no-op in non-grid views). */
-    fetchNextPage: paginated.fetchNextPage,
+    isFetchingNextPage,
+    /** Trigger fetching the next cursor page. */
+    fetchNextPage,
     /** Mount on the bottom-of-list sentinel `<div>` so infinite-scroll auto-loads. */
     sentinelRef,
   };

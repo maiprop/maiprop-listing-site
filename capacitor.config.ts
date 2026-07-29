@@ -9,6 +9,11 @@ const config: CapacitorConfig = {
   appId,
   appName,
   webDir: bundledWeb ? 'dist' : 'capacitor-fallback',
+  plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
+  },
   ...(bundledWeb
     ? {}
     : {

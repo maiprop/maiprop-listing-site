@@ -4,6 +4,7 @@ import type { Json, TablesInsert, TablesUpdate } from "@/integrations/supabase/t
 export type ListingMutationResult = {
   id: string;
   owner_id?: string | null;
+  organization_id?: string | null;
   status?: string | null;
   listing_type?: string | null;
   updated_at?: string | null;
@@ -38,10 +39,13 @@ function withoutSystemFields(payload: Record<string, unknown>): Json {
 
 export async function createListingForUser(
   payload: TablesInsert<"listings">,
+  organizationId: string | null = null,
 ): Promise<ListingMutationResult> {
-  const { data, error } = await supabase.rpc("create_listing_for_user", {
+  const args = {
     p_payload: withoutSystemFields(payload as Record<string, unknown>),
-  });
+    ...(organizationId ? { p_organization_id: organizationId } : {}),
+  };
+  const { data, error } = await supabase.rpc("create_listing_for_user", args);
   if (error) throw error;
   return data as ListingMutationResult;
 }

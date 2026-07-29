@@ -6,6 +6,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { invokeProjectManagement } from "@/hooks/projectManagementBoundary";
 import { parseMutationInput, projectMediaCreateSchema, scopedRowDeleteMutationSchema } from "@/lib/mutationSchemas";
+import { accountQueryKey } from "@/lib/identityQueryBoundary";
 
 export type ProjectMediaType =
   | "rendering"
@@ -24,8 +25,9 @@ export type ProjectMedia = Pick<
 >;
 
 export function useProjectMedia(projectId: string | undefined) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["project_media", projectId],
+    queryKey: accountQueryKey(user?.id, "project_media", projectId),
     queryFn: async () => {
       if (!projectId) return [];
       const { data, error } = await supabase
@@ -37,7 +39,7 @@ export function useProjectMedia(projectId: string | undefined) {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!projectId,
+    enabled: Boolean(user && projectId),
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
 }
@@ -78,8 +80,12 @@ export function useAddProjectMedia() {
       });
     },
     onSuccess: (_: unknown, { project_id }: { project_id: string; url: string; media_type: ProjectMediaType; title?: string; sort_order?: number }) => {
-      qc.invalidateQueries({ queryKey: ["project_media", project_id] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project_media", project_id),
+      });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "projects"),
+      });
       toast.success("Media added");
     },
     onError: () => toast.error("Failed to add media. Please try again."),
@@ -100,8 +106,12 @@ export function useDeleteProjectMedia() {
       });
     },
     onSuccess: (_: unknown, { projectId }: { id: string; projectId: string }) => {
-      qc.invalidateQueries({ queryKey: ["project_media", projectId] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project_media", projectId),
+      });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "projects"),
+      });
       toast.success("Media removed");
     },
     onError: () => toast.error("Failed to remove media. Please try again."),

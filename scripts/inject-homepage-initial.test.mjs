@@ -61,7 +61,7 @@ describe("homepage initial payload injection", () => {
           },
         ]), { status: 200, headers: { "content-type": "application/json" } });
       }
-      if (href.includes("section=open-houses")) {
+      if (href.includes("/api/public/open-houses?")) {
         return new Response(JSON.stringify([
           {
             id: "open-house-1",
@@ -192,6 +192,59 @@ describe("homepage initial payload injection", () => {
     expect(JSON.stringify(payload)).not.toContain("owner_id");
   });
 
+  it("builds the Open House bootstrap from the canonical first-six stream", async () => {
+    const requestedUrls = [];
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(String(url));
+      requestedUrls.push(parsed);
+      if (parsed.pathname === "/") {
+        return new Response("<html></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      }
+      if (parsed.pathname === "/api/public/open-houses") {
+        return new Response(JSON.stringify([
+          { id: "open-house-1", title: "First Canonical Open House", city: "Athens" },
+          { id: "open-house-2", title: "Second Canonical Open House", city: "Piraeus" },
+        ]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (parsed.pathname === "/api/public/homepage") {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (parsed.pathname === "/api/public/listings") {
+        return new Response(JSON.stringify({ data: [], hasMore: false }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    const payload = await buildHomepageInitialPayload({
+      origin: "https://portal.maiprop.co",
+      fetchImpl,
+      fetchOptions: { attempts: 1, timeoutMs: 1_000 },
+    });
+
+    expect(payload.openHouses.map((row) => row.id)).toEqual([
+      "open-house-1",
+      "open-house-2",
+    ]);
+    const openHouseRequest = requestedUrls.find((url) =>
+      url.pathname === "/api/public/open-houses");
+    expect(openHouseRequest?.searchParams.get("limit")).toBe("6");
+    expect(requestedUrls.some((url) =>
+      url.pathname === "/api/public/homepage"
+      && url.searchParams.get("section") === "open-houses")).toBe(false);
+  });
+
   it("uses the compatible catalogue contract when the canonical first-page key is unavailable", async () => {
     const fallbackRequests = [];
     const fetchImpl = vi.fn(async (url) => {
@@ -290,7 +343,7 @@ describe("homepage initial payload injection", () => {
   it("keeps Spotlight empty while still bootstrapping organic catalogue rows", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const href = String(url);
-      if (href.includes("section=featured") || href.includes("section=open-houses")) {
+      if (href.includes("section=featured") || href.includes("/api/public/open-houses?")) {
         return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
       }
       if (href.includes("/api/public/listings")) {
@@ -360,7 +413,7 @@ describe("homepage initial payload injection", () => {
     let genericCatalogueCalls = 0;
     const fetchImpl = vi.fn(async (url) => {
       const href = String(url);
-      if (href.includes("section=featured") || href.includes("section=open-houses")) {
+      if (href.includes("section=featured") || href.includes("/api/public/open-houses?")) {
         return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
       }
       if (href.includes("/api/public/listings")) {
@@ -412,7 +465,7 @@ describe("homepage initial payload injection", () => {
           },
         ]), { status: 200, headers: { "content-type": "application/json" } });
       }
-      if (href.includes("section=open-houses")) {
+      if (href.includes("/api/public/open-houses?")) {
         return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
       }
       return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });

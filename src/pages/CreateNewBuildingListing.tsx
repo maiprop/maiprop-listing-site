@@ -16,9 +16,10 @@ import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getPlanLimits } from "@/hooks/usePlanLimits";
-import { useMyListings } from "@/hooks/useListings";
-import { uploadListingImage } from "@/lib/buildingListingUploads";
+import { useActorOwnedListings } from "@/hooks/useListings";
+import { uploadNewBuildingListingImage } from "@/lib/buildingListingUploads";
 import { useCreateBuildingListing } from "@/hooks/useCreateBuildingListing";
+import { useManageableOrganizations } from "@/hooks/useManageableOrganizations";
 import { LocationAutocompleteInput, type LocationAutocompleteSelection } from "@/components/location/LocationAutocompleteInput";
 import {
   IMAGE_AND_VIDEO_MIME_TYPES,
@@ -26,6 +27,24 @@ import {
   assertAllowedUpload,
 } from "@/lib/uploadValidation";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
+import {
+  EMPTY_LISTING,
+  EMPTY_PROJECT,
+  EMPTY_UNIT,
+  WIZARD_STEPS,
+  clearNewBuildingDraft,
+  getNewBuildingDraftKey,
+  hasDraftContent,
+  persistableImages,
+  readNewBuildingDraft,
+  type ListingDraft,
+  type NewBuildingDraft,
+  type ProjectDraft,
+  type ProjectKind,
+  type UnitDraft,
+  type UploadedImage,
+  type WizardStep,
+} from "./new-building/newBuildingDraft";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -43,186 +62,10 @@ const MEDIA_TYPES: { value: ProjectMediaType; label: string }[] = [
   { value: "video", label: "Video" },
 ];
 
-type UploadedImage = { id: string; url: string; file?: File; uploading?: boolean; error?: string };
-
-const WIZARD_STEPS = ["building", "unit", "media", "listing", "photos"] as const;
-type WizardStep = typeof WIZARD_STEPS[number];
-type ProjectKind = "new_build" | "renovation";
-type ProjectDraft = {
-  name: string;
-  building_permit_number: string;
-  developer_company: string;
-  architect_group: string;
-  construction_company: string;
-  description: string;
-  address: string;
-  city: string;
-  municipality: string;
-  area_description: string;
-  permit_approval_date: string;
-  construction_start_date: string;
-  structural_completion_date: string;
-  delivery_date: string;
-  latitude: string | number;
-  longitude: string | number;
-  construction_year: string;
-  renovation_year: string;
-};
-type UnitDraft = {
-  unit_id: string;
-  floor: string;
-  unit_number: string;
-  internal_sqm: string;
-  balcony_sqm: string;
-  storage_sqm: string;
-  parking_sqm: string;
-  bedrooms: string;
-  bathrooms: string;
-  kitchen_type: string;
-  living_rooms: string;
-  price: string;
-  vat_included: boolean;
-  parking_price: string;
-  storage_price: string;
-  sea_view: boolean;
-  city_view: boolean;
-  mountain_view: boolean;
-  energy_class: string;
-  heating_system: string;
-  cooling_system: string;
-};
-type ListingDraft = {
-  title: string;
-  description: string;
-};
-type NewBuildingDraft = {
-  version: 1;
-  step: WizardStep;
-  projectKind: ProjectKind;
-  project: ProjectDraft;
-  units: UnitDraft[];
-  listing: ListingDraft;
-  images: Array<Pick<UploadedImage, "id" | "url">>;
-  coverImageId: string | null;
-};
-
-const NEW_BUILDING_DRAFT_KEY_PREFIX = "maiprop:new-building-listing-draft:v1";
-
-const EMPTY_PROJECT: ProjectDraft = {
-  name: "",
-  building_permit_number: "",
-  developer_company: "",
-  architect_group: "",
-  construction_company: "",
-  description: "",
-  address: "",
-  city: "",
-  municipality: "",
-  area_description: "",
-  permit_approval_date: "",
-  construction_start_date: "",
-  structural_completion_date: "",
-  delivery_date: "",
-  latitude: "",
-  longitude: "",
-  construction_year: "",
-  renovation_year: "",
-};
-
-const EMPTY_UNIT: UnitDraft = {
-  unit_id: "",
-  floor: "",
-  unit_number: "",
-  internal_sqm: "",
-  balcony_sqm: "",
-  storage_sqm: "",
-  parking_sqm: "",
-  bedrooms: "",
-  bathrooms: "",
-  kitchen_type: "",
-  living_rooms: "",
-  price: "",
-  vat_included: true,
-  parking_price: "",
-  storage_price: "",
-  sea_view: false,
-  city_view: false,
-  mountain_view: false,
-  energy_class: "",
-  heating_system: "",
-  cooling_system: "",
-};
-
 const EMPTY_PROJECT_MEDIA: Record<ProjectMediaType, File | null> = {
   rendering: null, floor_plan: null, site_plan: null, brochure_pdf: null,
   drone: null, walkthrough: null, progress: null, video: null,
 };
-
-const EMPTY_LISTING: ListingDraft = {
-  title: "",
-  description: "",
-};
-
-function getNewBuildingDraftKey(userId: string) {
-  return `${NEW_BUILDING_DRAFT_KEY_PREFIX}:${userId}`;
-}
-
-function readNewBuildingDraft(userId: string): NewBuildingDraft | null {
-  try {
-    const raw = localStorage.getItem(getNewBuildingDraftKey(userId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<NewBuildingDraft>;
-    if (parsed.version !== 1) return null;
-    if (!parsed.step || !WIZARD_STEPS.includes(parsed.step)) return null;
-    const legacyUnit = (parsed as Partial<NewBuildingDraft> & { unit?: Partial<UnitDraft> }).unit;
-    const rawUnits = Array.isArray(parsed.units)
-      ? parsed.units
-      : legacyUnit
-        ? [legacyUnit]
-        : [];
-    return {
-      version: 1,
-      step: parsed.step,
-      projectKind: parsed.projectKind === "renovation" ? "renovation" : "new_build",
-      project: { ...EMPTY_PROJECT, ...(parsed.project ?? {}) },
-      units: rawUnits.length > 0 ? rawUnits.map((unit) => ({ ...EMPTY_UNIT, ...unit })) : [{ ...EMPTY_UNIT }],
-      listing: { ...EMPTY_LISTING, ...(parsed.listing ?? {}) },
-      images: Array.isArray(parsed.images)
-        ? parsed.images.filter((image): image is Pick<UploadedImage, "id" | "url"> =>
-            typeof image?.id === "string" &&
-            typeof image?.url === "string" &&
-            !image.url.startsWith("blob:"),
-          )
-        : [],
-      coverImageId: typeof parsed.coverImageId === "string" ? parsed.coverImageId : null,
-    };
-  } catch (_err: unknown) {
-    return null;
-  }
-}
-
-function clearNewBuildingDraft(userId: string) {
-  try {
-    localStorage.removeItem(getNewBuildingDraftKey(userId));
-  } catch (_err: unknown) {
-    /* localStorage can be disabled */
-  }
-}
-
-function hasDraftContent(project: ProjectDraft, units: UnitDraft[], listing: ListingDraft, images: UploadedImage[]) {
-  return (
-    Object.values(project).some((value) => String(value).trim() !== "") ||
-    units.some((unit) => Object.entries(unit).some(([key, value]) => key !== "vat_included" && String(value).trim() !== "")) ||
-    Object.values(listing).some((value) => value.trim() !== "") ||
-    images.some((image) => !image.uploading && !image.error && !image.file && !image.url.startsWith("blob:"))
-  );
-}
-
-function persistableImages(images: UploadedImage[]): Array<Pick<UploadedImage, "id" | "url">> {
-  return images
-    .filter((image) => !image.uploading && !image.error && !image.file && !image.url.startsWith("blob:"))
-    .map(({ id, url }) => ({ id, url }));
-}
 
 const STEPS = [
   { id: "building" as WizardStep, label: "Project", icon: Building2 },
@@ -237,11 +80,12 @@ export default function CreateNewBuildingListing() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const submitNewBuildingListing = useCreateBuildingListing();
+  const { data: manageableOrganizations = [] } = useManageableOrganizations();
 
   const participantType = getParticipantTypeFromProfile(profile);
   const canCreateListing = profile?.role === "developer" || isPlatformAdmin(profile);
   const { hasDeveloperPro } = useSubscription();
-  const { data: myListings = [] } = useMyListings();
+  const { data: myListings = [] } = useActorOwnedListings();
   const activeListingCount = myListings.filter((listing) => listing.status === "active").length;
   const listingLimit = getPlanLimits(participantType, hasDeveloperPro ? "pro" : "free").listings;
   const tr = useCallback((key: string, fallback: string) => tFallback(t, key, fallback), [t]);
@@ -255,6 +99,8 @@ export default function CreateNewBuildingListing() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Step 1: Project
+  const [projectId, setProjectId] = useState<string>(() => crypto.randomUUID());
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [projectKind, setProjectKind] = useState<ProjectKind>("new_build");
   const [project, setProject] = useState<ProjectDraft>(() => ({ ...EMPTY_PROJECT }));
 
@@ -285,8 +131,10 @@ export default function CreateNewBuildingListing() {
   useEffect(() => {
     if (!user?.id || restoredDraftUserRef.current === user.id) return;
     restoredDraftUserRef.current = user.id;
-    const draft = readNewBuildingDraft(user.id);
+    const draft = readNewBuildingDraft(user.id, projectId);
     if (!draft) return;
+    setProjectId(draft.projectId);
+    setOrganizationId(draft.organizationId);
     setProjectKind(draft.projectKind);
     setProject(draft.project);
     setUnits(draft.units.length > 0 ? draft.units : [{ ...EMPTY_UNIT }]);
@@ -295,7 +143,7 @@ export default function CreateNewBuildingListing() {
     setImages(draft.images);
     setCoverImageId(draft.coverImageId);
     goTo(draft.step);
-  }, [goTo, user?.id]);
+  }, [goTo, projectId, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -303,6 +151,8 @@ export default function CreateNewBuildingListing() {
     try {
       const draft: NewBuildingDraft = {
         version: 1,
+        projectId,
+        organizationId,
         step,
         projectKind,
         project,
@@ -315,7 +165,7 @@ export default function CreateNewBuildingListing() {
     } catch (_err: unknown) {
       /* localStorage can be disabled or full */
     }
-  }, [coverImageId, images, listing, project, projectKind, step, units, user?.id]);
+  }, [coverImageId, images, listing, organizationId, project, projectId, projectKind, step, units, user?.id]);
 
   const setProjectLocationField = (key: "address" | "city" | "municipality", value: string) =>
     setProject(p => ({ ...p, [key]: value, latitude: "", longitude: "" }));
@@ -351,8 +201,8 @@ export default function CreateNewBuildingListing() {
 
   const handleListingImageUpload = useCallback(async (file: File): Promise<UploadedImage> => {
     if (!user) throw new Error(tr("newBuildingListing.validation.mustBeLoggedIn", "Must be logged in"));
-    return uploadListingImage(file, user.id);
-  }, [user, tr]);
+    return uploadNewBuildingListingImage(file, user.id, projectId);
+  }, [projectId, user, tr]);
 
   // Guard: listing count limit reached
   if (user && profile && canCreateListing && listingLimit !== null && activeListingCount >= listingLimit) {
@@ -427,8 +277,12 @@ export default function CreateNewBuildingListing() {
 
   const validateStep = (s: WizardStep): boolean => {
     const newErrors: Record<string, string> = {};
+    const hasUnitValue = (value: string) => value.trim() !== "";
     const hasRequiredUnitFields = (item: UnitDraft) =>
-      Boolean(item.internal_sqm && item.price && item.bedrooms && item.bathrooms);
+      hasUnitValue(item.internal_sqm)
+      && hasUnitValue(item.price)
+      && hasUnitValue(item.bedrooms)
+      && hasUnitValue(item.bathrooms);
     if (s === "building") {
       if (!project.name.trim()) newErrors.project_name = tr("newBuildingListing.validation.projectNameRequired", "Project name is required");
       if (projectKind === "new_build" && !project.building_permit_number.trim()) newErrors.building_permit = tr("newBuildingListing.validation.permitRequired", "Building permit number is required");
@@ -476,7 +330,12 @@ export default function CreateNewBuildingListing() {
       toast.error(tr("newBuildingListing.validation.projectFieldsRequired", "Fill in required project fields"));
       return;
     }
-    if (units.some((item) => !(item.internal_sqm && item.price && item.bedrooms && item.bathrooms))) {
+    if (units.some((item) =>
+      !item.internal_sqm.trim()
+      || !item.price.trim()
+      || !item.bedrooms.trim()
+      || !item.bathrooms.trim()
+    )) {
       toast.error(tr("newBuildingListing.validation.unitFieldsRequired", "Fill in required unit fields"));
       return;
     }
@@ -503,6 +362,8 @@ export default function CreateNewBuildingListing() {
     setSubmitting(true);
     try {
       const { listingId } = await submitNewBuildingListing({
+        projectId,
+        organizationId,
         projectKind,
         userId: user.id,
         project,
@@ -529,7 +390,16 @@ export default function CreateNewBuildingListing() {
       if (i === 0) return projectKind === "renovation"
         ? !!(project.name && project.construction_year && project.renovation_year && project.city)
         : !!(project.name && project.building_permit_number && project.city);
-      if (i === 1) return units.length > 0 && units.every((item) => item.internal_sqm && item.price && item.bedrooms && item.bathrooms);
+      if (i === 1) {
+        return units.length > 0 && units.every((item) =>
+          Boolean(
+            item.internal_sqm.trim()
+            && item.price.trim()
+            && item.bedrooms.trim()
+            && item.bathrooms.trim()
+          )
+        );
+      }
       if (i === 2) return true;
       if (i === 3) return !!effectiveListingTitle;
       if (i === 4) return images.some(img => !img.uploading && !img.error);
@@ -585,6 +455,34 @@ export default function CreateNewBuildingListing() {
             {step === "building" && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-semibold">{tr("newBuildingListing.building.heading", "Building & Project Details")}</h2>
+                {manageableOrganizations.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label htmlFor="new-building-owner-scope" className={LABEL_CLS}>
+                      {tr("newBuildingListing.building.ownerScope", "Publish under")}
+                    </label>
+                    <select
+                      id="new-building-owner-scope"
+                      value={organizationId ?? ""}
+                      onChange={(event) => setOrganizationId(event.target.value || null)}
+                      className={INPUT_CLS}
+                    >
+                      <option value="">
+                        {tr("newBuildingListing.building.personalAccount", "Personal account")}
+                      </option>
+                      {manageableOrganizations.map((organization) => (
+                        <option key={organization.id} value={organization.id}>
+                          {organization.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      {tr(
+                        "newBuildingListing.building.ownerScopeHint",
+                        "The selected account owns the project, listing, units, media, and leads.",
+                      )}
+                    </p>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-secondary/40 p-1">
                   {[
                     { value: "new_build" as ProjectKind, label: tr("newBuildingListing.projectKind.newBuild", "New build") },

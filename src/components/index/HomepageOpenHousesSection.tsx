@@ -103,6 +103,7 @@ export function HomepageOpenHousesSection({ listings, isLoading = false }: Props
                   tags: l.tags || [],
                   isPreSale: l.listing_type === "new_build",
                   constructionStatus: l.construction_status ?? undefined,
+                  _raw: l,
                 }}
               />
             );

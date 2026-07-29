@@ -1,25 +1,147 @@
+import { Capacitor, CapacitorHttp, type HttpResponse } from "@capacitor/core";
+import { getRuntimeValue } from "@/lib/runtimeConfig";
+
 const PUBLIC_API_TIMEOUT_MS = 6_500;
-const PUBLIC_API_ORIGIN = import.meta.env.VITE_PUBLIC_API_ORIGIN ?? import.meta.env.VITE_APP_URL ?? "";
+const NATIVE_PUBLIC_API_ORIGIN =
+  getRuntimeValue("VITE_PUBLIC_API_ORIGIN") ??
+  getRuntimeValue("VITE_APP_URL") ??
+  "";
 
-function getPublicApiUrl(path: string): string {
-  if (!path.startsWith("/")) return path;
+type PublicApiTransportResponse = {
+  status: number;
+  contentType: string;
+  data: unknown;
+};
 
-  const isNativeBundle = window.location.protocol === "capacitor:";
-  if (isNativeBundle) {
-    return PUBLIC_API_ORIGIN ? new URL(path, PUBLIC_API_ORIGIN).toString() : path;
+function boundedPublicApiPath(path: string): string {
+  if (!path.startsWith("/api/") || path.startsWith("//") || path.includes("\\")) {
+    throw new PublicApiError(path, "Public API requests must use a same-origin /api path");
   }
 
-  const browserOrigin = window.location.origin && window.location.origin !== "null"
-    ? window.location.origin
-    : "";
-  const origin = PUBLIC_API_ORIGIN || browserOrigin;
-  return origin ? new URL(path, origin).toString() : path;
+  const normalized = new URL(path, "https://public-api.invalid");
+  if (normalized.origin !== "https://public-api.invalid" || !normalized.pathname.startsWith("/api/")) {
+    throw new PublicApiError(path, "Public API requests must use a same-origin /api path");
+  }
+
+  return `${normalized.pathname}${normalized.search}`;
+}
+
+function nativePublicApiOrigin(path: string): string {
+  if (!NATIVE_PUBLIC_API_ORIGIN) {
+    throw new PublicApiError(path, "Native public API origin is not configured");
+  }
+
+  let configured: URL;
+  try {
+    configured = new URL(NATIVE_PUBLIC_API_ORIGIN);
+  } catch {
+    throw new PublicApiError(path, "Native public API origin must be an absolute HTTP(S) origin");
+  }
+
+  if (
+    !["http:", "https:"].includes(configured.protocol)
+    || configured.username
+    || configured.password
+    || configured.search
+    || configured.hash
+    || (configured.pathname !== "/" && configured.pathname !== "")
+  ) {
+    throw new PublicApiError(path, "Native public API origin must be an absolute HTTP(S) origin");
+  }
+
+  return configured.origin;
+}
+
+function isNativeBundle(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
+function headerValue(headers: Record<string, string>, name: string): string {
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase());
+  return entry?.[1] ?? "";
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("Aborted", "AbortError");
+}
+
+async function withAbortSignal<T>(request: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) throw abortReason(signal);
+
+  return await new Promise<T>((resolve, reject) => {
+    const abort = () => reject(abortReason(signal));
+    signal.addEventListener("abort", abort, { once: true });
+    request.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+
+async function fetchNativePublicApi(
+  path: string,
+  signal: AbortSignal,
+  timeoutMs: number,
+  headers: Record<string, string>,
+  method: "GET" | "POST",
+  body: unknown,
+): Promise<PublicApiTransportResponse> {
+  const url = new URL(path, nativePublicApiOrigin(path)).toString();
+  const requestOptions = {
+    url,
+    headers,
+    connectTimeout: timeoutMs,
+    readTimeout: timeoutMs,
+    responseType: "json" as const,
+  };
+  const response = await withAbortSignal<HttpResponse>(
+    method === "GET" && body === undefined
+      ? CapacitorHttp.get(requestOptions)
+      : CapacitorHttp.request({
+          ...requestOptions,
+          method,
+          data: body,
+        }),
+    signal,
+  );
+
+  return {
+    status: response.status,
+    contentType: headerValue(response.headers, "Content-Type"),
+    data: response.data,
+  };
+}
+
+async function fetchWebPublicApi(
+  path: string,
+  signal: AbortSignal,
+  headers: Record<string, string>,
+  method: "GET" | "POST",
+  body: unknown,
+): Promise<PublicApiTransportResponse> {
+  const response = await fetch(path, {
+    method,
+    headers,
+    signal,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const contentType = response.headers.get("Content-Type") ?? "";
+
+  return {
+    status: response.status,
+    contentType,
+    data: response.ok && contentType.toLowerCase().includes("application/json")
+      ? await response.json()
+      : null,
+  };
 }
 
 type PublicApiOptions = {
   timeoutMs?: number;
   throwOnError?: boolean;
   signal?: AbortSignal;
+  headers?: Record<string, string>;
+  method?: "GET" | "POST";
+  body?: unknown;
 };
 
 export class PublicApiError extends Error {
@@ -31,15 +153,6 @@ export class PublicApiError extends Error {
     super(message);
     this.name = "PublicApiError";
   }
-}
-
-export function shouldLogPublicApiFallback(error: unknown): boolean {
-  if (!import.meta.env.DEV) return true;
-  if (isPublicApiAbort(error)) return false;
-  if (error instanceof TypeError && /failed to fetch|networkerror|load failed/i.test(error.message)) {
-    return false;
-  }
-  return true;
 }
 
 export function isPublicApiAbort(error: unknown): boolean {
@@ -66,32 +179,57 @@ function linkAbortSignal(source: AbortSignal | undefined, controller: AbortContr
 export async function fetchPublicApi<T>(path: string, options: PublicApiOptions = {}): Promise<T | null> {
   const controller = new AbortController();
   const unlinkAbortSignal = linkAbortSignal(options.signal, controller);
-  const timer = window.setTimeout(() => controller.abort(), options.timeoutMs ?? PUBLIC_API_TIMEOUT_MS);
+  const timeoutMs = options.timeoutMs ?? PUBLIC_API_TIMEOUT_MS;
+  let timedOut = false;
+  const timer = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   try {
-    const response = await fetch(getPublicApiUrl(path), {
-      headers: { Accept: "application/json" },
-      signal: controller.signal,
-    });
-    const contentType = response.headers.get("Content-Type") ?? "";
-    if (!response.ok) {
+    const boundedPath = boundedPublicApiPath(path);
+    const method = options.method ?? "GET";
+    const headers = {
+      Accept: "application/json",
+      ...(options.body === undefined ? {} : {
+        "Content-Type": "application/json",
+      }),
+      ...options.headers,
+    };
+    const response = isNativeBundle()
+      ? await fetchNativePublicApi(
+        boundedPath,
+        controller.signal,
+        timeoutMs,
+        headers,
+        method,
+        options.body,
+      )
+      : await fetchWebPublicApi(
+        boundedPath,
+        controller.signal,
+        headers,
+        method,
+        options.body,
+      );
+    if (response.status < 200 || response.status >= 300) {
       if (options.throwOnError) {
         throw new PublicApiError(path, `Public API request failed with ${response.status}`, response.status);
       }
       return null;
     }
-    if (!contentType.includes("application/json")) {
+    if (!response.contentType.toLowerCase().includes("application/json")) {
       if (options.throwOnError) {
         throw new PublicApiError(path, "Public API returned a non-JSON response", response.status);
       }
       return null;
     }
-    return (await response.json()) as T;
+    return response.data as T;
   } catch (error) {
     if (options.throwOnError) {
       if (error instanceof PublicApiError) throw error;
-      if (error instanceof DOMException && error.name === "AbortError") {
+      if (isPublicApiAbort(error)) {
         if (options.signal?.aborted) throw error;
-        throw new PublicApiError(path, "Public API request timed out");
+        if (timedOut) throw new PublicApiError(path, "Public API request timed out");
       }
       throw error;
     }

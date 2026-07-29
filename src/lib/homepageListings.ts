@@ -39,6 +39,7 @@ export type HasHomepageImages = {
 };
 
 export type HomepageListing = HasHomepageImages & {
+  publicationId?: number;
   id: string;
   owner_id?: string | null;
   title: string;

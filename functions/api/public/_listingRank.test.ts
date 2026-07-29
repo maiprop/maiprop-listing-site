@@ -7,7 +7,6 @@ import {
   catalogueStreamOffsetsForAvailableRows,
   decodeCatalogueCursor,
   interleaveCatalogueStreams,
-  MAX_CATALOGUE_STREAM_OFFSET,
   resolveCatalogueSort,
 } from "./_listingRank";
 
@@ -16,6 +15,12 @@ const rows = (prefix: string, count: number) => Array.from({ length: count }, (_
   created_at: new Date(Date.UTC(2026, 6, 14, 12, 0, count - index)).toISOString(),
   price: 100_000 + index,
 }));
+
+const cursorRows = (count: number, namespace = 0) =>
+  rows("cursor", count).map((row, index) => ({
+    ...row,
+    id: `00000000-0000-4000-8000-${String(namespace * 1_000 + index + 1).padStart(12, "0")}`,
+  }));
 
 describe("public catalogue paid-slot ranking", () => {
   it("places at most three Priority rows in each 12-card block while organic rows exist", () => {
@@ -102,17 +107,53 @@ describe("public catalogue paid-slot ranking", () => {
 
   it("round-trips a versioned cursor and rejects malformed cursors", () => {
     const sort = resolveCatalogueSort("featured");
-    const page = interleaveCatalogueStreams(rows("priority", 4), rows("organic", 10), 12, 0);
-    const encoded = buildNextCatalogueCursor(null, sort, page);
+    const page = interleaveCatalogueStreams(cursorRows(4, 1), cursorRows(10, 2), 12, 0);
+    const asOf = new Date().toISOString();
+    const encoded = buildNextCatalogueCursor(null, sort, page, 42, asOf, "sort=featured");
 
     expect(decodeCatalogueCursor(encoded, sort)).toMatchObject({
-      v: 1,
+      v: 3,
+      publicationId: 42,
       sort: "featured",
+      asOf,
+      scope: "sort=featured",
       slot: 0,
       priorityOffset: 3,
       organicOffset: 9,
     });
     expect(decodeCatalogueCursor("not-a-cursor", sort)).toBeNull();
+  });
+
+  it("rejects legacy and snapshot-less cursors", () => {
+    const sort = resolveCatalogueSort("featured");
+    const payload = {
+      v: 2,
+      sort: "featured",
+      scope: "sort=featured",
+      slot: 0,
+      priorityOffset: 0,
+      organicOffset: 0,
+    };
+    const encoded = btoa(JSON.stringify(payload))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+
+    expect(decodeCatalogueCursor(`v3.${encoded}`, sort)).toBeNull();
+    expect(decodeCatalogueCursor(`v2.${encoded}`, sort)).toBeNull();
+    expect(decodeCatalogueCursor(`v1.${encoded}`, sort)).toBeNull();
+  });
+
+  it("pins promotion eligibility to one catalogue snapshot across cursor pages", () => {
+    const sort = resolveCatalogueSort("featured");
+    const page = interleaveCatalogueStreams(cursorRows(4, 1), cursorRows(10, 2), 12, 0);
+    const asOf = new Date().toISOString();
+    const encoded = buildNextCatalogueCursor(null, sort, page, 42, asOf, "sort=featured");
+
+    expect(decodeCatalogueCursor(encoded, sort)).toMatchObject({
+      publicationId: 42,
+      asOf,
+    });
   });
 
   it("applies keyset pagination with a stable id tie-breaker", () => {
@@ -141,36 +182,58 @@ describe("public catalogue paid-slot ranking", () => {
   ])("uses deterministic keyset ordering for %s", (sortName, primaryOrder, value, keysetClause) => {
     const sort = resolveCatalogueSort(sortName);
     const params = new URLSearchParams();
-    applyCatalogueStreamCursor(params, sort, { id: "row-9", value, offset: 80 });
+    const id = "00000000-0000-4000-8000-000000000009";
+    applyCatalogueStreamCursor(params, sort, { id, value, offset: 80 });
 
     expect(params.getAll("order")).toEqual([`${primaryOrder},id.desc`]);
     expect(params.get("or")).toContain(keysetClause);
-    expect(params.get("or")).toContain("id.lt.row-9");
+    expect(params.get("or")).toContain(`id.lt.${id}`);
     expect(params.has("offset")).toBe(false);
   });
 
-  it("uses bounded stream offsets only for nullable AI score ordering", () => {
+  it("uses keyset pagination for numeric AI scores and includes the null phase", () => {
     const sort = resolveCatalogueSort("ai-score");
     const params = new URLSearchParams();
-    applyCatalogueStreamCursor(params, sort, { id: "row-1", value: null, offset: 40 });
+    const id = "00000000-0000-4000-8000-000000000001";
+    applyCatalogueStreamCursor(params, sort, { id, value: 88, offset: 40 });
 
     expect(params.getAll("order")).toEqual([
       "ai_score.desc.nullslast,id.desc",
     ]);
-    expect(params.get("offset")).toBe("40");
+    expect(params.get("or")).toContain("ai_score.lt.88");
+    expect(params.get("or")).toContain("ai_score.is.null");
+    expect(params.get("or")).toContain(`id.lt.${id}`);
+    expect(params.has("offset")).toBe(false);
   });
 
-  it("stops AI score traversal before a bounded stream offset would repeat", () => {
+  it("continues keyset pagination within the null AI-score phase", () => {
+    const sort = resolveCatalogueSort("ai-score");
+    const params = new URLSearchParams();
+    const id = "00000000-0000-4000-8000-000000000099";
+    applyCatalogueStreamCursor(params, sort, { id, value: null, offset: 40 });
+
+    expect(params.getAll("order")).toEqual([
+      "ai_score.desc.nullslast,id.desc",
+    ]);
+    expect(params.get("ai_score")).toBe("is.null");
+    expect(params.get("id")).toBe(`lt.${id}`);
+    expect(params.has("offset")).toBe(false);
+  });
+
+  it("does not stop AI-score traversal at the legacy offset ceiling", () => {
     const sort = resolveCatalogueSort("ai-score");
     const page = interleaveCatalogueStreams(rows("priority", 4), rows("organic", 10), 12, 0);
 
     expect(canAdvanceCatalogueCursor({
-      v: 1,
+      v: 3,
+      publicationId: 42,
       sort: "ai-score",
+      asOf: new Date().toISOString(),
+      scope: "sort=ai-score",
       slot: 0,
-      priorityOffset: MAX_CATALOGUE_STREAM_OFFSET - 2,
+      priorityOffset: 99_998,
       organicOffset: 0,
-    }, sort, page)).toBe(false);
+    }, sort, page)).toBe(true);
     expect(canAdvanceCatalogueCursor(null, resolveCatalogueSort("views"), page)).toBe(true);
   });
 });

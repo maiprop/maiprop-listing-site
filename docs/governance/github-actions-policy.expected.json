@@ -3,6 +3,7 @@
   "allowedActionRepositories": [
     "actions/attest-build-provenance",
     "actions/checkout",
+    "actions/download-artifact",
     "actions/setup-java",
     "actions/setup-node",
     "actions/upload-artifact",
@@ -23,6 +24,7 @@
     "patterns_allowed": [
       "actions/attest-build-provenance@*",
       "actions/checkout@*",
+      "actions/download-artifact@*",
       "actions/setup-java@*",
       "actions/setup-node@*",
       "actions/upload-artifact@*",

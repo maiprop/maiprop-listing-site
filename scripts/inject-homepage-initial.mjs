@@ -10,6 +10,7 @@ const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
 const DEFAULT_FETCH_ATTEMPTS = 2;
 const MAX_FEATURED_ROWS = 4;
 const MAX_OPEN_HOUSE_ROWS = 4;
+const OPEN_HOUSE_SOURCE_ROWS = 6;
 const INITIAL_CATALOGUE_ROWS = 12;
 const MAX_IMAGES_PER_ROW = 2;
 const MAX_PAYLOAD_BYTES = 64_000;
@@ -259,6 +260,21 @@ async function fetchHomepageSection(origin, section, limit, fetchImpl, fetchOpti
   }
 }
 
+async function fetchInitialOpenHouses(origin, fetchImpl, fetchOptions) {
+  const url = new URL("/api/public/open-houses", origin);
+  url.searchParams.set("limit", String(OPEN_HOUSE_SOURCE_ROWS));
+  try {
+    const json = await fetchJsonWithTimeout(url, fetchImpl, fetchOptions);
+    return publicRowsFromResponse(json)
+      .map(sanitizeHomepageRow)
+      .filter(Boolean)
+      .slice(0, MAX_OPEN_HOUSE_ROWS);
+  } catch (error) {
+    console.warn(`[homepage-initial] Could not fetch open houses: ${error.message}`);
+    return undefined;
+  }
+}
+
 function sanitizeListingsPage(value) {
   if (!isRecord(value) || !Array.isArray(value.data)) return undefined;
   const page = {
@@ -369,7 +385,7 @@ export async function buildHomepageInitialPayload({
   // Build-time latency is not user-facing. Fetch sequentially to avoid a cold
   // deploy creating a burst of expensive catalogue requests against production.
   const freshFeatured = await fetchHomepageSection(origin, "featured", MAX_FEATURED_ROWS, fetchImpl, fetchOptions);
-  const freshOpenHouses = await fetchHomepageSection(origin, "open-houses", MAX_OPEN_HOUSE_ROWS, fetchImpl, fetchOptions);
+  const freshOpenHouses = await fetchInitialOpenHouses(origin, fetchImpl, fetchOptions);
   const freshSaleListings = await fetchInitialListingsPage(origin, "sale", fetchImpl, fetchOptions);
   const freshRentListings = await fetchInitialListingsPage(origin, "rent", fetchImpl, fetchOptions);
 

@@ -13,12 +13,21 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, renderHook, waitFor } from "@testing-library/react";
 
-const { authActivityMock, authStateCallbackHolder, supabaseMock } = vi.hoisted(() => {
+const {
+  authActivityMock,
+  authStateCallbackHolder,
+  realtimeCallbacks,
+  supabaseMock,
+} = vi.hoisted(() => {
   // Holder<T> lets us reassign the captured onAuthStateChange listener
   // between tests so each test can drive the provider with a fresh shape.
   const authStateCallbackHolder: { current: ((event: string, session: unknown) => void) | null } = {
     current: null,
   };
+  const realtimeCallbacks: Array<{
+    table: string;
+    callback: () => void;
+  }> = [];
 
   const supabaseMock = {
     auth: {
@@ -40,13 +49,33 @@ const { authActivityMock, authStateCallbackHolder, supabaseMock } = vi.hoisted((
     functions: {
       invoke: vi.fn().mockResolvedValue({ data: null, error: null }),
     },
+    channel: vi.fn(() => {
+      const channel = {
+        on: vi.fn((
+          _event: string,
+          filter: { table: string },
+          callback: () => void,
+        ) => {
+          realtimeCallbacks.push({ table: filter.table, callback });
+          return channel;
+        }),
+        subscribe: vi.fn(() => channel),
+      };
+      return channel;
+    }),
+    removeChannel: vi.fn().mockResolvedValue(undefined),
   };
 
   const authActivityMock = {
     recordUserAuthActivity: vi.fn().mockResolvedValue("auth-event-1"),
   };
 
-  return { authActivityMock, authStateCallbackHolder, supabaseMock };
+  return {
+    authActivityMock,
+    authStateCallbackHolder,
+    realtimeCallbacks,
+    supabaseMock,
+  };
 });
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -66,6 +95,11 @@ import {
   unavailableSubscriptionState,
   useAuth,
 } from "@/contexts/AuthContext";
+import { appQueryClient } from "@/lib/appQueryClient";
+import {
+  accountQueryKey,
+  resetIdentityQueryStateForTests,
+} from "@/lib/identityQueryBoundary";
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function wrap({ children }: { children: React.ReactNode }) {
@@ -73,7 +107,10 @@ function wrap({ children }: { children: React.ReactNode }) {
 }
 
 beforeEach(() => {
+  appQueryClient.clear();
+  resetIdentityQueryStateForTests();
   authStateCallbackHolder.current = null;
+  realtimeCallbacks.length = 0;
   vi.clearAllMocks();
   // Reinstall default behaviour after clearAllMocks wipes implementations.
   supabaseMock.auth.onAuthStateChange.mockImplementation((cb: (event: string, session: unknown) => void) => {
@@ -193,16 +230,231 @@ describe("AuthProvider initial state and signed-out flow", () => {
 });
 
 describe("AuthProvider signed-in flow", () => {
+  it("does not let a delayed initial session overwrite a newer auth event", async () => {
+    let finishInitialSession!: (value: {
+      data: { session: { user: { id: string } } };
+    }) => void;
+    supabaseMock.auth.getSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishInitialSession = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await act(async () => {
+      authStateCallbackHolder.current?.("SIGNED_IN", {
+        user: { id: "newer-user" },
+      });
+    });
+    await waitFor(() => expect(result.current.user?.id).toBe("newer-user"));
+
+    await act(async () => {
+      finishInitialSession({
+        data: { session: { user: { id: "stale-initial-user" } } },
+      });
+    });
+
+    expect(result.current.user?.id).toBe("newer-user");
+  });
+
+  it("ignores a delayed session restore after the provider unmounts", async () => {
+    let finishInitialSession!: (value: {
+      data: { session: { user: { id: string } } };
+    }) => void;
+    supabaseMock.auth.getSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishInitialSession = resolve;
+        }),
+    );
+    const privateKey = accountQueryKey("active-user", "billing-info");
+    appQueryClient.setQueryData(privateKey, { invoices: ["invoice-a"] });
+
+    const { unmount } = renderHook(() => useAuth(), { wrapper: wrap });
+    unmount();
+    await act(async () => {
+      finishInitialSession({
+        data: { session: { user: { id: "stale-unmounted-user" } } },
+      });
+      await Promise.resolve();
+    });
+
+    expect(appQueryClient.getQueryData(privateKey)).toEqual({
+      invoices: ["invoice-a"],
+    });
+  });
+
+  it("purges the previous account cache before exposing a new user", async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      authStateCallbackHolder.current?.("SIGNED_IN", {
+        user: { id: "account-a", email: "a@example.com" },
+      });
+    });
+    await waitFor(() => expect(result.current.user?.id).toBe("account-a"));
+
+    const publicKey = ["homepage-featured"] as const;
+    const privateKey = accountQueryKey("account-a", "billing-info");
+    appQueryClient.setQueryData(publicKey, ["listing-a"]);
+    appQueryClient.setQueryData(privateKey, { invoices: ["invoice-a"] });
+
+    await act(async () => {
+      authStateCallbackHolder.current?.("SIGNED_IN", {
+        user: { id: "account-b", email: "b@example.com" },
+      });
+    });
+
+    expect(appQueryClient.getQueryData(privateKey)).toBeUndefined();
+    expect(appQueryClient.getQueryData(publicKey)).toEqual(["listing-a"]);
+    expect(result.current.user?.id).toBe("account-b");
+  });
+
+  it("purges private cache when the current user's role changes", async () => {
+    let role = "buyer";
+    const memberships: Array<{
+      organization_id: string;
+      role: string;
+      status: string;
+      updated_at: string;
+    }> = [];
+    supabaseMock.from.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockImplementation(async () => ({
+            data: {
+              user_id: "same-user",
+              role,
+              participant_type: role,
+              is_platform_admin: false,
+              investor_mode: false,
+              force_pro_access: false,
+              subscription_product_id: null,
+              role_switch_in_progress_at: null,
+              account_status: "active",
+            },
+            error: null,
+          })),
+        };
+      }
+      const membershipQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        then(resolve: (value: unknown) => unknown) {
+          return Promise.resolve(resolve({ data: memberships, error: null }));
+        },
+      };
+      return membershipQuery;
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      authStateCallbackHolder.current?.("SIGNED_IN", {
+        user: { id: "same-user" },
+      });
+    });
+    await waitFor(() => expect(result.current.profile?.role).toBe("buyer"));
+
+    const publicKey = ["homepage-featured"] as const;
+    const privateKey = accountQueryKey("same-user", "projects");
+    appQueryClient.setQueryData(publicKey, ["listing-a"]);
+    appQueryClient.setQueryData(privateKey, ["project-a"]);
+    role = "developer";
+
+    await act(async () => {
+      await result.current.refreshProfile();
+    });
+
+    expect(appQueryClient.getQueryData(privateKey)).toBeUndefined();
+    expect(appQueryClient.getQueryData(publicKey)).toEqual(["listing-a"]);
+    expect(result.current.profile?.role).toBe("developer");
+  });
+
+  it("purges private cache when current organization membership changes", async () => {
+    const memberships = [{
+      organization_id: "org-a",
+      role: "member",
+      status: "active",
+      updated_at: "2026-07-26T10:00:00Z",
+    }];
+    supabaseMock.from.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: {
+              user_id: "org-user",
+              role: "developer",
+              participant_type: "developer",
+              is_platform_admin: false,
+              investor_mode: false,
+              force_pro_access: false,
+              subscription_product_id: null,
+              role_switch_in_progress_at: null,
+              account_status: "active",
+            },
+            error: null,
+          }),
+        };
+      }
+      const membershipQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        then(resolve: (value: unknown) => unknown) {
+          return Promise.resolve(resolve({ data: [...memberships], error: null }));
+        },
+      };
+      return membershipQuery;
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      authStateCallbackHolder.current?.("SIGNED_IN", {
+        user: { id: "org-user" },
+      });
+    });
+    await waitFor(() => expect(result.current.profile?.role).toBe("developer"));
+
+    const privateKey = accountQueryKey("org-user", "projects");
+    appQueryClient.setQueryData(privateKey, ["project-a"]);
+    memberships[0] = {
+      ...memberships[0],
+      role: "admin",
+      updated_at: "2026-07-26T10:05:00Z",
+    };
+
+    const membershipCallback = realtimeCallbacks.find(
+      ({ table }) => table === "organization_memberships",
+    )?.callback;
+    expect(membershipCallback).toBeDefined();
+    await act(async () => {
+      membershipCallback?.();
+    });
+
+    await waitFor(() =>
+      expect(appQueryClient.getQueryData(privateKey)).toBeUndefined(),
+    );
+  });
+
   it("hydrates user/profile and probes the subscription edge function on SIGNED_IN", async () => {
     // Profile fetch — the chain ends in `.single()` returning the row.
+    const selectMock = vi.fn().mockReturnThis();
     const profileRow = {
       user_id: "u-1",
       role: "buyer",
       participant_type: "buyer",
       display_name: "Alice",
+      video_link: "https://video.example/alice",
     };
     supabaseMock.from.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
+      select: selectMock,
       eq: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: profileRow, error: null }),
@@ -227,6 +479,8 @@ describe("AuthProvider signed-in flow", () => {
     });
     await waitFor(() => expect(result.current.user?.id).toBe("u-1"));
     await waitFor(() => expect(result.current.profile?.user_id).toBe("u-1"));
+    expect(selectMock).toHaveBeenCalledWith("*");
+    expect(result.current.profile?.video_link).toBe("https://video.example/alice");
     await waitFor(() => expect(result.current.subscription.subscribed).toBe(true));
     expect(result.current.subscription).toMatchObject({
       productId: "prod_pro",
@@ -280,6 +534,47 @@ describe("AuthProvider signed-in flow", () => {
     // Subscription stays at default after the failed probe.
     await waitFor(() => expect(result.current.subscription.loading).toBe(false));
     expect(result.current.subscription.subscribed).toBe(false);
+  });
+
+  it("retries a transient subscription failure with bounded backoff", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "u-retry" } } },
+    });
+    supabaseMock.functions.invoke
+      .mockResolvedValueOnce({ data: null, error: new Error("503") })
+      .mockResolvedValueOnce({
+        data: {
+          subscribed: true,
+          product_id: "prod_agent",
+          subscription_end: "2099-01-01T00:00:00.000Z",
+          source: "billing_state",
+          sync_status: "synced",
+          status: "active",
+        },
+        error: null,
+      });
+
+    try {
+      const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+      await waitFor(() => expect(supabaseMock.functions.invoke).toHaveBeenCalledTimes(1));
+      expect(result.current.subscription.syncStatus).toBe("timeout");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+
+      await waitFor(() => expect(supabaseMock.functions.invoke).toHaveBeenCalledTimes(2));
+      expect(result.current.subscription).toMatchObject({
+        subscribed: true,
+        productId: "prod_agent",
+        source: "billing_state",
+        syncStatus: "synced",
+        loading: false,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -492,6 +787,53 @@ describe("AuthProvider auth API methods", () => {
     );
     expect(result.current.subscription.syncStatus).toBe("pending");
     expect(result.current.subscription.source).toBe("investor");
+  });
+
+  it("does not reconcile an old checkout session against a newly signed-in account", async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      authStateCallbackHolder.current?.("SIGNED_IN", {
+        user: { id: "checkout-user-a" },
+      });
+    });
+    await waitFor(() => expect(result.current.user?.id).toBe("checkout-user-a"));
+    supabaseMock.functions.invoke.mockClear();
+
+    let finishRefreshSession!: (value: {
+      data: { session: { user: { id: string } } };
+    }) => void;
+    supabaseMock.auth.getSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRefreshSession = resolve;
+        }),
+    );
+
+    let refreshPromise!: Promise<void>;
+    act(() => {
+      refreshPromise = result.current.refreshSubscription(
+        "cs_test_checkout_user_a",
+      );
+    });
+    await act(async () => {
+      authStateCallbackHolder.current?.("SIGNED_IN", {
+        user: { id: "checkout-user-b" },
+      });
+    });
+    await waitFor(() => expect(result.current.user?.id).toBe("checkout-user-b"));
+
+    await act(async () => {
+      finishRefreshSession({
+        data: { session: { user: { id: "checkout-user-b" } } },
+      });
+      await refreshPromise;
+    });
+
+    expect(supabaseMock.functions.invoke).not.toHaveBeenCalledWith(
+      "check-subscription",
+      { body: { checkout_session_id: "cs_test_checkout_user_a" } },
+    );
   });
 
   it("reconciles the exact session during an onboarding success restore", async () => {
@@ -807,13 +1149,14 @@ describe("AuthProvider auth API methods", () => {
       });
     });
 
-    await waitFor(() => expect(result.current.subscription.loading).toBe(false));
-    expect(result.current.subscription).toMatchObject({
-      subscribed: true,
-      productId: "prod_agent",
-      source: "billing_state",
-      syncStatus: "timeout",
-      staleUntil: expect.any(Number),
+    await waitFor(() => {
+      expect(result.current.subscription).toMatchObject({
+        subscribed: true,
+        productId: "prod_agent",
+        source: "billing_state",
+        syncStatus: "timeout",
+        staleUntil: expect.any(Number),
+      });
     });
   });
 });

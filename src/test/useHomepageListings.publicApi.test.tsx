@@ -31,6 +31,7 @@ import {
 } from "@/hooks/useHomepageListings";
 import {
   HOMEPAGE_FEATURED_SNAPSHOT_KEY,
+  HOMEPAGE_OPEN_HOUSES_SNAPSHOT_KEY,
   readInitialListingsPage,
   readHomepageSnapshot,
   writeHomepageSnapshot,
@@ -45,15 +46,6 @@ const wrap = (children: React.ReactNode) => {
 
 const renderHookWithQuery = <T,>(hook: () => T) => {
   return renderHook(hook, { wrapper: ({ children }) => wrap(children) });
-};
-
-const makeThenableBuilder = (data: unknown[] = []) => {
-  const b: Record<string, unknown> = {};
-  const chain = ["select", "order", "limit", "eq", "gte", "gt", "in"];
-  for (const method of chain) b[method] = vi.fn().mockReturnValue(b);
-  b.then = (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
-    Promise.resolve({ data, error: null }).then(resolve, reject);
-  return b;
 };
 
 beforeEach(() => {
@@ -136,54 +128,66 @@ describe("homepage public API fallback behavior", () => {
     });
   });
 
-  it("falls back to constrained Supabase reads for Spotlight listings when the public API is unavailable", async () => {
-    publicApiMock.mockResolvedValue(null);
-    const builder = makeThenableBuilder([{ id: "db-featured", title: "DB Spotlight", city: "Athens" }]);
-    rpcMock.mockReturnValue(builder);
+  it("reuses a fresh same-source Spotlight snapshot when the public API is unavailable", async () => {
+    writeHomepageSnapshot(HOMEPAGE_FEATURED_SNAPSHOT_KEY, [
+      { id: "snapshot-featured", title: "Snapshot Spotlight", city: "Athens" },
+    ]);
+    publicApiMock.mockRejectedValue(new Error("public homepage unavailable"));
 
     const { result } = renderHookWithQuery(() => useHomepageFeaturedListings());
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isFetching).toBe(false));
 
-    expect(result.current.data?.[0]).toMatchObject({ id: "db-featured" });
+    expect(result.current.data?.[0]).toMatchObject({ id: "snapshot-featured" });
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/homepage?section=featured",
       expect.objectContaining({ throwOnError: true, timeoutMs: 5500, signal: expect.any(AbortSignal) }),
     );
-    expect(rpcMock).toHaveBeenCalledWith("get_public_listing_catalogue");
-    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("featured_until"));
-    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("priority_until"));
-    expect(builder.eq).toHaveBeenCalledWith("is_featured", true);
-    expect(builder.gt).toHaveBeenCalledWith("featured_until", expect.any(String));
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("falls back to constrained Supabase reads for open houses when the public API is unavailable", async () => {
-    publicApiMock.mockResolvedValue(null);
-    rpcMock.mockReturnValue(makeThenableBuilder([{ id: "db-open-house", title: "DB Open House", city: "Athens" }]));
+  it("reuses a fresh same-source open-house snapshot when the public API is unavailable", async () => {
+    writeHomepageSnapshot(HOMEPAGE_OPEN_HOUSES_SNAPSHOT_KEY, [
+      { id: "snapshot-open-house", title: "Snapshot Open House", city: "Athens" },
+    ]);
+    publicApiMock.mockRejectedValue(new Error("public open-house catalogue unavailable"));
 
     const { result } = renderHookWithQuery(() => useHomepageOpenHouseListings());
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isFetching).toBe(false));
 
-    expect(result.current.data?.[0]).toMatchObject({ id: "db-open-house" });
+    expect(result.current.data?.[0]).toMatchObject({ id: "snapshot-open-house" });
     expect(publicApiMock).toHaveBeenCalledWith(
-      "/api/public/open-houses?limit=12",
+      "/api/public/open-houses?showPast=0&limit=60&includeMeta=1",
       expect.objectContaining({ throwOnError: true, timeoutMs: 5500, signal: expect.any(AbortSignal) }),
     );
-    expect(rpcMock).toHaveBeenCalledWith("get_public_listing_catalogue");
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("overfetches canonical open houses before removing public test fixtures", async () => {
-    publicApiMock.mockResolvedValue([
-      ...Array.from({ length: 6 }, (_, index) => ({
-        id: `fixture-${index}`,
-        title: `supervisor-${index + 1} open house`,
-        address: "Athens",
-      })),
-      ...Array.from({ length: 7 }, (_, index) => ({
+  it("surfaces an error rather than changing catalogue source when no snapshot exists", async () => {
+    publicApiMock.mockRejectedValue(new Error("canonical homepage catalogue unavailable"));
+
+    const featured = renderHookWithQuery(() => useHomepageFeaturedListings());
+    await waitFor(() => expect(featured.result.current.isError).toBe(true), { timeout: 3_000 });
+    expect(featured.result.current.error).toEqual(expect.objectContaining({
+      message: "canonical homepage catalogue unavailable",
+    }));
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves the canonical first six open houses without client re-ranking", async () => {
+    publicApiMock.mockResolvedValue({
+      data: Array.from({ length: 60 }, (_, index) => ({
         id: `real-open-house-${index}`,
         title: `Glyfada Open House ${index + 1}`,
         address: "Glyfada",
+        cover_image_url: index % 2 === 0 ? null : `https://img.example/${index}.jpg`,
       })),
-    ]);
+      hasMore: true,
+      nextCursor: "canonical-page-2",
+      limit: 60,
+    });
 
     const { result } = renderHookWithQuery(() => useHomepageOpenHouseListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -192,7 +196,7 @@ describe("homepage public API fallback behavior", () => {
       Array.from({ length: 6 }, (_, index) => `real-open-house-${index}`),
     );
     expect(publicApiMock).toHaveBeenCalledWith(
-      "/api/public/open-houses?limit=12",
+      "/api/public/open-houses?showPast=0&limit=60&includeMeta=1",
       expect.objectContaining({ throwOnError: true, timeoutMs: 5500, signal: expect.any(AbortSignal) }),
     );
     expect(fromMock).not.toHaveBeenCalled();
@@ -209,7 +213,7 @@ describe("homepage public API fallback behavior", () => {
   it("uses a compact deferred auction request for the homepage preview", () => {
     renderHookWithQuery(() => useHomepageAuctionListings({ enabled: false }));
 
-    expect(useAuctionListingsMock).toHaveBeenCalledWith(6, { enabled: false });
+    expect(useAuctionListingsMock).toHaveBeenCalledWith(60, { enabled: false });
   });
 
 });

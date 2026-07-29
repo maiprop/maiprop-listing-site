@@ -1,6 +1,6 @@
 /* eslint complexity: "off" */
-import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,10 +27,14 @@ import {
 } from "@/lib/rolePlanMap";
 import { usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { buildBillingContactHref } from "@/lib/billingContact";
-import { getClientStripeRuntimeMode } from "@/lib/billingRuntime";
 import { BillingUsagePanel } from "@/components/dashboard/BillingUsagePanel";
 import { formatDate } from "@/lib/format";
+import {
+  captureIdentityEpoch,
+  isCurrentIdentityEpoch,
+} from "@/lib/identityQueryBoundary";
 import { AddonCard } from "./billing/AddonCard";
+import { listingPromotionBalanceQueryKey } from "@/hooks/useListingPromotions";
 import { getAddonSectionsForParticipant, resolveAddonKey, type AddonItem } from "./billing/addons";
 import {
   createAddonCheckoutUrl,
@@ -39,7 +43,15 @@ import {
   type SubscriptionBillingCycle,
 } from "./billing/checkoutActions";
 import { StatusBadge } from "./billing/StatusBadge";
-import type { BillingInfo } from "./billing/types";
+import {
+  BILLING_FUNCTION_TIMEOUT_MS,
+  addonLabel,
+  creditWord,
+  getInvoiceTaxIdLabel,
+  netAddonCredits,
+  useAddonCreditLedger,
+  useBillingInfo,
+} from "./billing/billingData";
 
 type PortalAction =
   | "manage"
@@ -48,94 +60,10 @@ type PortalAction =
   | "subscription_update"
   | "resume_subscription";
 
-type AddonCreditLedgerRow = {
-  id: string;
-  addon_key: string;
-  status: string;
-  credits_granted: number;
-  credits_consumed: number;
-  credits_refunded?: number | null;
-  refund_status?: string | null;
-  created_at?: string | null;
-};
-
-const BILLING_FUNCTION_TIMEOUT_MS = 20_000;
-
 const showAddonCheckoutError = (e: unknown) => {
   toast.error(
     (e instanceof Error ? e.message : null) ?? "Could not start add-on checkout",
   );
-};
-
-const getInvoiceTaxIdLabel = (
-  invoice: BillingInfo["invoices"][number],
-): string | null => {
-  const taxId = invoice.customer_tax_ids?.find((entry) => entry.value)?.value;
-  return taxId ? `VAT ID ${taxId}` : null;
-};
-
-const useBillingInfo = () => {
-  return useQuery<BillingInfo>({
-    queryKey: ["billing-info"],
-    queryFn: async ({ signal }) => {
-      const { data, error } = await supabase.functions.invoke("get-invoices", {
-        signal,
-        timeout: BILLING_FUNCTION_TIMEOUT_MS,
-      });
-      if (error) throw error;
-      return data as BillingInfo;
-    },
-    staleTime: 60_000,
-  });
-};
-
-const addonLabel = (addonKey: string | null | undefined) => {
-  switch (addonKey) {
-    case "valuation_single":
-    case "valuation_bundle":
-      return "AI valuations";
-    case "property_report_single":
-      return "Property reports";
-    case "neighbourhood_report_single":
-    case "neighbourhood_report_bundle":
-      return "Neighbourhood reports";
-    case "featured_listing":
-      return "Spotlight";
-    case "priority_placement":
-      return "Priority Rank";
-    case "featured_priority_bundle":
-      return "Spotlight + Priority Rank";
-    default:
-      return addonKey ? addonKey.split("_").join(" ") : "Add-on credits";
-  }
-};
-
-const creditWord = (count: number) => Math.abs(count) === 1 ? "credit" : "credits";
-
-const netAddonCredits = (row: AddonCreditLedgerRow) =>
-  Number(row.credits_granted ?? 0) -
-  Number(row.credits_consumed ?? 0) -
-  Number(row.credits_refunded ?? 0);
-
-const useAddonCreditLedger = (userId: string | undefined) => {
-  const runtimeMode = getClientStripeRuntimeMode();
-  return useQuery<AddonCreditLedgerRow[]>({
-    queryKey: ["addon_purchases", "credit-ledger", userId, runtimeMode],
-    enabled: Boolean(userId),
-    queryFn: async () => {
-      if (!userId) return [];
-      let query = supabase
-        .from("addon_purchases")
-        .select("id, addon_key, status, credits_granted, credits_consumed, credits_refunded, refund_status, created_at")
-        .eq("user_id", userId)
-        .in("status", ["paid", "active", "refunded"]);
-      if (runtimeMode) query = query.eq("runtime_mode", runtimeMode);
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as AddonCreditLedgerRow[];
-    },
-    staleTime: 60_000,
-  });
 };
 
 export default function BillingTab() { // skipcq: JS-0067
@@ -153,7 +81,7 @@ export default function BillingTab() { // skipcq: JS-0067
     refreshSubscription,
   } = useSubscription();
   const { profile, user } = useAuth();
-  const { data, isLoading, refetch, isRefetching, error } = useBillingInfo();
+  const { data, isLoading, refetch, isRefetching, error } = useBillingInfo(user?.id);
   const { data: addonCreditRows = [] } = useAddonCreditLedger(user?.id);
   const { data: pricingConfigs = {} } = usePricingConfigs();
   const [portalLoading, setPortalLoading] = useState(false);
@@ -163,6 +91,14 @@ export default function BillingTab() { // skipcq: JS-0067
   const [subscriptionBillingCycle, setSubscriptionBillingCycle] =
     useState<SubscriptionBillingCycle>("monthly");
   const [usageRefreshToken, setUsageRefreshToken] = useState(0);
+  const currentUserIdRef = useRef<string | null>(user?.id ?? null);
+  currentUserIdRef.current = user?.id ?? null;
+
+  useEffect(() => {
+    setPortalLoading(false);
+    setAddonLoadingKey(null);
+    setSubscriptionCheckoutLoading(false);
+  }, [user?.id]);
 
   const participantType = getParticipantTypeFromProfile(profile) ?? "buyer";
   const rolePlan = getPlanForParticipant(participantType);
@@ -177,6 +113,8 @@ export default function BillingTab() { // skipcq: JS-0067
 
   useEffect(() => {
     if (searchParams.get("checkout") !== "success") return;
+    const actionEpoch = captureIdentityEpoch();
+    const actionUserId = currentUserIdRef.current;
     const isMockCheckout = searchParams.get("billing_mode") === "mock";
     const checkoutSessionId = searchParams.get("checkout_session_id") ??
       searchParams.get("session_id");
@@ -186,19 +124,23 @@ export default function BillingTab() { // skipcq: JS-0067
     }
 
     let cancelled = false;
+    const isCurrentAction = () =>
+      !cancelled &&
+      currentUserIdRef.current === actionUserId &&
+      isCurrentIdentityEpoch(actionEpoch);
     const refreshCheckoutState = async () => {
       await refreshSubscription(checkoutSessionId);
-      if (cancelled) return;
+      if (!isCurrentAction()) return;
       await Promise.all([
         refetch(),
         ...[
           ["addon_purchases"],
           ["usage_property_reports"],
           ["listing_promotion_allocations", "priority-plan-usage"],
-          ["listing-promotion-balance"],
+          listingPromotionBalanceQueryKey(actionUserId),
         ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
       ]);
-      if (!cancelled) setUsageRefreshToken((token) => token + 1);
+      if (isCurrentAction()) setUsageRefreshToken((token) => token + 1);
     };
     void refreshCheckoutState();
 
@@ -224,6 +166,11 @@ export default function BillingTab() { // skipcq: JS-0067
       toast.info("Subscription details are still loading.");
       return;
     }
+    const actionEpoch = captureIdentityEpoch();
+    const actionUserId = user?.id ?? null;
+    const isCurrentAction = () =>
+      currentUserIdRef.current === actionUserId &&
+      isCurrentIdentityEpoch(actionEpoch);
     setPortalLoading(true);
     try {
       const { data: pData, error } =
@@ -236,9 +183,11 @@ export default function BillingTab() { // skipcq: JS-0067
               : {}),
           },
         });
+      if (!isCurrentAction()) return;
       if (action === "resume_subscription" && pData?.resumed) {
         toast.success("Your subscription renewal has been resumed.");
         await refetch();
+        if (!isCurrentAction()) return;
         setPortalLoading(false);
         return;
       }
@@ -249,6 +198,7 @@ export default function BillingTab() { // skipcq: JS-0067
       }
       window.location.href = pData.url;
     } catch (e: unknown) {
+      if (!isCurrentAction()) return;
       toast.error(
         (e instanceof Error ? e.message : null) ??
           "Could not open billing portal",
@@ -258,10 +208,18 @@ export default function BillingTab() { // skipcq: JS-0067
   };
 
   const purchaseAddonKey = async (addonKey: string) => {
+    const actionEpoch = captureIdentityEpoch();
+    const actionUserId = user?.id ?? null;
+    const isCurrentAction = () =>
+      currentUserIdRef.current === actionUserId &&
+      isCurrentIdentityEpoch(actionEpoch);
     setAddonLoadingKey(addonKey);
     try {
-      window.location.href = await createAddonCheckoutUrl(addonKey);
+      const checkoutUrl = await createAddonCheckoutUrl(addonKey);
+      if (!isCurrentAction()) return;
+      window.location.href = checkoutUrl;
     } catch (e: unknown) {
+      if (!isCurrentAction()) return;
       showAddonCheckoutError(e);
       setAddonLoadingKey(null);
     }
@@ -280,13 +238,21 @@ export default function BillingTab() { // skipcq: JS-0067
       navigate(participantType === "institutional" ? "/contact" : "/investor-dashboard");
       return;
     }
+    const actionEpoch = captureIdentityEpoch();
+    const actionUserId = user?.id ?? null;
+    const isCurrentAction = () =>
+      currentUserIdRef.current === actionUserId &&
+      isCurrentIdentityEpoch(actionEpoch);
     setSubscriptionCheckoutLoading(true);
     try {
-      window.location.href = await createSubscriptionCheckoutUrl(
+      const checkoutUrl = await createSubscriptionCheckoutUrl(
         rolePlan.planKey,
         { billingCycle: subscriptionBillingCycle },
       );
+      if (!isCurrentAction()) return;
+      window.location.href = checkoutUrl;
     } catch (e: unknown) {
+      if (!isCurrentAction()) return;
       toast.error(
         (e instanceof Error ? e.message : null) ??
           "Could not start subscription checkout",
@@ -372,7 +338,17 @@ export default function BillingTab() { // skipcq: JS-0067
             )}
           </div>
           <div className="flex items-center gap-2">
-            {canManageBilling ? (
+            {subLoading ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled
+              >
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Checking access
+              </Button>
+            ) : canManageBilling ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -410,7 +386,15 @@ export default function BillingTab() { // skipcq: JS-0067
           </div>
         </div>
 
-        {sub ? (
+        {subLoading ? (
+          <div
+            className="rounded-xl bg-secondary p-4 text-sm text-muted-foreground"
+            aria-live="polite"
+          >
+            Confirming your plan access. Billing actions will be available when
+            entitlement verification completes.
+          </div>
+        ) : sub ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="bg-secondary rounded-xl p-3">
               <p className="text-xs text-muted-foreground mb-0.5">
@@ -598,16 +582,33 @@ export default function BillingTab() { // skipcq: JS-0067
         </div>
       )}
 
-      <BillingUsagePanel
-        user={user}
-        isPro={isPro}
-        participantType={participantType}
-        pricingConfigs={pricingConfigs}
-        addonLoadingKey={addonLoadingKey}
-        refreshToken={usageRefreshToken}
-        onPurchaseAddon={(addonKey) => void purchaseAddonKey(addonKey)}
-        onUpgrade={() => void startSubscriptionCheckout()}
-      />
+      {subLoading ? (
+        <section
+          aria-label="Monthly usage loading"
+          className="glass-card rounded-2xl border border-border p-5"
+        >
+          <div className="h-4 w-28 rounded bg-muted animate-pulse" />
+          <div className="mt-4 grid gap-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-16 rounded-xl bg-muted animate-pulse"
+              />
+            ))}
+          </div>
+        </section>
+      ) : (
+        <BillingUsagePanel
+          user={user}
+          isPro={isPro}
+          participantType={participantType}
+          pricingConfigs={pricingConfigs}
+          addonLoadingKey={addonLoadingKey}
+          refreshToken={usageRefreshToken}
+          onPurchaseAddon={(addonKey) => void purchaseAddonKey(addonKey)}
+          onUpgrade={() => void startSubscriptionCheckout()}
+        />
+      )}
 
       {visibleAddonCredits.length > 0 && (
         <div className="glass-card rounded-2xl border border-border p-5 space-y-4">

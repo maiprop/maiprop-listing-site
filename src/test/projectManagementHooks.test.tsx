@@ -42,6 +42,7 @@ import {
   useUpdateProjectUnit,
 } from "@/hooks/useProjectUnits";
 import { useCreateProjectLead, useDeleteProjectLead, useProjectLeads, useUpdateProjectLead } from "@/hooks/useProjectLeads";
+import { accountQueryKey } from "@/lib/identityQueryBoundary";
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -49,6 +50,19 @@ function wrapper({ children }: { children: React.ReactNode }) {
     defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 }, mutations: { retry: false } },
   });
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
+
+function accountScopedWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0, staleTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+  return { queryClient, Wrapper };
 }
 
 beforeEach(() => {
@@ -78,11 +92,19 @@ describe("project media hooks", () => {
       eq: vi.fn().mockReturnValue({ order: firstOrder }),
     });
 
-    const { result } = renderHook(() => useProjectMedia("project-1"), { wrapper });
+    const { queryClient, Wrapper } = accountScopedWrapper();
+    const { result } = renderHook(() => useProjectMedia("project-1"), {
+      wrapper: Wrapper,
+    });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(firstOrder).toHaveBeenCalledWith("media_type");
     expect(secondOrder).toHaveBeenCalledWith("sort_order");
+    expect(
+      queryClient.getQueryData(
+        accountQueryKey("user-1", "project_media", "project-1"),
+      ),
+    ).toEqual([{ id: "m1" }]);
   });
 
   it("adds and deletes media through the project-management edge boundary", async () => {
@@ -124,11 +146,19 @@ describe("project unit hooks", () => {
       eq: vi.fn().mockReturnValue({ order: orderFloor }),
     });
 
-    const { result } = renderHook(() => useProjectUnits("project-1"), { wrapper });
+    const { queryClient, Wrapper } = accountScopedWrapper();
+    const { result } = renderHook(() => useProjectUnits("project-1"), {
+      wrapper: Wrapper,
+    });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(orderFloor).toHaveBeenCalledWith("floor", { ascending: true, nullsFirst: false });
     expect(orderUnit).toHaveBeenCalledWith("unit_number", { ascending: true, nullsFirst: false });
+    expect(
+      queryClient.getQueryData(
+        accountQueryKey("user-1", "project_units", "project-1"),
+      ),
+    ).toEqual([{ id: "u1" }]);
   });
 
   it("creates, updates, and deletes units through the project-management edge boundary", async () => {
@@ -219,10 +249,18 @@ describe("project lead hooks", () => {
       eq: vi.fn().mockReturnValue({ order }),
     });
 
-    const { result } = renderHook(() => useProjectLeads("project-1"), { wrapper });
+    const { queryClient, Wrapper } = accountScopedWrapper();
+    const { result } = renderHook(() => useProjectLeads("project-1"), {
+      wrapper: Wrapper,
+    });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(
+      queryClient.getQueryData(
+        accountQueryKey("user-1", "project_leads", "project-1"),
+      ),
+    ).toEqual([{ id: "lead-1" }]);
   });
 
   it("creates, updates, and deletes leads through the project-management edge boundary", async () => {

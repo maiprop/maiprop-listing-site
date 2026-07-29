@@ -1,21 +1,24 @@
 import {
   cachedJson,
+  getPublicCataloguePublication,
+  isPublicCatalogueSnapshotExpiredError,
   isSupabaseTransientError,
   jsonResponse,
   methodNotAllowed,
   missingRuntime,
   normalizedCacheUrl,
+  publicCatalogueValidityHeaders,
   safeDecimal,
   safeInt,
   safeText,
   safeToken,
-  supabaseJson,
+  supabaseRpcJson,
   upstreamUnavailable,
+  type PublicCatalogueQueryRpcRow,
   type PublicApiCtx,
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
-import { PUBLIC_LISTING_CATALOGUE_PATH } from "../../_publicListingProjection";
 import { publicListingRows } from "./_fixture-content";
 import { hasActivePriority, normalizePublicPromotionState } from "./_promotionState";
 import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
@@ -46,12 +49,15 @@ const LISTING_TYPES = ["sale", "rent", "firesale", "auction", "open_house", "new
 const PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office", "warehouse", "hotel"] as const;
 const SIMILAR_LISTINGS_CANDIDATE_LIMIT = 48;
 const SIMILAR_LISTINGS_LIMIT_MAX = 24;
-const SIMILAR_LISTINGS_CACHE_VERSION = "similar-promotions-v2";
-const SIMILAR_LISTINGS_SELECT =
-  "id,created_at,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,property_type,listing_type,open_house_transaction_type,open_house_date,auction_date,auction_starting_bid,cover_image_url,owner_id,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,walkability_score,safety_score,noise_score,listing_images";
+const SIMILAR_LISTINGS_CACHE_VERSION = "publication-similar-v3";
 
 function buildSimilarParams(requestUrl: URL): {
-  params: URLSearchParams;
+  cacheParams: URLSearchParams;
+  city: string | null;
+  propertyType: (typeof PROPERTY_TYPES)[number] | null;
+  listingType: (typeof LISTING_TYPES)[number] | null;
+  excludeId: string | null;
+  publicationId: number | null;
   limit: number;
   price: number | null;
 } | null {
@@ -62,23 +68,43 @@ function buildSimilarParams(requestUrl: URL): {
   const priceValue = safeDecimal(requestUrl.searchParams.get("price"));
   const price = priceValue ? Number(priceValue) : null;
   const limit = safeInt(requestUrl.searchParams.get("limit"), 8, 1, SIMILAR_LISTINGS_LIMIT_MAX);
+  const publicationValue = requestUrl.searchParams.get("publicationId");
+  const publicationId = publicationValue == null ? null : Number(publicationValue);
 
-  if (!city && !propertyType) return null;
+  if (
+    (!city && !propertyType) ||
+    (
+      publicationValue != null &&
+      (
+        publicationId == null ||
+        !Number.isSafeInteger(publicationId) ||
+        publicationId < 1
+      )
+    )
+  ) {
+    return null;
+  }
 
-  const params = new URLSearchParams();
-  params.set("select", SIMILAR_LISTINGS_SELECT);
-  params.set("status", "eq.active");
-  params.set("is_off_market", "eq.false");
-  params.set("limit", String(SIMILAR_LISTINGS_CANDIDATE_LIMIT));
-  params.append("order", "created_at.desc");
-  params.append("order", "id.asc");
+  const cacheParams = new URLSearchParams([
+    ["limit", String(limit)],
+    ["publicationId", publicationId == null ? "current" : String(publicationId)],
+  ]);
+  if (UUID_RE.test(excludeId)) cacheParams.set("excludeId", excludeId);
+  if (city) cacheParams.set("city", city);
+  if (propertyType) cacheParams.set("propertyType", propertyType);
+  if (listingType) cacheParams.set("listingType", listingType);
+  if (price != null) cacheParams.set("price", String(price));
 
-  if (UUID_RE.test(excludeId)) params.set("id", `neq.${excludeId}`);
-  if (city) params.set("city", `ilike.*${city}*`);
-  if (propertyType) params.set("property_type", `eq.${propertyType}`);
-  if (listingType) params.set("listing_type", `eq.${listingType}`);
-
-  return { params, limit, price };
+  return {
+    cacheParams,
+    city,
+    propertyType,
+    listingType,
+    excludeId: UUID_RE.test(excludeId) ? excludeId : null,
+    publicationId,
+    limit,
+    price,
+  };
 }
 
 function sortBySimilarity(rows: ListingRow[], price: number | null, nowMs: number): ListingRow[] {
@@ -155,18 +181,48 @@ async function publicSimilarListings(ctx: PublicApiCtx, requestUrl: URL): Promis
   const built = buildSimilarParams(requestUrl);
   if (!built) return jsonResponse({ data: [] });
 
-  const cacheParams = new URLSearchParams(built.params);
-  cacheParams.set("responseLimit", String(built.limit));
-  if (built.price != null) cacheParams.set("price", String(built.price));
+  const cacheParams = new URLSearchParams(built.cacheParams);
   cacheParams.set("v", SIMILAR_LISTINGS_CACHE_VERSION);
   const cacheKey = normalizedCacheUrl(requestUrl, "similar-listings", cacheParams);
 
   return cachedJson(ctx, cacheKey, async () => {
     try {
-      const nowMs = Date.now();
-      const rows = publicListingRows(
-        await supabaseJson<ListingRow>(ctx.env, PUBLIC_LISTING_CATALOGUE_PATH, built.params, { failOnTransient: true }),
-      ).map((row) => normalizePublicPromotionState(row, nowMs));
+      const publication = await getPublicCataloguePublication(
+        ctx.env,
+        built.publicationId,
+      );
+      const nowMs = Date.parse(publication.snapshotMinute);
+      const rpcRows = await supabaseRpcJson<PublicCatalogueQueryRpcRow>(
+        ctx.env,
+        "query_public_catalogue",
+        {
+          p_publication_id: publication.publicationId,
+          p_listing_type: built.listingType,
+          p_property_type: built.propertyType,
+          p_location: built.city,
+          p_sort: "newest",
+          p_limit: SIMILAR_LISTINGS_CANDIDATE_LIMIT,
+        },
+        { failOnTransient: true },
+      );
+      const rows = publicListingRows(rpcRows.map((row) => {
+        if (Number(row.publication_id) !== publication.publicationId) {
+          throw new Error("Similar catalogue RPC returned a different publication");
+        }
+        if (
+          !row.card_payload ||
+          typeof row.card_payload !== "object" ||
+          Array.isArray(row.card_payload)
+        ) {
+          throw new Error("Similar catalogue RPC returned an invalid card payload");
+        }
+        return {
+          ...(row.card_payload as ListingRow),
+          publicationId: publication.publicationId,
+        };
+      }))
+        .filter((row) => row.id !== built.excludeId)
+        .map((row) => normalizePublicPromotionState(row, nowMs));
       const ownerIds = rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
       const profiles = await fetchPublicProfileSummaries(ctx.env, ownerIds);
       const withProfiles = rows.map((row) => ({
@@ -175,10 +231,26 @@ async function publicSimilarListings(ctx: PublicApiCtx, requestUrl: URL): Promis
         ownerParticipantType: row.owner_id ? profiles.get(row.owner_id)?.owner_participant_type ?? null : null,
       }));
 
-      return jsonResponse({
-        data: dedupeSimilarRows(sortBySimilarity(withProfiles, built.price, nowMs)).slice(0, built.limit),
-      });
+      return jsonResponse(
+        {
+          data: dedupeSimilarRows(sortBySimilarity(withProfiles, built.price, nowMs)).slice(0, built.limit),
+          publicationId: publication.publicationId,
+        },
+        { headers: publicCatalogueValidityHeaders(publication) },
+      );
     } catch (error) {
+      if (isPublicCatalogueSnapshotExpiredError(error)) {
+        return jsonResponse(
+          { error: "Listing catalogue publication is no longer active" },
+          {
+            status: 409,
+            headers: {
+              "Cache-Control": "no-store",
+              "CDN-Cache-Control": "no-store",
+            },
+          },
+        );
+      }
       if (isSupabaseTransientError(error)) return upstreamUnavailable();
       throw error;
     }

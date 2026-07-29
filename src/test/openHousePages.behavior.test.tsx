@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { Route, Routes } from "react-router-dom";
+import { useRef } from "react";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { renderWithProviders } from "@/test/utils";
 
 const mocks = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   streetView: vi.fn(),
   publicApi: vi.fn(),
+  mapMounts: 0,
 }));
 
 const TEST_OPEN_HOUSE_ID = "11111111-1111-4111-8111-111111111111";
@@ -34,29 +36,68 @@ vi.mock("@/components/Footer", () => ({ Footer: () => <footer data-testid="foote
 vi.mock("@/components/MapView", () => ({
   MapView: ({
     listings,
-    onPolygonFilter,
+    onPolygonChange,
+    onViewportBoundsChange,
     itemLabelSingular,
     itemLabelPlural,
+    polygonPoints,
   }: {
-    listings?: Array<{ id: string }>;
-    onPolygonFilter?: (ids: Set<string> | null) => void;
+    listings?: Array<{ id: string; _raw?: { publicationId?: number } }>;
+    onPolygonChange?: (points: Array<[number, number]> | null) => void;
+    onViewportBoundsChange?: (bounds: { west: number; south: number; east: number; north: number }) => void;
     itemLabelSingular?: string;
     itemLabelPlural?: string;
-  }) => (
-    <div
-      data-testid="map-view"
-      data-count={String(listings?.length ?? 0)}
-      data-labels={`${itemLabelSingular ?? ""}/${itemLabelPlural ?? ""}`}
-    >
-      <button type="button" onClick={() => onPolygonFilter?.(new Set(["oh-athens"]))}>
-        Apply open house area
-      </button>
-    </div>
-  ),
+    polygonPoints?: Array<[number, number]> | null;
+  }) => {
+    const instance = useRef<number | null>(null);
+    if (instance.current == null) {
+      mocks.mapMounts += 1;
+      instance.current = mocks.mapMounts;
+    }
+    return (
+      <div
+        data-testid="map-view"
+        data-count={String(listings?.length ?? 0)}
+        data-ids={(listings ?? []).map((listing) => listing.id).join(",")}
+        data-publication-ids={(listings ?? []).map((listing) => listing._raw?.publicationId ?? "").join(",")}
+        data-instance={String(instance.current)}
+        data-labels={`${itemLabelSingular ?? ""}/${itemLabelPlural ?? ""}`}
+        data-polygon-points={String(polygonPoints?.length ?? 0)}
+      >
+        <button type="button" onClick={() => onPolygonChange?.([
+          [23.7, 37.9],
+          [23.8, 37.9],
+          [23.8, 38.05],
+          [23.7, 38.05],
+        ])}>
+          Apply open house area
+        </button>
+        <button type="button" onClick={() => onViewportBoundsChange?.({
+          west: 23.7,
+          south: 37.9,
+          east: 23.8,
+          north: 38.05,
+        })}>
+          Move open house map
+        </button>
+      </div>
+    );
+  },
 }));
 vi.mock("@/components/PropertyCard", () => ({
-  PropertyCard: ({ property }: { property: { title: string; city?: string; images?: string[] } }) => (
-    <article data-testid="open-house-card" data-image={property.images?.[0] ?? ""}>
+  PropertyCard: ({ property }: {
+    property: {
+      title: string;
+      city?: string;
+      images?: string[];
+      _raw?: { publicationId?: number };
+    };
+  }) => (
+    <article
+      data-testid="open-house-card"
+      data-image={property.images?.[0] ?? ""}
+      data-publication-id={String(property._raw?.publicationId ?? "")}
+    >
       <h2>{property.title}</h2>
       <p>{property.city}</p>
     </article>
@@ -208,7 +249,14 @@ vi.mock("@/lib/config", async () => {
   };
 });
 vi.mock("@/lib/publicApi", () => ({
-  fetchPublicApi: (...args: unknown[]) => mocks.publicApi(...args),
+  fetchPublicApi: async (...args: unknown[]) => {
+    const result = await mocks.publicApi(...args);
+    const path = String(args[0] ?? "");
+    if (path.includes("/api/public/open-houses?") && path.includes("includeMeta=1") && Array.isArray(result)) {
+      return { data: result, hasMore: false, limit: 60, nextCursor: null };
+    }
+    return result;
+  },
   isPublicApiAbort: () => false,
 }));
 vi.mock("sonner", () => ({
@@ -286,13 +334,28 @@ async function renderOpenHouses(initialPath = "/open-houses") {
   return renderWithProviders(<OpenHouses />, { initialPath });
 }
 
+function PropertyRedirectTarget() {
+  const { state } = useLocation() as {
+    state?: { listing?: { id?: string; publicationId?: number } };
+  };
+  return (
+    <div
+      data-testid="property-redirect-target"
+      data-listing-id={state?.listing?.id ?? ""}
+      data-publication-id={String(state?.listing?.publicationId ?? "")}
+    >
+      Property redirect target
+    </div>
+  );
+}
+
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function renderOpenHouseDetail(initialPath = `/open-house/${TEST_OPEN_HOUSE_ID}`) {
   const { default: OpenHouseDetail } = await import("@/pages/OpenHouseDetail");
   return renderWithProviders(
     <Routes>
       <Route path="/open-house/:id" element={<OpenHouseDetail />} />
-      <Route path="/property/:id" element={<div>Property redirect target</div>} />
+      <Route path="/property/:id" element={<PropertyRedirectTarget />} />
       <Route path="/messages" element={<div>Messages route</div>} />
     </Routes>,
     { initialPath }
@@ -322,6 +385,7 @@ beforeEach(() => {
   mocks.invoke.mockResolvedValue({ data: null, error: null });
   mocks.streetView.mockReturnValue("https://street.example/fallback.jpg");
   mocks.publicApi.mockReset().mockResolvedValue([]);
+  mocks.mapMounts = 0;
   makeListingsQuery([]);
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -352,7 +416,7 @@ describe("OpenHouses page behavior", () => {
     expect(await screen.findByText("Athens Apartment")).toBeInTheDocument();
     expect(screen.getByText("Voula House")).toBeInTheDocument();
     expect(mocks.publicApi).toHaveBeenCalledWith(
-      "/api/public/open-houses?showPast=0&limit=200",
+      "/api/public/open-houses?showPast=0&limit=60&includeMeta=1",
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
     expect(mocks.from).not.toHaveBeenCalled();
@@ -360,13 +424,13 @@ describe("OpenHouses page behavior", () => {
     fireEvent.change(screen.getByLabelText(/search open houses by city/i), { target: { value: "Athens" } });
     fireEvent.keyDown(screen.getByLabelText(/search open houses by city/i), { key: "Enter" });
 
-    expect(screen.getByText("Athens Apartment")).toBeInTheDocument();
+    expect(await screen.findByText("Athens Apartment")).toBeInTheDocument();
     expect(screen.queryByText("Voula House")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /toggle filters/i }));
     fireEvent.click(screen.getByRole("button", { name: "House" }));
 
-    expect(screen.getByText(/no open houses match your filters/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no open houses match your filters/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /clear filters/i }));
 
@@ -385,7 +449,7 @@ describe("OpenHouses page behavior", () => {
     expect(await screen.findByText("Rental Open House")).toBeInTheDocument();
     expect(screen.queryByText("Sale Open House")).not.toBeInTheDocument();
     expect(mocks.publicApi).toHaveBeenCalledWith(
-      "/api/public/open-houses?showPast=0&limit=200&transactionType=rent",
+      "/api/public/open-houses?showPast=0&limit=60&includeMeta=1&transactionType=rent",
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
 
@@ -396,7 +460,7 @@ describe("OpenHouses page behavior", () => {
 
     await waitFor(() =>
       expect(mocks.publicApi).toHaveBeenCalledWith(
-        "/api/public/open-houses?showPast=0&limit=200&transactionType=sale",
+        "/api/public/open-houses?showPast=0&limit=60&includeMeta=1&transactionType=sale",
         expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
       ),
     );
@@ -435,7 +499,8 @@ describe("OpenHouses page behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: /apply open house area/i }));
 
     expect(await screen.findByText(/area filter active/i)).toHaveTextContent("1 open house in area");
-    expect(screen.getByTestId("map-view")).toHaveAttribute("data-count", "1");
+    expect(screen.getByTestId("map-view")).toHaveAttribute("data-count", "2");
+    expect(screen.getByTestId("map-view")).toHaveAttribute("data-polygon-points", "4");
 
     fireEvent.click(screen.getByRole("button", { name: /show as list/i }));
 
@@ -444,6 +509,59 @@ describe("OpenHouses page behavior", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /clear area/i }));
     expect(await screen.findByText("Voula House")).toBeInTheDocument();
+  });
+
+  it("keeps polygon membership current when a later cursor page adds an in-area row", async () => {
+    mocks.publicApi.mockImplementation((path: string) => {
+      if (path.includes("cursor=cursor-page-2")) {
+        return Promise.resolve({
+          data: [createListing({
+            id: "oh-inside-201",
+            title: "Later In Area",
+            latitude: 37.99,
+            longitude: 23.75,
+          })],
+          hasMore: false,
+          limit: 60,
+          nextCursor: null,
+        });
+      }
+      return Promise.resolve({
+        data: [
+          createListing({
+            id: "oh-inside-1",
+            title: "First In Area",
+            latitude: 37.98,
+            longitude: 23.73,
+          }),
+          createListing({
+            id: "oh-outside",
+            title: "Outside Area",
+            latitude: 37.84,
+            longitude: 23.77,
+          }),
+        ],
+        hasMore: true,
+        limit: 60,
+        nextCursor: "cursor-page-2",
+      });
+    });
+
+    await renderOpenHouses();
+    expect(await screen.findByText("First In Area")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /show on map/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /apply open house area/i }));
+    expect(await screen.findByText(/area filter active/i)).toHaveTextContent(
+      "1+ open house in area",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /show as list/i }));
+
+    expect(screen.getByText("First In Area")).toBeInTheDocument();
+    expect(screen.queryByText("Outside Area")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /load more/i }));
+
+    expect(await screen.findByText("Later In Area")).toBeInTheDocument();
+    expect(screen.queryByText("Outside Area")).not.toBeInTheDocument();
   });
 
   it("hides supervisor test open houses and sends the logo as the empty-image fallback", async () => {
@@ -457,6 +575,30 @@ describe("OpenHouses page behavior", () => {
     expect(await screen.findByText("Real Open House")).toBeInTheDocument();
     expect(screen.queryByText(/supervisor-177912/i)).not.toBeInTheDocument();
     expect(screen.getByTestId("open-house-card")).toHaveAttribute("data-image", "/images/maiprop-logo.webp");
+  });
+
+  it("preserves the publication source on open-house cards and map pins", async () => {
+    mocks.publicApi.mockResolvedValue([
+      createListing({
+        id: "oh-publication",
+        title: "Publication-pinned Open House",
+        publicationId: 7401,
+        latitude: 37.98,
+        longitude: 23.73,
+      }),
+    ]);
+
+    await renderOpenHouses();
+
+    expect(await screen.findByTestId("open-house-card")).toHaveAttribute(
+      "data-publication-id",
+      "7401",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /show on map/i }));
+    expect(await screen.findByTestId("map-view")).toHaveAttribute(
+      "data-publication-ids",
+      "7401",
+    );
   });
 
   it("virtualizes large open-house result grids for responsive browsing", async () => {
@@ -479,28 +621,244 @@ describe("OpenHouses page behavior", () => {
     expect(screen.getAllByTestId("open-house-card").length).toBeLessThan(30);
   });
 
-  it("falls back to constrained Supabase reads on public API outages and switches paths for past open houses", async () => {
-    mocks.publicApi.mockResolvedValue(null);
-    makeListingsQuery([createListing({ id: "oh-db", title: "Direct DB Open House" })]);
+  it("preserves canonical API order instead of prioritizing rows with images", async () => {
+    mocks.publicApi.mockResolvedValue([
+      createListing({ id: "oh-first", title: "First Canonical Result", cover_image_url: null }),
+      createListing({ id: "oh-second", title: "Second With Image", cover_image_url: "https://images.example/second.jpg" }),
+    ]);
 
     await renderOpenHouses();
 
-    expect(await screen.findByText("Direct DB Open House")).toBeInTheDocument();
+    const cards = await screen.findAllByTestId("open-house-card");
+    expect(cards.map((card) => card.textContent)).toEqual([
+      expect.stringContaining("First Canonical Result"),
+      expect.stringContaining("Second With Image"),
+    ]);
+  });
+
+  it("loads the next cursor page and keeps the later results reachable", async () => {
+    mocks.publicApi.mockImplementation((path: string) => {
+      if (path.includes("cursor=cursor-page-2")) {
+        return Promise.resolve({
+          data: [createListing({ id: "oh-page-2", title: "Cursor Page Two" })],
+          hasMore: false,
+          limit: 60,
+          nextCursor: null,
+        });
+      }
+      return Promise.resolve({
+        data: [createListing({ id: "oh-page-1", title: "Cursor Page One" })],
+        hasMore: true,
+        limit: 60,
+        nextCursor: "cursor-page-2",
+      });
+    });
+
+    await renderOpenHouses();
+    expect(await screen.findByText("Cursor Page One")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /load more/i }));
+
+    expect(await screen.findByText("Cursor Page Two")).toBeInTheDocument();
     expect(mocks.publicApi).toHaveBeenCalledWith(
-      "/api/public/open-houses?showPast=0&limit=200",
+      expect.stringContaining("cursor=cursor-page-2"),
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
-    expect(mocks.from).toHaveBeenCalledWith("public_listing_catalogue");
+  });
 
-    mocks.publicApi.mockClear().mockResolvedValue([]);
-    mocks.from.mockClear();
-    fireEvent.click(screen.getByRole("button", { name: "Past" }));
+  it("keeps the first cursor page visible and offers retry when load more fails", async () => {
+    mocks.publicApi.mockImplementation((path: string) => {
+      if (path.includes("cursor=cursor-page-2")) {
+        return Promise.reject(new Error("later page failed"));
+      }
+      return Promise.resolve({
+        data: [createListing({ id: "oh-page-1", title: "Preserved Page One" })],
+        hasMore: true,
+        limit: 60,
+        nextCursor: "cursor-page-2",
+      });
+    });
 
-    await waitFor(() =>
-      expect(mocks.publicApi).toHaveBeenCalledWith(
-        "/api/public/open-houses?showPast=1&limit=200",
-        expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
-      )
+    await renderOpenHouses();
+    expect(await screen.findByText("Preserved Page One")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /load more/i }));
+
+    expect(await screen.findByText("Preserved Page One")).toBeInTheDocument();
+    const callsBeforeRetry = mocks.publicApi.mock.calls.length;
+    await new Promise((resolve) => window.setTimeout(resolve, 25));
+    expect(mocks.publicApi.mock.calls).toHaveLength(callsBeforeRetry);
+    fireEvent.click(await screen.findByRole("button", { name: /retry loading more open houses/i }));
+    await waitFor(() => expect(mocks.publicApi.mock.calls.length).toBeGreaterThan(callsBeforeRetry));
+  });
+
+  it("passes map bounds to the canonical API and never renders an empty-map claim on failure", async () => {
+    mocks.publicApi.mockResolvedValue([
+      createListing({ id: "oh-map", title: "Mapped Open House", latitude: 37.98, longitude: 23.73 }),
+    ]);
+
+    const view = await renderOpenHouses();
+    expect(await screen.findByText("Mapped Open House")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /show on map/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /move open house map/i }));
+
+    await waitFor(() => expect(mocks.publicApi).toHaveBeenCalledWith(
+      expect.stringMatching(/boundsWest=23\.7.*boundsSouth=37\.9.*boundsEast=23\.8.*boundsNorth=38\.05/),
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
+    ));
+
+    view.unmount();
+    mocks.publicApi.mockRejectedValue(new Error("canonical map outage"));
+    await renderOpenHouses("/open-houses?failure=map");
+    fireEvent.click(screen.getByRole("button", { name: /show on map/i }));
+
+    expect(await screen.findByRole("heading", { name: /could not load open houses/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no open houses with location data/i)).not.toBeInTheDocument();
+  });
+
+  it("waits for map bounds and starts the new scope without the previous cursor", async () => {
+    mocks.publicApi.mockImplementation((path: string) => {
+      if (path.includes("boundsWest=23.7")) {
+        return Promise.resolve({
+          data: [createListing({ id: "oh-bounded", title: "Bounded Open House", latitude: 37.98, longitude: 23.73 })],
+          hasMore: false,
+          limit: 60,
+          nextCursor: null,
+        });
+      }
+      return Promise.resolve({
+        data: [createListing({ id: "oh-initial", title: "Initial Open House", latitude: 37.98, longitude: 23.73 })],
+        hasMore: true,
+        limit: 60,
+        nextCursor: "old-scope-cursor",
+      });
+    });
+
+    await renderOpenHouses();
+    expect(await screen.findByText("Initial Open House")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /show on map/i }));
+
+    await new Promise((resolve) => window.setTimeout(resolve, 25));
+    expect(mocks.publicApi.mock.calls.map(([path]) => String(path))).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("cursor=old-scope-cursor")]),
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /move open house map/i }));
+    await waitFor(() => expect(screen.getByTestId("map-view")).toHaveAttribute("data-ids", "oh-bounded"));
+
+    const boundedCalls = mocks.publicApi.mock.calls
+      .map(([path]) => String(path))
+      .filter((path) => path.includes("boundsWest=23.7"));
+    expect(boundedCalls).toHaveLength(1);
+    expect(boundedCalls[0]).not.toContain("cursor=");
+  });
+
+  it("auto-fetches exactly three bounded map pages and discloses the remaining window", async () => {
+    mocks.publicApi.mockImplementation((path: string) => {
+      if (!path.includes("boundsWest=23.7")) {
+        return Promise.resolve({
+          data: [createListing({ id: "oh-unbounded", title: "Unbounded Row", latitude: 37.98, longitude: 23.73 })],
+          hasMore: false,
+          limit: 60,
+          nextCursor: null,
+        });
+      }
+      if (path.includes("cursor=cursor-page-3")) {
+        return Promise.resolve({
+          data: [createListing({ id: "oh-map-page-3", title: "Map Page Three", latitude: 37.99, longitude: 23.75 })],
+          hasMore: true,
+          limit: 60,
+          nextCursor: "cursor-page-4",
+        });
+      }
+      if (path.includes("cursor=cursor-page-2")) {
+        return Promise.resolve({
+          data: [createListing({ id: "oh-map-page-2", title: "Map Page Two", latitude: 37.985, longitude: 23.74 })],
+          hasMore: true,
+          limit: 60,
+          nextCursor: "cursor-page-3",
+        });
+      }
+      return Promise.resolve({
+        data: [createListing({ id: "oh-map-page-1", title: "Map Page One", latitude: 37.98, longitude: 23.73 })],
+        hasMore: true,
+        limit: 60,
+        nextCursor: "cursor-page-2",
+      });
+    });
+
+    await renderOpenHouses();
+    expect(await screen.findByText("Unbounded Row")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /show on map/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /move open house map/i }));
+
+    await waitFor(() => expect(mocks.publicApi.mock.calls.some(
+      ([path]) => String(path).includes("cursor=cursor-page-3"),
+    )).toBe(true));
+    expect(await screen.findByText(/zoom in to load all open houses/i)).toBeInTheDocument();
+    await new Promise((resolve) => window.setTimeout(resolve, 25));
+    expect(mocks.publicApi.mock.calls.some(
+      ([path]) => String(path).includes("cursor=cursor-page-4"),
+    )).toBe(false);
+  });
+
+  it("keeps the same map instance mounted while a bounded catalogue request is pending", async () => {
+    let resolveBounded!: (value: {
+      data: ReturnType<typeof createListing>[];
+      hasMore: boolean;
+      limit: number;
+      nextCursor: string | null;
+    }) => void;
+    const bounded = new Promise<{
+      data: ReturnType<typeof createListing>[];
+      hasMore: boolean;
+      limit: number;
+      nextCursor: string | null;
+    }>((resolve) => {
+      resolveBounded = resolve;
+    });
+    mocks.publicApi.mockImplementation((path: string) => {
+      if (path.includes("boundsWest=23.7")) return bounded;
+      return Promise.resolve({
+        data: [createListing({ id: "oh-initial-map", title: "Initial Map Row", latitude: 37.98, longitude: 23.73 })],
+        hasMore: false,
+        limit: 60,
+        nextCursor: null,
+      });
+    });
+
+    await renderOpenHouses();
+    expect(await screen.findByText("Initial Map Row")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /show on map/i }));
+    const initialInstance = screen.getByTestId("map-view").getAttribute("data-instance");
+
+    fireEvent.click(screen.getByRole("button", { name: /move open house map/i }));
+    await waitFor(() => expect(mocks.publicApi).toHaveBeenCalledWith(
+      expect.stringContaining("boundsWest=23.7"),
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
+    ));
+    expect(screen.getByTestId("map-view")).toHaveAttribute("data-instance", initialInstance);
+    expect(screen.getByTestId("map-view")).toHaveAttribute("data-ids", "oh-initial-map");
+
+    resolveBounded({
+      data: [createListing({ id: "oh-bounded-map", title: "Bounded Map Row", latitude: 37.99, longitude: 23.74 })],
+      hasMore: false,
+      limit: 60,
+      nextCursor: null,
+    });
+    await waitFor(() => expect(screen.getByTestId("map-view")).toHaveAttribute("data-ids", "oh-bounded-map"));
+    expect(screen.getByTestId("map-view")).toHaveAttribute("data-instance", initialInstance);
+    expect(mocks.mapMounts).toBe(1);
+  });
+
+  it("surfaces an outage without switching to a differently ordered Supabase catalogue", async () => {
+    mocks.publicApi.mockRejectedValue(new Error("canonical open-house catalogue unavailable"));
+
+    await renderOpenHouses();
+
+    expect(await screen.findByRole("heading", { name: /could not load open houses/i })).toBeInTheDocument();
+    expect(mocks.publicApi).toHaveBeenCalledWith(
+      "/api/public/open-houses?showPast=0&limit=60&includeMeta=1",
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
     expect(mocks.from).not.toHaveBeenCalled();
   });
@@ -544,7 +902,7 @@ describe("OpenHouses page behavior", () => {
     fireEvent.change(screen.getByLabelText(/construction year/i), { target: { value: "2010-2020" } });
     fireEvent.click(screen.getByRole("button", { name: /parking/i }));
 
-    expect(screen.getByText("Boundary Match")).toBeInTheDocument();
+    expect(await screen.findByText("Boundary Match")).toBeInTheDocument();
     for (const excludedTitle of [
       "Below Budget",
       "Above Budget",
@@ -568,7 +926,32 @@ describe("OpenHouses page behavior", () => {
     expect(screen.getByTestId("open-house-grid")).toHaveAttribute("data-total-count", "12");
   }, 15_000);
 
-  it("keeps loading and dual-source failure states actionable", async () => {
+  it("debounces numeric filters before requesting a new canonical catalogue scope", async () => {
+    mocks.publicApi.mockResolvedValue([
+      createListing({ id: "oh-debounce", title: "Debounced Open House", price: 200000 }),
+    ]);
+
+    await renderOpenHouses();
+    expect(await screen.findByText("Debounced Open House")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /toggle filters/i }));
+    const callsBeforeTyping = mocks.publicApi.mock.calls.length;
+    const minimumPrice = screen.getByLabelText(/price.*minimum/i);
+
+    fireEvent.change(minimumPrice, { target: { value: "2" } });
+    fireEvent.change(minimumPrice, { target: { value: "20" } });
+    fireEvent.change(minimumPrice, { target: { value: "200" } });
+
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+    expect(mocks.publicApi.mock.calls).toHaveLength(callsBeforeTyping);
+
+    await waitFor(() => expect(
+      mocks.publicApi.mock.calls
+        .map(([path]) => String(path))
+        .filter((path) => path.includes("priceMin=200")),
+    ).toHaveLength(1));
+  });
+
+  it("keeps loading and canonical-source failure states actionable", async () => {
     let settlePublicRequest: ((value: unknown) => void) | undefined;
     mocks.publicApi.mockImplementationOnce(() => new Promise((resolve) => {
       settlePublicRequest = resolve;
@@ -580,7 +963,6 @@ describe("OpenHouses page behavior", () => {
     settlePublicRequest?.([]);
 
     mocks.publicApi.mockRejectedValue(new Error("public catalog unavailable"));
-    makeListingsQuery([], new Error("fallback catalog unavailable"));
     await renderOpenHouses("/open-houses?failure=1");
 
     expect(await screen.findByRole("heading", { name: /could not load open houses/i })).toBeInTheDocument();
@@ -944,11 +1326,13 @@ describe("OpenHouseDetail page behavior", () => {
   });
 
   it("redirects non-open-house listings to the standard property detail route", async () => {
-    mocks.listing = createListing({ listing_type: "sale" });
+    mocks.listing = createListing({ listing_type: "sale", publicationId: 7401 });
 
     await renderOpenHouseDetail();
 
-    expect(await screen.findByText("Property redirect target")).toBeInTheDocument();
+    const redirectTarget = await screen.findByTestId("property-redirect-target");
+    expect(redirectTarget).toHaveAttribute("data-listing-id", TEST_OPEN_HOUSE_ID);
+    expect(redirectTarget).toHaveAttribute("data-publication-id", "7401");
   });
 
   it("keeps localized guest actions and malformed-listing recovery safe", async () => {

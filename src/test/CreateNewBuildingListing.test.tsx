@@ -8,6 +8,7 @@ const {
   useSubMock,
   useMyListingsMock,
   getPlanLimitsMock,
+  useManageableOrganizationsMock,
   submitMock,
   uploadListingImageMock,
   toastMock,
@@ -17,6 +18,7 @@ const {
   useSubMock: vi.fn(),
   useMyListingsMock: vi.fn(),
   getPlanLimitsMock: vi.fn(),
+  useManageableOrganizationsMock: vi.fn(),
   submitMock: vi.fn(),
   uploadListingImageMock: vi.fn(),
   toastMock: { error: vi.fn(), success: vi.fn() },
@@ -25,10 +27,18 @@ const {
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubMock() }));
-vi.mock("@/hooks/useListings", () => ({ useMyListings: () => useMyListingsMock() }));
+vi.mock("@/hooks/useListings", () => ({
+  useActorOwnedListings: () => useMyListingsMock(),
+  useMyListings: () => useMyListingsMock(),
+}));
 vi.mock("@/hooks/usePlanLimits", () => ({ getPlanLimits: (...args: unknown[]) => getPlanLimitsMock(...args) }));
 vi.mock("@/hooks/useCreateBuildingListing", () => ({ useCreateBuildingListing: () => submitMock }));
-vi.mock("@/lib/buildingListingUploads", () => ({ uploadListingImage: (...args: unknown[]) => uploadListingImageMock(...args) }));
+vi.mock("@/hooks/useManageableOrganizations", () => ({
+  useManageableOrganizations: () => useManageableOrganizationsMock(),
+}));
+vi.mock("@/lib/buildingListingUploads", () => ({
+  uploadNewBuildingListingImage: (...args: unknown[]) => uploadListingImageMock(...args),
+}));
 vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
 vi.mock("@/components/Footer", () => ({ Footer: () => <footer data-testid="footer" /> }));
@@ -103,6 +113,8 @@ const seedDraft = (overrides: Record<string, unknown>) => {
     listing: {},
     images: [],
     coverImageId: null,
+    projectId: "draft-project-id",
+    organizationId: null,
     ...overrides,
   }));
 };
@@ -117,6 +129,7 @@ beforeEach(() => {
   useSubMock.mockReturnValue({ hasDeveloperPro: false });
   useMyListingsMock.mockReturnValue({ data: [] });
   getPlanLimitsMock.mockReturnValue({ listings: 5 });
+  useManageableOrganizationsMock.mockReturnValue({ data: [] });
   submitMock.mockResolvedValue({ listingId: "listing-1" });
   uploadListingImageMock.mockResolvedValue({ id: "img-1", url: "https://cdn.test/cover.jpg" });
   Object.defineProperty(URL, "createObjectURL", { writable: true, value: vi.fn(() => "blob:test") });
@@ -443,19 +456,61 @@ describe("CreateNewBuildingListing", () => {
       target: { files: [file] },
     });
 
-    await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(file, "u-1"));
+    await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(file, "u-1", "uuid-1"));
     await screen.findByRole("button", { name: /Cover/i });
 
     fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));
 
     await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
       userId: "u-1",
+      projectId: "uuid-1",
+      organizationId: null,
       finalTitle: "Marina Heights A101",
       coverImageUrl: "https://cdn.test/cover.jpg",
       additionalImageUrls: [],
     })));
     expect(toastMock.success).toHaveBeenCalledWith("New Build ad published!");
     expect(navigateMock).toHaveBeenCalledWith("/new-build/listing-1");
+  });
+
+  it("accepts a studio unit with zero bedrooms", async () => {
+    renderPage();
+
+    fillRequiredProject();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    expect(await screen.findByText(/Step 2 of 5/i)).toBeInTheDocument();
+
+    fillRequiredUnit();
+    fireEvent.change(screen.getByLabelText(/Bedrooms/i), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+
+    expect(await screen.findByText(/Step 3 of 5/i)).toBeInTheDocument();
+    expect(toastMock.error).not.toHaveBeenCalledWith(
+      "Every unit needs size, price, bedrooms, and bathrooms",
+    );
+  });
+
+  it("persists and submits the selected organization ownership scope", async () => {
+    useManageableOrganizationsMock.mockReturnValue({
+      data: [{ id: "org-1", name: "MaiProp Development" }],
+    });
+    seedDraft({
+      step: "photos",
+      projectId: "project-stable",
+      organizationId: "org-1",
+      project: { name: "Org Heights", building_permit_number: "P-9", city: "Athens" },
+      units: [{ internal_sqm: "80", price: "250000", bedrooms: "2", bathrooms: "1" }],
+      images: [{ id: "saved", url: "https://cdn.test/saved.jpg" }],
+      coverImageId: "saved",
+    });
+
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));
+    await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "project-stable",
+      organizationId: "org-1",
+    })));
   });
 
   it("clears stale coordinates when the project address is manually edited", async () => {
@@ -640,13 +695,13 @@ describe("CreateNewBuildingListing", () => {
     const dropFile = new File(["drop"], "drop.jpg", { type: "image/jpeg" });
     fireEvent.dragOver(dropZone);
     fireEvent.drop(dropZone, { dataTransfer: { files: [dropFile] } });
-    await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(dropFile, "u-1"));
+    await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(dropFile, "u-1", "uuid-1"));
 
     const clickFile = new File(["click"], "click.jpg", { type: "image/jpeg" });
     fireEvent.change(document.querySelector("#nb-photo-input") as HTMLInputElement, {
       target: { files: [clickFile] },
     });
-    await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(clickFile, "u-1"));
+    await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(clickFile, "u-1", "uuid-1"));
 
     fireEvent.click(await screen.findByRole("button", { name: /Set as cover/i }));
     fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));

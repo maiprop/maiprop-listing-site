@@ -4,6 +4,7 @@ import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  useAuthMock,
   fromMock,
   getUserMock,
   storageFromMock,
@@ -12,6 +13,7 @@ const {
   invokeMock,
   toastMock,
 } = vi.hoisted(() => ({
+  useAuthMock: vi.fn(),
   fromMock: vi.fn(),
   getUserMock: vi.fn(),
   storageFromMock: vi.fn(),
@@ -19,6 +21,10 @@ const {
   rpcMock: vi.fn(),
   invokeMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => useAuthMock(),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -41,15 +47,22 @@ import {
   useMyFiresaleInterests,
   useUpdateInterestStatus,
 } from "@/hooks/useFiresaleInterest";
+import { accountQueryKey } from "@/lib/identityQueryBoundary";
 
-function wrapper() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function wrapperWithClient(client: QueryClient) {
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
 }
 
+function wrapper() {
+  return wrapperWithClient(
+    new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  );
+}
+
 beforeEach(() => {
+  useAuthMock.mockReset();
   fromMock.mockReset();
   getUserMock.mockReset();
   storageFromMock.mockReset();
@@ -59,6 +72,7 @@ beforeEach(() => {
   toastMock.success.mockReset();
   toastMock.error.mockReset();
 
+  useAuthMock.mockReturnValue({ user: { id: "inv-1" } });
   getUserMock.mockResolvedValue({ data: { user: { id: "inv-1" } } });
   rpcMock.mockResolvedValue({ error: null });
   invokeMock.mockResolvedValue({ data: { data: { id: "i-1" }, error: null }, error: null });
@@ -79,7 +93,25 @@ describe("queue helpers", () => {
 });
 
 describe("useMyFiresaleInterests", () => {
+  it("scopes investor interest data to the current account", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const eq = vi.fn().mockResolvedValue({ data: [] });
+    fromMock.mockReturnValue({ select: () => ({ eq }) });
+
+    const { result } = renderHook(() => useMyFiresaleInterests(), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(client.getQueryState(
+      accountQueryKey("inv-1", "firesale-interest-mine"),
+    )).toBeDefined();
+  });
+
   it("returns an empty Map when unauthenticated", async () => {
+    useAuthMock.mockReturnValue({ user: null });
     getUserMock.mockResolvedValue({ data: { user: null } });
     const { result } = renderHook(() => useMyFiresaleInterests(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -105,6 +137,25 @@ describe("useMyFiresaleInterests", () => {
 });
 
 describe("useFiresaleInterestQueue", () => {
+  it("scopes the admin queue to the current account", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const order = vi.fn().mockResolvedValue({ data: [], error: null });
+    fromMock.mockReturnValue({
+      select: () => ({ eq: () => ({ order }) }),
+    });
+
+    const { result } = renderHook(() => useFiresaleInterestQueue("d-1"), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(client.getQueryState(
+      accountQueryKey("inv-1", "firesale-interest-queue", "d-1"),
+    )).toBeDefined();
+  });
+
   it("returns undefined when disabled", async () => {
     const { result } = renderHook(() => useFiresaleInterestQueue(undefined), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));

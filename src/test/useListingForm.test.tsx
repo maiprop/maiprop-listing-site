@@ -503,6 +503,24 @@ describe("useListingForm — handleSubmit", () => {
     expect(navigateMock).toHaveBeenCalledWith("/property/L-1");
   });
 
+  it("passes organization ownership to the secure create boundary", async () => {
+    createListingMock.mockResolvedValueOnce({ id: "L-org" });
+    const { result } = renderHook(
+      () => useListingForm({ organizationId: "org-1" }),
+      { wrapper: wrap },
+    );
+    setBaseForm(result);
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(createListingMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Athens 3-bed" }),
+      "org-1",
+    );
+  });
+
   it("posts selected address coordinates with the listing", async () => {
     const insertMock = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({

@@ -327,7 +327,7 @@
       "dependencies": [
         "npm:@axe-core/playwright@^4.12.1",
         "npm:@capacitor/android@7.6.7",
-        "npm:@capacitor/cli@7.6.5",
+        "npm:@capacitor/cli@7.6.8",
         "npm:@capacitor/core@7.6.7",
         "npm:@cloudflare/workers-types@^4.20260608.1",
         "npm:@commitlint/cli@^20.5.3",
@@ -422,13 +422,14 @@
         "npm:vaul@~0.9.9",
         "npm:vite@^8.0.16",
         "npm:vitest@^4.1.9",
+        "npm:wrangler@4.86.0",
         "npm:ws@8.21.0",
         "npm:zod@^4.4.3"
       ],
       "overrides": {
         "js-yaml": "4.2.0",
         "tmp": "^0.2.7",
-        "tar": "7.5.16",
+        "tar": "7.5.21",
         "uuid": "^14.0.0",
         "undici": "7.28.0",
         "ws": "8.21.0"

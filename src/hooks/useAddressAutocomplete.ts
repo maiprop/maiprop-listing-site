@@ -15,6 +15,7 @@ import {
   normalizeGreekLocationText,
   rankAddressPredictionsForQuery,
 } from "@/lib/location/locationSearchSemantics";
+import { getRuntimeValue } from "@/lib/runtimeConfig";
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 300;
 const GOOGLE_PROVIDER_BUDGET_MS = 800;
@@ -67,7 +68,7 @@ function writePredictionCache(key: string, predictions: AddressPrediction[]): vo
 
 const getMapboxAddressToken = () => {
   if (import.meta.env.MODE === "test") return "";
-  return import.meta.env.VITE_MAPBOX_TOKEN ?? "";
+  return getRuntimeValue("VITE_MAPBOX_TOKEN") ?? "";
 };
 
 const mapboxTypesForMode = (mode: AddressAutocompleteMode) =>

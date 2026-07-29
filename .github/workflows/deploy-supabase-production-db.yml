@@ -1,158 +1,53 @@
 name: Deploy Supabase Production DB
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       dry_run:
-        description: "Dry run only - list pending migrations without applying them"
-        required: true
+        description: Reserved; production database access is disabled.
+        required: false
         type: boolean
         default: true
       confirm_apply:
-        description: "Required with dry_run=false to apply production migrations"
-        required: true
+        description: Reserved; production database mutations are disabled.
+        required: false
         type: boolean
         default: false
       include_all:
-        description: "Include pending local migrations that are older than the newest recorded remote migration"
-        required: true
+        description: Reserved; production database mutations are disabled.
+        required: false
         type: boolean
         default: false
+      release_sha:
+        description: Immutable repository commit submitted for validation.
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Immutable repository commit submitted for validation.
+        required: true
+        type: string
 
 permissions:
   contents: read
 
-concurrency:
-  group: supabase-production-db
-  cancel-in-progress: false
-
 jobs:
-  deploy:
-    name: Production database migration gate
+  validate-disabled:
+    name: Production database deployment disabled
     runs-on: ubuntu-latest
-    environment: production
-
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-      SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
-      INCLUDE_ALL_MIGRATIONS: ${{ github.event.inputs.include_all }}
-
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          fetch-depth: 2
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: .node-version
-          cache: npm
-
-      - name: Check runtime
-        run: npm run check:runtime
-
-      - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
-
-      - name: Install Supabase CLI
+      - name: Reject production database mutation
         run: |
-          npm install -g supabase@2.104.0
-          supabase --version
+          echo "::error::Production database mutations are disabled. Staging evidence and a separately reviewed immutable promotion workflow are required."
+          exit 1
 
-      - name: Validate production database secrets
-        run: |
-          required=(
-            "SUPABASE_ACCESS_TOKEN"
-            "SUPABASE_PROJECT_REF"
-            "SUPABASE_PRODUCTION_DB_URL"
-          )
-          missing=0
-          for key in "${required[@]}"; do
-            if [ -z "${!key}" ]; then
-              echo "::error::Missing required secret: $key"
-              missing=1
-            fi
-          done
-          if [ "$missing" -ne 0 ]; then
-            exit 1
-          fi
-
-      - name: Guard production apply
-        if: inputs.dry_run != true
-        run: |
-          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
-            echo "::error::Production DB applies must run from main. Current ref: ${GITHUB_REF}"
-            exit 1
-          fi
-          if [ "${CONFIRM_APPLY}" != "true" ]; then
-            echo "::error::Set confirm_apply=true when dry_run=false."
-            exit 1
-          fi
-          {
-            echo "### Supabase production DB migration apply"
-            echo "- Ref: ${GITHUB_REF}"
-            echo "- SHA: ${GITHUB_SHA}"
-            echo "- Project ref: ${SUPABASE_PROJECT_REF}"
-          } >> "$GITHUB_STEP_SUMMARY"
-        env:
-          CONFIRM_APPLY: ${{ github.event.inputs.confirm_apply }}
-
-      - name: Capture migration list before
-        run: supabase migration list --db-url "$SUPABASE_PRODUCTION_DB_URL" > supabase-production-migrations-before.txt
-
-      - name: Lint production schema
-        run: supabase db lint --db-url "$SUPABASE_PRODUCTION_DB_URL" --fail-on error > supabase-production-db-lint.txt
-
-      - name: Capture Supabase index stats
-        run: npm run capture:supabase-index-stats -- --out supabase-production-index-stats.json
-
-      - name: Check Supabase advisors before dry-run
-        if: inputs.dry_run == true
-        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --index-stats supabase-production-index-stats.json --out supabase-production-advisor-summary.json
-
-      - name: Dry-run production migrations
-        if: inputs.dry_run == true
-        run: |
-          set -o pipefail
-          args=(--db-url "$SUPABASE_PRODUCTION_DB_URL")
-          if [ "$INCLUDE_ALL_MIGRATIONS" = "true" ]; then
-            args+=(--include-all)
-          fi
-          supabase db push "${args[@]}" --dry-run | tee supabase-production-db-push.txt
-
-      - name: Apply production migrations
-        if: inputs.dry_run != true
-        run: |
-          set -o pipefail
-          args=(--db-url "$SUPABASE_PRODUCTION_DB_URL")
-          if [ "$INCLUDE_ALL_MIGRATIONS" = "true" ]; then
-            args+=(--include-all)
-          fi
-          supabase db push "${args[@]}" --yes | tee supabase-production-db-push.txt
-
-      - name: Capture Supabase index stats after apply
-        if: inputs.dry_run != true
-        run: npm run capture:supabase-index-stats -- --out supabase-production-index-stats.json
-
-      - name: Check Supabase advisors after apply
-        if: inputs.dry_run != true
-        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --index-stats supabase-production-index-stats.json --out supabase-production-advisor-summary.json
-
-      - name: Capture migration list after
-        if: always()
-        run: supabase migration list --db-url "$SUPABASE_PRODUCTION_DB_URL" > supabase-production-migrations-after.txt
-
-      - name: Upload production DB release evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: supabase-production-db-release-evidence
-          path: |
-            supabase-production-migrations-before.txt
-            supabase-production-migrations-after.txt
-            supabase-production-db-lint.txt
-            supabase-production-db-push.txt
-            supabase-production-index-stats.json
-            supabase-production-advisor-summary.json
-          if-no-files-found: ignore
-          retention-days: 30
+  deploy:
+    name: Production database mutation hard-disabled
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    env:
+      PRODUCTION_MUTATIONS_DISABLED: "true"
+    steps:
+      - run: exit 1

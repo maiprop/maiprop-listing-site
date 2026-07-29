@@ -22,14 +22,47 @@ import {
   profileUpdateMutationSchema,
   signUpProfileUpdateMutationSchema,
 } from "@/lib/mutationSchemas";
+import { appQueryClient } from "@/lib/appQueryClient";
+import {
+  transitionQueryAuthorization,
+  transitionQueryIdentity,
+} from "@/lib/identityQueryBoundary";
 
-export type Profile = Tables<"profiles"> & {
-  role_switch_in_progress_at?: string | null;
-  account_status?: "active" | "suspended" | "banned" | null;
-  account_moderation_reason?: string | null;
-  account_moderated_at?: string | null;
-  account_moderated_by?: string | null;
-};
+export type Profile = Tables<"profiles">;
+
+type AuthorizationMembership = Pick<
+  Tables<"organization_memberships">,
+  "organization_id" | "role" | "status"
+>;
+
+export const buildAuthorizationFingerprint = (
+  profile: Profile | null,
+  memberships: readonly AuthorizationMembership[],
+) => JSON.stringify({
+  profile: profile
+    ? {
+        role: profile.role,
+        participantType: profile.participant_type,
+        platformAdmin: profile.is_platform_admin,
+        investorMode: profile.investor_mode,
+        forcedPro: profile.force_pro_access,
+        subscriptionProductId: profile.subscription_product_id,
+        roleSwitchInProgress: Boolean(profile.role_switch_in_progress_at),
+        accountStatus: profile.account_status,
+      }
+    : null,
+  memberships: [...memberships]
+    .map(({ organization_id, role, status }) => ({
+      organizationId: organization_id,
+      role,
+      status,
+    }))
+    .sort((left, right) => (
+      left.organizationId.localeCompare(right.organizationId) ||
+      left.role.localeCompare(right.role) ||
+      left.status.localeCompare(right.status)
+    )),
+});
 
 export interface SubscriptionState {
   subscribed: boolean;
@@ -81,6 +114,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const CHECKOUT_SESSION_ID_RE = /^cs_(?:test|live)_[A-Za-z0-9_]{6,240}$/;
 const SUBSCRIPTION_CHECK_TIMEOUT_MS = 6_500;
 const SUBSCRIPTION_STALE_GRACE_MS = 30_000;
+const SUBSCRIPTION_RETRY_DELAYS_MS = [10_000, 15_000] as const;
 
 const emptySubscriptionState = (): SubscriptionState => ({
   subscribed: false,
@@ -214,43 +248,100 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Guard: discard profile fetch results that belong to a previous user session
   const expectedUserIdRef = useRef<string | null>(null);
+  const profileFetchGenerationRef = useRef(0);
   // Subscription work is scoped to one auth identity and generation. A delayed
   // response from a prior account can never update the current account.
   const expectedSubscriptionUserIdRef = useRef<string | null>(null);
   const subscriptionGenerationRef = useRef(0);
+  const subscriptionRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const subscriptionRetryAttemptRef = useRef(0);
+  const checkSubscriptionRef = useRef<
+    ((currentSession: Session | null, checkoutSessionId?: string | null) => Promise<void>) | null
+  >(null);
   const subCheckInProgressRef = useRef<{
     userId: string;
     generation: number;
     checkoutSessionId: string | null;
     promise: Promise<void>;
   } | null>(null);
+  const authEventGenerationRef = useRef(0);
   // Guard: avoid duplicate auth telemetry from INITIAL_SESSION + getSession races.
   const lastAuthActivityRef = useRef<{ key: string; at: number } | null>(null);
 
+  const cancelSubscriptionRetry = useCallback((resetAttempts = false) => {
+    if (subscriptionRetryTimerRef.current) {
+      clearTimeout(subscriptionRetryTimerRef.current);
+      subscriptionRetryTimerRef.current = null;
+    }
+    if (resetAttempts) subscriptionRetryAttemptRef.current = 0;
+  }, []);
+
+  const scheduleSubscriptionRetry = useCallback((
+    currentSession: Session,
+    userId: string,
+    generation: number,
+  ) => {
+    if (subscriptionRetryTimerRef.current) return;
+    const delay = SUBSCRIPTION_RETRY_DELAYS_MS[subscriptionRetryAttemptRef.current];
+    if (delay === undefined) return;
+    subscriptionRetryAttemptRef.current += 1;
+    subscriptionRetryTimerRef.current = setTimeout(() => {
+      subscriptionRetryTimerRef.current = null;
+      if (
+        expectedSubscriptionUserIdRef.current !== userId ||
+        subscriptionGenerationRef.current !== generation
+      ) return;
+      void checkSubscriptionRef.current?.(currentSession);
+    }, delay);
+  }, []);
+
   const fetchProfile = useCallback(async (userId: string) => {
     expectedUserIdRef.current = userId;
+    const fetchGeneration = ++profileFetchGenerationRef.current;
     setProfileLoading(true);
-    const { data } = await supabase
-      .from("profiles")
-      .select(
-        "user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id, participant_type, investor_mode, subscription_product_id, force_pro_access, role_switch_in_progress_at, account_status, account_moderation_reason, account_moderated_at, account_moderated_by",
-      )
-      .eq("user_id", userId)
-      .single();
+    const [profileResult, membershipResult] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", userId)
+        .single(),
+      supabase
+        .from("organization_memberships")
+        .select("organization_id, role, status")
+        .eq("user_id", userId)
+        .eq("status", "active"),
+    ]);
     // Discard stale result if the auth user changed before this resolved
-    if (expectedUserIdRef.current !== userId) return null;
-    if (data) setProfile(data as unknown as Profile);
+    if (
+      expectedUserIdRef.current !== userId ||
+      profileFetchGenerationRef.current !== fetchGeneration
+    ) return null;
+    const nextProfile: Profile | null = profileResult.data;
+    const memberships = membershipResult.data ?? [];
+    if (profileResult.error) {
+      logger.warn("Profile fetch failed:", profileResult.error);
+    }
+    if (membershipResult.error) {
+      logger.warn("Organization membership fetch failed:", membershipResult.error);
+    }
+    transitionQueryAuthorization(
+      appQueryClient,
+      userId,
+      buildAuthorizationFingerprint(nextProfile, memberships),
+    );
+    setProfile(nextProfile);
     setProfileLoading(false);
-    return data;
+    return profileResult.data;
   }, []);
 
   const adoptSubscriptionUser = useCallback((userId: string | null) => {
     if (expectedSubscriptionUserIdRef.current === userId) return false;
+    cancelSubscriptionRetry(true);
     expectedSubscriptionUserIdRef.current = userId;
     subscriptionGenerationRef.current += 1;
     setSubscription(emptySubscriptionState());
     return true;
-  }, []);
+  }, [cancelSubscriptionRetry]);
 
   const checkSubscription = useCallback(
     async (
@@ -293,7 +384,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         promise: currentCheck,
       };
       subCheckInProgressRef.current = currentWork;
+      cancelSubscriptionRetry();
       setSubscription((prev) => ({ ...prev, loading: true }));
+      let shouldRetry = false;
       try {
         const { data, error } = await withSubscriptionDeadline(
           supabase.functions.invoke(
@@ -309,6 +402,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ) return;
         if (!error && data) {
           if (data.source === "deadline" && data.sync_status === "timeout") {
+            shouldRetry = true;
             setSubscription((prev) => unavailableSubscriptionState(prev));
           } else {
             const nextSubscription: SubscriptionState = {
@@ -329,6 +423,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               loading: false,
             };
             if (nextSubscription.syncStatus === "timeout") {
+              shouldRetry = true;
               setSubscription((previous) => {
                 const sameGrant = previous.productId === nextSubscription.productId &&
                   previous.source === nextSubscription.source;
@@ -338,13 +433,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 });
               });
             } else {
+              cancelSubscriptionRetry(true);
               setSubscription(nextSubscription);
             }
           }
         } else {
+          shouldRetry = true;
           setSubscription((prev) => unavailableSubscriptionState(prev));
         }
       } catch (err: unknown) {
+        shouldRetry = true;
         logger.warn(
           "[AuthContext] checkSubscription failed:",
           err instanceof Error ? err.message : err,
@@ -360,10 +458,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           subCheckInProgressRef.current = null;
         }
         releaseCheck();
+        if (shouldRetry) {
+          scheduleSubscriptionRetry(currentSession, userId, generation);
+        }
       }
     },
-    [adoptSubscriptionUser],
+    [
+      adoptSubscriptionUser,
+      cancelSubscriptionRetry,
+      scheduleSubscriptionRetry,
+    ],
   );
+  checkSubscriptionRef.current = checkSubscription;
 
   const recordAuthActivity = useCallback(
     (eventType: AuthActivityEventType, currentSession: Session | null, source: string) => {
@@ -408,6 +514,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription: authSub },
     } = supabase.auth.onAuthStateChange((_event, sess) => {
+      authEventGenerationRef.current += 1;
+      transitionQueryIdentity(appQueryClient, sess?.user.id ?? null);
       setSession(sess);
       setUser(sess?.user ?? null);
 
@@ -442,15 +550,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Do not rely solely on onAuthStateChange here: on a hard reload with an
     // already-authenticated user, the event can lag behind initial route
     // rendering and leave ProtectedRoute stuck on its loading shell.
+    const restoreAuthGeneration = authEventGenerationRef.current;
     supabase.auth
       .getSession()
       .then(({ data: { session: sess } }) => {
+        if (authEventGenerationRef.current !== restoreAuthGeneration) return;
         if (!sess) {
+          transitionQueryIdentity(appQueryClient, null);
           // No session — stop loading, let login page show
           setLoading(false);
           return;
         }
 
+        transitionQueryIdentity(appQueryClient, sess.user.id);
         setSession(sess);
         setUser(sess.user);
         const userChanged = adoptSubscriptionUser(sess.user.id);
@@ -472,7 +584,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         recordAuthActivity("session_restored", sess, "get_session_restore");
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        if (authEventGenerationRef.current === restoreAuthGeneration) {
+          setLoading(false);
+        }
+      });
 
     // Refresh subscription every 5 minutes
     const interval = setInterval(
@@ -493,11 +609,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     return () => {
+      authEventGenerationRef.current += 1;
+      profileFetchGenerationRef.current += 1;
+      expectedUserIdRef.current = null;
       clearTimeout(safetyTimer);
+      cancelSubscriptionRetry(true);
       authSub.unsubscribe();
       clearInterval(interval);
     };
-  }, [fetchProfile, checkSubscription, eventToAuthActivity, recordAuthActivity, adoptSubscriptionUser]);
+  }, [
+    fetchProfile,
+    checkSubscription,
+    eventToAuthActivity,
+    recordAuthActivity,
+    adoptSubscriptionUser,
+    cancelSubscriptionRetry,
+  ]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) return;
+
+    const refreshAuthorization = () => {
+      void fetchProfile(userId).catch((err: unknown) => {
+        logger.warn(
+          "Authorization context refresh failed:",
+          err instanceof Error ? err.message : err,
+        );
+        setProfileLoading(false);
+      });
+    };
+    const channel = supabase
+      .channel(`authorization-context:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `user_id=eq.${userId}`,
+        },
+        refreshAuthorization,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "organization_memberships",
+          filter: `user_id=eq.${userId}`,
+        },
+        refreshAuthorization,
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [fetchProfile, user?.id]);
 
   const signUp = useCallback(
     async (
@@ -557,6 +726,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    transitionQueryIdentity(appQueryClient, null);
     expectedUserIdRef.current = null;
     adoptSubscriptionUser(null);
     await recordUserAuthActivity({
@@ -617,6 +787,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, fetchProfile]);
 
   const refreshSubscription = useCallback(async (requestedSessionId?: string | null) => {
+    const expectedUserId = expectedSubscriptionUserIdRef.current;
+    const expectedGeneration = subscriptionGenerationRef.current;
     const checkoutSessionId = requestedSessionId === undefined
       ? checkoutSessionIdForReconciliation()
       : requestedSessionId && CHECKOUT_SESSION_ID_RE.test(requestedSessionId)
@@ -625,9 +797,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { session: sess },
     } = await supabase.auth.getSession();
-    if (sess?.user) adoptSubscriptionUser(sess.user.id);
+    if (
+      expectedSubscriptionUserIdRef.current !== expectedUserId ||
+      subscriptionGenerationRef.current !== expectedGeneration ||
+      sess?.user.id !== expectedUserId
+    ) {
+      return;
+    }
     await checkSubscription(sess, checkoutSessionId);
-  }, [adoptSubscriptionUser, checkSubscription]);
+  }, [checkSubscription]);
 
   const needsOnboarding = profileNeedsOnboarding(profile);
 

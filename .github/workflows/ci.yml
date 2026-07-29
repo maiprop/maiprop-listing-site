@@ -11,6 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
 
@@ -175,19 +176,37 @@ jobs:
             sleep 10
           done
 
-      - name: Upload dist artifact
+      - name: Package Cloudflare Pages Functions worker
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npm run build:cloudflare-pages-worker
+
+      - name: Create immutable release candidate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          npm run release:artifact:create -- \
+            --dist dist \
+            --sbom sbom.cdx.json \
+            --out release-candidate \
+            --sha "$GITHUB_SHA" \
+            --tree "$source_tree" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT"
+
+      - name: Upload immutable release candidate
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: dist
-          path: dist/
-          retention-days: 1
+          name: production-release-candidate-${{ github.sha }}
+          path: release-candidate/
+          if-no-files-found: error
+          retention-days: 30
 
   release-safety:
     name: Release Safety Inventory
     needs: quality
     uses: ./.github/workflows/reusable-release-safety.yml
-    secrets: inherit
 
   e2e:
     name: E2E Tests
@@ -242,406 +261,12 @@ jobs:
           VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_real
           VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
-          # Auth tests skip gracefully when these secrets are not set in repo settings
-          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
-          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
-          path: playwright-report/
-          retention-days: 3
-
-  e2e-security-staging:
-    name: E2E Security (Live-safe)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # Run automatically for release-bearing branches and same-repo PRs. Dependabot
-    # PRs are excluded because repository secrets are intentionally unavailable.
-    # Main/manual runs wait for Supabase prep so isolated staging can receive
-    # migrations first. Production-only setups run with destructive checks off.
-    if: >
-      always() &&
-      !cancelled() &&
-      needs.quality.result == 'success' &&
-      needs['release-safety'].result == 'success' &&
-      needs['migrations-validate'].result == 'success' &&
-      (
-        needs['deploy-supabase-staging'].result == 'success' ||
-        (github.event_name == 'pull_request' && needs['deploy-supabase-staging'].result == 'skipped')
-      ) &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        github.event_name == 'push' ||
-        (github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-          github.event.pull_request.user.login != 'dependabot[bot]' &&
-          !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
-          github.event.pull_request.draft == false)
-      )
-    needs: [quality, release-safety, migrations-validate, deploy-supabase-staging]
-    env:
-      CI: true
-      E2E_SECURITY_USE_ISOLATED_STAGING: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && 'true' || 'false' }}
-      VITE_SUPABASE_URL: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.STAGING_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.STAGING_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      VITE_SUPABASE_PROJECT_ID: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.STAGING_SUPABASE_PROJECT_ID || secrets.VITE_SUPABASE_PROJECT_ID }}
-      RLS_USER_A_EMAIL: ${{ secrets.RLS_USER_A_EMAIL }}
-      RLS_USER_B_EMAIL: ${{ secrets.RLS_USER_B_EMAIL }}
-      RLS_USER_PASSWORD: ${{ secrets.RLS_USER_PASSWORD }}
-      ONBOARDING_TEST_EMAIL: ${{ secrets.ONBOARDING_TEST_EMAIL }}
-      ONBOARDING_TEST_PASSWORD: ${{ secrets.ONBOARDING_TEST_PASSWORD }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging != 'true' && secrets.SUPABASE_SERVICE_ROLE_KEY || '' }}
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && 'true' || 'false' }}
-      E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.STAGING_SUPABASE_PROJECT_ID || '' }}
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          fetch-depth: 50
-
-      - name: Detect PR Supabase deployment changes
-        id: pr_supabase_changes
-        if: github.event_name == 'pull_request'
-        run: |
-          set -euo pipefail
-          base="${{ github.event.pull_request.base.sha }}"
-
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}" || true
-          fi
-
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "::warning::Could not inspect the PR base; running live-safe security checks."
-            echo "has_supabase_changes=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
-          echo "$changed_files"
-
-          if grep -Eq '^(supabase/|deno\.json$|deno\.lock$)' <<< "$changed_files"; then
-            echo "has_supabase_changes=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_supabase_changes=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Require isolated staging for Supabase-changing PRs
-        if: github.event_name == 'pull_request' && steps.pr_supabase_changes.outputs.has_supabase_changes == 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true'
-        run: |
-          echo "::error::Supabase-changing PRs require an isolated staging runtime and matching staging service-role key. Refusing to defer RLS and security E2E until after merge."
-          exit 1
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: .node-version
-          cache: npm
-
-      - name: Check runtime
-        run: npm run check:runtime
-
-      - name: Resolve isolated staging service-role key
-        if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'
-        run: |
-          set -euo pipefail
-          response_file="$(mktemp)"
-          trap 'rm -f "$response_file"' EXIT
-
-          http_code=$(curl -sS --retry 3 --connect-timeout 10 \
-            -o "$response_file" \
-            -w "%{http_code}" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-            -H "Accept: application/json" \
-            "https://api.supabase.com/v1/projects/$VITE_SUPABASE_PROJECT_ID/api-keys")
-          if [ "$http_code" != "200" ]; then
-            echo "::error::Could not resolve isolated staging API keys (HTTP $http_code)."
-            exit 1
-          fi
-
-          service_role_key=$(jq -r '
-            (if type == "array" then . else (.keys // .result // []) end)
-            | map(select((.name // .role // .id // "") == "service_role"))
-            | .[0]
-            | (.api_key // .key // .value // empty)
-          ' "$response_file")
-          if [ -z "$service_role_key" ] || [ "$service_role_key" = "null" ]; then
-            echo "::error::Supabase Management API did not return the staging service-role key."
-            exit 1
-          fi
-
-          echo "::add-mask::$service_role_key"
-          echo "SUPABASE_SERVICE_ROLE_KEY=$service_role_key" >> "$GITHUB_ENV"
-          echo "Resolved and masked the isolated staging service-role key for this job only."
-
-      - name: Validate required live security secrets
-        run: |
-          required=(
-            "VITE_SUPABASE_URL"
-            "VITE_SUPABASE_PUBLISHABLE_KEY"
-            "VITE_SUPABASE_PROJECT_ID"
-            "RLS_USER_A_EMAIL"
-            "RLS_USER_B_EMAIL"
-            "RLS_USER_PASSWORD"
-            "SUPABASE_SERVICE_ROLE_KEY"
-            "SUPABASE_ACCESS_TOKEN"
-          )
-
-          if [ "$E2E_SECURITY_USE_ISOLATED_STAGING" = "true" ]; then
-            required+=("ONBOARDING_TEST_EMAIL" "ONBOARDING_TEST_PASSWORD")
-          fi
-
-          missing=0
-          for key in "${required[@]}"; do
-            if [ -z "${!key}" ]; then
-              echo "::error::Missing required secret: $key"
-              missing=1
-            fi
-          done
-
-          if [ "$missing" -ne 0 ]; then
-            exit 1
-          fi
-
-          if [ "${{ needs['deploy-supabase-staging'].outputs.isolated_staging }}" = "true" ] && [ "$E2E_SECURITY_USE_ISOLATED_STAGING" != "true" ]; then
-            echo "::warning::Isolated staging Supabase runtime is configured, but the Supabase management token is unavailable. Live-safe security tests will use production runtime with destructive checks disabled."
-          fi
-
-          if [ "$E2E_SECURITY_USE_ISOLATED_STAGING" != "true" ]; then
-            echo "::warning::Onboarding role-selection tests require isolated staging and will be skipped in production fallback mode."
-          fi
-
-      - name: Validate selected Supabase service role key
-        if: env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS == 'true'
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          const url = process.env.VITE_SUPABASE_URL;
-          const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-          if (!url || !serviceRoleKey) {
-            throw new Error("VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
-          }
-
-          const host = new URL(url).host;
-          const endpoint = `${url.replace(/\/$/, "")}/auth/v1/admin/users?page=1&per_page=1`;
-          const maxAttempts = 3;
-          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-          for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 20_000);
-
-            try {
-              const response = await fetch(endpoint, {
-                headers: {
-                  Accept: "application/json",
-                  apikey: serviceRoleKey,
-                  Authorization: `Bearer ${serviceRoleKey}`,
-                },
-                signal: controller.signal,
-              });
-              clearTimeout(timeout);
-
-              if (response.ok) {
-                console.log(`Validated selected Supabase service-role key for ${host} on attempt ${attempt}.`);
-                process.exit(0);
-              }
-
-              const detail = await response.text().catch(() => "");
-              const contentType = response.headers.get("content-type") ?? "";
-              const retryable =
-                response.status >= 500 ||
-                contentType.toLowerCase().includes("text/html") ||
-                /cloudflare|error code|<!doctype html/i.test(detail);
-
-              if (!retryable || attempt === maxAttempts) {
-                const fatal = new Error(
-                  `Selected SUPABASE_SERVICE_ROLE_KEY is not accepted by ${host} ` +
-                    `(status ${response.status}, content-type ${contentType || "unknown"}): ${detail.slice(0, 240)}`,
-                );
-                fatal.name = "SupabaseServiceRoleValidationError";
-                throw fatal;
-              }
-
-              console.warn(
-                `Supabase service-role validation for ${host} returned retryable status ${response.status} ` +
-                  `with content-type ${contentType || "unknown"} on attempt ${attempt}; retrying.`,
-              );
-            } catch (error) {
-              clearTimeout(timeout);
-
-              if (error instanceof Error && error.name === "SupabaseServiceRoleValidationError") {
-                throw error;
-              }
-
-              if (attempt === maxAttempts) {
-                throw error;
-              }
-
-              console.warn(
-                `Supabase service-role validation for ${host} failed on attempt ${attempt}: ` +
-                  `${error instanceof Error ? error.message : String(error)}; retrying.`,
-              );
-            }
-
-            await sleep(attempt * 5_000);
-          }
-          NODE
-
-      - name: Skip Auth Admin service-role validation in production fallback
-        if: env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS != 'true'
-        run: |
-          echo "::warning::Skipping Auth Admin service-role validation because destructive live security tests are disabled. Configure isolated staging with SUPABASE_ACCESS_TOKEN so CI can resolve an ephemeral staging service-role key and enable the full Auth Admin security suite."
-
-      - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
-
-      - name: Prepare isolated staging security fixtures
-        if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'
-        run: node scripts/prepare-isolated-security-fixtures.mjs
-
-      - name: Skip live type freshness without staged DB changes
-        if: needs['deploy-supabase-staging'].outputs.db_changes != 'true'
-        run: echo "Live type freshness runs only after the staging database migration path is required."
-
-      - name: Skip live type freshness without isolated staging
-        if: needs['deploy-supabase-staging'].outputs.db_changes == 'true' && needs['deploy-supabase-staging'].outputs.isolated_staging != 'true'
-        run: echo "No isolated staging Supabase project is configured; live type freshness is deferred to the production DB deployment workflow."
-
-      - name: Check generated Supabase types against isolated staging
-        if: needs['deploy-supabase-staging'].outputs.db_changes == 'true' && needs['deploy-supabase-staging'].outputs.isolated_staging == 'true'
-        run: |
-          if ! node scripts/check-supabase-types-freshness.cjs --strict; then
-            echo "::warning title=Staging Supabase type drift::Staging generated types differ from the committed production types. Staging migration apply, advisors, security posture, and edge function deploy remain hard gates."
-            {
-              echo "### Staging Supabase type drift"
-              echo ""
-              echo "The isolated staging project generated types differ from the committed production-source types."
-              echo "This is recorded as staging environment drift and should be resolved by rebuilding/reconciling staging, not by replacing production-generated source types."
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Probe production Supabase data plane before fallback security tests
-        id: supabase_data_plane_probe
-        if: env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true'
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import { appendFileSync } from "node:fs";
-
-          const output = process.env.GITHUB_OUTPUT;
-          const url = process.env.VITE_SUPABASE_URL;
-          const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-          if (!output || !url || !key) {
-            throw new Error("GITHUB_OUTPUT, VITE_SUPABASE_URL, and VITE_SUPABASE_PUBLISHABLE_KEY are required.");
-          }
-
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 15_000);
-
-          try {
-            const response = await fetch(`${url.replace(/\/$/, "")}/rest/v1/user_roles?select=*&limit=1`, {
-              headers: {
-                apikey: key,
-                Authorization: `Bearer ${key}`,
-              },
-              signal: controller.signal,
-            });
-            const ready = response.status < 500;
-            appendFileSync(output, `ready=${ready ? "true" : "false"}\n`);
-            if (!ready) {
-              console.log(`::warning::Production Supabase REST probe returned HTTP ${response.status}; skipping production-fallback live-safe security tests in this PR run.`);
-            }
-          } catch (error) {
-            appendFileSync(output, "ready=false\n");
-            const message = error instanceof Error ? error.message : String(error);
-            console.log(`::warning::Production Supabase REST probe did not complete within 15s (${message}); skipping production-fallback live-safe security tests in this PR run.`);
-          } finally {
-            clearTimeout(timeout);
-          }
-          NODE
-
-      - name: Probe production fallback RLS test credentials
-        id: production_rls_auth_probe
-        if: env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true' && steps.supabase_data_plane_probe.outputs.ready == 'true'
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import { appendFileSync } from "node:fs";
-
-          const output = process.env.GITHUB_OUTPUT;
-          const url = process.env.VITE_SUPABASE_URL;
-          const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-          const password = process.env.RLS_USER_PASSWORD;
-          const emails = [
-            process.env.RLS_USER_A_EMAIL,
-            process.env.RLS_USER_B_EMAIL,
-          ].filter(Boolean);
-
-          if (!output || !url || !key || !password || emails.length < 2) {
-            appendFileSync(output ?? "/dev/null", "ready=false\n");
-            console.log("::warning::Production fallback RLS test credentials are incomplete; skipping production-fallback live-safe security tests.");
-            process.exit(0);
-          }
-
-          let ready = true;
-          for (const email of emails) {
-            const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/token?grant_type=password`, {
-              method: "POST",
-              headers: {
-                apikey: key,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ email, password }),
-            });
-            if (!response.ok) {
-              ready = false;
-              console.log(`::warning::A production fallback RLS test account could not sign in (HTTP ${response.status}); skipping production-fallback live-safe security tests. Refresh RLS_USER_A_EMAIL/RLS_USER_B_EMAIL/RLS_USER_PASSWORD or configure isolated staging.`);
-              break;
-            }
-          }
-
-          appendFileSync(output, `ready=${ready ? "true" : "false"}\n`);
-          NODE
-
-      - name: Install Playwright browsers
-        timeout-minutes: 4
-        # Hosted Ubuntu runners already include Chromium's runtime libraries for
-        # our CI smoke tests. Avoid --with-deps here because it enters apt and
-        # can stall on external package mirrors before tests ever start.
-        run: npx playwright install chromium
-
-      - name: Build app
-        run: npm run build
-
-      - name: Run live-safe RLS + conditional onboarding + GDPR security tests
-        if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true' || (steps.supabase_data_plane_probe.outputs.ready == 'true' && steps.production_rls_auth_probe.outputs.ready == 'true')
-        run: |
-          set -euo pipefail
-          specs=(e2e/rls-security.spec.ts e2e/gdpr-delete-account.spec.ts)
-
-          if [ "$E2E_SECURITY_USE_ISOLATED_STAGING" = "true" ]; then
-            specs+=(e2e/onboarding-role-selection.spec.ts)
-          else
-            echo "::warning::Skipping onboarding role-selection tests because live-safe security is using production fallback runtime. Configure STAGING_SUPABASE_SERVICE_ROLE_KEY to run them against isolated staging."
-          fi
-
-          npx playwright test --project=chromium "${specs[@]}"
-
-      - name: Skip production-fallback live-safe security tests while data plane is unavailable
-        if: env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true' && (steps.supabase_data_plane_probe.outputs.ready != 'true' || steps.production_rls_auth_probe.outputs.ready != 'true')
-        run: |
-          echo "::warning::Skipped production-fallback live-safe security tests because production Supabase fallback preflight did not pass. This can be data-plane unavailability or stale RLS demo-account credentials. Configure isolated staging to make these tests a hard PR gate independent of production availability."
-
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: playwright-report-security-staging
           path: playwright-report/
           retention-days: 3
 
@@ -845,17 +470,6 @@ jobs:
         github.event.pull_request.user.login != 'dependabot[bot]' &&
         !startsWith(github.event.pull_request.head.ref, 'release-please--'))
     needs: [quality, release-safety]
-    env:
-      # Lighthouse audits protected app surfaces. Prefer isolated staging when
-      # configured, otherwise use the production app test accounts.
-      VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      VITE_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID || secrets.VITE_SUPABASE_PROJECT_ID }}
-      LIGHTHOUSE_AUTH_EMAIL: ${{ secrets.E2E_SELLER_PRO_EMAIL }}
-      LIGHTHOUSE_AUTH_PASSWORD: ${{ secrets.E2E_SELLER_PRO_PASSWORD }}
-      LIGHTHOUSE_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      LIGHTHOUSE_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -870,37 +484,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
 
-      - name: Validate Lighthouse authenticated audit secrets
-        id: lighthouse-secrets
-        run: |
-          required=(
-            "VITE_SUPABASE_URL"
-            "VITE_SUPABASE_PUBLISHABLE_KEY"
-            "VITE_SUPABASE_PROJECT_ID"
-            "LIGHTHOUSE_AUTH_EMAIL"
-            "LIGHTHOUSE_AUTH_PASSWORD"
-            "LIGHTHOUSE_ADMIN_EMAIL"
-            "LIGHTHOUSE_ADMIN_PASSWORD"
-          )
-          missing=0
-          for key in "${required[@]}"; do
-            if [ -z "${!key}" ]; then
-              echo "::error::Missing Lighthouse secret: $key"
-              missing=1
-            fi
-          done
-          if [ "$missing" -ne 0 ]; then
-            echo "::error::Authenticated Lighthouse audit secrets are required for same-repo PR and main gates."
-            exit 1
-          fi
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-
       - name: Build app
-        if: steps.lighthouse-secrets.outputs.enabled == 'true'
         run: npm run build
 
       - name: Install Lighthouse browser
-        if: steps.lighthouse-secrets.outputs.enabled == 'true'
         timeout-minutes: 4
         run: |
           npx playwright install chromium
@@ -909,13 +496,10 @@ jobs:
           echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
 
       - name: Run Lighthouse CI
-        if: steps.lighthouse-secrets.outputs.enabled == 'true'
-        run: npx @lhci/cli@0.15.1 autorun
-        env:
-          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+        run: npx @lhci/cli@0.15.1 autorun --config=.lighthouserc.public.json
 
       - name: Upload Lighthouse reports
-        if: always() && steps.lighthouse-secrets.outputs.enabled == 'true'
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: lighthouse-reports
@@ -923,278 +507,79 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-  deploy:
-    name: Deploy to Cloudflare Pages
-    needs: [quality, release-safety, e2e, e2e-security-staging, migrations-validate, lighthouse]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  release-candidate-built:
+    name: Immutable release candidate built
+    if: >
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    needs: [quality, release-safety, e2e, migrations-validate, lighthouse]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
+      actions: read
+      attestations: write
       contents: read
       id-token: write
-      attestations: write
-    uses: ./.github/workflows/reusable-cloudflare-production-deploy.yml
-    secrets: inherit
-
-  deploy-supabase-staging:
-    name: Prepare Supabase
-    needs: [quality, release-safety, migrations-validate]
-    uses: ./.github/workflows/reusable-supabase-staging.yml
-    secrets: inherit
-
-  deploy-staging:
-    name: Deploy to Cloudflare Pages (preview)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Skip for Dependabot PRs — secrets are unavailable to bot-generated PRs
-    # by default and Wrangler will fail with "CLOUDFLARE_API_TOKEN not set".
-    # Dependabot bumps are validated by quality + e2e checks; a preview deploy
-    # adds no value there. Human PRs get previews only when the Supabase
-    # runtime has been proven to point at an isolated staging project.
-    if: >
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-      github.event.pull_request.user.login != 'dependabot[bot]' &&
-      !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
-      needs['deploy-supabase-staging'].outputs.isolated_staging == 'true'
-    needs: [quality, release-safety, deploy-supabase-staging]
-
     steps:
-      - name: Checkout (for Pages Functions in functions/)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: .node-version
-          cache: npm
-
-      - name: Check runtime
-        run: npm run check:runtime
-
-      - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
-
-      - name: Sync Cloudflare Pages preview runtime environment variables
+      - name: Require every static release gate
         env:
-          CF_API_TOKEN:                  ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_ACCOUNT_ID:                 ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CF_PROJECT:                    maiprop-listing-site
-          CF_API_BASE:                   https://api.cloudflare.com/client/v4
-          STAGING_SUPABASE_URL:          ${{ secrets.STAGING_SUPABASE_URL }}
-          STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
-          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
-          STAGING_APP_URL:               ${{ secrets.STAGING_APP_URL }}
-          STAGING_SITE_LOCK_PASSWORD:    ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          RELEASE_SAFETY_RESULT: ${{ needs['release-safety'].result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          MIGRATIONS_RESULT: ${{ needs['migrations-validate'].result }}
+          LIGHTHOUSE_RESULT: ${{ needs.lighthouse.result }}
         run: |
           set -euo pipefail
-
-          required=(
-            "CF_API_TOKEN"
-            "CF_ACCOUNT_ID"
-            "STAGING_SUPABASE_URL"
-            "STAGING_SUPABASE_PROJECT_ID"
-            "STAGING_SUPABASE_PUBLISHABLE_KEY"
-          )
-          missing=0
-          for key in "${required[@]}"; do
-            if [ -z "${!key}" ]; then
-              echo "::error::Missing required preview secret: $key"
-              missing=1
-            fi
-          done
-          if [ "$missing" -ne 0 ]; then
-            exit 1
-          fi
-
-          EFFECTIVE_STAGING_APP_URL="$STAGING_APP_URL"
-          if [ -z "$EFFECTIVE_STAGING_APP_URL" ]; then
-            EFFECTIVE_STAGING_APP_URL=$(node - "$GITHUB_HEAD_REF" "$CF_PROJECT" <<'NODE'
-          const [, , branchRef = "", projectName = ""] = process.argv;
-          const slug = branchRef
-            .toLowerCase()
-            .replace(/[^a-z0-9-]+/g, "-")
-            .replace(/^-+|-+$/g, "")
-            .slice(0, 63) || "preview";
-          const project = projectName.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
-          console.log(`https://${slug}.${project}.pages.dev`);
-          NODE
-          )
-            echo "STAGING_APP_URL was not set; derived Cloudflare Pages preview URL from branch."
-          fi
-          {
-            echo "EFFECTIVE_STAGING_APP_URL=$EFFECTIVE_STAGING_APP_URL"
-            echo "VITE_APP_URL=$EFFECTIVE_STAGING_APP_URL"
-          } >> "$GITHUB_ENV"
-
-          if ! NORMALIZED_SUPABASE_PROJECT_ID=$(node - "$STAGING_SUPABASE_PROJECT_ID" "$STAGING_SUPABASE_URL" <<'NODE'
-          const [, , explicitProjectId = "", supabaseUrl = ""] = process.argv;
-          const validProjectRef = (value) => /^[a-z0-9]{20}$/.test(value);
-          if (validProjectRef(explicitProjectId)) {
-            console.log(explicitProjectId);
-            process.exit(0);
-          }
-          try {
-            const host = new URL(supabaseUrl).hostname;
-            const suffix = ".supabase.co";
-            const derived = host.endsWith(suffix) ? host.slice(0, -suffix.length) : "";
-            if (validProjectRef(derived)) {
-              console.log(derived);
-              process.exit(0);
-            }
-          } catch {
-            // Fall through to the deployment error below.
-          }
-          process.exit(1);
-          NODE
-          ); then
-            echo "::error::STAGING_SUPABASE_PROJECT_ID must be a 20-character project ref or STAGING_SUPABASE_URL must be a valid https://<ref>.supabase.co URL."
-            exit 1
-          fi
-
-          if ! node - "$EFFECTIVE_STAGING_APP_URL" <<'NODE'
-          const [, , appUrl = ""] = process.argv;
-          try {
-            const parsed = new URL(appUrl);
-            if (parsed.protocol === "https:" && parsed.hostname.endsWith(".pages.dev")) {
-              process.exit(0);
-            }
-            if (parsed.protocol === "https:" && parsed.hostname.endsWith(".maiprop.co")) {
-              process.exit(0);
-            }
-          } catch {
-            // Fall through to error below.
-          }
-          process.exit(1);
-          NODE
-          then
-            echo "::error::STAGING_APP_URL must be an https:// preview or staging origin."
-            exit 1
-          fi
-
-          ENV_JSON=$(jq -n \
-            --arg surl "$STAGING_SUPABASE_URL" \
-            --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" \
-            --arg pkey "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
-            --arg app_url "$EFFECTIVE_STAGING_APP_URL" \
-            --arg lock "$STAGING_SITE_LOCK_PASSWORD" \
-            '
-            ({} +
-              {
-                SUPABASE_URL: { value: $surl, type: "plain_text" },
-                VITE_SUPABASE_URL: { value: $surl, type: "plain_text" },
-                SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" },
-                VITE_SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" },
-                SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
-                VITE_SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
-                VITE_SUPABASE_ANON_KEY: { value: $pkey, type: "plain_text" },
-                VITE_APP_URL: { value: $app_url, type: "plain_text" }
-              } +
-              (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else { SITE_LOCK_PASSWORD: null } end)
-            )')
-
-          PAYLOAD=$(jq -n --argjson env "$ENV_JSON" '{
-            deployment_configs: { preview: { env_vars: $env } }
-          }')
-
-          HTTP_CODE=$(curl -sS -o /tmp/cf_preview_env.json -w "%{http_code}" -X PATCH \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data "$PAYLOAD" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::Failed to sync Pages preview env vars (HTTP $HTTP_CODE)"
-            cat /tmp/cf_preview_env.json
-            exit 1
-          fi
-
-          HTTP_CODE=$(curl -sS -o /tmp/cf_preview_env_verify.json -w "%{http_code}" \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::Failed to verify Pages preview env vars (HTTP $HTTP_CODE)"
-            cat /tmp/cf_preview_env_verify.json
-            exit 1
-          fi
-
-          for key in SUPABASE_URL VITE_SUPABASE_URL SUPABASE_PROJECT_ID VITE_SUPABASE_PROJECT_ID SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_ANON_KEY VITE_APP_URL; do
-            if ! jq -e --arg key "$key" '.success == true and (.result.deployment_configs.preview.env_vars[$key].type == "plain_text")' /tmp/cf_preview_env_verify.json >/dev/null; then
-              echo "::error::Cloudflare Pages preview env var $key was not persisted."
+          for result in \
+            "$QUALITY_RESULT" \
+            "$RELEASE_SAFETY_RESULT" \
+            "$E2E_RESULT" \
+            "$MIGRATIONS_RESULT" \
+            "$LIGHTHOUSE_RESULT"; do
+            if [ "$result" != "success" ]; then
+              echo "::error::Immutable release candidate requires every static gate to succeed; observed '$result'."
               exit 1
             fi
           done
-          if ! jq -e --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" '.result.deployment_configs.preview.env_vars.SUPABASE_PROJECT_ID.value == $pid' /tmp/cf_preview_env_verify.json >/dev/null; then
-            echo "::error::Cloudflare Pages preview SUPABASE_PROJECT_ID did not match the normalized project ref."
-            exit 1
-          fi
-          if ! jq -e --arg app_url "$EFFECTIVE_STAGING_APP_URL" '.result.deployment_configs.preview.env_vars.VITE_APP_URL.value == $app_url' /tmp/cf_preview_env_verify.json >/dev/null; then
-            echo "::error::Cloudflare Pages preview VITE_APP_URL did not match the effective staging app URL."
-            exit 1
-          fi
 
-          toml_quote() {
-            jq -Rn --arg value "$1" '$value'
-          }
-          {
-            echo 'name = "maiprop-listing-site"'
-            echo 'pages_build_output_dir = "./dist"'
-            echo 'compatibility_date = "2026-05-19"'
-            echo
-            echo '[vars]'
-            printf 'SUPABASE_URL = %s\n' "$(toml_quote "$STAGING_SUPABASE_URL")"
-            printf 'VITE_SUPABASE_URL = %s\n' "$(toml_quote "$STAGING_SUPABASE_URL")"
-            printf 'SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$NORMALIZED_SUPABASE_PROJECT_ID")"
-            printf 'VITE_SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$NORMALIZED_SUPABASE_PROJECT_ID")"
-            printf 'SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
-            printf 'VITE_SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
-            printf 'VITE_SUPABASE_ANON_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
-            printf 'VITE_APP_URL = %s\n' "$(toml_quote "$EFFECTIVE_STAGING_APP_URL")"
-            if [ -n "${STAGING_SITE_LOCK_PASSWORD}" ]; then
-              printf 'SITE_LOCK_PASSWORD = %s\n' "$(toml_quote "$STAGING_SITE_LOCK_PASSWORD")"
-            fi
-          } > wrangler.toml
-          echo "Pages preview runtime env vars synced and Wrangler preview config prepared."
-
-      - name: Build app with staging environment
-        run: npm run build
-        env:
-          VITE_SUPABASE_URL:             ${{ secrets.STAGING_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_PROJECT_ID:      ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
-          VITE_MAPBOX_TOKEN:             ${{ secrets.VITE_MAPBOX_TOKEN }}
-          VITE_SENTRY_DSN:               ${{ secrets.VITE_SENTRY_DSN }}
-          VITE_STRIPE_PRO_PRODUCT_ID:    ${{ secrets.VITE_STRIPE_PRO_PRODUCT_ID }}
-          VITE_TURNSTILE_SITE_KEY:       ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
-          VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-          VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE: "true"
-          VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
-
-      - name: Generate homepage initial payload
-        run: npm run build:homepage-initial
-        env:
-          HOMEPAGE_INITIAL_ORIGIN: https://portal.maiprop.co
-
-      - name: Package Cloudflare Pages Functions worker
-        run: npm run build:cloudflare-pages-worker
-
-      - name: Deploy to Cloudflare Pages (PR preview)
-        id: deploy_pages_preview
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          apiToken:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId:  ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Deploys under a preview branch named after the PR head ref so each
-          # PR gets a deterministic preview URL like:
-          #   https://<branch>.maiprop-listing-site.pages.dev
-          command:    pages deploy dist --project-name=maiprop-listing-site --branch=${{ github.head_ref }} --commit-dirty=true
+          ref: ${{ github.sha }}
+          fetch-depth: 1
 
-      - name: Validate Cloudflare Pages preview public APIs
-        env:
-          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
-          CF_ACCESS_CLIENT_ID:                  ${{ secrets.CF_ACCESS_CLIENT_ID || secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET:              ${{ secrets.CF_ACCESS_CLIENT_SECRET || secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
-          CF_ACCESS_TOKEN:                      ${{ secrets.CF_ACCESS_TOKEN || secrets.CLOUDFLARE_ACCESS_TOKEN }}
-          PRODUCTION_DEPLOY_CHECK_ATTEMPTS:     12
-          PRODUCTION_DEPLOY_CHECK_DELAY_MS:     10000
-        run: npm run check:production-deploy -- "${{ steps.deploy_pages_preview.outputs['deployment-url'] }}" --public-api
+      - name: Download immutable release candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-release-candidate-${{ github.sha }}
+          path: release-candidate
+
+      - name: Verify immutable release candidate
+        run: |
+          set -euo pipefail
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$GITHUB_SHA" \
+            --tree "$source_tree" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT"
+
+      - name: Attest immutable release manifest
+        id: provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: release-candidate/release-manifest.json
+
+      - name: Record candidate readiness
+        run: |
+          {
+            echo "### Immutable release candidate built"
+            echo
+            echo "Static CI passed and the exact artifact for \`${GITHUB_SHA}\` was verified."
+            echo "GitHub build provenance: ${{ steps.provenance.outputs.attestation-url }}"
+            echo "No staging or production service was mutated by this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   release-status:
     name: Publish Release PR CI Status
@@ -1208,10 +593,8 @@ jobs:
       - quality
       - release-safety
       - e2e
-      - e2e-security-staging
       - migrations-validate
       - lighthouse
-      - deploy-supabase-staging
     permissions:
       contents: read
       statuses: write
@@ -1223,10 +606,8 @@ jobs:
           QUALITY_RESULT: ${{ needs.quality.result }}
           RELEASE_SAFETY_RESULT: ${{ needs['release-safety'].result }}
           E2E_RESULT: ${{ needs.e2e.result }}
-          E2E_SECURITY_RESULT: ${{ needs['e2e-security-staging'].result }}
           MIGRATIONS_RESULT: ${{ needs['migrations-validate'].result }}
           LIGHTHOUSE_RESULT: ${{ needs.lighthouse.result }}
-          STAGING_SUPABASE_RESULT: ${{ needs['deploy-supabase-staging'].result }}
         run: |
           set -euo pipefail
           target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
@@ -1234,10 +615,8 @@ jobs:
             "$QUALITY_RESULT"
             "$RELEASE_SAFETY_RESULT"
             "$E2E_RESULT"
-            "$E2E_SECURITY_RESULT"
             "$MIGRATIONS_RESULT"
             "$LIGHTHOUSE_RESULT"
-            "$STAGING_SUPABASE_RESULT"
           )
           state=success
           for result in "${results[@]}"; do

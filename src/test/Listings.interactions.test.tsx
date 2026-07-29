@@ -169,13 +169,30 @@ vi.mock("@/components/MapView", () => ({
   MapView: ({
     onVisibleListingsChange,
     onPolygonFilter,
+    polygonPoints,
+    onPolygonChange,
   }: {
     onVisibleListingsChange?: (ids: Set<string>) => void;
-    onPolygonFilter?: (ids: Set<string>) => void;
+    onPolygonFilter?: (ids: Set<string> | null) => void;
+    polygonPoints?: Array<[number, number]> | null;
+    onPolygonChange?: (points: Array<[number, number]> | null) => void;
   }) => (
-    <div data-testid="map-view">
+    <div data-testid="map-view" data-polygon-points={String(polygonPoints?.length ?? 0)}>
       <button type="button" onClick={() => onVisibleListingsChange?.(new Set(["one"]))}>Sync viewport</button>
-      <button type="button" onClick={() => onPolygonFilter?.(new Set(["two"]))}>Apply polygon</button>
+      <button
+        type="button"
+        onClick={() => {
+          onPolygonChange?.([
+            [23.7, 37.9],
+            [23.8, 37.9],
+            [23.8, 38.0],
+            [23.7, 38.0],
+          ]);
+          onPolygonFilter?.(new Set(["two"]));
+        }}
+      >
+        Apply polygon
+      </button>
     </div>
   ),
 }));
@@ -485,10 +502,21 @@ describe("Listings page interactions", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /150k.*300k/i })[0]);
     expect(setParam).toHaveBeenCalledWith("price", "150000-300000");
 
+    vi.useFakeTimers();
+    fireEvent.change(screen.getByPlaceholderText("Min m²"), { target: { value: "6" } });
     fireEvent.change(screen.getByPlaceholderText("Min m²"), { target: { value: "60" } });
+    fireEvent.change(screen.getByPlaceholderText("Max m²"), { target: { value: "14" } });
     fireEvent.change(screen.getByPlaceholderText("Max m²"), { target: { value: "140" } });
-    expect(setParam).toHaveBeenCalledWith("sqm_min", "60");
-    expect(setParam).toHaveBeenCalledWith("sqm_max", "140");
+    expect(setParam).not.toHaveBeenCalledWith("sqm_min", "6");
+    expect(setParam).not.toHaveBeenCalledWith("sqm_min", "60");
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(setParams).toHaveBeenCalledWith([
+      ["sqm_min", "60"],
+      ["sqm_max", "140"],
+    ]);
+    vi.useRealTimers();
 
     fireEvent.click(screen.getAllByRole("button", { name: "3+" })[0]);
     expect(setParam).toHaveBeenCalledWith("beds_min", "3");
@@ -600,4 +628,22 @@ describe("Listings page interactions", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /retry/i })[0]);
     expect(reload).toHaveBeenCalled();
   }, 15000);
+
+  it("preserves polygon geometry and membership across map remounts", async () => {
+    const { default: Listings } = await import("@/pages/Listings");
+    renderWithProviders(<Listings />);
+
+    fireEvent.click(screen.getByRole("button", { name: /split view/i }));
+    await waitFor(() => expect(screen.getByTestId("map-view")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Apply polygon" }));
+    expect(screen.getByTestId("map-view")).toHaveAttribute("data-polygon-points", "4");
+    expect(screen.getByText("1 in area")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /grid view/i }).at(-1)!);
+    expect(screen.queryByTestId("map-view")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /split view/i }));
+
+    await waitFor(() => expect(screen.getByTestId("map-view")).toHaveAttribute("data-polygon-points", "4"));
+    expect(screen.getByText("1 in area")).toBeInTheDocument();
+  });
 });

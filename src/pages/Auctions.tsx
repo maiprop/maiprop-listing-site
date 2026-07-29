@@ -120,6 +120,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     cityOptions,
     roundOptions,
     visibleFiltered,
+    visibleCount: serverVisibleCount,
     polygonFilteredCount,
     paginated,
     totalPages,
@@ -142,6 +143,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     currentPage,
     setCurrentPage,
   });
+  const visibleCount = serverVisibleCount ?? visibleFiltered.length;
 
   useEffect(() => {
     const city = selectedCity === "All Cities" ? "" : selectedCity;
@@ -162,7 +164,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
         surface: "auctions",
         query,
         route: `/auctions${window.location.search}`,
-        resultCount: visibleFiltered.length,
+        resultCount: visibleCount,
         filters: {
           city: city || undefined,
           type: filterType || undefined,
@@ -197,7 +199,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     totalRaw,
     trackUserSearch,
     viewMode,
-    visibleFiltered.length,
+    visibleCount,
   ]);
 
   const handleToggleFav = (id: string, isFav: boolean) => {
@@ -228,7 +230,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
   const metaName = isGreek ? "Πλειστηριασμοί Ακινήτων στην Ελλάδα" : "Greek Property Auctions";
   const auctionStats = [
   { value: isLoading ? "—" : String(thisWeek), label: isGreek ? "Αυτή την εβδομάδα" : "This Week", icon: Gavel },
-  { value: isLoading ? "—" : visibleFiltered.length.toLocaleString(), label: isGreek ? "Ορατοί πλειστηριασμοί" : "Visible Auctions", icon: TrendingUp },
+  { value: isLoading ? "—" : visibleCount.toLocaleString(), label: isGreek ? "Ορατοί πλειστηριασμοί" : "Visible Auctions", icon: TrendingUp },
   { value: isLoading ? "—" : avgBid > 0 ? formatPrice(avgBid) : "—", label: isGreek ? "Μέση τιμή πρώτης προσφοράς" : "Avg First Offer Price", icon: TrendingUp }];
   const mobileTypeLabels: Record<string, string> = {
     apartment: "Διαμέρισμα",
@@ -489,8 +491,8 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
                 {isGreek
-                  ? "Περιηγηθείτε σε ηλεκτρονικούς πλειστηριασμούς με ζωντανά φίλτρα και καθημερινή τυχαία εναλλαγή αποτελεσμάτων."
-                  : "Browse electronic auction opportunities with live filters and daily randomized rotation."}
+                  ? "Περιηγηθείτε σε ηλεκτρονικούς πλειστηριασμούς με ζωντανά φίλτρα και ενιαία ημερήσια κατάταξη."
+                  : "Browse electronic auction opportunities with live filters and one consistent daily catalogue."}
               </p>
             </div>
             {isLoading &&
@@ -512,7 +514,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
               </div>
           }
 
-            {!isLoading && !error && visibleFiltered.length === 0 &&
+            {!isLoading && !error && visibleCount === 0 &&
           <div className="text-center py-20">
                 <Gavel className="w-12 h-12 text-primary/30 mx-auto mb-4" />
                 <p className="font-display font-semibold text-lg mb-2">{isGreek ? "Δεν υπάρχουν πλειστηριασμοί που ταιριάζουν στα φίλτρα" : "No auctions match your filters"}</p>
@@ -525,7 +527,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
               </div>
           }
 
-            {!isLoading && visibleFiltered.length > 0 &&
+            {!isLoading && paginated.length > 0 &&
           <>
                  <p className="text-xs text-muted-foreground mb-4">
                    {isGreek ? "Εμφάνιση" : "Showing"} <span className="font-semibold text-foreground">{(currentPage - 1) * AUCTIONS_PAGE_SIZE + 1}–{Math.min(currentPage * AUCTIONS_PAGE_SIZE, polygonFilteredCount)}</span>
@@ -534,7 +536,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                    <span className="font-semibold text-foreground">{polygonFilteredCount}</span> {isGreek ? "πλειστηριασμούς" : "auctions"}
                    {polygonFilterIds && <span className="text-primary"> · {isGreek ? "ενεργό φίλτρο περιοχής" : "area filter active"}</span>}
                    {selectedCity !== "All Cities" ? (isGreek ? ` σε ${selectedCity}` : ` in ${selectedCity}`) : ""}
-                   {" · "}{isGreek ? "καθημερινή τυχαία εναλλαγή" : "daily randomized rotation"}
+                   {" · "}{isGreek ? "ημερήσια έκδοση καταλόγου" : "daily catalogue revision"}
                  </p>
                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                    {paginated.map((a) =>

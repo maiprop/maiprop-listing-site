@@ -33,6 +33,26 @@ const PROJECT_MEDIA_MIME_TYPES = new Set<string>([
 const LISTING_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const PROJECT_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 
+type NewBuildingStorageBucket = "listing-images" | "project-media";
+
+export async function registerProjectStorageUpload(
+  projectId: string,
+  bucket: NewBuildingStorageBucket,
+  objectPath: string,
+  objectUrl: string,
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    "register_new_building_storage_upload",
+    {
+      p_project_id: projectId,
+      p_bucket: bucket,
+      p_object_path: objectPath,
+      p_object_url: objectUrl,
+    },
+  );
+  if (error) throw error;
+}
+
 /** Per-upload type returned by `uploadListingImage`. */
 export interface UploadedListingImage {
   /** Stable id used as the React key in the wizard's image grid. */
@@ -69,6 +89,35 @@ export async function uploadListingImage(
 }
 
 /**
+ * Uploads a creation-only new-building image. The stable client-generated
+ * project id is also the creation session id, so retries reuse one exact,
+ * server-verifiable namespace without affecting later project edits.
+ */
+export async function uploadNewBuildingListingImage(
+  file: File,
+  userId: string,
+  projectId: string,
+): Promise<UploadedListingImage> {
+  assertAllowedUpload(file, LISTING_IMAGE_MIME_TYPES, {
+    label: "listing image",
+    maxBytes: LISTING_IMAGE_MAX_BYTES,
+  });
+  const ext = file.name.split(".").pop();
+  const id = crypto.randomUUID();
+  const path = `${userId}/${projectId}/create/${id}.${ext}`;
+  const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
+  await registerProjectStorageUpload(
+    projectId,
+    "listing-images",
+    path,
+    data.publicUrl,
+  );
+  const { error } = await supabase.storage.from("listing-images").upload(path, file, { upsert: false });
+  if (error) throw error;
+  return { id, url: data.publicUrl };
+}
+
+/**
  * Validates and uploads project-level media (renderings, floor plans,
  * brochures, video, etc.) to `project-media`. PDFs go through the PDF
  * allowlist; everything else matches the bucket's image/video allowlist.
@@ -85,9 +134,35 @@ export async function uploadProjectMedia(
     maxBytes: PROJECT_MEDIA_MAX_BYTES,
   });
   const ext = file.name.split(".").pop() || "jpg";
-  const path = `${userId}/${projectId}/media-${crypto.randomUUID()}.${ext}`;
+  const path = `${userId}/${projectId}/create/media-${crypto.randomUUID()}.${ext}`;
+  const { data } = supabase.storage.from("project-media").getPublicUrl(path);
+  await registerProjectStorageUpload(
+    projectId,
+    "project-media",
+    path,
+    data.publicUrl,
+  );
   const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: false });
   if (error) throw error;
-  const { data } = supabase.storage.from("project-media").getPublicUrl(path);
   return data.publicUrl;
+}
+
+export async function deleteProjectMediaUrls(urls: readonly string[]): Promise<void> {
+  const marker = "/storage/v1/object/public/project-media/";
+  const paths = urls.flatMap((rawUrl) => {
+    try {
+      const url = new URL(rawUrl);
+      const markerIndex = url.pathname.indexOf(marker);
+      if (markerIndex < 0) return [];
+      const path = decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+      return path && !path.split("/").some((segment) => !segment || segment === "." || segment === "..")
+        ? [path]
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  if (paths.length === 0) return;
+  const { error } = await supabase.storage.from("project-media").remove(paths);
+  if (error) throw error;
 }

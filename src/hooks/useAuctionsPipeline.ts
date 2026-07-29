@@ -16,6 +16,7 @@ import { getAuctionImageList } from "@/lib/auctionStreetView";
 
 /** Inferred row type returned by `useAuctionListings()`. */
 type Auction = NonNullable<ReturnType<typeof useAuctionListings>["data"]>[number];
+const EMPTY_AUCTIONS: Auction[] = [];
 
 /** Page-size and per-tier maximums match the previous inline constants. */
 export const AUCTIONS_PAGE_SIZE = 20;
@@ -52,12 +53,11 @@ export interface UseAuctionsPipelineOptions {
 /**
  * Encapsulates the data pipeline that powers `/auctions`:
  *
- *   raw fetch → tier-aware page cap → filter chain → polygon filter
- *     → pagination → derived stats (thisWeek / avgBid / mappableCount)
- *     → mapListings transform
+ *   plan-aware request -> canonical server filters -> entitlement cap
+ *     -> server pagination -> current-page map transform
  *
- * The cap is applied **before** filtering so that narrowing filters cannot be
- * used to bypass the per-tier item limit (free=60, pro=600, OS=∞).
+ * The public API filters the complete scheduled DB revision before enforcing
+ * the per-tier visibility limit (free=60, paid/high-trust=600).
  */
 export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
   const {
@@ -78,67 +78,80 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
   const { isPro } = useSubscription();
   const isMaiPropOsUser = isPlatformAdmin(profile);
 
-  /** Per-plan auction cap. OS users and high-trust plans have no cap. */
+  /** Per-plan auction cap. The canonical scheduled pool is bounded at 600. */
   const participantType = getParticipantTypeFromProfile(profile);
   const configuredAuctionLimit = isMaiPropOsUser
-    ? null
+    ? AUCTIONS_MAX_PAGES_PRO * AUCTIONS_PAGE_SIZE
     : getPlanLimits(participantType, isPro ? "pro" : "free").auctionListingsVisible;
-  const maxItems = configuredAuctionLimit ?? Infinity;
-  const fetchLimit = Number.isFinite(maxItems) ? maxItems : undefined;
-
-  const { data: auctions = [], isLoading, error } = useAuctionListings(fetchLimit);
+  const maxItems = configuredAuctionLimit ?? AUCTIONS_MAX_PAGES_PRO * AUCTIONS_PAGE_SIZE;
+  const serverFilters = useMemo(() => ({
+    city: selectedCity === "All Cities" ? undefined : selectedCity,
+    propertyType: filterType || undefined,
+    bidRange: filterBidRange || undefined,
+    yearRange: filterYearRange || undefined,
+    sqmRange: filterSqmRange || undefined,
+    ownership: isPro || isMaiPropOsUser ? filterOwnership || undefined : undefined,
+    round: isPro || isMaiPropOsUser ? filterRound || undefined : undefined,
+    yield: isPro || isMaiPropOsUser ? filterYield || undefined : undefined,
+    ids: polygonFilterIds ? [...polygonFilterIds].sort() : undefined,
+  }), [
+    filterBidRange,
+    filterOwnership,
+    filterRound,
+    filterSqmRange,
+    filterType,
+    filterYearRange,
+    filterYield,
+    isMaiPropOsUser,
+    isPro,
+    polygonFilterIds,
+    selectedCity,
+  ]);
+  const auctionQuery = useAuctionListings(maxItems, {
+    page: currentPage,
+    pageSize: AUCTIONS_PAGE_SIZE,
+    filters: serverFilters,
+  });
+  const auctions = auctionQuery.data ?? EMPTY_AUCTIONS;
+  const pageMeta = auctionQuery.auctionPage;
+  const isLoading = auctionQuery.isLoading && auctionQuery.data == null;
+  const error = auctionQuery.error;
+  const visibleCount = pageMeta?.total ?? auctions.length;
+  const totalRaw = pageMeta?.totalRaw ?? visibleCount;
 
   /** Distinct city list seeded with "All Cities". */
   const cityOptions = useMemo(() => {
-    const cities = Array.from(new Set(auctions.map((a) => a.city).filter(Boolean))).sort();
+    const cities = Array.from(new Set(
+      pageMeta?.facets.cities.filter(Boolean) ??
+      auctions.map((auction) => auction.city).filter((city): city is string => Boolean(city)),
+    )).sort();
     return ["All Cities", ...cities];
-  }, [auctions]);
+  }, [auctions, pageMeta?.facets.cities]);
 
   /** Round dropdown options inferred from the data so we don't show "3rd+ Auction" if no row matches. */
   const roundOptions = useMemo(() => {
-    const rounds = auctions.map((a) => getAuctionRound(a.tags)).filter((n): n is number => n != null);
+    const rounds = pageMeta?.facets.rounds ??
+      auctions.map((auction) => getAuctionRound(auction.tags)).filter((round): round is number => round != null);
     const result: { value: string; label: string }[] = [{ value: "", label: "All Rounds" }];
     if (rounds.some((n) => n === 1)) result.push({ value: "1", label: "1st Auction" });
     if (rounds.some((n) => n === 2)) result.push({ value: "2", label: "2nd Auction" });
     if (rounds.some((n) => n >= 3)) result.push({ value: "3plus", label: "3rd+ Auction" });
     return result;
-  }, [auctions]);
+  }, [auctions, pageMeta?.facets.rounds]);
 
-  /**
-   * Cap is applied on the RAW auctions list BEFORE filtering so that
-   * narrowing filters cannot be used to bypass the per-tier item limit.
-   * This is the same security boundary the inline pipeline maintained.
-   */
-  const cappedAuctions = useMemo(
-    () => Number.isFinite(maxItems) ? auctions.slice(0, maxItems) : auctions,
-    [auctions, maxItems]
+  // The API has already filtered, applied the entitlement cap, and paginated.
+  const visibleFiltered = auctions;
+  const paginated = auctions;
+  const polygonFilteredCount = visibleCount;
+  const totalPages = pageMeta?.totalPages ?? Math.max(
+    1,
+    Math.ceil(visibleCount / AUCTIONS_PAGE_SIZE),
   );
-  const totalRaw = auctions.length; // full count for upsell copy
-
-  const visibleFiltered = useMemo(() => {
-    const predicate = buildAuctionFilter(
-      { selectedCity, filterType, filterBidRange, filterYearRange, filterSqmRange, filterOwnership, filterRound, filterYield },
-      isPro,
-      isMaiPropOsUser,
-    );
-    return cappedAuctions.filter(predicate);
-  }, [cappedAuctions, selectedCity, filterType, filterBidRange, filterYearRange, filterSqmRange, filterOwnership, filterRound, filterYield, isPro, isMaiPropOsUser]);
-
-  const polygonFiltered = useMemo(() => {
-    if (!polygonFilterIds) return visibleFiltered;
-    return visibleFiltered.filter((a) => polygonFilterIds.has(a.id));
-  }, [visibleFiltered, polygonFilterIds]);
-
-  const totalPages = Math.max(1, Math.ceil(polygonFiltered.length / AUCTIONS_PAGE_SIZE));
-  const paginated = useMemo(() => {
-    const start = (currentPage - 1) * AUCTIONS_PAGE_SIZE;
-    return polygonFiltered.slice(start, start + AUCTIONS_PAGE_SIZE);
-  }, [polygonFiltered, currentPage]);
 
   /** Reset to first page whenever any filter or the cap (tier change) flips. */
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCity, filterType, filterBidRange, filterYearRange, filterSqmRange, filterOwnership, filterRound, filterYield, maxItems, setCurrentPage]);
+  }, [selectedCity, filterType, filterBidRange, filterYearRange, filterSqmRange, filterOwnership, filterRound, filterYield, polygonFilterIds, maxItems, setCurrentPage]);
 
   /** Clamp current page to total when filters reduce the result set. */
   useEffect(() => {
@@ -153,29 +166,11 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
     ...(isPro || isMaiPropOsUser ? [filterOwnership, filterRound, filterYield] : []),
   ].filter(Boolean).length;
 
-  /** Derived stats (rendered in the page hero / toolbar). */
-  const thisWeek = useMemo(() => {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const weekEnd = new Date(todayStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
-    return visibleFiltered.filter((a) => {
-      if (!a.auction_date) return false;
-      const d = new Date(a.auction_date);
-      const dayOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      return dayOnly >= todayStart && dayOnly <= weekEnd;
-    }).length;
-  }, [visibleFiltered]);
+  /** Derived stats cover the complete server-filtered entitlement window. */
+  const thisWeek = pageMeta?.stats.thisWeek ?? 0;
+  const avgBid = pageMeta?.stats.avgBid ?? 0;
 
-  const avgBid = useMemo(() => {
-    if (!visibleFiltered.length) return 0;
-    return Math.round(
-      visibleFiltered.reduce((sum, a) => sum + (a.auction_starting_bid ?? a.price ?? 0), 0) /
-      visibleFiltered.length
-    );
-  }, [visibleFiltered]);
-
-  /** Map markers built from the *filtered* (not paginated) list so the map shows every visible result. */
+  /** Map markers for the current server page. */
   const mapListings: MapListing[] = useMemo(() => {
     return visibleFiltered
       .filter((a) => a.latitude != null && a.longitude != null)
@@ -213,10 +208,11 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
     cityOptions,
     /** Round dropdown options inferred from the data. */
     roundOptions,
-    /** Capped, filtered, polygon-filtered list (length used for "Visible Auctions" stat). */
+    /** Current canonical server page. */
     visibleFiltered,
-    /** Total count after polygon filter (used by "Showing X–Y of Z" copy in pagination). */
-    polygonFilteredCount: polygonFiltered.length,
+    visibleCount,
+    /** Total count after filters and the entitlement cap. */
+    polygonFilteredCount,
     /** Current page slice — what the list view renders. */
     paginated,
     /** Total page count (≥1). */
@@ -225,9 +221,9 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
     thisWeek,
     avgBid,
     activeFilterCount,
-    /** Pre-cap counts used by upsell banner copy. */
+    /** Filtered count before the entitlement cap. */
     totalRaw,
-    /** Map markers (filtered, not paginated). */
+    /** Map markers for the current page. */
     mapListings,
     mappableCount,
   };

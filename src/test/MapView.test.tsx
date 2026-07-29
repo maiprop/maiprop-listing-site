@@ -251,10 +251,46 @@ describe("MapView", () => {
     expect(cb).not.toHaveBeenCalled();
   });
 
+  it("emits normalized viewport bounds on load and after map movement", async () => {
+    const onViewportBoundsChange = vi.fn();
+    render(
+      <TestMapView
+        listings={baseListings}
+        onViewportBoundsChange={onViewportBoundsChange}
+      />,
+    );
+    await waitFor(() => screen.getByTestId("map-mock"));
+
+    act(() => handlerHolder.onLoad?.());
+    await waitFor(() => expect(onViewportBoundsChange).toHaveBeenCalledWith({
+      west: 23,
+      south: 37,
+      east: 25,
+      north: 39,
+    }));
+
+    boundsMock.getWest.mockReturnValue(23.5);
+    act(() => handlerHolder.onMoveEnd?.());
+    await waitFor(() => expect(onViewportBoundsChange).toHaveBeenLastCalledWith({
+      west: 23.5,
+      south: 37,
+      east: 25,
+      north: 39,
+    }));
+  });
+
   it("renders an empty layout when given no listings", async () => {
     render(<TestMapView listings={[]} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     expect(screen.getAllByTestId("map-source").length).toBeGreaterThan(0);
+  });
+
+  it("shows an updating state instead of claiming a fresh map scope is empty", async () => {
+    render(<TestMapView listings={[]} isLoading />);
+    await waitFor(() => screen.getByTestId("map-mock"));
+
+    expect(screen.getByText(/updating map results/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no listings with location data/i)).not.toBeInTheDocument();
   });
 
   it("falls back to a placeholder when MAPBOX_TOKEN is empty", async () => {
@@ -375,6 +411,121 @@ describe("MapView", () => {
     expect(onPolygonFilter).toHaveBeenLastCalledWith(null);
   });
 
+  it("emits polygon coordinates and accepts an external clear", async () => {
+    const onPolygonChange = vi.fn();
+    const view = render(
+      <TestMapView
+        listings={baseListings}
+        polygonPoints={null}
+        onPolygonChange={onPolygonChange}
+      />,
+    );
+    await waitFor(() => screen.getByTestId("map-mock"));
+    fireEvent.click(screen.getByRole("button", { name: /Draw|Polygon|Lasso/i }));
+
+    for (const point of [
+      { lngLat: { lng: 23.0, lat: 37.0 }, point: { x: 1, y: 1 } },
+      { lngLat: { lng: 24.5, lat: 37.0 }, point: { x: 2, y: 2 } },
+      { lngLat: { lng: 24.5, lat: 39.0 }, point: { x: 3, y: 3 } },
+    ]) {
+      await act(async () => handlerHolder.onClick?.(point));
+    }
+    fireEvent.click(screen.getByRole("button", { name: /Finish polygon/i }));
+
+    expect(onPolygonChange).toHaveBeenCalledWith([
+      [23.0, 37.0],
+      [24.5, 37.0],
+      [24.5, 39.0],
+    ]);
+
+    const emittedPoints = onPolygonChange.mock.calls.at(-1)?.[0] as Array<[number, number]>;
+    view.rerender(
+      <TestMapView
+        listings={baseListings}
+        polygonPoints={emittedPoints}
+        onPolygonChange={onPolygonChange}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /clear area filter/i })).toBeInTheDocument(),
+    );
+    view.rerender(
+      <TestMapView
+        listings={baseListings}
+        polygonPoints={null}
+        onPolygonChange={onPolygonChange}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Draw|Polygon|Lasso/i })).toBeInTheDocument(),
+    );
+  });
+
+  it("recomputes an active polygon when later cursor pages add matching listings", async () => {
+    const onPolygonFilter = vi.fn();
+    const { rerender } = render(
+      <TestMapView
+        listings={[{ ...baseListings[0], id: "inside-1" }]}
+        onPolygonFilter={onPolygonFilter}
+      />,
+    );
+    await waitFor(() => screen.getByTestId("map-mock"));
+    fireEvent.click(screen.getByRole("button", { name: /Draw area filter/i }));
+    for (const pt of [
+      { lngLat: { lng: 23.0, lat: 37.0 }, point: { x: 1, y: 1 } },
+      { lngLat: { lng: 24.5, lat: 37.0 }, point: { x: 2, y: 2 } },
+      { lngLat: { lng: 24.5, lat: 39.0 }, point: { x: 3, y: 3 } },
+      { lngLat: { lng: 23.0, lat: 39.0 }, point: { x: 4, y: 4 } },
+    ]) {
+      await act(async () => handlerHolder.onClick?.(pt));
+    }
+    fireEvent.click(screen.getByRole("button", { name: /Finish polygon/i }));
+
+    rerender(
+      <TestMapView
+        listings={[
+          { ...baseListings[0], id: "inside-1" },
+          { ...baseListings[0], id: "inside-201", latitude: 38.1, longitude: 23.9 },
+        ]}
+        onPolygonFilter={onPolygonFilter}
+      />,
+    );
+
+    await waitFor(() => {
+      const ids = onPolygonFilter.mock.calls.at(-1)?.[0] as Set<string>;
+      expect([...ids]).toEqual(["inside-1", "inside-201"]);
+    });
+  });
+
+  it("recomputes visible IDs when later cursor pages append in-bounds listings", async () => {
+    const onVisibleListingsChange = vi.fn();
+    const { rerender } = render(
+      <TestMapView
+        listings={[{ ...baseListings[0], id: "inside-1" }]}
+        onVisibleListingsChange={onVisibleListingsChange}
+      />,
+    );
+    await waitFor(() => screen.getByTestId("map-mock"));
+    act(() => handlerHolder.onLoad?.());
+    await waitFor(() => expect(onVisibleListingsChange).toHaveBeenCalled());
+
+    onVisibleListingsChange.mockClear();
+    rerender(
+      <TestMapView
+        listings={[
+          { ...baseListings[0], id: "inside-1" },
+          { ...baseListings[0], id: "inside-201", latitude: 38.1, longitude: 23.9 },
+        ]}
+        onVisibleListingsChange={onVisibleListingsChange}
+      />,
+    );
+
+    await waitFor(() => {
+      const ids = onVisibleListingsChange.mock.calls.at(-1)?.[0] as Set<string>;
+      expect([...ids]).toEqual(["inside-1", "inside-201"]);
+    });
+  });
+
   it("draw area locally filters visible map pins and active heatmap data in every MapView caller", async () => {
     render(
       <TestMapView
@@ -482,6 +633,32 @@ describe("MapView", () => {
     );
 
     mapController.fitBounds.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Fit all pins" }));
+    expect(mapController.fitBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not auto-fit again when cursor pagination appends listings", async () => {
+    const initialListings = [
+      { ...baseListings[0], id: "south-west", latitude: 35.1, longitude: 20.2 },
+      { ...baseListings[0], id: "north-east", latitude: 41.9, longitude: 28.4 },
+    ];
+    const view = render(<TestMapView listings={initialListings} />);
+    await waitFor(() => expect(mapController.fitBounds).toHaveBeenCalledTimes(1));
+
+    mapController.fitBounds.mockClear();
+    view.rerender(
+      <TestMapView
+        listings={[
+          ...initialListings,
+          { ...baseListings[0], id: "later-page", latitude: 40.2, longitude: 25.1 },
+        ]}
+      />,
+    );
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
+    });
+
+    expect(mapController.fitBounds).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Fit all pins" }));
     expect(mapController.fitBounds).toHaveBeenCalledTimes(1);
   });

@@ -1,5 +1,6 @@
 ﻿import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -12,6 +13,11 @@ import {
   parseMutationInput,
 } from "@/lib/mutationSchemas";
 import { attachListingReferences } from "@/lib/listingReferences";
+import {
+  accountQueryKey,
+  captureIdentityEpoch,
+  isCurrentIdentityEpoch,
+} from "@/lib/identityQueryBoundary";
 
 type ConversationCandidate = { id: string; listing_id: string | null };
 type StartConversationInput = { other_user_id: string; listing_id?: string };
@@ -44,6 +50,9 @@ type CachedMessage = Pick<
 };
 type SendMessageContext = {
   optimisticId: string | null;
+  identityEpoch: number;
+  messageQueryKey: ReturnType<typeof accountQueryKey>;
+  conversationsQueryKey: ReturnType<typeof accountQueryKey>;
 };
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
@@ -273,21 +282,28 @@ const startConversationForUser = async (
 export function useConversations() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const userId = user?.id;
+  const conversationsQueryKey = useMemo(
+    () => accountQueryKey(userId, "conversations"),
+    [userId],
+  );
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
+    const subscriptionEpoch = captureIdentityEpoch();
     const channel = supabase
-      .channel(`conversations:user:${user.id}`)
+      .channel(`conversations:user:${userId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "conversations",
-          filter: `participant_a=eq.${user.id}`,
+          filter: `participant_a=eq.${userId}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["conversations", user.id] });
+          if (!isCurrentIdentityEpoch(subscriptionEpoch)) return;
+          queryClient.invalidateQueries({ queryKey: conversationsQueryKey });
         }
       )
       .on(
@@ -296,10 +312,11 @@ export function useConversations() {
           event: "*",
           schema: "public",
           table: "conversations",
-          filter: `participant_b=eq.${user.id}`,
+          filter: `participant_b=eq.${userId}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["conversations", user.id] });
+          if (!isCurrentIdentityEpoch(subscriptionEpoch)) return;
+          queryClient.invalidateQueries({ queryKey: conversationsQueryKey });
         }
       )
       .subscribe();
@@ -307,19 +324,19 @@ export function useConversations() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, queryClient]);
+  }, [userId, queryClient, conversationsQueryKey]);
 
   return useQuery({
-    queryKey: ["conversations", user?.id],
+    queryKey: conversationsQueryKey,
     queryFn: async () => {
-      if (!user) return [];
+      if (!userId) return [];
       const { data: convs, error: convError } = await supabase
         .from("conversations")
         .select(`
           *,
           messages(content, created_at, sender_id)
         `)
-        .or(`participant_a.eq.${user.id},participant_b.eq.${user.id}`)
+        .or(`participant_a.eq.${userId},participant_b.eq.${userId}`)
         .order("last_message_at", { ascending: false, nullsFirst: false })
         .order("created_at", {
           referencedTable: "messages",
@@ -349,17 +366,27 @@ export function useConversations() {
         profile_b: profileByUserId.get(c.participant_b ?? "") ?? null,
       }));
     },
-    enabled: !!user,
+    enabled: Boolean(userId),
     staleTime: REALTIME_QUERY_STALE_TIME,
   });
 }
 
 export function useMessages(conversation_id: string) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const userId = user?.id;
+  const queryKey = useMemo(
+    () => accountQueryKey(userId, "messages", conversation_id),
+    [conversation_id, userId],
+  );
+  const conversationsQueryKey = useMemo(
+    () => accountQueryKey(userId, "conversations"),
+    [userId],
+  );
 
   useEffect(() => {
-    if (!conversation_id) return;
-    const queryKey = ["messages", conversation_id] as const;
+    if (!conversation_id || !userId) return;
+    const subscriptionEpoch = captureIdentityEpoch();
     let cancelled = false;
     let unsubscribeInitialQuery: (() => void) | null = null;
 
@@ -402,16 +429,17 @@ export function useMessages(conversation_id: string) {
           filter: `conversation_id=eq.${conversation_id}`,
         },
         (payload) => {
+          if (!isCurrentIdentityEpoch(subscriptionEpoch)) return;
           const inserted = payload.new as MessageRow;
           if (inserted.id && inserted.conversation_id === conversation_id) {
             queryClient.setQueryData<CachedMessage[]>(
-              ["messages", conversation_id],
+              queryKey,
               (messages) => appendRealtimeMessage(messages, inserted),
             );
           }
-          queryClient.invalidateQueries({ queryKey: ["messages", conversation_id] });
+          queryClient.invalidateQueries({ queryKey });
           // Also refresh conversations sidebar so last_message_at updates
-          queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          queryClient.invalidateQueries({ queryKey: conversationsQueryKey });
         }
       )
       .on(
@@ -423,11 +451,15 @@ export function useMessages(conversation_id: string) {
           filter: `conversation_id=eq.${conversation_id}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["messages", conversation_id] });
+          if (!isCurrentIdentityEpoch(subscriptionEpoch)) return;
+          queryClient.invalidateQueries({ queryKey });
         }
       )
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
+        if (
+          status === "SUBSCRIBED" &&
+          isCurrentIdentityEpoch(subscriptionEpoch)
+        ) {
           closeInitialQueryGap();
         }
       });
@@ -438,12 +470,17 @@ export function useMessages(conversation_id: string) {
       unsubscribeInitialQuery = null;
       supabase.removeChannel(channel);
     };
-  }, [conversation_id, queryClient]);
+  }, [
+    conversation_id,
+    conversationsQueryKey,
+    queryClient,
+    queryKey,
+    userId,
+  ]);
 
   return useQuery({
-    queryKey: ["messages", conversation_id],
+    queryKey,
     queryFn: async () => {
-      const queryKey = ["messages", conversation_id] as const;
       const { data: msgs, error } = await supabase
         .from("messages")
         .select("id, client_delivery_id, content, created_at, sender_id, conversation_id, status, message_attachments(storage_path, filename, mime_type)")
@@ -472,7 +509,7 @@ export function useMessages(conversation_id: string) {
         queryClient.getQueryData<CachedMessage[]>(queryKey),
       );
     },
-    enabled: !!conversation_id,
+    enabled: Boolean(userId && conversation_id),
     staleTime: REALTIME_QUERY_STALE_TIME,
   });
 }
@@ -507,13 +544,29 @@ export function useSendMessage() {
       return data;
     },
     onMutate: async (input): Promise<SendMessageContext> => {
-      if (!user) return { optimisticId: null };
+      const identityEpoch = captureIdentityEpoch();
+      const messageQueryKey = accountQueryKey(
+        user?.id,
+        "messages",
+        input.conversation_id,
+      );
+      const conversationsQueryKey = accountQueryKey(
+        user?.id,
+        "conversations",
+      );
+      if (!user) {
+        return {
+          optimisticId: null,
+          identityEpoch,
+          messageQueryKey,
+          conversationsQueryKey,
+        };
+      }
       const clientDeliveryId = input.client_delivery_id ?? crypto.randomUUID();
       input.client_delivery_id = clientDeliveryId;
       const { conversation_id, content, attachmentPaths } = input;
 
-      const queryKey = ["messages", conversation_id] as const;
-      await queryClient.cancelQueries({ queryKey });
+      await queryClient.cancelQueries({ queryKey: messageQueryKey });
       const optimisticId = `optimistic:${crypto.randomUUID()}`;
       const optimisticMessage: CachedMessage = {
         id: optimisticId,
@@ -530,17 +583,23 @@ export function useSendMessage() {
         })),
         profiles: null,
       };
-      queryClient.setQueryData<CachedMessage[]>(queryKey, (messages = []) => [
+      queryClient.setQueryData<CachedMessage[]>(messageQueryKey, (messages = []) => [
         ...messages,
         optimisticMessage,
       ]);
-      return { optimisticId };
+      return {
+        optimisticId,
+        identityEpoch,
+        messageQueryKey,
+        conversationsQueryKey,
+      };
     },
-    onSuccess: (message, { conversation_id, attachmentPaths }, context) => {
+    onSuccess: (message, { attachmentPaths }, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
       const optimisticId = context?.optimisticId;
       if (optimisticId) {
         queryClient.setQueryData<CachedMessage[]>(
-          ["messages", conversation_id],
+          context.messageQueryKey,
           (messages) => reconcileSentMessage(
             messages,
             optimisticId,
@@ -549,10 +608,11 @@ export function useSendMessage() {
         );
       }
     },
-    onError: (err: Error, { conversation_id }, context) => {
+    onError: (err: Error, _variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
       if (context?.optimisticId) {
         queryClient.setQueryData<CachedMessage[]>(
-          ["messages", conversation_id],
+          context.messageQueryKey,
           (messages = []) => messages.filter(
             (message) => message.id !== context.optimisticId,
           ),
@@ -560,9 +620,10 @@ export function useSendMessage() {
       }
       toast.error(err.message);
     },
-    onSettled: (_message, _error, { conversation_id }) => {
-      queryClient.invalidateQueries({ queryKey: ["messages", conversation_id] });
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    onSettled: (_message, _error, _variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      queryClient.invalidateQueries({ queryKey: context.messageQueryKey });
+      queryClient.invalidateQueries({ queryKey: context.conversationsQueryKey });
     },
   });
 }
@@ -590,8 +651,12 @@ export function useMarkMessagesRead(conversationId: string) {
         .update({ status: "read" })
         .in("id", payload.messageIds);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+    onMutate: () => ({ identityEpoch: captureIdentityEpoch() }),
+    onSuccess: (_data, _variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      queryClient.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "messages", conversationId),
+      });
     },
   });
 }
@@ -601,8 +666,12 @@ export function useStartConversation() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: (input: StartConversationInput) => startConversationForUser(user?.id, input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    onMutate: () => ({ identityEpoch: captureIdentityEpoch() }),
+    onSuccess: (_data, _variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      queryClient.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "conversations"),
+      });
     },
   });
 }

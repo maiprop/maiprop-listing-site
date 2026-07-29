@@ -51,6 +51,40 @@ describe("listing management RPC client", () => {
     expect(payload).not.toHaveProperty("project_id");
   });
 
+  it("passes organization ownership separately from the client-writable payload", async () => {
+    await createListingForUser({
+      title: "Organization listing",
+      city: "Athens",
+      price: 320000,
+      sqm: 92,
+      property_type: "apartment",
+      listing_type: "sale",
+      organization_id: "forged-inside-payload",
+    } as never, "organization-1");
+
+    expect(rpcMock).toHaveBeenCalledWith("create_listing_for_user", {
+      p_organization_id: "organization-1",
+      p_payload: expect.not.objectContaining({
+        organization_id: expect.anything(),
+      }),
+    });
+  });
+
+  it("keeps personal listing creation backward compatible with a null organization", async () => {
+    await createListingForUser({
+      title: "Personal listing",
+      city: "Athens",
+      price: 210000,
+      sqm: 70,
+      property_type: "apartment",
+      listing_type: "sale",
+    });
+
+    expect(rpcMock).toHaveBeenCalledWith("create_listing_for_user", {
+      p_payload: expect.any(Object),
+    });
+  });
+
   it("drops undefined values and system fields before update", async () => {
     await updateListingForUser("listing-1", {
       title: "Updated",

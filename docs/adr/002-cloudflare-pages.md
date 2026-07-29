@@ -6,7 +6,10 @@
 
 ## Decision
 
-Host the frontend on **Cloudflare Pages** with automatic deployments from GitHub.
+Host the frontend on **Cloudflare Pages** using immutable artifacts deployed by
+the reviewed release train. Cloudflare Git production and preview automatic
+deployments are disabled and API-attested for both staging and production.
+Production mutation remains hard-disabled.
 
 ## Rationale
 
@@ -14,7 +17,7 @@ Host the frontend on **Cloudflare Pages** with automatic deployments from GitHub
 - Built-in DDoS protection (Cloudflare network)
 - Global CDN with edge caching
 - Pages Functions for server-side logic (sitemap, middleware)
-- Preview deployments per PR (`<branch>.maiprop-listing-site.pages.dev`)
+- Immutable deployment URLs for exact staging candidates
 - Custom domain support (`portal.maiprop.co`)
 
 ## Consequences
@@ -23,6 +26,7 @@ Host the frontend on **Cloudflare Pages** with automatic deployments from GitHub
 - Pages Functions in `functions/` directory (separate from Supabase edge functions)
 - Environment variables set via Cloudflare Dashboard or CI (`PATCH /projects/<name>`)
 - Build artifacts deployed via `wrangler pages deploy`
+- Source-controlled `wrangler.toml` contains no environment-specific `[vars]`
 - No server-side rendering (SSR) — app is a client-rendered SPA
 - Vite env vars (`VITE_*`) are baked into the bundle at build time
 

@@ -23,7 +23,9 @@ type RawListing = Record<string, unknown> & {
   listing_images?: { sort_order?: number | null; url?: string | null }[] | null;
   price?: string | number | null;
   property_type?: string | null;
+  publicationId?: number;
   region?: string | null;
+  listing_type?: string | null;
   tags?: unknown;
   year_built?: string | number | null;
 };
@@ -152,9 +154,15 @@ const getDetailLink = (listing: MapListing): string => {
 };
 
 const getDetailState = (listing: MapListing, raw: RawListing) => {
-  if (listing.listingType !== "auction") return undefined;
-  const auction = { ...raw, id: listing.id };
-  return { auction, listing: auction };
+  const sourceListing = {
+    ...raw,
+    id: listing.id,
+    listing_type: raw.listing_type ?? listing.listingType ?? "sale",
+  };
+  if (listing.listingType === "auction") {
+    return { auction: sourceListing, listing: sourceListing };
+  }
+  return { listing: sourceListing };
 };
 
 const getPills = (listing: MapListing, raw: RawListing): Pill[] => {

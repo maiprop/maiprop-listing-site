@@ -5,14 +5,16 @@ import "./index.css";
 import "./i18n";
 import { installChunkLoadRecovery } from "@/lib/chunkLoadRecovery";
 import { installWebVitalsMonitoring } from "@/lib/webVitals";
+import { getRuntimeValue } from "@/lib/runtimeConfig";
 
 installChunkLoadRecovery();
 
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+const sentryDsn = getRuntimeValue("VITE_SENTRY_DSN");
 if (sentryDsn) {
   Sentry.init({
     dsn: sentryDsn,
-    environment: import.meta.env.MODE,
+    environment:
+      getRuntimeValue("VITE_APP_ENVIRONMENT") ?? import.meta.env.MODE,
     // Performance: sample 10% of page loads as transactions
     tracesSampleRate: 0.1,
     // Instrument browser navigation + fetch/XHR automatically
@@ -25,14 +27,19 @@ if (sentryDsn) {
       /^https:\/\/[a-z]+\.supabase\.co\/functions/,
     ],
   });
-  // Expose to ErrorBoundary's zero-dependency hook
-  (window as unknown as Record<string, unknown>).__sentryClient = Sentry;
+  // Expose only the zero-dependency observability surface consumed by the app.
+  // Publishing the full namespace prevents tree-shaking unused integrations.
+  (window as unknown as Record<string, unknown>).__sentryClient = {
+    addBreadcrumb: Sentry.addBreadcrumb,
+    captureException: Sentry.captureException,
+    captureMessage: Sentry.captureMessage,
+  };
   installWebVitalsMonitoring();
 }
 
 // Plausible analytics — only fires when cookie consent includes analytics
 // and VITE_PLAUSIBLE_DOMAIN is set. Zero cookies, GDPR-compliant.
-const plausibleDomain = import.meta.env.VITE_PLAUSIBLE_DOMAIN as string | undefined;
+const plausibleDomain = getRuntimeValue("VITE_PLAUSIBLE_DOMAIN");
 if (plausibleDomain) {
   const script = document.createElement("script");
   script.defer = true;

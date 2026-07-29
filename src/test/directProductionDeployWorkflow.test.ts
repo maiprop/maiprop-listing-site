@@ -13,21 +13,14 @@ const workflow = readFileSync(
 );
 
 describe("manual Cloudflare production deploy workflow", () => {
-  it("cannot bypass an exact-SHA successful CI run", () => {
-    const verificationIndex = workflow.indexOf(
-      "Require successful exact-SHA CI",
-    );
-    const deployIndex = workflow.indexOf("Deploy to Cloudflare Pages");
-
+  it("validates the exact current main SHA but leaves production mutation disabled", () => {
     expect(workflow).toContain("actions: read");
-    expect(workflow).toContain("actions/workflows/ci.yml/runs");
-    expect(workflow).toContain('head_sha: process.env.GITHUB_SHA');
-    expect(workflow).toContain('event: "push"');
-    expect(workflow).toContain('conclusion: "success"');
-    expect(workflow).toContain(
-      "No successful push CI run exists for exact main SHA",
-    );
-    expect(verificationIndex).toBeGreaterThan(0);
-    expect(deployIndex).toBeGreaterThan(verificationIndex);
+    expect(workflow).toContain("git fetch --no-tags origin main");
+    expect(workflow).toContain("Recovery SHA must be the exact checked-out current main SHA.");
+    expect(workflow).toContain("node scripts/production-release-validation.mjs github-recovery");
+    expect(workflow).toContain('--sha "$RELEASE_SHA"');
+    expect(workflow).toContain("PRODUCTION_RELEASE_ENABLED");
+    expect(workflow).toContain("Production recovery mutations remain disabled");
+    expect(workflow).not.toContain("Deploy to Cloudflare Pages");
   });
 });

@@ -11,6 +11,10 @@
 
 import { spawn } from "node:child_process";
 import process from "node:process";
+import {
+  assertPromotionEntitlementTarget,
+  provePromotionMutationPrivilege,
+} from "./promotion_entitlement_target.mjs";
 
 const databaseUrl = process.env.PROMOTION_TEST_DATABASE_URL ?? process.argv[2];
 const psqlBin = process.env.PSQL_BIN ?? "psql";
@@ -22,15 +26,14 @@ if (!databaseUrl) {
   process.exit(2);
 }
 
-const targetUrl = new URL(databaseUrl);
-const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
-if (
-  !localHosts.has(targetUrl.hostname) &&
-  process.env.PROMOTION_TEST_TARGET !== "staging"
-) {
-  console.error(
-    "Remote execution requires PROMOTION_TEST_TARGET=staging; production is not supported.",
-  );
+try {
+  assertPromotionEntitlementTarget({
+    databaseUrl,
+    target: process.env.PROMOTION_TEST_TARGET,
+    acknowledgement: process.env.STAGING_MUTATION_ACKNOWLEDGEMENT,
+  });
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
   process.exit(2);
 }
 
@@ -39,6 +42,7 @@ const fixture = {
   listingA: "92000000-0000-4000-8000-000000000001",
   listingB: "92000000-0000-4000-8000-000000000002",
   subscriptionId: "93000000-0000-4000-8000-000000000001",
+  pricingConfigId: "94000000-0000-4000-8000-000000000001",
 };
 
 function psql(sql, applicationName) {
@@ -85,12 +89,45 @@ const cleanupSql = `
   WHERE user_id = '${fixture.userId}'::uuid;
   DELETE FROM auth.users
   WHERE id = '${fixture.userId}'::uuid;
+  DELETE FROM public.pricing_configs
+  WHERE id = '${fixture.pricingConfigId}'::uuid;
 `;
 
 const setupSql = `
   BEGIN;
   SET LOCAL session_replication_role = replica;
   ${cleanupSql}
+  INSERT INTO public.pricing_configs (
+    id,
+    key,
+    label,
+    description,
+    audience,
+    module,
+    unit,
+    currency,
+    amount,
+    is_active,
+    sort_order,
+    metadata
+  ) VALUES (
+    '${fixture.pricingConfigId}'::uuid,
+    'pro',
+    'Promotion concurrency fixture',
+    'Test-only Seller Pro promotion entitlement',
+    'participant',
+    'user_subscription',
+    'monthly',
+    'EUR',
+    0,
+    true,
+    0,
+    jsonb_build_object(
+      'stripe_product_id',
+      'prod_promotion_concurrency'
+    )
+  )
+  ON CONFLICT (key) DO NOTHING;
   INSERT INTO auth.users (id) VALUES ('${fixture.userId}'::uuid);
   INSERT INTO public.profiles (
     user_id,
@@ -101,7 +138,14 @@ const setupSql = `
     '${fixture.userId}'::uuid,
     'seller',
     false,
-    'prod_promotion_concurrency'
+    (
+      SELECT pricing.metadata->>'stripe_product_id'
+      FROM public.pricing_configs AS pricing
+      WHERE pricing.key = 'pro'
+        AND pricing.audience = 'participant'
+        AND pricing.module = 'user_subscription'
+        AND pricing.is_active = true
+    )
   );
   INSERT INTO public.billing_subscriptions (
     id,
@@ -109,6 +153,7 @@ const setupSql = `
     stripe_customer_id,
     stripe_subscription_id,
     stripe_product_id,
+    stripe_price_id,
     plan_key,
     audience,
     status,
@@ -121,7 +166,15 @@ const setupSql = `
     '${fixture.userId}'::uuid,
     'cus_promotion_concurrency',
     'sub_promotion_concurrency',
-    'prod_promotion_concurrency',
+    (
+      SELECT pricing.metadata->>'stripe_product_id'
+      FROM public.pricing_configs AS pricing
+      WHERE pricing.key = 'pro'
+        AND pricing.audience = 'participant'
+        AND pricing.module = 'user_subscription'
+        AND pricing.is_active = true
+    ),
+    'price_promotion_concurrency',
     'pro',
     'participant',
     'active',
@@ -185,6 +238,8 @@ function activationSql(listingId, requestKey) {
 
 let setupComplete = false;
 try {
+  await provePromotionMutationPrivilege(psql);
+
   const setup = await psql(setupSql, "promotion-concurrency-setup");
   if (setup.code !== 0) {
     throw new Error(`fixture setup failed: ${setup.stderr || setup.stdout}`);

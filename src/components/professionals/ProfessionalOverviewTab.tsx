@@ -4,13 +4,11 @@ import {
   MapPin, Clock, Languages, Globe, ExternalLink, Video, Shield,
   Zap, CheckCircle, Crown,
 } from "lucide-react";
-import type { Tables } from "@/integrations/supabase/types";
+import type { PublicProfessional } from "@/hooks/useProfessionals";
 import { stripSupervisorTestMarkers } from "@/lib/displayText";
 
-type Pro = Tables<"professionals">;
-
 interface Props {
-  pro: Pro;
+  pro: PublicProfessional;
   isRealEstateAgent: boolean;
   professionalIsPro: boolean;
   agentListingsCount: number;

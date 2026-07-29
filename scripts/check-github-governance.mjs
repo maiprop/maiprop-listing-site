@@ -322,10 +322,8 @@ export function checkReleasePrCiDispatch(root = process.cwd()) {
     "quality",
     "release-safety",
     "e2e",
-    "e2e-security-staging",
     "migrations-validate",
     "lighthouse",
-    "deploy-supabase-staging",
   ];
   const needs = Array.isArray(releaseStatus.needs)
     ? releaseStatus.needs

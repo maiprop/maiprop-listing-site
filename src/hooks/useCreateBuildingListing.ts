@@ -7,20 +7,16 @@
  */
 
 import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { type ProjectMediaType } from "@/hooks/useProjectMedia";
-import { type ProjectUnitInsert } from "@/hooks/useProjectUnits";
-import { uploadProjectMedia } from "@/lib/buildingListingUploads";
+import { deleteProjectMediaUrls, uploadProjectMedia } from "@/lib/buildingListingUploads";
 import {
   listingImageUrlsSchema,
-  listingWriteSchema,
-  newBuildingProjectWriteSchema,
   parseMutationInput,
-  projectMediaCreateSchema,
-  projectUnitWriteSchema,
 } from "@/lib/mutationSchemas";
-import { calculatePricePerSqm } from "@/lib/priceCalculations";
 import { geocodeAddressText, hasCompleteCoordinates } from "@/lib/location/geocodeAddress";
+import { invalidatePublicCatalogueQueries } from "@/lib/publicCatalogueQueryInvalidation";
 
 export interface CreateBuildingListingProjectInput {
   name: string;
@@ -68,6 +64,10 @@ export interface CreateBuildingListingUnitInput {
 }
 
 export interface CreateBuildingListingInput {
+  /** Stable client-generated id persisted with the draft and reused on retry. */
+  projectId: string;
+  /** Optional tenant scope. NULL means the developer's personal account. */
+  organizationId?: string | null;
   /** Project ad category. Renovations reuse the project layout but valuation as normal sale stock. */
   projectKind?: "new_build" | "renovation";
   /** Auth user id (taken from `useAuth().user!.id` by the caller). */
@@ -101,49 +101,30 @@ function toOptionalNumber(value: string | number) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function getDeliveryYear(deliveryDate: string) {
-  const match = deliveryDate.match(/^(\d{4})-/);
-  if (!match) return undefined;
-  const year = Number(match[1]);
-  return Number.isFinite(year) ? year : undefined;
-}
-
-function getYear(value: string | number | undefined) {
+function toOptionalInteger(value: string | number | undefined) {
+  if (typeof value === "string" && !value.trim()) return undefined;
+  if (value === undefined) return undefined;
   const parsed = typeof value === "number" ? value : Number(String(value ?? "").trim());
-  return Number.isFinite(parsed) && parsed >= 1800 && parsed <= 2200 ? Math.round(parsed) : undefined;
+  return Number.isInteger(parsed) ? parsed : undefined;
 }
 
-function getProjectPhase(project: CreateBuildingListingProjectInput, projectKind: CreateBuildingListingInput["projectKind"]) {
-  if (projectKind === "renovation") return "renovated";
-  if (project.structural_completion_date) return "shell_complete";
-  if (project.construction_start_date) return "under_construction";
-  if (project.permit_approval_date || project.building_permit_number.trim()) return "planning";
-  return undefined;
-}
-
-function normalizeUnitPayload(unit: CreateBuildingListingUnitInput, projectId: string): ProjectUnitInsert {
-  const internalSqm = parseFloat(String(unit.internal_sqm));
-  const price = parseFloat(String(unit.price));
-  const pricePerSqm = calculatePricePerSqm({ price, sqm: internalSqm });
+function normalizeUnitPayload(unit: CreateBuildingListingUnitInput) {
   return {
-    project_id: projectId,
     unit_id: unit.unit_id || undefined,
-    floor: unit.floor ? parseInt(String(unit.floor)) : undefined,
+    floor: toOptionalInteger(unit.floor),
     unit_number: unit.unit_number || undefined,
-    availability_status: "available",
-    internal_sqm: internalSqm,
-    balcony_sqm: unit.balcony_sqm ? parseFloat(String(unit.balcony_sqm)) : undefined,
-    storage_sqm: unit.storage_sqm ? parseFloat(String(unit.storage_sqm)) : undefined,
-    parking_sqm: unit.parking_sqm ? parseFloat(String(unit.parking_sqm)) : undefined,
-    bedrooms: parseInt(String(unit.bedrooms)),
-    bathrooms: parseInt(String(unit.bathrooms)),
+    internal_sqm: Number(unit.internal_sqm),
+    balcony_sqm: toOptionalNumber(unit.balcony_sqm),
+    storage_sqm: toOptionalNumber(unit.storage_sqm),
+    parking_sqm: toOptionalNumber(unit.parking_sqm),
+    bedrooms: toOptionalInteger(unit.bedrooms),
+    bathrooms: toOptionalInteger(unit.bathrooms),
     kitchen_type: unit.kitchen_type || undefined,
-    living_rooms: unit.living_rooms ? parseInt(String(unit.living_rooms)) : undefined,
-    price,
-    price_per_sqm: pricePerSqm ?? undefined,
+    living_rooms: toOptionalInteger(unit.living_rooms),
+    price: Number(unit.price),
     vat_included: unit.vat_included,
-    parking_price: unit.parking_price ? parseFloat(String(unit.parking_price)) : undefined,
-    storage_price: unit.storage_price ? parseFloat(String(unit.storage_price)) : undefined,
+    parking_price: toOptionalNumber(unit.parking_price),
+    storage_price: toOptionalNumber(unit.storage_price),
     sea_view: unit.sea_view,
     city_view: unit.city_view,
     mountain_view: unit.mountain_view,
@@ -153,135 +134,106 @@ function normalizeUnitPayload(unit: CreateBuildingListingUnitInput, projectId: s
   };
 }
 
-function getRepresentativeUnit(units: ProjectUnitInsert[]) {
-  return [...units].sort((a, b) => {
-    const left = typeof a.price === "number" && Number.isFinite(a.price) ? a.price : Number.MAX_SAFE_INTEGER;
-    const right = typeof b.price === "number" && Number.isFinite(b.price) ? b.price : Number.MAX_SAFE_INTEGER;
-    return left - right;
-  })[0] ?? units[0];
-}
-
 const getFunctionError = (data: CreateNewBuildingListingResponse | null | undefined) => {
   if (!data?.error) return null;
   return typeof data.error === "string" ? data.error : data.error.message || "New building listing failed";
 };
 
 export function useCreateBuildingListing() {
+  const queryClient = useQueryClient();
+
   return useCallback(
     async (args: CreateBuildingListingInput): Promise<{ listingId: string }> => {
-      const { userId, project, unit, projectMedia, listing, finalTitle, coverImageUrl, additionalImageUrls } = args;
+      const {
+        projectId,
+        organizationId,
+        userId,
+        project,
+        unit,
+        projectMedia,
+        listing,
+        finalTitle,
+        coverImageUrl,
+        additionalImageUrls,
+      } = args;
       const projectKind = args.projectKind ?? "new_build";
-      const projectId = crypto.randomUUID();
-      let projectLatitude = project.latitude;
-      let projectLongitude = project.longitude;
-      if (!hasCompleteCoordinates(projectLatitude, projectLongitude)) {
+      let projectLatitude: number | undefined;
+      let projectLongitude: number | undefined;
+      if (hasCompleteCoordinates(project.latitude, project.longitude)) {
+        projectLatitude = toOptionalNumber(project.latitude);
+        projectLongitude = toOptionalNumber(project.longitude);
+      } else {
         const geocoded = await geocodeAddressText({
           address: project.address,
           city: project.city,
           municipality: project.municipality,
         });
         if (geocoded) {
-          projectLatitude = geocoded.latitude;
-          projectLongitude = geocoded.longitude;
+          projectLatitude = toOptionalNumber(geocoded.latitude);
+          projectLongitude = toOptionalNumber(geocoded.longitude);
         }
       }
 
-      const projectPayload = parseMutationInput(
-        newBuildingProjectWriteSchema,
-        {
-          id: projectId,
-          name: project.name.trim(),
-          building_permit_number: project.building_permit_number.trim() || undefined,
-          developer_company: project.developer_company || undefined,
-          architect_group: project.architect_group || undefined,
-          construction_company: project.construction_company || undefined,
-          description: project.description || undefined,
-          address: project.address || undefined,
-          city: project.city.trim(),
-          municipality: project.municipality || undefined,
-          area_description: project.area_description || undefined,
-          latitude: toOptionalNumber(projectLatitude),
-          longitude: toOptionalNumber(projectLongitude),
-          permit_approval_date: project.permit_approval_date || undefined,
-          construction_start_date: project.construction_start_date || undefined,
-          structural_completion_date: project.structural_completion_date || undefined,
-          delivery_date: project.delivery_date || undefined,
-          owner_id: userId,
-        },
-        "new building project",
-      );
+      const projectPayload = {
+        id: projectId,
+        name: project.name.trim(),
+        building_permit_number: project.building_permit_number.trim() || undefined,
+        developer_company: project.developer_company.trim() || undefined,
+        architect_group: project.architect_group.trim() || undefined,
+        construction_company: project.construction_company.trim() || undefined,
+        description: project.description.trim() || undefined,
+        address: project.address.trim() || undefined,
+        city: project.city.trim(),
+        municipality: project.municipality.trim() || undefined,
+        area_description: project.area_description.trim() || undefined,
+        latitude: projectLatitude,
+        longitude: projectLongitude,
+        permit_approval_date: project.permit_approval_date || undefined,
+        construction_start_date: project.construction_start_date || undefined,
+        structural_completion_date: project.structural_completion_date || undefined,
+        delivery_date: project.delivery_date || undefined,
+        construction_year: toOptionalInteger(project.construction_year),
+        renovation_year: toOptionalInteger(project.renovation_year),
+      };
 
       const rawUnits = args.units?.length ? args.units : [unit];
-      const validatedUnitPayloads = rawUnits.map((item) =>
-        parseMutationInput(projectUnitWriteSchema, normalizeUnitPayload(item, projectId), "new building unit") as ProjectUnitInsert,
-      );
-      const representativeUnit = getRepresentativeUnit(validatedUnitPayloads);
-      const price = typeof representativeUnit.price === "number" ? representativeUnit.price : 0;
-      const internalSqm = typeof representativeUnit.internal_sqm === "number" ? representativeUnit.internal_sqm : 0;
-      const pricePerSqm = calculatePricePerSqm({
-        price,
-        sqm: internalSqm,
-        storedPricePerSqm: representativeUnit.price_per_sqm,
-      });
+      const unitPayloads = rawUnits.map(normalizeUnitPayload);
 
       const mediaRows = [];
-      for (const [mediaType, file] of Object.entries(projectMedia)) {
-        if (!file) continue;
-        const url = await uploadProjectMedia(file, userId, projectId, mediaType as ProjectMediaType);
-        mediaRows.push(parseMutationInput(
-          projectMediaCreateSchema,
-          { project_id: projectId, url, media_type: mediaType as ProjectMediaType },
-          "project media",
-        ));
+      try {
+        for (const [mediaType, file] of Object.entries(projectMedia)) {
+          if (!file) continue;
+          const url = await uploadProjectMedia(file, userId, projectId, mediaType as ProjectMediaType);
+          mediaRows.push({
+            url,
+            media_type: mediaType as ProjectMediaType,
+            sort_order: mediaRows.length,
+          });
+        }
+      } catch (error) {
+        try {
+          await deleteProjectMediaUrls(mediaRows.map((media) => media.url));
+        } catch {
+          // Preserve the actionable upload error. Server-side retry cleanup and
+          // lifecycle maintenance remain the final orphan-removal boundary.
+        }
+        throw error;
       }
 
-      const listingPayload = parseMutationInput(
-        listingWriteSchema,
-        {
-          title: finalTitle,
-          description: listing.description || undefined,
-          city: project.city.trim(),
-          address: project.address || undefined,
-          latitude: toOptionalNumber(projectLatitude),
-          longitude: toOptionalNumber(projectLongitude),
-          property_type: "apartment" as const,
-          listing_type: "new_build" as const,
-          price,
-          sqm: internalSqm,
-          bedrooms: typeof representativeUnit.bedrooms === "number" ? representativeUnit.bedrooms : undefined,
-          bathrooms: typeof representativeUnit.bathrooms === "number" ? representativeUnit.bathrooms : undefined,
-          living_rooms: typeof representativeUnit.living_rooms === "number" ? representativeUnit.living_rooms : undefined,
-          floor: typeof representativeUnit.floor === "number" ? representativeUnit.floor : undefined,
-          energy_class: representativeUnit.energy_class || undefined,
-          heating_system: representativeUnit.heating_system || undefined,
-          construction_status: getProjectPhase(project, projectKind),
-          year_built: projectKind === "renovation"
-            ? getYear(project.construction_year)
-            : getDeliveryYear(project.delivery_date),
-          cover_image_url: coverImageUrl,
-          price_per_sqm: pricePerSqm ?? undefined,
-          owner_id: userId,
-          status: "active" as const,
-          project_id: projectId,
-          is_pre_sale: false,
-          tags: projectKind === "renovation"
-            ? [
-                "renovation_project",
-                project.renovation_year ? `renovation_year:${project.renovation_year}` : null,
-              ].filter((tag): tag is string => Boolean(tag))
-            : undefined,
-        },
-        "new building listing",
-      );
+      const listingPayload = {
+        title: finalTitle.trim(),
+        description: listing.description.trim() || undefined,
+        cover_image_url: coverImageUrl,
+      };
 
       const { data, error } = await supabase.functions.invoke<CreateNewBuildingListingResponse>(
         "create-new-building-listing",
         {
           body: {
             projectKind,
+            organizationId: organizationId ?? null,
             project: projectPayload,
-            unit: validatedUnitPayloads[0],
-            units: validatedUnitPayloads,
+            units: unitPayloads,
             projectMedia: mediaRows,
             listing: listingPayload,
             additionalImageUrls: parseMutationInput(listingImageUrlsSchema, additionalImageUrls, "new building images"),
@@ -295,8 +247,9 @@ export function useCreateBuildingListing() {
 
       const listingId = data?.data?.listingId;
       if (!listingId) throw new Error("New building listing failed");
+      void invalidatePublicCatalogueQueries(queryClient, listingId);
       return { listingId };
     },
-    [],
+    [queryClient],
   );
 }

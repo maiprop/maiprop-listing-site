@@ -73,6 +73,14 @@ const resolveSubscriptionEntitlement = (
     ) => Promise<Record<string, unknown> | null>;
   }
 ).resolveSubscriptionEntitlement;
+const resolveHistoricalSubscriptionEntitlement = (
+  webhookModule as unknown as {
+    resolveHistoricalSubscriptionEntitlement?: (
+      supabase: unknown,
+      subscription: unknown,
+    ) => Promise<Record<string, unknown> | null>;
+  }
+).resolveHistoricalSubscriptionEntitlement;
 
 const addonFulfillmentClient = (input: {
   profileUserId: string;
@@ -271,6 +279,148 @@ Deno.test("active subscription entitlement resolution fails closed on pricing re
   );
 });
 
+Deno.test("deleted subscriptions resolve retired pricing configurations for revocation", async () => {
+  assertEquals(typeof resolveHistoricalSubscriptionEntitlement, "function");
+  if (!resolveHistoricalSubscriptionEntitlement) return;
+
+  const activeFilters: boolean[] = [];
+  const supabase = {
+    from(table: string) {
+      assertEquals(table, "pricing_configs");
+      return {
+        select() {
+          return this;
+        },
+        eq(column: string, value: boolean) {
+          assertEquals(column, "is_active");
+          activeFilters.push(value);
+          return Promise.resolve({
+            data: value
+              ? []
+              : [{
+                key: "retired_pro",
+                audience: "participant",
+                module: "user_subscription",
+                metadata: {
+                  stripe_product_id: "prod_retired",
+                  stripe_price_id_monthly: "price_retired",
+                },
+              }],
+            error: null,
+          });
+        },
+      };
+    },
+  };
+  const subscription = {
+    id: "sub_retired",
+    status: "canceled",
+    livemode: true,
+    metadata: { plan_key: "retired_pro" },
+    items: {
+      data: [{
+        price: {
+          id: "price_retired",
+          product: "prod_retired",
+        },
+      }],
+    },
+  };
+
+  assertEquals(
+    await resolveHistoricalSubscriptionEntitlement(supabase, subscription),
+    {
+      planKey: "retired_pro",
+      audience: "participant",
+      role: "participant",
+      productId: "prod_retired",
+    },
+  );
+  assertEquals(activeFilters, [true, false]);
+});
+
+Deno.test("deleted subscriptions fall back to their exact durable entitlement ledger", async () => {
+  assertEquals(typeof resolveHistoricalSubscriptionEntitlement, "function");
+  if (!resolveHistoricalSubscriptionEntitlement) return;
+
+  const selectedSubscriptions: string[] = [];
+  const supabase = {
+    from(table: string) {
+      if (table === "pricing_configs") {
+        return {
+          select() {
+            return this;
+          },
+          eq(_column: string, _value: boolean) {
+            return Promise.resolve({ data: [], error: null });
+          },
+        };
+      }
+      assertEquals(table, "billing_subscriptions");
+      return {
+        select() {
+          return this;
+        },
+        eq(column: string, value: string) {
+          assertEquals(column, "stripe_subscription_id");
+          selectedSubscriptions.push(value);
+          return this;
+        },
+        maybeSingle() {
+          return Promise.resolve({
+            data: {
+              plan_key: "legacy_professional",
+              audience: "professional",
+              stripe_product_id: "prod_legacy_professional",
+              livemode: false,
+            },
+            error: null,
+          });
+        },
+      };
+    },
+  };
+  const subscription = {
+    id: "sub_legacy_professional",
+    status: "canceled",
+    livemode: false,
+    metadata: {},
+    items: {
+      data: [{
+        price: {
+          id: "price_legacy_professional",
+          product: "prod_legacy_professional",
+        },
+      }],
+    },
+  };
+
+  assertEquals(
+    await resolveHistoricalSubscriptionEntitlement(supabase, subscription),
+    {
+      planKey: "legacy_professional",
+      audience: "professional",
+      role: "professional",
+      productId: "prod_legacy_professional",
+    },
+  );
+  assertEquals(selectedSubscriptions, ["sub_legacy_professional"]);
+
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const clearStart = source.indexOf("async function clearSubscription");
+  const clearEnd = source.indexOf(
+    "/** Update professionals.subscription_tier",
+    clearStart,
+  );
+  const clearBlock = source.slice(clearStart, clearEnd);
+  assertEquals(
+    clearBlock.includes("resolveHistoricalSubscriptionEntitlement"),
+    true,
+  );
+});
+
 Deno.test("subscription webhooks retrieve canonical current state instead of trusting event order", async () => {
   assertEquals(typeof retrieveCanonicalSubscriptionForEvent, "function");
   if (!retrieveCanonicalSubscriptionForEvent) return;
@@ -311,10 +461,24 @@ Deno.test("subscription webhook persistence carries event-created ordering conte
 });
 
 Deno.test("deleted subscriptions reconcile active replacements before clearing profile access", async () => {
+  const nowSeconds = 1_800_000_000;
   const replacement = {
     id: "sub_new",
     status: "active",
-    metadata: { checkout_type: "subscription" },
+    created: nowSeconds - 60,
+    metadata: {
+      checkout_type: "subscription",
+      plan_key: "developer_pro",
+    },
+    items: {
+      data: [{
+        current_period_end: nowSeconds + 3_600,
+        price: {
+          id: "price_developer_monthly",
+          product: "prod_developer",
+        },
+      }],
+    },
   };
   const stripe = {
     subscriptions: {
@@ -329,18 +493,74 @@ Deno.test("deleted subscriptions reconcile active replacements before clearing p
               status: "active",
               metadata: { checkout_type: "addon" },
             },
+            {
+              id: "sub_wrong_audience",
+              status: "active",
+              created: nowSeconds,
+              metadata: {
+                checkout_type: "subscription",
+                plan_key: "pro",
+              },
+              items: {
+                data: [{
+                  current_period_end: nowSeconds + 7_200,
+                  price: {
+                    id: "price_participant_monthly",
+                    product: "prod_participant",
+                  },
+                }],
+              },
+            },
             replacement,
           ],
         });
       },
     },
   };
+  const supabase = {
+    from(table: string) {
+      assertEquals(table, "pricing_configs");
+      return {
+        select() {
+          return this;
+        },
+        eq() {
+          return Promise.resolve({
+            data: [
+              {
+                key: "pro",
+                audience: "participant",
+                module: "user_subscription",
+                metadata: {
+                  stripe_product_id: "prod_participant",
+                  stripe_price_id_monthly: "price_participant_monthly",
+                },
+              },
+              {
+                key: "developer_pro",
+                audience: "developer",
+                module: "developer_subscription",
+                metadata: {
+                  stripe_product_id: "prod_developer",
+                  stripe_price_id_monthly: "price_developer_monthly",
+                },
+              },
+            ],
+            error: null,
+          });
+        },
+      };
+    },
+  };
 
   assertEquals(
     await findProvisionedReplacementSubscription(
+      supabase as never,
       stripe as never,
       "cus_123",
       "sub_old",
+      "developer",
+      nowSeconds * 1_000,
     ),
     replacement as never,
   );
@@ -361,6 +581,104 @@ Deno.test("deleted subscriptions reconcile active replacements before clearing p
   assertEquals(clearStart >= 0, true);
   assertEquals(replacementIndex > clearStart, true);
   assertEquals(profileClearIndex > replacementIndex, true);
+});
+
+Deno.test("replacement reconciliation ignores expired and malformed subscriptions and chooses deterministically", async () => {
+  const nowSeconds = 1_800_000_000;
+  const validOlder = {
+    id: "sub_valid_older",
+    status: "past_due",
+    created: nowSeconds - 200,
+    metadata: {
+      checkout_type: "subscription",
+      plan_key: "developer_pro",
+    },
+    items: {
+      data: [{
+        current_period_end: nowSeconds + 3_600,
+        price: {
+          id: "price_developer_monthly",
+          product: "prod_developer",
+        },
+      }],
+    },
+  };
+  const validNewest = {
+    ...validOlder,
+    id: "sub_valid_newest",
+    status: "trialing",
+    created: nowSeconds - 100,
+    trial_end: nowSeconds + 7_200,
+  };
+  const stripe = {
+    subscriptions: {
+      list() {
+        return Promise.resolve({
+          data: [
+            {
+              ...validOlder,
+              id: "sub_expired",
+              created: nowSeconds + 10,
+              items: {
+                data: [{
+                  current_period_end: nowSeconds - 1,
+                  price: {
+                    id: "price_developer_monthly",
+                    product: "prod_developer",
+                  },
+                }],
+              },
+            },
+            {
+              id: "sub_malformed",
+              status: "active",
+              created: nowSeconds + 20,
+              metadata: { checkout_type: "subscription" },
+              items: { data: [] },
+            },
+            validOlder,
+            validNewest,
+          ],
+        });
+      },
+    },
+  };
+  const supabase = {
+    from(table: string) {
+      assertEquals(table, "pricing_configs");
+      return {
+        select() {
+          return this;
+        },
+        eq() {
+          return Promise.resolve({
+            data: [{
+              key: "developer_pro",
+              audience: "developer",
+              module: "developer_subscription",
+              metadata: {
+                stripe_product_id: "prod_developer",
+                stripe_price_id_monthly: "price_developer_monthly",
+              },
+            }],
+            error: null,
+          });
+        },
+      };
+    },
+  };
+
+  assertEquals(
+    await findProvisionedReplacementSubscription(
+      supabase as never,
+      stripe as never,
+      "cus_123",
+      "sub_deleted",
+      "developer",
+      nowSeconds * 1_000,
+    ),
+    validNewest as never,
+  );
 });
 
 Deno.test("add-on subscription lifecycle maps to add-on ledger status without profile entitlement sync", async () => {

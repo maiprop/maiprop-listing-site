@@ -24,6 +24,7 @@ const {
   updateListingMock,
   uploadMock,
   getPublicUrlMock,
+  rpcMock,
   toastMock,
 } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
@@ -47,6 +48,7 @@ const {
   updateListingMock: vi.fn(),
   uploadMock: vi.fn(),
   getPublicUrlMock: vi.fn(),
+  rpcMock: vi.fn(),
   toastMock: { error: vi.fn(), success: vi.fn() },
 }));
 
@@ -56,6 +58,7 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/lib/participantConfig", () => ({ getParticipantTypeFromProfile: () => participantTypeMock() }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
+    rpc: rpcMock,
     storage: {
       from: () => ({
         upload: uploadMock,
@@ -208,6 +211,7 @@ beforeEach(() => {
     updateListingMock,
     uploadMock,
     getPublicUrlMock,
+    rpcMock,
     toastMock.error,
     toastMock.success,
   ].forEach((mock) => mock.mockReset());
@@ -232,6 +236,7 @@ beforeEach(() => {
   useMyListingsMock.mockReturnValue({ data: [{ id: "listing-free", title: "Loose unit", listing_type: "new_build" }] });
   getPublicUrlMock.mockReturnValue({ data: { publicUrl: "https://cdn/uploaded.jpg" } });
   uploadMock.mockResolvedValue({ error: null });
+  rpcMock.mockResolvedValue({ data: null, error: null });
 });
 
 describe("ProjectDetail", () => {
@@ -337,6 +342,15 @@ describe("ProjectDetail", () => {
     fireEvent.change(fileInput, { target: { files: [new File(["x"], "render.jpg", { type: "image/jpeg" })] } });
 
     await waitFor(() => expect(uploadMock).toHaveBeenCalled());
+    expect(rpcMock).toHaveBeenCalledWith(
+      "register_new_building_storage_upload",
+      expect.objectContaining({
+        p_project_id: "project-1",
+        p_bucket: "project-media",
+        p_object_path: expect.stringMatching(/^user-1\/project-1\/media\/rendering-[^/]+\.jpg$/),
+        p_object_url: "https://cdn/uploaded.jpg",
+      }),
+    );
     expect(addMediaMock).toHaveBeenCalledWith({
       project_id: "project-1",
       media_type: "rendering",
@@ -504,11 +518,20 @@ describe("ProjectDetail", () => {
     });
 
     await waitFor(() => expect(uploadMock).toHaveBeenCalledWith(
-      expect.stringMatching(/^user-1\/[^/]+\.webp$/),
+      expect.stringMatching(/^user-1\/project-1\/create\/[^/]+\.webp$/),
       file,
       { upsert: false },
     ));
-    expect(getPublicUrlMock).toHaveBeenCalledWith(expect.stringMatching(/^user-1\/[^/]+\.webp$/));
+    expect(rpcMock).toHaveBeenCalledWith(
+      "register_new_building_storage_upload",
+      expect.objectContaining({
+        p_project_id: "project-1",
+        p_bucket: "listing-images",
+        p_object_path: expect.stringMatching(/^user-1\/project-1\/create\/[^/]+\.webp$/),
+        p_object_url: "https://cdn/uploaded.jpg",
+      }),
+    );
+    expect(getPublicUrlMock).toHaveBeenCalledWith(expect.stringMatching(/^user-1\/project-1\/create\/[^/]+\.webp$/));
     expect(updateListingMock).toHaveBeenCalledWith(
       {
         projectId: "project-1",
@@ -608,6 +631,14 @@ describe("ProjectDetail", () => {
       media_type: "brochure_pdf",
       url: "https://cdn/uploaded.jpg",
     }));
+    expect(rpcMock).toHaveBeenCalledWith(
+      "register_new_building_storage_upload",
+      expect.objectContaining({
+        p_project_id: "project-1",
+        p_bucket: "project-media",
+        p_object_path: expect.stringMatching(/^user-1\/project-1\/media\/brochure_pdf-[^/]+\.pdf$/),
+      }),
+    );
 
     uploadMock.mockResolvedValueOnce({ error: new Error("storage unavailable") });
     const imageInput = document.querySelector('input[accept="image/*,video/*"]') as HTMLInputElement;

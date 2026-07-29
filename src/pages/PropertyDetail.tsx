@@ -69,6 +69,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   const { data: dbListing, isLoading, isError } = useListing(id || "", {
     initialData: listingFromState,
     publicScope: true,
+    publicationId: listingFromState?.publicationId,
   });
   const { mutate: trackViewMutate } = useTrackListingView();
   const ownerId = (dbListing as ListingWithJoins | null)?.owner_id;
@@ -87,7 +88,8 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     propertyType: dbListing?.property_type,
     listingType: dbListing?.listing_type,
     price: dbListing ? Number(dbListing.price) : undefined,
-    limit: 8
+    limit: 8,
+    publicationId: dbListing?.publicationId,
   });
 
   // Track view once per session; sessionStorage in useTrackListingView prevents double-counting on refetch
@@ -103,11 +105,17 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     if (!dbListing) return;
     const _db = dbListing as ListingWithJoins;
     if (shouldUseNewBuildRoute(_db)) {
-      navigate(`/new-build/${id}`, { replace: true });
+      navigate(`/new-build/${id}`, {
+        replace: true,
+        state: { listing: _db },
+      });
       return;
     }
     if (_db.listing_type === "auction" && window.location.pathname.startsWith("/property/")) {
-      navigate(`/auction/${id}`, { replace: true });
+      navigate(`/auction/${id}`, {
+        replace: true,
+        state: { auction: _db, listing: _db },
+      });
     }
   }, [dbListing, id, navigate]);
 

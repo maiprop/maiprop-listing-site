@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-07-16T15:59:13.246Z",
-  "total": 96,
+  "generated_at": "2026-07-29T13:27:47.977Z",
+  "total": 93,
   "by_pattern": {
-    "no-explicit-any-disable": 34,
-    "explicit-any": 62,
+    "no-explicit-any-disable": 33,
+    "explicit-any": 60,
     "ts-ignore": 0
   },
   "files": [
@@ -140,20 +140,6 @@
         {
           "name": "no-explicit-any-disable",
           "count": 2
-        },
-        {
-          "name": "explicit-any",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "file": "src/components/open-houses/OpenHousePrimitives.tsx",
-      "total": 3,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 1
         },
         {
           "name": "explicit-any",

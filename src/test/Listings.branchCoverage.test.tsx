@@ -8,6 +8,7 @@ const {
   accept,
   authState,
   clearAllFilters,
+  fetchNextPage,
   filterState,
   locale,
   pipelineCalls,
@@ -17,6 +18,7 @@ const {
   const setParam = vi.fn();
   const setParams = vi.fn();
   const clearAllFilters = vi.fn();
+  const fetchNextPage = vi.fn();
   const filterState = {
     searchQuery: "",
     selectedListingType: "sale",
@@ -46,6 +48,7 @@ const {
     setParams,
     toggleMulti: vi.fn(),
     clearAllFilters,
+    fetchNextPage,
     applyAIFilters: vi.fn(),
     getParam: vi.fn((_key: string, fallback = "") => fallback),
   };
@@ -53,6 +56,7 @@ const {
     accept: vi.fn(),
     authState: { user: null as null | { id: string } },
     clearAllFilters,
+    fetchNextPage,
     filterState,
     locale: { value: "en" },
     pipelineCalls: [] as unknown[],
@@ -61,8 +65,10 @@ const {
       totalLoaded: 0,
       isLoading: false,
       isError: false,
+      isFetchNextPageError: false,
       hasNextPage: false,
       isFetchingNextPage: false,
+      fetchNextPage,
       sentinelRef: { current: null },
     },
     setParam,
@@ -150,12 +156,26 @@ vi.mock("@/components/listings/MapGate", () => ({
   MapGate: ({ children }: { children: React.ReactNode }) => <div data-testid="map-gate">{children}</div>,
 }));
 vi.mock("@/components/MapView", () => ({
-  MapView: ({ onVisibleListingsChange, onPolygonFilter }: { onVisibleListingsChange?: (ids: Set<string>) => void; onPolygonFilter?: (ids: Set<string>) => void }) => (
+  MapView: ({
+    onVisibleListingsChange,
+    onPolygonFilter,
+    onViewportBoundsChange,
+  }: {
+    onVisibleListingsChange?: (ids: Set<string>) => void;
+    onPolygonFilter?: (ids: Set<string>) => void;
+    onViewportBoundsChange?: (bounds: { west: number; south: number; east: number; north: number }) => void;
+  }) => (
     <div data-testid="map-view">
       <button onClick={() => onVisibleListingsChange?.(new Set(["one"]))}>Viewport one</button>
       <button onClick={() => onVisibleListingsChange?.(new Set())}>Viewport empty</button>
       <button onClick={() => onPolygonFilter?.(new Set(["two"]))}>Polygon two</button>
       <button onClick={() => onPolygonFilter?.(new Set())}>Polygon empty</button>
+      <button onClick={() => onViewportBoundsChange?.({
+        west: 23.7,
+        south: 37.9,
+        east: 23.8,
+        north: 38.05,
+      })}>Move map bounds</button>
     </div>
   ),
 }));
@@ -223,6 +243,7 @@ describe("Listings route branch matrix", () => {
       totalLoaded: 2,
       isLoading: false,
       isError: false,
+      isFetchNextPageError: false,
       hasNextPage: false,
       isFetchingNextPage: false,
     });
@@ -388,6 +409,47 @@ describe("Listings route branch matrix", () => {
     expect(reload).toHaveBeenCalled();
   });
 
+  it("forwards map viewport bounds and keeps split pagination reachable", async () => {
+    pipelineState.hasNextPage = true;
+    const { default: Listings } = await import("@/pages/Listings");
+    renderWithProviders(<Listings />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Split view" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Move map bounds" }));
+
+    expect(pipelineCalls.at(-1)).toEqual(expect.objectContaining({
+      mapBounds: {
+        west: 23.7,
+        south: 37.9,
+        east: 23.8,
+        north: 38.05,
+      },
+    }));
+    expect(screen.getByTestId("split-pagination-sentinel")).toBeInTheDocument();
+  });
+
+  it("shows a retry state instead of a factual empty map when loading fails", async () => {
+    pipelineState.isError = true;
+    const { default: Listings } = await import("@/pages/Listings");
+    renderWithProviders(<Listings />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Map view" })[0]);
+
+    expect(screen.getByText("Could not load listings")).toBeInTheDocument();
+    expect(screen.queryByTestId("map-view")).not.toBeInTheDocument();
+  });
+
+  it("keeps loaded listings visible and retries when a later cursor page fails", async () => {
+    pipelineState.isFetchNextPageError = true;
+    pipelineState.hasNextPage = true;
+    const { default: Listings } = await import("@/pages/Listings");
+    renderWithProviders(<Listings />);
+
+    expect(screen.getByTestId("listing-grid")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry loading more listings" }));
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
   it("renders full-map singular/plural and polygon labels", async () => {
     pipelineState.filtered = [listing("one")];
     const { default: Listings } = await import("@/pages/Listings");
@@ -398,8 +460,11 @@ describe("Listings route branch matrix", () => {
     pipelineState.filtered = [listing("one"), listing("two")];
     view.rerender(<Listings />);
     expect(screen.getByText("2 map results")).toBeInTheDocument();
+    pipelineState.hasNextPage = true;
+    view.rerender(<Listings />);
+    expect(screen.getByText("2+ map results")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Polygon two" }));
-    expect(screen.getByText("1 in area")).toBeInTheDocument();
+    expect(screen.getByText("1+ in area")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show List" }));
     expect(screen.getByTestId("listing-grid")).toBeInTheDocument();
   });

@@ -11,39 +11,39 @@ const stagingWorkflow = readFileSync(
   "utf8",
 ).replace(/\r\n/g, "\n");
 
-function stepBlock(name: string): string {
+function stagingStepBlock(name: string): string {
   const marker = `      - name: ${name}`;
-  const start = workflow.indexOf(marker);
+  const start = stagingWorkflow.indexOf(marker);
 
   expect(start).toBeGreaterThanOrEqual(0);
 
-  const nextStep = workflow.indexOf("\n      - name:", start + marker.length);
-  return workflow.slice(start, nextStep === -1 ? workflow.length : nextStep);
+  const nextStep = stagingWorkflow.indexOf("\n      - name:", start + marker.length);
+  return stagingWorkflow.slice(start, nextStep === -1 ? stagingWorkflow.length : nextStep);
 }
 
 describe("production Edge Function deploy workflow", () => {
-  it("uses Supabase server-side bundling instead of runner Docker for every deployment", () => {
-    expect(workflow).toMatch(/supabase functions deploy[^\n]*--use-api/);
-    expect(workflow).not.toMatch(/supabase functions deploy(?![^\n]*--use-api)/);
+  it("keeps production Edge mutations disabled and stages with Supabase server-side bundling", () => {
+    expect(workflow).toContain("Production Edge deployment disabled");
+    expect(workflow).toContain("Production Edge Function mutations are disabled");
+    expect(workflow).toContain("if: ${{ false }}");
+    expect(workflow).not.toContain("supabase functions deploy");
     expect(stagingWorkflow).toMatch(
       /supabase functions deploy \\\n+\s+--use-api \\\n+\s+--project-ref/,
     );
   });
 
-  it("lets first-time function deploys proceed while keeping post-deploy live drift blocking", () => {
-    const preDeployStepName = "Capture pre-deploy production live function drift inventory";
-    const deployStepName = "Deploy functions";
-    const postDeployStepName = "Capture production live function drift inventory after deploy";
+  it("requires an isolated target and blocks on post-deploy staging live drift", () => {
+    const deployStepName = "Deploy edge functions to staging";
+    const postDeployStepName = "Capture staging live function drift inventory";
 
-    const preDeployStep = stepBlock(preDeployStepName);
-    const postDeployStep = stepBlock(postDeployStepName);
+    const deployStep = stagingStepBlock(deployStepName);
+    const postDeployStep = stagingStepBlock(postDeployStepName);
 
-    expect(workflow.indexOf(preDeployStepName)).toBeLessThan(workflow.indexOf(deployStepName));
-    expect(workflow.indexOf(deployStepName)).toBeLessThan(workflow.indexOf(postDeployStepName));
-
-    expect(preDeployStep).toContain("continue-on-error: true");
-    expect(preDeployStep).toContain("release-safety-production-live-functions.json");
-    expect(postDeployStep).toContain("release-safety-production-live-functions-after.json");
+    expect(stagingWorkflow.indexOf(deployStepName)).toBeLessThan(stagingWorkflow.indexOf(postDeployStepName));
+    expect(deployStep).toContain("node scripts/assert-staging-mutation-target.mjs");
+    expect(deployStep).toContain("STAGING_MUTATION_ACKNOWLEDGEMENT");
+    expect(postDeployStep).toContain("release-safety-staging-live-functions.json");
+    expect(postDeployStep).toContain("--require-live-source-evidence");
     expect(postDeployStep).not.toContain("continue-on-error");
   });
 });

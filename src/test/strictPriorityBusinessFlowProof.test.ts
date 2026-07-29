@@ -93,7 +93,11 @@ const proof: readonly FlowProof[] = [
       },
       {
         file: "src/test/buildingListingUploads.test.ts",
-        snippets: ["project-media", "user-1/project-1/media-"],
+        snippets: [
+          "project-media",
+          "register_new_building_storage_upload",
+          "user-1/project-1/create/media-",
+        ],
       },
       {
         file: "src/test/useCreateBuildingListing.coverage.test.tsx",
@@ -201,7 +205,7 @@ const proof: readonly FlowProof[] = [
     artifacts: [
       {
         file: "src/hooks/useAuctionsPipeline.ts",
-        snippets: ["getPlanLimits", "auctionListingsVisible", "useAuctionListings(fetchLimit)"],
+        snippets: ["getPlanLimits", "auctionListingsVisible", "pageSize: AUCTIONS_PAGE_SIZE", "filters: serverFilters"],
       },
       {
         file: "src/pages/Auctions.tsx",
@@ -209,7 +213,7 @@ const proof: readonly FlowProof[] = [
       },
       {
         file: "src/test/useAuctionsPipeline.test.tsx",
-        snippets: ["free-tier auction window", "pro-tier auction window"],
+        snippets: ["free-tier auction window", "server-paginated Pro query without hydration", "canonical server query"],
       },
       {
         file: "src/test/InteractionWidgets.behavior.test.tsx",
@@ -267,7 +271,12 @@ const proof: readonly FlowProof[] = [
       },
       {
         file: "src/test/useMaiPropVideoRoom.signaling.test.tsx",
-        snippets: ["consultation:consult-1", "Professional"],
+        snippets: [
+          "video:consultation:",
+          "/api/turn-credentials",
+          "short-lived-credential",
+          "Professional",
+        ],
       },
     ],
   },

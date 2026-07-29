@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { assertAllowedUpload } from "@/lib/uploadValidation";
+import { invalidatePublicCatalogueQueries } from "@/lib/publicCatalogueQueryInvalidation";
 import {
   CAPACITY_ERROR_MESSAGES,
   MY_OPEN_HOUSE_OFFERS_SELECT,
@@ -510,9 +511,7 @@ export function useAcceptOpenHouseOffer() {
     },
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
-      qc.invalidateQueries({ queryKey: ["listing", v.listingId] });
-      qc.invalidateQueries({ queryKey: ["listings"] });
-      qc.invalidateQueries({ queryKey: ["listings-paginated"] });
+      void invalidatePublicCatalogueQueries(qc, v.listingId);
       toast.success("Offer accepted — other bids automatically rejected");
     },
     onError: (err: unknown) => {
@@ -537,9 +536,7 @@ export function useReopenOpenHouseOfferSelection() {
     },
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
-      qc.invalidateQueries({ queryKey: ["listing", v.listingId] });
-      qc.invalidateQueries({ queryKey: ["listings"] });
-      qc.invalidateQueries({ queryKey: ["listings-paginated"] });
+      void invalidatePublicCatalogueQueries(qc, v.listingId);
       toast.success("Winner selection reopened");
     },
     onError: (err: unknown) => {

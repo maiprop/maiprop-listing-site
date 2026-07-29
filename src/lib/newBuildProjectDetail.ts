@@ -63,6 +63,7 @@ export type NewBuildProject = Pick<
 };
 
 export type NewBuildListing = Database["public"]["Tables"]["listings"]["Row"] & {
+  publicationId?: number;
   listing_images?: Array<Pick<Database["public"]["Tables"]["listing_images"]["Row"], "url" | "sort_order">> | null;
   project?: NewBuildProject | null;
   projects?: NewBuildProject | null;

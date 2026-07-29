@@ -27,6 +27,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   useMyListings,
   useUpdateListing,
@@ -57,8 +58,16 @@ const FILTER_ELIGIBLE_ROLES: ReadonlyArray<DashboardRole> = [
 ];
 
 export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
+  const { user } = useAuth();
   const isPromotionEligible = role === "seller" || role === "agent" || role === "developer";
-  const { data: myListings = [], isLoading } = useMyListings();
+  const {
+    data: myListings = [],
+    total,
+    isLoading,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useMyListings();
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
   const { data: promotionBalance } = useListingPromotionBalance(isPromotionEligible);
@@ -67,6 +76,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
 
   const [listingFilter, setListingFilter] = useState<ListingFilter>("all");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const authoritativeTotal = Math.max(total, myListings.length);
 
   const showFilterChips =
     FILTER_ELIGIBLE_ROLES.includes(role) &&
@@ -89,7 +99,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
         : myListings;
 
   const filterChips: { key: ListingFilter; label: string }[] = [
-    { key: "all", label: `All (${myListings.length})` },
+    { key: "all", label: `All (${authoritativeTotal})` },
     {
       key: "off_market",
       label: `Off-market (${myListings.filter((l) => l.is_off_market).length})`,
@@ -103,7 +113,16 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="font-display text-2xl font-bold">My Listings</h1>
+        <div>
+          <h1 className="font-display text-2xl font-bold">My Listings</h1>
+          {authoritativeTotal > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {myListings.length < authoritativeTotal
+                ? `${myListings.length} of ${authoritativeTotal} listings`
+                : `${authoritativeTotal} listings`}
+            </p>
+          )}
+        </div>
         <Button
           className="bg-gradient-primary border-0 text-primary-foreground gap-2"
           asChild
@@ -175,7 +194,11 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
         <div className="space-y-3">
           {filteredListings.map((l) => {
             const isProjectAd = l.listing_type === "new_build";
-            const promotionsEligible = isPromotionEligible && l.listing_type !== "open_house";
+            const promotionsEligible =
+              isPromotionEligible &&
+              l.owner_id === user?.id &&
+              !l.organization_id &&
+              l.listing_type !== "open_house";
             const spotlightActive = Boolean(l.is_featured);
             const priorityActive = Number(l.priority_placement ?? 0) > 0;
             const promotionPending = activatePromotion.isPending || deactivatePromotion.isPending;
@@ -332,6 +355,20 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
             </div>
             );
           })}
+          {hasNextPage && (
+            <div className="flex justify-center pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="gap-2"
+              >
+                {isFetchingNextPage && <Loader2 className="w-4 h-4 animate-spin" />}
+                Load more listings
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

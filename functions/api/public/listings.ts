@@ -1,18 +1,21 @@
 import {
-  CACHE_VALID_UNTIL_HEADER,
   cachedJson,
+  getPublicCataloguePublication,
+  isPublicCatalogueSnapshotExpiredError,
   isSupabaseTransientError,
   jsonResponse,
   methodNotAllowed,
   missingRuntime,
   normalizedCacheUrl,
+  publicCatalogueValidityHeaders,
   safeDecimal,
   safeInt,
   safeText,
   safeToken,
   supabaseCount,
-  supabaseJson,
+  supabaseRpcJson,
   upstreamUnavailable,
+  type PublicCatalogueQueryRpcRow,
   type PublicApiCtx,
   type PublicApiEnv,
 } from "./_cache";
@@ -57,7 +60,7 @@ const BOOLEAN_FEATURES = new Set([
   "has_cctv", "has_disability_access", "has_structured_cabling", "has_facade",
   "has_night_power", "has_solar_water",
 ]);
-const LISTINGS_CACHE_VERSION = "catalogue-stream-cursor-promotions-v4";
+const LISTINGS_CACHE_VERSION = "catalogue-publication-cursor-v7";
 const LISTINGS_CACHE_OPTIONS = {
   edgeTtlSeconds: 60,
   browserTtlSeconds: 30,
@@ -66,10 +69,16 @@ const LISTINGS_CACHE_OPTIONS = {
   producerTimeoutMs: 5_000,
 };
 const LISTINGS_SUPABASE_TIMEOUT_MS = 4_500;
-const LEGACY_STREAM_PROBE_MAX = 2_000;
 const DEFAULT_LOCATION_RADIUS_M = 750;
 const MAX_LOCATION_RADIUS_M = 5_000;
 const METERS_PER_LATITUDE_DEGREE = 111_320;
+
+type MapBounds = {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+};
 
 function earliestActivePromotionExpiry(rows: ListingRow[], nowMs: number): string | null {
   let earliestExpiryMs = Number.POSITIVE_INFINITY;
@@ -265,6 +274,27 @@ function listingLocationBounds(requestUrl: URL): LocationBounds | null {
   };
 }
 
+function listingMapBounds(requestUrl: URL): MapBounds | null {
+  const west = finiteCoordinate(requestUrl.searchParams.get("boundsWest"), -180, 180);
+  const south = finiteCoordinate(requestUrl.searchParams.get("boundsSouth"), -90, 90);
+  const east = finiteCoordinate(requestUrl.searchParams.get("boundsEast"), -180, 180);
+  const north = finiteCoordinate(requestUrl.searchParams.get("boundsNorth"), -90, 90);
+  if (west == null || south == null || east == null || north == null) return null;
+  if (west > east || south > north) return null;
+  return { west, south, east, north };
+}
+
+const LISTING_BOUND_KEYS = [
+  "boundsWest",
+  "boundsSouth",
+  "boundsEast",
+  "boundsNorth",
+] as const;
+
+function hasListingBounds(requestUrl: URL): boolean {
+  return LISTING_BOUND_KEYS.some((key) => requestUrl.searchParams.has(key));
+}
+
 function buildListingParams(requestUrl: URL): {
   params: URLSearchParams;
   page: number;
@@ -294,7 +324,14 @@ function buildListingParams(requestUrl: URL): {
     params.set("listing_type", "in.(sale,rent,firesale,new_build)");
   }
 
+  const mapBounds = listingMapBounds(requestUrl);
   const locationBounds = listingLocationBounds(requestUrl);
+  if (mapBounds) {
+    params.append("latitude", `gte.${mapBounds.south}`);
+    params.append("latitude", `lte.${mapBounds.north}`);
+    params.append("longitude", `gte.${mapBounds.west}`);
+    params.append("longitude", `lte.${mapBounds.east}`);
+  }
   if (locationBounds) {
     params.append("latitude", `gte.${locationBounds.minLat}`);
     params.append("latitude", `lte.${locationBounds.maxLat}`);
@@ -339,6 +376,16 @@ function buildListingParams(requestUrl: URL): {
   if (construction) params.set("construction_status", `eq.${construction}`);
   const commercialSubtype = safeText(requestUrl.searchParams.get("commercial_subtype"), 40);
   if (commercialSubtype) params.set("commercial_subtype", `eq.${commercialSubtype}`);
+  if (requestUrl.searchParams.get("has_video_tour") === "true") {
+    params.set("has_video_tour", "eq.true");
+  }
+  if (requestUrl.searchParams.get("has_virtual_tour") === "true") {
+    params.set("has_virtual_tour", "eq.true");
+  }
+  const aiScoreMin = safeDecimal(requestUrl.searchParams.get("ai_score_min"));
+  if (aiScoreMin) params.set("ai_score", `gte.${aiScoreMin}`);
+  const walkabilityMin = safeDecimal(requestUrl.searchParams.get("walkability_min"));
+  if (walkabilityMin) params.set("walkability_score", `gte.${walkabilityMin}`);
 
   if (requestUrl.searchParams.get("is_pre_sale") === "true" && !listingType) {
     params.set("listing_type", "eq.new_build");
@@ -362,9 +409,28 @@ function buildListingParams(requestUrl: URL): {
   return { params, page, pageSize, offset, sort };
 }
 
+function catalogueCursorScope(params: URLSearchParams, sort: CatalogueSort): string {
+  const scopeParams = new URLSearchParams(params);
+  scopeParams.delete("select");
+  return `${sort.name}:${scopeParams.toString()}`;
+}
+
 function invalidCursorResponse(): Response {
   return jsonResponse(
     { error: "Invalid catalogue cursor" },
+    {
+      status: 400,
+      headers: {
+        "Cache-Control": "no-store",
+        "CDN-Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
+function invalidBoundsResponse(): Response {
+  return jsonResponse(
+    { error: "Invalid catalogue bounds" },
     {
       status: 400,
       headers: {
@@ -386,6 +452,7 @@ function buildCatalogueStreamParams(
 ): URLSearchParams {
   const params = new URLSearchParams(baseParams);
   params.set("limit", String(limit));
+  params.set("p_as_of", now);
   if (stream === "priority") {
     params.set("priority_placement", "gt.0");
     params.set("priority_until", `gt.${now}`);
@@ -424,49 +491,36 @@ async function catalogueCursorForLegacyOffset(
   baseParams: URLSearchParams,
   sort: CatalogueSort,
   offset: number,
-  now: string,
+  publicationId: number,
+  snapshotMinute: string,
+  scope: string,
 ): Promise<CatalogueCursor | null> {
   if (offset <= 0) return null;
 
-  let availablePriorityRows: number;
-  let availableOrganicRows: number;
-  if (offset <= LEGACY_STREAM_PROBE_MAX) {
-    const [priorityRows, organicRows] = await Promise.all([
-      supabaseJson<{ id: string }>(
-        env,
-        PUBLIC_LISTING_CATALOGUE_PATH,
-        lightweightLegacyStreamParams(baseParams, sort, "priority", now, offset),
-        { failOnTransient: true, timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS },
-      ),
-      supabaseJson<{ id: string }>(
-        env,
-        PUBLIC_LISTING_CATALOGUE_PATH,
-        lightweightLegacyStreamParams(baseParams, sort, "organic", now, offset),
-        { failOnTransient: true, timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS },
-      ),
-    ]);
-    availablePriorityRows = priorityRows.length;
-    availableOrganicRows = organicRows.length;
-  } else {
-    const countParams = (stream: "priority" | "organic") => {
-      const params = lightweightLegacyStreamParams(baseParams, sort, stream, now, 1);
-      params.delete("limit");
-      params.delete("order");
-      return params;
-    };
-    [availablePriorityRows, availableOrganicRows] = await Promise.all([
-      supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, countParams("priority"), {
-        failOnTransient: true,
-        countStrategy: "exact",
-        timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
-      }),
-      supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, countParams("organic"), {
-        failOnTransient: true,
-        countStrategy: "exact",
-        timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
-      }),
-    ]);
-  }
+  const countParams = (stream: "priority" | "organic") => {
+    const params = lightweightLegacyStreamParams(
+      baseParams,
+      sort,
+      stream,
+      snapshotMinute,
+      1,
+    );
+    params.delete("limit");
+    params.delete("order");
+    return params;
+  };
+  const [availablePriorityRows, availableOrganicRows] = await Promise.all([
+    supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, countParams("priority"), {
+      failOnTransient: true,
+      countStrategy: "exact",
+      timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
+    }),
+    supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, countParams("organic"), {
+      failOnTransient: true,
+      countStrategy: "exact",
+      timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
+    }),
+  ]);
 
   const streamOffsets = catalogueStreamOffsetsForAvailableRows(
     offset,
@@ -474,20 +528,227 @@ async function catalogueCursorForLegacyOffset(
     availableOrganicRows,
   );
   return {
-    v: 1,
+    v: 3,
+    publicationId,
     sort: sort.name,
+    asOf: snapshotMinute,
+    scope,
     slot: streamOffsets.slot,
     priorityOffset: streamOffsets.priorityOffset,
     organicOffset: streamOffsets.organicOffset,
   };
 }
 
+function comparisonValue(
+  params: URLSearchParams,
+  name: string,
+  operator: "eq" | "gte" | "lte",
+): string | null {
+  const prefix = `${operator}.`;
+  const match = params.getAll(name).find((value) => value.startsWith(prefix));
+  return match ? match.slice(prefix.length) : null;
+}
+
+function numericComparison(
+  params: URLSearchParams,
+  name: string,
+  operator: "gte" | "lte",
+): number | null {
+  const raw = comparisonValue(params, name, operator);
+  if (raw == null) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function listingTypeFilter(params: URLSearchParams): string | null {
+  const raw = params.get("listing_type");
+  if (!raw) return null;
+  if (raw.startsWith("eq.")) return raw.slice(3);
+  if (raw.startsWith("in.(") && raw.endsWith(")")) {
+    return raw.slice(4, -1);
+  }
+  return null;
+}
+
+function energyClassFilter(params: URLSearchParams): string[] | null {
+  const raw = params.get("energy_class");
+  if (!raw?.startsWith("in.(") || !raw.endsWith(")")) return null;
+  const values = raw.slice(4, -1).split(",").filter(Boolean);
+  return values.length > 0 ? values : null;
+}
+
+function featureFilter(params: URLSearchParams): string[] | null {
+  const values = [...BOOLEAN_FEATURES]
+    .filter((feature) => params.get(feature) === "eq.true");
+  for (const feature of ["has_video_tour", "has_virtual_tour"]) {
+    if (params.get(feature) === "eq.true") values.push(feature);
+  }
+  return values.length > 0 ? values.sort() : null;
+}
+
+function boundedComparison(
+  params: URLSearchParams,
+  name: "latitude" | "longitude",
+  operator: "gte" | "lte",
+): number | null {
+  const values = params.getAll(name)
+    .filter((value) => value.startsWith(`${operator}.`))
+    .map((value) => Number(value.slice(4)))
+    .filter(Number.isFinite);
+  if (values.length === 0) return null;
+  return operator === "gte" ? Math.max(...values) : Math.min(...values);
+}
+
+function catalogueRpcSort(sort: CatalogueSort): string {
+  if (sort.name === "price-asc") return "price_asc";
+  if (sort.name === "price-desc") return "price_desc";
+  if (sort.name === "ai-score") return "ai_score";
+  if (sort.name === "views") return "views";
+  return "newest";
+}
+
+function catalogueRpcBody(
+  baseParams: URLSearchParams,
+  publicationId: number,
+  location: string | null,
+  locationGroups: string[][] | null,
+  sort: CatalogueSort,
+  cursor: CatalogueCursor | null,
+  stream: "priority" | "organic",
+  limit: number,
+): Record<string, unknown> {
+  const anchor = stream === "priority" ? cursor?.priority : cursor?.organic;
+  const streamOffset = stream === "priority"
+    ? cursor?.priorityOffset ?? 0
+    : cursor?.organicOffset ?? 0;
+  const numericAnchor = anchor && sort.field !== "created_at" &&
+      typeof anchor.value === "number"
+    ? anchor.value
+    : null;
+  const timestampAnchor = anchor && sort.field === "created_at" &&
+      typeof anchor.value === "string"
+    ? anchor.value
+    : null;
+
+  return {
+    p_publication_id: publicationId,
+    p_listing_type: listingTypeFilter(baseParams),
+    p_property_type: comparisonValue(baseParams, "property_type", "eq"),
+    p_city: null,
+    p_location: location,
+    p_price_min: numericComparison(baseParams, "price", "gte"),
+    p_price_max: numericComparison(baseParams, "price", "lte"),
+    p_bedrooms_min: numericComparison(baseParams, "bedrooms", "gte"),
+    p_bedrooms_max: numericComparison(baseParams, "bedrooms", "lte"),
+    p_bathrooms_min: numericComparison(baseParams, "bathrooms", "gte"),
+    p_bathrooms_max: numericComparison(baseParams, "bathrooms", "lte"),
+    p_sqm_min: numericComparison(baseParams, "sqm", "gte"),
+    p_sqm_max: numericComparison(baseParams, "sqm", "lte"),
+    p_floor_min: numericComparison(baseParams, "floor", "gte"),
+    p_floor_max: numericComparison(baseParams, "floor", "lte"),
+    p_year_min: numericComparison(baseParams, "year_built", "gte"),
+    p_year_max: numericComparison(baseParams, "year_built", "lte"),
+    p_energy_classes: energyClassFilter(baseParams),
+    p_heating_system: comparisonValue(baseParams, "heating_system", "eq"),
+    p_construction_status: comparisonValue(
+      baseParams,
+      "construction_status",
+      "eq",
+    ),
+    p_commercial_subtype: comparisonValue(
+      baseParams,
+      "commercial_subtype",
+      "eq",
+    ),
+    p_transaction_type: null,
+    p_features: featureFilter(baseParams),
+    p_ai_score_min: numericComparison(baseParams, "ai_score", "gte"),
+    p_walkability_min: numericComparison(
+      baseParams,
+      "walkability_score",
+      "gte",
+    ),
+    p_bounds_west: boundedComparison(baseParams, "longitude", "gte"),
+    p_bounds_south: boundedComparison(baseParams, "latitude", "gte"),
+    p_bounds_east: boundedComparison(baseParams, "longitude", "lte"),
+    p_bounds_north: boundedComparison(baseParams, "latitude", "lte"),
+    p_priority_mode: stream,
+    p_open_house_mode: null,
+    p_sort: catalogueRpcSort(sort),
+    p_cursor_timestamp: timestampAnchor,
+    p_cursor_numeric: numericAnchor,
+    p_cursor_listing_id: anchor?.id ?? null,
+    p_cursor_is_null: sort.name === "ai-score" && anchor?.value === null,
+    p_limit: limit,
+    p_offset: anchor ? 0 : streamOffset,
+    p_location_groups: locationGroups,
+  };
+}
+
+function catalogueRows(
+  rows: PublicCatalogueQueryRpcRow[],
+  publicationId: number,
+): ListingRow[] {
+  return rows.map((row) => {
+    if (Number(row.publication_id) !== publicationId) {
+      throw new Error("Catalogue RPC returned a different publication");
+    }
+    if (
+      !row.card_payload ||
+      typeof row.card_payload !== "object" ||
+      Array.isArray(row.card_payload)
+    ) {
+      throw new Error("Catalogue RPC returned an invalid card payload");
+    }
+    return {
+      ...(row.card_payload as ListingRow),
+      publicationId,
+    };
+  });
+}
+
+async function fetchCatalogueStream(
+  env: PublicApiEnv,
+  baseParams: URLSearchParams,
+  publicationId: number,
+  location: string | null,
+  locationGroups: string[][] | null,
+  sort: CatalogueSort,
+  cursor: CatalogueCursor | null,
+  stream: "priority" | "organic",
+  limit: number,
+): Promise<ListingRow[]> {
+  const rows = await supabaseRpcJson<PublicCatalogueQueryRpcRow>(
+    env,
+    "query_public_catalogue",
+    catalogueRpcBody(
+      baseParams,
+      publicationId,
+      location,
+      locationGroups,
+      sort,
+      cursor,
+      stream,
+      limit,
+    ),
+    {
+      failOnTransient: true,
+      timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
+    },
+  );
+  return catalogueRows(rows, publicationId);
+}
+
 async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
   if (!getSupabaseRuntime(ctx.env)) return missingRuntime();
+  if (hasListingBounds(requestUrl) && !listingMapBounds(requestUrl)) {
+    return invalidBoundsResponse();
+  }
 
   const { params, page, pageSize, offset: legacyOutputOffset, sort } = buildListingParams(requestUrl);
+  const cursorScope = catalogueCursorScope(params, sort);
   const encodedCursor = requestUrl.searchParams.get("cursor");
-  const decodedCursor = decodeCatalogueCursor(encodedCursor, sort);
+  const decodedCursor = decodeCatalogueCursor(encodedCursor, sort, cursorScope);
   if (encodedCursor && !decodedCursor) return invalidCursorResponse();
 
   const outputOffset = decodedCursor
@@ -504,41 +765,58 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
 
   return cachedJson(ctx, cacheKey, async () => {
     try {
-      const now = new Date().toISOString();
-      const streamLimit = pageSize + 1;
-      const legacyOffset = !decodedCursor && legacyOutputOffset > 0;
+      const publication = await getPublicCataloguePublication(
+        ctx.env,
+        decodedCursor?.publicationId ?? null,
+      );
+      if (
+        decodedCursor &&
+        decodedCursor.asOf !== publication.snapshotMinute
+      ) {
+        return invalidCursorResponse();
+      }
+      const location = listingLocationBounds(requestUrl)
+        ? null
+        : safeText(requestUrl.searchParams.get("city"));
+      const normalizedLocation = location
+        ? normalizeListingLocationSearchQuery(location)
+        : null;
+      const locationGroups = location
+        ? listingLocationSearchTokenGroups(location)
+        : [];
+      const streamLimit = Math.min(201, pageSize + 1);
       const cursor = decodedCursor ?? await catalogueCursorForLegacyOffset(
         ctx.env,
         params,
         sort,
         legacyOutputOffset,
-        now,
+        publication.publicationId,
+        publication.snapshotMinute,
+        cursorScope,
       );
-      const priorityParams = buildCatalogueStreamParams(
-        params,
-        sort,
-        cursor,
-        "priority",
-        now,
-        streamLimit,
-        legacyOffset,
-      );
-      const organicParams = buildCatalogueStreamParams(
-        params,
-        sort,
-        cursor,
-        "organic",
-        now,
-        streamLimit,
-        legacyOffset,
-      );
-      const fetchOptions = {
-        failOnTransient: true,
-        timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
-      } as const;
       const streamResults = await Promise.allSettled([
-        supabaseJson<ListingRow>(ctx.env, PUBLIC_LISTING_CATALOGUE_PATH, priorityParams, fetchOptions),
-        supabaseJson<ListingRow>(ctx.env, PUBLIC_LISTING_CATALOGUE_PATH, organicParams, fetchOptions),
+        fetchCatalogueStream(
+          ctx.env,
+          params,
+          publication.publicationId,
+          locationGroups.length > 0 ? null : normalizedLocation,
+          locationGroups.length > 0 ? locationGroups : null,
+          sort,
+          cursor,
+          "priority",
+          streamLimit,
+        ),
+        fetchCatalogueStream(
+          ctx.env,
+          params,
+          publication.publicationId,
+          locationGroups.length > 0 ? null : normalizedLocation,
+          locationGroups.length > 0 ? locationGroups : null,
+          sort,
+          cursor,
+          "organic",
+          streamLimit,
+        ),
       ]);
       const failedStream = streamResults.find((result) => result.status === "rejected");
       if (failedStream?.status === "rejected") throw failedStream.reason;
@@ -548,7 +826,7 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
       }
       const priorityRows = priorityResult.value;
       const organicRows = organicResult.value;
-      const nowMs = Date.parse(now);
+      const nowMs = Date.parse(publication.snapshotMinute);
       const cleanPriorityRows = publicListingRows(priorityRows)
         .map((row) => normalizePublicPromotionState(row, nowMs));
       const cleanOrganicRows = publicListingRows(organicRows)
@@ -565,7 +843,16 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
       const hasMore = pageResult.data.length === pageSize &&
         (hasUnreadRows || mayHaveMoreRows) &&
         canAdvanceCatalogueCursor(cursor, sort, pageResult);
-      const nextCursor = hasMore ? buildNextCatalogueCursor(cursor, sort, pageResult) : null;
+      const nextCursor = hasMore
+        ? buildNextCatalogueCursor(
+            cursor,
+            sort,
+            pageResult,
+            publication.publicationId,
+            publication.snapshotMinute,
+            cursorScope,
+          )
+        : null;
       const ownerIds = pageResult.data
         .map((row) => row.owner_id)
         .filter((id): id is string => typeof id === "string");
@@ -585,12 +872,19 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
           page,
           pageSize,
           offset: outputOffset,
+          publicationId: publication.publicationId,
         },
-        promotionValidUntil
-          ? { headers: { [CACHE_VALID_UNTIL_HEADER]: promotionValidUntil } }
-          : undefined,
+        {
+          headers: publicCatalogueValidityHeaders(
+            publication,
+            promotionValidUntil,
+          ),
+        },
       );
     } catch (error) {
+      if (isPublicCatalogueSnapshotExpiredError(error)) {
+        return invalidCursorResponse();
+      }
       if (isSupabaseTransientError(error)) return upstreamUnavailable();
       throw error;
     }

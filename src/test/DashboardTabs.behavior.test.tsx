@@ -13,6 +13,8 @@ const {
   authState,
   subscriptionState,
   listingsState,
+  listingSummaryState,
+  fetchNextListingsPage,
   updateListingMutate,
   deleteListingMutate,
   activatePromotionMutate,
@@ -37,9 +39,30 @@ const {
   toastMock,
   navigateMock,
 } = vi.hoisted(() => ({
-  authState: { profile: { role: "agent", participant_type: "agent" } as Record<string, unknown> | null },
+  authState: {
+    user: { id: "agent-user" } as { id: string } | null,
+    profile: { role: "agent", participant_type: "agent" } as Record<string, unknown> | null,
+  },
   subscriptionState: { isPro: true },
-  listingsState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
+  listingsState: {
+    data: [] as Array<Record<string, unknown>>,
+    total: 0,
+    isLoading: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+  },
+  listingSummaryState: {
+    data: {
+      totalListings: 0,
+      activeListings: 0,
+      totalViews: 0,
+      averageViews: 0,
+      averageActiveDays: 0,
+      bestListing: null as Record<string, unknown> | null,
+    },
+    isLoading: false,
+  },
+  fetchNextListingsPage: vi.fn(),
   updateListingMutate: vi.fn(),
   deleteListingMutate: vi.fn(),
   activatePromotionMutate: vi.fn(),
@@ -68,7 +91,8 @@ const {
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => authState }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => subscriptionState }));
 vi.mock("@/hooks/useListings", () => ({
-  useMyListings: () => listingsState,
+  useMyListings: () => ({ ...listingsState, fetchNextPage: fetchNextListingsPage }),
+  useManageableListingSummary: () => listingSummaryState,
   useUpdateListing: () => ({ mutate: updateListingMutate }),
   useDeleteListing: () => ({ mutate: deleteListingMutate }),
 }));
@@ -154,10 +178,23 @@ vi.mock("react-router-dom", async () => {
 vi.mock("sonner", () => ({ toast: toastMock }));
 
 beforeEach(() => {
+  authState.user = { id: "agent-user" };
   authState.profile = { role: "agent", participant_type: "agent" };
   subscriptionState.isPro = true;
   listingsState.data = [];
+  listingsState.total = 0;
   listingsState.isLoading = false;
+  listingsState.hasNextPage = false;
+  listingsState.isFetchingNextPage = false;
+  listingSummaryState.data = {
+    totalListings: 0,
+    activeListings: 0,
+    totalViews: 0,
+    averageViews: 0,
+    averageActiveDays: 0,
+    bestListing: null,
+  };
+  listingSummaryState.isLoading = false;
   portfoliosState.data = [];
   portfoliosState.isLoading = false;
   portfolioDetailState.data = null;
@@ -198,11 +235,23 @@ describe("dashboard tab behavior", () => {
     viewingsOwnerState.data = [{ id: "v-1", created_at: new Date().toISOString(), scheduled_at: new Date().toISOString() }];
     trendsState.data = [{ date: new Date().toISOString().slice(0, 10), count: 7 }];
     conversationsState.data = [{ id: "c-1" }, { id: "c-2" }];
+    listingSummaryState.data = {
+      totalListings: 203,
+      activeListings: 120,
+      totalViews: 9999,
+      averageViews: 49,
+      averageActiveDays: 31,
+      bestListing: { id: "l-200", title: "Portfolio champion", viewsCount: 800 },
+    };
 
     renderWithProviders(<AnalyticsTab />);
 
-    expect(screen.getAllByText("Seafront flat")).toHaveLength(2);
+    expect(screen.getByText("Seafront flat")).toBeInTheDocument();
     expect(screen.getByText("Old town studio")).toBeInTheDocument();
+    expect(screen.getByText("203")).toBeInTheDocument();
+    expect(screen.getByText("49")).toBeInTheDocument();
+    expect(screen.getByText("Portfolio champion")).toBeInTheDocument();
+    expect(screen.getByText("31d")).toBeInTheDocument();
     expect(screen.getByText("All-time messages")).toBeInTheDocument();
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "30d" }));
@@ -428,6 +477,7 @@ describe("dashboard tab behavior", () => {
     listingsState.data = [
       {
         id: "l-1",
+        owner_id: "agent-user",
         title: "Quiet off-market",
         city: "Athens",
         price: 100000,
@@ -442,6 +492,7 @@ describe("dashboard tab behavior", () => {
       },
       {
         id: "l-2",
+        owner_id: "agent-user",
         title: "Future launch",
         city: "Patras",
         price: 150000,
@@ -540,6 +591,87 @@ describe("dashboard tab behavior", () => {
     expect(screen.queryByTitle(/Add Spotlight badge/i)).not.toBeInTheDocument();
     expect(screen.queryByTitle(/Activate Priority ranking/i)).not.toBeInTheDocument();
     expect(screen.queryByTitle(/Activate Spotlight \+ Priority bundle/i)).not.toBeInTheDocument();
+  });
+
+  it("does not let an organization manager spend personal promotion credits on a colleague's listing", () => {
+    listingsState.data = [{
+      id: "l-org-colleague",
+      owner_id: "organization-colleague",
+      organization_id: "organization-1",
+      title: "Organization inventory",
+      city: "Athens",
+      price: 240000,
+      sqm: 80,
+      status: "active",
+      views_count: 12,
+      listing_type: "sale",
+      is_off_market: false,
+      is_pre_sale: false,
+      is_featured: false,
+      priority_placement: 0,
+      tags: [],
+    }];
+
+    renderWithProviders(<MyListingsSection bioType="agent" role="agent" />);
+
+    expect(screen.getByText("Organization inventory")).toBeInTheDocument();
+    expect(screen.queryByTitle(/Add Spotlight badge/i)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Activate Priority ranking/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /pause listing/i })).toBeInTheDocument();
+  });
+
+  it("does not let an organization creator spend personal promotion credits on organization inventory", () => {
+    listingsState.data = [{
+      id: "l-org-created",
+      owner_id: "agent-user",
+      organization_id: "organization-1",
+      title: "Creator-owned organization inventory",
+      city: "Athens",
+      price: 240000,
+      sqm: 80,
+      status: "active",
+      views_count: 12,
+      listing_type: "sale",
+      is_off_market: false,
+      is_pre_sale: false,
+      is_featured: false,
+      priority_placement: 0,
+      tags: [],
+    }];
+
+    renderWithProviders(<MyListingsSection bioType="agent" role="agent" />);
+
+    expect(screen.getByText("Creator-owned organization inventory")).toBeInTheDocument();
+    expect(screen.queryByTitle(/Add Spotlight badge/i)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Activate Priority ranking/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the authoritative managed total and loads catalogue pages on demand", () => {
+    listingsState.data = [{
+      id: "l-page-1",
+      owner_id: "agent-user",
+      organization_id: null,
+      title: "First loaded listing",
+      city: "Athens",
+      price: 240000,
+      sqm: 80,
+      status: "active",
+      views_count: 12,
+      listing_type: "sale",
+      is_off_market: false,
+      is_pre_sale: false,
+      is_featured: false,
+      priority_placement: 0,
+      tags: [],
+    }];
+    listingsState.total = 203;
+    listingsState.hasNextPage = true;
+
+    renderWithProviders(<MyListingsSection bioType="agent" role="agent" />);
+
+    expect(screen.getByText("1 of 203 listings")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /load more listings/i }));
+    expect(fetchNextListingsPage).toHaveBeenCalledTimes(1);
   });
 
   it("keeps my listing cards from squeezing text under mobile actions", () => {

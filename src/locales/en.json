@@ -265,6 +265,9 @@
     "syncStatus": "Sync status",
     "lastSync": "Last synced",
     "noAuctions": "No auctions found",
+    "loadingFullCatalogue": "Loading the full Pro auction catalogue...",
+    "fullCatalogueFailed": "The public preview is available, but the full Pro catalogue could not load.",
+    "retryFullCatalogue": "Retry full catalogue",
     "filters": {
       "allCourts": "All auction officers / platforms",
       "allTypes": "All types",
@@ -389,6 +392,9 @@
       "mapItemOther": "{{count}} open houses",
       "noMapListings": "No open houses with location data to show on the map.",
       "switchToList": "Switch to list",
+      "mapWindowIncomplete": "Zoom in to load all open houses",
+      "loadMoreError": "Could not load more open houses.",
+      "retryLoadMore": "Retry loading more open houses",
       "errorTitle": "Unable to load open houses",
       "retryPrompt": "Please try again.",
       "retryButton": "Retry",
@@ -1391,6 +1397,15 @@
   "createListing": {
     "title": "Create New Listing",
     "stepProgress": "Step {{current}} of {{total}} - {{label}}",
+    "owner": {
+      "label": "Listing owner",
+      "personal": "My personal account",
+      "help": "Choose the account responsible for this listing.",
+      "locked": "Listing ownership cannot be changed after creation."
+    },
+    "edit": {
+      "notAllowedBody": "You can only edit listings you own or manage for an active organization."
+    },
     "steps": {
       "type": "Type",
       "details": "Details",
@@ -1970,6 +1985,9 @@
     },
     "building": {
       "heading": "Building & Project Details",
+      "ownerScope": "Publish under",
+      "personalAccount": "Personal account",
+      "ownerScopeHint": "The selected account owns the project, listing, units, media, and leads.",
       "projectName": "Project name",
       "projectNamePlaceholder": "e.g. Marina Heights",
       "permitNumber": "Building permit number",

@@ -45,6 +45,7 @@ add a row here in the same PR.
 | `GOOGLE_MAPS_API_KEY` | `streetview-proxy` | Supabase fn secrets | **365 days** | Platform lead |
 | `GOOGLE_MAPS_REFERER` | Optional `streetview-proxy` HTTP referrer override for Google Maps API key restrictions | Supabase fn secrets | Only when the Google Maps key referrer policy changes | Platform lead |
 | `VITE_MAPBOX_TOKEN` | Browser bundle (map components) | Cloudflare Pages env | **365 days** | Platform lead |
+| `CLOUDFLARE_TURN_KEY_ID` / `CLOUDFLARE_TURN_API_TOKEN` | Authenticated `/api/turn-credentials` Pages Function | Cloudflare Pages encrypted env | **90 days** or on compromise | Platform lead |
 | `AUTH_VERIFY_TIMEOUT_MS` | Optional timeout for shared Edge JWT verification | Supabase fn secrets | Operational tuning only | Platform lead |
 | `RATE_LIMIT_DB_TIMEOUT_MS` | Optional database timeout for shared Edge rate-limit checks | Supabase fn secrets | Operational tuning only | Platform lead |
 

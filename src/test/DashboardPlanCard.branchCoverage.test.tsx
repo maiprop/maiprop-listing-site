@@ -12,6 +12,23 @@ const usage = {
 };
 
 describe("DashboardPlanCard role and tier matrix", () => {
+  it("does not label an unresolved entitlement as Free", () => {
+    renderWithProviders(
+      <DashboardPlanCard
+        audience="seller"
+        isPro={false}
+        loading
+        usage={{ ...usage, listings: 2 }}
+      />,
+    );
+
+    expect(screen.getByText("Checking plan")).toBeInTheDocument();
+    expect(screen.queryByText("Free Plan")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Upgrade|Subscribe/i }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByText("Listings")).not.toBeInTheDocument();
+  });
+
   it("shows every buyer Free allowance and explains an exhausted limit", () => {
     renderWithProviders(
       <DashboardPlanCard

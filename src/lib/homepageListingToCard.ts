@@ -34,6 +34,7 @@ export function homepageListingToCard(listing: HomepageListing): Property {
     longitude: numberOrNull(listing.longitude),
   }, {
     filterDisplayTags: true,
+    includeRaw: true,
     maxImages: 3,
   });
 }

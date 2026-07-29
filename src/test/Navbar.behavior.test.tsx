@@ -9,7 +9,7 @@ let authState: {
   user: { id: string; email?: string } | null;
   profile: Record<string, unknown> | null;
 };
-let subscriptionState = { isPro: false };
+let subscriptionState: { isPro: boolean; loading: boolean } = { isPro: false, loading: false };
 let eligibleState = { eligible: false };
 let themeState = { theme: "dark", resolvedTheme: "dark" };
 
@@ -96,7 +96,7 @@ describe("Navbar behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authState = { user: null, profile: null };
-    subscriptionState = { isPro: false };
+    subscriptionState = { isPro: false, loading: false };
     eligibleState = { eligible: false };
     themeState = { theme: "dark", resolvedTheme: "dark" };
     notifications = [
@@ -133,7 +133,7 @@ describe("Navbar behavior", () => {
       user: { id: "u1", email: "seller@example.com" },
       profile: { id: "u1", role: "seller", display_name: "Seller User", investor_mode: true },
     };
-    subscriptionState = { isPro: true };
+    subscriptionState = { isPro: true, loading: false };
     eligibleState = { eligible: true };
     const { Navbar } = await import("@/components/Navbar");
 
@@ -148,6 +148,23 @@ describe("Navbar behavior", () => {
     expect(screen.getByRole("menuitem", { name: /dashboard.myListings/i })).toHaveAttribute("href", "/dashboard/listings");
     expect(screen.getByRole("menuitem", { name: /nav.quickSale/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "common.proActive" })).toHaveAttribute("href", "/pricing");
+  });
+
+  it("does not label unresolved entitlement as Free or Pro", async () => {
+    authState = {
+      user: { id: "u-loading", email: "loading@example.com" },
+      profile: { id: "u-loading", role: "seller", display_name: "Loading User" },
+    };
+    subscriptionState = { isPro: false, loading: true };
+    const { Navbar } = await import("@/components/Navbar");
+
+    renderWithProviders(<Navbar forceScrolled />);
+
+    expect(screen.queryByRole("link", { name: "common.upgrade" })).not.toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByText("Loading User"), { button: 0, ctrlKey: false });
+    expect(await screen.findByRole("link", { name: "dashboard.billing" })).toHaveAttribute("href", "/pricing");
+    expect(screen.queryByText("common.upgrade")).not.toBeInTheDocument();
+    expect(screen.queryByText("common.proActive")).not.toBeInTheDocument();
   });
 
   it("marks notifications read with a user ownership filter", async () => {

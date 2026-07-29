@@ -1,175 +1,53 @@
 name: Deploy Edge Functions
 
 on:
-  # Manual trigger with explicit targeting. This workflow intentionally does
-  # not auto-deploy on push; production Supabase changes require an explicit
-  # ready-to-proceed action.
-  workflow_dispatch:
+  workflow_call:
     inputs:
       functions:
-        description: "Space-separated function names to deploy"
+        description: Reserved for a future immutable production promotion workflow.
         required: false
         type: string
+        default: ""
       confirm_deploy_all:
-        description: "Required when functions is blank; confirms deploying ALL edge functions"
+        description: Reserved; production Edge mutations are disabled.
         required: false
         type: boolean
         default: false
       dry_run:
-        description: "Dry run - list functions without deploying"
+        description: Reserved; this workflow performs no production inspection or mutation.
         required: false
         type: boolean
         default: true
+      release_sha:
+        description: Immutable repository commit submitted for validation.
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Immutable repository commit submitted for validation.
+        required: true
+        type: string
 
 permissions:
   contents: read
 
-concurrency:
-  group: supabase-edge-functions-production
-  cancel-in-progress: false
-
 jobs:
-  deploy:
-    name: Deploy to Supabase
+  validate-disabled:
+    name: Production Edge deployment disabled
     runs-on: ubuntu-latest
-    environment: production
-    if: github.event_name == 'workflow_dispatch'
-
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          fetch-depth: 2
-
-      - name: Validate secrets
+      - name: Reject production Edge mutation
         run: |
-          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$PROJECT_REF" ]; then
-            echo "::error::Missing SUPABASE_ACCESS_TOKEN or VITE_SUPABASE_PROJECT_ID secrets"
-            exit 1
-          fi
+          echo "::error::Production Edge Function mutations are disabled. A separately reviewed immutable bundle-promotion workflow is required."
+          exit 1
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: .node-version
-          cache: npm
-
-      - name: Check runtime
-        run: npm run check:runtime
-
-      - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: 2.7.12
-
-      - name: Install Supabase CLI
-        run: |
-          npm install -g supabase@2.104.0
-          supabase --version
-
-      - name: Guard production deploy ref
-        if: inputs.dry_run != true
-        run: |
-          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
-            echo "::error::Production edge function deploys must run from main. Current ref: ${GITHUB_REF}"
-            exit 1
-          fi
-          {
-            echo "### Supabase edge function deployment"
-            echo "- Ref: ${GITHUB_REF}"
-            echo "- SHA: ${GITHUB_SHA}"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Link project
-        run: supabase link --project-ref "$PROJECT_REF"
-
-      - name: Determine functions to deploy
-        id: target
-        env:
-          INPUT_FUNCTIONS: ${{ github.event.inputs.functions }}
-          CONFIRM_DEPLOY_ALL: ${{ github.event.inputs.confirm_deploy_all }}
-        run: |
-          set -euo pipefail
-          if [ -z "$INPUT_FUNCTIONS" ]; then
-            if [ "$CONFIRM_DEPLOY_ALL" != "true" ]; then
-              echo "::error::Set 'functions' or set 'confirm_deploy_all=true' to target every edge function."
-              exit 1
-            fi
-            echo "deploy_all=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "functions=$INPUT_FUNCTIONS" >> "$GITHUB_OUTPUT"
-            echo "deploy_all=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Run edge function tests
-        if: inputs.dry_run != true
-        run: npm run test:deno
-
-      - name: Capture pre-deploy production live function drift inventory
-        if: inputs.dry_run != true
-        # Evidence only: a first-time deploy can be repo-ahead-of-live until the deploy step below.
-        continue-on-error: true
-        run: npm run check:release-safety -- --live-functions --out release-safety-production-live-functions.json
-        env:
-          RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-          SUPABASE_ACCESS_TOKEN:               ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Upload production live drift inventory
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: release-safety-production-live-functions
-          path: |
-            release-safety-production-live-functions.json
-            release-safety-production-live-functions-after.json
-          if-no-files-found: ignore
-          retention-days: 30
-
-      - name: Deploy functions
-        if: inputs.dry_run != true
-        env:
-          TARGET_DEPLOY_ALL: ${{ steps.target.outputs.deploy_all }}
-          TARGET_FUNCTIONS: ${{ steps.target.outputs.functions }}
-        run: |
-          set -euo pipefail
-          if [ "$TARGET_DEPLOY_ALL" = "true" ]; then
-            echo "Deploying ALL edge functions..."
-            supabase functions deploy --use-api --project-ref "$PROJECT_REF"
-          elif [ -n "$TARGET_FUNCTIONS" ]; then
-            for fn in $TARGET_FUNCTIONS; do
-              echo "Deploying: $fn"
-              supabase functions deploy "$fn" --use-api --project-ref "$PROJECT_REF"
-            done
-          else
-            echo "No functions to deploy"
-          fi
-
-      - name: Capture production live function drift inventory after deploy
-        if: inputs.dry_run != true
-        run: npm run check:release-safety -- --live-functions --out release-safety-production-live-functions-after.json
-        env:
-          RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-          SUPABASE_ACCESS_TOKEN:               ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Dry run - list targets
-        if: inputs.dry_run == true
-        env:
-          TARGET_DEPLOY_ALL: ${{ steps.target.outputs.deploy_all }}
-          TARGET_FUNCTIONS: ${{ steps.target.outputs.functions }}
-        run: |
-          echo "DRY RUN - would deploy:"
-          if [ "$TARGET_DEPLOY_ALL" = "true" ]; then
-            echo "  ALL functions"
-            ls -d supabase/functions/*/ | grep -v _shared | grep -v node_modules | sed 's|supabase/functions/||;s|/||'
-          elif [ -n "$TARGET_FUNCTIONS" ]; then
-            for fn in $TARGET_FUNCTIONS; do
-              echo "  - $fn"
-            done
-          else
-            echo "  (none)"
-          fi
+  deploy:
+    name: Production Edge mutation hard-disabled
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    env:
+      PRODUCTION_MUTATIONS_DISABLED: "true"
+    steps:
+      - run: exit 1

@@ -4,7 +4,7 @@
  */
 
 import { Link } from "react-router-dom";
-import { Crown, Zap, ArrowRight } from "lucide-react";
+import { Crown, Zap, ArrowRight, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getPlanLimits, type PlanAudienceId } from "@/hooks/usePlanLimits";
@@ -21,6 +21,7 @@ type Usage = {
 type Props = {
   audience: PlanAudienceId;
   isPro: boolean;
+  loading?: boolean;
   hasPaidPromotionCredits?: boolean;
   usage: Usage;
   className?: string;
@@ -29,10 +30,31 @@ type Props = {
 export function DashboardPlanCard({
   audience,
   isPro,
+  loading = false,
   hasPaidPromotionCredits = false,
   usage,
   className,
 }: Props) {
+  if (loading) {
+    return (
+      <div
+        className={cn(
+          "glass-card min-h-[132px] rounded-xl border border-border p-5",
+          className,
+        )}
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <LoaderCircle className="h-4 w-4 animate-spin" />
+          Checking plan
+        </div>
+        <div className="mt-5 h-2 w-full rounded bg-muted" />
+        <div className="mt-3 h-2 w-2/3 rounded bg-muted" />
+      </div>
+    );
+  }
+
   const tier = isPro ? "pro" : "free";
   const limits = getPlanLimits(audience, tier);
 

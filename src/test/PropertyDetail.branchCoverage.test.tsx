@@ -316,8 +316,23 @@ describe("PropertyDetail business branches", () => {
     expect(mocks.navigate).toHaveBeenCalledWith("/listings");
     unavailable.unmount();
 
-    mocks.listing.mockReturnValue({ data: { ...baseListing, listing_type: "new_build" }, isLoading: false, isError: false });
+    mocks.listing.mockReturnValue({
+      data: { ...baseListing, listing_type: "new_build", publicationId: 871 },
+      isLoading: false,
+      isError: false,
+    });
     renderPage();
-    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith("/new-build/listing-1", { replace: true }));
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith(
+      "/new-build/listing-1",
+      {
+        replace: true,
+        state: {
+          listing: expect.objectContaining({
+            id: "listing-1",
+            publicationId: 871,
+          }),
+        },
+      },
+    ));
   });
 });

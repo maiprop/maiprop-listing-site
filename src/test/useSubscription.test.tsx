@@ -170,7 +170,7 @@ describe("useSubscription", () => {
     expect(supabase.from).not.toHaveBeenCalled();
   });
 
-  it("rejects an unbounded stale Stripe timeout grant", async () => {
+  it("keeps an unbounded stale Stripe timeout grant unresolved", async () => {
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
       subscription: {
         subscribed: true,
@@ -186,14 +186,14 @@ describe("useSubscription", () => {
     });
 
     const { result } = renderHook(() => useSubscription(), { wrapper });
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.loading).toBe(true);
     expect(result.current.isPro).toBe(false);
-    expect(result.current.accessSource).toBe("free");
+    expect(result.current.accessSource).toBe("unknown");
   });
 
   it.each(["billing_state", "investor"])(
-    "rejects an unbounded stale %s timeout grant",
-    async (source) => {
+    "keeps an unbounded stale %s timeout grant unresolved",
+    (source) => {
       (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
         subscription: {
           subscribed: true,
@@ -211,11 +211,33 @@ describe("useSubscription", () => {
       });
 
       const { result } = renderHook(() => useSubscription(), { wrapper });
-      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.loading).toBe(true);
       expect(result.current.isPro).toBe(false);
-      expect(result.current.accessSource).toBe("free");
+      expect(result.current.accessSource).toBe("unknown");
     },
   );
+
+  it("does not present a first-load entitlement timeout as the Free plan", () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: {
+        subscribed: false,
+        productId: null,
+        subscriptionEnd: null,
+        source: "database",
+        syncStatus: "timeout",
+        loading: false,
+      },
+      refreshSubscription: vi.fn(),
+      profile: { role: "seller", participant_type: "seller" },
+      user: { id: "u-first-timeout" },
+    });
+
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+
+    expect(result.current.isPro).toBe(false);
+    expect(result.current.loading).toBe(true);
+    expect(result.current.accessSource).toBe("unknown");
+  });
 
   it("keeps entitlement unknown while the signed-in profile is still loading", () => {
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({

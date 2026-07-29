@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authState, infiniteQueryMock, invokeMock, publicApiMock, queryMock } = vi.hoisted(() => ({
+const { authState, infiniteQueryMock, invokeMock, publicApiMock, queryMock, rpcMock } = vi.hoisted(() => ({
   authState: { user: null as null | { id: string } },
   infiniteQueryMock: vi.fn((options: unknown) => options),
   invokeMock: vi.fn(),
   publicApiMock: vi.fn(),
   queryMock: vi.fn((options: unknown) => options),
+  rpcMock: vi.fn(),
 }));
 
 const makeBuilder = (data: unknown[] = []) => {
   const builder: Record<string, unknown> = {};
-  for (const method of ["select", "order", "limit", "range", "ilike", "or", "eq", "in", "gte", "lte"]) {
+  for (const method of ["select", "order", "limit", "range", "ilike", "or", "eq", "is", "in", "gte", "lte"]) {
     builder[method] = vi.fn().mockReturnValue(builder);
   }
   builder.abortSignal = vi.fn().mockReturnValue(builder);
@@ -34,6 +35,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
     functions: { invoke: (...args: unknown[]) => invokeMock(...args) },
+    rpc: (...args: unknown[]) => rpcMock(...args),
   },
 }));
 
@@ -43,9 +45,11 @@ vi.mock("@/lib/publicApi", () => ({
 }));
 
 import {
+  useActorOwnedListings,
   useListing,
   useListings,
   useListingsPaginated,
+  useManageableListingSummary,
   useMyListings,
   useOwnerProStatus,
 } from "@/hooks/useListings";
@@ -97,6 +101,7 @@ beforeEach(() => {
     offset: 0,
   });
   invokeMock.mockResolvedValue({ data: { isPro: true }, error: null });
+  rpcMock.mockResolvedValue({ data: null, error: null });
 });
 
 describe("useListings query configuration", () => {
@@ -193,6 +198,10 @@ describe("useListings query configuration", () => {
       location_lat: 37.98,
       location_lng: 23.73,
       location_radius_m: 1500,
+      boundsWest: 23.7,
+      boundsSouth: 37.9,
+      boundsEast: 23.8,
+      boundsNorth: 38.05,
       listing_type: "sale",
       property_type: "apartment",
       includeAuctions: false,
@@ -214,6 +223,10 @@ describe("useListings query configuration", () => {
       commercial_subtype: "",
       is_pre_sale: false,
       is_off_market: false,
+      has_video_tour: true,
+      has_virtual_tour: true,
+      ai_score_min: 80,
+      walkability_min: 70,
       features: ["has_parking", "has_balcony"],
       sort: "price-asc",
       limit: 80,
@@ -223,13 +236,36 @@ describe("useListings query configuration", () => {
     const path = String(publicApiMock.mock.calls[0][0]);
     expect(path).toContain("city=Athens");
     expect(path).toContain("location_lat=37.98");
+    expect(path).toContain("boundsWest=23.7");
+    expect(path).toContain("boundsSouth=37.9");
+    expect(path).toContain("boundsEast=23.8");
+    expect(path).toContain("boundsNorth=38.05");
     expect(path).toContain("includeAuctions=false");
     expect(path).toContain("beds_min=0");
     expect(path).toContain("energy_class=A&energy_class=B%2B");
     expect(path).toContain("features=has_parking&features=has_balcony");
+    expect(path).toContain("has_video_tour=true");
+    expect(path).toContain("has_virtual_tour=true");
+    expect(path).toContain("ai_score_min=80");
+    expect(path).toContain("walkability_min=70");
     expect(path).not.toContain("commercial_subtype=");
     expect(path).not.toContain("limit=");
     expect(path).toContain("pageSize=80");
+  });
+
+  it("does not change catalogue authority when public list or detail requests fail", async () => {
+    publicApiMock.mockRejectedValue(new Error("canonical listings API unavailable"));
+    const mapOptions = useListings({ listing_type: "sale" }) as unknown as QueryOptions;
+    const pageOptions = useListingsPaginated({ listing_type: "sale" }) as unknown as InfiniteOptions;
+    const detailOptions = useListing("listing-1", { publicScope: true }) as unknown as QueryOptions;
+    const signal = new AbortController().signal;
+
+    await expect(mapOptions.queryFn({ signal })).rejects.toThrow("canonical listings API unavailable");
+    await expect(pageOptions.queryFn({ pageParam: null, signal })).rejects.toThrow("canonical listings API unavailable");
+    await expect(detailOptions.queryFn({ signal })).rejects.toThrow("canonical listings API unavailable");
+
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
   it("keeps user-scoped reads disabled and short-lived when requested", () => {
@@ -239,8 +275,16 @@ describe("useListings query configuration", () => {
     expect(ownerOptions.enabled).toBe(false);
     expect(publicOptions.enabled).toBe(true);
     expect(ownerOptions.staleTime).toBeLessThan(publicOptions.staleTime);
-    expect(ownerOptions.queryKey).toEqual(["listings", { owner_id: "owner-1" }, { publicScope: false }]);
-    expect(publicOptions.queryKey).toEqual(["listings", { owner_id: "owner-1" }, { publicScope: true }]);
+    expect(ownerOptions.queryKey).toEqual([
+      "listings",
+      { owner_id: "owner-1" },
+      { publicScope: false, manageableScope: false },
+    ]);
+    expect(publicOptions.queryKey).toEqual([
+      "listings",
+      { owner_id: "owner-1" },
+      { publicScope: true, manageableScope: false },
+    ]);
   });
 
   it("normalizes detail placeholders and respects empty identifiers", () => {
@@ -287,13 +331,78 @@ describe("useListings query configuration", () => {
     expect(explicitlyDisabled.enabled).toBe(false);
   });
 
-  it("scopes the shorthand listing query to the authenticated owner", () => {
+  it("separates actor-funded quota inventory from capability-managed inventory", async () => {
     authState.user = { id: "user-42" };
-    const options = useMyListings() as unknown as QueryOptions;
-    expect(options.queryKey).toEqual(["listings", { owner_id: "user-42" }, { publicScope: false }]);
+    const owned = useActorOwnedListings() as unknown as QueryOptions;
+    const managed = useMyListings() as unknown as InfiniteOptions;
+    const summary = useManageableListingSummary() as unknown as QueryOptions;
+
+    expect(owned.queryKey).toEqual([
+      "listings",
+      { owner_id: "user-42", personalOnly: true },
+      { publicScope: false, manageableScope: false },
+    ]);
+    expect(managed.queryKey).toEqual(["manageable-listings", "user-42"]);
+    expect(managed.initialPageParam).toBeNull();
+    expect(summary.queryKey).toEqual(["manageable-listing-summary", "user-42"]);
+    expect(owned.enabled).toBe(true);
+    expect(managed.enabled).toBe(true);
+    expect(summary.enabled).toBe(true);
+
+    rpcMock.mockResolvedValueOnce({
+      data: [{
+        data: [
+          { id: "listing-3", created_at: "2026-07-28T09:00:00Z" },
+          { id: "listing-2", created_at: "2026-07-28T09:00:00Z" },
+        ],
+        total_count: 203,
+        next_created_at: "2026-07-28T09:00:00Z",
+        next_id: "listing-2",
+      }],
+      error: null,
+    });
+    const firstPage = await managed.queryFn({ pageParam: null }) as {
+      data: Array<{ id: string }>;
+      total: number;
+      nextCursor: { createdAt: string; id: string } | null;
+    };
+    expect(rpcMock).toHaveBeenLastCalledWith("get_manageable_listing_catalogue_page", {
+      p_limit: 50,
+    });
+    expect(firstPage.data.map((listing) => listing.id)).toEqual(["listing-3", "listing-2"]);
+    expect(firstPage.total).toBe(203);
+    expect(firstPage.nextCursor).toEqual({
+      createdAt: "2026-07-28T09:00:00Z",
+      id: "listing-2",
+    });
+    expect(managed.getNextPageParam(firstPage as never, [firstPage as never])).toEqual(firstPage.nextCursor);
+
+    rpcMock.mockResolvedValueOnce({
+      data: {
+        totalListings: 203,
+        activeListings: 120,
+        totalViews: 9999,
+        averageViews: 49,
+        averageActiveDays: 31,
+        bestListing: { id: "listing-3", title: "Top listing", viewsCount: 800 },
+      },
+      error: null,
+    });
+    await expect(summary.queryFn()).resolves.toEqual({
+      totalListings: 203,
+      activeListings: 120,
+      totalViews: 9999,
+      averageViews: 49,
+      averageActiveDays: 31,
+      bestListing: { id: "listing-3", title: "Top listing", viewsCount: 800 },
+    });
 
     authState.user = null;
-    const signedOut = useMyListings() as unknown as QueryOptions;
-    expect(signedOut.queryKey).toEqual(["listings", { owner_id: undefined }, { publicScope: false }]);
+    const signedOutOwned = useActorOwnedListings() as unknown as QueryOptions;
+    const signedOutManaged = useMyListings() as unknown as InfiniteOptions;
+    const signedOutSummary = useManageableListingSummary() as unknown as QueryOptions;
+    expect(signedOutOwned.enabled).toBe(false);
+    expect(signedOutManaged.enabled).toBe(false);
+    expect(signedOutSummary.enabled).toBe(false);
   });
 });
