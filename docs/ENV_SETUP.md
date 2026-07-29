@@ -245,6 +245,10 @@ or override it in repository secrets.
 | `CLOUDFLARE_API_TOKEN` | Cloudflare Pages production/preview deploy | production environment |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account for Pages deploy | production environment |
 | `CLOUDFLARE_PAGES_PROJECT` | Cloudflare Pages project used by live posture capture | audit environment |
+| `CLOUDFLARE_PAGES_READ_TOKEN` | least-privilege read token for main-only Pages Git deployment posture verification; temporary fallback is `CLOUDFLARE_API_TOKEN` | repository secret |
+| `CLOUDFLARE_PAGES_EDIT_TOKEN` | least-privilege edit token used only by the manual main-only Pages Git deployment lock workflow; temporary fallback is `CLOUDFLARE_API_TOKEN` | repository secret |
+| `CLOUDFLARE_PAGES_PROJECT_ID` | exact production Pages project ID captured by read-only bootstrap evidence and required before lock mutation | repository variable |
+| `CLOUDFLARE_STAGING_PAGES_PROJECT_ID` | exact staging Pages project ID captured by read-only bootstrap evidence and required before lock mutation | repository variable |
 | `CLOUDFLARE_DNS_MODE` | `registrar` for the accepted current posture, or `cloudflare-authoritative` only after an approved nameserver migration | audit environment |
 | `CLOUDFLARE_ZONE_ID` | Zone queried by live posture capture whenever `CLOUDFLARE_DNS_MODE` is set | audit environment |
 | `CF_ACCESS_CLIENT_ID` / `CLOUDFLARE_ACCESS_CLIENT_ID` | optional Cloudflare Access service-token client id for protected preview/production deploy smoke checks | repo or environment scoped to deploy jobs |
