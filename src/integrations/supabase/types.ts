@@ -1497,13 +1497,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "public_professionals"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "leads_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -3268,13 +3261,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "professional_review_responses_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "public_professionals"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "professional_review_responses_review_id_fkey"
             columns: ["review_id"]
             isOneToOne: true
@@ -3332,13 +3318,6 @@ export type Database = {
             columns: ["professional_id"]
             isOneToOne: false
             referencedRelation: "professionals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "professional_reviews_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "public_professionals"
             referencedColumns: ["id"]
           },
         ]
@@ -5654,60 +5633,6 @@ export type Database = {
           video_link: string | null
           website_url: string | null
         }
-        Insert: {
-          avatar_url?: string | null
-          average_deal_size?: string | null
-          average_portfolio_asset_size?: string | null
-          bio?: string | null
-          category?: Database["public"]["Enums"]["professional_category"] | null
-          city?: string | null
-          created_at?: string | null
-          display_name?: string | null
-          experience_years?: number | null
-          hourly_rate?: number | null
-          id?: string | null
-          languages?: string[] | null
-          license_number?: string | null
-          projects_count?: number | null
-          rating?: number | null
-          reviews_count?: number | null
-          specialties?: string[] | null
-          subscription_tier?: string | null
-          title?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          verified?: boolean | null
-          verified_at?: string | null
-          video_link?: string | null
-          website_url?: string | null
-        }
-        Update: {
-          avatar_url?: string | null
-          average_deal_size?: string | null
-          average_portfolio_asset_size?: string | null
-          bio?: string | null
-          category?: Database["public"]["Enums"]["professional_category"] | null
-          city?: string | null
-          created_at?: string | null
-          display_name?: string | null
-          experience_years?: number | null
-          hourly_rate?: number | null
-          id?: string | null
-          languages?: string[] | null
-          license_number?: string | null
-          projects_count?: number | null
-          rating?: number | null
-          reviews_count?: number | null
-          specialties?: string[] | null
-          subscription_tier?: string | null
-          title?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          verified?: boolean | null
-          verified_at?: string | null
-          video_link?: string | null
-          website_url?: string | null
-        }
         Relationships: []
       }
     }
@@ -6923,15 +6848,6 @@ export type Database = {
           year_built: number
         }[]
       }
-      get_public_catalogue_homepage: {
-        Args: { p_publication_id?: number }
-        Returns: {
-          payload: Json
-          publication_id: number
-          published_at: string
-          retain_until: string
-        }[]
-      }
       get_public_catalogue_auctions: {
         Args: {
           p_listing_ids?: string[]
@@ -6943,6 +6859,15 @@ export type Database = {
           listing_id: string
           publication_id: number
           published_at: string
+        }[]
+      }
+      get_public_catalogue_homepage: {
+        Args: { p_publication_id?: number }
+        Returns: {
+          payload: Json
+          publication_id: number
+          published_at: string
+          retain_until: string
         }[]
       }
       get_public_catalogue_listing: {
@@ -7099,6 +7024,36 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_public_professionals: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          average_deal_size: string
+          average_portfolio_asset_size: string
+          bio: string
+          category: Database["public"]["Enums"]["professional_category"]
+          city: string
+          created_at: string
+          display_name: string
+          experience_years: number
+          hourly_rate: number
+          id: string
+          languages: string[]
+          license_number: string
+          projects_count: number
+          rating: number
+          reviews_count: number
+          specialties: string[]
+          subscription_tier: string
+          title: string
+          updated_at: string
+          user_id: string
+          verified: boolean
+          verified_at: string
+          video_link: string
+          website_url: string
+        }[]
       }
       get_public_profile_summaries: {
         Args: { p_user_ids: string[] }

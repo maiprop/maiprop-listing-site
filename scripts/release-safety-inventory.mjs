@@ -268,6 +268,49 @@ function scanWorkflows() {
     });
   }
 
+  const authorizedMutationWorkflows = new Set([
+    ".github/workflows/stage-release.yml",
+    ".github/workflows/reusable-supabase-staging.yml",
+  ]);
+  const forbiddenMutationWiring =
+    /\bI_KNOW_THIS_IS_PROD\b|\bSUPABASE_SERVICE_ROLE_KEY\b|\bSUPABASE_STAGING_DB_URL\b|\bstaging-load-dataset\.mjs\b|\bsupabase\s+(?:db\s+push|functions\s+deploy|migration\s+repair)\b|\bpages\s+deploy\b/;
+  for (const [workflowPath, text] of Object.entries(workflowText)) {
+    if (authorizedMutationWorkflows.has(workflowPath)) continue;
+    if (forbiddenMutationWiring.test(text)) {
+      violations.push(
+        `${workflowPath} contains release mutation wiring outside the exact-SHA staging workflows`,
+      );
+    }
+  }
+
+  const liveOperationalPath =
+    ".github/workflows/live-operational-smoke.yml";
+  const liveOperational = workflowText[liveOperationalPath] ?? "";
+  const forbiddenLiveOperationalWiring =
+    /\bsecrets\.|\b(?:VITE_)?SUPABASE_|\bE2E_|\/auth\/|ai-quota-status|\b(?:POST|PUT|PATCH|DELETE)\b|npm\s+(?:run|exec)|\bnpx\b|playwright|actions\/checkout/i;
+  if (!liveOperational) {
+    violations.push(`${liveOperationalPath} is missing`);
+  } else {
+    if (forbiddenLiveOperationalWiring.test(liveOperational)) {
+      violations.push(
+        `${liveOperationalPath} must remain unauthenticated, read-only, and independent of repository scripts`,
+      );
+    }
+
+    const methods = [
+      ...liveOperational.matchAll(/method:\s*"([A-Z]+)"/g),
+    ].map((match) => match[1]);
+    if (
+      !methods.includes("GET") ||
+      !methods.includes("HEAD") ||
+      methods.some((method) => !["GET", "HEAD"].includes(method))
+    ) {
+      violations.push(
+        `${liveOperationalPath} may use only explicit GET and HEAD probes`,
+      );
+    }
+  }
+
   const ci = workflowText[".github/workflows/ci.yml"] ?? "";
   if (
     /\bsecrets\./.test(ci) ||

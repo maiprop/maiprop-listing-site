@@ -1,4 +1,4 @@
-name: Live Operational Smoke
+name: Live Public Read-Only Smoke
 
 on:
   schedule:
@@ -9,327 +9,108 @@ permissions:
   contents: read
 
 concurrency:
-  group: live-operational-smoke-${{ github.ref }}
+  group: live-public-read-only-smoke
   cancel-in-progress: true
 
 jobs:
-  live-smoke:
-    name: Live role, tier, and AI quota smoke
+  public-read-only-smoke:
+    name: Public GET and HEAD health checks
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     env:
-      PLAYWRIGHT_BASE_URL: https://portal.maiprop.co
-      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-      SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      E2E_USE_SEEDED_DEMO_ACCOUNTS: true
-      E2E_FORCE_CANONICAL_DEMO_ACCOUNTS: true
-      E2E_RUN_SUPERVISOR_NETWORK: true
-      I_KNOW_THIS_IS_PROD: yes
-      E2E_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
-      E2E_BUYER_FREE_EMAIL: ${{ secrets.E2E_BUYER_FREE_EMAIL }}
-      E2E_BUYER_FREE_PASSWORD: ${{ secrets.E2E_BUYER_FREE_PASSWORD }}
-      E2E_BUYER_PRO_EMAIL: ${{ secrets.E2E_BUYER_PRO_EMAIL }}
-      E2E_BUYER_PRO_PASSWORD: ${{ secrets.E2E_BUYER_PRO_PASSWORD }}
-      E2E_SELLER_PRO_EMAIL: ${{ secrets.E2E_SELLER_PRO_EMAIL }}
-      E2E_SELLER_PRO_PASSWORD: ${{ secrets.E2E_SELLER_PRO_PASSWORD }}
-      E2E_AGENT_PRO_EMAIL: ${{ secrets.E2E_AGENT_PRO_EMAIL }}
-      E2E_AGENT_PRO_PASSWORD: ${{ secrets.E2E_AGENT_PRO_PASSWORD }}
-      E2E_DEVELOPER_PRO_EMAIL: ${{ secrets.E2E_DEVELOPER_PRO_EMAIL }}
-      E2E_DEVELOPER_PRO_PASSWORD: ${{ secrets.E2E_DEVELOPER_PRO_PASSWORD }}
-      E2E_INVESTOR_PRIVATE_EMAIL: ${{ secrets.E2E_INVESTOR_PRIVATE_EMAIL }}
-      E2E_INVESTOR_PRIVATE_PASSWORD: ${{ secrets.E2E_INVESTOR_PRIVATE_PASSWORD }}
-      E2E_INVESTOR_INSTITUTIONAL_EMAIL: ${{ secrets.E2E_INVESTOR_INSTITUTIONAL_EMAIL }}
-      E2E_INVESTOR_INSTITUTIONAL_PASSWORD: ${{ secrets.E2E_INVESTOR_INSTITUTIONAL_PASSWORD }}
-      E2E_PROFESSIONAL_ARCHITECT_EMAIL: ${{ secrets.E2E_PROFESSIONAL_ARCHITECT_EMAIL }}
-      E2E_PROFESSIONAL_ARCHITECT_PASSWORD: ${{ secrets.E2E_PROFESSIONAL_ARCHITECT_PASSWORD }}
-      E2E_PROFESSIONAL_LAWYER_EMAIL: ${{ secrets.E2E_PROFESSIONAL_LAWYER_EMAIL }}
-      E2E_PROFESSIONAL_LAWYER_PASSWORD: ${{ secrets.E2E_PROFESSIONAL_LAWYER_PASSWORD }}
-      E2E_PROFESSIONAL_VALUER_EMAIL: ${{ secrets.E2E_PROFESSIONAL_VALUER_EMAIL }}
-      E2E_PROFESSIONAL_VALUER_PASSWORD: ${{ secrets.E2E_PROFESSIONAL_VALUER_PASSWORD }}
-      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      PUBLIC_BASE_URL: https://portal.maiprop.co
     steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
       - name: Set up Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version-file: .node-version
-          cache: npm
+          node-version: "20.19.5"
 
-      - name: Detect live smoke credentials
-        id: smoke
-        shell: bash
-        run: |
-          if [ -z "${E2E_DEMO_PASSWORD}" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Live operational smoke skipped: E2E_DEMO_PASSWORD is not configured." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check runtime
-        if: steps.smoke.outputs.enabled == 'true'
-        run: npm run check:runtime
-
-      - name: Install dependencies
-        if: steps.smoke.outputs.enabled == 'true'
-        run: npm ci --prefer-offline --no-audit
-
-      - name: Validate Supabase service role key
-        id: service_role
-        if: steps.smoke.outputs.enabled == 'true'
+      - name: Run unauthenticated public read-only checks
         shell: bash
         run: |
           node <<'NODE'
-          const { appendFileSync } = await import("node:fs");
-          const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-          const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-          const setRepairEnabled = (enabled) => {
-            if (!process.env.GITHUB_OUTPUT) return;
-            appendFileSync(process.env.GITHUB_OUTPUT, enabled ? "repair_enabled=true\n" : "repair_enabled=false\n");
-          };
-          const appendSummary = (message) => {
-            if (!process.env.GITHUB_STEP_SUMMARY) return;
-            appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${message}\n`);
-          };
-
-          if (!supabaseUrl) {
-            throw new Error("SUPABASE_URL or VITE_SUPABASE_URL must be configured for live role repair.");
+          const baseUrl = new URL(process.env.PUBLIC_BASE_URL);
+          if (
+            baseUrl.protocol !== "https:" ||
+            baseUrl.hostname !== "portal.maiprop.co"
+          ) {
+            throw new Error(`Unexpected public smoke origin: ${baseUrl.origin}`);
           }
 
-          if (!serviceRoleKey) {
-            throw new Error("SUPABASE_SERVICE_ROLE_KEY must be configured for live role repair.");
-          }
+          const probes = [
+            { path: "/", method: "HEAD", expectsJson: false },
+            {
+              path: "/api/public/listings?limit=1",
+              method: "GET",
+              expectsJson: true,
+            },
+            {
+              path: "/api/public/auctions?limit=1",
+              method: "GET",
+              expectsJson: true,
+            },
+            {
+              path: "/api/public/open-houses?limit=1",
+              method: "GET",
+              expectsJson: true,
+            },
+            {
+              path: "/api/public/homepage?section=listing_counts",
+              method: "GET",
+              expectsJson: true,
+            },
+          ];
 
-          const authAdminUrl = new URL("/auth/v1/admin/users", supabaseUrl);
-          authAdminUrl.searchParams.set("page", "1");
-          authAdminUrl.searchParams.set("per_page", "1");
-          const transientStatuses = new Set([408, 429, 500, 502, 503, 504, 520, 522, 524]);
-          const attempts = 3;
-          const host = new URL(supabaseUrl).host;
-          let lastTransientFailure = "not attempted";
-          let accepted = false;
+          for (const probe of probes) {
+            const target = new URL(probe.path, baseUrl);
+            let lastFailure = "not attempted";
 
-          for (let attempt = 1; attempt <= attempts; attempt += 1) {
-            try {
-              const response = await fetch(authAdminUrl, {
-                headers: {
-                  apikey: serviceRoleKey,
-                  Authorization: `Bearer ${serviceRoleKey}`,
-                  Accept: "application/json",
-                },
-                signal: AbortSignal.timeout(15_000),
-              });
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+              try {
+                const response = await fetch(target, {
+                  method: probe.method,
+                  headers: {
+                    Accept: probe.expectsJson
+                      ? "application/json"
+                      : "text/html,application/xhtml+xml",
+                    "User-Agent": "maiprop-public-read-only-smoke/1.0",
+                  },
+                  signal: AbortSignal.timeout(15_000),
+                });
 
-              if (response.ok) {
-                console.log(`Supabase service role key accepted by Auth Admin API. Attempt ${attempt}.`);
-                setRepairEnabled(true);
-                accepted = true;
+                if (!response.ok) {
+                  lastFailure = `HTTP ${response.status}`;
+                } else if (probe.expectsJson) {
+                  const payload = await response.json();
+                  if (!payload || typeof payload !== "object") {
+                    lastFailure = "response is not a JSON object";
+                  } else {
+                    lastFailure = "";
+                  }
+                } else {
+                  lastFailure = "";
+                }
+              } catch (error) {
+                lastFailure =
+                  error instanceof Error ? error.message : String(error);
+              }
+
+              if (!lastFailure) {
+                console.log(
+                  `Public read-only probe passed: ${probe.method} ${target.pathname}${target.search}`,
+                );
                 break;
               }
 
-              const body = await response.text();
-              const detail = `HTTP ${response.status} ${body.slice(0, 160)}`;
-              if (!transientStatuses.has(response.status)) {
-                throw new Error(`SUPABASE_SERVICE_ROLE_KEY is not accepted by ${host}: ${detail}`);
+              if (attempt < 3) {
+                await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
               }
-              lastTransientFailure = detail;
-            } catch (error) {
-              const detail = error instanceof Error ? error.message : String(error);
-              if (!/timeout|aborted|fetch failed|network/i.test(detail)) {
-                throw error;
-              }
-              lastTransientFailure = detail;
             }
 
-            if (attempt < attempts) {
-              console.warn(`Supabase Auth Admin API preflight failed on attempt ${attempt}; retrying: ${lastTransientFailure}`);
-              await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
+            if (lastFailure) {
+              throw new Error(
+                `Public read-only probe failed: ${probe.method} ${target.pathname}${target.search}: ${lastFailure}`,
+              );
             }
-          }
-
-          if (!accepted) {
-            const message = `Supabase Auth Admin API transiently unavailable after ${attempts} attempts for ${host}: ${lastTransientFailure}`;
-            console.warn(`${message}. Demo role repair will be skipped; role matrix smoke will still run against current seeded accounts.`);
-            appendSummary(`Live demo role repair skipped: ${message}`);
-            setRepairEnabled(false);
           }
           NODE
-
-      - name: Warm live public listings API
-        id: public_api
-        if: steps.smoke.outputs.enabled == 'true'
-        shell: bash
-        run: |
-          node <<'NODE'
-          const { appendFileSync } = await import("node:fs");
-          const baseUrl = process.env.PLAYWRIGHT_BASE_URL;
-          const target = new URL("/api/public/listings?limit=1", baseUrl);
-          const attempts = 6;
-          let lastFailure = "not attempted";
-          let ready = false;
-          const setPublicApiReady = (isReady) => {
-            if (!process.env.GITHUB_OUTPUT) return;
-            appendFileSync(process.env.GITHUB_OUTPUT, isReady ? "public_api_ready=true\n" : "public_api_ready=false\n");
-          };
-          const appendSummary = (message) => {
-            if (!process.env.GITHUB_STEP_SUMMARY) return;
-            appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${message}\n`);
-          };
-
-          for (let attempt = 1; attempt <= attempts; attempt += 1) {
-            try {
-              const response = await fetch(target, {
-                headers: { Accept: "application/json" },
-              });
-              const text = await response.text();
-
-              if (response.ok) {
-                const payload = JSON.parse(text);
-                const listingId = payload?.data?.[0]?.id;
-                if (typeof listingId === "string" && listingId.length > 0) {
-                  console.log(`Public listings API is ready on attempt ${attempt}: ${listingId}`);
-                  ready = true;
-                  break;
-                }
-                lastFailure = `HTTP ${response.status} without a listing id: ${text.slice(0, 240)}`;
-              } else {
-                lastFailure = `HTTP ${response.status}: ${text.slice(0, 240)}`;
-              }
-            } catch (error) {
-              lastFailure = error instanceof Error ? error.message : String(error);
-            }
-
-            if (attempt < attempts) {
-              await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
-            }
-          }
-
-          if (!ready) {
-            const message = `Public listings API not ready after ${attempts} attempts: ${lastFailure}`;
-            console.warn(`${message}. AI quota smoke will be skipped; role matrix smoke will still run.`);
-            appendSummary(`Live AI quota smoke skipped: ${message}`);
-            setPublicApiReady(false);
-          } else {
-            setPublicApiReady(true);
-          }
-          NODE
-
-      - name: Install Playwright
-        if: steps.smoke.outputs.enabled == 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Repair live demo role matrix
-        if: steps.smoke.outputs.enabled == 'true' && steps.service_role.outputs.repair_enabled == 'true'
-        run: npx playwright test e2e/live-supervisor-agent-network.spec.ts --project=chromium -g "supervisor repairs the full mock matrix"
-
-      - name: Run non-consuming AI quota smoke
-        if: steps.smoke.outputs.enabled == 'true' && steps.public_api.outputs.public_api_ready == 'true'
-        run: npm run test:e2e:live-ai-quota
-
-      - name: Validate live demo account sign-in
-        if: steps.smoke.outputs.enabled == 'true' && steps.service_role.outputs.repair_enabled != 'true'
-        shell: bash
-        run: |
-          node <<'NODE'
-          const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-          const anonKey =
-            process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-            process.env.VITE_SUPABASE_ANON_KEY ||
-            process.env.SUPABASE_ANON_KEY;
-
-          if (!supabaseUrl) {
-            throw new Error("SUPABASE_URL or VITE_SUPABASE_URL must be configured for live demo auth preflight.");
-          }
-
-          if (!anonKey) {
-            throw new Error("VITE_SUPABASE_PUBLISHABLE_KEY must be configured for live demo auth preflight.");
-          }
-
-          const read = (...keys) => {
-            for (const key of keys) {
-              const value = process.env[key]?.trim();
-              if (value) return value;
-            }
-            return "";
-          };
-
-          const account = (label, defaultEmail, emailKeys, passwordKeys) => ({
-            label,
-            email: read(...emailKeys) || defaultEmail,
-            password:
-              read(...passwordKeys, "E2E_DEMO_PASSWORD", "E2E_TEST_PASSWORD") ||
-              "Demo2025!",
-          });
-
-          const accounts = [
-            account("buyer free", "buyer.free@maiprop.demo", ["E2E_BUYER_FREE_EMAIL", "E2E_BUYER_EMAIL", "E2E_TEST_EMAIL"], ["E2E_BUYER_FREE_PASSWORD", "E2E_BUYER_PASSWORD"]),
-            account("buyer pro", "buyer.pro@maiprop.demo", ["E2E_BUYER_PRO_EMAIL", "E2E_BUYER_EMAIL"], ["E2E_BUYER_PRO_PASSWORD", "E2E_BUYER_PASSWORD"]),
-            account("seller free", "seller.free@maiprop.demo", ["E2E_SELLER_FREE_EMAIL", "E2E_SELLER_EMAIL"], ["E2E_SELLER_FREE_PASSWORD", "E2E_SELLER_PASSWORD"]),
-            account("seller pro", "seller.pro@maiprop.demo", ["E2E_SELLER_PRO_EMAIL", "E2E_SELLER_EMAIL", "E2E_TEST_EMAIL"], ["E2E_SELLER_PRO_PASSWORD", "E2E_SELLER_PASSWORD"]),
-            account("agent pro", "agent.pro@maiprop.demo", ["E2E_AGENT_PRO_EMAIL", "E2E_AGENT_EMAIL"], ["E2E_AGENT_PRO_PASSWORD", "E2E_AGENT_PASSWORD"]),
-            account("developer pro", "developer.pro@maiprop.demo", ["E2E_DEVELOPER_PRO_EMAIL", "E2E_DEVELOPER_EMAIL"], ["E2E_DEVELOPER_PRO_PASSWORD", "E2E_DEVELOPER_PASSWORD"]),
-            account("investor private", "investor.private@maiprop.demo", ["E2E_INVESTOR_PRIVATE_EMAIL"], ["E2E_INVESTOR_PRIVATE_PASSWORD"]),
-            account("investor institutional", "investor.institutional@maiprop.demo", ["E2E_INVESTOR_INSTITUTIONAL_EMAIL"], ["E2E_INVESTOR_INSTITUTIONAL_PASSWORD"]),
-            account("professional architect pro", "architect.pro@maiprop.demo", ["E2E_PROFESSIONAL_ARCHITECT_EMAIL", "E2E_PROFESSIONAL1_EMAIL"], ["E2E_PROFESSIONAL_ARCHITECT_PASSWORD", "E2E_PROFESSIONAL1_PASSWORD"]),
-            account("professional lawyer pro", "lawyer.pro@maiprop.demo", ["E2E_PROFESSIONAL_LAWYER_EMAIL", "E2E_PROFESSIONAL2_EMAIL"], ["E2E_PROFESSIONAL_LAWYER_PASSWORD", "E2E_PROFESSIONAL2_PASSWORD"]),
-            account("professional valuer pro", "valuer.pro@maiprop.demo", ["E2E_PROFESSIONAL_VALUER_EMAIL", "E2E_PROFESSIONAL3_EMAIL"], ["E2E_PROFESSIONAL_VALUER_PASSWORD", "E2E_PROFESSIONAL3_PASSWORD"]),
-          ];
-
-          const tokenUrl = new URL("/auth/v1/token?grant_type=password", supabaseUrl);
-          const transientStatuses = new Set([408, 429, 500, 502, 503, 504, 520, 522, 524]);
-          const failures = [];
-
-          for (const current of accounts) {
-            try {
-              const response = await fetch(tokenUrl, {
-                method: "POST",
-                headers: {
-                  apikey: anonKey,
-                  "Content-Type": "application/json",
-                  Accept: "application/json",
-                },
-                body: JSON.stringify({
-                  email: current.email,
-                  password: current.password,
-                }),
-                signal: AbortSignal.timeout(15_000),
-              });
-              const text = await response.text();
-
-              if (response.ok) {
-                const body = JSON.parse(text);
-                if (typeof body.access_token === "string" && body.access_token.length > 0) {
-                  console.log(`Live demo auth preflight passed for ${current.label}.`);
-                } else {
-                  failures.push(`${current.label}: token response missing access_token`);
-                }
-              } else {
-                const reason = transientStatuses.has(response.status)
-                  ? `transient Supabase Auth HTTP ${response.status}`
-                  : `Supabase Auth HTTP ${response.status}`;
-                failures.push(`${current.label}: ${reason} ${text.slice(0, 160)}`);
-              }
-            } catch (error) {
-              const detail = error instanceof Error ? error.message : String(error);
-              failures.push(`${current.label}: ${detail}`);
-            }
-
-            await new Promise((resolve) => setTimeout(resolve, 250));
-          }
-
-          if (failures.length > 0) {
-            throw new Error(
-              `Live demo auth preflight failed before the browser role matrix. ` +
-                `Repair the seeded accounts or Supabase Auth availability first: ${failures.join("; ")}`
-            );
-          }
-          NODE
-
-      - name: Run role and tier matrix smoke
-        if: steps.smoke.outputs.enabled == 'true'
-        run: npm run test:e2e:live-role-tier-matrix

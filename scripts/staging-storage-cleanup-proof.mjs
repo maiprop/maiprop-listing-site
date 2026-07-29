@@ -549,7 +549,7 @@ try {
     email,
     password,
     email_confirm: true,
-    user_metadata: { ecas_fixture: true, ecas_run_id: runId },
+    app_metadata: { ecas_fixture: true, ecas_run_id: runId },
   });
   userId = expectNoError(created, "Create disposable staging developer").user.id;
 

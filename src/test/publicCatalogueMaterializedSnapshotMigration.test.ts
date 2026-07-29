@@ -20,6 +20,13 @@ const exactLookupMigration = readFileSync(
   ),
   "utf8",
 );
+const generatedTypes = readFileSync(
+  resolve(
+    process.cwd(),
+    "src/integrations/supabase/types.ts",
+  ),
+  "utf8",
+);
 
 describe("materialized public catalogue snapshot migration", () => {
   it("publishes immutable temporal card versions with bounded retention", () => {
@@ -140,5 +147,14 @@ describe("materialized public catalogue snapshot migration", () => {
     );
     expect(exactLookupMigration).toContain("TO anon, authenticated");
     expect(exactLookupMigration).toContain("retain_until timestamptz");
+  });
+
+  it("keeps nullable catalogue fields nullable in the generated RPC contract", () => {
+    const queryTypes = generatedTypes.match(
+      /query_public_catalogue:\s*\{[\s\S]*?read_email_batch:/,
+    )?.[0] ?? "";
+
+    expect(queryTypes).toContain("ai_score: number | null");
+    expect(queryTypes).toContain("open_house_date: string | null");
   });
 });

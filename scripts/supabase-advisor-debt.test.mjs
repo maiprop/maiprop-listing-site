@@ -32,6 +32,52 @@ const policy = {
 };
 
 describe("supabase advisor debt classification", () => {
+  it("classifies the constrained professional projection and service-only RLS tables", async () => {
+    const repositoryPolicy = await loadAdvisorDebtPolicy(
+      resolve(process.cwd(), "scripts/supabase-advisor-debt-policy.json"),
+    );
+    const debt = classifyAdvisorDebt(
+      {
+        results: [
+          {
+            category: "security",
+            lints: [
+              {
+                name: "anon_security_definer_function_executable",
+                level: "WARN",
+                cache_key:
+                  "anon_security_definer_function_executable_public_get_public_professionals",
+              },
+              {
+                name: "authenticated_security_definer_function_executable",
+                level: "WARN",
+                cache_key:
+                  "authenticated_security_definer_function_executable_public_get_public_professionals",
+              },
+              {
+                name: "rls_enabled_no_policy",
+                level: "INFO",
+                cache_key:
+                  "rls_enabled_no_policy_public_storage_cleanup_jobs",
+              },
+              {
+                name: "rls_enabled_no_policy",
+                level: "INFO",
+                cache_key:
+                  "rls_enabled_no_policy_public_storage_cleanup_invocations",
+              },
+            ],
+          },
+        ],
+      },
+      repositoryPolicy,
+    );
+
+    expect(debt.unknown_count).toBe(0);
+    expect(debt.review_count + debt.accepted_count).toBe(4);
+    expect(() => assertAdvisorDebtIsActionable(debt)).not.toThrow();
+  });
+
   it("classifies the constrained public profile summary RPC for both browser roles", async () => {
     const repositoryPolicy = await loadAdvisorDebtPolicy(
       resolve(process.cwd(), "scripts/supabase-advisor-debt-policy.json"),

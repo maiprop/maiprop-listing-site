@@ -43,6 +43,14 @@ test("Storage proof rejects a wrong cron secret without mutating the job or obje
   assert.match(source, /wrong secret leaves the cleanup job and object unchanged/);
 });
 
+test("Storage proof marks disposable users with server-owned metadata", () => {
+  assert.match(
+    source,
+    /app_metadata:\s*\{\s*ecas_fixture:\s*true,\s*ecas_run_id:\s*runId\s*\}/,
+  );
+  assert.doesNotMatch(source, /user_metadata:\s*\{[^}]*ecas_fixture/);
+});
+
 test("Storage proof exercises stale lease rejection and dead-job requeue", () => {
   assert.match(source, /prepare_storage_cleanup_delete/);
   assert.match(source, /stalePrepare[^]*!== "lost"/);

@@ -244,4 +244,46 @@ describe("isolated security fixture privilege gate", () => {
 
     expect(mutation).not.toHaveBeenCalled();
   });
+
+  it("does not trust a user-editable metadata marker for fixture ownership", async () => {
+    const mutation = vi.fn(() => {
+      throw new Error("mutation must not run");
+    });
+    const existingUser = {
+      id: "forged-fixture-id",
+      email: "onboarding@example.test",
+      user_metadata: { e2e_fixture: "isolated-security" },
+      app_metadata: {},
+    };
+    const listUsers = vi.fn().mockResolvedValue({
+      data: { users: [existingUser] },
+      error: null,
+    });
+    const createAdminClient = vi.fn(() => ({
+      auth: {
+        admin: {
+          listUsers,
+          createUser: mutation,
+          updateUserById: mutation,
+          deleteUser: mutation,
+        },
+      },
+      from: vi.fn(() => {
+        const query = {
+          select: vi.fn(() => query),
+          in: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+        return query;
+      }),
+    }));
+
+    await expect(
+      prepareIsolatedSecurityFixtures({
+        env: stagingEnv(),
+        createAdminClient,
+      }),
+    ).rejects.toThrow(/server-owned disposable staging fixture/i);
+
+    expect(mutation).not.toHaveBeenCalled();
+  });
 });

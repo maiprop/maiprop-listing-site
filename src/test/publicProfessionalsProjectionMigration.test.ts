@@ -1,22 +1,49 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const migration = readFileSync(
   "supabase/migrations/20260726184938_protect_public_professional_projection.sql",
   "utf8",
 );
+const correctionName = readdirSync("supabase/migrations").find((name) =>
+  /^\d{14}_replace_public_professional_definer_view\.sql$/.test(name),
+);
+const correction = correctionName
+  ? readFileSync(`supabase/migrations/${correctionName}`, "utf8")
+  : "";
 
 describe("public professional projection migration", () => {
-  it("exposes only a fixed public projection", () => {
-    expect(migration).toContain(
-      "CREATE OR REPLACE VIEW public.public_professionals",
+  it("replaces the definer view with an invoker view over a constrained function", () => {
+    expect(correctionName).toBeDefined();
+    expect(correction).toContain(
+      "CREATE OR REPLACE FUNCTION public.get_public_professionals()",
     );
-    expect(migration).toContain("WHERE professional.archived_at IS NULL");
-    expect(migration).not.toMatch(
+    expect(correction).toMatch(
+      /SECURITY DEFINER[\s\S]*SET search_path = ''/,
+    );
+    expect(correction).toMatch(
+      /CREATE OR REPLACE VIEW public\.public_professionals[\s\S]*security_invoker\s*=\s*true/,
+    );
+    expect(correction).toMatch(
+      /professional\.rating::numeric\(3,\s*2\)\s+AS rating/,
+    );
+    expect(correction).toMatch(
+      /professional\.hourly_rate::numeric\(10,\s*2\)\s+AS hourly_rate/,
+    );
+    expect(correction).not.toMatch(
+      /CREATE OR REPLACE VIEW public\.public_professionals[\s\S]*SELECT \*/,
+    );
+    expect(correction).toContain("WHERE professional.archived_at IS NULL");
+    expect(correction).toMatch(/\brating numeric\(3,\s*2\)/);
+    expect(correction).toMatch(/\bhourly_rate numeric\(10,\s*2\)/);
+    expect(correction).not.toMatch(
       /SELECT[\s\S]*professional\.(rejection_reason|calendar_notes|notes)/i,
     );
-    expect(migration).toMatch(
+    expect(correction).toMatch(
       /GRANT SELECT ON TABLE public\.public_professionals\s+TO anon, authenticated, service_role/,
+    );
+    expect(correction).toMatch(
+      /REVOKE ALL ON FUNCTION public\.get_public_professionals\(\)\s+FROM PUBLIC, anon, authenticated/,
     );
   });
 

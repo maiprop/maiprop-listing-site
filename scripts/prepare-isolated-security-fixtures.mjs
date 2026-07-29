@@ -145,9 +145,9 @@ async function assertExistingFixtureUsersAreSafe(admin, existingByEmail) {
         `Refusing to use protected admin identity ${user.email} as an RLS fixture.`,
       );
     }
-    if (user.user_metadata?.e2e_fixture !== DISPOSABLE_FIXTURE_MARKER) {
+    if (user.app_metadata?.e2e_fixture !== DISPOSABLE_FIXTURE_MARKER) {
       throw new Error(
-        `Existing user ${user.email} is not a disposable staging fixture.`,
+        `Existing user ${user.email} is not a server-owned disposable staging fixture.`,
       );
     }
   }
@@ -165,8 +165,8 @@ async function ensureAuthUser(admin, existingUser, email, password, { replace = 
   const attributes = {
     password,
     email_confirm: true,
-    user_metadata: {
-      ...(existingUser?.user_metadata ?? {}),
+    app_metadata: {
+      ...(existingUser?.app_metadata ?? {}),
       e2e_fixture: DISPOSABLE_FIXTURE_MARKER,
     },
   };
