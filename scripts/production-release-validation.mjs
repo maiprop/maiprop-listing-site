@@ -520,7 +520,7 @@ export function validateReleaseApproval({
 
   const approvedAt = requireDate(record.approved_at, "Approval time");
   const expiresAt = requireDate(record.expires_at, "Approval expiry");
-  const nowDate = now instanceof Date ? now : new Date(now);
+  const nowDate = requireDate(now, "Validation time");
   if (approvedAt >= expiresAt) {
     throw new Error("Release approval expiry must follow approval time.");
   }
@@ -539,7 +539,10 @@ export function validateReleaseApproval({
 export function validateMutationLease({
   lease,
   sha,
+  repository,
+  sourceTree,
   artifactSha256,
+  approvalNonce,
   sourceRunId,
   sourceRunAttempt,
   stagingRunId,
@@ -558,11 +561,30 @@ export function validateMutationLease({
     throw new Error("Mutation lease release SHA does not match.");
   }
   if (
+    requireRepository(record.repository, "Mutation lease repository") !==
+    requireRepository(repository, "Expected repository")
+  ) {
+    throw new Error("Mutation lease repository does not match.");
+  }
+  if (
+    requireFullSha(record.source_tree, "Mutation lease source tree") !==
+    requireFullSha(sourceTree, "Expected source tree")
+  ) {
+    throw new Error("Mutation lease source tree does not match.");
+  }
+  if (
     requireSha256(record.artifact_sha256, "Mutation lease artifact digest") !==
     requireSha256(artifactSha256, "Expected artifact digest")
   ) {
     throw new Error("Mutation lease artifact digest does not match.");
   }
+  if (
+    requireSha256(record.approval_nonce, "Mutation lease approval nonce") !==
+    requireSha256(approvalNonce, "Expected approval nonce")
+  ) {
+    throw new Error("Mutation lease approval nonce does not match.");
+  }
+  requireSha256(record.nonce, "Mutation lease nonce");
 
   for (const [field, expected, label] of [
     ["source_run_id", sourceRunId, "source run"],
@@ -588,7 +610,7 @@ export function validateMutationLease({
 
   const issuedAt = requireDate(record.issued_at, "Mutation lease issue time");
   const expiresAt = requireDate(record.expires_at, "Mutation lease expiry");
-  const nowDate = now instanceof Date ? now : new Date(now);
+  const nowDate = requireDate(now, "Validation time");
   if (issuedAt >= expiresAt) {
     throw new Error("Mutation lease expiry must follow issue time.");
   }
@@ -999,7 +1021,10 @@ async function main() {
     validateMutationLease({
       lease,
       sha,
+      repository: argValue("--repository"),
+      sourceTree: argValue("--source-tree"),
       artifactSha256: argValue("--artifact-sha256"),
+      approvalNonce: argValue("--approval-nonce"),
       sourceRunId: argValue("--source-run-id"),
       sourceRunAttempt: argValue("--source-run-attempt"),
       stagingRunId: argValue("--staging-run-id"),

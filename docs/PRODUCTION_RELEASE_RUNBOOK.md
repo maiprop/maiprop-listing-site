@@ -45,22 +45,31 @@ attempt, staging run ID and attempt, approval run ID and attempt, immutable
 artifact digest, approver, timestamps, and a 256-bit cryptographic nonce.
 Validation rejects future, revoked, expired, malformed, replay-ambiguous, or
 self-approved records and requires a separately validated mutation lease with
-a maximum 15-minute lifetime.
+a maximum 15-minute lifetime. The lease carries its own 256-bit nonce and binds
+the repository, source tree, signed approval nonce, artifact digest, and every
+source/staging/approval/production run ID and attempt. Invalid validation clocks
+fail closed.
 
 The Cloudflare lock workflow additionally requires repository secrets
 `CLOUDFLARE_PAGES_READ_TOKEN` and `CLOUDFLARE_PAGES_EDIT_TOKEN`, plus exact
 repository variables `CLOUDFLARE_PAGES_PROJECT_ID` and
-`CLOUDFLARE_STAGING_PAGES_PROJECT_ID`. Merge the workflow safely to `main`
-before its first dispatch; candidate-branch execution is rejected. Until the
+`CLOUDFLARE_STAGING_PAGES_PROJECT_ID`. Merge the safe bootstrap Task 1
+workflows to trusted `main` under `[CF-Pages-Skip]` before publishing the rest
+of the candidate. Run read/lock verification only from that independently
+verified current-main workflow SHA; no candidate branch receives provider
+secrets. Candidate-branch execution is rejected. Until the
 least-privilege secrets are provisioned, the isolated main-only read and edit
 steps may temporarily fall back to the existing `CLOUDFLARE_API_TOKEN`; rotate
 to the named read/edit tokens after bootstrap.
 
 When the project-ID variables are absent, the read-only standards workflow
-still GETs both fixed project names and uploads minimized evidence containing
-their IDs, then fails with a bootstrap instruction. Set both variables from
-that evidence and rerun. The mutation workflow never bootstraps identity:
-both distinct pinned IDs are mandatory and validated before either PATCH.
+GETs both fixed project names, validates identity/source type, and uploads
+minimized evidence containing their distinct IDs even when Git previews remain
+unlocked. It then fails with a bootstrap instruction without treating lock
+posture as an identity prerequisite. Set both variables from that evidence and
+rerun; only the pinned rerun enforces lock posture. The mutation workflow never
+bootstraps identity: both distinct pinned IDs are mandatory and validated
+before either PATCH.
 
 The `production` environment must contain:
 

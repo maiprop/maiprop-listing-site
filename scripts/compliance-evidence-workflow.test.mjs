@@ -50,6 +50,29 @@ describe("standards evidence workflow", () => {
     expect(collectJob).not.toContain("CLOUDFLARE_ACCOUNT_ID");
   });
 
+  it("never exposes provider secrets or candidate code on a non-main dispatch", () => {
+    expect(workflow).toContain("verify-current-main:");
+    expect(workflow).toContain(
+      "CURRENT_MAIN=\"$(gh api \"repos/${GITHUB_REPOSITORY}/branches/main\" --jq '.commit.sha')\"",
+    );
+    expect(workflow).toContain(
+      'if [ "$CURRENT_MAIN" != "$GITHUB_WORKFLOW_SHA" ]; then',
+    );
+
+    const collectStart = workflow.indexOf("  collect:");
+    const collectJob = workflow.slice(collectStart);
+    expect(collectJob).toContain(
+      "github.ref == 'refs/heads/main'",
+    );
+    expect(collectJob).toContain(
+      "needs.verify-current-main.result == 'success'",
+    );
+    expect(collectJob).toContain(
+      "ref: ${{ needs.verify-current-main.outputs.main_sha }}",
+    );
+    expect(collectJob).toContain("persist-credentials: false");
+  });
+
   it("keeps the Pages read token out of unrelated DNS posture collection", () => {
     expect(workflow).not.toContain("CLOUDFLARE_DNS_MODE");
     expect(workflow).not.toContain("CLOUDFLARE_ZONE_NAME");

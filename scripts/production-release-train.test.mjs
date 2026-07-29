@@ -11,6 +11,16 @@ const cloudflarePostureValidator = readFileSync(
   resolve(root, "scripts", "validate-cloudflare-pages-staging-posture.mjs"),
   "utf8",
 );
+const releasePlan = readFileSync(
+  resolve(
+    root,
+    "docs",
+    "superpowers",
+    "plans",
+    "2026-07-29-complete-ecas-production-release.md",
+  ),
+  "utf8",
+);
 
 describe("production release train", () => {
   it("parses every production release workflow as valid YAML", () => {
@@ -47,6 +57,7 @@ describe("production release train", () => {
   it("keeps compliance evidence read-only and isolates its Cloudflare read token", () => {
     const compliance = workflow("compliance-evidence.yml");
     const parsed = yaml.load(compliance);
+    const mainVerification = parsed.jobs["verify-current-main"];
     const control = parsed.jobs["cloudflare-pages-verify"];
     const collect = parsed.jobs.collect;
     const dispatch = parsed.on.workflow_dispatch;
@@ -64,9 +75,25 @@ describe("production release train", () => {
     const evidenceDownload = collect.steps.find(
       (step) => step.name === "Download minimized Cloudflare Pages posture evidence",
     );
+    const collectCheckout = collect.steps.find(
+      (step) => String(step.uses ?? "").startsWith("actions/checkout@"),
+    );
 
     expect(parsed.concurrency["cancel-in-progress"]).toBe(false);
     expect(dispatch).toEqual({});
+    expect(mainVerification.if).toBe(
+      "${{ github.ref == 'refs/heads/main' }}",
+    );
+    expect(JSON.stringify(mainVerification)).not.toMatch(
+      /secrets\.(?:CLOUDFLARE|SUPABASE|SENTRY)/,
+    );
+    expect(JSON.stringify(mainVerification)).not.toContain("actions/checkout");
+    expect(JSON.stringify(mainVerification)).not.toContain("npm ");
+    expect(mainVerification.steps[0].run).toContain(
+      "repos/${GITHUB_REPOSITORY}/branches/main",
+    );
+    expect(mainVerification.steps[0].run).toContain("GITHUB_WORKFLOW_SHA");
+    expect(control.needs).toBe("verify-current-main");
     expect(control.if).toBe("${{ github.ref == 'refs/heads/main' }}");
     expect(control.concurrency).toEqual({
       group: "maiprop-cloudflare-pages-git-deploy-verify",
@@ -133,10 +160,74 @@ describe("production release train", () => {
     );
     expect(evidenceDownload.uses).toContain("actions/download-artifact@");
     expect(evidenceDownload.with.path).toBe("compliance-evidence/");
+    expect(collect.needs).toEqual([
+      "verify-current-main",
+      "cloudflare-pages-verify",
+    ]);
+    expect(collect.if).toContain("github.ref == 'refs/heads/main'");
+    expect(collect.if).toContain(
+      "needs.verify-current-main.result == 'success'",
+    );
+    expect(collectCheckout.with.ref).toBe(
+      "${{ needs.verify-current-main.outputs.main_sha }}",
+    );
+    expect(collectCheckout.with["persist-credentials"]).toBe(false);
     expect(compliance).not.toMatch(
       /(?:--request|-X)\s*(?:POST|PUT|PATCH|DELETE)\b/i,
     );
     expect(compliance).not.toContain("CLOUDFLARE_PAGES_EDIT_TOKEN");
+  });
+
+  it("uploads unlocked project identity evidence before failing bootstrap", () => {
+    const compliance = workflow("compliance-evidence.yml");
+    const parsed = yaml.load(compliance);
+    const controlStep = parsed.jobs["cloudflare-pages-verify"].steps.find(
+      (step) => step.name === "Verify Cloudflare Pages Git deployment lockout",
+    );
+    const run = controlStep.run;
+    const identityStart = run.indexOf("validate_identity() {");
+    const lockedStart = run.indexOf("validate_locked() {");
+    const identityBody = run.slice(identityStart, lockedStart);
+    const evidenceWrite = run.indexOf(
+      '"$EVIDENCE_DIR/cloudflare-pages-git-auto-deploy-posture.json"',
+    );
+    const bootstrapFailure = run.indexOf(
+      'if [ "$bootstrap_required" -eq 1 ]; then',
+    );
+    const lockedValidation = run.indexOf(
+      'validate_locked "$PRODUCTION_RAW"',
+      bootstrapFailure,
+    );
+
+    expect(identityStart).toBeGreaterThanOrEqual(0);
+    expect(identityBody).toContain(
+      '(.result.id | type == "string" and length > 0)',
+    );
+    expect(identityBody).not.toContain("production_deployments_enabled");
+    expect(run).toContain(
+      'if [ "$PRODUCTION_ACTUAL_ID" = "$STAGING_ACTUAL_ID" ]; then',
+    );
+    expect(run).toContain(
+      "allAutomaticDeploymentsDisabled:",
+    );
+    expect(evidenceWrite).toBeGreaterThanOrEqual(0);
+    expect(evidenceWrite).toBeLessThan(bootstrapFailure);
+    expect(bootstrapFailure).toBeLessThan(lockedValidation);
+  });
+
+  it("formalizes trusted-main provider bootstrap before candidate publication", () => {
+    expect(releasePlan).toContain(
+      "No candidate branch receives live provider secrets",
+    );
+    expect(releasePlan).toContain(
+      "bootstrap Task 1 workflow",
+    );
+    expect(releasePlan).toContain(
+      "merged to trusted `main` under `[CF-Pages-Skip]`",
+    );
+    expect(releasePlan).toContain(
+      "main-only read and lock verification",
+    );
   });
 
   it("isolates Cloudflare Pages PATCH operations in a manual trusted-main workflow", () => {
