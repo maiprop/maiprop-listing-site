@@ -48,6 +48,10 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      cloudflare_pages_post_state_json: ${{ steps.cloudflare_verify.outputs.cloudflare_pages_post_state_json }}
+      cloudflare_pages_posture_json: ${{ steps.cloudflare_verify.outputs.cloudflare_pages_posture_json }}
+      cloudflare_admin_posture_json: ${{ steps.cloudflare_verify.outputs.cloudflare_admin_posture_json }}
     concurrency:
       group: maiprop-cloudflare-pages-git-deploy-verify
       cancel-in-progress: false
@@ -262,6 +266,13 @@ jobs:
           }' "$PRODUCTION_RAW" \
             > "$EVIDENCE_DIR/cloudflare-admin-posture.json"
 
+          echo "cloudflare_pages_post_state_json=$(jq -c . "$EVIDENCE_DIR/cloudflare-pages-git-auto-deploy-post-state.json")" \
+            >> "$GITHUB_OUTPUT"
+          echo "cloudflare_pages_posture_json=$(jq -c . "$EVIDENCE_DIR/cloudflare-pages-git-auto-deploy-posture.json")" \
+            >> "$GITHUB_OUTPUT"
+          echo "cloudflare_admin_posture_json=$(jq -c . "$EVIDENCE_DIR/cloudflare-admin-posture.json")" \
+            >> "$GITHUB_OUTPUT"
+
           if [ "$bootstrap_required" -eq 1 ]; then
             echo "::error::Set CLOUDFLARE_PAGES_PROJECT_ID and CLOUDFLARE_STAGING_PAGES_PROJECT_ID from the minimized posture artifact, then rerun verification."
             exit 1
@@ -393,12 +404,28 @@ jobs:
           mkdir -p compliance-evidence
           npm run capture:sentry-live-evidence -- --strict --out compliance-evidence/sentry-live-evidence.json
 
-      - name: Download minimized Cloudflare Pages posture evidence
+      - name: Materialize minimized Cloudflare Pages posture evidence
+        if: always()
         continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: cloudflare-pages-posture-${{ github.run_id }}
-          path: compliance-evidence/
+        env:
+          CLOUDFLARE_PAGES_POST_STATE_JSON: ${{ needs.cloudflare-pages-verify.outputs.cloudflare_pages_post_state_json }}
+          CLOUDFLARE_PAGES_POSTURE_JSON: ${{ needs.cloudflare-pages-verify.outputs.cloudflare_pages_posture_json }}
+          CLOUDFLARE_ADMIN_POSTURE_JSON: ${{ needs.cloudflare-pages-verify.outputs.cloudflare_admin_posture_json }}
+        run: |
+          set -euo pipefail
+          mkdir -p compliance-evidence
+          if [ -z "$CLOUDFLARE_PAGES_POST_STATE_JSON" ] ||
+             [ -z "$CLOUDFLARE_PAGES_POSTURE_JSON" ] ||
+             [ -z "$CLOUDFLARE_ADMIN_POSTURE_JSON" ]; then
+            echo "::error::Minimized Cloudflare posture outputs are unavailable."
+            exit 1
+          fi
+          printf '%s\n' "$CLOUDFLARE_PAGES_POST_STATE_JSON" |
+            jq -e '.' > compliance-evidence/cloudflare-pages-git-auto-deploy-post-state.json
+          printf '%s\n' "$CLOUDFLARE_PAGES_POSTURE_JSON" |
+            jq -e '.' > compliance-evidence/cloudflare-pages-git-auto-deploy-posture.json
+          printf '%s\n' "$CLOUDFLARE_ADMIN_POSTURE_JSON" |
+            jq -e '.' > compliance-evidence/cloudflare-admin-posture.json
 
       - name: Check ECAS live evidence rollup
         if: always()

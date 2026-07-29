@@ -95,9 +95,45 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     expect(upload.with.path).toContain(
       "cloudflare-pages-posture-evidence",
     );
-    expect(JSON.stringify(collect)).not.toContain("CLOUDFLARE_");
+    expect(JSON.stringify(collect)).not.toMatch(
+      /CLOUDFLARE_(?:PAGES_)?(?:READ|EDIT|API)_TOKEN|CLOUDFLARE_ACCOUNT_ID/,
+    );
     expect(JSON.stringify(collect.steps.slice(0, 4))).not.toMatch(
       /SUPABASE|SENTRY|GH_TOKEN|GITHUB_TOKEN|secrets\./,
+    );
+  });
+
+  it("hands minimized posture to collect without a downloaded artifact", () => {
+    const parsed = parsedWorkflow("compliance-evidence.yml");
+    const source = workflow("compliance-evidence.yml");
+    const verifyCloudflare = parsed.jobs["cloudflare-pages-verify"];
+    const collect = parsed.jobs.collect;
+    const materialize = collect.steps.find(
+      (step) =>
+        step.name === "Materialize minimized Cloudflare Pages posture evidence",
+    );
+
+    expect(source).not.toContain("actions/download-artifact");
+    expect(verifyCloudflare.outputs).toEqual({
+      cloudflare_pages_post_state_json:
+        "${{ steps.cloudflare_verify.outputs.cloudflare_pages_post_state_json }}",
+      cloudflare_pages_posture_json:
+        "${{ steps.cloudflare_verify.outputs.cloudflare_pages_posture_json }}",
+      cloudflare_admin_posture_json:
+        "${{ steps.cloudflare_verify.outputs.cloudflare_admin_posture_json }}",
+    });
+    expect(materialize.env.CLOUDFLARE_PAGES_POST_STATE_JSON).toBe(
+      "${{ needs.cloudflare-pages-verify.outputs.cloudflare_pages_post_state_json }}",
+    );
+    expect(materialize.env.CLOUDFLARE_PAGES_POSTURE_JSON).toBe(
+      "${{ needs.cloudflare-pages-verify.outputs.cloudflare_pages_posture_json }}",
+    );
+    expect(materialize.env.CLOUDFLARE_ADMIN_POSTURE_JSON).toBe(
+      "${{ needs.cloudflare-pages-verify.outputs.cloudflare_admin_posture_json }}",
+    );
+    expect(materialize.run).toContain("jq -e '.'");
+    expect(JSON.stringify(materialize)).not.toMatch(
+      /CLOUDFLARE_(?:PAGES_)?(?:READ|EDIT|API)_TOKEN|secrets\./,
     );
   });
 
