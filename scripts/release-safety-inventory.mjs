@@ -230,11 +230,28 @@ export function findCloudflareHttpMutations(text) {
   }
 
   const methods = new Set();
-  for (const match of source.matchAll(
-    /(?:--request(?:=|\s+)|-X\s*)["']?(POST|PUT|PATCH|DELETE)\b/gi,
-  )) {
-    methods.add(match[1].toUpperCase());
-  }
+  const collectMethods = (pattern) => {
+    for (const match of source.matchAll(pattern)) {
+      methods.add(match[1].toUpperCase());
+    }
+  };
+
+  collectMethods(
+    /\bcurl\b[\s\S]{0,1000}?(?:--request(?:=|\s+)|-X\s*)["']?(POST|PUT|PATCH|DELETE)\b/gi,
+  );
+  collectMethods(
+    /\bfetch\s*\([\s\S]{0,2000}?\bmethod\s*:\s*["'](POST|PUT|PATCH|DELETE)["']/gi,
+  );
+  collectMethods(
+    /\bInvoke-(?:RestMethod|WebRequest)\b[\s\S]{0,1000}?-Method(?:\s+|=)["']?(POST|PUT|PATCH|DELETE)\b/gi,
+  );
+  collectMethods(
+    /\bwget\b[\s\S]{0,1000}?--method(?:=|\s+)["']?(POST|PUT|PATCH|DELETE)\b/gi,
+  );
+  collectMethods(
+    /\bgh\s+api\b[\s\S]{0,1000}?(?:--method|-X)(?:=|\s+)["']?(POST|PUT|PATCH|DELETE)\b/gi,
+  );
+
   if (
     /\bcurl\b/i.test(source) &&
     /--data(?:-raw|-binary)?(?:=|\s+)/i.test(source) &&
@@ -243,6 +260,15 @@ export function findCloudflareHttpMutations(text) {
     methods.add("POST");
   }
   return [...methods].sort();
+}
+
+const authorizedCloudflareHttpMutationWorkflows = new Set([
+  ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
+  ".github/workflows/stage-release.yml",
+]);
+
+export function isAuthorizedCloudflareHttpMutationWorkflow(workflowPath) {
+  return authorizedCloudflareHttpMutationWorkflows.has(String(workflowPath));
 }
 
 export function cloudflareHttpMutationViolation({
@@ -330,7 +356,7 @@ function scanWorkflows() {
     const cloudflareViolation = cloudflareHttpMutationViolation({
       workflowPath,
       text,
-      authorized: authorizedMutationWorkflows.has(workflowPath),
+      authorized: isAuthorizedCloudflareHttpMutationWorkflow(workflowPath),
     });
     if (cloudflareViolation) violations.push(cloudflareViolation);
     if (authorizedMutationWorkflows.has(workflowPath)) continue;

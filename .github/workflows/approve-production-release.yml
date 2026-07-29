@@ -54,7 +54,8 @@ jobs:
           jq -e '
             .total_count == 1 and
             (.branch_policies | length) == 1 and
-            .branch_policies[0].name == "main"
+            .branch_policies[0].name == "main" and
+            .branch_policies[0].type == "branch"
           ' "$POLICIES_FILE" > /dev/null
 
           jq -n \

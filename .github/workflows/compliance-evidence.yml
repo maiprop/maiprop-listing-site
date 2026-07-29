@@ -316,16 +316,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GITHUB_TOKEN: ${{ github.token }}
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_ORG: ${{ vars.SENTRY_ORG || secrets.SENTRY_ORG }}
-      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT || secrets.SENTRY_PROJECT }}
-      SENTRY_ENVIRONMENT: production
-
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -347,6 +337,9 @@ jobs:
           npm run check:github-governance | tee compliance-evidence/github-governance.txt
 
       - name: Capture GitHub governance evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p compliance-evidence
@@ -380,6 +373,9 @@ jobs:
 
       - name: Capture Supabase live security evidence
         continue-on-error: true
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
         run: |
           set -euo pipefail
           mkdir -p compliance-evidence
@@ -387,6 +383,11 @@ jobs:
 
       - name: Capture Sentry live telemetry status
         continue-on-error: true
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG || secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT || secrets.SENTRY_PROJECT }}
+          SENTRY_ENVIRONMENT: production
         run: |
           set -euo pipefail
           mkdir -p compliance-evidence

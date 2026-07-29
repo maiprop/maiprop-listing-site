@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   cloudflareHttpMutationViolation,
   findCloudflareHttpMutations,
+  isAuthorizedCloudflareHttpMutationWorkflow,
 } from "./release-safety-inventory.mjs";
 
 describe("release safety inventory", () => {
@@ -45,6 +46,62 @@ describe("release safety inventory", () => {
       text: patch,
       authorized: true,
     })).toBeNull();
+  });
+
+  it("detects non-curl Cloudflare API mutation clients", () => {
+    const mutations = [
+      {
+        source: `await fetch("https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p", {
+          method: "PATCH",
+        });`,
+        method: "PATCH",
+      },
+      {
+        source:
+          'Invoke-RestMethod -Uri "https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p" -Method Delete',
+        method: "DELETE",
+      },
+      {
+        source:
+          'Invoke-WebRequest -Method PUT -Uri "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/p"',
+        method: "PUT",
+      },
+      {
+        source:
+          'wget --method=POST "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/p"',
+        method: "POST",
+      },
+      {
+        source:
+          'gh api --method PATCH "https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p"',
+        method: "PATCH",
+      },
+    ];
+
+    for (const { source, method } of mutations) {
+      expect(findCloudflareHttpMutations(source)).toEqual([method]);
+    }
+
+    expect(cloudflareHttpMutationViolation({
+      workflowPath: ".github/workflows/untrusted-provider-control.yml",
+      text: mutations.map(({ source }) => source).join("\n"),
+      authorized: false,
+    })).toMatch(/unauthorized/i);
+  });
+
+  it("keeps the Cloudflare HTTP mutation allowlist narrowly dedicated", () => {
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(
+      ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
+    )).toBe(true);
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(
+      ".github/workflows/stage-release.yml",
+    )).toBe(true);
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(
+      ".github/workflows/reusable-supabase-staging.yml",
+    )).toBe(false);
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(
+      ".github/workflows/compliance-evidence.yml",
+    )).toBe(false);
   });
 
   it("passes the checked inventory for documented environment variables", () => {

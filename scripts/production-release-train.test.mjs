@@ -78,6 +78,24 @@ describe("production release train", () => {
     const collectCheckout = collect.steps.find(
       (step) => String(step.uses ?? "").startsWith("actions/checkout@"),
     );
+    const setupNode = collect.steps.find(
+      (step) => String(step.uses ?? "").startsWith("actions/setup-node@"),
+    );
+    const install = collect.steps.find(
+      (step) => step.name === "Install dependencies",
+    );
+    const localStandards = collect.steps.find(
+      (step) => step.name === "Run local standards gates",
+    );
+    const githubEvidence = collect.steps.find(
+      (step) => step.name === "Capture GitHub governance evidence",
+    );
+    const supabaseEvidence = collect.steps.find(
+      (step) => step.name === "Capture Supabase live security evidence",
+    );
+    const sentryEvidence = collect.steps.find(
+      (step) => step.name === "Capture Sentry live telemetry status",
+    );
 
     expect(parsed.concurrency["cancel-in-progress"]).toBe(false);
     expect(dispatch).toEqual({});
@@ -110,9 +128,33 @@ describe("production release train", () => {
     expect(controlStep.env.CLOUDFLARE_ACCOUNT_ID).toBe(
       "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
     );
-    expect(collect.env.CLOUDFLARE_API_TOKEN).toBeUndefined();
-    expect(collect.env.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
+    expect(collect.env).toBeUndefined();
     expect(collectSource).not.toContain("secrets.CLOUDFLARE_PAGES_EDIT_TOKEN");
+    for (const step of [
+      collectCheckout,
+      setupNode,
+      install,
+      localStandards,
+    ]) {
+      expect(JSON.stringify(step)).not.toMatch(
+        /(?:SUPABASE|SENTRY|GH_TOKEN|GITHUB_TOKEN|secrets\.)/,
+      );
+    }
+    expect(githubEvidence.env).toEqual({
+      GH_TOKEN: "${{ github.token }}",
+      GITHUB_TOKEN: "${{ github.token }}",
+    });
+    expect(supabaseEvidence.env).toEqual({
+      SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+      SUPABASE_PROJECT_REF: "${{ secrets.VITE_SUPABASE_PROJECT_ID }}",
+    });
+    expect(sentryEvidence.env).toEqual({
+      SENTRY_AUTH_TOKEN: "${{ secrets.SENTRY_AUTH_TOKEN }}",
+      SENTRY_ORG: "${{ vars.SENTRY_ORG || secrets.SENTRY_ORG }}",
+      SENTRY_PROJECT:
+        "${{ vars.SENTRY_PROJECT || secrets.SENTRY_PROJECT }}",
+      SENTRY_ENVIRONMENT: "production",
+    });
     expect(controlStep.run).toContain(
       'PRODUCTION_PROJECT="maiprop-listing-site"',
     );
@@ -265,6 +307,7 @@ describe("production release train", () => {
     );
     expect(lock).toContain(".total_count == 1");
     expect(lock).toContain('.branch_policies[0].name == "main"');
+    expect(lock).toContain('.branch_policies[0].type == "branch"');
     expect(job.if).toContain("github.ref == 'refs/heads/main'");
     expect(job.if).toContain(
       "inputs.confirm == 'DISABLE_CLOUDFLARE_GIT_DEPLOYS'",
@@ -397,6 +440,9 @@ describe("production release train", () => {
     );
     expect(approval).toContain(
       '.branch_policies[0].name == "main"',
+    );
+    expect(approval).toContain(
+      '.branch_policies[0].type == "branch"',
     );
     expect(approval).toContain(
       '"required_reviewers_available": false',

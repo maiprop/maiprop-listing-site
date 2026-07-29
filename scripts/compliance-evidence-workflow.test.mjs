@@ -45,9 +45,25 @@ describe("standards evidence workflow", () => {
 
     const collectStart = workflow.indexOf("  collect:");
     const collectJob = workflow.slice(collectStart);
+    expect(collectJob).not.toMatch(/^\s{4}env:\s*$/m);
     expect(collectJob).not.toContain("CLOUDFLARE_PAGES_EDIT_TOKEN");
     expect(collectJob).not.toContain("CLOUDFLARE_PAGES_READ_TOKEN");
     expect(collectJob).not.toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(step("Install dependencies", "Run local standards gates")).not.toContain(
+      "secrets.",
+    );
+    expect(step("Run local standards gates", "Capture GitHub governance evidence")).not.toContain(
+      "secrets.",
+    );
+    expect(step("Capture GitHub governance evidence", "Capture Supabase live security evidence")).toContain(
+      "GH_TOKEN: ${{ github.token }}",
+    );
+    expect(step("Capture Supabase live security evidence", "Capture Sentry live telemetry status")).toContain(
+      "SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+    );
+    expect(step("Capture Sentry live telemetry status", "Download minimized Cloudflare Pages posture evidence")).toContain(
+      "SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}",
+    );
   });
 
   it("never exposes provider secrets or candidate code on a non-main dispatch", () => {
