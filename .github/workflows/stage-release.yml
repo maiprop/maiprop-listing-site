@@ -249,6 +249,7 @@ jobs:
       source_run_id: ${{ needs.validate-source.outputs.source_run_id }}
       source_run_attempt: ${{ needs.validate-source.outputs.source_run_attempt }}
       artifact_sha256: ${{ needs.validate-source.outputs.artifact_sha256 }}
+      manifest_sha256: ${{ needs.validate-source.outputs.manifest_sha256 }}
       production_supabase_project_id: ${{ vars.PRODUCTION_SUPABASE_PROJECT_ID }}
       staging_mutation_acknowledgement: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
       trusted_control_sha: ${{ github.workflow_sha }}
@@ -1632,6 +1633,14 @@ jobs:
              ) ||
              database.release_sha !== expectedSha ||
              database.artifact_sha256 !== expectedArtifact ||
+             database.manifest_sha256 !== expectedManifest ||
+             supabase.manifest_sha256 !== expectedManifest ||
+             database.supabase_sha256 !== supabase.supabase_sha256 ||
+             !/^[0-9a-f]{64}$/.test(supabase.supabase_sha256 ?? "") ||
+             supabase.edge_source_manifest?.release_sha !== expectedSha ||
+             !/^[0-9a-f]{64}$/.test(
+               supabase.edge_source_manifest?.manifest_sha256 ?? "",
+             ) ||
              database.schema_version !== 2 ||
              !Number.isSafeInteger(database.pgtap_plan) ||
              database.pgtap_plan < 1 ||

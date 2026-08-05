@@ -6,6 +6,9 @@ import { describe, expect, it } from "vitest";
 import {
   assertCloudflareDeployment,
   assertEdgeBundleParity,
+  assertEdgeSourceManifestParity,
+  assertMigrationDryRunParity,
+  assertMigrationPromotionPlan,
   assertSupabaseTargetIdentity,
   normalizeReleaseSha,
   selectApprovalRun,
@@ -553,6 +556,173 @@ describe("production release validation", () => {
     })).toThrow(/does not match/i);
   });
 
+  it("permits only staged migrations to remain pending in production", () => {
+    const staged = [
+      {
+        version: "20260722060307",
+        name: "replace_definer_listing_views_with_scoped_rpcs",
+        file_sha256: "a".repeat(64),
+      },
+      {
+        version: "20260726234052",
+        name: "use_current_service_role_claim",
+        file_sha256: "b".repeat(64),
+      },
+      {
+        version: "20260729145205",
+        name: "replace_public_professional_definer_view",
+        file_sha256: "c".repeat(64),
+      },
+    ];
+    const production = [{
+      version: staged[0].version,
+      name: staged[0].name,
+    }];
+
+    expect(assertMigrationPromotionPlan(staged, production)).toEqual({
+      staged,
+      production,
+      pending: staged.slice(1),
+      pending_files: [
+        "20260726234052_use_current_service_role_claim.sql",
+        "20260729145205_replace_public_professional_definer_view.sql",
+      ],
+    });
+  });
+
+  it("rejects unknown and version-name drift in production migration history", () => {
+    const staged = [
+      {
+        version: "20260722060307",
+        name: "canonical_name",
+        file_sha256: "a".repeat(64),
+      },
+      {
+        version: "20260729145205",
+        name: "next_name",
+        file_sha256: "b".repeat(64),
+      },
+    ];
+
+    expect(() => assertMigrationPromotionPlan(staged, [
+      { version: "20260722060307", name: "different_name" },
+    ])).toThrow(/version-name drift/i);
+    expect(() => assertMigrationPromotionPlan(staged, [
+      ...staged,
+      { version: "20260730000000", name: "unknown_remote" },
+    ])).toThrow(/unknown production migration/i);
+    expect(() => assertMigrationPromotionPlan([
+      ...staged,
+      staged[1],
+    ], [])).toThrow(/duplicate staged migration/i);
+  });
+
+  it("requires signed SQL digests and an exact production history prefix", () => {
+    const staged = [
+      {
+        version: "20260722060307",
+        name: "first",
+        file_sha256: "a".repeat(64),
+      },
+      {
+        version: "20260726234052",
+        name: "second",
+        file_sha256: "b".repeat(64),
+      },
+      {
+        version: "20260729145205",
+        name: "third",
+        file_sha256: "c".repeat(64),
+      },
+    ];
+
+    expect(() => assertMigrationPromotionPlan(staged, [
+      { version: staged[0].version, name: staged[0].name },
+      { version: staged[2].version, name: staged[2].name },
+    ])).toThrow(/exact staged prefix/i);
+    expect(() => assertMigrationPromotionPlan([
+      { version: staged[0].version, name: staged[0].name },
+    ], [])).toThrow(/file digest/i);
+    expect(() => assertMigrationPromotionPlan([
+      { ...staged[0], file_sha256: "not-a-digest" },
+    ], [])).toThrow(/file digest/i);
+  });
+
+  it("requires the Supabase dry run to report exactly the staged pending files", () => {
+    const pending = [
+      {
+        version: "20260726234052",
+        name: "use_current_service_role_claim",
+        file_sha256: "a".repeat(64),
+      },
+      {
+        version: "20260729145205",
+        name: "replace_public_professional_definer_view",
+        file_sha256: "b".repeat(64),
+      },
+    ];
+
+    expect(assertMigrationDryRunParity(pending, [
+      "20260729145205_replace_public_professional_definer_view.sql",
+      "20260726234052_use_current_service_role_claim.sql",
+    ])).toEqual([
+      "20260726234052_use_current_service_role_claim.sql",
+      "20260729145205_replace_public_professional_definer_view.sql",
+    ]);
+    expect(() => assertMigrationDryRunParity(pending, [
+      "20260726234052_use_current_service_role_claim.sql",
+    ])).toThrow(/dry-run migration inventory/i);
+    expect(() => assertMigrationDryRunParity(pending, [
+      "20260726234052_use_current_service_role_claim.sql",
+      "20260729145205_replace_public_professional_definer_view.sql",
+      "20260730000000_unstaged.sql",
+    ])).toThrow(/dry-run migration inventory/i);
+  });
+
+  it("requires the candidate Edge source and JWT manifest to exactly match staging", () => {
+    const manifest = {
+      schema_version: 1,
+      algorithm: "sha256",
+      release_sha: sha,
+      config_sha256: "a".repeat(64),
+      shared: {
+        source_sha256: "b".repeat(64),
+        files: [{
+          path: "supabase/functions/_shared/auth.ts",
+          sha256: "c".repeat(64),
+        }],
+      },
+      functions: [{
+        name: "process-storage-cleanup",
+        verify_jwt: false,
+        source_sha256: "d".repeat(64),
+        effective_source_sha256: "e".repeat(64),
+        files: [{
+          path: "supabase/functions/process-storage-cleanup/index.ts",
+          sha256: "f".repeat(64),
+        }],
+      }],
+      manifest_sha256: "0".repeat(64),
+    };
+
+    expect(assertEdgeSourceManifestParity(manifest, structuredClone(manifest)))
+      .toEqual(manifest);
+    expect(() => assertEdgeSourceManifestParity(manifest, {
+      ...manifest,
+      functions: [{
+        ...manifest.functions[0],
+        verify_jwt: true,
+      }],
+    })).toThrow(/Edge source manifest/i);
+    expect(() => assertEdgeSourceManifestParity(manifest, {
+      ...manifest,
+      functions: [{
+        ...manifest.functions[0],
+        effective_source_sha256: "1".repeat(64),
+      }],
+    })).toThrow(/Edge source manifest/i);
+  });
+
   it("requires a non-self, allowlisted, unexpired, non-revoked approval", () => {
     const approval = {
       schema_version: 1,
@@ -1004,6 +1174,36 @@ describe("production release validation", () => {
     expect(() => assertEdgeBundleParity(staged, [staged[0]])).toThrow(
       /function set/i,
     );
+  });
+
+  it("builds deterministic serial Edge forward-convergence recovery", async () => {
+    const validation = await import("./production-release-validation.mjs");
+    expect(validation.buildEdgeForwardConvergencePlan).toBeTypeOf("function");
+
+    const staged = [
+      { name: "beta", ezbr_sha256: "b".repeat(64), verify_jwt: false },
+      { name: "alpha", ezbr_sha256: "a".repeat(64), verify_jwt: true },
+      { name: "gamma", ezbr_sha256: "c".repeat(64), verify_jwt: true },
+    ];
+    const production = [
+      { name: "alpha", ezbr_sha256: "a".repeat(64), verify_jwt: true },
+      { name: "beta", ezbr_sha256: "d".repeat(64), verify_jwt: false },
+    ];
+
+    expect(validation.buildEdgeForwardConvergencePlan(
+      staged,
+      production,
+    )).toMatchObject({
+      pending_names: ["beta", "gamma"],
+      pending: [
+        { name: "beta", ezbr_sha256: "b".repeat(64), verify_jwt: false },
+        { name: "gamma", ezbr_sha256: "c".repeat(64), verify_jwt: true },
+      ],
+    });
+    expect(() => validation.buildEdgeForwardConvergencePlan(staged, [
+      ...production,
+      { name: "orphan", ezbr_sha256: "e".repeat(64), verify_jwt: true },
+    ])).toThrow(/unexpected production Edge function/i);
   });
 
   it("attests the exact Cloudflare deployment instead of trusting a list position", () => {

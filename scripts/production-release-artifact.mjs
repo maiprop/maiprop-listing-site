@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import {
-  cpSync,
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -10,13 +10,16 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const FULL_SHA = /^[0-9a-f]{40}$/i;
 const SHA256 = /^[0-9a-f]{64}$/i;
 const MANIFEST_NAME = "release-manifest.json";
 const MARKER_NAME = "deploy-version.json";
+const MIGRATION_FILE = /^\d{14}_[a-z0-9_-]+\.sql$/;
+const FUNCTION_DIRECTORY = /^[A-Za-z0-9_-]+$/;
+const FUNCTION_SOURCE_EXTENSIONS = new Set([".json", ".lock", ".ts", ".tsx"]);
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -60,6 +63,116 @@ function recordsDigest(records) {
   return sha256(JSON.stringify(records));
 }
 
+function assertSafeRelativePath(path, label) {
+  if (
+    !path ||
+    path.startsWith("/") ||
+    path.includes("\\") ||
+    path.split("/").some((part) => !part || part === "." || part === "..")
+  ) {
+    throw new Error(`${label} contains an unsafe path: ${path}`);
+  }
+}
+
+function assertPackagedSupabasePath(path) {
+  assertSafeRelativePath(path, "Supabase release package");
+  if (path === "supabase/config.toml") return;
+  if (/^supabase\/migrations\/\d{14}_[a-z0-9_-]+\.sql$/.test(path)) {
+    return;
+  }
+  if (
+    /^supabase\/functions\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(?:json|lock|ts|tsx)$/
+      .test(path)
+  ) {
+    return;
+  }
+  throw new Error(`Unexpected Supabase source path: ${path}`);
+}
+
+function collectFunctionSourceFiles(root) {
+  const output = [];
+  const walk = (directory, relativeDirectory = "") => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const relativePath = relativeDirectory
+        ? `${relativeDirectory}/${entry.name}`
+        : entry.name;
+      const absolute = join(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw new Error(
+          `Supabase release source cannot contain symbolic links: ${absolute}`,
+        );
+      }
+      if (entry.isDirectory()) {
+        if (!relativeDirectory && entry.name === "node_modules") {
+          continue;
+        }
+        if (!FUNCTION_DIRECTORY.test(entry.name)) {
+          throw new Error(`Unexpected Supabase source path: functions/${relativePath}`);
+        }
+        walk(absolute, relativePath);
+        continue;
+      }
+      if (
+        !entry.isFile() ||
+        !FUNCTION_SOURCE_EXTENSIONS.has(extname(entry.name).toLowerCase())
+      ) {
+        throw new Error(`Unexpected Supabase source path: functions/${relativePath}`);
+      }
+      output.push(`functions/${normalizePath(relativePath)}`);
+    }
+  };
+  walk(root);
+  return output;
+}
+
+function collectSupabaseSourceFiles(root) {
+  assertDirectory(root, "Supabase project");
+  assertFile(join(root, "config.toml"), "Supabase config");
+  assertDirectory(join(root, "migrations"), "Supabase migrations");
+  assertDirectory(join(root, "functions"), "Supabase functions");
+
+  const migrations = [];
+  for (
+    const entry of readdirSync(join(root, "migrations"), {
+      withFileTypes: true,
+    })
+  ) {
+    const absolute = join(root, "migrations", entry.name);
+    if (entry.isSymbolicLink()) {
+      throw new Error(
+        `Supabase release source cannot contain symbolic links: ${absolute}`,
+      );
+    }
+    if (entry.isFile() && entry.name === "README.md") continue;
+    if (!entry.isFile() || !MIGRATION_FILE.test(entry.name)) {
+      throw new Error(`Unexpected Supabase source path: migrations/${entry.name}`);
+    }
+    migrations.push(`migrations/${entry.name}`);
+  }
+  if (migrations.length === 0) {
+    throw new Error("Supabase release source must contain migrations.");
+  }
+
+  const files = [
+    "config.toml",
+    ...migrations,
+    ...collectFunctionSourceFiles(join(root, "functions")),
+  ].sort((left, right) => left.localeCompare(right));
+  if (!files.some((path) => /^functions\/[^/]+\/index\.ts$/.test(path))) {
+    throw new Error("Supabase release source must contain Edge Function entrypoints.");
+  }
+  return files;
+}
+
+function copyFiles(sourceRoot, targetRoot, paths) {
+  for (const path of paths) {
+    const source = join(sourceRoot, ...path.split("/"));
+    const target = join(targetRoot, ...path.split("/"));
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(source, target);
+  }
+}
+
 function requireFullSha(value, label) {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (!FULL_SHA.test(normalized)) {
@@ -91,6 +204,7 @@ function assertFile(path, label) {
 export function createReleaseArtifact({
   distDir,
   sbomPath,
+  supabaseDir = "supabase",
   outDir,
   releaseSha,
   sourceTree,
@@ -106,21 +220,23 @@ export function createReleaseArtifact({
   );
   const absoluteDist = resolve(distDir);
   const absoluteSbom = resolve(sbomPath);
+  const absoluteSupabase = resolve(supabaseDir);
   const absoluteOut = resolve(outDir);
   assertDirectory(absoluteDist, "Build output");
   assertFile(absoluteSbom, "SBOM");
   assertFile(join(absoluteDist, "_worker.js"), "Cloudflare Pages worker");
+  const supabaseSourcePaths = collectSupabaseSourceFiles(absoluteSupabase);
 
   rmSync(absoluteOut, { recursive: true, force: true });
   mkdirSync(absoluteOut, { recursive: true });
-  cpSync(absoluteDist, join(absoluteOut, "dist"), {
-    recursive: true,
-    force: true,
-    errorOnExist: false,
-  });
-  cpSync(absoluteSbom, join(absoluteOut, basename(absoluteSbom)), {
-    force: true,
-  });
+  const distPaths = walkFiles(absoluteDist);
+  copyFiles(absoluteDist, join(absoluteOut, "dist"), distPaths);
+  copyFileSync(absoluteSbom, join(absoluteOut, basename(absoluteSbom)));
+  copyFiles(
+    absoluteSupabase,
+    join(absoluteOut, "supabase"),
+    supabaseSourcePaths,
+  );
 
   const markerPath = join(absoluteOut, "dist", MARKER_NAME);
   rmSync(markerPath, { force: true });
@@ -146,16 +262,22 @@ export function createReleaseArtifact({
     (path) => path !== MANIFEST_NAME,
   );
   const files = fileRecords(absoluteOut, artifactPaths);
+  const supabasePaths = walkFiles(join(absoluteOut, "supabase"))
+    .map((path) => `supabase/${path}`);
+  for (const path of supabasePaths) assertPackagedSupabasePath(path);
+  const supabaseFiles = fileRecords(absoluteOut, supabasePaths);
   const manifest = {
-    schema_version: 1,
+    schema_version: 2,
     algorithm: "sha256",
     release_sha: normalizedReleaseSha,
     source_tree: normalizedSourceTree,
     source_run_id: normalizedRunId,
     source_run_attempt: normalizedRunAttempt,
     payload_sha256: payloadSha256,
+    supabase_sha256: recordsDigest(supabaseFiles),
     artifact_sha256: recordsDigest(files),
     payload_files: payloadFiles,
+    supabase_files: supabaseFiles,
     files,
   };
   writeFileSync(
@@ -193,6 +315,7 @@ export function verifyReleaseArtifact(
     throw new Error("Release manifest has an invalid source tree.");
   }
   if (!SHA256.test(String(manifest.payload_sha256 ?? "")) ||
+      !SHA256.test(String(manifest.supabase_sha256 ?? "")) ||
       !SHA256.test(String(manifest.artifact_sha256 ?? ""))) {
     throw new Error("Release manifest has an invalid digest.");
   }
@@ -229,6 +352,35 @@ export function verifyReleaseArtifact(
   const payloadFiles = fileRecords(root, payloadPaths);
   if (recordsDigest(payloadFiles) !== manifest.payload_sha256) {
     throw new Error("Release payload digest mismatch.");
+  }
+
+  const supabasePaths = walkFiles(join(root, "supabase"))
+    .map((path) => `supabase/${path}`);
+  for (const path of supabasePaths) assertPackagedSupabasePath(path);
+  const expectedSupabasePaths = (manifest.supabase_files ?? [])
+    .map((record) => String(record.path))
+    .sort((a, b) => a.localeCompare(b));
+  if (!samePaths(expectedSupabasePaths, supabasePaths)) {
+    throw new Error(
+      "Release Supabase file set does not match its manifest.",
+    );
+  }
+  const supabaseFiles = fileRecords(root, supabasePaths);
+  for (let index = 0; index < supabaseFiles.length; index += 1) {
+    const expectedRecord = manifest.supabase_files[index];
+    const actualRecord = supabaseFiles[index];
+    if (
+      expectedRecord.path !== actualRecord.path ||
+      expectedRecord.size !== actualRecord.size ||
+      expectedRecord.sha256 !== actualRecord.sha256
+    ) {
+      throw new Error(
+        `Release Supabase hash mismatch: ${actualRecord.path}`,
+      );
+    }
+  }
+  if (recordsDigest(supabaseFiles) !== manifest.supabase_sha256) {
+    throw new Error("Release Supabase digest mismatch.");
   }
 
   const marker = JSON.parse(
@@ -271,6 +423,7 @@ async function main() {
     const manifest = createReleaseArtifact({
       distDir: arg("--dist", "dist"),
       sbomPath: arg("--sbom", "sbom.cdx.json"),
+      supabaseDir: arg("--supabase", "supabase"),
       outDir: arg("--out", "release-candidate"),
       releaseSha: arg("--sha"),
       sourceTree: arg("--tree"),

@@ -377,6 +377,130 @@ export function assertSupabaseTargetIdentity({
   };
 }
 
+function normalizedMigrationInventory(
+  records,
+  label,
+  { requireFileDigest = false } = {},
+) {
+  if (!Array.isArray(records)) {
+    throw new Error(`${label} must be an array.`);
+  }
+  const normalized = records.map((record) => {
+    const value = requireRecord(record, `${label} record`);
+    const version = String(value.version ?? "").trim();
+    const name = String(value.name ?? "").trim();
+    if (!/^\d{14}$/.test(version)) {
+      throw new Error(
+        `${label} contains an invalid migration version: ${version}`,
+      );
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+      throw new Error(
+        `${label} contains an invalid migration name for ${version}.`,
+      );
+    }
+    const normalized = { version, name };
+    if (requireFileDigest) {
+      normalized.file_sha256 = requireSha256(
+        value.file_sha256,
+        `${label} ${version} file digest`,
+      );
+    }
+    return normalized;
+  }).sort((left, right) =>
+    left.version.localeCompare(right.version) ||
+    left.name.localeCompare(right.name));
+  const seen = new Set();
+  for (const migration of normalized) {
+    if (seen.has(migration.version)) {
+      throw new Error(
+        `${label} contains a duplicate staged migration version ${migration.version}.`,
+      );
+    }
+    seen.add(migration.version);
+  }
+  return normalized;
+}
+
+export function assertMigrationPromotionPlan(staged, production) {
+  const stagedInventory = normalizedMigrationInventory(
+    staged,
+    "Staged migration inventory",
+    { requireFileDigest: true },
+  );
+  const productionInventory = normalizedMigrationInventory(
+    production,
+    "Production migration inventory",
+  );
+  const stagedByVersion = new Map(
+    stagedInventory.map((migration, index) => [migration.version, index]),
+  );
+  for (let index = 0; index < productionInventory.length; index += 1) {
+    const migration = productionInventory[index];
+    const expected = stagedInventory[index];
+    if (!expected) {
+      throw new Error(
+        `Unknown production migration ${migration.version}_${migration.name}.`,
+      );
+    }
+    if (expected.version !== migration.version) {
+      if (stagedByVersion.has(migration.version)) {
+        throw new Error(
+          "Production migration history is not an exact staged prefix.",
+        );
+      }
+      throw new Error(
+        `Unknown production migration ${migration.version}_${migration.name}.`,
+      );
+    }
+    if (expected.name !== migration.name) {
+      throw new Error(
+        `Production migration version-name drift at ${migration.version}: ` +
+        `${migration.name} !== ${expected.name}.`,
+      );
+    }
+  }
+  const pending = stagedInventory.slice(productionInventory.length);
+  return {
+    staged: stagedInventory,
+    production: productionInventory,
+    pending,
+    pending_files: pending.map(
+      ({ version, name }) => `${version}_${name}.sql`,
+    ),
+  };
+}
+
+export function assertMigrationDryRunParity(pending, dryRunFiles) {
+  const expected = normalizedMigrationInventory(
+    pending,
+    "Pending staged migration inventory",
+    { requireFileDigest: true },
+  ).map(({ version, name }) => `${version}_${name}.sql`);
+  if (!Array.isArray(dryRunFiles)) {
+    throw new Error("Supabase dry-run migration inventory must be an array.");
+  }
+  const actual = dryRunFiles.map((value) => {
+    const file = String(value ?? "").trim().replaceAll("\\", "/")
+      .split("/").at(-1);
+    if (!/^\d{14}_[A-Za-z0-9_-]+\.sql$/.test(file ?? "")) {
+      throw new Error(
+        `Supabase dry-run migration inventory contains an invalid file: ${value}`,
+      );
+    }
+    return file;
+  }).sort((left, right) => left.localeCompare(right));
+  if (
+    new Set(actual).size !== actual.length ||
+    JSON.stringify(expected) !== JSON.stringify(actual)
+  ) {
+    throw new Error(
+      "Supabase dry-run migration inventory does not exactly match staged pending migrations.",
+    );
+  }
+  return actual;
+}
+
 function requireRecord(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${label} must be a JSON object.`);
@@ -687,6 +811,9 @@ function normalizedEdgeBundles(records, label) {
     if (!/^[A-Za-z0-9_-]+$/.test(name)) {
       throw new Error(`${label} contains an invalid function name.`);
     }
+    if (typeof value.verify_jwt !== "boolean") {
+      throw new Error(`${label} ${name} verify_jwt must be boolean.`);
+    }
     return {
       name,
       ezbr_sha256: requireSha256(
@@ -700,6 +827,39 @@ function normalizedEdgeBundles(records, label) {
     throw new Error(`${label} contains duplicate functions.`);
   }
   return normalized;
+}
+
+export function buildEdgeForwardConvergencePlan(staging, production) {
+  const expected = normalizedEdgeBundles(staging, "Staging Edge inventory");
+  const actual = normalizedEdgeBundles(
+    production,
+    "Production Edge inventory",
+  );
+  const expectedByName = new Map(
+    expected.map((record) => [record.name, record]),
+  );
+  const actualByName = new Map(actual.map((record) => [record.name, record]));
+
+  for (const record of actual) {
+    if (!expectedByName.has(record.name)) {
+      throw new Error(
+        `Unexpected production Edge function ${record.name}; forward convergence never deletes functions.`,
+      );
+    }
+  }
+
+  const pending = expected.filter((record) => {
+    const deployed = actualByName.get(record.name);
+    return !deployed ||
+      deployed.ezbr_sha256 !== record.ezbr_sha256 ||
+      deployed.verify_jwt !== record.verify_jwt;
+  });
+  return {
+    expected,
+    production: actual,
+    pending,
+    pending_names: pending.map((record) => record.name),
+  };
 }
 
 export function assertEdgeBundleParity(staging, production) {
@@ -728,6 +888,69 @@ export function assertEdgeBundleParity(staging, production) {
         `Edge verify_jwt mismatch for ${expected[index].name}.`,
       );
     }
+  }
+  return expected;
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => canonicalJson(entry)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) =>
+      `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function validateEdgeSourceManifest(value, label) {
+  const manifest = requireRecord(value, label);
+  if (
+    manifest.schema_version !== 1 ||
+    manifest.algorithm !== "sha256" ||
+    !FULL_SHA.test(String(manifest.release_sha ?? "")) ||
+    !SHA256.test(String(manifest.config_sha256 ?? "")) ||
+    !SHA256.test(String(manifest.manifest_sha256 ?? ""))
+  ) {
+    throw new Error(`${label} is incomplete or invalid.`);
+  }
+  const shared = requireRecord(manifest.shared, `${label} shared source`);
+  if (
+    !SHA256.test(String(shared.source_sha256 ?? "")) ||
+    !Array.isArray(shared.files) ||
+    !Array.isArray(manifest.functions) ||
+    manifest.functions.length === 0
+  ) {
+    throw new Error(`${label} is incomplete or invalid.`);
+  }
+  for (const fn of manifest.functions) {
+    const record = requireRecord(fn, `${label} function`);
+    if (
+      !/^[A-Za-z0-9_-]+$/.test(String(record.name ?? "")) ||
+      typeof record.verify_jwt !== "boolean" ||
+      !SHA256.test(String(record.source_sha256 ?? "")) ||
+      !SHA256.test(String(record.effective_source_sha256 ?? "")) ||
+      !Array.isArray(record.files)
+    ) {
+      throw new Error(`${label} contains an invalid function source record.`);
+    }
+  }
+  return manifest;
+}
+
+export function assertEdgeSourceManifestParity(staging, candidate) {
+  const expected = validateEdgeSourceManifest(
+    staging,
+    "Staging Edge source manifest",
+  );
+  const actual = validateEdgeSourceManifest(
+    candidate,
+    "Candidate Edge source manifest",
+  );
+  if (canonicalJson(expected) !== canonicalJson(actual)) {
+    throw new Error(
+      "Candidate Edge source manifest does not exactly match the staged Edge source manifest.",
+    );
   }
   return expected;
 }

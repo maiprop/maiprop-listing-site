@@ -27,11 +27,8 @@ describe("production mutation hard disable", () => {
     );
   });
 
-  it.each([
-    "deploy-edge-functions.yml",
-    "deploy-supabase-production-db.yml",
-    "reusable-cloudflare-production-deploy.yml",
-  ])("keeps %s as an explicit disabled stub", (name) => {
+  it("keeps reusable-cloudflare-production-deploy.yml as an explicit disabled stub", () => {
+    const name = "reusable-cloudflare-production-deploy.yml";
     const jobs = parsedWorkflow(name).jobs;
 
     expect(jobs["validate-disabled"]).toBeDefined();
@@ -39,9 +36,31 @@ describe("production mutation hard disable", () => {
   });
 
   it.each([
-    "direct-cloudflare-production-deploy.yml",
-    "deploy-production-release.yml",
-  ])("keeps %s validation-only and unconditionally non-mutating", (name) => {
+    "deploy-edge-functions.yml",
+    "deploy-supabase-production-db.yml",
+  ])("allows %s only as a protected workflow-call promotion boundary", (name) => {
+    const source = workflow(name);
+    const parsed = parsedWorkflow(name);
+
+    expect(Object.keys(parsed.on)).toEqual(["workflow_call"]);
+    expect(parsed.jobs.deploy.environment).toBe("production");
+    expect(parsed.concurrency).toBeUndefined();
+    expect(source).toContain("qvvicunqcrwpioqnvzxf");
+    expect(source).toContain("persist-credentials: false");
+    expect(source).toContain("npm ci --ignore-scripts");
+    expect(source).toContain("--workdir release-candidate");
+    expect(source).toContain("mutation-lease");
+    expect(source).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(source).not.toContain("secrets: inherit");
+
+    const runScripts = parsed.jobs.deploy.steps
+      .map((step) => step.run ?? "")
+      .join("\n");
+    expect(runScripts).not.toMatch(/\$\{\{\s*(?:inputs|secrets)\./);
+  });
+
+  it("keeps direct-cloudflare-production-deploy.yml validation-only and unconditionally non-mutating", () => {
+    const name = "direct-cloudflare-production-deploy.yml";
     const source = workflow(name);
     const jobs = parsedWorkflow(name).jobs;
     const runScripts = jobs.validate.steps
@@ -60,9 +79,41 @@ describe("production mutation hard disable", () => {
     );
   });
 
+  it("orchestrates production Supabase only through contract-bound reusable workflows", () => {
+    const name = "deploy-production-release.yml";
+    const source = workflow(name);
+    const jobs = parsedWorkflow(name).jobs;
+    const runScripts = [
+      ...jobs.validate.steps,
+      ...jobs["renew-edge-mutation-lease"].steps,
+    ].map((step) => step.run ?? "").join("\n");
+
+    expect(Object.keys(jobs)).toEqual([
+      "validate",
+      "deploy-production-database",
+      "renew-edge-mutation-lease",
+      "deploy-production-edge",
+    ]);
+    expect(jobs["deploy-production-database"].uses).toBe(
+      "./.github/workflows/deploy-supabase-production-db.yml",
+    );
+    expect(jobs["deploy-production-edge"].uses).toBe(
+      "./.github/workflows/deploy-edge-functions.yml",
+    );
+    expect(source).not.toContain("secrets: inherit");
+    expect(source).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(runScripts).not.toMatch(
+      /\bpages deploy\b|\bsupabase db push\b|\bsupabase functions deploy\b/,
+    );
+  });
+
   it("routes staging mutations only through the exact-SHA stage workflow", () => {
     const ciJobs = parsedWorkflow("ci.yml").jobs;
     const stagingJobs = parsedWorkflow("stage-release.yml").jobs;
+    const reusableStaging =
+      parsedWorkflow("reusable-supabase-staging.yml").jobs[
+        "deploy-supabase-staging"
+      ];
 
     expect(ciJobs["deploy-supabase-staging"]).toBeUndefined();
     expect(stagingJobs["validate-source"]).toBeDefined();
@@ -73,10 +124,15 @@ describe("production mutation hard disable", () => {
     expect(workflow("stage-release.yml")).toContain(
       "vars.STAGING_RELEASE_ENABLED == 'true'",
     );
+    expect(
+      reusableStaging.steps.map((step) => step.run ?? "").join("\n"),
+    ).not.toMatch(/\$\{\{\s*(?:inputs|secrets)\./);
   });
 
   it("keeps every other workflow free of release mutation credentials and commands", () => {
     const authorizedMutationWorkflows = new Set([
+      "deploy-edge-functions.yml",
+      "deploy-supabase-production-db.yml",
       "stage-release.yml",
       "reusable-supabase-staging.yml",
     ]);

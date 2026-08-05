@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -391,6 +391,11 @@ export function reconcileStagingMigrationAliases({
   commandRunner = runCommand,
   output = process.stdout,
 }) {
+  if (apply) {
+    throw new Error(
+      "Supabase provider mutation must run in the protected workflow, not this planning helper.",
+    );
+  }
   assertStagingMutationTarget({
     projectRef: stagingProjectRef,
     databaseUrl,
@@ -427,37 +432,39 @@ export function reconcileStagingMigrationAliases({
       `Reviewed staging repair ${version}: ${result.reasons.get(version)}\n`,
     );
   }
-  if (!apply) {
-    output.write(
-      `Dry run only: ${result.versionsToRevert.length} reviewed aliases require repair.\n`,
-    );
-    return result;
-  }
-
-  commandRunner(
-    "supabase",
-    [
-      "migration",
-      "repair",
-      ...result.versionsToRevert,
-      "--db-url",
-      databaseUrl,
-      "--status",
-      "reverted",
-      "--yes",
-    ],
-    { stdio: "inherit" },
+  output.write(
+    `Dry run only: ${result.versionsToRevert.length} reviewed aliases require repair.\n`,
   );
   return result;
 }
 
+function argValue(name, fallback = "") {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] ?? fallback : fallback;
+}
+
 function main() {
-  reconcileStagingMigrationAliases({
+  const result = reconcileStagingMigrationAliases({
     databaseUrl: process.env.SUPABASE_STAGING_EFFECTIVE_DB_URL,
     stagingProjectRef: process.env.STAGING_SUPABASE_PROJECT_ID,
     acknowledgement: process.env.STAGING_MUTATION_ACKNOWLEDGEMENT,
     apply: process.argv.includes("--apply"),
+    root: resolve(argValue("--root", process.cwd())),
   });
+  const out = argValue("--out");
+  if (out) {
+    writeFileSync(
+      resolve(out),
+      `${JSON.stringify({
+        schema_version: 1,
+        versions_to_revert: result.versionsToRevert,
+        repairs: result.versionsToRevert.map((version) => ({
+          version,
+          reason: result.reasons.get(version),
+        })),
+      }, null, 2)}\n`,
+    );
+  }
 }
 
 if (

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { extname, join, relative, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import yaml from "js-yaml";
@@ -16,9 +16,16 @@ const requireLiveSourceEvidence = process.argv.includes(
 );
 const outArgIndex = process.argv.indexOf("--out");
 const outPath = outArgIndex >= 0 ? process.argv[outArgIndex + 1] : "";
+const supabaseWorkdirArgIndex = process.argv.indexOf("--supabase-workdir");
+const supabaseWorkdir = resolve(
+  root,
+  supabaseWorkdirArgIndex >= 0
+    ? process.argv[supabaseWorkdirArgIndex + 1] ?? ""
+    : ".",
+);
 
-const functionDir = join(root, "supabase", "functions");
-const configPath = join(root, "supabase", "config.toml");
+const functionDir = join(supabaseWorkdir, "supabase", "functions");
+const configPath = join(supabaseWorkdir, "supabase", "config.toml");
 const workflowDir = join(root, ".github", "workflows");
 const envDocs = [
   ".env.example",
@@ -54,6 +61,10 @@ function normalizedRelativePath(path) {
   return relative(root, path).replace(/\\/g, "/");
 }
 
+function normalizedSupabaseSourcePath(path) {
+  return relative(supabaseWorkdir, path).replace(/\\/g, "/");
+}
+
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -77,10 +88,12 @@ function sourceGroup(files) {
   const records = [...new Set(files)]
     .filter((file) => existsSync(file))
     .sort((a, b) =>
-      normalizedRelativePath(a).localeCompare(normalizedRelativePath(b)),
+      normalizedSupabaseSourcePath(a).localeCompare(
+        normalizedSupabaseSourcePath(b),
+      ),
     )
     .map((file) => ({
-      path: normalizedRelativePath(file),
+      path: normalizedSupabaseSourcePath(file),
       sha256: sha256(readFileSync(file)),
     }));
   return {
@@ -338,6 +351,8 @@ function scanWorkflows() {
   }
 
   const authorizedMutationWorkflows = new Set([
+    ".github/workflows/deploy-edge-functions.yml",
+    ".github/workflows/deploy-supabase-production-db.yml",
     ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
     ".github/workflows/stage-release.yml",
     ".github/workflows/reusable-supabase-staging.yml",
@@ -413,19 +428,6 @@ function scanWorkflows() {
   if (!release) {
     violations.push(`${productionReleaseWorkflow} is missing`);
   } else {
-    const productionMutationsDisabled =
-      release.includes("PRODUCTION_RELEASE_ENABLED") &&
-      release.includes("Production mutations remain disabled") &&
-      !release.includes(
-        "uses: ./.github/workflows/deploy-supabase-production-db.yml",
-      ) &&
-      !release.includes(
-        "uses: ./.github/workflows/deploy-edge-functions.yml",
-      ) &&
-      !release.includes(
-        "uses: ./.github/workflows/reusable-cloudflare-production-deploy.yml",
-      ) &&
-      !release.includes("secrets: inherit");
     const requiredReleaseMarkers = [
       ["workflow_dispatch:", "manual workflow_dispatch trigger"],
       [
@@ -447,8 +449,12 @@ function scanWorkflows() {
         "explicit production release feature gate",
       ],
       [
-        "Production mutations remain disabled",
-        "validation-only production hard stop",
+        "github-release-approval",
+        "independent production approval selection",
+      ],
+      [
+        "production-mutation-lease.json",
+        "run-scoped production mutation lease",
       ],
     ];
     for (const [marker, label] of requiredReleaseMarkers) {
@@ -457,30 +463,76 @@ function scanWorkflows() {
       }
     }
 
-    if (!productionMutationsDisabled) {
-      if (!release.includes("release_sha: ${{ inputs.release_sha }}")) {
-        violations.push(
-          `${productionReleaseWorkflow} is missing exact-SHA reusable workflow input`,
-        );
-      }
-      const databaseJob = yamlJobBlock(release, "deploy-database");
-      const edgeJob = yamlJobBlock(release, "deploy-edge-functions");
-      const cloudflareJob = yamlJobBlock(release, "deploy-cloudflare");
-      if (!databaseJob.includes("needs: validate")) {
-        violations.push(
-          `${productionReleaseWorkflow} database deploy must require exact-SHA validation`,
-        );
-      }
-      if (!edgeJob.includes("needs: deploy-database")) {
-        violations.push(
-          `${productionReleaseWorkflow} Edge deploy must follow the database deploy`,
-        );
-      }
-      if (!cloudflareJob.includes("needs: deploy-edge-functions")) {
-        violations.push(
-          `${productionReleaseWorkflow} Cloudflare deploy must follow the Edge deploy`,
-        );
-      }
+    const parsedRelease = workflowYaml[productionReleaseWorkflow];
+    const releaseJobs = parsedRelease?.jobs ?? {};
+    const validateJob = releaseJobs.validate;
+    const databaseJob = releaseJobs["deploy-production-database"];
+    const renewEdgeLeaseJob = releaseJobs["renew-edge-mutation-lease"];
+    const edgeJob = releaseJobs["deploy-production-edge"];
+    if (
+      validateJob?.environment !== "production" ||
+      !validateJob?.outputs?.artifact_sha256 ||
+      !validateJob?.outputs?.manifest_sha256 ||
+      !validateJob?.outputs?.approval_nonce ||
+      !validateJob?.outputs?.mutation_lease_artifact
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} validation must emit the exact approved release and lease tuple`,
+      );
+    }
+    if (
+      databaseJob?.needs !== "validate" ||
+      databaseJob?.uses !==
+        "./.github/workflows/deploy-supabase-production-db.yml" ||
+      databaseJob?.with?.release_sha !== "${{ inputs.release_sha }}" ||
+      databaseJob?.with?.mutation_lease_artifact !==
+        "${{ needs.validate.outputs.mutation_lease_artifact }}"
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} database deploy must require the exact validated tuple`,
+      );
+    }
+    const renewNeeds = Array.isArray(renewEdgeLeaseJob?.needs)
+      ? renewEdgeLeaseJob.needs
+      : [renewEdgeLeaseJob?.needs].filter(Boolean);
+    if (
+      !renewNeeds.includes("validate") ||
+      !renewNeeds.includes("deploy-production-database") ||
+      renewEdgeLeaseJob?.environment !== "production" ||
+      !renewEdgeLeaseJob?.outputs?.mutation_lease_artifact
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} must renew the Edge lease only after database promotion`,
+      );
+    }
+    const edgeNeeds = Array.isArray(edgeJob?.needs)
+      ? edgeJob.needs
+      : [edgeJob?.needs].filter(Boolean);
+    if (
+      edgeJob?.uses !== "./.github/workflows/deploy-edge-functions.yml" ||
+      !edgeNeeds.includes("validate") ||
+      !edgeNeeds.includes("deploy-production-database") ||
+      !edgeNeeds.includes("renew-edge-mutation-lease") ||
+      edgeJob?.with?.mutation_lease_artifact !==
+        "${{ needs.renew-edge-mutation-lease.outputs.mutation_lease_artifact }}" ||
+      edgeJob?.with?.database_attestation_artifact !==
+        "${{ needs.deploy-production-database.outputs.database_attestation_artifact }}" ||
+      edgeJob?.with?.database_attestation_sha256 !==
+        "${{ needs.deploy-production-database.outputs.database_attestation_sha256 }}"
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} Edge deploy must consume the database attestation and renewed lease`,
+      );
+    }
+    if (
+      release.includes(
+        "uses: ./.github/workflows/reusable-cloudflare-production-deploy.yml",
+      ) ||
+      release.includes("secrets: inherit")
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} must keep Cloudflare disabled and pass production secrets explicitly`,
+      );
     }
   }
 
@@ -601,8 +653,6 @@ function scanWorkflows() {
 
   const disabledProductionWorkflows = [
     ".github/workflows/reusable-cloudflare-production-deploy.yml",
-    ".github/workflows/deploy-supabase-production-db.yml",
-    ".github/workflows/deploy-edge-functions.yml",
   ];
   for (const workflowPath of disabledProductionWorkflows) {
     const text = workflowText[workflowPath] ?? "";
@@ -658,6 +708,51 @@ function scanWorkflows() {
     ) {
       violations.push(
         `${workflowPath} contains executable production mutation or credential wiring`,
+      );
+    }
+  }
+
+  for (const workflowPath of [
+    ".github/workflows/deploy-supabase-production-db.yml",
+    ".github/workflows/deploy-edge-functions.yml",
+  ]) {
+    const text = workflowText[workflowPath] ?? "";
+    const parsed = workflowYaml[workflowPath];
+    const triggerNames = Object.keys(parsed?.on ?? {});
+    const deploy = parsed?.jobs?.deploy;
+    if (
+      triggerNames.length !== 1 ||
+      triggerNames[0] !== "workflow_call" ||
+      !deploy ||
+      deploy.environment !== "production"
+    ) {
+      violations.push(
+        `${workflowPath} must remain workflow-call-only in the protected production environment`,
+      );
+    }
+    if (
+      !text.includes('PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"') ||
+      !text.includes("persist-credentials: false") ||
+      !text.includes("npm ci --ignore-scripts") ||
+      !text.includes("--workdir release-candidate") ||
+      !text.includes("mutation-lease") ||
+      text.includes("SUPABASE_SERVICE_ROLE_KEY") ||
+      text.includes("secrets: inherit")
+    ) {
+      violations.push(
+        `${workflowPath} is missing exact-artifact production promotion controls`,
+      );
+    }
+    const mutationLines = text.split(/\r?\n/).filter((line) =>
+      /\bsupabase\b.*\b(?:migration repair|db push|functions deploy)\b/.test(
+        line,
+      ));
+    if (
+      mutationLines.some((line) =>
+        !line.includes("--workdir release-candidate"))
+    ) {
+      violations.push(
+        `${workflowPath} contains a Supabase mutation outside the verified artifact workdir`,
       );
     }
   }

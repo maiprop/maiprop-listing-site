@@ -45,6 +45,13 @@ describe("production release train", () => {
     const ci = workflow("ci.yml");
 
     expect(ci).toContain("name: Immutable release candidate built");
+    expect(ci).toContain("--supabase supabase");
+    expect(ci).toContain(
+      "git status --porcelain --untracked-files=all -- supabase",
+    );
+    expect(ci).toContain(
+      "Supabase source changed before immutable candidate packaging.",
+    );
     expect(ci).toContain("always() &&");
     expect(ci).toContain("RELEASE_SAFETY_RESULT:");
     expect(ci).toContain('if [ "$result" != "success" ]; then');
@@ -548,6 +555,7 @@ describe("production release train", () => {
 
   it("revalidates the staging lease before every Supabase mutation", () => {
     const staging = workflow("reusable-supabase-staging.yml");
+    const stagingJob = yaml.load(staging).jobs["deploy-supabase-staging"];
     const legacyLease = staging.indexOf(
       "Revalidate staging lease before legacy migration repair",
     );
@@ -605,6 +613,91 @@ describe("production release train", () => {
     expect(staging).toContain("trusted_control_sha:");
     expect(staging).toContain("job.workflow_sha");
     expect(staging).toContain("persist-credentials: false");
+
+    for (const [stepName, mutation] of [
+      ["Apply reviewed staging migration alias repairs", "migration repair"],
+      ["Repair staging add-on credit migration drift", "migration repair"],
+      ["Apply database migrations to staging", "db push"],
+      ["Deploy edge functions to staging", "functions deploy"],
+    ]) {
+      const step = stagingJob.steps.find((candidate) => candidate.name === stepName);
+      expect(step, stepName).toBeDefined();
+      expect(step.env?.GITHUB_TOKEN, stepName).toBe("${{ github.token }}");
+      expect(step.run, stepName).toContain("github-staging-lease");
+      expect(step.run.indexOf("github-staging-lease"), stepName).toBeLessThan(
+        step.run.indexOf(mutation),
+      );
+    }
+  });
+
+  it("stages database and Edge mutations only from the verified signed artifact", () => {
+    const stage = workflow("stage-release.yml");
+    const staging = workflow("reusable-supabase-staging.yml");
+    const stagingJob = yaml.load(staging).jobs["deploy-supabase-staging"];
+
+    expect(stage).toContain(
+      "manifest_sha256: ${{ needs.validate-source.outputs.manifest_sha256 }}",
+    );
+    expect(staging).toContain("manifest_sha256:");
+    expect(staging).toContain("Download immutable Supabase release candidate");
+    expect(staging).toContain(
+      "production-release-candidate-${{ inputs.release_sha }}",
+    );
+    expect(staging).toContain("run-id: ${{ inputs.source_run_id }}");
+    expect(staging).toContain("gh attestation verify");
+    expect(staging).toContain(
+      ".github/workflows/ci.yml",
+    );
+    expect(staging).toContain(
+      "npm run release:artifact:verify --",
+    );
+    expect(staging).toContain(
+      '--dir release-candidate',
+    );
+    expect(staging).toContain(
+      'actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json',
+    );
+    expect(staging).not.toContain("npm install -g supabase");
+    expect(staging).toContain(
+      "npx --no-install supabase --workdir release-candidate --version",
+    );
+    expect(staging).toContain(
+      "npx --no-install supabase --workdir release-candidate db push",
+    );
+    expect(staging).toContain(
+      "npx --no-install supabase --workdir release-candidate migration repair",
+    );
+    expect(staging).toContain(
+      "npx --no-install supabase --workdir release-candidate functions deploy",
+    );
+    expect(staging).toContain(
+      "find release-candidate/supabase/migrations",
+    );
+    expect(staging).toContain(
+      "--supabase-workdir release-candidate",
+    );
+    expect(staging).toContain("file_sha256");
+    expect(staging).toContain("migration_inventory_sha256");
+    for (const stepName of [
+      "Apply reviewed staging migration alias repairs",
+      "Repair staging add-on credit migration drift",
+      "Dry-run staging database migrations",
+      "Apply database migrations to staging",
+      "Deploy edge functions to staging",
+    ]) {
+      const mutationStep = stagingJob.steps.find(
+        (step) => step.name === stepName,
+      );
+      expect(mutationStep.run, stepName).toContain(
+        "npm run release:artifact:verify --",
+      );
+      expect(mutationStep.run, stepName).toContain(
+        "release-candidate/release-manifest.json",
+      );
+    }
+    expect(staging).not.toMatch(
+      /(?:cp|rsync)\s+(?:-a\s+)?supabase(?:\/|\s).*release-candidate/,
+    );
   });
 
   it("attests the exact staging database and live PostgREST contract before Edge deploy", () => {
@@ -711,30 +804,275 @@ describe("production release train", () => {
     expect(stage).toContain("security.playwright?.flaky !== 0");
   });
 
-  it("keeps every production mutation workflow a credential-free fail-explicit stub", () => {
-    for (const name of [
-      "deploy-supabase-production-db.yml",
-      "deploy-edge-functions.yml",
-      "reusable-cloudflare-production-deploy.yml",
-    ]) {
-      const content = workflow(name);
-      const parsed = yaml.load(content);
+  it("keeps Cloudflare production promotion a credential-free fail-explicit stub", () => {
+    const content = workflow("reusable-cloudflare-production-deploy.yml");
+    const parsed = yaml.load(content);
 
-      expect(content).toContain("workflow_call:");
-      expect(parsed.jobs.deploy.if).toBe("${{ false }}");
-      expect(parsed.jobs["validate-disabled"]).toBeDefined();
-      expect(content).toContain("PRODUCTION_MUTATIONS_DISABLED");
-      expect(content).not.toMatch(
-        /secrets\.(?:SUPABASE|VITE_SUPABASE|CLOUDFLARE|SITE_LOCK)/,
-      );
-      expect(content).not.toMatch(
-        /supabase (?:db push|migration repair|functions deploy)|pages deploy|wrangler-action@/,
-      );
-    }
+    expect(content).toContain("workflow_call:");
+    expect(parsed.jobs.deploy.if).toBe("${{ false }}");
+    expect(parsed.jobs["validate-disabled"]).toBeDefined();
+    expect(content).toContain("PRODUCTION_MUTATIONS_DISABLED");
+    expect(content).not.toMatch(
+      /secrets\.(?:SUPABASE|VITE_SUPABASE|CLOUDFLARE|SITE_LOCK)/,
+    );
+    expect(content).not.toMatch(
+      /supabase (?:db push|migration repair|functions deploy)|pages deploy|wrangler-action@/,
+    );
   });
 
-  it("keeps the production entrypoint validation-only while release blockers remain", () => {
+  it("makes production database promotion workflow-call-only and tuple-bound", () => {
+    const content = workflow("deploy-supabase-production-db.yml");
+    const parsed = yaml.load(content);
+    const call = parsed.on.workflow_call;
+    const job = parsed.jobs.deploy;
+    const requiredInputs = [
+      "release_sha",
+      "source_tree",
+      "source_run_id",
+      "source_run_attempt",
+      "staging_run_id",
+      "staging_run_attempt",
+      "approval_run_id",
+      "approval_run_attempt",
+      "production_run_id",
+      "production_run_attempt",
+      "artifact_sha256",
+      "manifest_sha256",
+      "approval_nonce",
+      "mutation_lease_artifact",
+    ];
+
+    expect(Object.keys(parsed.on)).toEqual(["workflow_call"]);
+    for (const name of requiredInputs) {
+      expect(call.inputs[name], name).toMatchObject({
+        required: true,
+        type: "string",
+      });
+    }
+    expect(call.secrets).toEqual({
+      SUPABASE_ACCESS_TOKEN: { required: true },
+      VITE_SUPABASE_PROJECT_ID: { required: true },
+      VITE_SUPABASE_URL: { required: true },
+      SUPABASE_PRODUCTION_DB_URL: { required: true },
+    });
+    expect(job.environment).toBe("production");
+    expect(parsed.concurrency).toBeUndefined();
+    expect(content).toContain('PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"');
+    expect(content).toContain("persist-credentials: false");
+    expect(content).toContain("npm ci --ignore-scripts");
+    expect(content).toContain("gh attestation verify");
+    expect(content).toContain("release-candidate-attestation-");
+    expect(content).toContain("supabase-staging-edge-attestation-");
+    expect(content).toContain(
+      "canonicalJson(edge.database) !== canonicalJson(database)",
+    );
+    expect(content).toContain(
+      "edge.supabase_sha256 !== releaseManifest.supabase_sha256",
+    );
+    expect(content).toContain(
+      "database.supabase_sha256 !== releaseManifest.supabase_sha256",
+    );
+    expect(content).toContain("mutation-lease");
+    expect(content).toContain("github-staging-lease");
+    expect(content).toContain("supabase-target");
+    expect(content).toContain("assertMigrationPromotionPlan");
+    expect(content).toContain("assertMigrationDryRunParity");
+    expect(content).toContain("file_sha256");
+    expect(content).toContain("migration_inventory_sha256");
+    expect(content).toContain("production-migrations-pre-apply.json");
+    expect(content).toContain(
+      "Production migration history changed after the reviewed dry run.",
+    );
+    expect(content).toContain(
+      "npx --no-install supabase --workdir release-candidate db push",
+    );
+    expect(content).toContain("--dry-run");
+    expect(content).toContain("--yes");
+    expect(content).not.toContain("--include-all");
+    const applyStep = job.steps.find(
+      (step) => step.name === "Apply exact staged production migrations",
+    );
+    expect(applyStep.run).toContain("npm run release:artifact:verify --");
+    expect(applyStep.run).toContain("release-candidate/release-manifest.json");
+    expect(applyStep.run).toContain("github-staging-lease");
+    expect(applyStep.run).toContain("mutation-lease");
+    expect(applyStep.run).toContain("supabase-target");
+    expect(applyStep.run.indexOf("release:artifact:verify")).toBeLessThan(
+      applyStep.run.indexOf("db push"),
+    );
+    const terminalEvidence = job.steps.find(
+      (step) => step.name === "Create production database terminal evidence",
+    );
+    const terminalUpload = job.steps.find(
+      (step) => step.name === "Upload production database terminal evidence",
+    );
+    expect(terminalEvidence.if).toBe("${{ always() }}");
+    expect(terminalEvidence.env.SUPABASE_PRODUCTION_DB_URL).toBe(
+      "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
+    );
+    expect(terminalEvidence.run).toContain(
+      'psql "$SUPABASE_PRODUCTION_DB_URL"',
+    );
+    expect(terminalEvidence.run).toContain(
+      "production-migrations-terminal.json",
+    );
+    expect(terminalEvidence.run).toContain(
+      "production_history_capture_status",
+    );
+    expect(
+      terminalEvidence.run.indexOf('psql "$SUPABASE_PRODUCTION_DB_URL"'),
+    ).toBeLessThan(
+      terminalEvidence.run.indexOf("node --input-type=module"),
+    );
+    expect(terminalEvidence.run).toContain("production-migrations-before.json");
+    expect(terminalEvidence.run).toContain("production-migrations-pre-apply.json");
+    expect(terminalEvidence.run).toContain("production-migrations-after.json");
+    expect(terminalEvidence.run).toContain("production-migration-dry-run.txt");
+    expect(terminalEvidence.run).toContain("job_status");
+    expect(terminalEvidence.run).toContain("readJsonIfValid");
+    expect(terminalEvidence.run).toContain("manifest_parse_error");
+    expect(terminalUpload.if).toBe("${{ always() }}");
+    expect(content).toContain("supabase_migrations.schema_migrations");
+    expect(content).toContain(
+      "npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown",
+    );
+    expect(content).toContain("npm run check:supabase-types -- -- --strict");
+    expect(content).toContain("npm run capture:supabase-index-stats");
+    expect(content).toContain("npm run check:live-security-posture");
+    expect(content).toContain("db lint");
+    expect(content).toContain("production-supabase-db-attestation");
+    expect(parsed.permissions.attestations).toBe("write");
+    expect(parsed.permissions["id-token"]).toBe("write");
+    expect(content).toContain(
+      "actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373",
+    );
+    expect(content).toContain(
+      "subject-path: production-supabase-db-attestation.json",
+    );
+    expect(content).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(content).not.toContain("secrets: inherit");
+  });
+
+  it("makes production Edge promotion workflow-call-only and artifact-bound", () => {
+    const content = workflow("deploy-edge-functions.yml");
+    const parsed = yaml.load(content);
+    const call = parsed.on.workflow_call;
+    const job = parsed.jobs.deploy;
+    const requiredInputs = [
+      "release_sha",
+      "source_tree",
+      "source_run_id",
+      "source_run_attempt",
+      "staging_run_id",
+      "staging_run_attempt",
+      "approval_run_id",
+      "approval_run_attempt",
+      "production_run_id",
+      "production_run_attempt",
+      "artifact_sha256",
+      "manifest_sha256",
+      "approval_nonce",
+      "mutation_lease_artifact",
+      "database_attestation_artifact",
+      "database_attestation_sha256",
+    ];
+
+    expect(Object.keys(parsed.on)).toEqual(["workflow_call"]);
+    for (const name of requiredInputs) {
+      expect(call.inputs[name], name).toMatchObject({
+        required: true,
+        type: "string",
+      });
+    }
+    expect(call.secrets).toEqual({
+      SUPABASE_ACCESS_TOKEN: { required: true },
+      VITE_SUPABASE_PROJECT_ID: { required: true },
+      VITE_SUPABASE_URL: { required: true },
+    });
+    expect(job.environment).toBe("production");
+    expect(parsed.concurrency).toBeUndefined();
+    expect(content).toContain('PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"');
+    expect(content).toContain("persist-credentials: false");
+    expect(content).toContain("npm ci --ignore-scripts");
+    expect(content).toContain("gh attestation verify");
+    expect(content).toContain("release-candidate-attestation-");
+    expect(content).toContain("supabase-staging-edge-attestation-");
+    expect(content).toContain("production-supabase-db-attestation");
+    expect(content).toContain(
+      "staging.supabase_sha256 !== releaseManifest.supabase_sha256",
+    );
+    expect(content).toContain(
+      "evidence.supabase_sha256 !== releaseManifest.supabase_sha256",
+    );
+    expect(content).toContain(
+      ".github/workflows/deploy-supabase-production-db.yml",
+    );
+    expect(content).toContain("assertEdgeSourceManifestParity");
+    expect(content).toContain("assertEdgeBundleParity");
+    expect(content).toContain("buildEdgeForwardConvergencePlan");
+    expect(content).toContain(
+      "--supabase-workdir release-candidate",
+    );
+    expect(content).toContain(
+      "npx --no-install supabase --workdir release-candidate functions deploy",
+    );
+    expect(content).toContain("--use-api");
+    expect(content).toContain("--jobs 1");
+    expect(content).toContain(
+      "Capture strict production live function inventory before deploy",
+    );
+    expect(content).toContain("release-safety-production-live-functions-before.json");
+    expect(content).toContain("production-edge-forward-plan.json");
+    expect(content).toContain("production-edge-deploy-progress.jsonl");
+    expect(content).toContain('functions deploy "$function_name"');
+    const deployStep = job.steps.find(
+      (step) => step.name === "Forward-converge exact artifact Edge functions serially",
+    );
+    expect(deployStep.run).toContain("npm run release:artifact:verify --");
+    expect(deployStep.run).toContain("inventory:release");
+    expect(deployStep.run).toContain("assertEdgeSourceManifestParity");
+    expect(deployStep.run).toContain("github-staging-lease");
+    expect(deployStep.run).toContain("mutation-lease");
+    expect(deployStep.run).toContain("supabase-target");
+    expect(deployStep.run.indexOf("release:artifact:verify")).toBeLessThan(
+      deployStep.run.indexOf('functions deploy "$function_name"'),
+    );
+    const edgeTerminalEvidence = job.steps.find(
+      (step) => step.name === "Create production Edge terminal evidence",
+    );
+    const edgeTerminalUpload = job.steps.find(
+      (step) => step.name === "Upload production Edge terminal evidence",
+    );
+    expect(edgeTerminalEvidence.if).toBe("${{ always() }}");
+    expect(edgeTerminalEvidence.run).toContain(
+      "release-safety-production-live-functions-before.json",
+    );
+    expect(edgeTerminalEvidence.run).toContain(
+      "release-safety-production-live-functions.json",
+    );
+    expect(edgeTerminalEvidence.run).toContain("production-edge-forward-plan.json");
+    expect(edgeTerminalEvidence.run).toContain("production-edge-deploy-progress.jsonl");
+    expect(edgeTerminalEvidence.run).toContain("job_status");
+    expect(edgeTerminalEvidence.run).toContain("readJsonIfValid");
+    expect(edgeTerminalEvidence.run).toContain("manifest_parse_error");
+    expect(edgeTerminalUpload.if).toBe("${{ always() }}");
+    expect(content).toContain("--require-live-source-evidence");
+    expect(content).toContain("ezbr_sha256");
+    expect(content).toContain("production-supabase-edge-attestation");
+    expect(content).toContain(
+      "actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373",
+    );
+    expect(content).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(content).not.toContain("secrets: inherit");
+  });
+
+  it("orchestrates database then renewed-lease Edge promotion only after contracts pass", () => {
     const release = workflow("deploy-production-release.yml");
+    const parsed = yaml.load(release);
+    const validate = parsed.jobs.validate;
+    const database = parsed.jobs["deploy-production-database"];
+    const renew = parsed.jobs["renew-edge-mutation-lease"];
+    const edge = parsed.jobs["deploy-production-edge"];
 
     expect(release).toContain("name: Deploy Production Release");
     expect(release).toContain("release_sha:");
@@ -757,17 +1095,59 @@ describe("production release train", () => {
     expect(release).toContain('--source-tree "$SOURCE_TREE"');
     expect(release).toContain('--source-run-id "$SOURCE_RUN_ID"');
     expect(release).toContain('--source-run-attempt "$SOURCE_RUN_ATTEMPT"');
-    expect(release).toContain("Production mutations remain disabled");
-    expect(release).not.toContain(
-      "uses: ./.github/workflows/deploy-supabase-production-db.yml",
+    expect(release).toContain("github-release-approval");
+    expect(release).toContain("release-approval");
+    expect(release).toContain("production-mutation-lease.json");
+    expect(validate.environment).toBe("production");
+    expect(validate.permissions).toEqual({
+      actions: "read",
+      attestations: "read",
+      contents: "read",
+    });
+    expect(validate.outputs).toMatchObject({
+      source_tree: expect.any(String),
+      artifact_sha256: expect.any(String),
+      manifest_sha256: expect.any(String),
+      approval_nonce: expect.any(String),
+      mutation_lease_artifact: expect.any(String),
+    });
+    expect(database.uses).toBe(
+      "./.github/workflows/deploy-supabase-production-db.yml",
     );
-    expect(release).not.toContain(
-      "uses: ./.github/workflows/deploy-edge-functions.yml",
+    expect(database.needs).toBe("validate");
+    expect(database.with.production_run_id).toBe("${{ github.run_id }}");
+    expect(database.with.production_run_attempt).toBe(
+      "${{ github.run_attempt }}",
+    );
+    expect(renew.needs).toEqual(["validate", "deploy-production-database"]);
+    expect(renew.environment).toBe("production");
+    expect(renew.permissions).toEqual({
+      actions: "read",
+      attestations: "read",
+      contents: "read",
+    });
+    expect(edge.uses).toBe("./.github/workflows/deploy-edge-functions.yml");
+    expect(edge.needs).toEqual([
+      "validate",
+      "deploy-production-database",
+      "renew-edge-mutation-lease",
+    ]);
+    expect(edge.with.mutation_lease_artifact).toBe(
+      "${{ needs.renew-edge-mutation-lease.outputs.mutation_lease_artifact }}",
+    );
+    expect(edge.with.database_attestation_artifact).toBe(
+      "${{ needs.deploy-production-database.outputs.database_attestation_artifact }}",
+    );
+    expect(edge.with.database_attestation_sha256).toBe(
+      "${{ needs.deploy-production-database.outputs.database_attestation_sha256 }}",
     );
     expect(release).not.toContain(
       "uses: ./.github/workflows/reusable-cloudflare-production-deploy.yml",
     );
     expect(release).not.toContain("secrets: inherit");
+    expect(release).not.toContain(
+      "Production mutations remain disabled until independent approval",
+    );
   });
 
   it("cryptographically attests the final exact-SHA staging aggregate", () => {
@@ -800,6 +1180,13 @@ describe("production release train", () => {
     ]) {
       expect(workflow(name)).toContain("group: maiprop-production-release");
       expect(workflow(name)).toContain("cancel-in-progress: false");
+    }
+
+    for (const name of [
+      "deploy-supabase-production-db.yml",
+      "deploy-edge-functions.yml",
+    ]) {
+      expect(yaml.load(workflow(name)).concurrency).toBeUndefined();
     }
   });
 

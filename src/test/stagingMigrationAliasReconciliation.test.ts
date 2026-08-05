@@ -180,10 +180,10 @@ describe("staging migration alias reconciliation", () => {
     );
   });
 
-  it("applies only the exact set produced by the reviewed dry run", () => {
+  it("keeps provider mutation out of the JavaScript planning helper", () => {
     const commandRunner = vi.fn(() => "");
 
-    reconcileStagingMigrationAliases({
+    expect(() => reconcileStagingMigrationAliases({
       databaseUrl,
       stagingProjectRef: MAIPROP_STAGING_SUPABASE_PROJECT_REF,
       acknowledgement: MAIPROP_STAGING_MUTATION_ACKNOWLEDGEMENT,
@@ -192,19 +192,9 @@ describe("staging migration alias reconciliation", () => {
       repairMap,
       commandRunner,
       apply: true,
-    });
+    })).toThrow(/provider mutation.*workflow/i);
 
-    expect(commandRunner).toHaveBeenCalledWith(
-      "supabase",
-      expect.arrayContaining([
-        "migration",
-        "repair",
-        remote.version,
-        "--status",
-        "reverted",
-      ]),
-      { stdio: "inherit" },
-    );
+    expect(commandRunner).not.toHaveBeenCalled();
   });
 
   it("rejects production, arbitrary targets, and missing acknowledgement", () => {

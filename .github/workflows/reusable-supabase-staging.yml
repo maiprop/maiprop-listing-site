@@ -19,6 +19,10 @@ on:
         description: Immutable release artifact digest.
         required: true
         type: string
+      manifest_sha256:
+        description: SHA-256 digest of the signed immutable release manifest.
+        required: true
+        type: string
       production_supabase_project_id:
         description: Production project ref used only to prove staging isolation.
         required: true
@@ -66,6 +70,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: staging
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
+      TRUSTED_CONTROL_SHA: ${{ inputs.trusted_control_sha }}
+      EXPECTED_ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+      EXPECTED_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
     outputs:
       deploy: ${{ steps.supabase_changes.outputs.deploy }}
       db_changes: ${{ steps.supabase_changes.outputs.db_changes }}
@@ -86,23 +97,27 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "${{ inputs.trusted_control_sha }}" != "$CONTROL_WORKFLOW_SHA" ] ||
-             [ "$CONTROL_WORKFLOW_SHA" != "${{ inputs.release_sha }}" ]; then
+          if [ "$TRUSTED_CONTROL_SHA" != "$CONTROL_WORKFLOW_SHA" ] ||
+             [ "$CONTROL_WORKFLOW_SHA" != "$RELEASE_SHA" ]; then
             echo "::error::The reusable staging control workflow is not pinned to the exact approved release SHA."
             exit 1
           fi
           npm run release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
-            --sha "${{ inputs.release_sha }}" \
-            --source-run-id "${{ inputs.source_run_id }}" \
-            --source-run-attempt "${{ inputs.source_run_attempt }}"
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
           actual_sha="$(git rev-parse HEAD)"
-          if [ "$actual_sha" != "${{ inputs.release_sha }}" ]; then
-            echo "::error::Staging checkout SHA $actual_sha does not match the requested release SHA."
+          if [ "$actual_sha" != "$RELEASE_SHA" ]; then
+            echo "::error::Staging checkout SHA $actual_sha does not match the requested release SHA $RELEASE_SHA."
             exit 1
           fi
-          if ! [[ "${{ inputs.artifact_sha256 }}" =~ ^[0-9a-f]{64}$ ]]; then
+          if ! [[ "$EXPECTED_ARTIFACT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
             echo "::error::The immutable artifact digest is invalid."
+            exit 1
+          fi
+          if ! [[ "$EXPECTED_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::The immutable manifest digest is invalid."
             exit 1
           fi
           echo "eligible=true" >> "$GITHUB_OUTPUT"
@@ -224,11 +239,53 @@ jobs:
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm ci --ignore-scripts --prefer-offline --no-audit
 
-      - name: Install Supabase CLI
+      - name: Download immutable Supabase release candidate
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-release-candidate-${{ inputs.release_sha }}
+          path: release-candidate
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Verify immutable Supabase release candidate
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        env:
+          EXPECTED_ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+          EXPECTED_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          npm install -g supabase@2.104.0
-          supabase --version
+          set -euo pipefail
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Downloaded release manifest digest does not match the trusted source run."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Downloaded release artifact digest does not match the trusted source run."
+            exit 1
+          fi
+          gh attestation verify \
+            release-candidate/release-manifest.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+            --signer-digest "$RELEASE_SHA" \
+            --source-digest "$RELEASE_SHA" \
+            --source-ref "refs/heads/main" \
+            --deny-self-hosted-runners
+
+      - name: Verify pinned Supabase CLI
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npx --no-install supabase --workdir release-candidate --version
 
       - name: Check staging database migration secret
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -254,7 +311,7 @@ jobs:
           fi
 
           projects_json="[]"
-          if ! projects_json="$(supabase projects list --output json 2>/tmp/supabase-projects-list.err)"; then
+          if ! projects_json="$(npx --no-install supabase --workdir release-candidate projects list --output json 2>/tmp/supabase-projects-list.err)"; then
             echo "::warning::Could not list Supabase projects to resolve pooler region. Trying the Supabase Management API project endpoint."
             sed 's/./*/g' /tmp/supabase-projects-list.err || true
             projects_json="[]"
@@ -327,15 +384,17 @@ jobs:
         run: |
           npm run release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
-            --sha "${{ inputs.release_sha }}" \
-            --source-run-id "${{ inputs.source_run_id }}" \
-            --source-run-attempt "${{ inputs.source_run_attempt }}"
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
 
       - name: Preview reviewed staging migration alias repairs
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           set -euo pipefail
           node scripts/reconcile-staging-migration-aliases.mjs \
+            --root release-candidate \
+            --out staging-migration-alias-repair-plan.json \
             | tee staging-migration-alias-repair-preview.txt
         env:
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
@@ -349,14 +408,54 @@ jobs:
         run: |
           npm run release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
-            --sha "${{ inputs.release_sha }}" \
-            --source-run-id "${{ inputs.source_run_id }}" \
-            --source-run-attempt "${{ inputs.source_run_attempt }}"
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
 
       - name: Apply reviewed staging migration alias repairs
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: node scripts/reconcile-staging-migration-aliases.mjs --apply
+        run: |
+          set -euo pipefail
+          mapfile -t versions < <(
+            node -e "const p=require('./staging-migration-alias-repair-plan.json'); for (const v of p.versions_to_revert) console.log(v)"
+          )
+          if [ "${#versions[@]}" -eq 0 ]; then
+            echo "No reviewed staging migration aliases require repair."
+            exit 0
+          fi
+          node scripts/assert-staging-mutation-target.mjs \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+            --database-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Release manifest changed at the staging alias-repair mutation boundary."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Release artifact changed at the staging alias-repair mutation boundary."
+            exit 1
+          fi
+          npm run release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npx --no-install supabase --workdir release-candidate migration repair \
+            "${versions[@]}" \
+            --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --status reverted \
+            --yes
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ inputs.staging_mutation_acknowledgement }}
 
@@ -367,9 +466,9 @@ jobs:
         run: |
           npm run release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
-            --sha "${{ inputs.release_sha }}" \
-            --source-run-id "${{ inputs.source_run_id }}" \
-            --source-run-attempt "${{ inputs.source_run_attempt }}"
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
 
       - name: Repair staging add-on credit migration drift
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -418,14 +517,63 @@ jobs:
           fi
 
           echo "Repairing staging history for canonical add-on credit migration 20260628193711."
-          supabase migration repair "20260628193711" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Release manifest changed at the staging add-on repair mutation boundary."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Release artifact changed at the staging add-on repair mutation boundary."
+            exit 1
+          fi
+          npm run release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npx --no-install supabase --workdir release-candidate migration repair \
+            "20260628193711" \
+            --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --status reverted \
+            --yes
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ inputs.staging_mutation_acknowledgement }}
 
       - name: Dry-run staging database migrations
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --dry-run --include-all
+        run: |
+          set -euo pipefail
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Release manifest changed at the staging dry-run boundary."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Release artifact changed at the staging dry-run boundary."
+            exit 1
+          fi
+          npx --no-install supabase --workdir release-candidate db push \
+            --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --dry-run \
+            --include-all
 
       - name: Revalidate staging lease before database apply
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -434,9 +582,9 @@ jobs:
         run: |
           npm run release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
-            --sha "${{ inputs.release_sha }}" \
-            --source-run-id "${{ inputs.source_run_id }}" \
-            --source-run-attempt "${{ inputs.source_run_attempt }}"
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
 
       - name: Apply database migrations to staging
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -446,8 +594,34 @@ jobs:
             --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
             --database-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
             --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
-          supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --yes --include-all
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Release manifest changed at the staging database mutation boundary."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Release artifact changed at the staging database mutation boundary."
+            exit 1
+          fi
+          npm run release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npx --no-install supabase --workdir release-candidate db push \
+            --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --yes \
+            --include-all
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ inputs.staging_mutation_acknowledgement }}
 
@@ -521,7 +695,7 @@ jobs:
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           set -euo pipefail
-          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' \
+          find release-candidate/supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' \
             | sort \
             | awk '
                 BEGIN { OFS = "\t" }
@@ -862,9 +1036,9 @@ jobs:
         run: |
           npm run release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
-            --sha "${{ inputs.release_sha }}" \
-            --source-run-id "${{ inputs.source_run_id }}" \
-            --source-run-attempt "${{ inputs.source_run_attempt }}"
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
 
       - name: Verify live staging PostgREST catalogue contract
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -921,6 +1095,7 @@ jobs:
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
           SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
           ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
           STAGING_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
         run: |
           set -euo pipefail
@@ -929,6 +1104,9 @@ jobs:
           import { readFileSync, writeFileSync } from "node:fs";
 
           const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+          const releaseManifest = readJson(
+            "release-candidate/release-manifest.json",
+          );
           const migrationSha = readFileSync(
             "staging-migrations.sha256",
             "utf8",
@@ -937,6 +1115,39 @@ jobs:
             "staging-actual-migrations.txt",
             "utf8",
           ).trim().split(/\r?\n/).filter(Boolean);
+          const signedSupabaseFiles = new Map(
+            (releaseManifest.supabase_files ?? []).map((record) => [
+              record.path,
+              record,
+            ]),
+          );
+          const migrationInventory = migrations.map((line) => {
+            const [version = "", name = ""] = line.split("\t", 2);
+            if (
+              !/^\d{14}$/.test(version) ||
+              !/^[A-Za-z0-9_-]+$/.test(name)
+            ) {
+              throw new Error(`Invalid staged migration inventory row: ${line}`);
+            }
+            const path = `supabase/migrations/${version}_${name}.sql`;
+            const signedFile = signedSupabaseFiles.get(path);
+            if (
+              signedFile?.path !== path ||
+              !/^[0-9a-f]{64}$/.test(signedFile.sha256 ?? "")
+            ) {
+              throw new Error(
+                `Staged migration ${path} is missing its signed SQL file digest.`,
+              );
+            }
+            return {
+              version,
+              name,
+              file_sha256: signedFile.sha256,
+            };
+          });
+          const migrationInventorySha256 = createHash("sha256")
+            .update(JSON.stringify(migrationInventory))
+            .digest("hex");
           const rpc = readJson("staging-public-catalogue-rpc-contract.json");
           const pgtap = readFileSync(
             "staging-public-catalogue-pgtap.txt",
@@ -974,7 +1185,13 @@ jobs:
 
           if (
             !/^[0-9a-f]{64}$/.test(migrationSha) ||
+            releaseManifest.release_sha !== process.env.RELEASE_SHA ||
+            releaseManifest.artifact_sha256 !==
+              process.env.ARTIFACT_SHA256 ||
+            !/^[0-9a-f]{64}$/.test(releaseManifest.supabase_sha256 ?? "") ||
+            !/^[0-9a-f]{64}$/.test(process.env.MANIFEST_SHA256 ?? "") ||
             migrations.length === 0 ||
+            !/^[0-9a-f]{64}$/.test(migrationInventorySha256) ||
             /(^|[\s])not ok([\s]|$)/m.test(pgtap) ||
             pgtapProof.status !== "passed" ||
             !Number.isSafeInteger(pgtapProof.plan) ||
@@ -1116,9 +1333,13 @@ jobs:
             source_run_id: process.env.SOURCE_RUN_ID,
             source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
             artifact_sha256: process.env.ARTIFACT_SHA256,
+            manifest_sha256: process.env.MANIFEST_SHA256,
+            supabase_sha256: releaseManifest.supabase_sha256,
             project_ref: process.env.STAGING_PROJECT_REF,
             migrations_sha256: migrationSha,
             migration_count: migrations.length,
+            migration_inventory: migrationInventory,
+            migration_inventory_sha256: migrationInventorySha256,
             pgtap_plan: pgtapProof.plan,
             pgtap_ok_count: pgtapProof.okCount,
             pgtap_sha256: createHash("sha256").update(pgtap).digest("hex"),
@@ -1148,9 +1369,9 @@ jobs:
         run: |
           npm run release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
-            --sha "${{ inputs.release_sha }}" \
-            --source-run-id "${{ inputs.source_run_id }}" \
-            --source-run-attempt "${{ inputs.source_run_attempt }}"
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
 
       - name: Deploy edge functions to staging
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -1159,17 +1380,40 @@ jobs:
           node scripts/assert-staging-mutation-target.mjs \
             --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
             --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
-          supabase functions deploy \
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Release manifest changed at the staging Edge mutation boundary."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Release artifact changed at the staging Edge mutation boundary."
+            exit 1
+          fi
+          npm run release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npx --no-install supabase --workdir release-candidate functions deploy \
             --use-api \
             --project-ref "$STAGING_SUPABASE_PROJECT_ID"
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ inputs.staging_mutation_acknowledgement }}
 
       - name: Capture staging live function drift inventory
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: npm run check:release-safety -- --live-functions --require-live-source-evidence --out release-safety-staging-live-functions.json
+        run: npm run check:release-safety -- --supabase-workdir release-candidate --live-functions --require-live-source-evidence --out release-safety-staging-live-functions.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
@@ -1182,6 +1426,7 @@ jobs:
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
           SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
           ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
           STAGING_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
         run: |
           set -euo pipefail
@@ -1192,6 +1437,12 @@ jobs:
           const inventoryPath = "release-safety-staging-live-functions.json";
           const inventoryBytes = readFileSync(inventoryPath);
           const inventory = JSON.parse(inventoryBytes);
+          const releaseManifest = JSON.parse(
+            readFileSync(
+              "release-candidate/release-manifest.json",
+              "utf8",
+            ),
+          );
           const database = JSON.parse(
             readFileSync("supabase-staging-db-attestation.json", "utf8"),
           );
@@ -1216,8 +1467,15 @@ jobs:
           if (
             database.release_sha !== process.env.RELEASE_SHA ||
             database.artifact_sha256 !== process.env.ARTIFACT_SHA256 ||
+            database.manifest_sha256 !== process.env.MANIFEST_SHA256 ||
+            database.supabase_sha256 !== releaseManifest.supabase_sha256 ||
             database.project_ref !== process.env.STAGING_PROJECT_REF ||
             database.schema_version !== 2 ||
+            inventory.edge_source_manifest?.release_sha !==
+              process.env.RELEASE_SHA ||
+            !/^[0-9a-f]{64}$/.test(
+              inventory.edge_source_manifest?.manifest_sha256 ?? "",
+            ) ||
             database.rpc?.rpc?.publication?.provolatile !== "s" ||
             database.rpc?.rpc?.query?.provolatile !== "s" ||
             database.rpc?.rpc?.homepage?.provolatile !== "s" ||
@@ -1266,11 +1524,14 @@ jobs:
             source_run_id: process.env.SOURCE_RUN_ID,
             source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
             artifact_sha256: process.env.ARTIFACT_SHA256,
+            manifest_sha256: process.env.MANIFEST_SHA256,
+            supabase_sha256: releaseManifest.supabase_sha256,
             project_ref: process.env.STAGING_PROJECT_REF,
             inventory_sha256: createHash("sha256")
               .update(inventoryBytes)
               .digest("hex"),
             database,
+            edge_source_manifest: inventory.edge_source_manifest,
             edge_bundles: edgeBundles,
             attested_at: new Date().toISOString(),
           };
@@ -1279,7 +1540,7 @@ jobs:
             `${JSON.stringify(attestation, null, 2)}\n`,
           );
           NODE
-          artifact_name="supabase-staging-edge-attestation-${{ inputs.release_sha }}"
+          artifact_name="supabase-staging-edge-attestation-${RELEASE_SHA}"
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
 
       - name: Upload exact staging Supabase evidence

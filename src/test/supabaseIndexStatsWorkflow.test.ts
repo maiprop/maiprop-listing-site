@@ -21,6 +21,24 @@ const supabaseStagingWorkflow = readFileSync(
   "utf8",
 );
 
+const supabaseProductionWorkflow = readFileSync(
+  ".github/workflows/deploy-supabase-production-db.yml",
+  "utf8",
+);
+
+function stagingStepBlock(name: string): string {
+  const marker = `      - name: ${name}`;
+  const start = supabaseStagingWorkflow.indexOf(marker);
+
+  expect(start).toBeGreaterThanOrEqual(0);
+
+  const nextStep = supabaseStagingWorkflow.indexOf("\n      - name:", start + marker.length);
+  return supabaseStagingWorkflow.slice(
+    start,
+    nextStep === -1 ? supabaseStagingWorkflow.length : nextStep,
+  );
+}
+
 const advisorScript = readFileSync(
   "scripts/check-supabase-advisor.mjs",
   "utf8",
@@ -60,6 +78,12 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseStagingWorkflow).toContain(
       "SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}",
     );
+    expect(supabaseProductionWorkflow).toContain(
+      "Capture production Supabase index stats",
+    );
+    expect(supabaseProductionWorkflow).toContain(
+      "SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf",
+    );
   });
 
   it("captures enough index metadata to review unused-index risk cautiously", () => {
@@ -87,6 +111,12 @@ describe("Supabase index stats workflow wiring", () => {
     expect(advisorReportWorkflow).not.toContain("--allow-transient-unavailable");
     expect(supabaseStagingWorkflow).toContain(
       "npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown",
+    );
+    expect(supabaseProductionWorkflow).toContain(
+      "npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown",
+    );
+    expect(supabaseProductionWorkflow).not.toContain(
+      "--allow-transient-unavailable",
     );
   });
 
@@ -131,7 +161,9 @@ describe("Supabase index stats workflow wiring", () => {
   it("requires an exact staging lease and isolated target before migration reconciliation", () => {
     expect(supabaseStagingWorkflow).toContain("Validate exact staging mutation lease");
     expect(supabaseStagingWorkflow).toContain("github-staging-lease");
-    expect(supabaseStagingWorkflow).toContain("Staging checkout SHA $actual_sha does not match the requested release SHA.");
+    expect(supabaseStagingWorkflow).toContain(
+      "Staging checkout SHA $actual_sha does not match the requested release SHA $RELEASE_SHA.",
+    );
     expect(supabaseStagingWorkflow).toContain('echo "eligible=true" >> "$GITHUB_OUTPUT"');
     expect(supabaseStagingWorkflow).toContain('echo "deploy=true" >> "$GITHUB_OUTPUT"');
     expect(supabaseStagingWorkflow).toContain('echo "db_changes=true" >> "$GITHUB_OUTPUT"');
@@ -139,6 +171,19 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseStagingWorkflow).toContain("An isolated staging Supabase project is required.");
     expect(supabaseStagingWorkflow).toContain("STAGING_SUPABASE_URL project ref does not match STAGING_SUPABASE_PROJECT_ID.");
     expect(supabaseStagingWorkflow).toContain("node scripts/assert-staging-mutation-target.mjs");
+    expect(supabaseStagingWorkflow).toContain(
+      "Download immutable Supabase release candidate",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "npm run release:artifact:verify --",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "--dir release-candidate",
+    );
+    expect(supabaseStagingWorkflow).not.toContain("npm install -g supabase");
+    expect(supabaseStagingWorkflow).toContain(
+      "npx --no-install supabase --workdir release-candidate --version",
+    );
     expect(supabaseStagingWorkflow).toContain('if [ -z "$SUPABASE_STAGING_DB_URL" ]; then');
     expect(supabaseStagingWorkflow).toContain(
       "SUPABASE_STAGING_DB_URL is required for isolated staging schema verification",
@@ -177,7 +222,9 @@ describe("Supabase index stats workflow wiring", () => {
   it("reconciles every exact-SHA candidate in the isolated staging runtime", () => {
     const paritySteps = [
       "Validate isolated staging secrets",
-      "Install Supabase CLI",
+      "Verify pinned Supabase CLI",
+      "Download immutable Supabase release candidate",
+      "Verify immutable Supabase release candidate",
       "Revalidate staging lease before legacy migration repair",
       "Preview reviewed staging migration alias repairs",
       "Revalidate staging lease before reviewed alias repair",
@@ -199,6 +246,23 @@ describe("Supabase index stats workflow wiring", () => {
     }
   });
 
+  it("revalidates the exact staging lease inside each mutating shell step", () => {
+    for (const [stepName, mutation] of [
+      ["Apply reviewed staging migration alias repairs", "migration repair"],
+      ["Repair staging add-on credit migration drift", "migration repair"],
+      ["Apply database migrations to staging", "db push"],
+      ["Deploy edge functions to staging", "functions deploy"],
+    ]) {
+      const block = stagingStepBlock(stepName);
+
+      expect(block, stepName).toContain("GITHUB_TOKEN: ${{ github.token }}");
+      expect(block, stepName).toContain("github-staging-lease");
+      expect(block.indexOf("github-staging-lease"), stepName).toBeLessThan(
+        block.indexOf(mutation),
+      );
+    }
+  });
+
   it("reconciles staging-only migration aliases before staging dry-run validation", () => {
     const checkStep = supabaseStagingWorkflow.indexOf("- name: Preview reviewed staging migration alias repairs");
     const repairStep = supabaseStagingWorkflow.indexOf("- name: Apply reviewed staging migration alias repairs");
@@ -210,7 +274,10 @@ describe("Supabase index stats workflow wiring", () => {
     expect(repairStep).toBeLessThan(dryRunStep);
 
     expect(supabaseStagingWorkflow).toContain(
-      "node scripts/reconcile-staging-migration-aliases.mjs --apply",
+      "npx --no-install supabase --workdir release-candidate migration repair",
+    );
+    expect(supabaseStagingWorkflow).toMatch(
+      /node scripts\/reconcile-staging-migration-aliases\.mjs \\\n\s+--root release-candidate/,
     );
     expect(supabaseStagingWorkflow).toContain(
       "PRODUCTION_SUPABASE_PROJECT_ID: ${{ inputs.production_supabase_project_id }}",
@@ -232,8 +299,8 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseStagingWorkflow).toContain("credits_consumed");
     expect(supabaseStagingWorkflow).toContain("supabase_migrations.schema_migrations");
     expect(supabaseStagingWorkflow).toContain("version = '20260628193711'");
-    expect(supabaseStagingWorkflow).toContain(
-      'supabase migration repair "20260628193711" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes',
+    expect(supabaseStagingWorkflow).toMatch(
+      /npx --no-install supabase --workdir release-candidate migration repair \\\n\s+"20260628193711" \\\n\s+--db-url "\$SUPABASE_STAGING_EFFECTIVE_DB_URL" \\\n\s+--status reverted \\\n\s+--yes/,
     );
   });
 });

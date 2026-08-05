@@ -14,8 +14,9 @@ on:
 
 permissions:
   actions: read
-  attestations: read
+  attestations: write
   contents: read
+  id-token: write
 
 concurrency:
   group: maiprop-production-release
@@ -25,8 +26,25 @@ jobs:
   validate:
     name: Validate exact production release SHA
     if: github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY_PRODUCTION_RELEASE'
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    environment: production
+    outputs:
+      source_tree: ${{ steps.release_contract.outputs.source_tree }}
+      source_run_id: ${{ steps.release_contract.outputs.source_run_id }}
+      source_run_attempt: ${{ steps.release_contract.outputs.source_run_attempt }}
+      staging_run_id: ${{ steps.release_contract.outputs.staging_run_id }}
+      staging_run_attempt: ${{ steps.release_contract.outputs.staging_run_attempt }}
+      approval_run_id: ${{ steps.release_contract.outputs.approval_run_id }}
+      approval_run_attempt: ${{ steps.release_contract.outputs.approval_run_attempt }}
+      artifact_sha256: ${{ steps.release_contract.outputs.artifact_sha256 }}
+      manifest_sha256: ${{ steps.release_contract.outputs.manifest_sha256 }}
+      approval_nonce: ${{ steps.release_contract.outputs.approval_nonce }}
+      mutation_lease_artifact: ${{ steps.release_contract.outputs.mutation_lease_artifact }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -39,13 +57,20 @@ jobs:
           node-version-file: .node-version
 
       - name: Require current main and final exact-SHA readiness
+        id: release_contract
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ inputs.release_sha }}
           PRODUCTION_RELEASE_ENABLED: ${{ vars.PRODUCTION_RELEASE_ENABLED }}
+          PRODUCTION_RELEASE_APPROVERS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
+          DEPLOY_ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
+          if [ "$PRODUCTION_RELEASE_ENABLED" != "true" ]; then
+            echo "::error::Production release orchestration is disabled."
+            exit 1
+          fi
           ACTUAL_SHA="$(git rev-parse HEAD)"
           if [ "$ACTUAL_SHA" != "$RELEASE_SHA" ]; then
             echo "::error::Checked out $ACTUAL_SHA, expected release SHA $RELEASE_SHA."
@@ -104,17 +129,328 @@ jobs:
             --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
             > staging-evidence/content-verification.json
 
+          ARTIFACT_SHA256="$(jq -r '.artifact_sha256' staging-evidence/content-verification.json)"
+          MANIFEST_SHA256="$(jq -r '.manifest_sha256' staging-evidence/content-verification.json)"
+          if ! [[ "$ARTIFACT_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+             ! [[ "$MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::The signed candidate artifact or manifest digest is invalid."
+            exit 1
+          fi
+
+          node scripts/production-release-validation.mjs github-release-approval \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            > approval-selection.json
+          APPROVAL_RUN_ID="$(jq -r '.approval_run_id' approval-selection.json)"
+          APPROVAL_RUN_ATTEMPT="$(jq -r '.approval_run_attempt' approval-selection.json)"
+          if ! [[ "$APPROVAL_RUN_ID" =~ ^[1-9][0-9]*$ ]] ||
+             ! [[ "$APPROVAL_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::The selected approval run identity is invalid."
+            exit 1
+          fi
+
+          mkdir -p approval-evidence
+          gh run download "$APPROVAL_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}" \
+            --dir approval-evidence
+          gh attestation verify \
+            approval-evidence/production-release-approval.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/approve-production-release.yml" \
+            --signer-digest "$RELEASE_SHA" \
+            --source-digest "$RELEASE_SHA" \
+            --source-ref "refs/heads/main" \
+            --deny-self-hosted-runners \
+            --format json \
+            > approval-evidence/cryptographic-verification.json
+          jq -e 'length > 0' approval-evidence/cryptographic-verification.json > /dev/null
+          npm run release:validate -- release-approval \
+            --file approval-evidence/production-release-approval.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --deploy-actor "$DEPLOY_ACTOR" \
+            --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS"
+
+          APPROVAL_NONCE="$(jq -r '.nonce' approval-evidence/production-release-approval.json)"
+          export RELEASE_SHA SOURCE_TREE SOURCE_RUN_ID SOURCE_RUN_ATTEMPT
+          export STAGING_RUN_ID STAGING_RUN_ATTEMPT APPROVAL_RUN_ID
+          export APPROVAL_RUN_ATTEMPT ARTIFACT_SHA256 APPROVAL_NONCE
+          node --input-type=module <<'NODE'
+          import { randomBytes } from "node:crypto";
+          import { writeFileSync } from "node:fs";
+
+          const issuedAt = new Date();
+          const lease = {
+            schema_version: 1,
+            repository: process.env.GITHUB_REPOSITORY,
+            release_sha: process.env.RELEASE_SHA,
+            source_tree: process.env.SOURCE_TREE,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
+            staging_run_id: process.env.STAGING_RUN_ID,
+            staging_run_attempt: process.env.STAGING_RUN_ATTEMPT,
+            approval_run_id: process.env.APPROVAL_RUN_ID,
+            approval_run_attempt: process.env.APPROVAL_RUN_ATTEMPT,
+            production_run_id: process.env.GITHUB_RUN_ID,
+            production_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            approval_nonce: process.env.APPROVAL_NONCE,
+            nonce: randomBytes(32).toString("hex"),
+            issued_at: issuedAt.toISOString(),
+            expires_at: new Date(
+              issuedAt.getTime() + 15 * 60 * 1000,
+            ).toISOString(),
+          };
+          writeFileSync(
+            "production-mutation-lease.json",
+            `${JSON.stringify(lease, null, 2)}\n`,
+          );
+          NODE
+          npm run release:validate -- mutation-lease \
+            --file production-mutation-lease.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$GITHUB_RUN_ID" \
+            --production-run-attempt "$GITHUB_RUN_ATTEMPT"
+
+          MUTATION_LEASE_ARTIFACT="production-mutation-lease-${RELEASE_SHA}-${GITHUB_RUN_ID}-database"
+          echo "source_tree=$SOURCE_TREE" >> "$GITHUB_OUTPUT"
+          echo "source_run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "source_run_attempt=$SOURCE_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "staging_run_id=$STAGING_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "staging_run_attempt=$STAGING_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "approval_run_id=$APPROVAL_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "approval_run_attempt=$APPROVAL_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "artifact_sha256=$ARTIFACT_SHA256" >> "$GITHUB_OUTPUT"
+          echo "manifest_sha256=$MANIFEST_SHA256" >> "$GITHUB_OUTPUT"
+          echo "approval_nonce=$APPROVAL_NONCE" >> "$GITHUB_OUTPUT"
+          echo "mutation_lease_artifact=$MUTATION_LEASE_ARTIFACT" >> "$GITHUB_OUTPUT"
+
           {
             echo "### Production release validation"
             echo "- Exact SHA: $RELEASE_SHA"
             echo "- Static gate: Immutable release candidate built"
             echo "- Signed staging evidence run: $STAGING_RUN_ID (attempt $STAGING_RUN_ATTEMPT)"
-            echo "- Production mutations remain disabled"
+            echo "- Independent approval run: $APPROVAL_RUN_ID (attempt $APPROVAL_RUN_ATTEMPT)"
+            echo "- Database mutation lease: $MUTATION_LEASE_ARTIFACT"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$PRODUCTION_RELEASE_ENABLED" != "true" ]; then
-            echo "::error::Production mutations remain disabled. PRODUCTION_RELEASE_ENABLED is not true."
+      - name: Upload database mutation lease
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.release_contract.outputs.mutation_lease_artifact }}
+          path: production-mutation-lease.json
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy-production-database:
+    name: Promote production database
+    needs: validate
+    if: ${{ needs.validate.result == 'success' }}
+    uses: ./.github/workflows/deploy-supabase-production-db.yml
+    with:
+      release_sha: ${{ inputs.release_sha }}
+      source_tree: ${{ needs.validate.outputs.source_tree }}
+      source_run_id: ${{ needs.validate.outputs.source_run_id }}
+      source_run_attempt: ${{ needs.validate.outputs.source_run_attempt }}
+      staging_run_id: ${{ needs.validate.outputs.staging_run_id }}
+      staging_run_attempt: ${{ needs.validate.outputs.staging_run_attempt }}
+      approval_run_id: ${{ needs.validate.outputs.approval_run_id }}
+      approval_run_attempt: ${{ needs.validate.outputs.approval_run_attempt }}
+      production_run_id: ${{ github.run_id }}
+      production_run_attempt: ${{ github.run_attempt }}
+      artifact_sha256: ${{ needs.validate.outputs.artifact_sha256 }}
+      manifest_sha256: ${{ needs.validate.outputs.manifest_sha256 }}
+      approval_nonce: ${{ needs.validate.outputs.approval_nonce }}
+      mutation_lease_artifact: ${{ needs.validate.outputs.mutation_lease_artifact }}
+    secrets:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+
+  renew-edge-mutation-lease:
+    name: Renew Edge mutation lease after database promotion
+    needs: [validate, deploy-production-database]
+    if: ${{ needs.validate.result == 'success' && needs.deploy-production-database.result == 'success' }}
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    outputs:
+      mutation_lease_artifact: ${{ steps.edge_lease.outputs.mutation_lease_artifact }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+
+      - name: Revalidate approval and create fresh Edge mutation lease
+        id: edge_lease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate.outputs.source_tree }}
+          SOURCE_RUN_ID: ${{ needs.validate.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.validate.outputs.source_run_attempt }}
+          STAGING_RUN_ID: ${{ needs.validate.outputs.staging_run_id }}
+          STAGING_RUN_ATTEMPT: ${{ needs.validate.outputs.staging_run_attempt }}
+          APPROVAL_RUN_ID: ${{ needs.validate.outputs.approval_run_id }}
+          APPROVAL_RUN_ATTEMPT: ${{ needs.validate.outputs.approval_run_attempt }}
+          ARTIFACT_SHA256: ${{ needs.validate.outputs.artifact_sha256 }}
+          APPROVAL_NONCE: ${{ needs.validate.outputs.approval_nonce }}
+          PRODUCTION_RELEASE_APPROVERS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if [ "$current_main" != "$RELEASE_SHA" ]; then
+            echo "::error::Release SHA is no longer current main before Edge lease renewal."
             exit 1
           fi
-          echo "::error::Production mutations remain disabled until independent approval and immutable Edge bundle promotion are implemented."
-          exit 1
+          node scripts/production-release-validation.mjs github-release-approval \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            > approval-selection.json
+          if [ "$(jq -r '.approval_run_id' approval-selection.json)" != "$APPROVAL_RUN_ID" ] ||
+             [ "$(jq -r '.approval_run_attempt' approval-selection.json)" != "$APPROVAL_RUN_ATTEMPT" ]; then
+            echo "::error::The approved release changed before Edge lease renewal."
+            exit 1
+          fi
+          mkdir -p approval-evidence
+          gh run download "$APPROVAL_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}" \
+            --dir approval-evidence
+          gh attestation verify \
+            approval-evidence/production-release-approval.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/approve-production-release.yml" \
+            --signer-digest "$RELEASE_SHA" \
+            --source-digest "$RELEASE_SHA" \
+            --source-ref "refs/heads/main" \
+            --deny-self-hosted-runners
+          npm run release:validate -- release-approval \
+            --file approval-evidence/production-release-approval.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --deploy-actor "$DEPLOY_ACTOR" \
+            --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS"
+          node --input-type=module <<'NODE'
+          import { randomBytes } from "node:crypto";
+          import { writeFileSync } from "node:fs";
+
+          const issuedAt = new Date();
+          const lease = {
+            schema_version: 1,
+            repository: process.env.GITHUB_REPOSITORY,
+            release_sha: process.env.RELEASE_SHA,
+            source_tree: process.env.SOURCE_TREE,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
+            staging_run_id: process.env.STAGING_RUN_ID,
+            staging_run_attempt: process.env.STAGING_RUN_ATTEMPT,
+            approval_run_id: process.env.APPROVAL_RUN_ID,
+            approval_run_attempt: process.env.APPROVAL_RUN_ATTEMPT,
+            production_run_id: process.env.GITHUB_RUN_ID,
+            production_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            approval_nonce: process.env.APPROVAL_NONCE,
+            nonce: randomBytes(32).toString("hex"),
+            issued_at: issuedAt.toISOString(),
+            expires_at: new Date(
+              issuedAt.getTime() + 15 * 60 * 1000,
+            ).toISOString(),
+          };
+          writeFileSync(
+            "production-mutation-lease.json",
+            `${JSON.stringify(lease, null, 2)}\n`,
+          );
+          NODE
+          npm run release:validate -- mutation-lease \
+            --file production-mutation-lease.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$GITHUB_RUN_ID" \
+            --production-run-attempt "$GITHUB_RUN_ATTEMPT"
+          artifact_name="production-mutation-lease-${RELEASE_SHA}-${GITHUB_RUN_ID}-edge"
+          echo "mutation_lease_artifact=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload renewed Edge mutation lease
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.edge_lease.outputs.mutation_lease_artifact }}
+          path: production-mutation-lease.json
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy-production-edge:
+    name: Forward-converge production Edge functions
+    needs: [validate, deploy-production-database, renew-edge-mutation-lease]
+    if: ${{ needs.validate.result == 'success' && needs.deploy-production-database.result == 'success' && needs.renew-edge-mutation-lease.result == 'success' }}
+    uses: ./.github/workflows/deploy-edge-functions.yml
+    with:
+      release_sha: ${{ inputs.release_sha }}
+      source_tree: ${{ needs.validate.outputs.source_tree }}
+      source_run_id: ${{ needs.validate.outputs.source_run_id }}
+      source_run_attempt: ${{ needs.validate.outputs.source_run_attempt }}
+      staging_run_id: ${{ needs.validate.outputs.staging_run_id }}
+      staging_run_attempt: ${{ needs.validate.outputs.staging_run_attempt }}
+      approval_run_id: ${{ needs.validate.outputs.approval_run_id }}
+      approval_run_attempt: ${{ needs.validate.outputs.approval_run_attempt }}
+      production_run_id: ${{ github.run_id }}
+      production_run_attempt: ${{ github.run_attempt }}
+      artifact_sha256: ${{ needs.validate.outputs.artifact_sha256 }}
+      manifest_sha256: ${{ needs.validate.outputs.manifest_sha256 }}
+      approval_nonce: ${{ needs.validate.outputs.approval_nonce }}
+      mutation_lease_artifact: ${{ needs.renew-edge-mutation-lease.outputs.mutation_lease_artifact }}
+      database_attestation_artifact: ${{ needs.deploy-production-database.outputs.database_attestation_artifact }}
+      database_attestation_sha256: ${{ needs.deploy-production-database.outputs.database_attestation_sha256 }}
+    secrets:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

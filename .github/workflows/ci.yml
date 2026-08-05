@@ -184,10 +184,19 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
+          supabase_status="$(
+            git status --porcelain --untracked-files=all -- supabase
+          )"
+          if [ -n "$supabase_status" ]; then
+            echo "::error::Supabase source changed before immutable candidate packaging."
+            printf '%s\n' "$supabase_status"
+            exit 1
+          fi
           source_tree="$(git rev-parse 'HEAD^{tree}')"
           npm run release:artifact:create -- \
             --dist dist \
             --sbom sbom.cdx.json \
+            --supabase supabase \
             --out release-candidate \
             --sha "$GITHUB_SHA" \
             --tree "$source_tree" \
