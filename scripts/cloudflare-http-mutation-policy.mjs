@@ -7,7 +7,7 @@ const cloudflareHttpMutationWorkflows = new Set([
 const currentMainMutationWorkflowDigests = new Map([
   [
     ".github/workflows/ci.yml",
-    "48f7797862c145bb528dbf44fe9c8292ff9843fbfabb37a3953378b0180be4f7",
+    "edf06582c2459a720aca464457570ef55bdf4141ab8db676a6d72d09c392021c",
   ],
   [
     ".github/workflows/reusable-cloudflare-production-deploy.yml",
@@ -29,13 +29,102 @@ function cloudflareApiAliases(source) {
 
 function hasCloudflareApiContext(text, aliases = new Set()) {
   const referencesAlias = [...aliases].some((alias) =>
-    new RegExp(`\\$(?:\\{${alias}\\}|${alias})\\b`).test(text),
+    new RegExp(
+      `(?:\\$${alias}\\b|\\$\\{${alias}\\}|\\$\\{\\{\\s*env\\.${alias}\\s*\\}\\})`,
+    ).test(text),
   );
   return (
     /https:\/\/api\.cloudflare\.com\/client\/v4/i.test(text) ||
     /\bCLOUDFLARE_(?:ACCOUNT|API|PAGES)[A-Z0-9_]*\b/.test(text) ||
     referencesAlias
   );
+}
+
+function logicalShellLines(source) {
+  return String(source ?? "")
+    .replace(/(?:\\|`)\r?\n\s*/g, " ")
+    .split(/\r?\n/);
+}
+
+function curlMutationMethods(line) {
+  if (!/\bcurl\b/i.test(line)) return [];
+  const methods = [
+    ...line.matchAll(
+      /(?:--request(?:=|\s+)|-X\s*)["']?(POST|PUT|PATCH|DELETE)\b/gi,
+    ),
+  ].map((match) => match[1].toUpperCase());
+  if (
+    methods.length === 0 &&
+    /--data(?:-raw|-binary)?(?:=|\s+)/i.test(line)
+  ) {
+    methods.push("POST");
+  }
+  return methods;
+}
+
+function hasFixedBootstrapProjects(source) {
+  return (
+    /^\s*PRODUCTION_PROJECT=["']maiprop-listing-site["']\s*$/m.test(source) &&
+    /^\s*STAGING_PROJECT=["']maiprop-listing-site-staging["']\s*$/m.test(source)
+  );
+}
+
+function hasAllowedBootstrapProjectTarget(line) {
+  const apiBase = String.raw`(?:\$API_BASE\b|\$\{API_BASE\}|\$\{\{\s*env\.API_BASE\s*\}\})`;
+  const account = String.raw`(?:\$CLOUDFLARE_ACCOUNT_ID\b|\$\{CLOUDFLARE_ACCOUNT_ID\}|\$\{\{\s*secrets\.CLOUDFLARE_ACCOUNT_ID\s*\}\})`;
+  const project = String.raw`(?:\$name\b|\$\{name\})`;
+  return new RegExp(
+    `${apiBase}/accounts/${account}/pages/projects/${project}(?:["'\\s]|$)`,
+  ).test(line);
+}
+
+function hasOnlyFixedPatchProjectCalls(source) {
+  const calls = [];
+  for (const line of logicalShellLines(source)) {
+    if (/\bpatch_project\s*\(\)\s*\{/.test(line)) continue;
+    const match = line.match(
+      /\bpatch_project\s+["']?(\$(?:\{)?(?:PRODUCTION_PROJECT|STAGING_PROJECT|[A-Z][A-Z0-9_]*)(?:\})?)["']?/,
+    );
+    if (match) calls.push(match[1].replace(/[${}]/g, ""));
+  }
+  return (
+    calls.length === 2 &&
+    calls.includes("PRODUCTION_PROJECT") &&
+    calls.includes("STAGING_PROJECT") &&
+    calls.every((name) =>
+      name === "PRODUCTION_PROJECT" || name === "STAGING_PROJECT"
+    )
+  );
+}
+
+function hasOnlyAuthorizedBootstrapMutations(source, aliases) {
+  if (!hasFixedBootstrapProjects(source)) return false;
+
+  const operations = [];
+  for (const line of logicalShellLines(source)) {
+    if (!hasCloudflareApiContext(line, aliases)) continue;
+    if (
+      /\b(?:Invoke-(?:RestMethod|WebRequest)|wget|gh\s+api)\b/i.test(line)
+    ) {
+      return false;
+    }
+    for (const method of curlMutationMethods(line)) {
+      operations.push({ method, line });
+    }
+  }
+  for (const match of source.matchAll(/\bfetch\s*\(([\s\S]{0,3000}?)\)\s*;?/gi)) {
+    if (hasCloudflareApiContext(match[0], aliases)) return false;
+  }
+
+  if (operations.length !== 1) return false;
+  if (
+    operations[0].method !== "PATCH" ||
+    !hasAllowedBootstrapProjectTarget(operations[0].line)
+  ) {
+    return false;
+  }
+
+  return hasOnlyFixedPatchProjectCalls(source);
 }
 
 function addMethod(methods, method) {
@@ -81,26 +170,12 @@ export function findCloudflareHttpMutations(text) {
   if (!hasCloudflareApiContext(source, aliases)) return [];
 
   const methods = new Set();
-  const logicalShellLines = source
-    .replace(/(?:\\|`)\r?\n\s*/g, " ")
-    .split(/\r?\n/);
 
-  for (const line of logicalShellLines) {
+  for (const line of logicalShellLines(source)) {
     if (!hasCloudflareApiContext(line, aliases)) continue;
 
     if (/\bcurl\b/i.test(line)) {
-      const explicit = [
-        ...line.matchAll(
-          /(?:--request(?:=|\s+)|-X\s*)["']?(POST|PUT|PATCH|DELETE)\b/gi,
-        ),
-      ];
-      for (const match of explicit) addMethod(methods, match[1]);
-      if (
-        explicit.length === 0 &&
-        /--data(?:-raw|-binary)?(?:=|\s+)/i.test(line)
-      ) {
-        methods.add("POST");
-      }
+      for (const method of curlMutationMethods(line)) addMethod(methods, method);
     }
 
     for (const match of line.matchAll(
@@ -137,9 +212,15 @@ export function isAuthorizedCloudflareHttpMutationWorkflow(workflowPath) {
 }
 
 export function cloudflareHttpMutationViolation({ workflowPath, text }) {
-  if (findCloudflareHttpMutations(text).length === 0) return null;
+  const source = String(text ?? "");
+  if (findCloudflareHttpMutations(source).length === 0) return null;
   if (/evidence/i.test(workflowPath)) {
     return `${workflowPath} contains Cloudflare HTTP mutation wiring in an evidence workflow`;
+  }
+  if (isAuthorizedCloudflareHttpMutationWorkflow(workflowPath)) {
+    const aliases = cloudflareApiAliases(source);
+    if (hasOnlyAuthorizedBootstrapMutations(source, aliases)) return null;
+    return `${workflowPath} contains unauthorized Cloudflare HTTP mutation wiring`;
   }
   if (!isAuthorizedCloudflareHttpMutationWorkflow(workflowPath)) {
     if (matchesCurrentMainMutationWorkflow(workflowPath, text)) {

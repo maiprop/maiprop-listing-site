@@ -83,6 +83,19 @@ steps:
     ).toEqual(["DELETE"]);
   });
 
+  it("resolves braced shell and GitHub environment aliases", () => {
+    expect(
+      findCloudflareHttpMutations(`API_BASE="https://api.cloudflare.com/client/v4"
+curl -X PATCH "\${API_BASE}/accounts/account/pages/projects/project"`),
+    ).toEqual(["PATCH"]);
+    expect(
+      findCloudflareHttpMutations(`env:
+  API_BASE: https://api.cloudflare.com/client/v4
+steps:
+  - run: curl -X DELETE "\${{ env.API_BASE }}/accounts/account/pages/projects/project"`),
+    ).toEqual(["DELETE"]);
+  });
+
   it("authorizes only the dedicated bootstrap lock workflow", () => {
     const lock =
       ".github/workflows/lock-cloudflare-pages-git-deploys.yml";
@@ -103,7 +116,15 @@ steps:
     expect(
       cloudflareHttpMutationViolation({
         workflowPath: lock,
-        text: patch,
+        text: `PRODUCTION_PROJECT="maiprop-listing-site"
+STAGING_PROJECT="maiprop-listing-site-staging"
+API_BASE="https://api.cloudflare.com/client/v4"
+patch_project() {
+  local name="$1"
+  curl --request PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$name"
+}
+patch_project "$PRODUCTION_PROJECT"
+patch_project "$STAGING_PROJECT"`,
       }),
     ).toBeNull();
     expect(
@@ -116,6 +137,70 @@ steps:
       cloudflareHttpMutationViolation({
         workflowPath: ".github/workflows/untrusted-provider-control.yml",
         text: patch,
+      }),
+    ).toMatch(/unauthorized/i);
+  });
+
+  it("rejects unauthorized methods and resources inside the bootstrap workflow", () => {
+    const lock = ".github/workflows/lock-cloudflare-pages-git-deploys.yml";
+    const fixedProjects = `PRODUCTION_PROJECT="maiprop-listing-site"
+STAGING_PROJECT="maiprop-listing-site-staging"
+API_BASE="https://api.cloudflare.com/client/v4"`;
+
+    expect(
+      cloudflareHttpMutationViolation({
+        workflowPath: lock,
+        text: `${fixedProjects}
+curl -X DELETE "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT"`,
+      }),
+    ).toMatch(/unauthorized/i);
+    expect(
+      cloudflareHttpMutationViolation({
+        workflowPath: lock,
+        text: `${fixedProjects}
+curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/zones/zone"`,
+      }),
+    ).toMatch(/unauthorized/i);
+    expect(
+      cloudflareHttpMutationViolation({
+        workflowPath: lock,
+        text: `${fixedProjects}
+patch_project() {
+  local name="$1"
+  curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$name"
+}
+patch_project "$UNTRUSTED_PROJECT"`,
+      }),
+    ).toMatch(/unauthorized/i);
+    expect(
+      cloudflareHttpMutationViolation({
+        workflowPath: lock,
+        text: `${fixedProjects}
+patch_project() {
+  local name="$1"
+  curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/\${name}"
+}
+patch_project "$UNTRUSTED_PROJECT"`,
+      }),
+    ).toMatch(/unauthorized/i);
+    expect(
+      cloudflareHttpMutationViolation({
+        workflowPath: lock,
+        text: `${fixedProjects}
+patch_project() {
+  local name="$1"
+  curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$name"
+}
+patch_project "$PRODUCTION_PROJECT"
+patch_project "$STAGING_PROJECT"
+gh api --method PATCH "https://api.cloudflare.com/client/v4/accounts/account/pages/projects/other"`,
+      }),
+    ).toMatch(/unauthorized/i);
+    expect(
+      cloudflareHttpMutationViolation({
+        workflowPath: lock,
+        text: `${fixedProjects}
+curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT"`,
       }),
     ).toMatch(/unauthorized/i);
   });
