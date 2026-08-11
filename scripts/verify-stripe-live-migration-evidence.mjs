@@ -38,9 +38,28 @@ const expectedWorkflowRunAttempt = optionValue("--workflow-run-attempt") ??
   process.env.GITHUB_RUN_ATTEMPT;
 const expectedEvidenceNonce = optionValue("--evidence-nonce") ??
   process.env.RELEASE_EVIDENCE_NONCE;
-if (!expectedWorkflowRunId || !expectedWorkflowRunAttempt || !expectedEvidenceNonce) {
+const expectedRepository = optionValue("--repository") ?? process.env.GITHUB_REPOSITORY;
+const expectedWorkflowSha = optionValue("--workflow-sha") ??
+  process.env.GITHUB_WORKFLOW_SHA;
+const expectedWorkflowRef = optionValue("--workflow-ref") ??
+  process.env.GITHUB_WORKFLOW_REF;
+const expectedEventSha = optionValue("--event-sha") ?? process.env.GITHUB_SHA;
+const expectedEventName = optionValue("--event-name") ?? process.env.GITHUB_EVENT_NAME;
+const expectedActor = optionValue("--actor") ?? process.env.GITHUB_ACTOR;
+if (
+  !expectedKeyId ||
+  !expectedWorkflowRunId ||
+  !expectedWorkflowRunAttempt ||
+  !expectedEvidenceNonce ||
+  !expectedRepository ||
+  !expectedWorkflowSha ||
+  !expectedWorkflowRef ||
+  !expectedEventSha ||
+  !expectedEventName ||
+  !expectedActor
+) {
   throw new Error(
-    "Stripe live migration evidence verification requires workflow run ID, run attempt, and nonce.",
+    "Stripe live migration evidence verification requires the signing key ID and exact workflow provenance.",
   );
 }
 if (!verifyStripeLiveMigrationEvidence(evidence, {
@@ -49,6 +68,12 @@ if (!verifyStripeLiveMigrationEvidence(evidence, {
   expectedWorkflowRunId,
   expectedWorkflowRunAttempt,
   expectedEvidenceNonce,
+  expectedRepository,
+  expectedWorkflowSha,
+  expectedWorkflowRef,
+  expectedEventSha,
+  expectedEventName,
+  expectedActor,
 })) {
   throw new Error("Stripe live migration evidence signature is invalid.");
 }

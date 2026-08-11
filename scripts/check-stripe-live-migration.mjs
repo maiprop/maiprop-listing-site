@@ -63,6 +63,14 @@ const EVIDENCE_WORKFLOW_RUN_ID = optionValue("--workflow-run-id") ?? process.env
 const EVIDENCE_WORKFLOW_RUN_ATTEMPT = optionValue("--workflow-run-attempt") ??
   process.env.GITHUB_RUN_ATTEMPT;
 const EVIDENCE_NONCE = optionValue("--evidence-nonce") ?? process.env.RELEASE_EVIDENCE_NONCE;
+const EVIDENCE_REPOSITORY = optionValue("--repository") ?? process.env.GITHUB_REPOSITORY;
+const EVIDENCE_WORKFLOW_SHA = optionValue("--workflow-sha") ?? process.env.GITHUB_WORKFLOW_SHA;
+const EVIDENCE_WORKFLOW_REF = optionValue("--workflow-ref") ?? process.env.GITHUB_WORKFLOW_REF;
+const EVIDENCE_EVENT_SHA = optionValue("--event-sha") ?? process.env.GITHUB_SHA;
+const EVIDENCE_EVENT_NAME = optionValue("--event-name") ?? process.env.GITHUB_EVENT_NAME;
+const EVIDENCE_ACTOR = optionValue("--actor") ?? process.env.GITHUB_ACTOR;
+const EVIDENCE_TRIGGERING_ACTOR = optionValue("--triggering-actor") ??
+  process.env.GITHUB_TRIGGERING_ACTOR;
 
 const REQUIRED_WEBHOOK_EVENTS = [
   "checkout.session.completed",
@@ -146,8 +154,8 @@ function encodeForm(values) {
 
 function getStripeKey() {
   const key = getStripeReadOnlyKey(process.env);
-  if (!/^(sk|rk)_live_/.test(key)) {
-    throw new Error("Refusing to run live migration gate without an sk_live_ or rk_live_ Stripe key.");
+  if (!/^rk_live_/.test(key)) {
+    throw new Error("Refusing to run live migration gate without an rk_live_ Stripe restricted key.");
   }
   return key;
 }
@@ -423,6 +431,13 @@ async function main() {
     workflowRunId: EVIDENCE_WORKFLOW_RUN_ID,
     workflowRunAttempt: EVIDENCE_WORKFLOW_RUN_ATTEMPT,
     evidenceNonce: EVIDENCE_NONCE,
+    repository: EVIDENCE_REPOSITORY,
+    workflowSha: EVIDENCE_WORKFLOW_SHA,
+    workflowRef: EVIDENCE_WORKFLOW_REF,
+    eventSha: EVIDENCE_EVENT_SHA,
+    eventName: EVIDENCE_EVENT_NAME,
+    actor: EVIDENCE_ACTOR,
+    triggeringActor: EVIDENCE_TRIGGERING_ACTOR,
   });
   const report = signStripeLiveMigrationEvidence(unsignedReport, {
     signingKey: EVIDENCE_SIGNING_KEY,

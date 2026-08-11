@@ -11,6 +11,17 @@ import {
 } from "./stripe-live-migration-evidence.mjs";
 
 describe("Stripe live migration evidence", () => {
+  const workflowProvenance = {
+    repository: "maiprop/maiprop-listing-site",
+    workflowSha: "a".repeat(40),
+    workflowRef:
+      "maiprop/maiprop-listing-site/.github/workflows/verify-stripe-live-readiness.yml@refs/heads/main",
+    eventSha: "a".repeat(40),
+    eventName: "workflow_dispatch",
+    actor: "release-reviewer",
+    triggeringActor: "release-reviewer",
+  };
+
   it("binds provider evidence to an exact release SHA and production Supabase target", () => {
     const releaseSha = "a".repeat(40);
     const evidence = buildStripeLiveMigrationEvidence({
@@ -26,6 +37,7 @@ describe("Stripe live migration evidence", () => {
       workflowRunId: "31532373459",
       workflowRunAttempt: "1",
       evidenceNonce: "31532373459:1:aaaaaaaa",
+      ...workflowProvenance,
     });
 
     expect(evidence).toMatchObject({
@@ -40,6 +52,12 @@ describe("Stripe live migration evidence", () => {
         workflow_run_id: "31532373459",
         workflow_run_attempt: "1",
         evidence_nonce: "31532373459:1:aaaaaaaa",
+        repository: "maiprop/maiprop-listing-site",
+        workflow_sha: releaseSha,
+        event_sha: releaseSha,
+        event_name: "workflow_dispatch",
+        actor: "release-reviewer",
+        triggering_actor: "release-reviewer",
       },
     });
   });
@@ -56,6 +74,7 @@ describe("Stripe live migration evidence", () => {
       workflowRunId: "31532373459",
       workflowRunAttempt: "1",
       evidenceNonce: "31532373459:1:aaaaaaaa",
+      ...workflowProvenance,
     };
 
     expect(() => buildStripeLiveMigrationEvidence({
@@ -112,6 +131,9 @@ describe("Stripe live migration evidence", () => {
       workflowRunId: "31532373459",
       workflowRunAttempt: "1",
       evidenceNonce: "31532373459:1:cccccccc",
+      ...workflowProvenance,
+      workflowSha: "c".repeat(40),
+      eventSha: "c".repeat(40),
     });
     const signingKey = "release-evidence-test-key-that-is-at-least-32-bytes";
     const signed = signStripeLiveMigrationEvidence(evidence, {
@@ -125,10 +147,17 @@ describe("Stripe live migration evidence", () => {
     });
     const verification = {
       signingKey,
+      expectedKeyId: "github-actions-release-evidence-v1",
       now: new Date("2026-08-11T00:05:00.000Z"),
       expectedWorkflowRunId: "31532373459",
       expectedWorkflowRunAttempt: "1",
       expectedEvidenceNonce: "31532373459:1:cccccccc",
+      expectedRepository: "maiprop/maiprop-listing-site",
+      expectedWorkflowSha: "c".repeat(40),
+      expectedWorkflowRef: workflowProvenance.workflowRef,
+      expectedEventSha: "c".repeat(40),
+      expectedEventName: "workflow_dispatch",
+      expectedActor: "release-reviewer",
     };
     expect(verifyStripeLiveMigrationEvidence(signed, verification)).toBe(true);
     expect(verifyStripeLiveMigrationEvidence({
@@ -139,9 +168,34 @@ describe("Stripe live migration evidence", () => {
       ...signed,
       signature: { ...signed.signature, value: "0".repeat(64) },
     }, verification)).toBe(false);
+    expect(verifyStripeLiveMigrationEvidence({
+      ...signed,
+      signature: { ...signed.signature, key_id: "forged-key" },
+    }, verification)).toBe(false);
+    expect(verifyStripeLiveMigrationEvidence(signed, {
+      ...verification,
+      expectedKeyId: "wrong-key",
+    })).toBe(false);
+    const { expectedKeyId: _expectedKeyId, ...missingKeyIdVerification } = verification;
+    expect(verifyStripeLiveMigrationEvidence(
+      signed,
+      missingKeyIdVerification,
+    )).toBe(false);
     expect(verifyStripeLiveMigrationEvidence(signed, {
       ...verification,
       now: new Date("2026-08-11T01:00:00.000Z"),
+    })).toBe(false);
+    expect(verifyStripeLiveMigrationEvidence({
+      ...signed,
+      schema_version: 2,
+    }, verification)).toBe(false);
+    expect(verifyStripeLiveMigrationEvidence({
+      ...signed,
+      evidence_type: "other-evidence",
+    }, verification)).toBe(false);
+    expect(verifyStripeLiveMigrationEvidence(signed, {
+      ...verification,
+      expectedWorkflowSha: "d".repeat(40),
     })).toBe(false);
     expect(verifyStripeLiveMigrationEvidence(signed, {
       ...verification,
@@ -149,18 +203,19 @@ describe("Stripe live migration evidence", () => {
     })).toBe(false);
   });
 
-  it("requires a protected exact-SHA workflow to generate and verify live evidence", () => {
+  it("requires an allowlisted exact-SHA workflow to generate and verify live evidence", () => {
     const workflow = readFileSync(
       resolve(import.meta.dirname, "..", ".github", "workflows", "verify-stripe-live-readiness.yml"),
       "utf8",
     );
 
-    expect(workflow).toContain("environment: production");
+    expect(workflow).toContain("PRODUCTION_RELEASE_APPROVERS");
     expect(workflow).toContain("github.run_attempt != 1");
     expect(workflow).toContain("github.actor != github.triggering_actor");
     expect(workflow).toContain("STRIPE_RESTRICTED_KEY");
     expect(workflow).toContain("check:stripe-live-migration");
     expect(workflow).toContain("verify:stripe-live-migration-evidence");
-    expect(workflow).toContain("actions/attest-build-provenance@");
+    expect(workflow).not.toContain("environment: production");
+    expect(workflow).not.toContain("actions/attest-build-provenance@");
   });
 });

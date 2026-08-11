@@ -57,7 +57,8 @@ add a row here in the same PR.
 | `CLOUDFLARE_API_TOKEN` | GitHub Actions Cloudflare Pages deploys, env sync, rollback | GH repo secrets | **90 days** or on compromise | Platform lead |
 | `CLOUDFLARE_PAGES_READ_TOKEN` | Main-only Pages Git deployment posture verification | GH repo secrets | **90 days** or on compromise | Platform lead |
 | `CLOUDFLARE_PAGES_EDIT_TOKEN` | Manual main-only Pages Git deployment lock | GH repo secrets | **90 days** or on compromise | Platform lead |
-| `RELEASE_EVIDENCE_SIGNING_KEY` / `RELEASE_EVIDENCE_SIGNING_KEY_ID` | Sign and verify exact-commit Stripe live-migration evidence | Protected GH release environment | **90 days** or on compromise; change key ID on every rotation | Platform + finance leads |
+| `RELEASE_EVIDENCE_SIGNING_KEY` / `RELEASE_EVIDENCE_SIGNING_KEY_ID` | Sign and verify domain-separated, exact-commit Stripe live-migration evidence | GH repository secret plus repository key-ID variable | **90 days** or on compromise; change key ID on every rotation | Platform + finance leads |
+| `STRIPE_RESTRICTED_KEY` | Read-only live catalogue/account verification from the main-only readiness workflow; must start with `rk_live_` | GH repository secret | **90 days** or on compromise | Finance lead |
 | `CF_ACCESS_CLIENT_ID` / `CLOUDFLARE_ACCESS_CLIENT_ID` | Deploy smoke checks against Cloudflare Access-protected previews | GH repo or environment secrets | **90 days** or on compromise | Platform lead |
 | `CF_ACCESS_CLIENT_SECRET` / `CLOUDFLARE_ACCESS_CLIENT_SECRET` | Deploy smoke checks against Cloudflare Access-protected previews | GH repo or environment secrets | **90 days** or on compromise | Platform lead |
 | `CF_ACCESS_TOKEN` / `CLOUDFLARE_ACCESS_TOKEN` | Optional pre-issued Cloudflare Access JWT for deploy diagnostics | GH repo or environment secrets | On expiry or compromise | Platform lead |

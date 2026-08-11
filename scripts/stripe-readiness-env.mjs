@@ -2,7 +2,7 @@ export const REQUIRED_STRIPE_SECRET_MESSAGE =
   "STRIPE_SECRET_KEY is required. Export it only in the secure CI/provider shell; never commit it to .env files.";
 
 export const REQUIRED_STRIPE_READ_ONLY_MESSAGE =
-  "A live Stripe read-only key is required. Export STRIPE_RESTRICTED_KEY=rk_live_... or STRIPE_SECRET_KEY=sk_live_... only in the secure CI/provider shell.";
+  "A live Stripe restricted key is required. Export STRIPE_RESTRICTED_KEY=rk_live_... only in the secure CI/provider shell.";
 
 export function getStripeSecretKey(env = process.env) {
   const key = env.STRIPE_SECRET_KEY ?? env.STRIPE_API_KEY ?? "";
@@ -14,10 +14,10 @@ export function getStripeSecretKey(env = process.env) {
 }
 
 export function getStripeReadOnlyKey(env = process.env) {
-  const key = env.STRIPE_RESTRICTED_KEY ?? env.STRIPE_READ_ONLY_KEY ?? env.STRIPE_SECRET_KEY ?? env.STRIPE_API_KEY ?? "";
+  const key = env.STRIPE_RESTRICTED_KEY ?? "";
   if (!key) throw new Error(REQUIRED_STRIPE_READ_ONLY_MESSAGE);
-  if (!/^(sk|rk)_(test|live)_/.test(key)) {
-    throw new Error("Stripe read-only checks require an sk_ or rk_ API key.");
+  if (!/^rk_live_/.test(key)) {
+    throw new Error("Stripe read-only checks require STRIPE_RESTRICTED_KEY=rk_live_....");
   }
   return key;
 }

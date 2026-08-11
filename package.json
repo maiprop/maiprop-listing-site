@@ -31,7 +31,7 @@
         ".": "13.0.6",
         "minimatch": {
           ".": "10.2.6",
-          "brace-expansion": "5.0.8"
+          "brace-expansion": "5.0.9"
         }
       }
     }
@@ -243,7 +243,7 @@
     "i18next-scanner": "^4.6.0",
     "js-yaml": "4.2.0",
     "jsdom": "^29.1.1",
-    "postcss": "^8.5.19",
+    "postcss": "^8.5.26",
     "remotion": "^4.0.482",
     "rollup-plugin-visualizer": "^6.0.11",
     "sharp": "^0.34.5",

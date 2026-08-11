@@ -2,6 +2,15 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 const FULL_SHA = /^[0-9a-f]{40}$/i;
 const PRODUCTION_SUPABASE_PROJECT_REF = "qvvicunqcrwpioqnvzxf";
+const PRODUCTION_REPOSITORY = "maiprop/maiprop-listing-site";
+const READINESS_WORKFLOW_REF =
+  `${PRODUCTION_REPOSITORY}/.github/workflows/verify-stripe-live-readiness.yml@refs/heads/main`;
+const EVIDENCE_SCHEMA_VERSION = 1;
+const EVIDENCE_TYPE = "maiprop-stripe-live-migration";
+const SIGNING_DOMAIN = Buffer.from(
+  "maiprop/stripe-live-readiness/v1\0",
+  "utf8",
+);
 const MIN_SIGNING_KEY_BYTES = 32;
 const DEFAULT_MAX_EVIDENCE_AGE_MS = 15 * 60 * 1000;
 const MAX_FUTURE_CLOCK_SKEW_MS = 60 * 1000;
@@ -99,6 +108,33 @@ function unsignedEvidence(signedEvidence) {
   return evidence;
 }
 
+function requiredText(value, label) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) throw new Error(`${label} is required.`);
+  return normalized;
+}
+
+function signingPayload(evidence, keyId) {
+  const unsigned = unsignedEvidence(evidence);
+  if (
+    unsigned?.schema_version !== EVIDENCE_SCHEMA_VERSION ||
+    unsigned?.evidence_type !== EVIDENCE_TYPE
+  ) {
+    throw new Error("Stripe readiness evidence schema or type is invalid.");
+  }
+  const normalizedKeyId = requiredText(
+    keyId,
+    "Release evidence signing key ID",
+  );
+  return Buffer.concat([
+    SIGNING_DOMAIN,
+    Buffer.from(stableJson({
+      key_id: normalizedKeyId,
+      evidence: unsigned,
+    }), "utf8"),
+  ]);
+}
+
 export function signStripeLiveMigrationEvidence(evidence, {
   signingKey,
   keyId,
@@ -107,7 +143,7 @@ export function signStripeLiveMigrationEvidence(evidence, {
   if (!normalizedKeyId) {
     throw new Error("Release evidence signing key ID is required.");
   }
-  const payload = stableJson(unsignedEvidence(evidence));
+  const payload = signingPayload(evidence, normalizedKeyId);
   const key = signingKeyBuffer(signingKey);
   return {
     ...unsignedEvidence(evidence),
@@ -126,18 +162,28 @@ export function verifyStripeLiveMigrationEvidence(signedEvidence, {
   expectedWorkflowRunId,
   expectedWorkflowRunAttempt,
   expectedEvidenceNonce,
+  expectedRepository,
+  expectedWorkflowSha,
+  expectedWorkflowRef,
+  expectedEventSha,
+  expectedEventName,
+  expectedActor,
   now = new Date(),
   maxAgeMs = DEFAULT_MAX_EVIDENCE_AGE_MS,
 } = {}) {
   try {
     const signature = signedEvidence?.signature;
+    const normalizedExpectedKeyId = requiredText(
+      expectedKeyId,
+      "Expected release evidence signing key ID",
+    );
     if (
       signature?.algorithm !== "hmac-sha256" ||
       !/^[0-9a-f]{64}$/i.test(String(signature?.value ?? "")) ||
-      (expectedKeyId && signature?.key_id !== expectedKeyId)
+      signature?.key_id !== normalizedExpectedKeyId
     ) return false;
 
-    const payload = stableJson(unsignedEvidence(signedEvidence));
+    const payload = signingPayload(signedEvidence, normalizedExpectedKeyId);
     const digest = createHash("sha256").update(payload).digest("hex");
     if (digest !== signedEvidence?.evidence_digest_sha256) return false;
 
@@ -171,10 +217,45 @@ export function verifyStripeLiveMigrationEvidence(signedEvidence, {
       "Evidence workflow run attempt",
     );
     const nonce = evidenceNonce(provenance?.evidence_nonce);
+    const repository = requiredText(
+      provenance?.repository,
+      "Evidence repository",
+    );
+    const workflowSha = normalizeStripeMigrationReleaseSha(
+      provenance?.workflow_sha,
+    );
+    const workflowRef = requiredText(
+      provenance?.workflow_ref,
+      "Evidence workflow ref",
+    );
+    const eventSha = normalizeStripeMigrationReleaseSha(
+      provenance?.event_sha,
+    );
+    const eventName = requiredText(
+      provenance?.event_name,
+      "Evidence event name",
+    );
+    const actor = requiredText(provenance?.actor, "Evidence actor");
+    const triggeringActor = requiredText(
+      provenance?.triggering_actor,
+      "Evidence triggering actor",
+    );
     if (
       (expectedWorkflowRunId && workflowRunId !== String(expectedWorkflowRunId)) ||
       (expectedWorkflowRunAttempt && workflowRunAttempt !== String(expectedWorkflowRunAttempt)) ||
-      (expectedEvidenceNonce && nonce !== String(expectedEvidenceNonce))
+      (expectedEvidenceNonce && nonce !== String(expectedEvidenceNonce)) ||
+      repository !== PRODUCTION_REPOSITORY ||
+      workflowRef !== READINESS_WORKFLOW_REF ||
+      workflowSha !== signedEvidence.release_sha ||
+      eventSha !== signedEvidence.release_sha ||
+      eventName !== "workflow_dispatch" ||
+      actor !== triggeringActor ||
+      (expectedRepository && repository !== expectedRepository) ||
+      (expectedWorkflowSha && workflowSha !== expectedWorkflowSha) ||
+      (expectedWorkflowRef && workflowRef !== expectedWorkflowRef) ||
+      (expectedEventSha && eventSha !== expectedEventSha) ||
+      (expectedEventName && eventName !== expectedEventName) ||
+      (expectedActor && actor !== expectedActor)
     ) return false;
     return true;
   } catch {
@@ -195,6 +276,13 @@ export function buildStripeLiveMigrationEvidence({
   workflowRunId,
   workflowRunAttempt,
   evidenceNonce: nonce,
+  repository,
+  workflowSha,
+  workflowRef,
+  eventSha,
+  eventName,
+  actor,
+  triggeringActor,
 }) {
   const normalizedSha = normalizeStripeMigrationReleaseSha(releaseSha);
   if (supabaseProjectRef !== PRODUCTION_SUPABASE_PROJECT_REF) {
@@ -202,10 +290,32 @@ export function buildStripeLiveMigrationEvidence({
       `Stripe migration evidence must target production Supabase ${PRODUCTION_SUPABASE_PROJECT_REF}.`,
     );
   }
+  const normalizedWorkflowSha = normalizeStripeMigrationReleaseSha(workflowSha);
+  const normalizedEventSha = normalizeStripeMigrationReleaseSha(eventSha);
+  const normalizedRepository = requiredText(repository, "Evidence repository");
+  const normalizedWorkflowRef = requiredText(workflowRef, "Evidence workflow ref");
+  const normalizedEventName = requiredText(eventName, "Evidence event name");
+  const normalizedActor = requiredText(actor, "Evidence actor");
+  const normalizedTriggeringActor = requiredText(
+    triggeringActor,
+    "Evidence triggering actor",
+  );
+  if (
+    normalizedRepository !== PRODUCTION_REPOSITORY ||
+    normalizedWorkflowRef !== READINESS_WORKFLOW_REF ||
+    normalizedWorkflowSha !== normalizedSha ||
+    normalizedEventSha !== normalizedSha ||
+    normalizedEventName !== "workflow_dispatch" ||
+    normalizedActor !== normalizedTriggeringActor
+  ) {
+    throw new Error(
+      "Stripe readiness evidence must bind the exact trusted main workflow and original dispatcher.",
+    );
+  }
 
   return {
-    schema_version: 1,
-    evidence_type: "maiprop-stripe-live-migration",
+    schema_version: EVIDENCE_SCHEMA_VERSION,
+    evidence_type: EVIDENCE_TYPE,
     ok: issues.length === 0,
     release_sha: normalizedSha,
     supabase_project_ref: supabaseProjectRef,
@@ -226,6 +336,13 @@ export function buildStripeLiveMigrationEvidence({
         "Evidence workflow run attempt",
       ),
       evidence_nonce: evidenceNonce(nonce),
+      repository: normalizedRepository,
+      workflow_sha: normalizedWorkflowSha,
+      workflow_ref: normalizedWorkflowRef,
+      event_sha: normalizedEventSha,
+      event_name: normalizedEventName,
+      actor: normalizedActor,
+      triggering_actor: normalizedTriggeringActor,
     },
   };
 }
