@@ -124,7 +124,7 @@ export const captureHandler = async (
     BREVO_API_KEY: nonSensitiveTestValue("brevo"),
     BREVO_FROM_EMAIL: "noreply@maiprop.test",
     SEND_EMAIL_HOOK_SECRET: nonSensitiveTestValue("email-hook"),
-    STRIPE_SECRET_KEY: nonSensitiveTestValue("stripe-api"),
+    STRIPE_SECRET_KEY: "sk_test_placeholder",
     STRIPE_WEBHOOK_SECRET: nonSensitiveTestValue("stripe-webhook"),
     MAIPROP_OS_URL: "https://os.test",
     MAIPROP_OS_EMAIL: "test@test.com",

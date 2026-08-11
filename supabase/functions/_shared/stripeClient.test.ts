@@ -298,21 +298,42 @@ Deno.test("Stripe runtime mode rejects unknown values", () => {
 Deno.test("Stripe runtime mode requires test keys in test mode", () => {
   withEnv({ STRIPE_RUNTIME_MODE: "test" }, () => {
     assertStripeKeyMatchesRuntimeMode("sk_test_123");
+    assertStripeKeyMatchesRuntimeMode("rk_test_123");
+    for (const liveKey of ["sk_live_123", "rk_live_123"]) {
+      assertThrows(
+        () => assertStripeKeyMatchesRuntimeMode(liveKey),
+        Error,
+        "test mode",
+      );
+    }
     assertThrows(
-      () => assertStripeKeyMatchesRuntimeMode("sk_live_123"),
+      () => assertStripeKeyMatchesRuntimeMode("unclassified_key"),
       Error,
-      "test mode",
+      "recognized Stripe secret or restricted key prefix",
     );
   });
 });
 
 Deno.test("Stripe runtime mode requires explicit live opt-in for live keys", () => {
   withEnv({ STRIPE_RUNTIME_MODE: "live", STRIPE_LIVE_MODE: undefined }, () => {
-    assertThrows(
-      () => assertStripeKeyMatchesRuntimeMode("sk_live_123"),
-      Error,
-      "STRIPE_LIVE_MODE=true",
-    );
+    for (const liveKey of ["sk_live_123", "rk_live_123"]) {
+      assertThrows(
+        () => assertStripeKeyMatchesRuntimeMode(liveKey),
+        Error,
+        "STRIPE_LIVE_MODE=true",
+      );
+    }
+  });
+  withEnv({ STRIPE_RUNTIME_MODE: "live", STRIPE_LIVE_MODE: "true" }, () => {
+    assertStripeKeyMatchesRuntimeMode("sk_live_123");
+    assertStripeKeyMatchesRuntimeMode("rk_live_123");
+    for (const testKey of ["sk_test_123", "rk_test_123"]) {
+      assertThrows(
+        () => assertStripeKeyMatchesRuntimeMode(testKey),
+        Error,
+        "live mode",
+      );
+    }
   });
 });
 
@@ -367,6 +388,11 @@ Deno.test("Stripe account verification rejects a client authenticated to another
         return Promise.resolve({ id: "acct_other456" });
       },
     },
+    balance: {
+      retrieve() {
+        return Promise.resolve({ livemode: false });
+      },
+    },
   };
 
   await assertRejects(
@@ -374,6 +400,7 @@ Deno.test("Stripe account verification rejects a client authenticated to another
       verifyStripeAccountIdentity(stripe as never, {
         expectedAccountId: "acct_expected123",
         cacheTtlMs: 0,
+        runtimeMode: "test",
       }),
     Error,
     "authenticated account",
@@ -382,11 +409,18 @@ Deno.test("Stripe account verification rejects a client authenticated to another
 
 Deno.test("Stripe account verification is bounded and caches successful checks", async () => {
   let retrieveCalls = 0;
+  let balanceCalls = 0;
   const stripe = {
     accounts: {
       retrieve() {
         retrieveCalls += 1;
         return Promise.resolve({ id: "acct_cache123" });
+      },
+    },
+    balance: {
+      retrieve() {
+        balanceCalls += 1;
+        return Promise.resolve({ livemode: false });
       },
     },
   };
@@ -395,14 +429,43 @@ Deno.test("Stripe account verification is bounded and caches successful checks",
     expectedAccountId: "acct_cache123",
     cacheTtlMs: 60_000,
     timeoutMs: 100,
+    runtimeMode: "test",
   });
   await verifyStripeAccountIdentity(stripe as never, {
     expectedAccountId: "acct_cache123",
     cacheTtlMs: 60_000,
     timeoutMs: 100,
+    runtimeMode: "test",
   });
 
   assertEquals(retrieveCalls, 1);
+  assertEquals(balanceCalls, 1);
+});
+
+Deno.test("Stripe account verification rejects provider livemode drift", async () => {
+  const stripe = {
+    accounts: {
+      retrieve() {
+        return Promise.resolve({ id: "acct_expected123" });
+      },
+    },
+    balance: {
+      retrieve() {
+        return Promise.resolve({ livemode: false });
+      },
+    },
+  };
+
+  await assertRejects(
+    () =>
+      verifyStripeAccountIdentity(stripe as never, {
+        expectedAccountId: "acct_expected123",
+        cacheTtlMs: 0,
+        runtimeMode: "live",
+      }),
+    Error,
+    "livemode=false",
+  );
 });
 
 Deno.test("Stripe account verification fails within its request deadline", async () => {
@@ -410,6 +473,11 @@ Deno.test("Stripe account verification fails within its request deadline", async
     accounts: {
       retrieve() {
         return new Promise<{ id: string }>(() => undefined);
+      },
+    },
+    balance: {
+      retrieve() {
+        return Promise.resolve({ livemode: false });
       },
     },
   };
@@ -420,6 +488,7 @@ Deno.test("Stripe account verification fails within its request deadline", async
         expectedAccountId: "acct_timeout123",
         cacheTtlMs: 0,
         timeoutMs: 5,
+        runtimeMode: "test",
       }),
     Error,
     "timed out",

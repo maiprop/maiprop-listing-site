@@ -18,6 +18,7 @@ import {
   resolveCheckedOutReleaseSha,
   signStripeLiveMigrationEvidence,
 } from "./stripe-live-migration-evidence.mjs";
+import { getSupabaseReadOnlyKey } from "./supabase-readonly-key.mjs";
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -58,6 +59,10 @@ const RELEASE_SHA = optionValue("--release-sha") ?? process.env.RELEASE_SHA;
 const OUTPUT_PATH = optionValue("--out");
 const EVIDENCE_SIGNING_KEY = process.env.RELEASE_EVIDENCE_SIGNING_KEY;
 const EVIDENCE_SIGNING_KEY_ID = process.env.RELEASE_EVIDENCE_SIGNING_KEY_ID;
+const EVIDENCE_WORKFLOW_RUN_ID = optionValue("--workflow-run-id") ?? process.env.GITHUB_RUN_ID;
+const EVIDENCE_WORKFLOW_RUN_ATTEMPT = optionValue("--workflow-run-attempt") ??
+  process.env.GITHUB_RUN_ATTEMPT;
+const EVIDENCE_NONCE = optionValue("--evidence-nonce") ?? process.env.RELEASE_EVIDENCE_NONCE;
 
 const REQUIRED_WEBHOOK_EVENTS = [
   "checkout.session.completed",
@@ -182,22 +187,6 @@ async function listAll(path, values = {}) {
   return rows;
 }
 
-function decodeJwtPayload(value) {
-  const payload = value?.split(".")[1];
-  if (!payload) return null;
-  try {
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function keyRole(value) {
-  if (!value) return "";
-  if (value.startsWith("sb_secret_")) return "service_role";
-  return decodeJwtPayload(value)?.role ?? "";
-}
-
 function getSupabaseUrl() {
   const url = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
@@ -213,16 +202,8 @@ function getSupabaseUrl() {
   return url.replace(/\/$/, "");
 }
 
-function getSupabaseServiceKey() {
-  for (const name of ["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY", "SB_SERVICE_ROLE_KEY"]) {
-    const value = process.env[name];
-    if (value && keyRole(value) === "service_role") return value;
-  }
-  throw new Error("A Supabase service-role key is required for pricing metadata verification.");
-}
-
 async function supabaseRest(path) {
-  const key = getSupabaseServiceKey();
+  const key = getSupabaseReadOnlyKey();
   const response = await fetch(`${getSupabaseUrl()}${path}`, {
     headers: {
       apikey: key,
@@ -439,6 +420,9 @@ async function main() {
     webhook: webhook ? { id: webhook.id, url: webhook.url } : null,
     issues,
     warnings,
+    workflowRunId: EVIDENCE_WORKFLOW_RUN_ID,
+    workflowRunAttempt: EVIDENCE_WORKFLOW_RUN_ATTEMPT,
+    evidenceNonce: EVIDENCE_NONCE,
   });
   const report = signStripeLiveMigrationEvidence(unsignedReport, {
     signingKey: EVIDENCE_SIGNING_KEY,

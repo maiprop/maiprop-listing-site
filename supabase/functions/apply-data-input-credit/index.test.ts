@@ -179,6 +179,10 @@ function installFetchMock(scenario: MockScenario) {
         return json({ id: "acct_testmaiprop", object: "account" });
       }
 
+      if (url.pathname === "/v1/balance") {
+        return json({ object: "balance", livemode: false, available: [], pending: [] });
+      }
+
       if (url.pathname === "/v1/customers/search") {
         return json({ object: "search_result", data: [{ id: "cus_agent" }] });
       }

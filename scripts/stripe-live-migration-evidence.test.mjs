@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -21,6 +23,9 @@ describe("Stripe live migration evidence", () => {
       issues: [],
       warnings: [],
       checkedAt: "2026-08-11T00:00:00.000Z",
+      workflowRunId: "31532373459",
+      workflowRunAttempt: "1",
+      evidenceNonce: "31532373459:1:aaaaaaaa",
     });
 
     expect(evidence).toMatchObject({
@@ -31,6 +36,11 @@ describe("Stripe live migration evidence", () => {
       supabase_project_ref: "qvvicunqcrwpioqnvzxf",
       stripe_api_version: "2026-06-24.dahlia",
       checked_at: "2026-08-11T00:00:00.000Z",
+      provenance: {
+        workflow_run_id: "31532373459",
+        workflow_run_attempt: "1",
+        evidence_nonce: "31532373459:1:aaaaaaaa",
+      },
     });
   });
 
@@ -43,6 +53,9 @@ describe("Stripe live migration evidence", () => {
       issues: [],
       warnings: [],
       checkedAt: "2026-08-11T00:00:00.000Z",
+      workflowRunId: "31532373459",
+      workflowRunAttempt: "1",
+      evidenceNonce: "31532373459:1:aaaaaaaa",
     };
 
     expect(() => buildStripeLiveMigrationEvidence({
@@ -96,6 +109,9 @@ describe("Stripe live migration evidence", () => {
       issues: [],
       warnings: [],
       checkedAt: "2026-08-11T00:00:00.000Z",
+      workflowRunId: "31532373459",
+      workflowRunAttempt: "1",
+      evidenceNonce: "31532373459:1:cccccccc",
     });
     const signingKey = "release-evidence-test-key-that-is-at-least-32-bytes";
     const signed = signStripeLiveMigrationEvidence(evidence, {
@@ -107,14 +123,44 @@ describe("Stripe live migration evidence", () => {
       algorithm: "hmac-sha256",
       key_id: "github-actions-release-evidence-v1",
     });
-    expect(verifyStripeLiveMigrationEvidence(signed, { signingKey })).toBe(true);
+    const verification = {
+      signingKey,
+      now: new Date("2026-08-11T00:05:00.000Z"),
+      expectedWorkflowRunId: "31532373459",
+      expectedWorkflowRunAttempt: "1",
+      expectedEvidenceNonce: "31532373459:1:cccccccc",
+    };
+    expect(verifyStripeLiveMigrationEvidence(signed, verification)).toBe(true);
     expect(verifyStripeLiveMigrationEvidence({
       ...signed,
       checked: { ...signed.checked, catalog_products: 26 },
-    }, { signingKey })).toBe(false);
+    }, verification)).toBe(false);
     expect(verifyStripeLiveMigrationEvidence({
       ...signed,
       signature: { ...signed.signature, value: "0".repeat(64) },
-    }, { signingKey })).toBe(false);
+    }, verification)).toBe(false);
+    expect(verifyStripeLiveMigrationEvidence(signed, {
+      ...verification,
+      now: new Date("2026-08-11T01:00:00.000Z"),
+    })).toBe(false);
+    expect(verifyStripeLiveMigrationEvidence(signed, {
+      ...verification,
+      expectedWorkflowRunId: "999",
+    })).toBe(false);
+  });
+
+  it("requires a protected exact-SHA workflow to generate and verify live evidence", () => {
+    const workflow = readFileSync(
+      resolve(import.meta.dirname, "..", ".github", "workflows", "verify-stripe-live-readiness.yml"),
+      "utf8",
+    );
+
+    expect(workflow).toContain("environment: production");
+    expect(workflow).toContain("github.run_attempt != 1");
+    expect(workflow).toContain("github.actor != github.triggering_actor");
+    expect(workflow).toContain("STRIPE_RESTRICTED_KEY");
+    expect(workflow).toContain("check:stripe-live-migration");
+    expect(workflow).toContain("verify:stripe-live-migration-evidence");
+    expect(workflow).toContain("actions/attest-build-provenance@");
   });
 });

@@ -3,6 +3,24 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 const FULL_SHA = /^[0-9a-f]{40}$/i;
 const PRODUCTION_SUPABASE_PROJECT_REF = "qvvicunqcrwpioqnvzxf";
 const MIN_SIGNING_KEY_BYTES = 32;
+const DEFAULT_MAX_EVIDENCE_AGE_MS = 15 * 60 * 1000;
+const MAX_FUTURE_CLOCK_SKEW_MS = 60 * 1000;
+
+function positiveIntegerString(value, label) {
+  const normalized = String(value ?? "").trim();
+  if (!/^[1-9][0-9]*$/.test(normalized)) {
+    throw new Error(`${label} must be a positive integer.`);
+  }
+  return normalized;
+}
+
+function evidenceNonce(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || normalized.length > 256) {
+    throw new Error("Stripe migration evidence nonce is required and must be at most 256 characters.");
+  }
+  return normalized;
+}
 
 export function normalizeStripeMigrationReleaseSha(releaseSha) {
   const normalizedSha = String(releaseSha ?? "").trim().toLowerCase();
@@ -105,6 +123,11 @@ export function signStripeLiveMigrationEvidence(evidence, {
 export function verifyStripeLiveMigrationEvidence(signedEvidence, {
   signingKey,
   expectedKeyId,
+  expectedWorkflowRunId,
+  expectedWorkflowRunAttempt,
+  expectedEvidenceNonce,
+  now = new Date(),
+  maxAgeMs = DEFAULT_MAX_EVIDENCE_AGE_MS,
 } = {}) {
   try {
     const signature = signedEvidence?.signature;
@@ -123,7 +146,37 @@ export function verifyStripeLiveMigrationEvidence(signedEvidence, {
       "hex",
     );
     const actual = Buffer.from(signature.value, "hex");
-    return expected.length === actual.length && timingSafeEqual(expected, actual);
+    if (!(expected.length === actual.length && timingSafeEqual(expected, actual))) {
+      return false;
+    }
+
+    const checkedAtMs = Date.parse(String(signedEvidence?.checked_at ?? ""));
+    const nowMs = now instanceof Date ? now.getTime() : Number(now);
+    if (
+      !Number.isFinite(checkedAtMs) ||
+      !Number.isFinite(nowMs) ||
+      !Number.isFinite(maxAgeMs) ||
+      maxAgeMs <= 0 ||
+      checkedAtMs > nowMs + MAX_FUTURE_CLOCK_SKEW_MS ||
+      nowMs - checkedAtMs > maxAgeMs
+    ) return false;
+
+    const provenance = signedEvidence?.provenance;
+    const workflowRunId = positiveIntegerString(
+      provenance?.workflow_run_id,
+      "Evidence workflow run ID",
+    );
+    const workflowRunAttempt = positiveIntegerString(
+      provenance?.workflow_run_attempt,
+      "Evidence workflow run attempt",
+    );
+    const nonce = evidenceNonce(provenance?.evidence_nonce);
+    if (
+      (expectedWorkflowRunId && workflowRunId !== String(expectedWorkflowRunId)) ||
+      (expectedWorkflowRunAttempt && workflowRunAttempt !== String(expectedWorkflowRunAttempt)) ||
+      (expectedEvidenceNonce && nonce !== String(expectedEvidenceNonce))
+    ) return false;
+    return true;
   } catch {
     return false;
   }
@@ -139,6 +192,9 @@ export function buildStripeLiveMigrationEvidence({
   issues,
   warnings,
   checkedAt = new Date().toISOString(),
+  workflowRunId,
+  workflowRunAttempt,
+  evidenceNonce: nonce,
 }) {
   const normalizedSha = normalizeStripeMigrationReleaseSha(releaseSha);
   if (supabaseProjectRef !== PRODUCTION_SUPABASE_PROJECT_REF) {
@@ -160,5 +216,16 @@ export function buildStripeLiveMigrationEvidence({
     issues,
     warnings,
     checked_at: checkedAt,
+    provenance: {
+      workflow_run_id: positiveIntegerString(
+        workflowRunId,
+        "Evidence workflow run ID",
+      ),
+      workflow_run_attempt: positiveIntegerString(
+        workflowRunAttempt,
+        "Evidence workflow run attempt",
+      ),
+      evidence_nonce: evidenceNonce(nonce),
+    },
   };
 }
