@@ -19,6 +19,7 @@ import { getStreetViewProxyUrl } from "@/lib/config";
 import { MAIPROP_LOGO_FALLBACK_URL } from "@/lib/imageFallbacks";
 import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { fetchPublicApi } from "@/lib/publicApi";
+import { normalizePublicCollectionWindow } from "@/lib/publicCollectionWindow";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 import {
   fmtDate,
@@ -357,14 +358,15 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
         params.set("boundsNorth", String(activeMapBounds.north));
       }
 
-      const cached = await fetchPublicApi<PublicOpenHouseWindow>(
+      const cached = await fetchPublicApi<PublicOpenHouseWindow | OpenHouseListingRow[]>(
         `/api/public/open-houses?${params.toString()}`,
         { throwOnError: true, signal },
       );
       if (!cached) throw new Error("Public open houses API returned no data");
+      const window = normalizePublicCollectionWindow(cached, OPEN_HOUSE_PAGE_SIZE);
       return {
-        ...cached,
-        data: normalizeOpenHouseRows(cached.data),
+        ...window,
+        data: normalizeOpenHouseRows(window.data),
       };
     },
     getNextPageParam: (lastPage) => (

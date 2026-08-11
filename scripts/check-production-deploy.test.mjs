@@ -95,6 +95,70 @@ describe("production deploy site-lock smoke helpers", () => {
     expect(result.stderr).not.toContain("redacted-token");
   });
 
+  it("requires the documented Cloudflare TURN key and token together", () => {
+    const result = spawnSync(
+      process.execPath,
+      ["scripts/check-production-deploy.mjs"],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          CLOUDFLARE_TURN_KEY_ID: "redacted-key-id",
+          CLOUDFLARE_TURN_API_TOKEN: "",
+        },
+      },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "Cloudflare TURN service proof requires both CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN",
+    );
+    expect(result.stderr).not.toContain("redacted-key-id");
+  });
+
+  it("functionally proves Cloudflare TURN credentials without exposing them", () => {
+    const program = [
+      'import { verifyCloudflareTurnCredentials } from "./scripts/check-production-deploy.mjs";',
+      'const proof = await verifyCloudflareTurnCredentials({',
+      '  keyId: "turn-key-id-secret",',
+      '  apiToken: "turn-api-token-secret",',
+      '  ttlSeconds: 600,',
+      '  fetchImpl: async (url, options) => {',
+      '    if (url !== "https://rtc.live.cloudflare.com/v1/turn/keys/turn-key-id-secret/credentials/generate-ice-servers") throw new Error(`unexpected URL ${url}`);',
+      '    if (options.headers.Authorization !== "Bearer turn-api-token-secret") throw new Error("missing bearer token");',
+      '    if (options.method !== "POST" || JSON.parse(options.body).ttl !== 600) throw new Error("invalid request");',
+      '    return new Response(JSON.stringify({ iceServers: [',
+      '      { urls: ["stun:stun.cloudflare.com:3478"] },',
+      '      { urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:5349?transport=tcp"], username: "ephemeral-user", credential: "ephemeral-credential" },',
+      '    ] }), { status: 201, headers: { "content-type": "application/json" } });',
+      '  },',
+      '});',
+      'process.stdout.write(JSON.stringify(proof));',
+    ].join("\n");
+    const proof = JSON.parse(execFileSync(
+      process.execPath,
+      ["--input-type=module", "--eval", program],
+      { cwd: process.cwd(), encoding: "utf8" },
+    ));
+
+    expect(proof).toEqual({
+      status: "passed",
+      httpStatus: 201,
+      authentication: "bearer",
+      ttlSeconds: 600,
+      iceServerCount: 2,
+      turnUrlCount: 2,
+      credentialsPresent: true,
+      credentialsRedacted: true,
+    });
+    const serialized = JSON.stringify(proof);
+    expect(serialized).not.toContain("turn-key-id-secret");
+    expect(serialized).not.toContain("turn-api-token-secret");
+    expect(serialized).not.toContain("ephemeral-user");
+    expect(serialized).not.toContain("ephemeral-credential");
+  });
+
   it("prefers the dedicated smoke-check passcode secret over the runtime site-lock secret", () => {
     expect(getSiteLockPassword({
       PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: "smoke-secret",
@@ -599,6 +663,31 @@ describe("production deploy public API fixture guard", () => {
     expect(requestOptions.get(
       "https://portal.maiprop.co/api/public/homepage?section=featured",
     )?.timeoutMs).toBe(3_500);
+  });
+
+  it("enforces exact staging budgets for open-house and homepage catalogue endpoints", async () => {
+    const { PUBLIC_API_BUDGETS } = await import(
+      "./check-production-deploy-public-api.mjs"
+    );
+
+    expect(Object.fromEntries(PUBLIC_API_BUDGETS)).toMatchObject({
+      "/api/public/open-houses?limit=1": {
+        maxMs: 1_800,
+        maxBytes: 180_000,
+      },
+      "/api/public/open-houses?limit=1&includeMeta=1": {
+        maxMs: 1_800,
+        maxBytes: 180_000,
+      },
+      "/api/public/homepage?section=auctions": {
+        maxMs: 2_500,
+        maxBytes: 120_000,
+      },
+      "/api/public/homepage?section=open-houses": {
+        maxMs: 2_500,
+        maxBytes: 100_000,
+      },
+    });
   });
 
   it("rejects inactive or expired rows returned by the Spotlight endpoint", async () => {

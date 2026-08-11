@@ -71,6 +71,28 @@ const AuctionCardSkeleton = () => {
   );
 };
 
+const AuctionLoadError = ({
+  isGreek,
+  onRetry,
+  className = "py-20",
+}: {
+  isGreek: boolean;
+  onRetry: () => unknown;
+  className?: string;
+}) => (
+  <div role="alert" className={`flex flex-col items-center justify-center text-center gap-3 ${className}`}>
+    <AlertCircle className="w-8 h-8 text-destructive" />
+    <p className="text-sm text-muted-foreground">
+      {isGreek
+        ? "Δεν ήταν δυνατή η φόρτωση των πλειστηριασμών. Παρακαλώ δοκιμάστε ξανά."
+        : "Failed to load auctions. Please try again."}
+    </p>
+    <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+      {isGreek ? "Δοκιμάστε ξανά" : "Retry"}
+    </Button>
+  </div>
+);
+
 const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinates filter state, map/list view state, pagination, and Pro upsells.
   const { user } = useAuth();
   const trackUserSearch = useTrackUserSearch();
@@ -117,6 +139,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     isMaiPropOsUser,
     isLoading,
     error,
+    refetch,
     cityOptions,
     roundOptions,
     visibleFiltered,
@@ -228,10 +251,11 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     ? "Περιηγηθείτε σε ηλεκτρονικούς πλειστηριασμούς ακινήτων στην Ελλάδα. Φιλτράρετε ανά πόλη, τύπο και τιμή πρώτης προσφοράς."
     : "Browse Greek electronic property auctions. Filter by city, type, and first offer price.";
   const metaName = isGreek ? "Πλειστηριασμοί Ακινήτων στην Ελλάδα" : "Greek Property Auctions";
+  const statsUnavailable = isLoading || Boolean(error);
   const auctionStats = [
-  { value: isLoading ? "—" : String(thisWeek), label: isGreek ? "Αυτή την εβδομάδα" : "This Week", icon: Gavel },
-  { value: isLoading ? "—" : visibleCount.toLocaleString(), label: isGreek ? "Ορατοί πλειστηριασμοί" : "Visible Auctions", icon: TrendingUp },
-  { value: isLoading ? "—" : avgBid > 0 ? formatPrice(avgBid) : "—", label: isGreek ? "Μέση τιμή πρώτης προσφοράς" : "Avg First Offer Price", icon: TrendingUp }];
+  { value: statsUnavailable ? "—" : String(thisWeek), label: isGreek ? "Αυτή την εβδομάδα" : "This Week", icon: Gavel },
+  { value: statsUnavailable ? "—" : visibleCount.toLocaleString(), label: isGreek ? "Ορατοί πλειστηριασμοί" : "Visible Auctions", icon: TrendingUp },
+  { value: statsUnavailable ? "—" : avgBid > 0 ? formatPrice(avgBid) : "—", label: isGreek ? "Μέση τιμή πρώτης προσφοράς" : "Avg First Offer Price", icon: TrendingUp }];
   const mobileTypeLabels: Record<string, string> = {
     apartment: "Διαμέρισμα",
     house: "Μονοκατοικία",
@@ -443,6 +467,12 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
           <div className="flex items-center justify-center mobile-map-panel rounded-2xl bg-card border border-border">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div> :
+          error ?
+          <AuctionLoadError
+            isGreek={isGreek}
+            onRetry={() => void refetch()}
+            className="mobile-map-panel rounded-2xl bg-card border border-border px-6"
+          /> :
           mappableCount === 0 ?
           <div className="flex flex-col items-center justify-center mobile-map-panel rounded-2xl bg-card border border-border gap-3">
                 <MapPin className="w-10 h-10 text-muted-foreground/30" />
@@ -508,10 +538,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
           }
 
             {error &&
-          <div className="text-center py-20">
-                <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">{isGreek ? "Δεν ήταν δυνατή η φόρτωση των πλειστηριασμών. Παρακαλώ δοκιμάστε ξανά." : "Failed to load auctions. Please try again."}</p>
-              </div>
+              <AuctionLoadError isGreek={isGreek} onRetry={() => void refetch()} />
           }
 
             {!isLoading && !error && visibleCount === 0 &&
@@ -527,7 +554,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
               </div>
           }
 
-            {!isLoading && paginated.length > 0 &&
+            {!isLoading && !error && paginated.length > 0 &&
           <>
                  <p className="text-xs text-muted-foreground mb-4">
                    {isGreek ? "Εμφάνιση" : "Showing"} <span className="font-semibold text-foreground">{(currentPage - 1) * AUCTIONS_PAGE_SIZE + 1}–{Math.min(currentPage * AUCTIONS_PAGE_SIZE, polygonFilteredCount)}</span>

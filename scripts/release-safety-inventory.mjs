@@ -5,6 +5,7 @@ import { extname, join, relative, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import yaml from "js-yaml";
+import { checkSlsaReadiness } from "./check-slsa-readiness.mjs";
 
 const root = process.cwd();
 const checkMode = process.argv.includes("--check");
@@ -46,6 +47,9 @@ const documentedEnvAllowlist = new Set([
   "MODE",
   "NODE_ENV",
   "PROD",
+  "PRODUCTION_APP_URL",
+  "PRODUCTION_SUPABASE_PUBLISHABLE_KEY",
+  "PRODUCTION_SUPABASE_URL",
   "SSR",
 ]);
 
@@ -277,6 +281,7 @@ export function findCloudflareHttpMutations(text) {
 
 const authorizedCloudflareHttpMutationWorkflows = new Set([
   ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
+  ".github/workflows/reusable-cloudflare-production-deploy.yml",
   ".github/workflows/stage-release.yml",
 ]);
 
@@ -300,7 +305,7 @@ export function cloudflareHttpMutationViolation({
   return null;
 }
 
-function scanWorkflows() {
+export function scanWorkflows() {
   const files = readdirSync(workflowDir)
     .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
     .map((name) => join(workflowDir, name));
@@ -354,6 +359,7 @@ function scanWorkflows() {
     ".github/workflows/deploy-edge-functions.yml",
     ".github/workflows/deploy-supabase-production-db.yml",
     ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
+    ".github/workflows/reusable-cloudflare-production-deploy.yml",
     ".github/workflows/stage-release.yml",
     ".github/workflows/reusable-supabase-staging.yml",
   ]);
@@ -411,8 +417,12 @@ function scanWorkflows() {
   }
 
   const ci = workflowText[".github/workflows/ci.yml"] ?? "";
+  const ciSecretReferences = [...ci.matchAll(/secrets\.([A-Z0-9_]+)/g)]
+    .map((match) => match[1]);
   if (
-    /\bsecrets\./.test(ci) ||
+    ciSecretReferences.some(
+      (name) => name !== "RELEASE_EVIDENCE_SIGNING_KEY",
+    ) ||
     /\bsupabase\s+(?:db\s+push|functions\s+deploy)\b/.test(ci) ||
     /\bpages\s+deploy\b/.test(ci) ||
     /uses:\s*\.\/\.github\/workflows\/reusable-(?:supabase-staging|cloudflare-production-deploy)\.yml/.test(
@@ -420,7 +430,7 @@ function scanWorkflows() {
     )
   ) {
     violations.push(
-      ".github/workflows/ci.yml must remain secretless and mutation-free",
+      ".github/workflows/ci.yml may use only RELEASE_EVIDENCE_SIGNING_KEY and must remain mutation-free",
     );
   }
 
@@ -469,6 +479,10 @@ function scanWorkflows() {
     const databaseJob = releaseJobs["deploy-production-database"];
     const renewEdgeLeaseJob = releaseJobs["renew-edge-mutation-lease"];
     const edgeJob = releaseJobs["deploy-production-edge"];
+    const renewCloudflareLeaseJob =
+      releaseJobs["renew-cloudflare-mutation-lease"];
+    const cloudflareJob = releaseJobs["deploy-production-cloudflare"];
+    const aggregateJob = releaseJobs["attest-production-release"];
     if (
       validateJob?.environment !== "production" ||
       !validateJob?.outputs?.artifact_sha256 ||
@@ -524,39 +538,48 @@ function scanWorkflows() {
         `${productionReleaseWorkflow} Edge deploy must consume the database attestation and renewed lease`,
       );
     }
+    const renewCloudflareNeeds = Array.isArray(renewCloudflareLeaseJob?.needs)
+      ? renewCloudflareLeaseJob.needs
+      : [renewCloudflareLeaseJob?.needs].filter(Boolean);
+    const cloudflareNeeds = Array.isArray(cloudflareJob?.needs)
+      ? cloudflareJob.needs
+      : [cloudflareJob?.needs].filter(Boolean);
+    const aggregateNeeds = Array.isArray(aggregateJob?.needs)
+      ? aggregateJob.needs
+      : [aggregateJob?.needs].filter(Boolean);
     if (
-      release.includes(
-        "uses: ./.github/workflows/reusable-cloudflare-production-deploy.yml",
-      ) ||
+      !renewCloudflareNeeds.includes("validate") ||
+      !renewCloudflareNeeds.includes("deploy-production-database") ||
+      !renewCloudflareNeeds.includes("deploy-production-edge") ||
+      renewCloudflareLeaseJob?.environment !== "production" ||
+      !renewCloudflareLeaseJob?.outputs?.mutation_lease_artifact ||
+      cloudflareJob?.uses !==
+        "./.github/workflows/reusable-cloudflare-production-deploy.yml" ||
+      !cloudflareNeeds.includes("renew-cloudflare-mutation-lease") ||
+      cloudflareJob?.with?.backend_run_id !== "${{ github.run_id }}" ||
+      cloudflareJob?.with?.backend_run_attempt !==
+        "${{ github.run_attempt }}" ||
+      cloudflareJob?.with?.backend_approval_run_id !==
+        "${{ needs.validate.outputs.approval_run_id }}" ||
+      cloudflareJob?.with?.backend_approval_run_attempt !==
+        "${{ needs.validate.outputs.approval_run_attempt }}" ||
+      !aggregateNeeds.includes("deploy-production-cloudflare") ||
+      aggregateJob?.environment !== "production" ||
+      aggregateJob?.permissions?.attestations !== "write" ||
+      aggregateJob?.permissions?.["artifact-metadata"] !== "write" ||
+      aggregateJob?.permissions?.["id-token"] !== "write" ||
+      !release.includes("production-release-attestation.json") ||
+      !release.includes("actions/attest-build-provenance@") ||
       release.includes("secrets: inherit")
     ) {
       violations.push(
-        `${productionReleaseWorkflow} must keep Cloudflare disabled and pass production secrets explicitly`,
+        `${productionReleaseWorkflow} must serialize database, Edge, Cloudflare, and signed aggregate evidence with fresh leases and explicit secrets`,
       );
     }
   }
 
-  const ciReadiness = yamlJobBlock(ci, "release-candidate-built");
-  for (const marker of [
-    "name: Immutable release candidate built",
-    "always() &&",
-    "QUALITY_RESULT:",
-    "RELEASE_SAFETY_RESULT:",
-    "E2E_RESULT:",
-    "MIGRATIONS_RESULT:",
-    "LIGHTHOUSE_RESULT:",
-    "production-release-candidate-${{ github.sha }}",
-    "release:artifact:verify",
-    "attestations: write",
-    "id-token: write",
-    "actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373",
-    "release-candidate/release-manifest.json",
-  ]) {
-    if (!ciReadiness.includes(marker)) {
-      violations.push(
-        `.github/workflows/ci.yml immutable candidate job is missing ${marker}`,
-      );
-    }
+  for (const failure of checkSlsaReadiness(root).failures) {
+    violations.push(`GitHub Free release binding: ${failure}`);
   }
 
   const releaseSafetyWorkflow =
@@ -575,19 +598,13 @@ function scanWorkflows() {
     "vars.STAGING_RELEASE_ENABLED == 'true'",
     "github-staging-lease",
     "uses: ./.github/workflows/reusable-supabase-staging.yml",
-    "production-release-candidate-${{ github.event.workflow_run.head_sha }}",
+    "production-release-candidate-binding-${{ github.event.workflow_run.head_sha }}",
     "CLOUDFLARE_STAGING_PAGES_PROJECT",
     "--commit-dirty=false",
     "pages-deployment-id",
     "release:verify-live-marker",
     "name: Release candidate attested",
     "release-candidate-attestation-",
-    "attestations: read",
-    "gh attestation verify",
-    "--signer-workflow",
-    "--source-digest",
-    '--source-ref "refs/heads/main"',
-    "--deny-self-hosted-runners",
     "provenance-verification.json",
     "source-provenance-verification-",
     "manifest_sha256",
@@ -614,7 +631,10 @@ function scanWorkflows() {
   for (const marker of [
     "public_catalogue_postgrest_contract.mjs",
     "supabase-staging-db-attestation.json",
-    "supabase-staging-edge-attestation-${{ inputs.release_sha }}",
+    'artifact_name="supabase-staging-edge-attestation-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"',
+    "production-release-candidate-binding-",
+    "node scripts/verify-release-artifact-binding.mjs",
+    "RELEASE_EVIDENCE_SIGNING_KEY",
   ]) {
     if (!supabaseStaging.includes(marker)) {
       violations.push(
@@ -626,13 +646,22 @@ function scanWorkflows() {
   const direct =
     workflowText[".github/workflows/direct-cloudflare-production-deploy.yml"] ??
     "";
+  const directParsed =
+    workflowYaml[".github/workflows/direct-cloudflare-production-deploy.yml"];
+  const directJobs = directParsed?.jobs ?? {};
   for (const marker of [
     "release_sha:",
     "required: true",
     "RECOVER_CLOUDFLARE_PRODUCTION",
     "github-recovery",
     "PRODUCTION_RELEASE_ENABLED",
-    "Production recovery mutations remain disabled",
+    "backend_run_id",
+    "backend_run_attempt",
+    "backend_approval_run_id",
+    "backend_approval_run_attempt",
+    "production-mutation-lease",
+    "production-recovery-attestation.json",
+    "actions/attest-build-provenance@",
   ]) {
     if (!direct.includes(marker)) {
       violations.push(
@@ -641,74 +670,246 @@ function scanWorkflows() {
     }
   }
   if (
-    direct.includes(
-      "uses: ./.github/workflows/reusable-cloudflare-production-deploy.yml",
-    ) ||
-    direct.includes("secrets: inherit")
+    Object.keys(directJobs).join("\n") !==
+      [
+        "validate",
+        "deploy-production-cloudflare",
+        "attest-production-recovery",
+      ].join("\n") ||
+    directJobs.validate?.environment !== "production" ||
+    directJobs["deploy-production-cloudflare"]?.uses !==
+      "./.github/workflows/reusable-cloudflare-production-deploy.yml" ||
+    directJobs["attest-production-recovery"]?.permissions?.attestations !==
+      "write" ||
+    directJobs["attest-production-recovery"]?.permissions?.[
+      "artifact-metadata"
+    ] !== "write" ||
+    directJobs["attest-production-recovery"]?.permissions?.["id-token"] !==
+      "write" ||
+    direct.includes("secrets: inherit") ||
+    /npm run build|vite build/.test(direct)
   ) {
     violations.push(
-      ".github/workflows/direct-cloudflare-production-deploy.yml must remain validation-only while production mutations are disabled",
+      ".github/workflows/direct-cloudflare-production-deploy.yml must recover only through the protected exact-artifact Cloudflare boundary and sign terminal evidence",
     );
   }
 
-  const disabledProductionWorkflows = [
-    ".github/workflows/reusable-cloudflare-production-deploy.yml",
-  ];
-  for (const workflowPath of disabledProductionWorkflows) {
-    const text = workflowText[workflowPath] ?? "";
-    const parsed = workflowYaml[workflowPath];
-    const jobs = parsed && typeof parsed === "object" ? parsed.jobs : null;
-    const permissions =
-      parsed && typeof parsed === "object" ? parsed.permissions : null;
-    if (!jobs?.["validate-disabled"] || !jobs?.deploy) {
-      violations.push(
-        `${workflowPath} must expose only explicit validation and hard-disabled deploy jobs`,
-      );
-      continue;
-    }
-    if (String(jobs.deploy.if ?? "").trim() !== "${{ false }}") {
-      violations.push(
-        `${workflowPath} deploy job must use the literal \${{ false }} guard`,
-      );
-    }
-    if (jobs.deploy?.env?.PRODUCTION_MUTATIONS_DISABLED !== "true") {
-      violations.push(
-        `${workflowPath} deploy job must declare PRODUCTION_MUTATIONS_DISABLED=true`,
-      );
-    }
-    const validationSteps = jobs["validate-disabled"]?.steps ?? [];
+  const cloudflareProductionWorkflow =
+    ".github/workflows/reusable-cloudflare-production-deploy.yml";
+  {
+    const text = workflowText[cloudflareProductionWorkflow] ?? "";
+    const parsed = workflowYaml[cloudflareProductionWorkflow];
+    const triggerNames = Object.keys(parsed?.on ?? {});
+    const workflowCall = parsed?.on?.workflow_call;
+    const deploy = parsed?.jobs?.deploy;
     if (
-      !Array.isArray(validationSteps) ||
-      !validationSteps.some((step) => /\bexit\s+1\b/.test(String(step?.run ?? "")))
+      triggerNames.length !== 1 ||
+      triggerNames[0] !== "workflow_call" ||
+      !deploy ||
+      deploy.environment !== "production"
     ) {
       violations.push(
-        `${workflowPath} validation job must fail explicitly without mutating production`,
+        `${cloudflareProductionWorkflow} must remain workflow-call-only in the protected production environment`,
       );
     }
+
+    const requiredInputs = [
+      "release_sha",
+      "source_tree",
+      "source_run_id",
+      "source_run_attempt",
+      "staging_run_id",
+      "staging_run_attempt",
+      "approval_run_id",
+      "approval_run_attempt",
+      "production_run_id",
+      "production_run_attempt",
+      "backend_run_id",
+      "backend_run_attempt",
+      "backend_approval_run_id",
+      "backend_approval_run_attempt",
+      "artifact_sha256",
+      "manifest_sha256",
+      "approval_nonce",
+      "allowed_approvers",
+      "mutation_lease_artifact",
+      "production_project_id",
+      "staging_project_id",
+      "database_attestation_artifact",
+      "database_attestation_sha256",
+      "edge_attestation_artifact",
+      "edge_attestation_sha256",
+    ];
+    const inputs = workflowCall?.inputs ?? {};
     if (
-      !permissions ||
+      requiredInputs.some((name) => inputs[name]?.required !== true) ||
+      Object.keys(inputs).sort().join("\n") !== requiredInputs.sort().join("\n")
+    ) {
+      violations.push(
+        `${cloudflareProductionWorkflow} must require only the exact release tuple, digests, lease, and upstream attestation inputs`,
+      );
+    }
+
+    const requiredSecrets = [
+      "CLOUDFLARE_ACCOUNT_ID",
+      "CLOUDFLARE_PAGES_READ_TOKEN",
+      "CLOUDFLARE_PAGES_EDIT_TOKEN",
+      "CLOUDFLARE_STAGING_ACCOUNT_ID",
+      "CLOUDFLARE_STAGING_PAGES_READ_TOKEN",
+      "VITE_SUPABASE_PROJECT_ID",
+      "VITE_SUPABASE_URL",
+      "VITE_SUPABASE_PUBLISHABLE_KEY",
+      "CLOUDFLARE_TURN_KEY_ID",
+      "CLOUDFLARE_TURN_API_TOKEN",
+    ];
+    const optionalSecrets = [
+      "CF_ACCESS_CLIENT_ID",
+      "CF_ACCESS_CLIENT_SECRET",
+    ];
+    const callSecrets = workflowCall?.secrets ?? {};
+    const exactSecrets = [...requiredSecrets, ...optionalSecrets].sort();
+    if (
+      requiredSecrets.some((name) => callSecrets[name]?.required !== true) ||
+      optionalSecrets.some((name) => callSecrets[name]?.required !== false) ||
+      Object.keys(callSecrets).sort().join("\n") !== exactSecrets.join("\n")
+    ) {
+      violations.push(
+        `${cloudflareProductionWorkflow} must expose only explicit least-privilege production secrets`,
+      );
+    }
+
+    const permissions = parsed?.permissions ?? {};
+    if (
+      permissions.actions !== "read" ||
+      permissions.attestations !== "read" ||
       permissions.contents !== "read" ||
-      Object.keys(permissions).some((name) => name !== "contents")
+      Object.keys(permissions).sort().join("\n") !==
+        ["actions", "attestations", "contents"].join("\n")
     ) {
       violations.push(
-        `${workflowPath} must grant only contents: read`,
+        `${cloudflareProductionWorkflow} must grant only actions, attestations, and contents read access`,
       );
     }
-    if (
-      /\bsecrets\./.test(text) ||
-      /\bsupabase\s+(?:db\s+push|functions\s+deploy|migration\s+repair)\b/.test(
-        text,
-      ) ||
-      /\b(?:wrangler|npx\s+wrangler)\b/.test(text) ||
-      /\bpages\s+deploy\b/.test(text) ||
-      /api\.cloudflare\.com/i.test(text) ||
-      /\b(?:CLOUDFLARE_API_TOKEN|SUPABASE_ACCESS_TOKEN|SUPABASE_PRODUCTION_DB_URL)\b/.test(
-        text,
-      )
-    ) {
+
+    const requiredMarkers = [
+      'PRODUCTION_PROJECT: "maiprop-listing-site"',
+      'STAGING_PROJECT: "maiprop-listing-site-staging"',
+      'PRODUCTION_APP_URL: "https://portal.maiprop.co"',
+      'PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"',
+      'WRANGLER_VERSION: "4.86.0"',
+      "persist-credentials: false",
+      "production-release-candidate-${{ inputs.release_sha }}",
+      ".github/workflows/ci.yml",
+      ".github/workflows/stage-release.yml",
+      ".github/workflows/approve-production-release.yml",
+      ".github/workflows/deploy-supabase-production-db.yml",
+      ".github/workflows/deploy-edge-functions.yml",
+      "--deny-self-hosted-runners",
+      "production-upstream-attestations",
+      "--mode git-lock",
+      "canonical_deployment",
+      "cloudflare-production-rollback-target.json",
+      "Verify pre-provisioned production Pages runtime bindings",
+      "preprovisioned-verified-runtime",
+      "runtime_mutation_attempted: false",
+      "runtime_restore_required: false",
+      "Rollback target must differ from the candidate release SHA",
+      "Production canonical changed after rollback capture; candidate deploy refused",
+      "Rollback refused because production canonical is neither the captured rollback target nor the exact candidate deployed by this run",
+      "--mode production",
+      "$RUNNER_TEMP/maiprop-cloudflare-production-",
+      "npx --no-install wrangler pages deploy dist",
+      "--project-name=maiprop-listing-site",
+      "--branch=main",
+      '--commit-hash="$RELEASE_SHA"',
+      "--commit-dirty=false",
+      "release:verify-live-marker",
+      "release:verify-runtime-config",
+      "check:production-deploy",
+      "auctionConsistency",
+      "listingsCursor",
+      "openHousesCursor",
+      "publicationPinning",
+      "/rollback",
+      "Create minimized rollback evidence",
+      "steps.rollback.outcome != 'skipped'",
+      "rollback_outcome",
+      "cloudflare-production-evidence.json",
+      "cloudflare-production-rollback-evidence.json",
+      "Any successful rollback is evidence of recovery, not release success",
+    ];
+    for (const marker of requiredMarkers) {
+      if (!text.includes(marker)) {
+        violations.push(
+          `${cloudflareProductionWorkflow} is missing immutable production promotion control ${marker}`,
+        );
+      }
+    }
+
+    const forbiddenMarkers = [
+      "secrets: inherit",
+      "npm run build",
+      "vite build",
+      "cloudflare/wrangler-action",
+      "SITE_LOCK_PASSWORD",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "--request PATCH",
+      "deployment-only-forward-runtime",
+    ];
+    for (const marker of forbiddenMarkers) {
+      if (text.includes(marker)) {
+        violations.push(
+          `${cloudflareProductionWorkflow} contains forbidden production promotion wiring ${marker}`,
+        );
+      }
+    }
+    if ((text.match(/\bpages deploy dist\b/g) ?? []).length !== 1) {
       violations.push(
-        `${workflowPath} contains executable production mutation or credential wiring`,
+        `${cloudflareProductionWorkflow} must contain exactly one immutable Pages deploy command`,
       );
+    }
+
+    const mutationSteps = [
+      ["Deploy exact immutable production artifact", "pages deploy dist"],
+      ["Roll back failed production candidate", "/rollback"],
+    ];
+    const steps = Array.isArray(deploy?.steps) ? deploy.steps : [];
+    for (const [stepName, mutation] of mutationSteps) {
+      const step = steps.find((candidate) => candidate?.name === stepName);
+      const run = String(step?.run ?? "");
+      const providerMutation = run.indexOf(mutation);
+      const projectLock = run.lastIndexOf(
+        "validate-cloudflare-pages-staging-posture.mjs",
+        providerMutation,
+      );
+      const currentMain = run.lastIndexOf(
+        "github-staging-lease",
+        providerMutation,
+      );
+      const lease = run.lastIndexOf("mutation-lease", providerMutation);
+      if (
+        !step ||
+        projectLock < 0 ||
+        currentMain <= projectLock ||
+        lease <= currentMain ||
+        providerMutation <= lease
+      ) {
+        violations.push(
+          `${cloudflareProductionWorkflow} must revalidate current main and the mutation lease in the same shell immediately before ${stepName}`,
+        );
+      }
+    }
+    const expectedHttpMutations = new Map([
+      ["Roll back failed production candidate", ["POST"]],
+    ]);
+    for (const step of steps) {
+      const actual = findCloudflareHttpMutations(String(step?.run ?? ""));
+      const expected = expectedHttpMutations.get(step?.name) ?? [];
+      if (actual.join("\n") !== expected.join("\n")) {
+        violations.push(
+          `${cloudflareProductionWorkflow} has unexpected Cloudflare HTTP mutation wiring in ${step?.name ?? "an unnamed step"}`,
+        );
+      }
     }
   }
 
@@ -778,20 +979,6 @@ function scanWorkflows() {
     secrets: [...secrets].sort(),
     undocumented_secrets: undocumentedSecrets,
   };
-}
-
-function yamlJobBlock(text, jobName) {
-  const lines = text.split(/\r?\n/);
-  const start = lines.findIndex((line) => line === `  ${jobName}:`);
-  if (start === -1) return "";
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^  [A-Za-z0-9_-]+:\s*$/.test(lines[i])) {
-      end = i;
-      break;
-    }
-  }
-  return lines.slice(start, end).join("\n");
 }
 
 function packageVersion(packageName) {

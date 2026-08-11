@@ -245,6 +245,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     isMapWindowIncomplete,
     isFetchingNextPage,
     fetchNextPage,
+    refetch,
     sentinelRef,
   } = useListingsPipeline({
     filters,
@@ -765,7 +766,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                   {isLoading
                     ? <div className="space-y-3">{SPLIT_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}</div>
                     : isError
-                    ? <EmptyState icon={Building2} title={isGreek ? "Δεν φορτώθηκαν οι αγγελίες" : "Failed to load listings"} subtitle={isGreek ? "Δοκιμάστε ξανά" : "Please try again"} action={{ label: isGreek ? "Επανάληψη" : "Retry", onClick: () => window.location.reload() }} />
+                    ? <EmptyState icon={Building2} title={isGreek ? "Δεν φορτώθηκαν οι αγγελίες" : "Failed to load listings"} subtitle={isGreek ? "Δοκιμάστε ξανά" : "Please try again"} action={{ label: isGreek ? "Επανάληψη" : "Retry", onClick: () => void refetch() }} />
                     : gridCards
                   }
                   {!isLoading && !isError && !isFetchNextPageError && mapBounds && hasNextPage && !isFetchingNextPage && (
@@ -813,7 +814,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 icon={Building2}
                 title={isGreek ? "Δεν ήταν δυνατή η φόρτωση αγγελιών" : "Could not load listings"}
                 subtitle={isGreek ? "Δοκιμάστε ξανά αργότερα" : "Please try again later"}
-                action={{ label: isGreek ? "Επανάληψη" : "Retry", onClick: () => window.location.reload() }}
+                action={{ label: isGreek ? "Επανάληψη" : "Retry", onClick: () => void refetch() }}
                 testId="empty-listings"
               />
             ) : filtered.length === 0 && !hasNextPage ? (
@@ -872,7 +873,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
               icon={Building2}
               title={isGreek ? "Δεν ήταν δυνατή η φόρτωση αγγελιών" : "Could not load listings"}
               subtitle={isGreek ? "Δοκιμάστε ξανά αργότερα" : "Please try again later"}
-              action={{ label: isGreek ? "Επανάληψη" : "Retry", onClick: () => window.location.reload() }}
+              action={{ label: isGreek ? "Επανάληψη" : "Retry", onClick: () => void refetch() }}
               testId="empty-listings"
             />
           ) : (

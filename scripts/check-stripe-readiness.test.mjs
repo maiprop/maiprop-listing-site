@@ -36,4 +36,24 @@ describe("Stripe readiness environment helpers", () => {
     });
     expect(() => getStripeSecretKey({ STRIPE_SECRET_KEY: key })).toThrow(/secret key/i);
   });
+
+  it.each([
+    ["standard live secret", { STRIPE_RESTRICTED_KEY: "sk_live_synthetic" }],
+    ["standard test secret", { STRIPE_RESTRICTED_KEY: "sk_test_synthetic" }],
+    ["restricted test key", { STRIPE_RESTRICTED_KEY: "rk_test_synthetic" }],
+    ["read-only alias", { STRIPE_READ_ONLY_KEY: "rk_live_synthetic" }],
+    ["secret fallback", { STRIPE_SECRET_KEY: "rk_live_synthetic" }],
+    ["API fallback", { STRIPE_API_KEY: "rk_live_synthetic" }],
+    ["live-secret alias", { STRIPE_LIVE_SECRET_KEY: "rk_live_synthetic" }],
+    ["alternate live-secret alias", { STRIPE_SECRET_KEY_LIVE: "rk_live_synthetic" }],
+  ])("rejects %s for live readiness", (_label, env) => {
+    expect(() => getStripeReadOnlyKey(env)).toThrow(/STRIPE_RESTRICTED_KEY.*rk_live_/i);
+  });
+
+  it("rejects ambiguous Stripe aliases even when the restricted key is valid", () => {
+    expect(() => getStripeReadOnlyKey({
+      STRIPE_RESTRICTED_KEY: "rk_live_synthetic",
+      STRIPE_SECRET_KEY: "sk_live_forbidden",
+    })).toThrow(/alias|fallback/i);
+  });
 });

@@ -13,12 +13,14 @@ const {
   locale,
   pipelineCalls,
   pipelineState,
+  refetch,
   setParams,
 } = vi.hoisted(() => {
   const setParam = vi.fn();
   const setParams = vi.fn();
   const clearAllFilters = vi.fn();
   const fetchNextPage = vi.fn();
+  const refetch = vi.fn();
   const filterState = {
     searchQuery: "",
     selectedListingType: "sale",
@@ -60,6 +62,7 @@ const {
     filterState,
     locale: { value: "en" },
     pipelineCalls: [] as unknown[],
+    refetch,
     pipelineState: {
       filtered: [] as ListingCardWithRaw[],
       totalLoaded: 0,
@@ -69,6 +72,7 @@ const {
       hasNextPage: false,
       isFetchingNextPage: false,
       fetchNextPage,
+      refetch,
       sentinelRef: { current: null },
     },
     setParam,
@@ -350,7 +354,8 @@ describe("Listings route branch matrix", () => {
     pipelineState.isError = true;
     view.rerender(<Listings />);
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(reload).toHaveBeenCalled();
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
 
     pipelineState.isError = false;
     filterState.activeFilterCount = 2;
@@ -406,7 +411,8 @@ describe("Listings route branch matrix", () => {
     pipelineState.isError = true;
     view.rerender(<Listings />);
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(reload).toHaveBeenCalled();
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it("forwards map viewport bounds and keeps split pagination reachable", async () => {
@@ -429,6 +435,8 @@ describe("Listings route branch matrix", () => {
   });
 
   it("shows a retry state instead of a factual empty map when loading fails", async () => {
+    const reload = vi.fn();
+    Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, reload } });
     pipelineState.isError = true;
     const { default: Listings } = await import("@/pages/Listings");
     renderWithProviders(<Listings />);
@@ -437,6 +445,9 @@ describe("Listings route branch matrix", () => {
 
     expect(screen.getByText("Could not load listings")).toBeInTheDocument();
     expect(screen.queryByTestId("map-view")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it("keeps loaded listings visible and retries when a later cursor page fails", async () => {

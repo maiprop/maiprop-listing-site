@@ -320,10 +320,31 @@ export function checkLiveGithubAdminEvidence(root = process.cwd()) {
     "patterns_allowed",
     "Branch protection API result: blocked",
     "Upgrade to GitHub Pro or make this repository public",
-    "Environment approvals: pending repository admin",
+    "Protected-environment approvals are not an active control for this private",
+    "repository on GitHub Free.",
+    "workflows must not claim that their",
+    "secrets or reviewer settings provide isolation.",
+    "attempt-one approval artifact",
+    "allowlisted GitHub actor who differs from the allowlisted deployer",
+    "current-`main` SHA/tree checks",
+    "GitHub artifact API metadata",
+    "repository-secret HMAC binding",
+    "short-lived mutation",
+    "leases are revalidated before each provider mutation.",
     "Push protection: pending repository admin",
   ])) {
     failures.push(`LIVE_GITHUB_ADMIN_SETTINGS.md must mention ${marker}`);
+  }
+
+  for (const [pattern, label] of [
+    [/Environment approvals:\s*pending repository admin/i, "Enterprise environment approvals"],
+    [/actions\/attest-build-provenance@/i, "GitHub build attestations"],
+    [/\bgh\s+attestation\b/i, "gh attestation"],
+    [/\bid-token:\s*(?:read|write)\b/i, "OIDC permissions"],
+  ]) {
+    if (pattern.test(text)) {
+      failures.push(`LIVE_GITHUB_ADMIN_SETTINGS.md must not claim ${label} as an active release gate`);
+    }
   }
 
   return result(failures);
@@ -348,9 +369,12 @@ export function checkLoadProofEvidence(root = process.cwd()) {
   return result(failures);
 }
 
-export function checkEcasHardeningContracts(root = process.cwd()) {
+export function checkEcasHardeningContracts(
+  root = process.cwd(),
+  { now = new Date() } = {},
+) {
   const checks = [
-    checkModuleSizeBudget(root),
+    checkModuleSizeBudget(root, { now }),
     checkSensitiveMutationBoundaries(root),
     checkFunctionInvocationBoundaryEvidence(root),
     checkLiveGithubAdminEvidence(root),

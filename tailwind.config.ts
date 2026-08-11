@@ -159,8 +159,8 @@ export default {
           to: { opacity: "1", transform: "translateY(0)" },
         },
         "cookie-banner-up": {
-          from: { opacity: "0", transform: "translate(-50%, 24px)" },
-          to: { opacity: "1", transform: "translate(-50%, 0)" },
+          from: { opacity: "0", transform: "translateY(24px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {

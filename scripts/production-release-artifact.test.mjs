@@ -24,30 +24,39 @@ function fixture() {
   const supabase = join(root, "supabase");
   mkdirSync(join(dist, "assets"), { recursive: true });
   mkdirSync(join(supabase, "migrations"), { recursive: true });
+  mkdirSync(join(supabase, "reconciliation"), { recursive: true });
   mkdirSync(join(supabase, "functions", "_shared"), { recursive: true });
   mkdirSync(join(supabase, "functions", "alpha"), { recursive: true });
   writeFileSync(join(dist, "index.html"), "<html>release</html>");
   writeFileSync(join(dist, "_worker.js"), "export default {};");
   writeFileSync(join(dist, "assets", "app.js"), "console.log('release');");
   writeFileSync(join(root, "sbom.cdx.json"), '{"bomFormat":"CycloneDX"}');
-  writeFileSync(join(supabase, "config.toml"), [
-    'project_id = "qvvicunqcrwpioqnvzxf"',
-    "[functions.alpha]",
-    "verify_jwt = true",
-    "",
-  ].join("\n"));
+  writeFileSync(
+    join(supabase, "config.toml"),
+    [
+      'project_id = "qvvicunqcrwpioqnvzxf"',
+      "[functions.alpha]",
+      "verify_jwt = true",
+      "",
+    ].join("\n"),
+  );
   writeFileSync(
     join(supabase, "migrations", "20260729120000_alpha.sql"),
     "select 1;\n",
   );
   writeFileSync(
+    join(supabase, "reconciliation", "production-history-v1.json"),
+    '{"schema_version":1}\n',
+  );
+  writeFileSync(
+    join(supabase, "reconciliation", "production-history-v1.sql"),
+    "select json_build_object('ok', true);\n",
+  );
+  writeFileSync(
     join(supabase, "functions", "deno.json"),
     '{"nodeModulesDir":"auto"}\n',
   );
-  writeFileSync(
-    join(supabase, "functions", "deno.lock"),
-    '{"version":"5"}\n',
-  );
+  writeFileSync(join(supabase, "functions", "deno.lock"), '{"version":"5"}\n');
   writeFileSync(
     join(supabase, "functions", "_shared", "helper.ts"),
     "export const value = 1;\n",
@@ -87,6 +96,8 @@ describe("immutable production release artifact", () => {
       "supabase/functions/deno.json",
       "supabase/functions/deno.lock",
       "supabase/migrations/20260729120000_alpha.sql",
+      "supabase/reconciliation/production-history-v1.json",
+      "supabase/reconciliation/production-history-v1.sql",
     ]);
     expect(
       manifest.files.find((record) => record.path === "supabase/config.toml"),
@@ -99,12 +110,8 @@ describe("immutable production release artifact", () => {
 
   it("accepts CLI-stamped historical migration names with UUID suffixes", () => {
     const { root, dist, supabase, out } = fixture();
-    const migration =
-      "20260216201611_fb487914-ce34-4cc3-8fd3-eb1ca344b71c.sql";
-    writeFileSync(
-      join(supabase, "migrations", migration),
-      "select 2;\n",
-    );
+    const migration = "20260216201611_fb487914-ce34-4cc3-8fd3-eb1ca344b71c.sql";
+    writeFileSync(join(supabase, "migrations", migration), "select 2;\n");
 
     const manifest = createReleaseArtifact({
       distDir: dist,
@@ -130,38 +137,38 @@ describe("immutable production release artifact", () => {
       "SUPABASE_SERVICE_ROLE_KEY=not-a-real-key\n",
     );
 
-    expect(() => createReleaseArtifact({
-      distDir: dist,
-      sbomPath: join(root, "sbom.cdx.json"),
-      supabaseDir: supabase,
-      outDir: out,
-      releaseSha: sha,
-      sourceTree: sha,
-      runId: "123",
-      runAttempt: "2",
-    })).toThrow(/unexpected Supabase source path/i);
+    expect(() =>
+      createReleaseArtifact({
+        distDir: dist,
+        sbomPath: join(root, "sbom.cdx.json"),
+        supabaseDir: supabase,
+        outDir: out,
+        releaseSha: sha,
+        sourceTree: sha,
+        runId: "123",
+        runAttempt: "2",
+      }),
+    ).toThrow(/unexpected Supabase source path/i);
   });
 
   it("rejects symbolic links in deploy source", () => {
     const { root, dist, supabase, out } = fixture();
     const outside = join(root, "outside");
     mkdirSync(outside);
-    symlinkSync(
-      outside,
-      join(supabase, "functions", "linked"),
-      "junction",
-    );
+    symlinkSync(outside, join(supabase, "functions", "linked"), "junction");
 
-    expect(() => createReleaseArtifact({
-      distDir: dist,
-      sbomPath: join(root, "sbom.cdx.json"),
-      supabaseDir: supabase,
-      outDir: out,
-      releaseSha: sha,
-      sourceTree: sha,
-      runId: "123",
-      runAttempt: "2",
-    })).toThrow(/symbolic links/i);
+    expect(() =>
+      createReleaseArtifact({
+        distDir: dist,
+        sbomPath: join(root, "sbom.cdx.json"),
+        supabaseDir: supabase,
+        outDir: out,
+        releaseSha: sha,
+        sourceTree: sha,
+        runId: "123",
+        runAttempt: "2",
+      }),
+    ).toThrow(/symbolic links/i);
   });
 
   it("creates and verifies a manifest tied to SHA, tree, run, and attempt", () => {
@@ -205,6 +212,11 @@ describe("immutable production release artifact", () => {
       "tampered Supabase migration",
       "supabase/migrations/20260729120000_alpha.sql",
       "select 2;",
+    ],
+    [
+      "tampered migration reconciliation manifest",
+      "supabase/reconciliation/production-history-v1.json",
+      "{}",
     ],
   ])("rejects %s", (_label, path, contents) => {
     const { root, dist, supabase, out } = fixture();

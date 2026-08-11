@@ -101,6 +101,14 @@ describe("useAuctionListings", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.[0]).toMatchObject({ id: "api-a1" });
+    expect(result.current.auctionPage).toMatchObject({
+      facets: { cities: ["Athens"], rounds: [] },
+      stats: { avgBid: 0, mappableCount: 0 },
+      page: 1,
+      pageSize: 60,
+      total: 1,
+      totalPages: 1,
+    });
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/auctions?limit=60",
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),

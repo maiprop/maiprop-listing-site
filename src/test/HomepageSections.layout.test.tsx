@@ -1,8 +1,11 @@
 import React from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, screen } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import type { HomepageListing } from "@/lib/homepageListings";
+import i18n from "@/i18n";
+
+vi.unmock("react-i18next");
 
 const fetchPublicApiMock = vi.hoisted(() => vi.fn().mockResolvedValue(null));
 
@@ -38,6 +41,10 @@ describe("homepage section layout contracts", () => {
     fetchPublicApiMock.mockClear();
   });
 
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
   it("renders the featured property section as a single four-card row", async () => {
     const { FeaturedPropertiesSection } = await import("@/components/index/FeaturedPropertiesSection");
 
@@ -69,6 +76,26 @@ describe("homepage section layout contracts", () => {
     expect(container.querySelector("section")).toBeNull();
   });
 
+  it("shows a localized retry state instead of stale Spotlight data after a failed request", async () => {
+    const { FeaturedPropertiesSection } = await import("@/components/index/FeaturedPropertiesSection");
+    const onRetry = vi.fn();
+    await i18n.changeLanguage("el");
+
+    renderWithProviders(
+      <FeaturedPropertiesSection
+        listings={[listing(1)]}
+        isLoading={false}
+        isError
+        onRetry={onRetry}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Δεν ήταν δυνατή η φόρτωση των επιλεγμένων ακινήτων");
+    expect(screen.queryByTestId("featured-property-card")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Δοκιμάστε ξανά" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps popular location imagery but uses the smaller landscape card shape", async () => {
     const { PopularLocationsSection } = await import("@/components/index/PopularLocationsSection");
 
@@ -96,5 +123,24 @@ describe("homepage section layout contracts", () => {
     renderWithProviders(<ProfessionalsCTASection />);
 
     expect(screen.getByText(/The right expert/i).closest("section")).toHaveClass("py-8", "sm:py-12");
+  });
+
+  it("stacks Greek catalogue headers so their CTAs stay inside a 320px viewport", async () => {
+    const { HomepageAuctionsSection } = await import("@/components/index/HomepageAuctionsSection");
+    const { HomepageOpenHousesSection } = await import("@/components/index/HomepageOpenHousesSection");
+    await i18n.changeLanguage("el");
+
+    const auctions = renderWithProviders(
+      <HomepageAuctionsSection listings={[]} isLoading={false} />,
+    );
+    const auctionsLink = auctions.container.querySelector('a[href="/auctions"]');
+    expect(auctionsLink?.closest(".reveal")).toHaveClass("flex-col", "sm:flex-row");
+    auctions.unmount();
+
+    const openHouses = renderWithProviders(
+      <HomepageOpenHousesSection listings={[]} isLoading={false} />,
+    );
+    const openHousesLink = openHouses.container.querySelector('a[href="/open-houses"]');
+    expect(openHousesLink?.closest(".reveal")).toHaveClass("flex-col", "sm:flex-row");
   });
 });

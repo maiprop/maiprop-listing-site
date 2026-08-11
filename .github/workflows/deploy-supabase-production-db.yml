@@ -33,6 +33,21 @@ on:
       production_run_attempt:
         required: true
         type: string
+      stripe_readiness_run_id:
+        required: true
+        type: string
+      stripe_readiness_run_attempt:
+        required: true
+        type: string
+      stripe_readiness_sha256:
+        required: true
+        type: string
+      stripe_readiness_artifact_id:
+        required: true
+        type: string
+      stripe_readiness_artifact_digest:
+        required: true
+        type: string
       artifact_sha256:
         required: true
         type: string
@@ -46,34 +61,37 @@ on:
         required: true
         type: string
     secrets:
+      RELEASE_EVIDENCE_SIGNING_KEY:
+        required: true
       SUPABASE_ACCESS_TOKEN:
+        required: true
+      SUPABASE_PRODUCTION_DB_URL:
         required: true
       VITE_SUPABASE_PROJECT_ID:
         required: true
       VITE_SUPABASE_URL:
-        required: true
-      SUPABASE_PRODUCTION_DB_URL:
         required: true
     outputs:
       database_attestation_artifact:
         value: ${{ jobs.deploy.outputs.database_attestation_artifact }}
       database_attestation_sha256:
         value: ${{ jobs.deploy.outputs.database_attestation_sha256 }}
+      database_binding_artifact:
+        value: ${{ jobs.deploy.outputs.database_binding_artifact }}
 
 permissions:
   actions: read
-  attestations: write
   contents: read
-  id-token: write
 
 jobs:
   deploy:
     name: Production database migration gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
     env:
+      PRODUCTION_CALLER_WORKFLOW_PATH: ".github/workflows/deploy-production-release.yml"
       PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"
+      RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
       RELEASE_SHA: ${{ inputs.release_sha }}
       SOURCE_TREE: ${{ inputs.source_tree }}
       SOURCE_RUN_ID: ${{ inputs.source_run_id }}
@@ -84,12 +102,18 @@ jobs:
       APPROVAL_RUN_ATTEMPT: ${{ inputs.approval_run_attempt }}
       PRODUCTION_RUN_ID: ${{ inputs.production_run_id }}
       PRODUCTION_RUN_ATTEMPT: ${{ inputs.production_run_attempt }}
+      STRIPE_READINESS_RUN_ID: ${{ inputs.stripe_readiness_run_id }}
+      STRIPE_READINESS_RUN_ATTEMPT: ${{ inputs.stripe_readiness_run_attempt }}
+      STRIPE_READINESS_SHA256: ${{ inputs.stripe_readiness_sha256 }}
+      STRIPE_READINESS_ARTIFACT_ID: ${{ inputs.stripe_readiness_artifact_id }}
+      STRIPE_READINESS_ARTIFACT_DIGEST: ${{ inputs.stripe_readiness_artifact_digest }}
       ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
       MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
       APPROVAL_NONCE: ${{ inputs.approval_nonce }}
     outputs:
       database_attestation_artifact: ${{ steps.database_attestation.outputs.artifact_name }}
       database_attestation_sha256: ${{ steps.database_attestation.outputs.attestation_sha256 }}
+      database_binding_artifact: ${{ steps.database_binding.outputs.binding_artifact_name }}
     steps:
       - name: Check out exact release SHA
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -123,6 +147,23 @@ jobs:
             echo "::error::The production database workflow is not bound to the current production run."
             exit 1
           fi
+          if [ "$GITHUB_RUN_ATTEMPT" != "1" ] ||
+             [ "$SOURCE_RUN_ATTEMPT" != "1" ] ||
+             [ "$STAGING_RUN_ATTEMPT" != "1" ] ||
+             [ "$APPROVAL_RUN_ATTEMPT" != "1" ] ||
+             [ "$PRODUCTION_RUN_ATTEMPT" != "1" ] ||
+             [ "$STRIPE_READINESS_RUN_ATTEMPT" != "1" ]; then
+            echo "::error::Production provider evidence is accepted only from attempt 1."
+            exit 1
+          fi
+          if [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ]; then
+            echo "::error::Production provider actor and triggering actor must match."
+            exit 1
+          fi
+          if [ -z "$RELEASE_EVIDENCE_SIGNING_KEY_ID" ]; then
+            echo "::error::RELEASE_EVIDENCE_SIGNING_KEY_ID is required."
+            exit 1
+          fi
           current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
           if [ "$current_main" != "$RELEASE_SHA" ]; then
             echo "::error::Release SHA is no longer current main."
@@ -132,7 +173,7 @@ jobs:
       - name: Download immutable release candidate
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: production-release-candidate-${{ inputs.release_sha }}
+          name: production-release-candidate-${{ inputs.release_sha }}-${{ inputs.source_run_attempt }}
           path: release-candidate
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
@@ -159,39 +200,21 @@ jobs:
             echo "::error::Production candidate artifact digest mismatch."
             exit 1
           fi
-          gh attestation verify \
-            release-candidate/release-manifest.json \
-            --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
-            --signer-digest "$RELEASE_SHA" \
-            --source-digest "$RELEASE_SHA" \
-            --source-ref "refs/heads/main" \
-            --deny-self-hosted-runners
           npx --no-install supabase --workdir release-candidate --version
 
       - name: Download signed staging release attestation
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: release-candidate-attestation-${{ inputs.release_sha }}
+          name: release-candidate-attestation-${{ inputs.release_sha }}-${{ inputs.staging_run_attempt }}
           path: evidence/staging-aggregate
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.staging_run_id }}
 
-      - name: Verify signed staging release attestation
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Verify signed staging release evidence contract
         run: |
           set -euo pipefail
-          gh attestation verify \
-            evidence/staging-aggregate/release-candidate-attestation.json \
-            --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/stage-release.yml" \
-            --signer-digest "$RELEASE_SHA" \
-            --source-digest "$RELEASE_SHA" \
-            --source-ref "refs/heads/main" \
-            --deny-self-hosted-runners
-          npm run release:validate -- release-candidate-attestation \
+          npm run --silent release:validate -- release-candidate-attestation \
             --file evidence/staging-aggregate/release-candidate-attestation.json \
             --sha "$RELEASE_SHA" \
             --source-tree "$SOURCE_TREE" \
@@ -200,21 +223,68 @@ jobs:
             --staging-run-id "$STAGING_RUN_ID" \
             --staging-run-attempt "$STAGING_RUN_ATTEMPT"
 
+      - name: Resolve exact staging Supabase artifact
+        id: staging_supabase_artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const aggregate = JSON.parse(readFileSync(
+            "evidence/staging-aggregate/release-candidate-attestation.json",
+            "utf8",
+          ));
+          const binding = aggregate.artifact_bindings.supabase;
+          const expectedName =
+            `supabase-staging-edge-attestation-${process.env.RELEASE_SHA}-${process.env.STAGING_RUN_ATTEMPT}`;
+          if (
+            !binding ||
+            binding.name !== expectedName ||
+            !/^[1-9][0-9]*$/.test(String(binding.id ?? "")) ||
+            !/^[0-9a-f]{64}$/.test(String(binding.digest ?? "")) ||
+            String(binding.run_id) !== process.env.STAGING_RUN_ID ||
+            String(binding.run_attempt) !== process.env.STAGING_RUN_ATTEMPT ||
+            binding.release_sha !== process.env.RELEASE_SHA
+          ) {
+            throw new Error("Signed Supabase artifact binding does not match the selected staging run.");
+          }
+          writeFileSync(
+            "evidence/staging-aggregate/supabase-artifact-binding.json",
+            `${JSON.stringify(binding, null, 2)}\n`,
+          );
+          NODE
+          artifact_id="$(node -p "require('./evidence/staging-aggregate/supabase-artifact-binding.json').id")"
+          producer_run_id="$(node -p "require('./evidence/staging-aggregate/supabase-artifact-binding.json').run_id")"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$artifact_id" \
+            > evidence/staging-aggregate/supabase-artifact-metadata.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$producer_run_id" \
+            > evidence/staging-aggregate/supabase-producer-run.json
+          node scripts/github-artifact-metadata.mjs \
+            --binding evidence/staging-aggregate/supabase-artifact-binding.json \
+            --artifact evidence/staging-aggregate/supabase-artifact-metadata.json \
+            --producer-run evidence/staging-aggregate/supabase-producer-run.json \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Download exact staging Supabase evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: supabase-staging-edge-attestation-${{ inputs.release_sha }}
+          artifact-ids: ${{ steps.staging_supabase_artifact.outputs.artifact_id }}
           path: evidence/staging-supabase
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.staging_run_id }}
 
       - name: Verify exact staging database evidence
+        env:
+          STAGING_SUPABASE_ARTIFACT_DIGEST: ${{ steps.staging_supabase_artifact.outputs.artifact_digest }}
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
-          import { createHash } from "node:crypto";
-          import { readFileSync } from "node:fs";
+           import { createHash } from "node:crypto";
+           import { readFileSync } from "node:fs";
+           import { validateLegacyMigrationSchemaEvidence } from "./scripts/production-release-validation.mjs";
 
           const aggregate = JSON.parse(readFileSync(
             "evidence/staging-aggregate/release-candidate-attestation.json",
@@ -242,7 +312,14 @@ jobs:
             }
             return JSON.stringify(value);
           };
-          const evidenceSha = createHash("sha256").update(edgeBytes).digest("hex");
+           const evidenceSha = createHash("sha256").update(edgeBytes).digest("hex");
+           const legacyMigrationSchemaEvidence =
+             validateLegacyMigrationSchemaEvidence(
+               database.legacy_migration_schema_evidence,
+             );
+           const legacyMigrationSchemaEvidenceSha256 = createHash("sha256")
+             .update(canonicalJson(legacyMigrationSchemaEvidence))
+             .digest("hex");
           const migrationInventorySha256 = createHash("sha256")
             .update(JSON.stringify(database.migration_inventory ?? []))
             .digest("hex");
@@ -265,6 +342,8 @@ jobs:
             manifestSha: process.env.MANIFEST_SHA256,
           };
           if (
+            aggregate.artifact_bindings?.supabase?.digest !==
+              process.env.STAGING_SUPABASE_ARTIFACT_DIGEST ||
             aggregate.evidence_sha256?.supabase !== evidenceSha ||
             edge.release_sha !== expected.releaseSha ||
             edge.artifact_sha256 !== expected.artifactSha ||
@@ -279,9 +358,11 @@ jobs:
             database.project_ref !== "xsiehskfgeoqyazcgauv" ||
             !Array.isArray(database.migration_inventory) ||
             database.migration_inventory.length === 0 ||
-            database.migration_inventory_sha256 !==
-              migrationInventorySha256 ||
-            !migrationDigestsMatch ||
+             database.migration_inventory_sha256 !==
+               migrationInventorySha256 ||
+             database.legacy_migration_schema_evidence_sha256 !==
+               legacyMigrationSchemaEvidenceSha256 ||
+             !migrationDigestsMatch ||
             edge.edge_source_manifest?.release_sha !== expected.releaseSha
           ) {
             throw new Error("Signed staging Supabase evidence does not match the exact candidate.");
@@ -297,18 +378,137 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.production_run_id }}
 
+      - name: Download exact Stripe readiness evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ inputs.stripe_readiness_artifact_id }}
+          path: evidence/stripe
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.stripe_readiness_run_id }}
+
+      - name: Resolve exact signed provider artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MUTATION_LEASE_ARTIFACT: ${{ inputs.mutation_lease_artifact }}
+          STAGING_SUPABASE_ARTIFACT_ID: ${{ steps.staging_supabase_artifact.outputs.artifact_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/api evidence/bindings
+
+          resolve_payload() {
+            local key="$1" run_id="$2" expected_name="$3" expected_id="$4"
+            local metadata="evidence/api/${key}-artifact.json"
+            local run_metadata="evidence/api/${key}-run.json"
+            local artifact_id="$expected_id"
+            if [ -z "$artifact_id" ]; then
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \
+                | jq -s '[.[].artifacts[]]' \
+                > "evidence/api/${key}-artifacts.json"
+              local count
+              count="$(jq --arg name "$expected_name" \
+                '[.[] | select(.name == $name and .expired == false)] | length' \
+                "evidence/api/${key}-artifacts.json")"
+              if [ "$count" != "1" ]; then
+                echo "::error::Expected exactly one non-expired ${key} payload artifact."
+                exit 1
+              fi
+              artifact_id="$(jq -r --arg name "$expected_name" \
+                '.[] | select(.name == $name and .expired == false) | .id' \
+                "evidence/api/${key}-artifacts.json")"
+            fi
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" > "$metadata"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$run_metadata"
+            jq -e \
+              --arg id "$artifact_id" \
+              --arg name "$expected_name" \
+              --arg run_id "$run_id" \
+              --arg release_sha "$RELEASE_SHA" '
+                (.expired == false) and
+                ((.id | tostring) == $id) and
+                (.name == $name) and
+                ((.workflow_run.id | tostring) == $run_id) and
+                (.workflow_run.head_sha == $release_sha) and
+                (.digest | test("^sha256:[0-9a-f]{64}$"))
+              ' "$metadata" > /dev/null
+          }
+
+          download_binding() {
+            local key="$1" run_id="$2" binding_name="$3"
+            local list="evidence/api/${key}-binding-artifacts.json"
+            local metadata="evidence/api/${key}-binding-artifact.json"
+            local destination="evidence/bindings/${key}"
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \
+              | jq -s '[.[].artifacts[]]' > "$list"
+            local count binding_id
+            count="$(jq --arg name "$binding_name" \
+              '[.[] | select(.name == $name and .expired == false)] | length' "$list")"
+            if [ "$count" != "1" ]; then
+              echo "::error::Expected exactly one non-expired ${key} binding artifact."
+              exit 1
+            fi
+            binding_id="$(jq -r --arg name "$binding_name" \
+              '.[] | select(.name == $name and .expired == false) | .id' "$list")"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${binding_id}" > "$metadata"
+            jq -e \
+              --arg id "$binding_id" \
+              --arg name "$binding_name" \
+              --arg run_id "$run_id" \
+              --arg release_sha "$RELEASE_SHA" '
+                (.expired == false) and
+                ((.id | tostring) == $id) and
+                (.name == $name) and
+                ((.workflow_run.id | tostring) == $run_id) and
+                (.workflow_run.head_sha == $release_sha)
+              ' "$metadata" > /dev/null
+            mkdir -p "$destination"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${binding_id}/zip" \
+              > "evidence/api/${key}-binding.zip"
+            unzip -q "evidence/api/${key}-binding.zip" -d "$destination"
+            test -f "${destination}/release-artifact-binding.json"
+          }
+
+          source_name="production-release-candidate-${RELEASE_SHA}-${SOURCE_RUN_ATTEMPT}"
+          staging_name="release-candidate-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}"
+          staging_supabase_name="supabase-staging-edge-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}"
+          stripe_name="stripe-live-readiness-${RELEASE_SHA}-${STRIPE_READINESS_RUN_ID}-${STRIPE_READINESS_RUN_ATTEMPT}"
+
+          resolve_payload source "$SOURCE_RUN_ID" "$source_name" ""
+          download_binding source "$SOURCE_RUN_ID" \
+            "production-release-candidate-binding-${RELEASE_SHA}-${SOURCE_RUN_ATTEMPT}"
+          resolve_payload staging-aggregate "$STAGING_RUN_ID" "$staging_name" ""
+          download_binding staging-aggregate "$STAGING_RUN_ID" "${staging_name}-binding"
+          resolve_payload staging-supabase "$STAGING_RUN_ID" "$staging_supabase_name" \
+            "$STAGING_SUPABASE_ARTIFACT_ID"
+          download_binding staging-supabase "$STAGING_RUN_ID" "${staging_supabase_name}-binding"
+          resolve_payload stripe "$STRIPE_READINESS_RUN_ID" "$stripe_name" \
+            "$STRIPE_READINESS_ARTIFACT_ID"
+          download_binding stripe "$STRIPE_READINESS_RUN_ID" "${stripe_name}-binding"
+          resolve_payload mutation-lease "$PRODUCTION_RUN_ID" "$MUTATION_LEASE_ARTIFACT" ""
+          download_binding mutation-lease "$PRODUCTION_RUN_ID" "${MUTATION_LEASE_ARTIFACT}-binding"
+
+          actual_stripe_digest="$(jq -r '.digest | sub("^sha256:"; "")' \
+            evidence/api/stripe-artifact.json)"
+          expected_stripe_digest="${STRIPE_READINESS_ARTIFACT_DIGEST#sha256:}"
+          if [ "$actual_stripe_digest" != "$expected_stripe_digest" ]; then
+            echo "::error::Stripe readiness artifact API digest does not match the selected release tuple."
+            exit 1
+          fi
+
       - name: Validate current production mutation lease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test -f evidence/mutation-lease/production-mutation-lease.json
-          npm run release:validate -- github-staging-lease \
+          npm run --silent release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
             --sha "$RELEASE_SHA" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
-          npm run release:validate -- mutation-lease \
+          npm run --silent release:validate -- mutation-lease \
             --file evidence/mutation-lease/production-mutation-lease.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -322,7 +522,139 @@ jobs:
             --approval-run-id "$APPROVAL_RUN_ID" \
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --production-run-id "$PRODUCTION_RUN_ID" \
-            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT"
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+
+      - name: Verify signed provider artifact bindings
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MUTATION_LEASE_ARTIFACT: ${{ inputs.mutation_lease_artifact }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/verify-production-provider-bindings.sh" <<'VERIFY_SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          verify_binding() {
+            local key="$1" payload_root="$2" binding="$3" workflow_path="$4"
+            local event="$5" run_id="$6" run_attempt="$7" same_run="$8"
+            shift 8
+            local metadata="evidence/api/${key}-artifact.json"
+            local run_metadata="evidence/api/${key}-run.json"
+            local artifact_id artifact_name artifact_digest actor triggering_actor
+            local expected_artifact_id expected_artifact_digest
+            artifact_id="$(jq -r '.id' "$metadata")"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" \
+              > "${metadata}.fresh"
+            mv "${metadata}.fresh" "$metadata"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" \
+              > "${run_metadata}.fresh"
+            mv "${run_metadata}.fresh" "$run_metadata"
+            artifact_name="$(jq -r '.name' "$metadata")"
+            artifact_digest="$(jq -r '.digest' "$metadata")"
+            expected_artifact_id="$artifact_id"
+            expected_artifact_digest="$artifact_digest"
+            if [ "$key" = "stripe" ]; then
+              expected_artifact_id="$STRIPE_READINESS_ARTIFACT_ID"
+              expected_artifact_digest="$STRIPE_READINESS_ARTIFACT_DIGEST"
+              if [ "$artifact_id" != "$expected_artifact_id" ] ||
+                 [ "${artifact_digest#sha256:}" != "${expected_artifact_digest#sha256:}" ]; then
+                echo "::error::Stripe binding metadata does not match the selected artifact ID and digest."
+                exit 1
+              fi
+            fi
+            actor="$(jq -r '.actor.login' "$run_metadata")"
+            triggering_actor="$(jq -r '.triggering_actor.login' "$run_metadata")"
+            if [ "$actor" != "$triggering_actor" ]; then
+              echo "::error::${key} producer actor does not match triggering actor."
+              exit 1
+            fi
+            if [ "$same_run" = "true" ] && {
+              [ "$run_id" != "$GITHUB_RUN_ID" ] ||
+              [ "$actor" != "$GITHUB_ACTOR" ] ||
+              [ "$triggering_actor" != "$GITHUB_TRIGGERING_ACTOR" ];
+            }; then
+              echo "::error::${key} same-run producer identity does not match this production run."
+              exit 1
+            fi
+            local args=(
+              node scripts/verify-release-artifact-binding.mjs
+              --binding "$binding"
+              --payload-root "$payload_root"
+              --file-root "$payload_root"
+              --artifact-metadata "$metadata"
+              --producer-run "$run_metadata"
+              --repository "$GITHUB_REPOSITORY"
+              --release-sha "$RELEASE_SHA"
+              --source-tree "$SOURCE_TREE"
+              --workflow-path "$workflow_path"
+              --workflow-ref "$GITHUB_REPOSITORY/$workflow_path@refs/heads/main"
+              --workflow-sha "$RELEASE_SHA"
+              --event "$event"
+              --run-id "$run_id"
+              --run-attempt "$run_attempt"
+              --actor "$actor"
+              --triggering-actor "$triggering_actor"
+              --artifact-id "$expected_artifact_id"
+              --artifact-name "$artifact_name"
+              --artifact-digest "$expected_artifact_digest"
+              --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+            )
+            if [ "$same_run" = "true" ]; then
+              args+=(
+                --same-run
+                --trusted-current-run-id "$GITHUB_RUN_ID"
+                --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT"
+                --trusted-current-actor "$GITHUB_ACTOR"
+                --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR"
+              )
+            fi
+            local file
+            for file in "$@"; do
+              args+=(--file "$file")
+            done
+            "${args[@]}" > "evidence/api/${key}-binding-verification.json"
+          }
+
+          verify_binding source release-candidate \
+            evidence/bindings/source/release-artifact-binding.json \
+            .github/workflows/ci.yml push "$SOURCE_RUN_ID" "$SOURCE_RUN_ATTEMPT" false \
+            release-manifest.json
+          verify_binding staging-aggregate evidence/staging-aggregate \
+            evidence/bindings/staging-aggregate/release-artifact-binding.json \
+            .github/workflows/stage-release.yml workflow_run \
+            "$STAGING_RUN_ID" "$STAGING_RUN_ATTEMPT" false \
+            release-candidate-attestation.json
+          verify_binding staging-supabase evidence/staging-supabase \
+            evidence/bindings/staging-supabase/release-artifact-binding.json \
+            .github/workflows/stage-release.yml workflow_run \
+            "$STAGING_RUN_ID" "$STAGING_RUN_ATTEMPT" false \
+            supabase-staging-edge-attestation.json \
+            supabase-staging-db-attestation.json
+          verify_binding stripe evidence/stripe \
+            evidence/bindings/stripe/release-artifact-binding.json \
+            .github/workflows/verify-stripe-live-readiness.yml workflow_dispatch \
+            "$STRIPE_READINESS_RUN_ID" "$STRIPE_READINESS_RUN_ATTEMPT" false \
+            stripe-live-migration-evidence.json
+          verify_binding mutation-lease evidence/mutation-lease \
+            evidence/bindings/mutation-lease/release-artifact-binding.json \
+            "$PRODUCTION_CALLER_WORKFLOW_PATH" workflow_dispatch \
+            "$PRODUCTION_RUN_ID" "$PRODUCTION_RUN_ATTEMPT" true \
+            production-mutation-lease.json
+
+          stripe_sha256="$(sha256sum evidence/stripe/stripe-live-migration-evidence.json | awk '{print $1}')"
+          if [ "$stripe_sha256" != "$STRIPE_READINESS_SHA256" ]; then
+            echo "::error::Signed Stripe readiness payload SHA-256 does not match the mutation lease tuple."
+            exit 1
+          fi
+          VERIFY_SCRIPT
+          chmod 700 "$RUNNER_TEMP/verify-production-provider-bindings.sh"
+          "$RUNNER_TEMP/verify-production-provider-bindings.sh"
 
       - name: Validate production target identity
         env:
@@ -336,7 +668,7 @@ jobs:
             echo "::error::Production Supabase project secret does not match the fixed target."
             exit 1
           fi
-          npm run release:validate -- supabase-target \
+          npm run --silent release:validate -- supabase-target \
             > production-supabase-target.json
 
       - name: Capture production migration history
@@ -355,7 +687,20 @@ jobs:
                 json_agg(
                   json_build_object(
                     'version', version,
-                    'name', COALESCE(name, '')
+                    'name', COALESCE(name, ''),
+                    'statement_count', COALESCE(cardinality(statements), 0),
+                    'statement_marker_only', COALESCE(
+                      cardinality(statements) = 1 AND
+                      statements[1] = version || '_' || COALESCE(name, '') || '.sql',
+                      FALSE
+                    ),
+                    'statements_sha256', encode(
+                      extensions.digest(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
+                        'sha256'
+                      ),
+                      'hex'
+                    )
                   )
                   ORDER BY version
                 ),
@@ -365,29 +710,268 @@ jobs:
             " > production-migrations-before.json
           node -e "JSON.parse(require('fs').readFileSync('production-migrations-before.json','utf8'))"
 
+      - name: Capture production legacy schema evidence before mutation
+        env:
+          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+        run: |
+          set -euo pipefail
+          raw_evidence="$(mktemp)"
+          psql "$SUPABASE_PRODUCTION_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --quiet \
+            --file release-candidate/supabase/reconciliation/production-history-v1.sql \
+            | sed '/^[[:space:]]*$/d' > "$raw_evidence"
+          if [ "$(wc -l < "$raw_evidence" | tr -d '[:space:]')" != "1" ]; then
+            echo "::error::Production legacy schema evidence must contain exactly one JSON object."
+            exit 1
+          fi
+          jq -e '
+            .schema_version == 1 and
+            .evidence_type == "maiprop-legacy-migration-schema-evidence" and
+            .reconciliation_id == "production-history-v1" and
+            (.ok | type == "boolean") and
+            (.checks | type == "array" and length > 0) and
+            ([.checks[].name] == ([.checks[].name] | sort)) and
+            (([.checks[].name] | unique | length) == (.checks | length)) and
+            all(
+              .checks[];
+              (.ok | type == "boolean") and
+              (.fingerprint | type == "string" and test("^sha256:[0-9a-f]{64}$"))
+            )
+          ' "$raw_evidence" >/dev/null
+          canonical_evidence="$(jq -cS . "$raw_evidence")"
+          printf '%s' "$canonical_evidence" \
+            > production-legacy-migration-schema-evidence-before.json
+
+      - name: Require canonical migration history before production mutation
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+          import { reconcileMigrationHistories } from "./scripts/production-release-validation.mjs";
+
+          const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+          const manifest = read("release-candidate/release-manifest.json");
+          const reconciliationManifest = read(
+            "release-candidate/supabase/reconciliation/production-history-v1.json",
+          );
+          const stagingEvidence = read(
+            "evidence/staging-supabase/supabase-staging-db-attestation.json",
+          );
+          const production = read("production-migrations-before.json");
+          const migrationPath = /^supabase\/migrations\/(\d{14})_([A-Za-z0-9_-]+)\.sql$/;
+          const candidate = (manifest.supabase_files ?? [])
+            .map((record) => {
+              const match = migrationPath.exec(String(record.path ?? ""));
+              return match ? {
+                version: match[1],
+                name: match[2],
+                file_sha256: String(record.sha256 ?? ""),
+              } : null;
+            })
+            .filter(Boolean)
+            .sort((left, right) =>
+              left.version.localeCompare(right.version) ||
+              left.name.localeCompare(right.name));
+          const staging = (stagingEvidence.migration_inventory ?? [])
+            .map((migration) => ({
+              version: String(migration.version ?? ""),
+              name: String(migration.name ?? ""),
+              file_sha256: String(migration.file_sha256 ?? ""),
+              statements_sha256: String(migration.statements_sha256 ?? ""),
+              statement_count: Number(migration.statement_count ?? 0),
+              statement_marker_only: migration.statement_marker_only === true,
+            }))
+            .sort((left, right) =>
+              left.version.localeCompare(right.version) ||
+              left.name.localeCompare(right.name));
+          const productionInventory = (production ?? [])
+            .map((migration) => ({
+              version: String(migration.version ?? ""),
+              name: String(migration.name ?? ""),
+              statements_sha256: String(migration.statements_sha256 ?? ""),
+              statement_count: Number(migration.statement_count ?? 0),
+              statement_marker_only: migration.statement_marker_only === true,
+            }))
+            .sort((left, right) =>
+              left.version.localeCompare(right.version) ||
+              left.name.localeCompare(right.name));
+          const reconciliationPlan = reconcileMigrationHistories({
+            candidate,
+            staging,
+            production: productionInventory,
+            manifest: reconciliationManifest,
+          });
+          const exactKey = (migration) => `${migration.version}_${migration.name}`;
+          const candidateByKey = new Map(candidate.map((migration) => [exactKey(migration), migration]));
+          const stagingByKey = new Map(staging.map((migration) => [exactKey(migration), migration]));
+          const candidateByName = new Map(candidate.map((migration) => [migration.name, migration.version]));
+          const stagingByName = new Map(staging.map((migration) => [migration.name, migration.version]));
+          const stagingOnly = staging
+            .filter((migration) => !candidateByKey.has(exactKey(migration)))
+            .map(exactKey);
+          const candidateNotStaged = candidate
+            .filter((migration) => !stagingByKey.has(exactKey(migration)))
+            .map(exactKey);
+          const stagingDigestDrift = staging
+            .filter((migration) => {
+              const expected = candidateByKey.get(exactKey(migration));
+              return expected && expected.file_sha256 !== migration.file_sha256;
+            })
+            .map((migration) => ({
+              migration: exactKey(migration),
+              candidate_sha256: candidateByKey.get(exactKey(migration)).file_sha256,
+              staging_sha256: migration.file_sha256,
+            }));
+          const sameNameVersionDrift = [...new Set([...candidateByName.keys(), ...stagingByName.keys()])]
+            .filter((name) =>
+              candidateByName.has(name) &&
+              stagingByName.has(name) &&
+              candidateByName.get(name) !== stagingByName.get(name))
+            .map((name) => ({
+              name,
+              candidate_version: candidateByName.get(name),
+              staging_version: stagingByName.get(name),
+            }));
+          const productionDrift = productionInventory
+            .map((migration, index) => {
+              const expected = candidate[index];
+              return !expected ||
+                migration.version !== expected.version ||
+                migration.name !== expected.name
+                ? {
+                    index,
+                    production: exactKey(migration),
+                    candidate: expected ? exactKey(expected) : null,
+                  }
+                : null;
+            })
+            .filter(Boolean);
+          const productionRepairMarkers = productionInventory
+            .filter((migration) =>
+              migration.statement_marker_only ||
+              migration.statement_count < 1 ||
+              !/^[0-9a-f]{64}$/.test(migration.statements_sha256))
+            .map((migration) => ({
+              migration: exactKey(migration),
+              statement_count: migration.statement_count,
+              reason: "filename-only schema_migrations statement is not execution proof",
+            }));
+          const productionExecutionDrift = productionInventory
+            .filter((migration) => {
+              const expected = stagingByKey.get(exactKey(migration));
+              return expected && (
+                expected.statements_sha256 !== migration.statements_sha256 ||
+                expected.statement_count !== migration.statement_count
+              );
+            })
+            .map((migration) => ({
+              migration: exactKey(migration),
+              staging_statements_sha256:
+                stagingByKey.get(exactKey(migration)).statements_sha256,
+              production_statements_sha256: migration.statements_sha256,
+              staging_statement_count:
+                stagingByKey.get(exactKey(migration)).statement_count,
+              production_statement_count: migration.statement_count,
+            }));
+          const uniqueVersions = (inventory) =>
+            new Set(inventory.map((migration) => migration.version)).size ===
+              inventory.length;
+          const candidateShapeIsValid =
+            candidate.length > 0 &&
+            uniqueVersions(candidate) &&
+            candidate.every((migration) => /^[0-9a-f]{64}$/.test(migration.file_sha256));
+          const stagingShapeIsValid =
+            staging.length > 0 &&
+            uniqueVersions(staging) &&
+            staging.every((migration) =>
+              /^[0-9a-f]{64}$/.test(migration.file_sha256) &&
+              /^[0-9a-f]{64}$/.test(migration.statements_sha256) &&
+              Number.isSafeInteger(migration.statement_count) &&
+              migration.statement_count > 0 &&
+              migration.statement_marker_only === false);
+          const productionShapeIsValid =
+            uniqueVersions(productionInventory) &&
+            productionInventory.every((migration) =>
+              Number.isSafeInteger(migration.statement_count) &&
+              migration.statement_count > 0 &&
+              typeof migration.statement_marker_only === "boolean" &&
+              /^[0-9a-f]{64}$/.test(migration.statements_sha256));
+          const stagingIsExactCandidate =
+            candidateShapeIsValid &&
+            stagingShapeIsValid &&
+            staging.length === candidate.length &&
+            stagingOnly.length === 0 &&
+            candidateNotStaged.length === 0 &&
+            stagingDigestDrift.length === 0;
+          const productionIsCanonicalPrefix =
+            productionShapeIsValid &&
+            reconciliationPlan.production.length <=
+              reconciliationPlan.staging.length;
+          const result = {
+            schema_version: 1,
+            evidence_type: "maiprop-canonical-migration-history-reconciliation",
+            release_sha: process.env.RELEASE_SHA,
+            source_tree: process.env.SOURCE_TREE,
+            staging_run_id: process.env.STAGING_RUN_ID,
+            production_run_id: process.env.PRODUCTION_RUN_ID,
+            ok: stagingIsExactCandidate && productionIsCanonicalPrefix,
+            candidate_count: candidate.length,
+            staging_count: staging.length,
+            production_count: productionInventory.length,
+            staging_is_exact_candidate: stagingIsExactCandidate,
+            production_is_canonical_prefix: productionIsCanonicalPrefix,
+            reconciliation_id: reconciliationPlan.reconciliation_id,
+            legacy_anomaly_count: reconciliationPlan.legacy_anomaly_count,
+            cutover_applied: reconciliationPlan.cutover_applied,
+            cutover: reconciliationPlan.cutover,
+            candidate_shape_is_valid: candidateShapeIsValid,
+            staging_shape_is_valid: stagingShapeIsValid,
+            production_shape_is_valid: productionShapeIsValid,
+            drift: {
+              staging_only: stagingOnly,
+              candidate_not_staged: candidateNotStaged,
+              staging_digest_drift: stagingDigestDrift,
+              same_name_version_drift: sameNameVersionDrift,
+              production_prefix_drift: productionDrift,
+              production_repair_markers: productionRepairMarkers,
+              production_execution_drift: productionExecutionDrift,
+            },
+            checked_at: new Date().toISOString(),
+          };
+          writeFileSync(
+            "production-migration-plan.json",
+            `${JSON.stringify(reconciliationPlan, null, 2)}\n`,
+          );
+          writeFileSync(
+            "production-migration-history-reconciliation.json",
+            `${JSON.stringify(result, null, 2)}\n`,
+          );
+          if (!result.ok) {
+            throw new Error(
+              "Canonical migration history reconciliation is required before any production mutation.",
+            );
+          }
+          NODE
+
       - name: Build exact production migration plan
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from "node:fs";
-          import { assertMigrationPromotionPlan } from "./scripts/production-release-validation.mjs";
-
-          const staging = JSON.parse(readFileSync(
-            "evidence/staging-supabase/supabase-staging-db-attestation.json",
-            "utf8",
-          ));
-          const production = JSON.parse(readFileSync(
-            "production-migrations-before.json",
-            "utf8",
-          ));
-          const plan = assertMigrationPromotionPlan(
-            staging.migration_inventory,
-            production,
-          );
-          writeFileSync(
+          const plan = JSON.parse(readFileSync(
             "production-migration-plan.json",
-            `${JSON.stringify(plan, null, 2)}\n`,
-          );
+            "utf8",
+          ));
+          if (
+            plan.reconciliation_id !== "production-history-v1" ||
+            !Array.isArray(plan.pending_files)
+          ) {
+            throw new Error("Signed legacy migration reconciliation plan is invalid.");
+          }
           writeFileSync(
             "production-expected-pending-migrations.txt",
             `${plan.pending_files.join("\n")}${plan.pending_files.length ? "\n" : ""}`,
@@ -496,12 +1080,12 @@ jobs:
             echo "::error::Release SHA is no longer current main."
             exit 1
           fi
-          npm run release:validate -- github-staging-lease \
+          npm run --silent release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
             --sha "$RELEASE_SHA" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
-          npm run release:validate -- mutation-lease \
+          npm run --silent release:validate -- mutation-lease \
             --file evidence/mutation-lease/production-mutation-lease.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -515,8 +1099,13 @@ jobs:
             --approval-run-id "$APPROVAL_RUN_ID" \
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --production-run-id "$PRODUCTION_RUN_ID" \
-            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT"
-          npm run release:validate -- supabase-target \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+          npm run --silent release:validate -- supabase-target \
             > production-supabase-target-pre-apply.json
           psql "$SUPABASE_PRODUCTION_DB_URL" \
             --no-psqlrc \
@@ -529,7 +1118,20 @@ jobs:
                 json_agg(
                   json_build_object(
                     'version', version,
-                    'name', COALESCE(name, '')
+                    'name', COALESCE(name, ''),
+                    'statement_count', COALESCE(cardinality(statements), 0),
+                    'statement_marker_only', COALESCE(
+                      cardinality(statements) = 1 AND
+                      statements[1] = version || '_' || COALESCE(name, '') || '.sql',
+                      FALSE
+                    ),
+                    'statements_sha256', encode(
+                      extensions.digest(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
+                        'sha256'
+                      ),
+                      'hex'
+                    )
                   )
                   ORDER BY version
                 ),
@@ -539,7 +1141,7 @@ jobs:
             " > production-migrations-pre-apply.json
           node --input-type=module <<'NODE'
           import { readFileSync } from "node:fs";
-          import { assertMigrationPromotionPlan } from "./scripts/production-release-validation.mjs";
+          import { reconcileMigrationHistories } from "./scripts/production-release-validation.mjs";
 
           const read = (path) => JSON.parse(readFileSync(path, "utf8"));
           const reviewed = read("production-migration-plan.json");
@@ -547,10 +1149,14 @@ jobs:
             "evidence/staging-supabase/supabase-staging-db-attestation.json",
           );
           const current = read("production-migrations-pre-apply.json");
-          const refreshed = assertMigrationPromotionPlan(
-            staging.migration_inventory,
-            current,
-          );
+          const refreshed = reconcileMigrationHistories({
+            candidate: reviewed.candidate,
+            staging: staging.migration_inventory,
+            production: current,
+            manifest: read(
+              "release-candidate/supabase/reconciliation/production-history-v1.json",
+            ),
+          });
           if (
             JSON.stringify(refreshed.production) !==
               JSON.stringify(reviewed.production) ||
@@ -566,6 +1172,7 @@ jobs:
       - name: Apply exact staged production migrations
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
           SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
@@ -581,12 +1188,12 @@ jobs:
             echo "::error::Release SHA is no longer current main."
             exit 1
           fi
-          npm run release:validate -- github-staging-lease \
+          npm run --silent release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
             --sha "$RELEASE_SHA" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
-          npm run release:validate -- mutation-lease \
+          npm run --silent release:validate -- mutation-lease \
             --file evidence/mutation-lease/production-mutation-lease.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -600,8 +1207,13 @@ jobs:
             --approval-run-id "$APPROVAL_RUN_ID" \
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --production-run-id "$PRODUCTION_RUN_ID" \
-            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT"
-          npm run release:validate -- supabase-target \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+          npm run --silent release:validate -- supabase-target \
             > production-supabase-target-mutation-boundary.json
           psql "$SUPABASE_PRODUCTION_DB_URL" \
             --no-psqlrc \
@@ -614,7 +1226,20 @@ jobs:
                 json_agg(
                   json_build_object(
                     'version', version,
-                    'name', COALESCE(name, '')
+                    'name', COALESCE(name, ''),
+                    'statement_count', COALESCE(cardinality(statements), 0),
+                    'statement_marker_only', COALESCE(
+                      cardinality(statements) = 1 AND
+                      statements[1] = version || '_' || COALESCE(name, '') || '.sql',
+                      FALSE
+                    ),
+                    'statements_sha256', encode(
+                      extensions.digest(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
+                        'sha256'
+                      ),
+                      'hex'
+                    )
                   )
                   ORDER BY version
                 ),
@@ -624,17 +1249,24 @@ jobs:
             " > production-migrations-mutation-boundary.json
           node --input-type=module <<'NODE'
           import { readFileSync } from "node:fs";
-          import { assertMigrationPromotionPlan } from "./scripts/production-release-validation.mjs";
+          import { reconcileMigrationHistories } from "./scripts/production-release-validation.mjs";
 
           const read = (path) => JSON.parse(readFileSync(path, "utf8"));
           const reviewed = read("production-migration-plan.json");
           const staging = read(
             "evidence/staging-supabase/supabase-staging-db-attestation.json",
           );
-          const refreshed = assertMigrationPromotionPlan(
-            staging.migration_inventory,
-            read("production-migrations-mutation-boundary.json"),
+          const mutationBoundary = read(
+            "production-migrations-mutation-boundary.json",
           );
+          const refreshed = reconcileMigrationHistories({
+            candidate: reviewed.candidate,
+            staging: staging.migration_inventory,
+            production: mutationBoundary,
+            manifest: read(
+              "release-candidate/supabase/reconciliation/production-history-v1.json",
+            ),
+          });
           if (
             JSON.stringify(refreshed.production) !==
               JSON.stringify(reviewed.production) ||
@@ -662,6 +1294,7 @@ jobs:
             echo "::error::Release artifact changed at the production database mutation boundary."
             exit 1
           fi
+          "$RUNNER_TEMP/verify-production-provider-bindings.sh"
           npx --no-install supabase --workdir release-candidate db push \
             --db-url "$SUPABASE_PRODUCTION_DB_URL" \
             --yes
@@ -682,7 +1315,20 @@ jobs:
                 json_agg(
                   json_build_object(
                     'version', version,
-                    'name', COALESCE(name, '')
+                    'name', COALESCE(name, ''),
+                    'statement_count', COALESCE(cardinality(statements), 0),
+                    'statement_marker_only', COALESCE(
+                      cardinality(statements) = 1 AND
+                      statements[1] = version || '_' || COALESCE(name, '') || '.sql',
+                      FALSE
+                    ),
+                    'statements_sha256', encode(
+                      extensions.digest(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
+                        'sha256'
+                      ),
+                      'hex'
+                    )
                   )
                   ORDER BY version
                 ),
@@ -692,25 +1338,89 @@ jobs:
             " > production-migrations-after.json
           node --input-type=module <<'NODE'
           import { readFileSync } from "node:fs";
-          import { assertMigrationPromotionPlan } from "./scripts/production-release-validation.mjs";
+          import { reconcileMigrationHistories } from "./scripts/production-release-validation.mjs";
 
-          const staging = JSON.parse(readFileSync(
+          const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+          const staging = read(
             "evidence/staging-supabase/supabase-staging-db-attestation.json",
-            "utf8",
-          ));
-          const production = JSON.parse(readFileSync(
-            "production-migrations-after.json",
-            "utf8",
-          ));
-          const parity = assertMigrationPromotionPlan(
-            staging.migration_inventory,
-            production,
           );
+          const reviewed = read("production-migration-plan.json");
+          const parity = reconcileMigrationHistories({
+            candidate: reviewed.candidate,
+            staging: staging.migration_inventory,
+            production: read("production-migrations-after.json"),
+            manifest: read(
+              "release-candidate/supabase/reconciliation/production-history-v1.json",
+            ),
+          });
           if (
+            parity.cutover_applied !== true ||
             parity.pending.length !== 0 ||
             parity.production.length !== parity.staged.length
           ) {
-            throw new Error("Production migration history does not exactly equal staging.");
+            throw new Error(
+              "Production migration history does not satisfy the signed legacy reconciliation and exact post-cutover contract.",
+            );
+          }
+          NODE
+
+      - name: Require exact legacy schema convergence with staging
+        env:
+          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+        run: |
+          set -euo pipefail
+          raw_evidence="$(mktemp)"
+          psql "$SUPABASE_PRODUCTION_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --quiet \
+            --file release-candidate/supabase/reconciliation/production-history-v1.sql \
+            | sed '/^[[:space:]]*$/d' > "$raw_evidence"
+          if [ "$(wc -l < "$raw_evidence" | tr -d '[:space:]')" != "1" ]; then
+            echo "::error::Production legacy schema evidence must contain exactly one JSON object."
+            exit 1
+          fi
+          production_canonical="$(jq -cS . "$raw_evidence")"
+          printf '%s' "$production_canonical" \
+            > production-legacy-migration-schema-evidence-after.json
+          staging_canonical="$(jq -cS '.legacy_migration_schema_evidence' \
+            evidence/staging-supabase/supabase-staging-db-attestation.json)"
+          printf '%s' "$staging_canonical" \
+            > staging-legacy-migration-schema-evidence.json
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync } from "node:fs";
+          import { validateLegacyMigrationSchemaEvidence } from "./scripts/production-release-validation.mjs";
+
+          const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+          const stagingAttestation = read(
+            "evidence/staging-supabase/supabase-staging-db-attestation.json",
+          );
+          const productionBytes = readFileSync(
+            "production-legacy-migration-schema-evidence-after.json",
+          );
+          const stagingBytes = readFileSync(
+            "staging-legacy-migration-schema-evidence.json",
+          );
+          validateLegacyMigrationSchemaEvidence(JSON.parse(productionBytes));
+          const stagingEvidence = validateLegacyMigrationSchemaEvidence(
+            JSON.parse(stagingBytes),
+          );
+          const stagingSha256 = createHash("sha256")
+            .update(stagingBytes)
+            .digest("hex");
+          if (
+            !productionBytes.equals(stagingBytes) ||
+            stagingSha256 !==
+              stagingAttestation.legacy_migration_schema_evidence_sha256 ||
+            JSON.stringify(stagingEvidence) !==
+              JSON.stringify(stagingAttestation.legacy_migration_schema_evidence)
+          ) {
+            throw new Error(
+              "Production legacy schema evidence does not exactly match signed staging evidence.",
+            );
           }
           NODE
 
@@ -766,7 +1476,16 @@ jobs:
           const before = read("production-migrations-before.json");
           const preApply = read("production-migrations-pre-apply.json");
           const after = read("production-migrations-after.json");
+          const legacySchemaBefore = read(
+            "production-legacy-migration-schema-evidence-before.json",
+          );
+          const legacySchemaAfter = read(
+            "production-legacy-migration-schema-evidence-after.json",
+          );
           const plan = read("production-migration-plan.json");
+          const reconciliation = read(
+            "production-migration-history-reconciliation.json",
+          );
           const indexStats = read("supabase-index-stats-production.json");
           const advisor = read("supabase-advisor-production-summary.json");
           const securitySha256 = digest(
@@ -775,10 +1494,16 @@ jobs:
           const manifest = read("release-candidate/release-manifest.json");
           if (
             staging.value.supabase_sha256 !==
-              manifest.value.supabase_sha256
+              manifest.value.supabase_sha256 ||
+            reconciliation.value.ok !== true ||
+            reconciliation.value.staging_is_exact_candidate !== true ||
+            reconciliation.value.production_is_canonical_prefix !== true ||
+            legacySchemaAfter.value.ok !== true ||
+            legacySchemaAfter.sha256 !==
+              staging.value.legacy_migration_schema_evidence_sha256
           ) {
             throw new Error(
-              "Staging database Supabase digest does not match the signed release manifest.",
+              "Production database evidence requires canonical staged and production migration history.",
             );
           }
           const attestation = {
@@ -805,7 +1530,24 @@ jobs:
             migrations_before_sha256: before.sha256,
             migrations_pre_apply_sha256: preApply.sha256,
             migrations_after_sha256: after.sha256,
+            legacy_migration_schema_evidence_before_sha256:
+              legacySchemaBefore.sha256,
+            legacy_migration_schema_evidence:
+              legacySchemaAfter.value,
+            legacy_migration_schema_evidence_sha256:
+              legacySchemaAfter.sha256,
             migration_plan_sha256: plan.sha256,
+            canonical_history_reconciliation: {
+              ok: reconciliation.value.ok,
+              candidate_count: reconciliation.value.candidate_count,
+              staging_count: reconciliation.value.staging_count,
+              production_count: reconciliation.value.production_count,
+              staging_is_exact_candidate:
+                reconciliation.value.staging_is_exact_candidate,
+              production_is_canonical_prefix:
+                reconciliation.value.production_is_canonical_prefix,
+            },
+            canonical_history_reconciliation_sha256: reconciliation.sha256,
             migration_count: after.value.length,
             pending_migration_count: plan.value.pending.length,
             index_stats_sha256: indexStats.sha256,
@@ -818,39 +1560,127 @@ jobs:
             `${JSON.stringify(attestation, null, 2)}\n`,
           );
           NODE
-          artifact_name="production-supabase-db-attestation-$RELEASE_SHA-$PRODUCTION_RUN_ID"
+          artifact_name="production-supabase-db-attestation-$RELEASE_SHA-$PRODUCTION_RUN_ID-$PRODUCTION_RUN_ATTEMPT"
           attestation_sha256="$(sha256sum production-supabase-db-attestation.json | awk '{print $1}')"
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
           echo "attestation_sha256=$attestation_sha256" >> "$GITHUB_OUTPUT"
+          payload_root="production-database-evidence-payload"
+          mkdir -p "$payload_root"
+          for file in \
+            production-supabase-db-attestation.json \
+            production-supabase-target.json \
+            production-supabase-target-pre-apply.json \
+            production-supabase-target-mutation-boundary.json \
+            production-migrations-before.json \
+            production-migrations-pre-apply.json \
+            production-migrations-mutation-boundary.json \
+            production-migrations-after.json \
+            production-legacy-migration-schema-evidence-before.json \
+            production-legacy-migration-schema-evidence-after.json \
+            staging-legacy-migration-schema-evidence.json \
+            production-migration-plan.json \
+            production-migration-history-reconciliation.json \
+            production-migration-dry-run.txt \
+            production-supabase-db-pre-mutation-evidence.json \
+            production-expected-pending-migrations.txt \
+            production-actual-pending-migrations.txt \
+            supabase-index-stats-production.json \
+            supabase-advisor-production-summary.json \
+            supabase-live-security-production.txt; do
+            cp -- "$file" "$payload_root/$file"
+          done
 
       - name: Upload production database evidence
+        id: database_payload_upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.database_attestation.outputs.artifact_name }}
-          path: |
-            production-supabase-db-attestation.json
-            production-supabase-target.json
-            production-supabase-target-pre-apply.json
-            production-supabase-target-mutation-boundary.json
-            production-migrations-before.json
-            production-migrations-pre-apply.json
-            production-migrations-mutation-boundary.json
-            production-migrations-after.json
-            production-migration-plan.json
-            production-migration-dry-run.txt
-            production-supabase-db-pre-mutation-evidence.json
-            production-expected-pending-migrations.txt
-            production-actual-pending-migrations.txt
-            supabase-index-stats-production.json
-            supabase-advisor-production-summary.json
-            supabase-live-security-production.txt
+          path: production-database-evidence-payload/
           if-no-files-found: error
           retention-days: 30
 
-      - name: Attest production database evidence
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+      - name: Create signed production database evidence binding
+        id: database_binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.database_payload_upload.outputs.artifact-digest }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.database_payload_upload.outputs.artifact-id }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          payload_root="production-database-evidence-payload"
+          binding_root="production-database-evidence-binding"
+          binding_artifact_name="${{ steps.database_attestation.outputs.artifact_name }}-binding"
+          mkdir -p "$binding_root" production-database-evidence-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > production-database-evidence-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > production-database-evidence-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root "$payload_root" \
+            --file-root "$payload_root" \
+            --file production-supabase-db-attestation.json \
+            --file production-migration-plan.json \
+             --file production-migration-history-reconciliation.json \
+             --file production-legacy-migration-schema-evidence-after.json \
+             --file production-migrations-after.json \
+            --out "$binding_root/release-artifact-binding.json" \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path "$PRODUCTION_CALLER_WORKFLOW_PATH" \
+            --workflow-ref "$GITHUB_REPOSITORY/$PRODUCTION_CALLER_WORKFLOW_PATH@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "${{ steps.database_attestation.outputs.artifact_name }}" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding "$binding_root/release-artifact-binding.json" \
+            --payload-root "$payload_root" \
+            --file-root "$payload_root" \
+            --file production-supabase-db-attestation.json \
+            --file production-migration-plan.json \
+             --file production-migration-history-reconciliation.json \
+             --file production-legacy-migration-schema-evidence-after.json \
+             --file production-migrations-after.json \
+            --artifact-metadata production-database-evidence-metadata/artifact.json \
+            --producer-run production-database-evidence-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path "$PRODUCTION_CALLER_WORKFLOW_PATH" \
+            --workflow-ref "$GITHUB_REPOSITORY/$PRODUCTION_CALLER_WORKFLOW_PATH@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "${{ steps.database_attestation.outputs.artifact_name }}" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > "$binding_root/verification.json"
+          echo "binding_artifact_name=$binding_artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload signed production database evidence binding
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          subject-path: production-supabase-db-attestation.json
+          name: ${{ steps.database_binding.outputs.binding_artifact_name }}
+          path: production-database-evidence-binding/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Create production database terminal evidence
         if: ${{ always() }}
@@ -871,7 +1701,20 @@ jobs:
                 json_agg(
                   json_build_object(
                     'version', version,
-                    'name', COALESCE(name, '')
+                    'name', COALESCE(name, ''),
+                    'statement_count', COALESCE(cardinality(statements), 0),
+                    'statement_marker_only', COALESCE(
+                      cardinality(statements) = 1 AND
+                      statements[1] = version || '_' || COALESCE(name, '') || '.sql',
+                      FALSE
+                    ),
+                    'statements_sha256', encode(
+                      extensions.digest(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
+                        'sha256'
+                      ),
+                      'hex'
+                    )
                   )
                   ORDER BY version
                 ),
@@ -958,17 +1801,20 @@ jobs:
               record("production-migrations-before.json"),
               record("production-migrations-pre-apply.json"),
               record("production-migrations-mutation-boundary.json"),
-              record("production-migrations-after.json"),
+               record("production-migrations-after.json"),
+               record("production-legacy-migration-schema-evidence-before.json"),
+               record("production-legacy-migration-schema-evidence-after.json"),
               record("production-migrations-terminal.json"),
               record("production-migration-plan.json"),
+              record("production-migration-history-reconciliation.json"),
               record("production-migration-dry-run.txt"),
               record("production-supabase-db-pre-mutation-evidence.json"),
               record("production-supabase-db-attestation.json"),
             ],
             recovery: jobStatus === "success" ? null : {
-              strategy: "forward-only",
-              instruction:
-                "Rerun this exact release. The production history must remain an exact prefix of the signed staged inventory; no automatic rollback or migration repair is permitted.",
+               strategy: "forward-only",
+               instruction:
+                 "Rerun this exact release. Production must satisfy the signed legacy reconciliation and exact post-cutover staged history; no automatic rollback or migration repair is permitted.",
             },
             captured_at: new Date().toISOString(),
           };
@@ -977,24 +1823,80 @@ jobs:
             `${JSON.stringify(evidence, null, 2)}\n`,
           );
           NODE
+          terminal_root="production-database-terminal-evidence-payload"
+          mkdir -p "$terminal_root"
+          for pattern in \
+            production-supabase-db-terminal-evidence.json \
+            'production-supabase-target*.json' \
+             'production-migrations-*.json' \
+             'production-legacy-migration-schema-evidence-*.json' \
+             production-migration-history-reconciliation.json \
+            'production-migration-*.txt' \
+            production-supabase-db-pre-mutation-evidence.json \
+            production-supabase-db-attestation.json; do
+            for file in $pattern; do
+              if [ -f "$file" ]; then
+                cp -- "$file" "$terminal_root/$(basename "$file")"
+              fi
+            done
+          done
 
       - name: Upload production database terminal evidence
+        id: database_terminal_payload_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-supabase-db-terminal-${{ inputs.release_sha }}-${{ inputs.production_run_id }}-${{ inputs.production_run_attempt }}
-          path: |
-            production-supabase-db-terminal-evidence.json
-            production-supabase-target*.json
-            production-migrations-*.json
-            production-migration-*.txt
-            production-supabase-db-pre-mutation-evidence.json
-            production-supabase-db-attestation.json
+          path: production-database-terminal-evidence-payload/
           if-no-files-found: error
           retention-days: 30
 
-      - name: Attest production database terminal evidence
+      - name: Create signed production database terminal binding
+        id: database_terminal_binding
         if: ${{ always() }}
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.database_terminal_payload_upload.outputs.artifact-digest }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.database_terminal_payload_upload.outputs.artifact-id }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          payload_root="production-database-terminal-evidence-payload"
+          binding_root="production-database-terminal-evidence-binding"
+          payload_artifact_name="production-supabase-db-terminal-${RELEASE_SHA}-${PRODUCTION_RUN_ID}-${PRODUCTION_RUN_ATTEMPT}"
+          binding_artifact_name="${payload_artifact_name}-binding"
+          mkdir -p "$binding_root" production-database-terminal-evidence-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > production-database-terminal-evidence-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > production-database-terminal-evidence-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root "$payload_root" \
+            --file-root "$payload_root" \
+            --file production-supabase-db-terminal-evidence.json \
+            --out "$binding_root/release-artifact-binding.json" \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path "$PRODUCTION_CALLER_WORKFLOW_PATH" \
+            --workflow-ref "$GITHUB_REPOSITORY/$PRODUCTION_CALLER_WORKFLOW_PATH@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$payload_artifact_name" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          echo "binding_artifact_name=$binding_artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload signed production database terminal binding
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          subject-path: production-supabase-db-terminal-evidence.json
+          name: ${{ steps.database_terminal_binding.outputs.binding_artifact_name }}
+          path: production-database-terminal-evidence-binding/
+          if-no-files-found: error
+          retention-days: 30

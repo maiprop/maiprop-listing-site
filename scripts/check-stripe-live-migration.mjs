@@ -3,35 +3,14 @@
 /**
  * Live Stripe migration gate.
  *
- * This check is intentionally read-only. It requires a live Stripe secret key
+ * This check is intentionally read-only. It requires a restricted live Stripe key
  * and verifies that live Stripe objects, production Supabase pricing metadata,
  * webhooks, Tax, VAT, and Customer Portal are aligned before real payments are
  * enabled.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-
 import { formatStripeKeyEvidence, getStripeReadOnlyKey } from "./stripe-readiness-env.mjs";
-
-function loadEnvFile(path) {
-  if (!existsSync(path)) return;
-  const contents = readFileSync(path, "utf8");
-  for (const line of contents.split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-    if (!match || match[1].startsWith("#")) continue;
-    let value = match[2].trim();
-    const commentIndex = value.search(/\s#/);
-    if (commentIndex >= 0) value = value.slice(0, commentIndex).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    if (process.env[match[1]] === undefined) process.env[match[1]] = value;
-  }
-}
-
-loadEnvFile(".env");
-loadEnvFile(".env.local");
-loadEnvFile(".stripe.live.env");
+import { createStripeLiveMigrationEvidence } from "./verify-stripe-live-migration-evidence.mjs";
 
 const STRIPE_API_BASE = "https://api.stripe.com";
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION ?? "2026-06-24.dahlia";
@@ -122,11 +101,7 @@ function encodeForm(values) {
 }
 
 function getStripeKey() {
-  const key = getStripeReadOnlyKey(process.env);
-  if (!/^(sk|rk)_live_/.test(key)) {
-    throw new Error("Refusing to run live migration gate without an sk_live_ or rk_live_ Stripe key.");
-  }
-  return key;
+  return getStripeReadOnlyKey(process.env);
 }
 
 async function stripeRequest(path, values = undefined) {
@@ -181,27 +156,35 @@ function keyRole(value) {
 }
 
 function getSupabaseUrl() {
-  const url = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
+  const url = process.env.VITE_SUPABASE_URL ?? "";
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
-    throw new Error("VITE_SUPABASE_URL or SUPABASE_URL must be set to the production Supabase URL.");
+    throw new Error("VITE_SUPABASE_URL must be set to the production Supabase URL.");
   }
   return url.replace(/\/$/, "");
 }
 
-function getSupabaseServiceKey() {
+function getSupabasePublishableKey() {
   for (const name of ["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY", "SB_SERVICE_ROLE_KEY"]) {
-    const value = process.env[name];
-    if (value && keyRole(value) === "service_role") return value;
+    if (String(process.env[name] ?? "").trim()) {
+      throw new Error(`${name} is forbidden for the read-only Stripe readiness producer.`);
+    }
   }
-  throw new Error("A Supabase service-role key is required for pricing metadata verification.");
+  const key = String(process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "").trim();
+  const isPublishable = /^sb_publishable_[A-Za-z0-9_-]+$/.test(key);
+  const isLegacyAnon = keyRole(key) === "anon";
+  if (!isPublishable && !isLegacyAnon) {
+    throw new Error(
+      "VITE_SUPABASE_PUBLISHABLE_KEY must be a Supabase publishable or legacy anon key.",
+    );
+  }
+  return key;
 }
 
 async function supabaseRest(path) {
-  const key = getSupabaseServiceKey();
+  const key = getSupabasePublishableKey();
   const response = await fetch(`${getSupabaseUrl()}${path}`, {
     headers: {
       apikey: key,
-      authorization: `Bearer ${key}`,
       "content-type": "application/json",
     },
     signal: AbortSignal.timeout(30_000),
@@ -403,7 +386,34 @@ async function main() {
     warnings,
   };
 
-  if (process.argv.includes("--json")) {
+  const outputJson = process.argv.includes("--json");
+  const outputEvidence = process.argv.includes("--evidence-json");
+  if (outputJson && outputEvidence) {
+    throw new Error("Choose exactly one of --json or --evidence-json.");
+  }
+
+  if (outputEvidence) {
+    const evidence = createStripeLiveMigrationEvidence({
+      report,
+      stripeKey,
+      apiVersion: STRIPE_API_VERSION,
+      provenance: {
+        repository: process.env.GITHUB_REPOSITORY,
+        release_sha: process.env.RELEASE_SHA,
+        source_tree: process.env.SOURCE_TREE,
+        workflow_path: ".github/workflows/verify-stripe-live-readiness.yml",
+        workflow_ref: process.env.GITHUB_WORKFLOW_REF,
+        workflow_sha: process.env.GITHUB_WORKFLOW_SHA,
+        event: process.env.GITHUB_EVENT_NAME,
+        workflow_run_id: process.env.GITHUB_RUN_ID,
+        workflow_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+        actor: process.env.GITHUB_ACTOR,
+        triggering_actor: process.env.GITHUB_TRIGGERING_ACTOR,
+        evidence_nonce: process.env.RELEASE_EVIDENCE_NONCE,
+      },
+    });
+    console.log(JSON.stringify(evidence, null, 2));
+  } else if (outputJson) {
     console.log(JSON.stringify(report, null, 2));
   } else {
     console.log(formatStripeKeyEvidence(stripeKey));

@@ -55,20 +55,20 @@ add a row here in the same PR.
 |---|---|---|---|---|
 | `LHCI_GITHUB_APP_TOKEN` | Lighthouse CI workflow | GH repo secrets | **365 days** | CI owner |
 | `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` | Playwright e2e | GH repo secrets | On demo-account password change | CI owner |
-| `CLOUDFLARE_API_TOKEN` | GitHub Actions Cloudflare Pages deploys, env sync, rollback | GH repo secrets | **90 days** or on compromise | Platform lead |
-| `CLOUDFLARE_PAGES_READ_TOKEN` | Isolated read-only Pages posture verification | GH repo secrets | **90 days** or on compromise | Platform lead |
-| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Isolated manual lock of Pages Git deployments | GH repo secrets | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_API_TOKEN` | Legacy bootstrap compatibility only; not used by protected release trains | GH repo secrets while legacy bootstrap remains | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_PAGES_READ_TOKEN` | Production Pages posture, deployment, and runtime verification | GH repo and `production` environment secrets | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Production Pages deploy and compare-and-swap rollback | `production` environment secrets | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_STAGING_PAGES_READ_TOKEN` | Read-only staging re-attestation during production promotion | `production` environment secrets | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN` | Staging-only Pages deploy and rollback | `staging` environment secrets | **90 days** or on compromise | Platform lead |
 | `CF_ACCESS_CLIENT_ID` / `CLOUDFLARE_ACCESS_CLIENT_ID` | Deploy smoke checks against Cloudflare Access-protected previews | GH repo or environment secrets | **90 days** or on compromise | Platform lead |
 | `CF_ACCESS_CLIENT_SECRET` / `CLOUDFLARE_ACCESS_CLIENT_SECRET` | Deploy smoke checks against Cloudflare Access-protected previews | GH repo or environment secrets | **90 days** or on compromise | Platform lead |
 | `CF_ACCESS_TOKEN` / `CLOUDFLARE_ACCESS_TOKEN` | Optional pre-issued Cloudflare Access JWT for deploy diagnostics | GH repo or environment secrets | On expiry or compromise | Platform lead |
 | `VITE_STRIPE_PRICE_*` (8 IDs) | `rolePlanMap.ts` fallbacks | Cloudflare Pages env | Only if Stripe products replaced | Finance lead |
 
-The isolated main-only Cloudflare control steps may use
-`CLOUDFLARE_API_TOKEN` as an explicit temporary fallback while the named
-read/edit tokens are absent. After project identity bootstrap, create
-least-privilege `CLOUDFLARE_PAGES_READ_TOKEN` and
-`CLOUDFLARE_PAGES_EDIT_TOKEN`, verify both workflows use them, then rotate the
-legacy token so it is no longer a usable control-plane fallback.
+Protected Cloudflare release jobs fail closed when any named account-scoped
+token is absent. They do not fall back to `CLOUDFLARE_API_TOKEN`. Keep staging
+and production in separate Cloudflare accounts, rotate their credentials
+independently, and never place a staging edit token in the production job.
 
 ---
 
@@ -96,17 +96,18 @@ Record each rotation here. Entries are append-only.
 6. **Append** a row to the rotation log above in the same commit as any
    config change.
 
-### Cloudflare Pages deploy token
+### Cloudflare Pages scoped tokens
 
-Use this for `CLOUDFLARE_API_TOKEN`, especially after any chat, log, or
-terminal exposure.
+Use this for each named staging or production Pages token, especially after any
+chat, log, or terminal exposure.
 
-1. Create a new Cloudflare API token from the dashboard using the **Edit
-   Cloudflare Pages** template, scoped to the correct account and Pages
-   project.
-2. Update the GitHub repository secret `CLOUDFLARE_API_TOKEN`.
-3. Run a same-repo PR preview deploy or production workflow dispatch to
-   prove the token can deploy and sync Pages runtime variables.
+1. Create a read-only or edit Cloudflare API token with only the permissions
+   required by its named workflow, scoped to the correct account.
+2. Update the corresponding GitHub environment secret. Do not reuse the token
+   across staging and production accounts.
+3. Run the read-only posture workflow first, then the exact-artifact staging or
+   production workflow appropriate to that token. Runtime bindings remain
+   pre-provisioned and are never synchronized by the release train.
 4. Revoke the exposed token in Cloudflare immediately after the new token is
    verified.
 5. Review Cloudflare Audit Logs for the exposure window.

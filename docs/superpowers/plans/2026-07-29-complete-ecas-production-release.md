@@ -33,8 +33,10 @@ promoted to production in this order:
 - Secrets are passed explicitly to reusable workflows. No `secrets: inherit`.
 - No candidate branch receives live provider secrets. Provider posture checks
   execute only from a workflow SHA independently verified as current `main`.
-- Production workflows use the protected `production` environment and the
-  shared `maiprop-production-release` concurrency group.
+- Production workflows use repository-secret HMAC artifact bindings,
+  independent approver/deployer allowlists, attempt-one actor checks, and the
+  shared `maiprop-production-release` concurrency group. Protected-environment
+  claims are not part of the control boundary on the private GitHub Free plan.
 - New behavior is developed test-first and all workflow YAML is parsed in tests.
 - The final pushed commit begins with `[CF-Pages-Skip]`.
 
@@ -50,10 +52,11 @@ promoted to production in this order:
 - Add a manual production approval workflow that:
   - accepts a full release SHA and exact confirmation text;
   - proves current `main`, successful CI, and signed staging evidence;
-  - runs in a protected approval environment;
+  - runs only from verified current `main` under an allowlisted actor;
   - writes a short-lived approval JSON tied to SHA, artifact digest, staging
     run, approval run, and `github.actor`;
-  - attests and uploads the approval artifact.
+  - HMAC-binds and uploads the approval artifact plus immutable GitHub artifact
+    metadata.
 - Add CLI modes and tests for selecting the approval run, validating the
   approval artifact, and validating a run-scoped mutation lease.
 
@@ -62,7 +65,7 @@ promoted to production in this order:
 - Replace the database and Edge fail-closed stubs with workflow-call-only
   reusable workflows.
 - Both workflows check out the exact SHA, download and verify the signed staging
-  attestation and current-run mutation lease, prove the fixed production target,
+  binding and current-run mutation lease, prove the fixed production target,
   and revalidate current `main` immediately before mutation.
 - Database promotion compares migration history before apply, applies only the
   staged exact inventory, then proves exact history, generated types, index
@@ -91,7 +94,7 @@ promoted to production in this order:
 - Wire the production entrypoint to validate the signed staging and approval
   artifacts, issue the run-scoped mutation lease, and call database, Edge, and
   Cloudflare workflows in order.
-- Add a final signed production release evidence aggregate.
+- Add a final HMAC-bound production release evidence aggregate.
 - Keep direct Cloudflare recovery exact-SHA and same-run-backend-proof gated;
   recovery deploys the existing signed CI artifact and never rebuilds.
 - Update release-safety inventory, runbooks, and workflow contract tests.

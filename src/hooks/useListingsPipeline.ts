@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useListingsPaginated, type ListingsFilters, type ListingWithJoins } from "@/hooks/useListings";
 import { listingToCard } from "@/lib/listingsCardUtils";
-import { toast } from "sonner";
 
 const MAP_AUTO_PAGE_BUDGET = 3;
 
@@ -77,6 +76,7 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
   const paginated = useListingsPaginated(serverFilters, { enabled: true });
   const loadedPageCount = paginated.data?.pages.length ?? 0;
   const fetchNextPage = paginated.fetchNextPage;
+  const refetch = paginated.refetch;
   const hasNextPage = !!paginated.hasNextPage;
   const isFetchingNextPage = !!paginated.isFetchingNextPage;
   const queryIsError = !!paginated.isError;
@@ -88,7 +88,6 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
   const isLoading = paginated.isLoading;
   const isFetchNextPageError = !!paginated.isFetchNextPageError;
   const isError = queryIsError && !isFetchNextPageError;
-  const error = paginated.error;
 
   useEffect(() => {
     if (
@@ -146,12 +145,6 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
     viewMode,
   ]);
 
-  useEffect(() => {
-    if (isError && error) {
-      toast.error("Could not load listings. Please try again.");
-    }
-  }, [isError, error]);
-
   const sourceListings = useMemo(() => dbListings.map(listingToCard), [dbListings]);
 
   const filtered = useMemo(() => {
@@ -203,6 +196,8 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
     isFetchingNextPage,
     /** Trigger fetching the next cursor page. */
     fetchNextPage,
+    /** Retry the active catalogue query without reloading the application. */
+    refetch,
     /** Mount on the bottom-of-list sentinel `<div>` so infinite-scroll auto-loads. */
     sentinelRef,
   };

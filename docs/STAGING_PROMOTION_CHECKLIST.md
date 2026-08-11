@@ -8,9 +8,11 @@ until every gate below has an owner and a recorded result.
 
 - [ ] Confirm the branch under review is not `main`.
 - [ ] Confirm no command in the review used `supabase db push`, `supabase functions deploy`, Cloudflare deploy, or production data mutation.
-- [ ] Confirm `deploy-edge-functions.yml` is manual-only and dry-run by default.
+- [ ] Confirm database, Edge, and Cloudflare production workflows are reusable-call-only boundaries.
 - [ ] Confirm destructive E2E tests require `E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS=true` and an allowlisted non-production project ref.
 - [ ] Record the live Supabase project ref and the staging Supabase project ref.
+- [ ] Confirm `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_STAGING_ACCOUNT_ID` are present, belong to dedicated production/staging accounts, and differ.
+- [ ] Confirm production promotion has only staging read credentials; staging edit credentials remain confined to the staging environment.
 
 ## Clean Verification
 
@@ -40,6 +42,17 @@ Expected result: every command exits 0.
 
 ## Migration Preflight
 
+- [ ] Confirm `supabase/reconciliation/production-history-v1.json` still names
+      the exact reviewed legacy anomalies and binds every canonical SQL hash.
+- [ ] Confirm staging uses one dry-run and one lease-bound `supabase db push`;
+      reject any workflow containing `supabase migration repair` or a direct write
+      to `supabase_migrations.schema_migrations`.
+- [ ] Capture the read-only legacy schema evidence and pgTap convergence proof;
+      bind both digests into the signed staging database attestation.
+- [ ] Confirm production preflight accepts only the fixed manifest, applies the
+      forward cutover migration normally, and requires its post-apply schema
+      evidence to equal the signed staging evidence byte for byte.
+
 Before applying migrations to staging or production, run read-only duplicate checks:
 
 ```sql
@@ -66,6 +79,13 @@ applying constraints.
 - [ ] Apply migrations to staging only.
 - [ ] Deploy edge functions to staging only.
 - [ ] Deploy the frontend to staging only.
+- [ ] Confirm the canonical production N-1 identity and attempt-qualified CI artifact were captured before the first staging mutation.
+- [ ] Run the captured N-1 frontend against the newly staged Supabase database and Edge Functions; require zero skipped, unexpected, or flaky catalogue tests.
+- [ ] Verify the immutable deployment URL and stable staging origin both pass public API latency and payload budgets.
+- [ ] Verify homepage, listings, auctions, and open houses render live staged data; homepage auction identity routes to the same auction detail and AI Market Insights is visible.
+- [ ] Reject any catalogue proof that calls direct `/rest/v1/listings` or `fetch-os-auctions` authority fallbacks.
+- [ ] Require exact-SHA LCP <= 3000 ms, CLS <= 0.1, INP <= 200 ms, and per-route Supabase query budgets for homepage, listings, auctions, and open houses.
+- [ ] Verify staging and production Pages runtime bindings were pre-provisioned and attested read-only; reject any release-train project-settings PATCH.
 - [ ] Run `node scripts/check-supabase-types-freshness.cjs --strict` against the staging project.
 - [ ] Run staging RLS/security E2E.
 - [ ] Run `npm run test:e2e:live-smoke` for account deletion auth, checkout eligibility, role approval, firesale, and open-house smoke coverage.
@@ -80,8 +100,15 @@ Production is eligible only after staging is green:
 - [ ] Branch protection requires quality, release-safety, E2E, migration validation, staging security, Lighthouse, and build jobs.
 - [ ] Live inventory drift has an approved disposition.
 - [ ] Migration preflight queries return zero rows in production.
-- [ ] Run `.github/workflows/deploy-edge-functions.yml` from `main` with `dry_run=true`; review the target list before any production edge deploy.
-- [ ] If production edge functions must deploy, rerun the same workflow with explicit function names, or set `confirm_deploy_all=true` only for an approved full redeploy.
+- [ ] Confirm **Immutable release candidate built** and the signed staging aggregate refer to the exact current `main` SHA and explicit run attempts.
+- [ ] Obtain a signed approval from an allowlisted actor who is not the deployment actor.
+- [ ] Dispatch only `.github/workflows/deploy-production-release.yml` with the full current-main SHA and `DEPLOY_PRODUCTION_RELEASE`.
+- [ ] Confirm database, Edge, and Cloudflare jobs consume the same artifact and manifest digests and attempt-qualified evidence.
+- [ ] Confirm the captured production rollback deployment ID/SHA still matches canonical production immediately before deploy and differs from the candidate SHA.
+- [ ] Confirm rollback authorization is bound to the exact rollback ID/SHA and candidate ID/SHA and refuses a newer or unrelated canonical deployment.
+- [ ] Confirm the signed schema-v4 staging aggregate binds N-1 compatibility and catalogue endpoint/route/CWV/query evidence digests.
+- [ ] Confirm the signed terminal aggregate reports `release_status=passed` and `rollback_performed=false`.
+- [ ] Use direct Cloudflare recovery only when one prior coordinated run attempt proves both database and Edge success; require a fresh approval and never rebuild the candidate.
 - [ ] Rollback owner and on-call owner are named.
 - [ ] A rollback path is recorded for frontend, edge functions, and database compensating migrations.
 

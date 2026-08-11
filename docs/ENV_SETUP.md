@@ -237,6 +237,14 @@ Rotation cadence for each is documented in [`SECRETS_ROTATION.md`](./SECRETS_ROT
 
 Under Settings → Secrets and variables → Actions:
 
+This private repository currently uses GitHub Free. Production workflows must
+therefore read credentials from repository secrets and enforce attempt-one
+actors, independent allowlists, exact current-`main` SHA checks, signed HMAC
+artifact bindings, and run-scoped mutation leases in code. Do not describe a
+repository secret as protected merely because an environment with the same
+name exists; private-repository environment approval rules are not part of the
+active control boundary on this plan.
+
 GitHub Actions also sets `CI=true` automatically. Playwright uses this to run
 against the production preview server on port `4173` and to enable stricter
 fail-fast behavior.
@@ -253,10 +261,13 @@ or override it in repository secrets.
 | `LHCI_GITHUB_APP_TOKEN` | Lighthouse CI status checks | repo. See `LIGHTHOUSE_CI_SETUP.md` |
 | `GITHUB_TOKEN` | GitHub-provided token used by secret scanning | automatic |
 | `GITLEAKS_LICENSE` | optional Gitleaks license for enhanced scanning | repo |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare Pages production/preview deploy; temporary fallback for isolated Pages lock verification/mutation until least-privilege tokens are provisioned | repository secret and production environment as required |
-| `CLOUDFLARE_PAGES_READ_TOKEN` | Preferred read-only token for isolated Pages posture verification; rotate away from the legacy fallback after bootstrap | GitHub repository secret |
-| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Preferred Pages project edit token used only by the isolated, manual Git-deploy lock workflow; exact ID pins remain mandatory | GitHub repository secret |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account for Pages deploy and isolated posture control jobs | GitHub repository secret and production environment as required |
+| `CLOUDFLARE_API_TOKEN` | Legacy compatibility token only; protected staging and production release trains use the scoped credentials below | repository secret only while legacy workflows still require it |
+| `CLOUDFLARE_PAGES_READ_TOKEN` | Read-only production Pages token used for exact project, deployment, runtime-binding, and rollback-state verification | repository secret |
+| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Production Pages edit token used only after the exact-SHA production guard and for compare-and-swap rollback | repository secret |
+| `CLOUDFLARE_ACCOUNT_ID` | Production Cloudflare account; must differ from `CLOUDFLARE_STAGING_ACCOUNT_ID` | repository secret |
+| `CLOUDFLARE_STAGING_ACCOUNT_ID` | Dedicated staging Cloudflare account; equality with the production account fails the release train | repository secret |
+| `CLOUDFLARE_STAGING_PAGES_READ_TOKEN` | Read-only staging Pages token used by production promotion to verify the approved staging deployment | repository secret |
+| `CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN` | Staging-only Pages edit token used to deploy and roll back the staging project | repository secret |
 | `CLOUDFLARE_PAGES_PROJECT` | Cloudflare Pages project used by live posture capture | audit environment |
 | `CLOUDFLARE_PAGES_PROJECT_ID` | Exact immutable ID for `maiprop-listing-site`; read-only verification uploads the discovered ID then fails when absent, while mutation requires it before PATCH | repository variable |
 | `CLOUDFLARE_STAGING_PAGES_PROJECT_ID` | Exact immutable ID for `maiprop-listing-site-staging`; bootstrapped through minimized read evidence and required to differ from production before mutation | repository variable |
@@ -265,18 +276,18 @@ or override it in repository secrets.
 | `CF_ACCESS_CLIENT_ID` / `CLOUDFLARE_ACCESS_CLIENT_ID` | optional Cloudflare Access service-token client id for protected preview/production deploy smoke checks | repo or environment scoped to deploy jobs |
 | `CF_ACCESS_CLIENT_SECRET` / `CLOUDFLARE_ACCESS_CLIENT_SECRET` | optional Cloudflare Access service-token secret paired with the client id above; required when either client-id alias is set | repo or environment scoped to deploy jobs |
 | `CF_ACCESS_TOKEN` / `CLOUDFLARE_ACCESS_TOKEN` | optional pre-issued Cloudflare Access JWT for deploy smoke checks when service-token headers are not used | repo or environment scoped to deploy jobs |
-| `VITE_SUPABASE_URL` | production Vite build Supabase URL | production environment |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | production Vite build anon/publishable key | production environment |
-| `VITE_SUPABASE_PROJECT_ID` | production Supabase project ref | production environment |
+| `VITE_SUPABASE_URL` | production Vite build Supabase URL | repository secret |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | production Vite build anon/publishable key | repository secret |
+| `VITE_SUPABASE_PROJECT_ID` | production Supabase project ref | repository secret |
 | `VITE_SUPABASE_PROJECT_URL` | legacy alias for `VITE_SUPABASE_URL`; prefer `VITE_SUPABASE_URL` | local/test only |
-| `VITE_MAPBOX_TOKEN` | optional map token for production build | production environment |
-| `VITE_SENTRY_DSN` | optional browser Sentry DSN | production environment |
-| `VITE_STRIPE_PRO_PRODUCT_ID` | optional Stripe product id for subscription checks | production environment |
-| `VITE_TURNSTILE_SITE_KEY` | optional Turnstile site key | production environment |
-| `VITE_GOOGLE_MAPS_API_KEY` | optional browser Google Maps key; see browser-key restrictions above | production environment |
+| `VITE_MAPBOX_TOKEN` | optional map token for production build | repository secret |
+| `VITE_SENTRY_DSN` | optional browser Sentry DSN | repository secret |
+| `VITE_STRIPE_PRO_PRODUCT_ID` | optional Stripe product id for subscription checks | repository secret |
+| `VITE_TURNSTILE_SITE_KEY` | optional Turnstile site key | repository secret |
+| `VITE_GOOGLE_MAPS_API_KEY` | optional browser Google Maps key; see browser-key restrictions above | repository secret |
 | `VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE` | optional `true` flag for Google Places autocomplete; leave false/unset to use Nominatim suggestions | production/staging build |
-| `VITE_PLAUSIBLE_DOMAIN` | optional analytics domain | production environment |
-| `VITE_APP_URL` | canonical app origin for production build | production environment |
+| `VITE_PLAUSIBLE_DOMAIN` | optional analytics domain | repository secret |
+| `VITE_APP_URL` | canonical app origin for production build | repository secret |
 | `VITE_PUBLIC_API_ORIGIN` | optional absolute origin for cached `/api/public/*` routes in bundled Capacitor apps over native HTTP; browser builds ignore it; defaults to `VITE_APP_URL` for native calls | production/staging build |
 | `CLOUDFLARE_TURN_KEY_ID` | server-only Cloudflare Realtime TURN key ID; configure as encrypted Pages binding, never `VITE_*` | production/staging Pages runtime |
 | `CLOUDFLARE_TURN_API_TOKEN` | server-only API token used by `/api/turn-credentials`; configure as encrypted Pages binding | production/staging Pages runtime |
@@ -285,11 +296,20 @@ or override it in repository secrets.
 | `CAPACITOR_APP_ID` | Android package id override; default is `co.maiprop.portal.mobile` | Android WebView APK workflow |
 | `CAPACITOR_APP_NAME` | Android app label override; default is `MaiProp Portal` | Android WebView APK workflow |
 | `CAPACITOR_SERVER_URL` | remote web origin for non-bundled Capacitor builds; default is `https://portal.maiprop.co` | Android WebView APK workflow |
-| `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate | production environment |
+| `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate | repository secret and encrypted Pages binding |
 | `STAGING_SUPABASE_URL` | optional isolated staging Supabase URL for security/E2E jobs; PR preview deploys require it to be a non-production Supabase URL matching `STAGING_SUPABASE_PROJECT_ID` | repo or staging environment |
 | `STAGING_SUPABASE_PUBLISHABLE_KEY` | optional isolated staging anon/publishable key; PR preview deploys are skipped when it matches the production key | repo or staging environment |
 | `STAGING_SUPABASE_PROJECT_ID` | optional isolated staging Supabase project ref; if absent, matching production, or mismatched from `STAGING_SUPABASE_URL`, CI treats the setup as production-only and skips staging/preview deploys | repo or staging environment |
 | `PRODUCTION_SUPABASE_PROJECT_ID` | production Supabase project ref used only as a non-secret comparison guard; staging release workflows reject any target that matches it | repository variable |
+| `RELEASE_EVIDENCE_SIGNING_KEY` | random secret of at least 32 bytes used only to HMAC-sign release artifact bindings; rotate with a new key ID and never expose it to application runtime | repository secret |
+| `RELEASE_EVIDENCE_SIGNING_KEY_ID` | non-secret identifier for the active release-evidence HMAC key; the key ID is covered by the signature and must match at every consumer | repository variable |
+| `PRODUCTION_RELEASE_APPROVERS` | comma-separated GitHub logins allowed to issue an independent short-lived approval; the selected approver must differ from the deployer | repository variable |
+| `PRODUCTION_RELEASE_DEPLOYERS` | comma-separated GitHub logins allowed to dispatch production; each dispatch must be attempt one by the original actor | repository variable |
+| `PRODUCTION_RELEASE_ENABLED` | exact lowercase `true` enables the final production dispatcher only after provider identities, secrets, staging evidence, Stripe live readiness, and an independent approval are valid; otherwise keep unset or `false` | repository variable |
+| `STRIPE_RESTRICTED_KEY` | live restricted key (`rk_live_...`) used only by the manual Stripe live-readiness workflow; test, standard secret, and fallback key forms are rejected | repository secret |
+| `STRIPE_EXPECTED_ACCOUNT_ID` | exact live Stripe account ID expected by the live-readiness workflow | repository variable |
+| `STRIPE_COMPANY_VAT_ID` | expected company VAT identifier checked by live readiness when configured | repository variable |
+| `STRIPE_WEBHOOK_EXPECTED_URL` | exact production Stripe webhook endpoint expected by live readiness | repository variable |
 | `STAGING_RELEASE_ENABLED` | exact lowercase `true` enables the automatic staging release train only after every prerequisite is provisioned; any other value keeps staging mutation disabled | repository variable |
 | `STAGING_TRUSTED_CONTROL_SHA` | full manually approved `main` SHA containing the staging workflows; must equal both `github.workflow_sha` and the exact release SHA before any privileged staging job can start | repository variable |
 | `STAGING_MUTATION_ACKNOWLEDGEMENT` | non-secret staging-only mutation acknowledgement; must equal `MUTATE_STAGING_xsiehskfgeoqyazcgauv` and is independently checked before every staging mutation | repository variable |
@@ -304,7 +324,7 @@ or override it in repository secrets.
 | `MAIPROP_NODE20_HOME` | optional local path override for `scripts/project-runtime.mjs`; point it at the directory containing the pinned Node 20 `node` and npm binaries when PATH/Volta/Scoop discovery is not enough | local developer shell only |
 | `SUPABASE_STAGING_DB_URL` | optional isolated staging Postgres connection string for CI `supabase db push --db-url`; only required when `STAGING_SUPABASE_PROJECT_ID` points to a real non-production staging project and migrations change | staging environment only |
 | `SUPABASE_STAGING_EFFECTIVE_DB_URL` | CI-generated staging Postgres connection string after resolving `SUPABASE_STAGING_DB_URL` or the Supabase Management API pooler URL; do not set manually outside the workflow | GitHub Actions generated runtime env |
-| `SUPABASE_PRODUCTION_DB_URL` | percent-encoded production Postgres connection string used only by the manual production DB migration workflow; keep scoped to the protected `production` environment | production environment |
+| `SUPABASE_PRODUCTION_DB_URL` | optional percent-encoded production Postgres connection string used only by the manual production DB migration workflow | repository secret; prefer the fixed project ref plus scoped Supabase access token when the workflow supports it |
 | `SUPABASE_PROJECT_REF` | optional project ref alias used by release-safety live inventory | manual release certification |
 | `RELEASE_SAFETY_SUPABASE_PROJECT_REF` | optional project ref override for release-safety live inventory; defaults to `supabase/config.toml` `project_id` when unset | manual release certification |
 | `SUPABASE_MANAGEMENT_API_BASE` | optional override for Supabase Management API advisor checks; defaults to `https://api.supabase.com/v1` | local/CI diagnostics only |

@@ -23,17 +23,39 @@ function stagingStepBlock(name: string): string {
 }
 
 describe("production Edge Function deploy workflow", () => {
-  it("promotes exact artifact Edge source through a protected reusable workflow", () => {
-    const parsed = yaml.load(workflow) as { concurrency?: unknown };
+  it("promotes exact artifact Edge source through a signed reusable workflow", () => {
+    const parsed = yaml.load(workflow) as {
+      on: {
+        workflow_call: {
+          secrets?: Record<string, { required: boolean }>;
+        };
+      };
+      permissions?: Record<string, string>;
+      concurrency?: unknown;
+      jobs: { deploy: { environment?: unknown } };
+    };
 
     expect(workflow).toContain("workflow_call:");
     expect(workflow).not.toContain("workflow_dispatch:");
     expect(parsed.concurrency).toBeUndefined();
-    expect(workflow).toContain("environment: production");
+    expect(parsed.jobs.deploy.environment).toBeUndefined();
+    expect(parsed.permissions).toEqual({ actions: "read", contents: "read" });
+    expect(parsed.on.workflow_call.secrets?.RELEASE_EVIDENCE_SIGNING_KEY).toEqual({
+      required: true,
+    });
     expect(workflow).toContain('PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"');
     expect(workflow).toContain("Download immutable release candidate");
-    expect(workflow).toContain("Verify signed staging release attestation");
-    expect(workflow).toContain("Verify production database evidence");
+    expect(workflow).toContain("Verify signed provider artifact bindings");
+    expect(workflow).toContain("database_binding_artifact:");
+    expect(workflow).toContain("production-database/release-artifact-binding.json");
+    expect(workflow).toContain(
+      "production-migration-history-reconciliation.json",
+    );
+    expect(workflow).toContain(
+      "evidence.canonical_history_reconciliation?.ok !== true",
+    );
+    expect(workflow).toContain("staging_is_exact_candidate");
+    expect(workflow).toContain("production_is_canonical_prefix");
     expect(workflow).toContain("Validate current production mutation lease");
     expect(workflow).toContain("Revalidate current main and mutation lease before Edge mutation");
     expect(workflow).toContain("--supabase-workdir release-candidate");
@@ -45,7 +67,14 @@ describe("production Edge Function deploy workflow", () => {
     expect(workflow).toContain("buildEdgeForwardConvergencePlan");
     expect(workflow).toContain("production-edge-deploy-progress.jsonl");
     expect(workflow).toContain("--require-live-source-evidence");
-    expect(workflow).toContain("actions/attest-build-provenance@");
+    expect(workflow).toContain("scripts/verify-release-artifact-binding.mjs");
+    expect(workflow).toContain("scripts/create-release-artifact-binding.mjs");
+    expect(workflow).toContain("Create signed production Edge terminal binding");
+    expect(workflow).not.toContain("actions/attest-build-provenance@");
+    expect(workflow).not.toContain("gh attestation");
+    expect(workflow).not.toContain("attestations: write");
+    expect(workflow).not.toContain("id-token: write");
+    expect(workflow).not.toContain("artifact-metadata: write");
     expect(workflow).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
     expect(stagingWorkflow).toMatch(
       /npx --no-install supabase --workdir release-candidate functions deploy \\\n+\s+--use-api \\\n+\s+--project-ref/,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   parseRuntimeConfigScript,
+  validateProductionRuntimeConfig,
   validateRuntimeConfig,
 } from "./verify-runtime-config.mjs";
 
@@ -35,7 +36,41 @@ const productionStripeBindings = {
     type: "plain_text",
     value: "price_production_participant_monthly",
   },
+  VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL: {
+    type: "plain_text",
+    value: "price_production_participant_annual",
+  },
+  VITE_STRIPE_PRICE_AGENT_MONTHLY: {
+    type: "plain_text",
+    value: "price_production_agent_monthly",
+  },
+  VITE_STRIPE_PRICE_AGENT_ANNUAL: {
+    type: "plain_text",
+    value: "price_production_agent_annual",
+  },
+  VITE_STRIPE_PRICE_DEVELOPER_MONTHLY: {
+    type: "plain_text",
+    value: "price_production_developer_monthly",
+  },
+  VITE_STRIPE_PRICE_DEVELOPER_ANNUAL: {
+    type: "plain_text",
+    value: "price_production_developer_annual",
+  },
+  VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY: {
+    type: "plain_text",
+    value: "price_production_professional_monthly",
+  },
+  VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL: {
+    type: "plain_text",
+    value: "price_production_professional_annual",
+  },
 };
+const productionStripeValues = Object.fromEntries(
+  Object.entries(productionStripeBindings).map(([name, binding]) => [
+    name,
+    binding.value,
+  ]),
+);
 
 describe("runtime config verification", () => {
   it("parses and accepts the exact isolated staging runtime", () => {
@@ -193,5 +228,60 @@ describe("runtime config verification", () => {
         expected,
       ),
     ).toThrow(/VITE_APP_URL/);
+  });
+
+  it("proves the production runtime matches API-attested live bindings", () => {
+    const productionExpected = {
+      supabaseUrl: "https://qvvicunqcrwpioqnvzxf.supabase.co",
+      supabaseProjectId: "qvvicunqcrwpioqnvzxf",
+      supabasePublishableKey: "production-publishable-key",
+      appUrl: "https://portal.maiprop.co",
+    };
+    const config = {
+      VITE_SUPABASE_URL: productionExpected.supabaseUrl,
+      VITE_SUPABASE_PROJECT_ID: productionExpected.supabaseProjectId,
+      VITE_SUPABASE_PUBLISHABLE_KEY:
+        productionExpected.supabasePublishableKey,
+      VITE_APP_URL: productionExpected.appUrl,
+      VITE_PUBLIC_API_ORIGIN: productionExpected.appUrl,
+      VITE_STRIPE_PUBLISHABLE_KEY: "pk_live_production_public_key",
+      VITE_STRIPE_RUNTIME_MODE: "live",
+      VITE_BILLING_MODE: "live",
+      VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY:
+        "price_production_participant_monthly",
+      VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL:
+        "price_production_participant_annual",
+      VITE_STRIPE_PRICE_AGENT_MONTHLY: "price_production_agent_monthly",
+      VITE_STRIPE_PRICE_AGENT_ANNUAL: "price_production_agent_annual",
+      VITE_STRIPE_PRICE_DEVELOPER_MONTHLY:
+        "price_production_developer_monthly",
+      VITE_STRIPE_PRICE_DEVELOPER_ANNUAL:
+        "price_production_developer_annual",
+      VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY:
+        "price_production_professional_monthly",
+      VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL:
+        "price_production_professional_annual",
+    };
+
+    const evidence = validateProductionRuntimeConfig(
+      config,
+      productionExpected,
+      productionStripeBindings,
+      productionStripeValues,
+    );
+    expect(evidence.stripe_runtime).toEqual({
+      status: "live",
+      publishable_key: "live",
+      runtime_mode: "live",
+      billing_mode: "live",
+      price_binding_count: 8,
+      api_binding_match: true,
+    });
+    expect(JSON.stringify(evidence)).not.toContain(
+      "pk_live_production_public_key",
+    );
+    expect(JSON.stringify(evidence)).not.toContain(
+      "production-publishable-key",
+    );
   });
 });

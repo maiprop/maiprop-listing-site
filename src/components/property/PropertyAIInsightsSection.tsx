@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
 import { UNLIMITED_AI_LIMIT } from "@/hooks/useAiQuota";
 import type { AIInsightsQuota } from "@/hooks/usePropertyAIInsights";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 interface AIInsightsData {
   vsMarket: number | null;
@@ -36,31 +38,60 @@ interface Props {
   listingType?: string | null;
 }
 
-const COMPARISON_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+const COMPARISON_CONFIG: Record<string, { labelKey: string; fallbackLabel: string; color: string; bg: string }> = {
   below_market: {
-    label: "Below Market",
+    labelKey: "propertyAIInsights.comparison.belowMarket",
+    fallbackLabel: "Below Market",
     color: "text-emerald-400",
     bg: "bg-emerald-400/10 border-emerald-400/20",
   },
   at_market: {
-    label: "At Market",
+    labelKey: "propertyAIInsights.comparison.atMarket",
+    fallbackLabel: "At Market",
     color: "text-yellow-400",
     bg: "bg-yellow-400/10 border-yellow-400/20",
   },
   above_market: {
-    label: "Above Market",
+    labelKey: "propertyAIInsights.comparison.aboveMarket",
+    fallbackLabel: "Above Market",
     color: "text-destructive",
     bg: "bg-destructive/10 border-destructive/20",
   },
 };
 
-function formatQuotaText(quota: AIInsightsQuota | null | undefined, isPro: boolean, quotaLoading?: boolean) {
-  if (quotaLoading) return "Checking AI request allowance...";
-  if (!quota) return "AI request allowance will be checked before loading.";
-  if (quota.limit >= UNLIMITED_AI_LIMIT) return "Unlimited AI insight requests this month";
-  const tier = isPro ? "Pro" : "Free";
-  return `${Math.max(quota.limit - quota.used, 0)} of ${quota.limit} ${tier} AI insight requests remaining this month`;
+function formatQuotaText(
+  t: TFunction,
+  quota: AIInsightsQuota | null | undefined,
+  isPro: boolean,
+  quotaLoading?: boolean,
+) {
+  if (quotaLoading) return t("propertyAIInsights.quota.checking", "Checking AI request allowance...");
+  if (!quota) return t("propertyAIInsights.quota.pending", "AI request allowance will be checked before loading.");
+  if (quota.limit >= UNLIMITED_AI_LIMIT) {
+    return t("propertyAIInsights.quota.unlimited", "Unlimited AI insight requests this month");
+  }
+  return t(
+    isPro ? "propertyAIInsights.quota.remainingPro" : "propertyAIInsights.quota.remainingFree",
+    {
+      remaining: Math.max(quota.limit - quota.used, 0),
+      limit: quota.limit,
+    },
+  );
 }
+
+const CONFIDENCE_KEYS: Record<string, { key: string; fallback: string }> = {
+  low: { key: "propertyAIInsights.confidence.low", fallback: "Low" },
+  medium: { key: "propertyAIInsights.confidence.medium", fallback: "Medium" },
+  high: { key: "propertyAIInsights.confidence.high", fallback: "High" },
+  verylow: { key: "propertyAIInsights.confidence.veryLow", fallback: "Very Low" },
+  veryhigh: { key: "propertyAIInsights.confidence.veryHigh", fallback: "Very High" },
+};
+
+const localizeConfidence = (t: TFunction, confidence: string): string => {
+  const normalized = confidence.toLowerCase().replace(/[\s_-]+/g, "");
+  const translation = CONFIDENCE_KEYS[normalized];
+  return translation ? t(translation.key, translation.fallback) : confidence;
+};
 
 export function PropertyAIInsightsSection({
   user,
@@ -75,33 +106,40 @@ export function PropertyAIInsightsSection({
   limitReached = false,
   listingType,
 }: Props) {
+  const { t, i18n } = useTranslation();
   const isRental = listingType?.toLowerCase() === "rent";
   const quotaReached = limitReached || (!!quota && quota.limit < UNLIMITED_AI_LIMIT && quota.used >= quota.limit);
-  const loadLabel = data ? "Refresh AI insights" : "Load AI insights";
-  const quotaText = formatQuotaText(quota, isPro, quotaLoading);
+  const loadLabel = data
+    ? t("propertyAIInsights.actions.refresh", "Refresh AI insights")
+    : t("propertyAIInsights.actions.load", "Load AI insights");
+  const quotaText = formatQuotaText(t, quota, isPro, quotaLoading);
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const numberLocale = isGreek ? "el-GR" : "en-GB";
+  const monthUnit = t("propertyAIInsights.units.month", "mo");
+  const unavailable = t("propertyAIInsights.unavailable", "Unavailable");
   const rentPerSqm = data?.pricePerSqmEstimate
-    ? `€${data.pricePerSqmEstimate.toLocaleString("el-GR", { maximumFractionDigits: 2 })}/m²/mo`
-    : "Unavailable";
+    ? `€${data.pricePerSqmEstimate.toLocaleString(numberLocale, { maximumFractionDigits: 2 })}/m²/${monthUnit}`
+    : unavailable;
   const aiEstimate = data?.estimatedValue == null
-    ? "Unavailable"
+    ? unavailable
     : isRental
-      ? `${formatPrice(data.estimatedValue)}/mo`
+      ? `${formatPrice(data.estimatedValue)}/${monthUnit}`
       : formatPrice(data.estimatedValue);
 
   return (
     <Section>
       <SectionHeader
         icon={Zap}
-        title="AI Market Insights"
-        badge={<span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>}
+        title={t("propertyAIInsights.title", "AI Market Insights")}
+        badge={<span className="text-[10px] text-muted-foreground">{t("propertyAIInsights.poweredBy", "Powered by mAI Prop OS")}</span>}
       />
       <div className="p-5 space-y-4">
-        {!user && <SignInForAI feature="AI Market Insights" />}
+        {!user && <SignInForAI feature={t("propertyAIInsights.title", "AI Market Insights")} />}
 
         {user && (
           <div className="flex flex-col gap-3 rounded-xl border border-border bg-secondary/40 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-foreground">Run AI analysis when you need it</p>
+              <p className="text-xs font-semibold text-foreground">{t("propertyAIInsights.prompt", "Run AI analysis when you need it")}</p>
               <p className="mt-1 text-xs text-muted-foreground">{quotaText}</p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -110,13 +148,13 @@ export function PropertyAIInsightsSection({
                   {!isPro && (
                     <Button asChild size="sm" className="gap-2">
                       <Link to="/pricing">
-                        Upgrade to Pro
+                        {t("propertyAIInsights.actions.upgrade", "Upgrade to Pro")}
                         <ArrowUpRight className="w-3.5 h-3.5" />
                       </Link>
                     </Button>
                   )}
                   <Button asChild size="sm" variant={isPro ? "default" : "outline"}>
-                    <Link to="/dashboard?tab=billing&addon=valuation_single">Buy AI add-on</Link>
+                    <Link to="/dashboard?tab=billing&addon=valuation_single">{t("propertyAIInsights.actions.buyAddon", "Buy AI add-on")}</Link>
                   </Button>
                 </>
               ) : (
@@ -134,7 +172,7 @@ export function PropertyAIInsightsSection({
                   ) : (
                     <Sparkles className="w-3.5 h-3.5" />
                   )}
-                  {loading ? "Loading insights..." : loadLabel}
+                  {loading ? t("propertyAIInsights.actions.loading", "Loading insights...") : loadLabel}
                 </Button>
               )}
             </div>
@@ -144,7 +182,7 @@ export function PropertyAIInsightsSection({
         {user && loading && (
           <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="text-xs">Analysing market data...</span>
+            <span className="text-xs">{t("propertyAIInsights.analysing", "Analysing market data...")}</span>
           </div>
         )}
 
@@ -155,42 +193,65 @@ export function PropertyAIInsightsSection({
           const cmp = hasMarketComparison
             ? COMPARISON_CONFIG[marketComparison] ?? COMPARISON_CONFIG.at_market
             : {
-                label: "Unavailable",
+                labelKey: "propertyAIInsights.unavailable",
+                fallbackLabel: "Unavailable",
                 color: "text-muted-foreground",
                 bg: "bg-secondary/50 border-border",
               };
           return (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{isRental ? "vs Rental Market" : "vs Market"}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                  {isRental
+                    ? t("propertyAIInsights.labels.vsRentalMarket", "vs Rental Market")
+                    : t("propertyAIInsights.labels.vsMarket", "vs Market")}
+                </p>
                 <div className="flex items-baseline gap-1">
                   <span className={`font-display font-black text-3xl ${cmp.color}`}>
                     {hasMarketComparison
                       ? `${vsMarket > 0 ? "+" : ""}${vsMarket}%`
-                      : "Unavailable"}
+                      : unavailable}
                   </span>
                 </div>
                 <p className={`text-[10px] font-semibold ${cmp.color}`}>
-                  {hasMarketComparison ? cmp.label : `${isRental ? "Rent" : "Market"} benchmark not returned`}
+                  {hasMarketComparison
+                    ? t(cmp.labelKey, cmp.fallbackLabel)
+                    : isRental
+                      ? t("propertyAIInsights.benchmarkMissing.rent", "Rent benchmark not returned")
+                      : t("propertyAIInsights.benchmarkMissing.market", "Market benchmark not returned")}
                 </p>
               </div>
 
               <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{isRental ? "Rent / m² / mo" : "Rental Yield"}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                  {isRental
+                    ? t("propertyAIInsights.labels.rentPerSqmMonth", "Rent / m² / mo")
+                    : t("propertyAIInsights.labels.rentalYield", "Rental Yield")}
+                </p>
                 <div className="flex items-baseline gap-1">
                   <span className="font-display font-black text-3xl text-primary">{isRental ? rentPerSqm : `${data.rentalYield}%`}</span>
                 </div>
-                <p className="text-[10px] text-muted-foreground">{isRental ? "Estimated monthly rent density" : "Est. gross annual yield"}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {isRental
+                    ? t("propertyAIInsights.labels.rentDensity", "Estimated monthly rent density")
+                    : t("propertyAIInsights.labels.grossYield", "Est. gross annual yield")}
+                </p>
               </div>
 
               <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{isRental ? "AI Rent Estimate" : "AI Estimate"}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                  {isRental
+                    ? t("propertyAIInsights.labels.rentEstimate", "AI Rent Estimate")
+                    : t("propertyAIInsights.labels.estimate", "AI Estimate")}
+                </p>
                 <div className="flex items-baseline gap-1">
                   <span className="font-display font-black text-3xl text-foreground">
                     {aiEstimate}
                   </span>
                 </div>
-                <p className="text-[10px] text-muted-foreground">Confidence: {data.confidenceLabel}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {t("propertyAIInsights.labels.confidence", "Confidence")}: {localizeConfidence(t, data.confidenceLabel)}
+                </p>
               </div>
             </div>
           );
@@ -198,7 +259,7 @@ export function PropertyAIInsightsSection({
 
         {user && !loading && !data && hasRequested && (
           <p className="text-xs text-muted-foreground text-center py-4">
-            {errorMessage ?? "Market analysis unavailable"}
+            {errorMessage ?? t("propertyAIInsights.analysisUnavailable", "Market analysis unavailable")}
           </p>
         )}
       </div>

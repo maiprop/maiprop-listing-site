@@ -81,6 +81,72 @@
       "auctions": "Πλειστηριασμοί",
       "newBuilds": "Νέες κατασκευές",
       "quickSale": "Quick Sale™"
+    },
+    "catalogue": {
+      "featuredError": "Δεν ήταν δυνατή η φόρτωση των επιλεγμένων ακινήτων.",
+      "auctionsEyebrow": "Πλειστηριασμοί ακινήτων",
+      "auctionsTitle": "Οι πλειστηριασμοί αυτής της εβδομάδας",
+      "allAuctions": "Όλοι οι πλειστηριασμοί",
+      "auctionsError": "Δεν ήταν δυνατή η φόρτωση των πλειστηριασμών.",
+      "auctionsEmpty": "Δεν υπάρχουν προγραμματισμένοι πλειστηριασμοί αυτή τη στιγμή.",
+      "openHousesEyebrow": "Open House",
+      "openHousesTitle": "Προγραμματισμένες επισκέψεις χωρίς ραντεβού",
+      "allOpenHouses": "Όλα τα Open House",
+      "openHousesError": "Δεν ήταν δυνατή η φόρτωση των Open House.",
+      "openHousesEmpty": "Νέα Open House έρχονται σύντομα.",
+      "openHousesEmptyDetail": "Νέες επισκέψεις προστίθενται τακτικά."
+    }
+  },
+  "propertyAIInsights": {
+    "title": "AI ανάλυση αγοράς",
+    "poweredBy": "Powered by mAI Prop OS",
+    "prompt": "Εκτέλεση AI ανάλυσης όταν τη χρειάζεστε",
+    "quota": {
+      "checking": "Έλεγχος διαθέσιμων αιτημάτων AI ανάλυσης...",
+      "pending": "Τα διαθέσιμα αιτήματα AI ανάλυσης θα ελεγχθούν πριν από τη φόρτωση.",
+      "unlimited": "Απεριόριστα αιτήματα AI ανάλυσης αυτόν τον μήνα",
+      "remainingFree": "Απομένουν {{remaining}} από {{limit}} αιτήματα AI ανάλυσης στο δωρεάν πλάνο αυτόν τον μήνα.",
+      "remainingPro": "Απομένουν {{remaining}} από {{limit}} αιτήματα AI ανάλυσης στο πλάνο Pro αυτόν τον μήνα."
+    },
+    "actions": {
+      "upgrade": "Αναβάθμιση σε Pro",
+      "buyAddon": "Αγορά πρόσθετης AI ανάλυσης",
+      "load": "Φόρτωση AI ανάλυσης",
+      "refresh": "Ανανέωση AI ανάλυσης",
+      "loading": "Φόρτωση AI ανάλυσης..."
+    },
+    "analysing": "Ανάλυση δεδομένων αγοράς...",
+    "unavailable": "Μη διαθέσιμο",
+    "analysisUnavailable": "Η ανάλυση αγοράς δεν είναι διαθέσιμη",
+    "labels": {
+      "vsMarket": "έναντι αγοράς",
+      "vsRentalMarket": "έναντι μισθωτικής αγοράς",
+      "rentalYield": "Μισθωτική απόδοση",
+      "rentPerSqmMonth": "Ενοίκιο / m² / μήνα",
+      "rentDensity": "Εκτιμώμενο μηνιαίο ενοίκιο ανά τετραγωνικό μέτρο",
+      "grossYield": "Εκτ. μεικτή ετήσια απόδοση",
+      "estimate": "AI εκτίμηση",
+      "rentEstimate": "AI εκτίμηση ενοικίου",
+      "confidence": "Βεβαιότητα"
+    },
+    "benchmarkMissing": {
+      "market": "Δεν επιστράφηκε σημείο αναφοράς αγοράς",
+      "rent": "Δεν επιστράφηκε σημείο αναφοράς ενοικίου"
+    },
+    "comparison": {
+      "belowMarket": "Κάτω από την αγορά",
+      "atMarket": "Στην αγορά",
+      "aboveMarket": "Πάνω από την αγορά"
+    },
+    "confidence": {
+      "veryLow": "Πολύ χαμηλή",
+      "low": "Χαμηλή",
+      "medium": "Μέτρια",
+      "high": "Υψηλή",
+      "veryHigh": "Πολύ υψηλή"
+    },
+    "units": {
+      "month": "μήνα"
     }
   },
   "listings": {
@@ -161,6 +227,15 @@
     "alarm": "Συναγερμός",
     "airConditioning": "Κλιματισμός",
     "heating": "Θέρμανση",
+    "condition": "Κατάσταση",
+    "notProvided": "Δεν παρέχεται",
+    "listingLabels": {
+      "sale": "Προς πώληση",
+      "rent": "Προς ενοικίαση",
+      "auction": "Προς πλειστηριασμό",
+      "openHouseRental": "Open House προς ενοικίαση",
+      "openHouseSale": "Open House προς πώληση"
+    },
     "askingPrice": "Ζητούμενη τιμή",
     "minimumBid": "Τιμή πρώτης προσφοράς",
     "requestViewing": "Αίτηση επίσκεψης",
@@ -268,6 +343,28 @@
     "loadingFullCatalogue": "Φόρτωση ολόκληρου του καταλόγου πλειστηριασμών Pro...",
     "fullCatalogueFailed": "Η δημόσια προεπισκόπηση είναι διαθέσιμη, αλλά δεν φορτώθηκε ολόκληρος ο κατάλογος Pro.",
     "retryFullCatalogue": "Νέα προσπάθεια πλήρους καταλόγου",
+    "card": {
+      "spotlight": "Προτεινόμενο",
+      "built": "Έτος",
+      "save": "Αποθήκευση",
+      "saved": "Αποθηκεύτηκε",
+      "share": "Κοινοποίηση",
+      "report": "Αναφορά",
+      "eAuction": "Στο eAuction",
+      "linkCopied": "Ο σύνδεσμος αντιγράφηκε",
+      "reportSubmitted": "Η αναφορά υποβλήθηκε. Η ομάδα μας θα την εξετάσει."
+    },
+    "detail": {
+      "verifyingCached": "Προβάλλονται προσωρινά αποθηκευμένα στοιχεία ενώ επαληθεύουμε τις πιο πρόσφατες πληροφορίες.",
+      "refreshFailed": "Δεν ήταν δυνατή η ανανέωση των στοιχείων του πλειστηριασμού. Οι πληροφορίες που εμφανίζονται ενδέχεται να μην είναι ενημερωμένες.",
+      "auction": "Πλειστηριασμός",
+      "timing": "Χρονισμός",
+      "ownership": "Κυριότητα",
+      "share": "Ποσοστό",
+      "today": "Σήμερα",
+      "daysToGo": "Σε {{count}} ημέρα",
+      "daysToGo_other": "Σε {{count}} ημέρες"
+    },
     "filters": {
       "allCourts": "Όλοι οι υπάλληλοι πλειστηριασμού / πλατφόρμες",
       "allTypes": "Όλοι οι τύποι",

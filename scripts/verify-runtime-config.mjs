@@ -12,6 +12,7 @@ import { fetchReleaseResource } from "./release-http.mjs";
 import {
   getCloudflarePagesProductionBindings,
   STRIPE_RUNTIME_BINDINGS,
+  validateProductionStripeBindings,
   validateStagingStripeBindings,
 } from "./validate-cloudflare-pages-staging-posture.mjs";
 
@@ -105,7 +106,7 @@ function validateRuntimeStripeConfig(
   };
 }
 
-export function validateRuntimeConfig(config, expected, stripeContext) {
+function validateCoreRuntimeConfig(config, expected, environmentLabel) {
   const checks = {
     VITE_SUPABASE_URL: requireExpected(expected.supabaseUrl, "Supabase URL"),
     VITE_SUPABASE_PROJECT_ID: requireExpected(
@@ -121,13 +122,9 @@ export function validateRuntimeConfig(config, expected, stripeContext) {
   };
   for (const [key, value] of Object.entries(checks)) {
     if (config[key] !== value) {
-      throw new Error(`${key} does not match the isolated staging runtime.`);
+      throw new Error(`${key} does not match the ${environmentLabel} runtime.`);
     }
   }
-  const stripeRuntime = validateRuntimeStripeConfig(
-    config,
-    stripeContext,
-  );
   return {
     supabase_url: checks.VITE_SUPABASE_URL,
     supabase_project_id: checks.VITE_SUPABASE_PROJECT_ID,
@@ -136,7 +133,52 @@ export function validateRuntimeConfig(config, expected, stripeContext) {
       .digest("hex"),
     app_url: checks.VITE_APP_URL,
     public_api_origin: checks.VITE_PUBLIC_API_ORIGIN,
-    stripe_runtime: stripeRuntime,
+  };
+}
+
+export function validateRuntimeConfig(config, expected, stripeContext) {
+  return {
+    ...validateCoreRuntimeConfig(config, expected, "isolated staging"),
+    stripe_runtime: validateRuntimeStripeConfig(config, stripeContext),
+  };
+}
+
+export function validateProductionRuntimeConfig(
+  config,
+  expected,
+  productionBindings,
+  expectedProductionStripeBindings,
+) {
+  if (!productionBindings) {
+    throw new Error(
+      "API-attested production Pages bindings are required.",
+    );
+  }
+  validateProductionStripeBindings(
+    productionBindings,
+    expectedProductionStripeBindings,
+  );
+  const runtimeBindings = runtimeStripeBindings(config);
+  for (const name of STRIPE_RUNTIME_BINDINGS) {
+    const expectedValue = optionalApiPlainTextValue(
+      productionBindings,
+      name,
+    );
+    if (runtimeBindings[name]?.value !== expectedValue) {
+      throw new Error(
+        `${name} does not match the API-attested production Pages binding.`,
+      );
+    }
+  }
+  return {
+    ...validateCoreRuntimeConfig(config, expected, "production"),
+    stripe_runtime: {
+      ...validateProductionStripeBindings(
+        runtimeBindings,
+        expectedProductionStripeBindings,
+      ),
+      api_binding_match: true,
+    },
   };
 }
 
@@ -180,6 +222,7 @@ async function main() {
   };
   const stagingProjectFile = option("--staging-project-file");
   const productionProjectFile = option("--production-project-file");
+  const environment = option("--environment") ?? "staging";
   if (
     !baseUrl ||
     !supabaseUrl ||
@@ -190,7 +233,7 @@ async function main() {
     !productionProjectFile
   ) {
     throw new Error(
-      "Usage: verify-runtime-config.mjs <base-url> <supabase-url> <supabase-project-id> <supabase-publishable-key> <app-url> --staging-project-file <path> --production-project-file <path>",
+      "Usage: verify-runtime-config.mjs <base-url> <supabase-url> <supabase-project-id> <supabase-publishable-key> <app-url> --staging-project-file <path> --production-project-file <path> [--environment staging|production]",
     );
   }
   const stagingProjectName = requireExpected(
@@ -201,6 +244,14 @@ async function main() {
     process.env.PRODUCTION_PROJECT,
     "PRODUCTION_PROJECT",
   );
+  const stagingProjectId = requireExpected(
+    process.env.CLOUDFLARE_STAGING_PAGES_PROJECT_ID,
+    "CLOUDFLARE_STAGING_PAGES_PROJECT_ID",
+  );
+  const productionProjectId = requireExpected(
+    process.env.CLOUDFLARE_PAGES_PROJECT_ID,
+    "CLOUDFLARE_PAGES_PROJECT_ID",
+  );
   const stagingApi = JSON.parse(
     readFileSync(stagingProjectFile, "utf8"),
   );
@@ -208,25 +259,38 @@ async function main() {
     readFileSync(productionProjectFile, "utf8"),
   );
   const config = await fetchRuntimeConfig(baseUrl);
-  const evidence = validateRuntimeConfig(
-    config,
-    {
-      supabaseUrl,
-      supabaseProjectId,
-      supabasePublishableKey,
-      appUrl,
-    },
-    {
-      stagingBindings: getCloudflarePagesProductionBindings(
-        stagingApi,
-        stagingProjectName,
-      ),
-      productionBindings: getCloudflarePagesProductionBindings(
-        productionApi,
-        productionProjectName,
-      ),
-    },
+  const expected = {
+    supabaseUrl,
+    supabaseProjectId,
+    supabasePublishableKey,
+    appUrl,
+  };
+  const stagingBindings = getCloudflarePagesProductionBindings(
+    stagingApi,
+    stagingProjectName,
+    stagingProjectId,
   );
+  const productionBindings = getCloudflarePagesProductionBindings(
+    productionApi,
+    productionProjectName,
+    productionProjectId,
+  );
+  const evidence = environment === "production"
+    ? validateProductionRuntimeConfig(
+        config,
+        expected,
+        productionBindings,
+        Object.fromEntries(
+          STRIPE_RUNTIME_BINDINGS.map((name) => [
+            name,
+            requireExpected(process.env[name], name),
+          ]),
+        ),
+      )
+    : validateRuntimeConfig(config, expected, {
+        stagingBindings,
+        productionBindings,
+      });
   process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
 }
 

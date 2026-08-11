@@ -82,6 +82,31 @@ if (
     "PRODUCTION_DEPLOY_TURN_EXPECTED_TTL_SECONDS must be an integer from 300 through 86400",
   );
 }
+const turnKeyId =
+  process.env.CLOUDFLARE_TURN_KEY_ID?.trim() ?? "";
+const turnApiToken =
+  process.env.CLOUDFLARE_TURN_API_TOKEN?.trim() ?? "";
+if (Boolean(turnKeyId) !== Boolean(turnApiToken)) {
+  throw new Error(
+    "Cloudflare TURN service proof requires both CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN",
+  );
+}
+const turnServiceTtlSeconds = Number.parseInt(
+  process.env.MAIPROP_TURN_TTL_SECONDS ?? "600",
+  10,
+);
+if (
+  turnKeyId &&
+  (
+    !Number.isSafeInteger(turnServiceTtlSeconds) ||
+    turnServiceTtlSeconds < 300 ||
+    turnServiceTtlSeconds > 172_800
+  )
+) {
+  throw new Error(
+    "MAIPROP_TURN_TTL_SECONDS must be an integer from 300 through 172800",
+  );
+}
 
 const attempts = Number.parseInt(
   process.env.PRODUCTION_DEPLOY_CHECK_ATTEMPTS ?? "",
@@ -102,7 +127,7 @@ const assertOk = (condition, message) => {
 
 export function createDeployVerificationEvidence(
   targets,
-  { generatedAt = new Date().toISOString() } = {},
+  { generatedAt = new Date().toISOString(), turnService = null } = {},
 ) {
   assertOk(Array.isArray(targets) && targets.length > 0, "Deploy verification produced no target evidence");
   for (const target of targets) {
@@ -117,6 +142,16 @@ export function createDeployVerificationEvidence(
       );
     }
   }
+  if (turnService) {
+    assertOk(
+      turnService.status === "passed" &&
+        turnService.httpStatus === 201 &&
+        turnService.credentialsPresent === true &&
+        turnService.credentialsRedacted === true &&
+        turnService.turnUrlCount > 0,
+      "Deploy verification cannot attest incomplete Cloudflare TURN service evidence",
+    );
+  }
 
   return {
     schemaVersion: 1,
@@ -124,6 +159,86 @@ export function createDeployVerificationEvidence(
     generatedAt,
     status: "passed",
     targets,
+    ...(turnService ? { turnService } : {}),
+  };
+}
+
+export async function verifyCloudflareTurnCredentials({
+  keyId,
+  apiToken,
+  ttlSeconds = 600,
+  fetchImpl = fetchReleaseResource,
+}) {
+  assertOk(
+    typeof keyId === "string" && keyId.trim().length > 0 &&
+      typeof apiToken === "string" && apiToken.trim().length > 0,
+    "Cloudflare TURN key id and API token are required",
+  );
+  assertOk(
+    Number.isSafeInteger(ttlSeconds) &&
+      ttlSeconds >= 300 &&
+      ttlSeconds <= 172_800,
+    "Cloudflare TURN credential TTL must be an integer from 300 through 172800",
+  );
+
+  let response;
+  try {
+    response = await fetchImpl(
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId.trim())}/credentials/generate-ice-servers`,
+      {
+        method: "POST",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        headers: {
+          Authorization: `Bearer ${apiToken.trim()}`,
+          "Content-Type": "application/json",
+          "user-agent": USER_AGENT,
+        },
+        body: JSON.stringify({ ttl: ttlSeconds }),
+      },
+    );
+  } catch {
+    throw new Error("Cloudflare TURN credential generation request failed");
+  }
+  assertOk(
+    response?.status === 201,
+    `Cloudflare TURN credential generation returned HTTP ${response?.status ?? "unknown"}`,
+  );
+
+  let payload;
+  try {
+    payload = JSON.parse(await response.text());
+  } catch {
+    throw new Error("Cloudflare TURN credential generation returned invalid JSON");
+  }
+  const iceServers = Array.isArray(payload?.iceServers)
+    ? payload.iceServers
+    : [];
+  const urls = iceServers.flatMap((server) =>
+    Array.isArray(server?.urls)
+      ? server.urls
+      : typeof server?.urls === "string"
+        ? [server.urls]
+        : []
+  );
+  const turnUrls = urls.filter((url) => /^turns?:/i.test(url));
+  const credentialServer = iceServers.find((server) =>
+    typeof server?.username === "string" && server.username.length > 0 &&
+      typeof server?.credential === "string" && server.credential.length > 0
+  );
+  assertOk(
+    iceServers.length > 0 && turnUrls.length > 0 && credentialServer,
+    "Cloudflare TURN credential generation returned incomplete ICE credentials",
+  );
+
+  return {
+    status: "passed",
+    httpStatus: response.status,
+    authentication: "bearer",
+    ttlSeconds,
+    iceServerCount: iceServers.length,
+    turnUrlCount: turnUrls.length,
+    credentialsPresent: true,
+    credentialsRedacted: true,
   };
 }
 
@@ -328,12 +443,19 @@ const checkWithRetries = async (url) => {
 };
 
 const main = async () => {
+  const turnService = turnKeyId
+    ? await verifyCloudflareTurnCredentials({
+        keyId: turnKeyId,
+        apiToken: turnApiToken,
+        ttlSeconds: turnServiceTtlSeconds,
+      })
+    : null;
   const targets = [];
   for (const url of urls) {
     targets.push(await checkWithRetries(url));
   }
 
-  const evidence = createDeployVerificationEvidence(targets);
+  const evidence = createDeployVerificationEvidence(targets, { turnService });
   process.stdout.write(`${JSON.stringify(evidence)}\n`);
 };
 

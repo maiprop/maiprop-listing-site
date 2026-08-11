@@ -14,6 +14,10 @@ const supabaseStagingWorkflow = readFileSync(
   join(process.cwd(), ".github", "workflows", "reusable-supabase-staging.yml"),
   "utf8",
 );
+const approvalWorkflow = readFileSync(
+  join(process.cwd(), ".github", "workflows", "approve-production-release.yml"),
+  "utf8",
+);
 
 describe("release-train live security workflow", () => {
   it("keeps CI validation-only and starts staging only from a successful main push", () => {
@@ -30,7 +34,9 @@ describe("release-train live security workflow", () => {
   it("requires an exact-SHA lease and an isolated staging target before any staging security check", () => {
     expect(supabaseStagingWorkflow).toContain("Validate exact staging mutation lease");
     expect(supabaseStagingWorkflow).toContain("github-staging-lease");
-    expect(supabaseStagingWorkflow).toContain("Staging checkout SHA $actual_sha does not match the requested release SHA.");
+    expect(supabaseStagingWorkflow).toContain(
+      "Staging checkout SHA $actual_sha does not match the requested release SHA $RELEASE_SHA.",
+    );
     expect(supabaseStagingWorkflow).toContain("Resolve Supabase staging target");
     expect(supabaseStagingWorkflow).toContain("An isolated staging Supabase project is required.");
     expect(supabaseStagingWorkflow).toContain("STAGING_SUPABASE_URL project ref does not match STAGING_SUPABASE_PROJECT_ID.");
@@ -65,6 +71,30 @@ describe("release-train live security workflow", () => {
     expect(stagingWorkflow).toContain("Verify immutable candidate again");
     expect(stagingWorkflow).toContain("Deploy exact artifact to dedicated staging project");
     expect(stagingWorkflow).toContain("--commit-hash=${{ needs.validate-source.outputs.release_sha }}");
+  });
+
+  it("uses GitHub Free compatible signed artifact bindings", () => {
+    for (const workflow of [
+      ciWorkflow,
+      stagingWorkflow,
+      supabaseStagingWorkflow,
+      approvalWorkflow,
+    ]) {
+      expect(workflow).not.toContain("actions/attest-build-provenance@");
+      expect(workflow).not.toContain("gh attestation verify");
+      expect(workflow).not.toMatch(/^\s{4}environment:\s*\S+/m);
+    }
+    expect(ciWorkflow).toContain("production-release-candidate-binding-${{ github.sha }}-${{ github.run_attempt }}");
+    expect(ciWorkflow).toContain("RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}");
+    expect(ciWorkflow).toContain("--trusted-current-run-id \"$GITHUB_RUN_ID\"");
+    expect(stagingWorkflow).toContain("github.event.workflow_run.run_attempt == 1");
+    expect(stagingWorkflow).toContain("release-candidate-attestation-binding-");
+    expect(stagingWorkflow).toContain("--workflow-path .github/workflows/stage-release.yml");
+    expect(supabaseStagingWorkflow).toContain("production-release-candidate-binding-");
+    expect(supabaseStagingWorkflow).toContain("node scripts/verify-release-artifact-binding.mjs");
+    expect(approvalWorkflow).toContain("PRODUCTION_RELEASE_APPROVERS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}");
+    expect(approvalWorkflow).toContain("The allowlisted approver must be independent from CI and staging producers.");
+    expect(approvalWorkflow).toContain("production-release-approval-binding-");
   });
 
   it("proves live security against the exact staged app and Supabase project", () => {
@@ -104,23 +134,23 @@ describe("release-train live security workflow", () => {
     expect(stagingWorkflow).toContain(
       "node scripts/staging-live-security-evidence.mjs",
     );
-    expect(stagingWorkflow).toContain(
-      "path: staging-live-security-proof.json",
-    );
-    expect(stagingWorkflow).not.toContain(
-      "path: staging-live-security-playwright.json",
-    );
+    expect(stagingWorkflow).toContain("path: |");
+    expect(stagingWorkflow).toContain("staging-live-security-proof.json");
+    expect(stagingWorkflow).toContain("staging-live-security-playwright.json");
   });
 
   it("binds minimized live security evidence into the final exact-SHA attestation", () => {
     expect(stagingWorkflow).toContain("      - staging-live-security");
     expect(stagingWorkflow).toContain(
-      "name: staging-live-security-${{ needs.validate-source.outputs.release_sha }}",
+      'artifact_name="staging-live-security-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"',
+    );
+    expect(stagingWorkflow).toContain(
+      "name: ${{ steps.evidence.outputs.artifact_name }}",
     );
     expect(stagingWorkflow).toContain(
       'const securityEvidence = read("evidence/security/staging-live-security-proof.json");',
     );
-    expect(stagingWorkflow).toContain("schema_version: 2");
+    expect(stagingWorkflow).toContain("schema_version: 4");
     expect(stagingWorkflow).toContain("security: securityEvidence.sha256");
     expect(stagingWorkflow).toContain(
       'security.evidence_type !== "maiprop-staging-live-security"',

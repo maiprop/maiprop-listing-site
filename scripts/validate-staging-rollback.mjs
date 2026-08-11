@@ -50,9 +50,11 @@ function requireSuccessfulDeployment(deployment, expectedProject, label) {
     deployment.project_name !== expectedProject ||
     deployment.environment !== "production" ||
     deployment.is_skipped !== false ||
+    deployment.uses_functions !== true ||
     deployment.latest_stage?.name !== "deploy" ||
     deployment.latest_stage?.status !== "success" ||
-    deployment.deployment_trigger?.metadata?.branch !== "main"
+    deployment.deployment_trigger?.metadata?.branch !== "main" ||
+    deployment.deployment_trigger?.metadata?.commit_dirty !== false
   ) {
     throw new Error(
       `${label} must be a successful rollback target in the dedicated staging Pages project`,

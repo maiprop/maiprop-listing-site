@@ -1,19 +1,41 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import {
+  reconcileMigrationHistories,
+  validateLegacyMigrationSchemaEvidence,
+} from "./legacy-migration-reconciliation.mjs";
+
+export {
+  reconcileMigrationHistories,
+  validateLegacyMigrationSchemaEvidence,
+};
 
 const FULL_SHA = /^[0-9a-f]{40}$/i;
 const SHA256 = /^[0-9a-f]{64}$/i;
 const PROJECT_REF = /^[a-z0-9]{20}$/;
 const STAGING_PROJECT_REF = "xsiehskfgeoqyazcgauv";
+const PRODUCTION_PROJECT_REF = "qvvicunqcrwpioqnvzxf";
 const STAGING_SECURITY_SPECS = [
   "gdpr-delete-account.spec.ts",
   "onboarding-role-selection.spec.ts",
   "rls-security.spec.ts",
 ];
+const REQUIRED_CATALOGUE_ROUTES = [
+  "/",
+  "/listings",
+  "/auctions",
+  "/open-houses",
+];
+const CATALOGUE_WEB_VITAL_BUDGETS = {
+  lcp_ms: 3000,
+  cls: 0.1,
+  inp_ms: 200,
+};
 const READINESS_JOB = "Immutable release candidate built";
 const STAGING_ATTESTATION_JOB = "Release candidate attested";
 const APPROVAL_JOB = "Production release approved";
+const STRIPE_READINESS_JOB = "Verify exact-SHA Stripe live catalogue";
 const DATABASE_JOB = "Production database migration gate";
 const EDGE_JOB = "Deploy to Supabase";
 const GITHUB_API = "https://api.github.com";
@@ -38,6 +60,14 @@ function successfulJob(jobs, expectedName, { suffix = false } = {}) {
       job?.status !== "in_progress" &&
       job?.conclusion === "success";
   });
+}
+
+function isOriginalManualAttempt(run) {
+  const actor = String(run?.actor?.login ?? "").trim();
+  const triggeringActor = String(run?.triggering_actor?.login ?? "").trim();
+  return Number(run?.run_attempt) === 1 &&
+    actor.length > 0 &&
+    actor === triggeringActor;
 }
 
 export function selectReadinessRun({ sha, runs, jobsByRun }) {
@@ -105,6 +135,7 @@ export function selectApprovalRun({ sha, runs, jobsByRun }) {
     .filter((run) =>
       String(run?.head_sha ?? "").toLowerCase() === expectedSha &&
       run?.event === "workflow_dispatch" &&
+      isOriginalManualAttempt(run) &&
       run?.status === "completed" &&
       run?.conclusion === "success")
     .sort((a, b) =>
@@ -116,6 +147,27 @@ export function selectApprovalRun({ sha, runs, jobsByRun }) {
   if (!match) {
     throw new Error(
       `No successful exact-SHA approval run has a successful "${APPROVAL_JOB}" job for ${expectedSha}.`,
+    );
+  }
+  return match;
+}
+
+export function selectStripeReadinessRun({ sha, runs, jobsByRun }) {
+  const expectedSha = normalizeReleaseSha(sha);
+  const candidates = (runs ?? [])
+    .filter((run) =>
+      String(run?.head_sha ?? "").toLowerCase() === expectedSha &&
+      run?.event === "workflow_dispatch" &&
+      isOriginalManualAttempt(run) &&
+      run?.status === "completed" &&
+      run?.conclusion === "success")
+    .sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0));
+
+  const match = candidates.find((run) =>
+    successfulJob(jobsByRun.get(run.id), STRIPE_READINESS_JOB));
+  if (!match) {
+    throw new Error(
+      `No successful exact-SHA attempt-1 Stripe readiness run by the original triggering actor has a successful "${STRIPE_READINESS_JOB}" job for ${expectedSha}.`,
     );
   }
   return match;
@@ -150,6 +202,28 @@ function requirePositiveInteger(value, label) {
   return normalized;
 }
 
+function hasCompletePlaywrightStats(value, minimumExpected = 1) {
+  return Number.isSafeInteger(value?.expected) &&
+    value.expected >= minimumExpected &&
+    value?.skipped === 0 &&
+    value?.unexpected === 0 &&
+    value?.flaky === 0 &&
+    SHA256.test(String(value?.report_sha256 ?? ""));
+}
+
+function normalizedOrigin(value, label) {
+  let parsed;
+  try {
+    parsed = new URL(String(value ?? ""));
+  } catch {
+    throw new Error(`${label} must be a valid HTTPS origin.`);
+  }
+  if (parsed.protocol !== "https:" || parsed.origin !== parsed.href.replace(/\/$/, "")) {
+    throw new Error(`${label} must be a normalized HTTPS origin.`);
+  }
+  return parsed.origin;
+}
+
 export function validateReleaseCandidateAttestation({
   attestation,
   sha,
@@ -168,7 +242,7 @@ export function validateReleaseCandidateAttestation({
     throw new Error("Release candidate attestation must be a JSON object.");
   }
   if (
-    attestation.schema_version !== 2 ||
+    attestation.schema_version !== 4 ||
     attestation.evidence_type !== "maiprop-release-candidate-attestation"
   ) {
     throw new Error("Release candidate attestation has an unsupported schema or evidence type.");
@@ -206,6 +280,27 @@ export function validateReleaseCandidateAttestation({
   ) {
     throw new Error("Release candidate attestation does not match the selected staging run.");
   }
+  const supabaseArtifactBinding = attestation.artifact_bindings?.supabase;
+  const expectedSupabaseArtifactName =
+    `supabase-staging-edge-attestation-${expectedSha}-${attestation.staging_run_attempt}`;
+  if (
+    !supabaseArtifactBinding ||
+    typeof supabaseArtifactBinding !== "object" ||
+    Array.isArray(supabaseArtifactBinding) ||
+    supabaseArtifactBinding.name !== expectedSupabaseArtifactName ||
+    !/^[1-9][0-9]*$/.test(String(supabaseArtifactBinding.id ?? "")) ||
+    !SHA256.test(String(supabaseArtifactBinding.digest ?? "")) ||
+    String(supabaseArtifactBinding.run_id) !==
+      String(attestation.staging_run_id) ||
+    String(supabaseArtifactBinding.run_attempt) !==
+      String(attestation.staging_run_attempt) ||
+    String(supabaseArtifactBinding.release_sha ?? "").toLowerCase() !==
+      expectedSha
+  ) {
+    throw new Error(
+      "Release candidate attestation has an invalid Supabase artifact binding.",
+    );
+  }
   for (const [key, label] of [
     ["artifact_sha256", "artifact"],
     ["manifest_sha256", "manifest"],
@@ -221,6 +316,8 @@ export function validateReleaseCandidateAttestation({
     "cloudflare",
     "business",
     "security",
+    "n_minus_one",
+    "catalogue_performance",
   ]) {
     if (!SHA256.test(String(attestation.evidence_sha256?.[key] ?? ""))) {
       throw new Error(`Release candidate attestation has an invalid ${key} evidence digest.`);
@@ -234,6 +331,8 @@ export function validateReleaseCandidateAttestation({
     ["cloudflare", "Cloudflare"],
     ["business", "business"],
     ["security", "security"],
+    ["n_minus_one", "N-1"],
+    ["catalogue_performance", "catalogue performance"],
   ]) {
     const evidence = attestation[key];
     if (
@@ -274,6 +373,95 @@ export function validateReleaseCandidateAttestation({
   ) {
     throw new Error("Security evidence is incomplete or does not prove isolated staging.");
   }
+
+  const nMinusOne = attestation.n_minus_one;
+  if (
+    nMinusOne.schema_version !== 1 ||
+    nMinusOne.evidence_type !== "maiprop-staging-n-minus-one-compatibility" ||
+    nMinusOne.ok !== true ||
+    nMinusOne.staged_backend_project_ref !== STAGING_PROJECT_REF ||
+    nMinusOne.staged_backend_project_ref !==
+      attestation.supabase?.database?.project_ref ||
+    !FULL_SHA.test(String(nMinusOne.previous_sha ?? "")) ||
+    String(nMinusOne.previous_sha).toLowerCase() === expectedSha ||
+    String(nMinusOne.source?.previous_sha ?? "").toLowerCase() !==
+      String(nMinusOne.previous_sha).toLowerCase() ||
+    !hasCompletePlaywrightStats(nMinusOne.playwright) ||
+    !SHA256.test(String(nMinusOne.deploy_verification_sha256 ?? ""))
+  ) {
+    throw new Error("N-1 evidence is incomplete or does not prove the previous frontend against staged backend services.");
+  }
+
+  const performance = attestation.catalogue_performance;
+  let deploymentOrigin;
+  let performanceStableOrigin;
+  try {
+    deploymentOrigin = normalizedOrigin(
+      performance.target?.deployment_origin,
+      "Catalogue performance deployment origin",
+    );
+    performanceStableOrigin = normalizedOrigin(
+      performance.target?.stable_origin,
+      "Catalogue performance stable origin",
+    );
+  } catch {
+    throw new Error("Catalogue performance evidence has invalid staging origins.");
+  }
+  const endpointBudget = performance.endpoint_budget;
+  const routeE2e = performance.route_e2e;
+  const cwvQuery = performance.cwv_query;
+  const budgets = cwvQuery?.budgets;
+  const routes = cwvQuery?.routes;
+  const routeEvidenceComplete = REQUIRED_CATALOGUE_ROUTES.every((route) => {
+    const measurement = routes?.[route];
+    const query = measurement?.query;
+    const queryBudget = query?.budget;
+    return Number.isFinite(measurement?.lcp_ms) &&
+      measurement.lcp_ms > 0 &&
+      measurement.lcp_ms <= CATALOGUE_WEB_VITAL_BUDGETS.lcp_ms &&
+      Number.isFinite(measurement?.cls) &&
+      measurement.cls >= 0 &&
+      measurement.cls <= CATALOGUE_WEB_VITAL_BUDGETS.cls &&
+      Number.isFinite(measurement?.inp_ms) &&
+      measurement.inp_ms >= 0 &&
+      measurement.inp_ms <= CATALOGUE_WEB_VITAL_BUDGETS.inp_ms &&
+      measurement.forbidden_authority_requests === 0 &&
+      ["auth", "rest", "functions", "total"].every((key) =>
+        Number.isSafeInteger(query?.[key]) &&
+        query[key] >= 0 &&
+        Number.isSafeInteger(queryBudget?.[key]) &&
+        queryBudget[key] >= 0 &&
+        query[key] <= queryBudget[key]
+      );
+  });
+  if (
+    performance.schema_version !== 1 ||
+    performance.evidence_type !== "maiprop-staging-catalogue-performance" ||
+    performance.ok !== true ||
+    performance.target?.supabase_project_ref !== STAGING_PROJECT_REF ||
+    performance.target.supabase_project_ref !==
+      attestation.supabase?.database?.project_ref ||
+    deploymentOrigin !==
+      normalizedOrigin(
+        attestation.cloudflare?.deployment_url,
+        "Cloudflare staging deployment origin",
+      ) ||
+    performanceStableOrigin !== cloudflareOrigin.origin ||
+    endpointBudget?.deployment_status !== "passed" ||
+    endpointBudget?.stable_status !== "passed" ||
+    !SHA256.test(String(endpointBudget?.deployment_report_sha256 ?? "")) ||
+    !SHA256.test(String(endpointBudget?.stable_report_sha256 ?? "")) ||
+    !hasCompletePlaywrightStats(routeE2e) ||
+    routeE2e?.forbidden_authority_requests !== 0 ||
+    !hasCompletePlaywrightStats(cwvQuery, REQUIRED_CATALOGUE_ROUTES.length) ||
+    !SHA256.test(String(cwvQuery?.measurements_sha256 ?? "")) ||
+    budgets?.lcp_ms !== CATALOGUE_WEB_VITAL_BUDGETS.lcp_ms ||
+    budgets?.cls !== CATALOGUE_WEB_VITAL_BUDGETS.cls ||
+    budgets?.inp_ms !== CATALOGUE_WEB_VITAL_BUDGETS.inp_ms ||
+    !routeEvidenceComplete
+  ) {
+    throw new Error("Catalogue performance evidence is incomplete or exceeds an exact-SHA staging budget.");
+  }
   return attestation;
 }
 
@@ -283,7 +471,9 @@ export function selectBackendProofRun({ sha, runs, jobsByRun }) {
     .filter((run) =>
       String(run?.head_sha ?? "").toLowerCase() === expectedSha &&
       run?.event === "workflow_dispatch" &&
-      run?.status === "completed")
+      isOriginalManualAttempt(run) &&
+      run?.status === "completed" &&
+      Number.isSafeInteger(Number(run?.run_attempt)))
     .sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0));
 
   const match = candidates.find((run) => {
@@ -293,7 +483,7 @@ export function selectBackendProofRun({ sha, runs, jobsByRun }) {
   });
   if (!match) {
     throw new Error(
-      `No single exact-SHA production release run proves both database and Edge deployment success for ${expectedSha}.`,
+      `No single exact-SHA attempt-1 production release by the original triggering actor proves both database and Edge deployment success for ${expectedSha}.`,
     );
   }
   return match;
@@ -380,7 +570,7 @@ export function assertSupabaseTargetIdentity({
 function normalizedMigrationInventory(
   records,
   label,
-  { requireFileDigest = false } = {},
+  { requireExecutionFingerprint = false, requireFileDigest = false } = {},
 ) {
   if (!Array.isArray(records)) {
     throw new Error(`${label} must be an array.`);
@@ -406,6 +596,30 @@ function normalizedMigrationInventory(
         `${label} ${version} file digest`,
       );
     }
+    if (requireExecutionFingerprint) {
+      const statementCount = Number(value.statement_count);
+      if (!Number.isSafeInteger(statementCount) || statementCount < 1) {
+        throw new Error(
+          `${label} ${version} statement count must be a positive integer.`,
+        );
+      }
+      if (value.statement_marker_only === true) {
+        throw new Error(
+          `${label} ${version} contains a filename-only migration marker instead of executed SQL.`,
+        );
+      }
+      if (value.statement_marker_only !== false) {
+        throw new Error(
+          `${label} ${version} is missing its executed SQL marker verification.`,
+        );
+      }
+      normalized.statements_sha256 = requireSha256(
+        value.statements_sha256,
+        `${label} ${version} executed SQL fingerprint`,
+      );
+      normalized.statement_count = statementCount;
+      normalized.statement_marker_only = false;
+    }
     return normalized;
   }).sort((left, right) =>
     left.version.localeCompare(right.version) ||
@@ -426,11 +640,12 @@ export function assertMigrationPromotionPlan(staged, production) {
   const stagedInventory = normalizedMigrationInventory(
     staged,
     "Staged migration inventory",
-    { requireFileDigest: true },
+    { requireExecutionFingerprint: true, requireFileDigest: true },
   );
   const productionInventory = normalizedMigrationInventory(
     production,
     "Production migration inventory",
+    { requireExecutionFingerprint: true },
   );
   const stagedByVersion = new Map(
     stagedInventory.map((migration, index) => [migration.version, index]),
@@ -459,6 +674,14 @@ export function assertMigrationPromotionPlan(staged, production) {
         `${migration.name} !== ${expected.name}.`,
       );
     }
+    if (
+      expected.statements_sha256 !== migration.statements_sha256 ||
+      expected.statement_count !== migration.statement_count
+    ) {
+      throw new Error(
+        `Production executed SQL fingerprint drift at ${migration.version}.`,
+      );
+    }
   }
   const pending = stagedInventory.slice(productionInventory.length);
   return {
@@ -475,7 +698,7 @@ export function assertMigrationDryRunParity(pending, dryRunFiles) {
   const expected = normalizedMigrationInventory(
     pending,
     "Pending staged migration inventory",
-    { requireFileDigest: true },
+    { requireExecutionFingerprint: true, requireFileDigest: true },
   ).map(({ version, name }) => `${version}_${name}.sql`);
   if (!Array.isArray(dryRunFiles)) {
     throw new Error("Supabase dry-run migration inventory must be an array.");
@@ -544,6 +767,14 @@ function requireFullSha(value, label) {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (!FULL_SHA.test(normalized)) {
     throw new Error(`${label} must be a full 40-character Git SHA.`);
+  }
+  return normalized;
+}
+
+function requireOpaqueId(value, label) {
+  const normalized = String(value ?? "").trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/.test(normalized)) {
+    throw new Error(`${label} must be a valid opaque identifier.`);
   }
   return normalized;
 }
@@ -675,6 +906,15 @@ export function validateMutationLease({
   approvalRunAttempt,
   productionRunId,
   productionRunAttempt,
+  stripeReadinessRunId,
+  stripeReadinessRunAttempt,
+  stripeReadinessSha256,
+  stripeReadinessArtifactId,
+  stripeReadinessArtifactDigest,
+  rollbackDeploymentId,
+  rollbackSha,
+  candidateDeploymentId,
+  candidateSha,
   now = new Date(),
 }) {
   const record = requireRecord(lease, "Mutation lease");
@@ -732,6 +972,157 @@ export function validateMutationLease({
     }
   }
 
+  const stripeReadinessRecordValues = [
+    record.stripe_readiness_run_id,
+    record.stripe_readiness_run_attempt,
+    record.stripe_readiness_sha256,
+    record.stripe_readiness_artifact_id,
+    record.stripe_readiness_artifact_digest,
+  ];
+  const stripeReadinessExpectedValues = [
+    stripeReadinessRunId,
+    stripeReadinessRunAttempt,
+    stripeReadinessSha256,
+    stripeReadinessArtifactId,
+    stripeReadinessArtifactDigest,
+  ];
+  const hasStripeReadinessBinding = [
+    ...stripeReadinessRecordValues,
+    ...stripeReadinessExpectedValues,
+  ].some((value) => String(value ?? "").trim().length > 0);
+  if (hasStripeReadinessBinding) {
+    const actualRunId = requirePositiveIntegerString(
+      record.stripe_readiness_run_id,
+      "Mutation lease Stripe readiness run",
+    );
+    const actualRunAttempt = requirePositiveIntegerString(
+      record.stripe_readiness_run_attempt,
+      "Mutation lease Stripe readiness run attempt",
+    );
+    if (actualRunAttempt !== "1") {
+      throw new Error("Mutation lease Stripe readiness must use attempt 1.");
+    }
+    const actualDigest = requireSha256(
+      record.stripe_readiness_sha256,
+      "Mutation lease Stripe readiness digest",
+    );
+    const actualArtifactId = requirePositiveIntegerString(
+      record.stripe_readiness_artifact_id,
+      "Mutation lease Stripe readiness artifact",
+    );
+    const actualArtifactDigest = requireSha256(
+      record.stripe_readiness_artifact_digest,
+      "Mutation lease Stripe readiness artifact digest",
+    );
+
+    if (
+      stripeReadinessExpectedValues.some(
+        (value) => String(value ?? "").trim().length > 0,
+      )
+    ) {
+      const expectedRunId = requirePositiveIntegerString(
+        stripeReadinessRunId,
+        "Expected Stripe readiness run",
+      );
+      const expectedRunAttempt = requirePositiveIntegerString(
+        stripeReadinessRunAttempt,
+        "Expected Stripe readiness run attempt",
+      );
+      if (expectedRunAttempt !== "1") {
+        throw new Error("Expected Stripe readiness must use attempt 1.");
+      }
+      const expectedDigest = requireSha256(
+        stripeReadinessSha256,
+        "Expected Stripe readiness digest",
+      );
+      const expectedArtifactId = requirePositiveIntegerString(
+        stripeReadinessArtifactId,
+        "Expected Stripe readiness artifact",
+      );
+      const expectedArtifactDigest = requireSha256(
+        stripeReadinessArtifactDigest,
+        "Expected Stripe readiness artifact digest",
+      );
+      if (actualRunId !== expectedRunId) {
+        throw new Error("Mutation lease Stripe readiness run does not match.");
+      }
+      if (actualRunAttempt !== expectedRunAttempt) {
+        throw new Error(
+          "Mutation lease Stripe readiness run attempt does not match.",
+        );
+      }
+      if (actualDigest !== expectedDigest) {
+        throw new Error(
+          "Mutation lease Stripe readiness digest does not match.",
+        );
+      }
+      if (actualArtifactId !== expectedArtifactId) {
+        throw new Error(
+          "Mutation lease Stripe readiness artifact does not match.",
+        );
+      }
+      if (actualArtifactDigest !== expectedArtifactDigest) {
+        throw new Error(
+          "Mutation lease Stripe readiness artifact digest does not match.",
+        );
+      }
+    }
+  }
+
+  const rollbackIdentityRequested = [
+    rollbackDeploymentId,
+    rollbackSha,
+    candidateDeploymentId,
+    candidateSha,
+  ].some((value) => String(value ?? "").trim().length > 0);
+  if (rollbackIdentityRequested) {
+    const expectedRollbackId = requireOpaqueId(
+      rollbackDeploymentId,
+      "Expected rollback deployment",
+    );
+    const expectedCandidateId = requireOpaqueId(
+      candidateDeploymentId,
+      "Expected candidate deployment",
+    );
+    if (
+      requireOpaqueId(
+        record.rollback_deployment_id,
+        "Mutation lease rollback deployment",
+      ) !== expectedRollbackId
+    ) {
+      throw new Error("Mutation lease rollback deployment does not match.");
+    }
+    if (
+      requireFullSha(record.rollback_sha, "Mutation lease rollback SHA") !==
+      requireFullSha(rollbackSha, "Expected rollback SHA")
+    ) {
+      throw new Error("Mutation lease rollback SHA does not match.");
+    }
+    if (
+      requireOpaqueId(
+        record.candidate_deployment_id,
+        "Mutation lease candidate deployment",
+      ) !== expectedCandidateId
+    ) {
+      throw new Error("Mutation lease candidate deployment does not match.");
+    }
+    if (
+      requireFullSha(record.candidate_sha, "Mutation lease candidate SHA") !==
+      requireFullSha(candidateSha, "Expected candidate SHA")
+    ) {
+      throw new Error("Mutation lease candidate SHA does not match.");
+    }
+    if (expectedRollbackId === expectedCandidateId) {
+      throw new Error("Rollback and candidate deployments must differ.");
+    }
+    if (
+      requireFullSha(rollbackSha, "Expected rollback SHA") ===
+      requireFullSha(candidateSha, "Expected candidate SHA")
+    ) {
+      throw new Error("Rollback and candidate SHAs must differ.");
+    }
+  }
+
   const issuedAt = requireDate(record.issued_at, "Mutation lease issue time");
   const expiresAt = requireDate(record.expires_at, "Mutation lease expiry");
   const nowDate = requireDate(now, "Validation time");
@@ -748,6 +1139,159 @@ export function validateMutationLease({
     throw new Error("Mutation lease has expired.");
   }
   return lease;
+}
+
+export function validateProductionPromotionAttestations({
+  database,
+  edge,
+  repository,
+  sha,
+  sourceTree,
+  sourceRunId,
+  sourceRunAttempt,
+  stagingRunId,
+  stagingRunAttempt,
+  approvalRunId,
+  approvalRunAttempt,
+  productionRunId,
+  productionRunAttempt,
+  artifactSha256,
+  manifestSha256,
+  supabaseSha256,
+  databaseSha256,
+  edgeSha256,
+}) {
+  const databaseRecord = requireRecord(
+    database,
+    "Production database attestation",
+  );
+  const edgeRecord = requireRecord(edge, "Production Edge attestation");
+  const expectedDatabaseSha256 = requireSha256(
+    databaseSha256,
+    "Expected database attestation digest",
+  );
+  requireSha256(edgeSha256, "Expected Edge attestation digest");
+  const expected = {
+    repository: requireRepository(repository, "Expected repository"),
+    release_sha: normalizeReleaseSha(sha),
+    source_tree: requireFullSha(sourceTree, "Expected source tree"),
+    source_run_id: requirePositiveIntegerString(
+      sourceRunId,
+      "Expected source run",
+    ),
+    source_run_attempt: requirePositiveIntegerString(
+      sourceRunAttempt,
+      "Expected source run attempt",
+    ),
+    staging_run_id: requirePositiveIntegerString(
+      stagingRunId,
+      "Expected staging run",
+    ),
+    staging_run_attempt: requirePositiveIntegerString(
+      stagingRunAttempt,
+      "Expected staging run attempt",
+    ),
+    approval_run_id: requirePositiveIntegerString(
+      approvalRunId,
+      "Expected approval run",
+    ),
+    approval_run_attempt: requirePositiveIntegerString(
+      approvalRunAttempt,
+      "Expected approval run attempt",
+    ),
+    production_run_id: requirePositiveIntegerString(
+      productionRunId,
+      "Expected production run",
+    ),
+    production_run_attempt: requirePositiveIntegerString(
+      productionRunAttempt,
+      "Expected production run attempt",
+    ),
+    artifact_sha256: requireSha256(
+      artifactSha256,
+      "Expected artifact digest",
+    ),
+    manifest_sha256: requireSha256(
+      manifestSha256,
+      "Expected manifest digest",
+    ),
+    supabase_sha256: requireSha256(
+      supabaseSha256,
+      "Expected Supabase digest",
+    ),
+    project_ref: PRODUCTION_PROJECT_REF,
+  };
+  const labels = {
+    repository: "repository",
+    release_sha: "release SHA",
+    source_tree: "source tree",
+    source_run_id: "source run",
+    source_run_attempt: "source run attempt",
+    staging_run_id: "staging run",
+    staging_run_attempt: "staging run attempt",
+    approval_run_id: "approval run",
+    approval_run_attempt: "approval run attempt",
+    production_run_id: "production run",
+    production_run_attempt: "production run attempt",
+    artifact_sha256: "artifact digest",
+    manifest_sha256: "manifest digest",
+    supabase_sha256: "Supabase digest",
+    project_ref: "project ref",
+  };
+
+  for (const [record, evidenceType, name] of [
+    [
+      databaseRecord,
+      "maiprop-production-database-promotion",
+      "Production database attestation",
+    ],
+    [
+      edgeRecord,
+      "maiprop-production-edge-promotion",
+      "Production Edge attestation",
+    ],
+  ]) {
+    if (
+      record.schema_version !== 1 ||
+      record.evidence_type !== evidenceType
+    ) {
+      throw new Error(`${name} has an unsupported schema or evidence type.`);
+    }
+    for (const [field, expectedValue] of Object.entries(expected)) {
+      const actualValue = String(record[field] ?? "").toLowerCase();
+      if (actualValue !== String(expectedValue).toLowerCase()) {
+        throw new Error(`${name} ${labels[field]} does not match.`);
+      }
+    }
+  }
+
+  if (
+    requireSha256(
+      edgeRecord.production_database_sha256,
+      "Edge database attestation digest",
+    ) !== expectedDatabaseSha256
+  ) {
+    throw new Error(
+      "Production Edge database attestation digest does not match.",
+    );
+  }
+  if (
+    !Array.isArray(edgeRecord.edge_bundles) ||
+    edgeRecord.edge_bundles.length === 0 ||
+    edgeRecord.edge_bundles.some(
+      (bundle) =>
+        !bundle ||
+        typeof bundle.name !== "string" ||
+        bundle.name.trim().length === 0 ||
+        !SHA256.test(String(bundle.ezbr_sha256 ?? "")) ||
+        typeof bundle.verify_jwt !== "boolean",
+    )
+  ) {
+    throw new Error(
+      "Production Edge attestation must contain a valid deployed bundle inventory.",
+    );
+  }
+  return { database, edge };
 }
 
 export function validateStagingLease({
@@ -958,6 +1502,7 @@ export function assertEdgeSourceManifestParity(staging, candidate) {
 export function assertCloudflareDeployment({
   deployment,
   expectedProject,
+  expectedProjectId,
   expectedEnvironment,
   expectedBranch,
   expectedSha,
@@ -971,6 +1516,13 @@ export function assertCloudflareDeployment({
     record.latest_stage,
     "Cloudflare deployment latest stage",
   );
+  if (
+    typeof expectedProjectId !== "string" ||
+    expectedProjectId.trim().length === 0 ||
+    String(record.project_id ?? "") !== expectedProjectId.trim()
+  ) {
+    throw new Error("Cloudflare deployment project ID does not match.");
+  }
   if (String(record.project_name ?? "") !== String(expectedProject)) {
     throw new Error("Cloudflare deployment project does not match.");
   }
@@ -1046,8 +1598,12 @@ async function workflowRuns({ repository, workflow, sha, token }) {
 
 async function jobsForRuns({ repository, runs, token }) {
   const entries = await Promise.all((runs ?? []).map(async (run) => {
+    const runAttempt = Number(run?.run_attempt);
+    if (!Number.isSafeInteger(runAttempt) || runAttempt <= 0) {
+      throw new Error(`GitHub workflow run ${run?.id ?? "unknown"} has no valid run attempt.`);
+    }
     const payload = await githubJson(
-      `/repos/${repository}/actions/runs/${run.id}/jobs?per_page=100`,
+      `/repos/${repository}/actions/runs/${run.id}/attempts/${runAttempt}/jobs?per_page=100`,
       token,
     );
     return [run.id, payload.jobs ?? []];
@@ -1103,6 +1659,17 @@ async function verifyGithubReleaseApproval({ repository, sha, token }) {
   });
   const jobsByRun = await jobsForRuns({ repository, runs, token });
   return selectApprovalRun({ sha, runs, jobsByRun });
+}
+
+async function verifyGithubStripeReadiness({ repository, sha, token }) {
+  const runs = await workflowRuns({
+    repository,
+    workflow: "verify-stripe-live-readiness.yml",
+    sha,
+    token,
+  });
+  const jobsByRun = await jobsForRuns({ repository, runs, token });
+  return selectStripeReadinessRun({ sha, runs, jobsByRun });
 }
 
 async function verifyGithubStagingLease({
@@ -1170,6 +1737,7 @@ async function main() {
     assertCloudflareDeployment({
       deployment,
       expectedProject: argValue("--project"),
+      expectedProjectId: argValue("--project-id"),
       expectedEnvironment: argValue("--environment"),
       expectedBranch: argValue("--branch"),
       expectedSha: sha,
@@ -1256,10 +1824,60 @@ async function main() {
       approvalRunAttempt: argValue("--approval-run-attempt"),
       productionRunId: argValue("--production-run-id"),
       productionRunAttempt: argValue("--production-run-attempt"),
+      stripeReadinessRunId: argValue("--stripe-readiness-run-id"),
+      stripeReadinessRunAttempt: argValue("--stripe-readiness-run-attempt"),
+      stripeReadinessSha256: argValue("--stripe-readiness-sha256"),
+      stripeReadinessArtifactId: argValue("--stripe-readiness-artifact-id"),
+      stripeReadinessArtifactDigest: argValue(
+        "--stripe-readiness-artifact-digest",
+      ),
+      rollbackDeploymentId: argValue("--rollback-deployment-id"),
+      rollbackSha: argValue("--rollback-sha"),
+      candidateDeploymentId: argValue("--candidate-deployment-id"),
+      candidateSha: argValue("--candidate-sha"),
       now: argValue("--now") || undefined,
     });
     process.stdout.write(
       `Verified production mutation lease ${lease.production_run_id} for ${sha}.\n`,
+    );
+    return;
+  }
+  if (mode === "production-upstream-attestations") {
+    const database = JSON.parse(
+      readFileSync(argValue("--database-file"), "utf8"),
+    );
+    const edge = JSON.parse(
+      readFileSync(argValue("--edge-file"), "utf8"),
+    );
+    validateProductionPromotionAttestations({
+      database,
+      edge,
+      repository: argValue("--repository"),
+      sha,
+      sourceTree: argValue("--source-tree"),
+      sourceRunId: argValue("--source-run-id"),
+      sourceRunAttempt: argValue("--source-run-attempt"),
+      stagingRunId: argValue("--staging-run-id"),
+      stagingRunAttempt: argValue("--staging-run-attempt"),
+      approvalRunId: argValue("--approval-run-id"),
+      approvalRunAttempt: argValue("--approval-run-attempt"),
+      productionRunId: argValue("--production-run-id"),
+      productionRunAttempt: argValue("--production-run-attempt"),
+      artifactSha256: argValue("--artifact-sha256"),
+      manifestSha256: argValue("--manifest-sha256"),
+      supabaseSha256: argValue("--supabase-sha256"),
+      databaseSha256: argValue("--database-sha256"),
+      edgeSha256: argValue("--edge-sha256"),
+    });
+    process.stdout.write(
+      `${JSON.stringify({
+        schema_version: 1,
+        evidence_type: "maiprop-production-upstream-attestation-verification",
+        verified: true,
+        release_sha: sha,
+        database_sha256: argValue("--database-sha256"),
+        edge_sha256: argValue("--edge-sha256"),
+      }, null, 2)}\n`,
     );
     return;
   }
@@ -1313,6 +1931,19 @@ async function main() {
     );
     return;
   }
+  if (mode === "github-stripe-readiness") {
+    const run = await verifyGithubStripeReadiness({ repository, sha, token });
+    process.stdout.write(
+      `${JSON.stringify({
+        evidence_type: "maiprop-github-stripe-readiness-selection",
+        release_sha: sha,
+        stripe_readiness_run_id: String(run.id),
+        stripe_readiness_run_attempt: String(run.run_attempt),
+        verifier: String(run.actor?.login ?? ""),
+      }, null, 2)}\n`,
+    );
+    return;
+  }
   if (mode === "github-staging-lease") {
     const run = await verifyGithubStagingLease({
       repository,
@@ -1329,13 +1960,19 @@ async function main() {
   if (mode === "github-recovery") {
     const proof = await verifyGithubRecovery({ repository, sha, token });
     process.stdout.write(
-      `Verified final CI readiness (${proof.readiness.html_url ?? proof.readiness.id}) ` +
-      `and same-SHA backend proof (${proof.backend.html_url ?? proof.backend.id}).\n`,
+      `${JSON.stringify({
+        evidence_type: "maiprop-github-recovery-selection",
+        release_sha: sha,
+        readiness_run_id: String(proof.readiness.id),
+        readiness_run_attempt: String(proof.readiness.run_attempt),
+        backend_run_id: String(proof.backend.id),
+        backend_run_attempt: String(proof.backend.run_attempt),
+      }, null, 2)}\n`,
     );
     return;
   }
   throw new Error(
-    "Usage: production-release-validation.mjs <github-readiness|github-release-evidence|github-release-approval|github-staging-lease|github-recovery|cloudflare-deployment|release-candidate-attestation|release-approval|mutation-lease|supabase-target>",
+    "Usage: production-release-validation.mjs <github-readiness|github-release-evidence|github-release-approval|github-stripe-readiness|github-staging-lease|github-recovery|cloudflare-deployment|release-candidate-attestation|release-approval|mutation-lease|production-upstream-attestations|supabase-target>",
   );
 }
 

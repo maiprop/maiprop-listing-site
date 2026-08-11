@@ -12,7 +12,7 @@ const workflowNames = readdirSync(workflowDir)
   .filter((name) => /\.ya?ml$/i.test(name))
   .sort();
 
-describe("production mutation hard disable", () => {
+describe("production mutation boundaries", () => {
   it("keeps CI free of deployment jobs and mutation commands", () => {
     const ci = workflow("ci.yml");
     const jobs = parsedWorkflow("ci.yml").jobs;
@@ -27,12 +27,18 @@ describe("production mutation hard disable", () => {
     );
   });
 
-  it("keeps reusable-cloudflare-production-deploy.yml as an explicit disabled stub", () => {
+  it("allows Cloudflare production mutation only through the protected reusable boundary", () => {
     const name = "reusable-cloudflare-production-deploy.yml";
-    const jobs = parsedWorkflow(name).jobs;
+    const source = workflow(name);
+    const parsed = parsedWorkflow(name);
 
-    expect(jobs["validate-disabled"]).toBeDefined();
-    expect(jobs.deploy.if).toBe("${{ false }}");
+    expect(Object.keys(parsed.on)).toEqual(["workflow_call"]);
+    expect(parsed.jobs.deploy.environment).toBe("production");
+    expect(source).toContain("npx --no-install wrangler pages deploy dist");
+    expect(source).toContain("--commit-dirty=false");
+    expect(source).toContain("production-mutation-lease");
+    expect(source).not.toContain("secrets: inherit");
+    expect(source).not.toMatch(/npm run build|vite build/);
   });
 
   it.each([
@@ -59,7 +65,7 @@ describe("production mutation hard disable", () => {
     expect(runScripts).not.toMatch(/\$\{\{\s*(?:inputs|secrets)\./);
   });
 
-  it("keeps direct-cloudflare-production-deploy.yml validation-only and unconditionally non-mutating", () => {
+  it("keeps direct Cloudflare recovery exact-artifact and backend-proof gated", () => {
     const name = "direct-cloudflare-production-deploy.yml";
     const source = workflow(name);
     const jobs = parsedWorkflow(name).jobs;
@@ -67,25 +73,36 @@ describe("production mutation hard disable", () => {
       .map((step) => step.run ?? "")
       .join("\n");
 
-    expect(Object.keys(jobs)).toEqual(["validate"]);
-    expect(source).not.toMatch(
-      /CLOUDFLARE_API_TOKEN|SUPABASE_ACCESS_TOKEN|SUPABASE_SERVICE_ROLE_KEY/,
+    expect(Object.keys(jobs)).toEqual([
+      "validate",
+      "deploy-production-cloudflare",
+      "attest-production-recovery",
+    ]);
+    expect(jobs["deploy-production-cloudflare"].uses).toBe(
+      "./.github/workflows/reusable-cloudflare-production-deploy.yml",
     );
+    expect(source).toContain("github-recovery");
+    expect(source).toContain("backend_run_id");
+    expect(source).toContain("backend_run_attempt");
+    expect(source).toContain("backend_approval_run_id");
+    expect(source).toContain("backend_approval_run_attempt");
+    expect(source).toContain("production-mutation-lease");
+    expect(source).toContain("actions/attest-build-provenance@");
+    expect(source).not.toContain("secrets: inherit");
+    expect(source).not.toMatch(/npm run build|vite build/);
     expect(runScripts).not.toMatch(
       /\bpages deploy\b|\bsupabase db push\b|\bsupabase functions deploy\b/,
     );
-    expect(runScripts).toMatch(
-      /Production (?:recovery )?mutations remain disabled[\s\S]*?exit 1/,
-    );
   });
 
-  it("orchestrates production Supabase only through contract-bound reusable workflows", () => {
+  it("orchestrates database, Edge, and Cloudflare only through contract-bound reusable workflows", () => {
     const name = "deploy-production-release.yml";
     const source = workflow(name);
     const jobs = parsedWorkflow(name).jobs;
     const runScripts = [
       ...jobs.validate.steps,
       ...jobs["renew-edge-mutation-lease"].steps,
+      ...jobs["renew-cloudflare-mutation-lease"].steps,
     ].map((step) => step.run ?? "").join("\n");
 
     expect(Object.keys(jobs)).toEqual([
@@ -93,6 +110,9 @@ describe("production mutation hard disable", () => {
       "deploy-production-database",
       "renew-edge-mutation-lease",
       "deploy-production-edge",
+      "renew-cloudflare-mutation-lease",
+      "deploy-production-cloudflare",
+      "attest-production-release",
     ]);
     expect(jobs["deploy-production-database"].uses).toBe(
       "./.github/workflows/deploy-supabase-production-db.yml",
@@ -100,6 +120,16 @@ describe("production mutation hard disable", () => {
     expect(jobs["deploy-production-edge"].uses).toBe(
       "./.github/workflows/deploy-edge-functions.yml",
     );
+    expect(jobs["deploy-production-cloudflare"].uses).toBe(
+      "./.github/workflows/reusable-cloudflare-production-deploy.yml",
+    );
+    expect(jobs["attest-production-release"].permissions).toMatchObject({
+      actions: "read",
+      attestations: "write",
+      "artifact-metadata": "write",
+      contents: "read",
+      "id-token": "write",
+    });
     expect(source).not.toContain("secrets: inherit");
     expect(source).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
     expect(runScripts).not.toMatch(
@@ -118,7 +148,7 @@ describe("production mutation hard disable", () => {
     expect(ciJobs["deploy-supabase-staging"]).toBeUndefined();
     expect(stagingJobs["validate-source"]).toBeDefined();
     expect(stagingJobs["supabase-staging"]).toMatchObject({
-      needs: "validate-source",
+      needs: ["validate-source", "capture-production-n-minus-one"],
       uses: "./.github/workflows/reusable-supabase-staging.yml",
     });
     expect(workflow("stage-release.yml")).toContain(
@@ -133,6 +163,7 @@ describe("production mutation hard disable", () => {
     const authorizedMutationWorkflows = new Set([
       "deploy-edge-functions.yml",
       "deploy-supabase-production-db.yml",
+      "reusable-cloudflare-production-deploy.yml",
       "stage-release.yml",
       "reusable-supabase-staging.yml",
     ]);

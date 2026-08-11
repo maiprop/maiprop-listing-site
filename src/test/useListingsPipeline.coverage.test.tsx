@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   paginatedArgs: [] as unknown[],
   fullFetchArgs: [] as unknown[],
   fetchNextPage: vi.fn(),
+  refetch: vi.fn(),
   toastError: vi.fn(),
 }));
 
@@ -69,6 +70,7 @@ const defaultPaginated = () => ({
   isFetchingNextPage: false,
   isFetchNextPageError: false,
   fetchNextPage: mocks.fetchNextPage,
+  refetch: mocks.refetch,
 });
 
 const defaultFullFetch = () => ({
@@ -129,6 +131,15 @@ describe("useListingsPipeline branch coverage", () => {
       { enabled: true },
     ]);
     expect(mocks.fullFetchArgs).toEqual([]);
+  });
+
+  it("exposes the active query refetch for targeted initial-load retries", async () => {
+    mocks.refetch.mockResolvedValue({ data: undefined });
+
+    const { result } = renderHook(() => useListingsPipeline(options()));
+    await result.current.refetch();
+
+    expect(mocks.refetch).toHaveBeenCalledTimes(1);
   });
 
   it("uses cursor pagination within map bounds", async () => {

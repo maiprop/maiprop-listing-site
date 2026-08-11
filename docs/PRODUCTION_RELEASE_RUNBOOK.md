@@ -2,11 +2,11 @@
 
 ## Release Contract
 
-Production mutation is currently **disabled**. The repository variable
-`PRODUCTION_RELEASE_ENABLED` is reserved for the future protected release gate,
-but setting it to `true` is not sufficient to deploy while the workflow-level
-hard stop remains in place. CI, coordinated release, and recovery entry points
-validate evidence only and never mutate production.
+Production mutation is enabled only through the protected coordinated release
+and exact-artifact Cloudflare recovery workflows. Both fail closed unless
+`PRODUCTION_RELEASE_ENABLED=true`, the requested SHA is current `main`, signed
+staging and independent approval evidence validate, and the current workflow
+attempt owns an unexpired mutation lease.
 
 One full 40-character SHA is deployed in this order:
 
@@ -57,36 +57,56 @@ repository variables `CLOUDFLARE_PAGES_PROJECT_ID` and
 workflows to trusted `main` under `[CF-Pages-Skip]` before publishing the rest
 of the candidate. Run read/lock verification only from that independently
 verified current-main workflow SHA; no candidate branch receives provider
-secrets. Candidate-branch execution is rejected. Until the
-least-privilege secrets are provisioned, the isolated main-only read and edit
-steps may temporarily fall back to the existing `CLOUDFLARE_API_TOKEN`; rotate
-to the named read/edit tokens after bootstrap.
+secrets. Candidate-branch execution is rejected. Protected release trains do
+not use the legacy broad `CLOUDFLARE_API_TOKEN`.
 
 When the project-ID variables are absent, the read-only standards workflow
 GETs both fixed project names, validates identity/source type, and uploads
 minimized evidence containing their distinct IDs even when Git previews remain
 unlocked. It then fails with a bootstrap instruction without treating lock
 posture as an identity prerequisite. Set both variables from that evidence and
-rerun; only the pinned rerun enforces lock posture. The mutation workflow never
-bootstraps identity: both distinct pinned IDs are mandatory and validated
-before either PATCH.
+rerun; only the pinned rerun enforces lock posture. The bootstrap lock workflow
+never bootstraps identity: both distinct pinned IDs are mandatory before it can
+change Git integration posture. The production release train performs no
+project-settings PATCH and accepts only pre-provisioned runtime bindings.
 
-The `production` environment must contain:
+The caller resolves these repository or organization secrets explicitly when
+invoking the reusable provider boundaries:
 
 - `SUPABASE_ACCESS_TOKEN`
 - `VITE_SUPABASE_PROJECT_ID`
 - `VITE_SUPABASE_URL`
-- `SUPABASE_PRODUCTION_DB_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
-- `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
-- `VITE_APP_URL`
+- `CLOUDFLARE_STAGING_ACCOUNT_ID`
+- `CLOUDFLARE_PAGES_READ_TOKEN`
+- `CLOUDFLARE_PAGES_EDIT_TOKEN`
+- `CLOUDFLARE_STAGING_PAGES_READ_TOKEN`
+- `CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN`
+- `CLOUDFLARE_TURN_KEY_ID`
+- `CLOUDFLARE_TURN_API_TOKEN`
+
+The protected `production` environment contains
+`SUPABASE_PRODUCTION_DB_URL`. The reusable database job resolves that value
+inside its own `environment: production` job because GitHub callers cannot
+forward environment-only secrets through `workflow_call`.
 
 The Supabase project ref in `VITE_SUPABASE_PROJECT_ID`, the API host in
 `VITE_SUPABASE_URL`, and the direct host or pooler username in
 `SUPABASE_PRODUCTION_DB_URL` must identify the same production project. The
 database and Edge workflows fail before mutation when this proof does not
 match.
+
+Staging and production must use different Cloudflare account IDs. The staging
+workflow receives only the staging edit token and account ID. Production
+promotion receives the staging read token solely to re-attest the approved
+staging deployment, and it uses separate production read/edit credentials for
+production. Missing or equal account IDs fail before any provider mutation.
+
+Production Pages runtime bindings are provisioned outside the release train.
+Promotion verifies those bindings read-only against the pinned project and
+account identities, then proves N-1 compatibility using that exact runtime
+posture. It does not synchronize bindings or use a Supabase service-role secret.
 
 Optional frontend/runtime secrets used when configured are:
 
@@ -116,43 +136,85 @@ uploaded release evidence.
 - The staging gate proved an isolated Supabase staging project; a successful
   no-op or production fallback is not release readiness.
 - Staging migration, security, E2E, performance, and Lighthouse gates succeeded.
+- Before any staging mutation, the workflow captured the canonical production
+  N-1 deployment identity and its unexpired, attempt-qualified CI artifact.
 - Database and Edge changes are backward compatible with the N-1 frontend.
 - The N-1 frontend remains compatible with the post-migration database and the
-  newly deployed Edge Functions for the entire Cloudflare rollback window.
+  newly deployed Edge Functions for the entire Cloudflare rollback window. The
+  automated proof must run that captured artifact against the isolated staged
+  backend and finish with zero skipped, unexpected, or flaky catalogue tests.
+- Both the immutable staging deployment URL and stable staging origin pass the
+  public API latency/payload budgets. The exact-SHA browser proof must render
+  homepage, listings, auctions, and open houses, preserve auction identity into
+  detail navigation, show AI Market Insights, and make no direct listings REST
+  or `fetch-os-auctions` authority fallback request.
+- Exact-SHA CWV/query evidence stays within LCP 3000 ms, CLS 0.1, and INP 200 ms
+  plus each route's explicit Supabase request budget.
 - Every destructive schema or API change uses a two-phase rollout or feature
   gate. A release that breaks N-1 compatibility must not start.
 
-## Coordinated Deploy
+## Legacy Migration Convergence
 
-This procedure is intentionally unavailable while production mutations remain
-disabled. The dispatch validates the candidate and then fails closed before it
-can call a database, Edge Function, or Cloudflare mutation workflow.
+Historical migration-ledger differences are accepted only when they match the
+fixed, reviewed anomaly manifest at
+`supabase/reconciliation/production-history-v1.json`. The release train must
+reject any additional alias, marker-only entry, version collision, or changed
+canonical migration hash.
+
+Staging proves convergence by applying the normal migration chain once, then
+running `supabase/reconciliation/production-history-v1.sql` read-only and the
+pgTap contract in `supabase/tests/legacy_migration_convergence_test.sql`. The
+signed staging database attestation binds the canonical schema evidence object,
+its SHA-256 digest, and the forward cutover migration
+`20260811231659_reconcile_legacy_migration_effects.sql`.
+
+Production may start only when its pre-mutation history matches that signed
+manifest exactly. It applies the forward cutover through the ordinary
+lease-bound `supabase db push` path, captures the same read-only schema evidence
+afterward, and requires byte-for-byte equality with the signed staging object.
+The workflows must never run `supabase migration repair`, update
+`supabase_migrations.schema_migrations` directly, or rewrite/delete an applied
+migration to manufacture convergence.
+
+## Coordinated Deploy
 
 1. Open GitHub Actions and select **Deploy Production Release**.
 2. Select `main`.
 3. Enter the current full 40-character `main` SHA in `release_sha`.
 4. Enter `DEPLOY_PRODUCTION_RELEASE`.
 5. Run the workflow and do not start another production release until it ends.
+6. Confirm the serialized jobs complete in this order: database, renewed Edge
+   lease, Edge Functions, renewed Cloudflare lease, Cloudflare Pages, signed
+   aggregate.
+7. Retain the attempt-qualified N-1 source/compatibility, catalogue-performance,
+   database, Edge, Cloudflare, and final release artifacts. The schema-v4
+   staging attestation must bind every evidence digest. The final production
+   aggregate must report `release_status=passed` and
+   `rollback_performed=false`.
 
-The reusable database and Edge workflows permit standalone dry runs for
-inventory only. They reject standalone production mutations without an
-explicit release SHA from the coordinated release workflow.
+The database, Edge, and Cloudflare workflows are reusable boundaries only.
+They reject standalone production mutations that are not bound to the exact
+source, staging, approval, production run ID, run attempt, artifact digests,
+and current mutation lease supplied by the coordinated workflow.
 
 ## Cloudflare Recovery Entry Point
-
-**Direct Cloudflare Production Deploy** is also validation-only while
-`PRODUCTION_RELEASE_ENABLED` is disabled. It proves the current SHA and backend
-proof, then fails closed without invoking Cloudflare.
 
 The recovery workflow accepts only:
 
 - the current canonical `main` SHA;
 - successful **Immutable release candidate built** evidence for that SHA; and
 - backend proof from one completed **Deploy Production Release** run where both
-  the production database and Edge deployment jobs succeeded for that SHA.
+  the production database and Edge deployment jobs succeeded in the same run
+  attempt for that SHA; and
+- a fresh signed approval and fresh current-run mutation lease. The fresh
+  authorization run is intentionally distinct from the historical backend
+  proof run and approval identities.
 
-Enter `RECOVER_CLOUDFLARE_PRODUCTION`. This path cannot deploy an older SHA,
-cannot combine proof from separate runs, and cannot bypass final readiness.
+Enter `RECOVER_CLOUDFLARE_PRODUCTION`. The workflow downloads the existing CI
+artifact and attempt-qualified backend attestations; it never rebuilds. This
+path cannot deploy an older SHA, combine proof from separate runs or attempts,
+or bypass final readiness. Success produces a signed, attempt-qualified
+recovery aggregate with `rollback_performed=false`.
 
 ## Release Evidence
 
@@ -172,14 +234,29 @@ The Edge artifact contains:
 - an attestation linking the exact source manifest to the live inventory.
 
 Cloudflare captures the previous successful production deployment ID and SHA
-before deployment, writes the release SHA to `deploy-version.json`, and rejects
-a stable-domain health check serving any other SHA.
+before deployment, verifies immediately before mutation that the canonical
+deployment still has that exact ID/SHA pair, writes the release SHA to
+`deploy-version.json`, and rejects a stable-domain health check serving any
+other SHA. The captured rollback target must differ from the candidate SHA.
+
+The final signed aggregate binds the candidate and manifest digests, source and
+staging run attempts, authorization approval, backend run/approval attempts,
+immutable Cloudflare project ID, deployment ID and URL, mutation-lease digest,
+and every provider evidence digest. A successful rollback remains failed
+release evidence and is never attested as a successful release.
 
 ## Rollback Contract
 
 Rollback-candidate capture is mandatory. If Cloudflare cannot identify a
 successful prior production deployment with a full commit SHA, deployment
 stops before production is changed.
+
+The captured rollback deployment ID/SHA and the candidate SHA are bound into
+the rollback authorization lease. Immediately before deploy, the canonical
+production deployment must still equal the captured rollback pair. A rollback
+is allowed only when production is already at the exact rollback target or is
+still at the exact candidate deployment ID/SHA created by this run. A newer or
+unrelated deployment causes a fail-closed refusal instead of being overwritten.
 
 When the post-deploy health check fails:
 
@@ -209,5 +286,8 @@ applied production migration.
   state, correct the underlying Storage/configuration fault, then requeue the
   reviewed job with `requeue_storage_cleanup_job(uuid)`. Never delete by URL
   prefix or requeue unreviewed dead jobs in bulk.
-- A failed release is never resumed from a later stage. Correct the issue,
-  obtain new exact-SHA final readiness, and start a new coordinated release.
+- A database or Edge failure is never resumed from a later stage. Correct the
+  issue, obtain new exact-SHA final readiness, and start a new coordinated
+  release. The only supported late-stage recovery is the dedicated no-rebuild
+  Cloudflare workflow after one run attempt has already proved both backend
+  promotions.

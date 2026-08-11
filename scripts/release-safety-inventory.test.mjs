@@ -4,6 +4,7 @@ import {
   cloudflareHttpMutationViolation,
   findCloudflareHttpMutations,
   isAuthorizedCloudflareHttpMutationWorkflow,
+  scanWorkflows,
 } from "./release-safety-inventory.mjs";
 
 describe("release safety inventory", () => {
@@ -97,11 +98,20 @@ describe("release safety inventory", () => {
       ".github/workflows/stage-release.yml",
     )).toBe(true);
     expect(isAuthorizedCloudflareHttpMutationWorkflow(
+      ".github/workflows/reusable-cloudflare-production-deploy.yml",
+    )).toBe(true);
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(
       ".github/workflows/reusable-supabase-staging.yml",
     )).toBe(false);
     expect(isAuthorizedCloudflareHttpMutationWorkflow(
       ".github/workflows/compliance-evidence.yml",
     )).toBe(false);
+  });
+
+  it("enforces the GitHub Free HMAC artifact binding contract", () => {
+    const scopedViolations = scanWorkflows().violations.filter((violation) =>
+      violation.startsWith("GitHub Free release binding:"));
+    expect(scopedViolations).toEqual([]);
   });
 
   it("passes the checked inventory for documented environment variables", () => {

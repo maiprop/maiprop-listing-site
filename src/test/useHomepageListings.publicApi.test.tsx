@@ -202,6 +202,21 @@ describe("homepage public API fallback behavior", () => {
     expect(fromMock).not.toHaveBeenCalled();
   });
 
+  it("accepts the legacy bare-array open-house payload during cache rollout", async () => {
+    publicApiMock.mockResolvedValue([
+      { id: "legacy-open-house-1", title: "Athens Open House", city: "Athens" },
+      { id: "legacy-open-house-2", title: "Piraeus Open House", city: "Piraeus" },
+    ]);
+
+    const { result } = renderHookWithQuery(() => useHomepageOpenHouseListings());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.map((listing) => listing.id)).toEqual([
+      "legacy-open-house-1",
+      "legacy-open-house-2",
+    ]);
+  });
+
   it("does not fetch open houses before the deferred section is enabled", async () => {
     const { result } = renderHookWithQuery(() => useHomepageOpenHouseListings({ enabled: false }));
 

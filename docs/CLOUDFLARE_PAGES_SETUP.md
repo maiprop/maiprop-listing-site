@@ -2,8 +2,8 @@
 
 This repo builds immutable Cloudflare Pages release candidates in GitHub
 Actions. The default-off staging release train may deploy an exact reviewed
-candidate to the dedicated staging project. Production mutation remains
-hard-disabled.
+candidate to the dedicated staging project. Production promotion is permitted
+only through the protected, exact-artifact release train after signed approval.
 
 ## 1. Create the Pages project
 
@@ -28,7 +28,22 @@ hard-disabled.
 
 ## 2. GitHub Actions secrets
 
-Add the following repo-level secrets
+Protected release trains require these account-scoped secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `CLOUDFLARE_ACCOUNT_ID` | Production Cloudflare account ID. It must differ from the staging account ID. |
+| `CLOUDFLARE_PAGES_READ_TOKEN` | Read-only production Pages posture and deployment verification. |
+| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Production Pages deploy and compare-and-swap rollback only. Store in the protected `production` environment. |
+| `CLOUDFLARE_STAGING_ACCOUNT_ID` | Dedicated staging Cloudflare account ID. It must differ from production. |
+| `CLOUDFLARE_STAGING_PAGES_READ_TOKEN` | Read-only staging token used by production promotion to re-attest the approved staging deployment. |
+| `CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN` | Staging-only Pages deploy and rollback token. Store in the `staging` environment. |
+
+Do not use `CLOUDFLARE_API_TOKEN` in protected release trains. Tokens must be
+scoped to their named account and operation; no candidate-branch job receives
+provider credentials.
+
+The following table is retained only for legacy bootstrap compatibility
 (**Settings → Secrets and variables → Actions**):
 
 | Secret                  | How to obtain                                                                                         |
@@ -101,6 +116,10 @@ price value. It does not copy production bindings into staging.
 Adding a server-side binding requires updating the project settings, the
 staging preflight, and the attestation validator.
 
+The production release train also treats runtime bindings as pre-provisioned.
+It verifies them read-only, proves N-1 compatibility against the verified
+posture, and performs no project-settings PATCH or runtime-secret synchronization.
+
 The workflow repeats the two-project Pages API posture check after deployment
 and re-fetches both projects again immediately before final attestation. Live
 `/runtime-config.js` on both the immutable and canonical URLs must exactly match
@@ -164,9 +183,11 @@ apex and www as distinct origins.
 
 The staging train records and validates the prior canonical staging deployment
 before mutation, then uses that exact deployment as its rollback target when
-post-deploy validation fails. Production deployment and rollback automation
-remain disabled; do not use the staging workflow to mutate the production
-Pages project.
+post-deploy validation fails. Production uses the same fail-closed principle:
+it captures the prior production deployment ID/SHA, verifies that exact pair
+immediately before deploy, and rolls back only if the canonical deployment is
+still the exact candidate created by that run. The staging workflow never
+mutates the production Pages project.
 
 ## 7. Known follow-ups (not in this migration)
 
@@ -191,38 +212,30 @@ runtime environment, so nothing leaks into the shipped JS.
 
 ### Enable the lock
 
-Choose one:
+Provision and rotate this binding outside the protected release train. The
+release train verifies the pre-provisioned value read-only and will not create,
+change, or delete runtime bindings.
 
-**Option A — CI-managed (recommended).**
+**Legacy CI path (disabled).**
 
-1. Pick a strong passcode.
-2. Add it as a GitHub repo secret:
-   ```powershell
-   gh secret set SITE_LOCK_PASSWORD --repo maiprop/maiprop-listing-site
-   ```
-3. Push any commit to `main` (or re-run the latest `deploy` job). The
-   *Sync Cloudflare Pages runtime environment variables* step will push the
-   value into the Pages project as `secret_text`. On the next request the
-   middleware picks it up.
+Do not use this legacy path. GitHub no longer synchronizes runtime secrets
+during production promotion.
 
-**Option B — Cloudflare dashboard (one-off).**
+**Cloudflare dashboard.**
 
 Cloudflare dashboard → Workers & Pages → `maiprop-listing-site` → Settings
 → Environment variables → **Production** → add `SITE_LOCK_PASSWORD`
 (type: *Encrypt*). Trigger a redeploy (or the next CI run) so the Function
 runtime picks up the new binding.
 
-> Note: if you set the value via the dashboard only, the next CI deploy
-> will still preserve it — the sync step does a partial PATCH and only
-> touches keys it explicitly sends.
+The release train preserves this pre-provisioned binding because it performs
+no project-settings mutation.
 
 ### Disable the lock
 
-- **CI-managed:** delete the GitHub secret (`gh secret delete SITE_LOCK_PASSWORD`)
-  and re-run the production deploy. The CI sync step sends
-  `SITE_LOCK_PASSWORD: null` to Cloudflare Pages, which removes any previously
-  stored production binding before the new deployment is uploaded.
-- **Dashboard-only:** delete the variable on Cloudflare Pages and redeploy.
+- Delete the variable in Cloudflare Pages project settings and redeploy the
+  exact approved application artifact. The release train will verify the new
+  pre-provisioned posture but will not perform the deletion itself.
 
 ### Rotate the passcode
 

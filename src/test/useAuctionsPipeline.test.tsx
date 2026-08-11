@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 
-const { useAuctionListingsMock, useAuthMock, useSubscriptionMock, isPlatformAdminMock } = vi.hoisted(() => ({
+const { useAuctionListingsMock, useAuthMock, useSubscriptionMock, isPlatformAdminMock, refetchMock } = vi.hoisted(() => ({
   useAuctionListingsMock: vi.fn(),
   useAuthMock: vi.fn(),
   useSubscriptionMock: vi.fn(),
   isPlatformAdminMock: vi.fn(),
+  refetchMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/useAuctionListings", () => ({
@@ -69,6 +70,7 @@ describe("useAuctionsPipeline auction fetch limits", () => {
       isSuccess: true,
       isFetching: false,
       error: null,
+      refetch: refetchMock,
     });
     useAuthMock.mockReturnValue({ profile: null });
     useSubscriptionMock.mockReturnValue({ isPro: false });
@@ -87,6 +89,15 @@ describe("useAuctionsPipeline auction fetch limits", () => {
         filters: expect.objectContaining({ city: undefined }),
       }),
     );
+  });
+
+  it("exposes the active auction query refetch for targeted retries", async () => {
+    refetchMock.mockResolvedValue({ data: undefined });
+
+    const { result } = renderHook(() => useAuctionsPipeline(defaultOpts));
+    await result.current.refetch();
+
+    expect(refetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("requests one canonical server-paginated Pro query without hydration", () => {

@@ -14,9 +14,7 @@ on:
 
 permissions:
   actions: read
-  attestations: write
   contents: read
-  id-token: write
 
 concurrency:
   group: maiprop-production-release
@@ -25,14 +23,12 @@ concurrency:
 jobs:
   validate:
     name: Validate exact production release SHA
-    if: github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY_PRODUCTION_RELEASE'
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY_PRODUCTION_RELEASE' && github.run_attempt == 1 && github.actor == github.triggering_actor
     permissions:
       actions: read
-      attestations: read
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: production
     outputs:
       source_tree: ${{ steps.release_contract.outputs.source_tree }}
       source_run_id: ${{ steps.release_contract.outputs.source_run_id }}
@@ -41,11 +37,22 @@ jobs:
       staging_run_attempt: ${{ steps.release_contract.outputs.staging_run_attempt }}
       approval_run_id: ${{ steps.release_contract.outputs.approval_run_id }}
       approval_run_attempt: ${{ steps.release_contract.outputs.approval_run_attempt }}
+      stripe_readiness_run_id: ${{ steps.release_contract.outputs.stripe_readiness_run_id }}
+      stripe_readiness_run_attempt: ${{ steps.release_contract.outputs.stripe_readiness_run_attempt }}
+      stripe_readiness_sha256: ${{ steps.release_contract.outputs.stripe_readiness_sha256 }}
+      stripe_readiness_artifact_id: ${{ steps.release_contract.outputs.stripe_readiness_artifact_id }}
+      stripe_readiness_artifact_digest: ${{ steps.release_contract.outputs.stripe_readiness_artifact_digest }}
       artifact_sha256: ${{ steps.release_contract.outputs.artifact_sha256 }}
       manifest_sha256: ${{ steps.release_contract.outputs.manifest_sha256 }}
       approval_nonce: ${{ steps.release_contract.outputs.approval_nonce }}
       mutation_lease_artifact: ${{ steps.release_contract.outputs.mutation_lease_artifact }}
     steps:
+      - name: Fail closed on reruns or substituted actors
+        if: ${{ github.run_attempt != 1 || github.actor != github.triggering_actor }}
+        run: |
+          echo "::error::Production release requires a fresh attempt-1 dispatch by the original actor."
+          exit 1
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ inputs.release_sha }}
@@ -64,13 +71,23 @@ jobs:
           RELEASE_SHA: ${{ inputs.release_sha }}
           PRODUCTION_RELEASE_ENABLED: ${{ vars.PRODUCTION_RELEASE_ENABLED }}
           PRODUCTION_RELEASE_APPROVERS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
+          PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
           DEPLOY_ACTOR: ${{ github.actor }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
         run: |
           set -euo pipefail
           if [ "$PRODUCTION_RELEASE_ENABLED" != "true" ]; then
             echo "::error::Production release orchestration is disabled."
             exit 1
           fi
+          case ",${PRODUCTION_RELEASE_DEPLOYERS// /}," in
+            *,"$DEPLOY_ACTOR",*) ;;
+            *)
+              echo "::error::Production release dispatcher is not an allowlisted deployer."
+              exit 1
+              ;;
+          esac
           ACTUAL_SHA="$(git rev-parse HEAD)"
           if [ "$ACTUAL_SHA" != "$RELEASE_SHA" ]; then
             echo "::error::Checked out $ACTUAL_SHA, expected release SHA $RELEASE_SHA."
@@ -104,20 +121,41 @@ jobs:
 
           gh run download "$STAGING_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name "release-candidate-attestation-${RELEASE_SHA}" \
+            --name "release-candidate-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}" \
             --dir staging-evidence
-
-          gh attestation verify \
-            staging-evidence/release-candidate-attestation.json \
+          mkdir -p staging-binding staging-binding-metadata
+          gh run download "$STAGING_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/stage-release.yml" \
-            --signer-digest "$RELEASE_SHA" \
-            --source-digest "$RELEASE_SHA" \
-            --source-ref "refs/heads/main" \
-            --deny-self-hosted-runners \
-            --format json \
+            --name "release-candidate-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}-binding" \
+            --dir staging-binding
+          staging_artifact_id="$(jq -er '.artifact.id' staging-binding/release-artifact-binding.json)"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${staging_artifact_id}" \
+            > staging-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${STAGING_RUN_ID}" \
+            > staging-binding-metadata/run.json
+          staging_actor="$(jq -er '.actor.login' staging-binding-metadata/run.json)"
+          staging_triggering_actor="$(jq -er '.triggering_actor.login' staging-binding-metadata/run.json)"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding staging-binding/release-artifact-binding.json \
+            --payload-root staging-evidence/release-candidate-attestation.json \
+            --artifact-metadata staging-binding-metadata/artifact.json \
+            --producer-run staging-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/stage-release.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/stage-release.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event workflow_run \
+            --run-id "$STAGING_RUN_ID" \
+            --run-attempt "$STAGING_RUN_ATTEMPT" \
+            --actor "$staging_actor" \
+            --triggering-actor "$staging_triggering_actor" \
+            --artifact-id "$staging_artifact_id" \
+            --artifact-name "release-candidate-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}" \
+            --artifact-digest "$(jq -er '.digest' staging-binding-metadata/artifact.json)" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
             > staging-evidence/cryptographic-verification.json
-          jq -e 'length > 0' staging-evidence/cryptographic-verification.json > /dev/null
 
           node scripts/production-release-validation.mjs release-candidate-attestation \
             --file staging-evidence/release-candidate-attestation.json \
@@ -137,6 +175,96 @@ jobs:
             exit 1
           fi
 
+          node scripts/production-release-validation.mjs github-stripe-readiness \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            > stripe-readiness-selection.json
+          STRIPE_READINESS_RUN_ID="$(jq -er '.stripe_readiness_run_id' stripe-readiness-selection.json)"
+          STRIPE_READINESS_RUN_ATTEMPT="$(jq -er '.stripe_readiness_run_attempt' stripe-readiness-selection.json)"
+          STRIPE_READINESS_ACTOR="$(jq -er '.verifier' stripe-readiness-selection.json)"
+          if [ "$STRIPE_READINESS_RUN_ATTEMPT" != "1" ]; then
+            echo "::error::Stripe live readiness must come from attempt 1."
+            exit 1
+          fi
+          STRIPE_READINESS_ARTIFACT_NAME="stripe-live-readiness-${RELEASE_SHA}-${STRIPE_READINESS_RUN_ID}-1"
+          mkdir -p stripe-readiness-evidence
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${STRIPE_READINESS_RUN_ID}" \
+            > stripe-readiness-evidence/producer-run.json
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${STRIPE_READINESS_RUN_ID}/artifacts?per_page=100" \
+            > stripe-readiness-evidence/artifacts.json
+          if [ "$(jq --arg name "$STRIPE_READINESS_ARTIFACT_NAME" \
+            '[.artifacts[] | select(.name == $name and .expired == false)] | length' \
+            stripe-readiness-evidence/artifacts.json)" != "1" ]; then
+            echo "::error::Expected one immutable Stripe readiness artifact."
+            exit 1
+          fi
+          jq --arg name "$STRIPE_READINESS_ARTIFACT_NAME" \
+            '[.artifacts[] | select(.name == $name and .expired == false)][0]' \
+            stripe-readiness-evidence/artifacts.json \
+            > stripe-readiness-evidence/artifact.json
+          : > stripe-readiness-evidence/artifact-metadata.env
+          node scripts/github-artifact-metadata.mjs \
+            --artifact stripe-readiness-evidence/artifact.json \
+            --producer-run stripe-readiness-evidence/producer-run.json \
+            --name "$STRIPE_READINESS_ARTIFACT_NAME" \
+            --run-id "$STRIPE_READINESS_RUN_ID" \
+            --run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --release-sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow-path ".github/workflows/verify-stripe-live-readiness.yml" \
+            --event "workflow_dispatch" \
+            --branch "main" \
+            --actor "$STRIPE_READINESS_ACTOR" \
+            --github-output stripe-readiness-evidence/artifact-metadata.env
+          source stripe-readiness-evidence/artifact-metadata.env
+          STRIPE_READINESS_ARTIFACT_ID="$artifact_id"
+          STRIPE_READINESS_ARTIFACT_DIGEST="$artifact_digest"
+          gh run download "$STRIPE_READINESS_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$STRIPE_READINESS_ARTIFACT_NAME" \
+            --dir stripe-readiness-evidence
+          mkdir -p stripe-readiness-binding
+          gh run download "$STRIPE_READINESS_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "${STRIPE_READINESS_ARTIFACT_NAME}-binding" \
+            --dir stripe-readiness-binding
+          STRIPE_READINESS_TRIGGERING_ACTOR="$(jq -er '.triggering_actor.login' stripe-readiness-evidence/producer-run.json)"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding stripe-readiness-binding/release-artifact-binding.json \
+            --payload-root stripe-readiness-evidence/stripe-live-migration-evidence.json \
+            --artifact-metadata stripe-readiness-evidence/artifact.json \
+            --producer-run stripe-readiness-evidence/producer-run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/verify-stripe-live-readiness.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/verify-stripe-live-readiness.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event workflow_dispatch \
+            --run-id "$STRIPE_READINESS_RUN_ID" \
+            --run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --actor "$STRIPE_READINESS_ACTOR" \
+            --triggering-actor "$STRIPE_READINESS_TRIGGERING_ACTOR" \
+            --artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --artifact-name "$STRIPE_READINESS_ARTIFACT_NAME" \
+            --artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > stripe-readiness-evidence/binding-verification.json
+          RELEASE_EVIDENCE_NONCE="${STRIPE_READINESS_RUN_ID}:1:${RELEASE_SHA}" \
+            node scripts/verify-stripe-live-migration-evidence.mjs \
+              --evidence stripe-readiness-evidence/stripe-live-migration-evidence.json \
+              --release-sha "$RELEASE_SHA" \
+              --workflow-run-id "$STRIPE_READINESS_RUN_ID" \
+              --workflow-run-attempt "1" \
+              --evidence-nonce "${STRIPE_READINESS_RUN_ID}:1:${RELEASE_SHA}"
+          STRIPE_READINESS_SHA256="$(sha256sum stripe-readiness-evidence/stripe-live-migration-evidence.json | awk '{print $1}')"
+          if ! [[ "$STRIPE_READINESS_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Stripe live readiness evidence digest is invalid."
+            exit 1
+          fi
+
           node scripts/production-release-validation.mjs github-release-approval \
             --repository "$GITHUB_REPOSITORY" \
             --sha "$RELEASE_SHA" \
@@ -152,20 +280,42 @@ jobs:
           mkdir -p approval-evidence
           gh run download "$APPROVAL_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}" \
+            --name "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}" \
             --dir approval-evidence
-          gh attestation verify \
-            approval-evidence/production-release-approval.json \
+          mkdir -p approval-binding approval-binding-metadata
+          gh run download "$APPROVAL_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/approve-production-release.yml" \
-            --signer-digest "$RELEASE_SHA" \
-            --source-digest "$RELEASE_SHA" \
-            --source-ref "refs/heads/main" \
-            --deny-self-hosted-runners \
-            --format json \
+            --name "production-release-approval-binding-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}" \
+            --dir approval-binding
+          approval_artifact_id="$(jq -er '.artifact.id' approval-binding/release-artifact-binding.json)"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${approval_artifact_id}" \
+            > approval-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${APPROVAL_RUN_ID}" \
+            > approval-binding-metadata/run.json
+          approval_actor="$(jq -er '.actor.login' approval-binding-metadata/run.json)"
+          approval_triggering_actor="$(jq -er '.triggering_actor.login' approval-binding-metadata/run.json)"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding approval-binding/release-artifact-binding.json \
+            --payload-root approval-evidence/production-release-approval.json \
+            --artifact-metadata approval-binding-metadata/artifact.json \
+            --producer-run approval-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/approve-production-release.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/approve-production-release.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event workflow_dispatch \
+            --run-id "$APPROVAL_RUN_ID" \
+            --run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --actor "$approval_actor" \
+            --triggering-actor "$approval_triggering_actor" \
+            --artifact-id "$approval_artifact_id" \
+            --artifact-name "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}" \
+            --artifact-digest "$(jq -er '.digest' approval-binding-metadata/artifact.json)" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
             > approval-evidence/cryptographic-verification.json
-          jq -e 'length > 0' approval-evidence/cryptographic-verification.json > /dev/null
-          npm run release:validate -- release-approval \
+          npm run --silent release:validate -- release-approval \
             --file approval-evidence/production-release-approval.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -184,6 +334,9 @@ jobs:
           export RELEASE_SHA SOURCE_TREE SOURCE_RUN_ID SOURCE_RUN_ATTEMPT
           export STAGING_RUN_ID STAGING_RUN_ATTEMPT APPROVAL_RUN_ID
           export APPROVAL_RUN_ATTEMPT ARTIFACT_SHA256 APPROVAL_NONCE
+          export STRIPE_READINESS_RUN_ID STRIPE_READINESS_RUN_ATTEMPT
+          export STRIPE_READINESS_SHA256
+          export STRIPE_READINESS_ARTIFACT_ID STRIPE_READINESS_ARTIFACT_DIGEST
           node --input-type=module <<'NODE'
           import { randomBytes } from "node:crypto";
           import { writeFileSync } from "node:fs";
@@ -200,6 +353,14 @@ jobs:
             staging_run_attempt: process.env.STAGING_RUN_ATTEMPT,
             approval_run_id: process.env.APPROVAL_RUN_ID,
             approval_run_attempt: process.env.APPROVAL_RUN_ATTEMPT,
+            stripe_readiness_run_id: process.env.STRIPE_READINESS_RUN_ID,
+            stripe_readiness_run_attempt:
+              process.env.STRIPE_READINESS_RUN_ATTEMPT,
+            stripe_readiness_sha256: process.env.STRIPE_READINESS_SHA256,
+            stripe_readiness_artifact_id:
+              process.env.STRIPE_READINESS_ARTIFACT_ID,
+            stripe_readiness_artifact_digest:
+              process.env.STRIPE_READINESS_ARTIFACT_DIGEST,
             production_run_id: process.env.GITHUB_RUN_ID,
             production_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
             artifact_sha256: process.env.ARTIFACT_SHA256,
@@ -215,7 +376,7 @@ jobs:
             `${JSON.stringify(lease, null, 2)}\n`,
           );
           NODE
-          npm run release:validate -- mutation-lease \
+          npm run --silent release:validate -- mutation-lease \
             --file production-mutation-lease.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -229,9 +390,14 @@ jobs:
             --approval-run-id "$APPROVAL_RUN_ID" \
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --production-run-id "$GITHUB_RUN_ID" \
-            --production-run-attempt "$GITHUB_RUN_ATTEMPT"
+            --production-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
 
-          MUTATION_LEASE_ARTIFACT="production-mutation-lease-${RELEASE_SHA}-${GITHUB_RUN_ID}-database"
+          MUTATION_LEASE_ARTIFACT="production-mutation-lease-${RELEASE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-database"
           echo "source_tree=$SOURCE_TREE" >> "$GITHUB_OUTPUT"
           echo "source_run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
           echo "source_run_attempt=$SOURCE_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
@@ -239,6 +405,11 @@ jobs:
           echo "staging_run_attempt=$STAGING_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
           echo "approval_run_id=$APPROVAL_RUN_ID" >> "$GITHUB_OUTPUT"
           echo "approval_run_attempt=$APPROVAL_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "stripe_readiness_run_id=$STRIPE_READINESS_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "stripe_readiness_run_attempt=$STRIPE_READINESS_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "stripe_readiness_sha256=$STRIPE_READINESS_SHA256" >> "$GITHUB_OUTPUT"
+          echo "stripe_readiness_artifact_id=$STRIPE_READINESS_ARTIFACT_ID" >> "$GITHUB_OUTPUT"
+          echo "stripe_readiness_artifact_digest=$STRIPE_READINESS_ARTIFACT_DIGEST" >> "$GITHUB_OUTPUT"
           echo "artifact_sha256=$ARTIFACT_SHA256" >> "$GITHUB_OUTPUT"
           echo "manifest_sha256=$MANIFEST_SHA256" >> "$GITHUB_OUTPUT"
           echo "approval_nonce=$APPROVAL_NONCE" >> "$GITHUB_OUTPUT"
@@ -250,14 +421,86 @@ jobs:
             echo "- Static gate: Immutable release candidate built"
             echo "- Signed staging evidence run: $STAGING_RUN_ID (attempt $STAGING_RUN_ATTEMPT)"
             echo "- Independent approval run: $APPROVAL_RUN_ID (attempt $APPROVAL_RUN_ATTEMPT)"
+            echo "- Stripe live readiness run: $STRIPE_READINESS_RUN_ID (attempt $STRIPE_READINESS_RUN_ATTEMPT)"
             echo "- Database mutation lease: $MUTATION_LEASE_ARTIFACT"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload database mutation lease
+        id: database_lease_upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.release_contract.outputs.mutation_lease_artifact }}
           path: production-mutation-lease.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Create signed database mutation lease binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.database_lease_upload.outputs.artifact-digest }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.database_lease_upload.outputs.artifact-id }}
+          PAYLOAD_ARTIFACT_NAME: ${{ steps.release_contract.outputs.mutation_lease_artifact }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ steps.release_contract.outputs.source_tree }}
+        run: |
+          set -euo pipefail
+          mkdir -p database-lease-binding database-lease-binding-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > database-lease-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > database-lease-binding-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root production-mutation-lease.json \
+            --out database-lease-binding/release-artifact-binding.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/deploy-production-release.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$PAYLOAD_ARTIFACT_NAME" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding database-lease-binding/release-artifact-binding.json \
+            --payload-root production-mutation-lease.json \
+            --artifact-metadata database-lease-binding-metadata/artifact.json \
+            --producer-run database-lease-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/deploy-production-release.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$PAYLOAD_ARTIFACT_NAME" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > database-lease-binding/verification.json
+
+      - name: Upload database mutation lease binding
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.release_contract.outputs.mutation_lease_artifact }}-binding
+          path: database-lease-binding/
           if-no-files-found: error
           retention-days: 1
 
@@ -277,15 +520,21 @@ jobs:
       approval_run_attempt: ${{ needs.validate.outputs.approval_run_attempt }}
       production_run_id: ${{ github.run_id }}
       production_run_attempt: ${{ github.run_attempt }}
+      stripe_readiness_run_id: ${{ needs.validate.outputs.stripe_readiness_run_id }}
+      stripe_readiness_run_attempt: ${{ needs.validate.outputs.stripe_readiness_run_attempt }}
+      stripe_readiness_sha256: ${{ needs.validate.outputs.stripe_readiness_sha256 }}
+      stripe_readiness_artifact_id: ${{ needs.validate.outputs.stripe_readiness_artifact_id }}
+      stripe_readiness_artifact_digest: ${{ needs.validate.outputs.stripe_readiness_artifact_digest }}
       artifact_sha256: ${{ needs.validate.outputs.artifact_sha256 }}
       manifest_sha256: ${{ needs.validate.outputs.manifest_sha256 }}
       approval_nonce: ${{ needs.validate.outputs.approval_nonce }}
       mutation_lease_artifact: ${{ needs.validate.outputs.mutation_lease_artifact }}
     secrets:
+      RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
       VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-      SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
 
   renew-edge-mutation-lease:
     name: Renew Edge mutation lease after database promotion
@@ -293,11 +542,9 @@ jobs:
     if: ${{ needs.validate.result == 'success' && needs.deploy-production-database.result == 'success' }}
     permissions:
       actions: read
-      attestations: read
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment: production
     outputs:
       mutation_lease_artifact: ${{ steps.edge_lease.outputs.mutation_lease_artifact }}
     steps:
@@ -324,10 +571,17 @@ jobs:
           STAGING_RUN_ATTEMPT: ${{ needs.validate.outputs.staging_run_attempt }}
           APPROVAL_RUN_ID: ${{ needs.validate.outputs.approval_run_id }}
           APPROVAL_RUN_ATTEMPT: ${{ needs.validate.outputs.approval_run_attempt }}
+          STRIPE_READINESS_RUN_ID: ${{ needs.validate.outputs.stripe_readiness_run_id }}
+          STRIPE_READINESS_RUN_ATTEMPT: ${{ needs.validate.outputs.stripe_readiness_run_attempt }}
+          STRIPE_READINESS_SHA256: ${{ needs.validate.outputs.stripe_readiness_sha256 }}
+          STRIPE_READINESS_ARTIFACT_ID: ${{ needs.validate.outputs.stripe_readiness_artifact_id }}
+          STRIPE_READINESS_ARTIFACT_DIGEST: ${{ needs.validate.outputs.stripe_readiness_artifact_digest }}
           ARTIFACT_SHA256: ${{ needs.validate.outputs.artifact_sha256 }}
           APPROVAL_NONCE: ${{ needs.validate.outputs.approval_nonce }}
           PRODUCTION_RELEASE_APPROVERS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
           DEPLOY_ACTOR: ${{ github.actor }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
         run: |
           set -euo pipefail
           current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
@@ -347,17 +601,42 @@ jobs:
           mkdir -p approval-evidence
           gh run download "$APPROVAL_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}" \
+            --name "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}" \
             --dir approval-evidence
-          gh attestation verify \
-            approval-evidence/production-release-approval.json \
+          mkdir -p approval-binding approval-binding-metadata
+          gh run download "$APPROVAL_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/approve-production-release.yml" \
-            --signer-digest "$RELEASE_SHA" \
-            --source-digest "$RELEASE_SHA" \
-            --source-ref "refs/heads/main" \
-            --deny-self-hosted-runners
-          npm run release:validate -- release-approval \
+            --name "production-release-approval-binding-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}" \
+            --dir approval-binding
+          approval_artifact_id="$(jq -er '.artifact.id' approval-binding/release-artifact-binding.json)"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${approval_artifact_id}" \
+            > approval-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${APPROVAL_RUN_ID}" \
+            > approval-binding-metadata/run.json
+          approval_actor="$(jq -er '.actor.login' approval-binding-metadata/run.json)"
+          approval_triggering_actor="$(jq -er '.triggering_actor.login' approval-binding-metadata/run.json)"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding approval-binding/release-artifact-binding.json \
+            --payload-root approval-evidence/production-release-approval.json \
+            --artifact-metadata approval-binding-metadata/artifact.json \
+            --producer-run approval-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/approve-production-release.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/approve-production-release.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event workflow_dispatch \
+            --run-id "$APPROVAL_RUN_ID" \
+            --run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --actor "$approval_actor" \
+            --triggering-actor "$approval_triggering_actor" \
+            --artifact-id "$approval_artifact_id" \
+            --artifact-name "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}" \
+            --artifact-digest "$(jq -er '.digest' approval-binding-metadata/artifact.json)" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > approval-evidence/binding-verification.json
+          npm run --silent release:validate -- release-approval \
             --file approval-evidence/production-release-approval.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -387,6 +666,14 @@ jobs:
             staging_run_attempt: process.env.STAGING_RUN_ATTEMPT,
             approval_run_id: process.env.APPROVAL_RUN_ID,
             approval_run_attempt: process.env.APPROVAL_RUN_ATTEMPT,
+            stripe_readiness_run_id: process.env.STRIPE_READINESS_RUN_ID,
+            stripe_readiness_run_attempt:
+              process.env.STRIPE_READINESS_RUN_ATTEMPT,
+            stripe_readiness_sha256: process.env.STRIPE_READINESS_SHA256,
+            stripe_readiness_artifact_id:
+              process.env.STRIPE_READINESS_ARTIFACT_ID,
+            stripe_readiness_artifact_digest:
+              process.env.STRIPE_READINESS_ARTIFACT_DIGEST,
             production_run_id: process.env.GITHUB_RUN_ID,
             production_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
             artifact_sha256: process.env.ARTIFACT_SHA256,
@@ -402,7 +689,7 @@ jobs:
             `${JSON.stringify(lease, null, 2)}\n`,
           );
           NODE
-          npm run release:validate -- mutation-lease \
+          npm run --silent release:validate -- mutation-lease \
             --file production-mutation-lease.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -416,15 +703,91 @@ jobs:
             --approval-run-id "$APPROVAL_RUN_ID" \
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --production-run-id "$GITHUB_RUN_ID" \
-            --production-run-attempt "$GITHUB_RUN_ATTEMPT"
-          artifact_name="production-mutation-lease-${RELEASE_SHA}-${GITHUB_RUN_ID}-edge"
+            --production-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+          artifact_name="production-mutation-lease-${RELEASE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-edge"
           echo "mutation_lease_artifact=$artifact_name" >> "$GITHUB_OUTPUT"
 
       - name: Upload renewed Edge mutation lease
+        id: edge_lease_upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.edge_lease.outputs.mutation_lease_artifact }}
           path: production-mutation-lease.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Create signed Edge mutation lease binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.edge_lease_upload.outputs.artifact-digest }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.edge_lease_upload.outputs.artifact-id }}
+          PAYLOAD_ARTIFACT_NAME: ${{ steps.edge_lease.outputs.mutation_lease_artifact }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate.outputs.source_tree }}
+        run: |
+          set -euo pipefail
+          mkdir -p edge-lease-binding edge-lease-binding-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > edge-lease-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > edge-lease-binding-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root production-mutation-lease.json \
+            --out edge-lease-binding/release-artifact-binding.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/deploy-production-release.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$PAYLOAD_ARTIFACT_NAME" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding edge-lease-binding/release-artifact-binding.json \
+            --payload-root production-mutation-lease.json \
+            --artifact-metadata edge-lease-binding-metadata/artifact.json \
+            --producer-run edge-lease-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/deploy-production-release.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$PAYLOAD_ARTIFACT_NAME" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > edge-lease-binding/verification.json
+
+      - name: Upload Edge mutation lease binding
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.edge_lease.outputs.mutation_lease_artifact }}-binding
+          path: edge-lease-binding/
           if-no-files-found: error
           retention-days: 1
 
@@ -444,13 +807,729 @@ jobs:
       approval_run_attempt: ${{ needs.validate.outputs.approval_run_attempt }}
       production_run_id: ${{ github.run_id }}
       production_run_attempt: ${{ github.run_attempt }}
+      stripe_readiness_run_id: ${{ needs.validate.outputs.stripe_readiness_run_id }}
+      stripe_readiness_run_attempt: ${{ needs.validate.outputs.stripe_readiness_run_attempt }}
+      stripe_readiness_sha256: ${{ needs.validate.outputs.stripe_readiness_sha256 }}
+      stripe_readiness_artifact_id: ${{ needs.validate.outputs.stripe_readiness_artifact_id }}
+      stripe_readiness_artifact_digest: ${{ needs.validate.outputs.stripe_readiness_artifact_digest }}
       artifact_sha256: ${{ needs.validate.outputs.artifact_sha256 }}
       manifest_sha256: ${{ needs.validate.outputs.manifest_sha256 }}
       approval_nonce: ${{ needs.validate.outputs.approval_nonce }}
       mutation_lease_artifact: ${{ needs.renew-edge-mutation-lease.outputs.mutation_lease_artifact }}
       database_attestation_artifact: ${{ needs.deploy-production-database.outputs.database_attestation_artifact }}
       database_attestation_sha256: ${{ needs.deploy-production-database.outputs.database_attestation_sha256 }}
+      database_binding_artifact: ${{ needs.deploy-production-database.outputs.database_binding_artifact }}
     secrets:
+      RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+
+  renew-cloudflare-mutation-lease:
+    name: Renew Cloudflare mutation lease after backend promotion
+    needs: [validate, deploy-production-database, deploy-production-edge]
+    if: ${{ needs.validate.result == 'success' && needs.deploy-production-database.result == 'success' && needs.deploy-production-edge.result == 'success' }}
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mutation_lease_artifact: ${{ steps.cloudflare_lease.outputs.mutation_lease_artifact }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+
+      - name: Revalidate approval and create fresh Cloudflare mutation lease
+        id: cloudflare_lease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate.outputs.source_tree }}
+          SOURCE_RUN_ID: ${{ needs.validate.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.validate.outputs.source_run_attempt }}
+          STAGING_RUN_ID: ${{ needs.validate.outputs.staging_run_id }}
+          STAGING_RUN_ATTEMPT: ${{ needs.validate.outputs.staging_run_attempt }}
+          APPROVAL_RUN_ID: ${{ needs.validate.outputs.approval_run_id }}
+          APPROVAL_RUN_ATTEMPT: ${{ needs.validate.outputs.approval_run_attempt }}
+          STRIPE_READINESS_RUN_ID: ${{ needs.validate.outputs.stripe_readiness_run_id }}
+          STRIPE_READINESS_RUN_ATTEMPT: ${{ needs.validate.outputs.stripe_readiness_run_attempt }}
+          STRIPE_READINESS_SHA256: ${{ needs.validate.outputs.stripe_readiness_sha256 }}
+          STRIPE_READINESS_ARTIFACT_ID: ${{ needs.validate.outputs.stripe_readiness_artifact_id }}
+          STRIPE_READINESS_ARTIFACT_DIGEST: ${{ needs.validate.outputs.stripe_readiness_artifact_digest }}
+          ARTIFACT_SHA256: ${{ needs.validate.outputs.artifact_sha256 }}
+          APPROVAL_NONCE: ${{ needs.validate.outputs.approval_nonce }}
+          PRODUCTION_RELEASE_APPROVERS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if [ "$current_main" != "$RELEASE_SHA" ]; then
+            echo "::error::Release SHA is no longer current main before Cloudflare lease renewal."
+            exit 1
+          fi
+          node scripts/production-release-validation.mjs github-release-approval \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            > approval-selection.json
+          if [ "$(jq -r '.approval_run_id' approval-selection.json)" != "$APPROVAL_RUN_ID" ] ||
+             [ "$(jq -r '.approval_run_attempt' approval-selection.json)" != "$APPROVAL_RUN_ATTEMPT" ]; then
+            echo "::error::The approved release changed before Cloudflare lease renewal."
+            exit 1
+          fi
+          mkdir -p approval-evidence
+          gh run download "$APPROVAL_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}" \
+            --dir approval-evidence
+          mkdir -p approval-binding approval-binding-metadata
+          gh run download "$APPROVAL_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "production-release-approval-binding-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}" \
+            --dir approval-binding
+          approval_artifact_id="$(jq -er '.artifact.id' approval-binding/release-artifact-binding.json)"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${approval_artifact_id}" \
+            > approval-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${APPROVAL_RUN_ID}" \
+            > approval-binding-metadata/run.json
+          approval_actor="$(jq -er '.actor.login' approval-binding-metadata/run.json)"
+          approval_triggering_actor="$(jq -er '.triggering_actor.login' approval-binding-metadata/run.json)"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding approval-binding/release-artifact-binding.json \
+            --payload-root approval-evidence/production-release-approval.json \
+            --artifact-metadata approval-binding-metadata/artifact.json \
+            --producer-run approval-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/approve-production-release.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/approve-production-release.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event workflow_dispatch \
+            --run-id "$APPROVAL_RUN_ID" \
+            --run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --actor "$approval_actor" \
+            --triggering-actor "$approval_triggering_actor" \
+            --artifact-id "$approval_artifact_id" \
+            --artifact-name "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}" \
+            --artifact-digest "$(jq -er '.digest' approval-binding-metadata/artifact.json)" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > approval-evidence/binding-verification.json
+          npm run --silent release:validate -- release-approval \
+            --file approval-evidence/production-release-approval.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --deploy-actor "$DEPLOY_ACTOR" \
+            --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS"
+          node --input-type=module <<'NODE'
+          import { randomBytes } from "node:crypto";
+          import { writeFileSync } from "node:fs";
+
+          const issuedAt = new Date();
+          const lease = {
+            schema_version: 1,
+            repository: process.env.GITHUB_REPOSITORY,
+            release_sha: process.env.RELEASE_SHA,
+            source_tree: process.env.SOURCE_TREE,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
+            staging_run_id: process.env.STAGING_RUN_ID,
+            staging_run_attempt: process.env.STAGING_RUN_ATTEMPT,
+            approval_run_id: process.env.APPROVAL_RUN_ID,
+            approval_run_attempt: process.env.APPROVAL_RUN_ATTEMPT,
+            stripe_readiness_run_id: process.env.STRIPE_READINESS_RUN_ID,
+            stripe_readiness_run_attempt:
+              process.env.STRIPE_READINESS_RUN_ATTEMPT,
+            stripe_readiness_sha256: process.env.STRIPE_READINESS_SHA256,
+            stripe_readiness_artifact_id:
+              process.env.STRIPE_READINESS_ARTIFACT_ID,
+            stripe_readiness_artifact_digest:
+              process.env.STRIPE_READINESS_ARTIFACT_DIGEST,
+            production_run_id: process.env.GITHUB_RUN_ID,
+            production_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            approval_nonce: process.env.APPROVAL_NONCE,
+            nonce: randomBytes(32).toString("hex"),
+            issued_at: issuedAt.toISOString(),
+            expires_at: new Date(issuedAt.getTime() + 15 * 60 * 1000).toISOString(),
+          };
+          writeFileSync(
+            "production-mutation-lease.json",
+            `${JSON.stringify(lease, null, 2)}\n`,
+          );
+          NODE
+          npm run --silent release:validate -- mutation-lease \
+            --file production-mutation-lease.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$GITHUB_RUN_ID" \
+            --production-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+          artifact_name="production-mutation-lease-${RELEASE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-cloudflare"
+          echo "mutation_lease_artifact=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload renewed Cloudflare mutation lease
+        id: cloudflare_lease_upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.cloudflare_lease.outputs.mutation_lease_artifact }}
+          path: production-mutation-lease.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Create signed Cloudflare mutation lease binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.cloudflare_lease_upload.outputs.artifact-digest }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.cloudflare_lease_upload.outputs.artifact-id }}
+          PAYLOAD_ARTIFACT_NAME: ${{ steps.cloudflare_lease.outputs.mutation_lease_artifact }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate.outputs.source_tree }}
+        run: |
+          set -euo pipefail
+          mkdir -p cloudflare-lease-binding cloudflare-lease-binding-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > cloudflare-lease-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > cloudflare-lease-binding-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root production-mutation-lease.json \
+            --out cloudflare-lease-binding/release-artifact-binding.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/deploy-production-release.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$PAYLOAD_ARTIFACT_NAME" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding cloudflare-lease-binding/release-artifact-binding.json \
+            --payload-root production-mutation-lease.json \
+            --artifact-metadata cloudflare-lease-binding-metadata/artifact.json \
+            --producer-run cloudflare-lease-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/deploy-production-release.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$PAYLOAD_ARTIFACT_NAME" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > cloudflare-lease-binding/verification.json
+
+      - name: Upload Cloudflare mutation lease binding
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.cloudflare_lease.outputs.mutation_lease_artifact }}-binding
+          path: cloudflare-lease-binding/
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy-production-cloudflare:
+    name: Promote immutable candidate to Cloudflare production
+    needs:
+      [validate, deploy-production-database, deploy-production-edge, renew-cloudflare-mutation-lease]
+    if: ${{ needs.validate.result == 'success' && needs.deploy-production-database.result == 'success' && needs.deploy-production-edge.result == 'success' && needs.renew-cloudflare-mutation-lease.result == 'success' }}
+    uses: ./.github/workflows/reusable-cloudflare-production-deploy.yml
+    with:
+      release_sha: ${{ inputs.release_sha }}
+      source_tree: ${{ needs.validate.outputs.source_tree }}
+      source_run_id: ${{ needs.validate.outputs.source_run_id }}
+      source_run_attempt: ${{ needs.validate.outputs.source_run_attempt }}
+      staging_run_id: ${{ needs.validate.outputs.staging_run_id }}
+      staging_run_attempt: ${{ needs.validate.outputs.staging_run_attempt }}
+      approval_run_id: ${{ needs.validate.outputs.approval_run_id }}
+      approval_run_attempt: ${{ needs.validate.outputs.approval_run_attempt }}
+      production_run_id: ${{ github.run_id }}
+      production_run_attempt: ${{ github.run_attempt }}
+      backend_run_id: ${{ github.run_id }}
+      backend_run_attempt: ${{ github.run_attempt }}
+      backend_approval_run_id: ${{ needs.validate.outputs.approval_run_id }}
+      backend_approval_run_attempt: ${{ needs.validate.outputs.approval_run_attempt }}
+      stripe_readiness_run_id: ${{ needs.validate.outputs.stripe_readiness_run_id }}
+      stripe_readiness_run_attempt: ${{ needs.validate.outputs.stripe_readiness_run_attempt }}
+      stripe_readiness_sha256: ${{ needs.validate.outputs.stripe_readiness_sha256 }}
+      stripe_readiness_artifact_id: ${{ needs.validate.outputs.stripe_readiness_artifact_id }}
+      stripe_readiness_artifact_digest: ${{ needs.validate.outputs.stripe_readiness_artifact_digest }}
+      artifact_sha256: ${{ needs.validate.outputs.artifact_sha256 }}
+      manifest_sha256: ${{ needs.validate.outputs.manifest_sha256 }}
+      approval_nonce: ${{ needs.validate.outputs.approval_nonce }}
+      allowed_approvers: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
+      allowed_deployers: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+      deploy_actor: ${{ github.actor }}
+      release_evidence_signing_key_id: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+      mutation_lease_artifact: ${{ needs.renew-cloudflare-mutation-lease.outputs.mutation_lease_artifact }}
+      production_project_id: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+      staging_project_id: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+      database_attestation_artifact: ${{ needs.deploy-production-database.outputs.database_attestation_artifact }}
+      database_attestation_sha256: ${{ needs.deploy-production-database.outputs.database_attestation_sha256 }}
+      database_binding_artifact: ${{ needs.deploy-production-database.outputs.database_binding_artifact }}
+      edge_attestation_artifact: ${{ needs.deploy-production-edge.outputs.edge_attestation_artifact }}
+      edge_attestation_sha256: ${{ needs.deploy-production-edge.outputs.edge_attestation_sha256 }}
+      edge_binding_artifact: ${{ needs.deploy-production-edge.outputs.edge_binding_artifact }}
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+      CLOUDFLARE_PAGES_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
+      CLOUDFLARE_STAGING_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+      CLOUDFLARE_STAGING_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+      VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      CLOUDFLARE_TURN_KEY_ID: ${{ secrets.CLOUDFLARE_TURN_KEY_ID }}
+      CLOUDFLARE_TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_TURN_API_TOKEN }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+
+  attest-production-release:
+    name: Record coordinated production release
+    needs:
+      [validate, deploy-production-database, deploy-production-edge, renew-cloudflare-mutation-lease, deploy-production-cloudflare]
+    if: ${{ always() && needs.validate.result == 'success' && needs.deploy-production-database.result == 'success' && needs.deploy-production-edge.result == 'success' && needs.renew-cloudflare-mutation-lease.result == 'success' && needs.deploy-production-cloudflare.result == 'success' }}
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+
+      - name: Download production database evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.deploy-production-database.outputs.database_attestation_artifact }}
+          path: evidence/database
+
+      - name: Download production Edge evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.deploy-production-edge.outputs.edge_attestation_artifact }}
+          path: evidence/edge
+
+      - name: Download Cloudflare production evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.deploy-production-cloudflare.outputs.evidence_artifact }}
+          path: evidence/cloudflare
+
+      - name: Download Cloudflare production evidence binding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.deploy-production-cloudflare.outputs.evidence_binding_artifact }}
+          path: evidence/cloudflare-binding
+
+      - name: Verify Cloudflare production evidence binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate.outputs.source_tree }}
+          CLOUDFLARE_ARTIFACT_NAME: ${{ needs.deploy-production-cloudflare.outputs.evidence_artifact }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/cloudflare-binding-metadata
+          artifact_id="$(jq -er '.artifact.id' evidence/cloudflare-binding/release-artifact-binding.json)"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" \
+            > evidence/cloudflare-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > evidence/cloudflare-binding-metadata/run.json
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding evidence/cloudflare-binding/release-artifact-binding.json \
+            --payload-root evidence/cloudflare/cloudflare-production-evidence.json \
+            --artifact-metadata evidence/cloudflare-binding-metadata/artifact.json \
+            --producer-run evidence/cloudflare-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/deploy-production-release.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/deploy-production-release.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event workflow_dispatch \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$artifact_id" \
+            --artifact-name "$CLOUDFLARE_ARTIFACT_NAME" \
+            --artifact-digest "$(jq -er '.digest' evidence/cloudflare-binding-metadata/artifact.json)" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > evidence/cloudflare-binding-metadata/verification.json
+
+      - name: Download exact Stripe live readiness evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: stripe-live-readiness-${{ inputs.release_sha }}-${{ needs.validate.outputs.stripe_readiness_run_id }}-1
+          path: evidence/stripe
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.validate.outputs.stripe_readiness_run_id }}
+
+      - name: Download Stripe live readiness binding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: stripe-live-readiness-${{ inputs.release_sha }}-${{ needs.validate.outputs.stripe_readiness_run_id }}-1-binding
+          path: evidence/stripe-binding
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.validate.outputs.stripe_readiness_run_id }}
+
+      - name: Verify Stripe live readiness binding again
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate.outputs.source_tree }}
+          STRIPE_RUN_ID: ${{ needs.validate.outputs.stripe_readiness_run_id }}
+          STRIPE_RUN_ATTEMPT: ${{ needs.validate.outputs.stripe_readiness_run_attempt }}
+          STRIPE_ARTIFACT_ID: ${{ needs.validate.outputs.stripe_readiness_artifact_id }}
+          STRIPE_ARTIFACT_DIGEST: ${{ needs.validate.outputs.stripe_readiness_artifact_digest }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/stripe-binding-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${STRIPE_ARTIFACT_ID}" \
+            > evidence/stripe-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${STRIPE_RUN_ID}" \
+            > evidence/stripe-binding-metadata/run.json
+          stripe_actor="$(jq -er '.actor.login' evidence/stripe-binding-metadata/run.json)"
+          stripe_triggering_actor="$(jq -er '.triggering_actor.login' evidence/stripe-binding-metadata/run.json)"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding evidence/stripe-binding/release-artifact-binding.json \
+            --payload-root evidence/stripe/stripe-live-migration-evidence.json \
+            --artifact-metadata evidence/stripe-binding-metadata/artifact.json \
+            --producer-run evidence/stripe-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/verify-stripe-live-readiness.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/verify-stripe-live-readiness.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event workflow_dispatch \
+            --run-id "$STRIPE_RUN_ID" \
+            --run-attempt "$STRIPE_RUN_ATTEMPT" \
+            --actor "$stripe_actor" \
+            --triggering-actor "$stripe_triggering_actor" \
+            --artifact-id "$STRIPE_ARTIFACT_ID" \
+            --artifact-name "stripe-live-readiness-${RELEASE_SHA}-${STRIPE_RUN_ID}-${STRIPE_RUN_ATTEMPT}" \
+            --artifact-digest "$STRIPE_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > evidence/stripe-binding-verification.json
+
+      - name: Download final Cloudflare mutation lease
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.renew-cloudflare-mutation-lease.outputs.mutation_lease_artifact }}
+          path: evidence/lease
+
+      - name: Validate and aggregate production release evidence
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate.outputs.source_tree }}
+          SOURCE_RUN_ID: ${{ needs.validate.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.validate.outputs.source_run_attempt }}
+          STAGING_RUN_ID: ${{ needs.validate.outputs.staging_run_id }}
+          STAGING_RUN_ATTEMPT: ${{ needs.validate.outputs.staging_run_attempt }}
+          APPROVAL_RUN_ID: ${{ needs.validate.outputs.approval_run_id }}
+          APPROVAL_RUN_ATTEMPT: ${{ needs.validate.outputs.approval_run_attempt }}
+          STRIPE_READINESS_RUN_ID: ${{ needs.validate.outputs.stripe_readiness_run_id }}
+          STRIPE_READINESS_RUN_ATTEMPT: ${{ needs.validate.outputs.stripe_readiness_run_attempt }}
+          STRIPE_READINESS_SHA256: ${{ needs.validate.outputs.stripe_readiness_sha256 }}
+          STRIPE_READINESS_ARTIFACT_ID: ${{ needs.validate.outputs.stripe_readiness_artifact_id }}
+          STRIPE_READINESS_ARTIFACT_DIGEST: ${{ needs.validate.outputs.stripe_readiness_artifact_digest }}
+          ARTIFACT_SHA256: ${{ needs.validate.outputs.artifact_sha256 }}
+          MANIFEST_SHA256: ${{ needs.validate.outputs.manifest_sha256 }}
+          DATABASE_SHA256: ${{ needs.deploy-production-database.outputs.database_attestation_sha256 }}
+          EDGE_SHA256: ${{ needs.deploy-production-edge.outputs.edge_attestation_sha256 }}
+          CLOUDFLARE_SHA256: ${{ needs.deploy-production-cloudflare.outputs.evidence_sha256 }}
+          CLOUDFLARE_DEPLOYMENT_ID: ${{ needs.deploy-production-cloudflare.outputs.deployment_id }}
+          CLOUDFLARE_DEPLOYMENT_URL: ${{ needs.deploy-production-cloudflare.outputs.deployment_url }}
+          CLOUDFLARE_ROLLBACK_PERFORMED: ${{ needs.deploy-production-cloudflare.outputs.rollback_performed }}
+          PRODUCTION_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const readBytes = (path) => readFileSync(path);
+          const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+          const readEvidence = (path, expectedDigest, label) => {
+            const bytes = readBytes(path);
+            const digest = sha256(bytes);
+            if (digest !== expectedDigest) {
+              throw new Error(`${label} digest does not match its reusable-workflow output.`);
+            }
+            return { digest, value: JSON.parse(bytes.toString("utf8")) };
+          };
+          const database = readEvidence(
+            "evidence/database/production-supabase-db-attestation.json",
+            process.env.DATABASE_SHA256,
+            "Database evidence",
+          );
+          const edge = readEvidence(
+            "evidence/edge/production-supabase-edge-attestation.json",
+            process.env.EDGE_SHA256,
+            "Edge evidence",
+          );
+          const cloudflare = readEvidence(
+            "evidence/cloudflare/cloudflare-production-evidence.json",
+            process.env.CLOUDFLARE_SHA256,
+            "Cloudflare evidence",
+          );
+          const leaseBytes = readBytes(
+            "evidence/lease/production-mutation-lease.json",
+          );
+          const lease = JSON.parse(leaseBytes.toString("utf8"));
+          const stripeBytes = readBytes(
+            "evidence/stripe/stripe-live-migration-evidence.json",
+          );
+          const stripeDigest = sha256(stripeBytes);
+          const stripe = JSON.parse(stripeBytes.toString("utf8"));
+          if (
+            stripeDigest !== process.env.STRIPE_READINESS_SHA256 ||
+            stripe.ok !== true ||
+            stripe.release_sha !== process.env.RELEASE_SHA ||
+            String(stripe.provenance?.workflow_run_id ?? "") !==
+              process.env.STRIPE_READINESS_RUN_ID ||
+            String(stripe.provenance?.workflow_run_attempt ?? "") !==
+              process.env.STRIPE_READINESS_RUN_ATTEMPT
+          ) {
+            throw new Error(
+              "Stripe live readiness evidence does not match the coordinated release tuple.",
+            );
+          }
+          if (
+            String(lease.stripe_readiness_run_id ?? "") !==
+              process.env.STRIPE_READINESS_RUN_ID ||
+            String(lease.stripe_readiness_run_attempt ?? "") !==
+              process.env.STRIPE_READINESS_RUN_ATTEMPT ||
+            lease.stripe_readiness_sha256 !==
+              process.env.STRIPE_READINESS_SHA256 ||
+            String(lease.stripe_readiness_artifact_id ?? "") !==
+              process.env.STRIPE_READINESS_ARTIFACT_ID ||
+            lease.stripe_readiness_artifact_digest !==
+              process.env.STRIPE_READINESS_ARTIFACT_DIGEST
+          ) {
+            throw new Error(
+              "The final mutation lease does not preserve the Stripe readiness artifact binding.",
+            );
+          }
+          const expected = {
+            repository: process.env.GITHUB_REPOSITORY,
+            release_sha: process.env.RELEASE_SHA,
+            source_tree: process.env.SOURCE_TREE,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
+            staging_run_id: process.env.STAGING_RUN_ID,
+            staging_run_attempt: process.env.STAGING_RUN_ATTEMPT,
+            approval_run_id: process.env.APPROVAL_RUN_ID,
+            approval_run_attempt: process.env.APPROVAL_RUN_ATTEMPT,
+            production_run_id: process.env.GITHUB_RUN_ID,
+            production_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            manifest_sha256: process.env.MANIFEST_SHA256,
+          };
+          for (const [name, record] of [
+            ["database", database.value],
+            ["edge", edge.value],
+            ["cloudflare", cloudflare.value],
+          ]) {
+            for (const [field, value] of Object.entries(expected)) {
+              if (String(record[field] ?? "") !== String(value)) {
+                throw new Error(`${name} ${field} does not match the coordinated release tuple.`);
+              }
+            }
+          }
+          if (
+            cloudflare.value.release_status !== "passed" ||
+            cloudflare.value.rollback_performed === true ||
+            process.env.CLOUDFLARE_ROLLBACK_PERFORMED === "true" ||
+            !["not-requested", "skipped"].includes(
+              cloudflare.value.outcomes?.rollback,
+            ) ||
+            cloudflare.value.project_id !== process.env.PRODUCTION_PROJECT_ID ||
+            cloudflare.value.deployment_id !== process.env.CLOUDFLARE_DEPLOYMENT_ID ||
+            cloudflare.value.deployment_url !== process.env.CLOUDFLARE_DEPLOYMENT_URL
+          ) {
+            throw new Error("Cloudflare evidence does not prove a successful non-rollback production promotion.");
+          }
+          const aggregate = {
+            schema_version: 1,
+            evidence_type: "maiprop-coordinated-production-release",
+            ...expected,
+            stripe_readiness_run_id: process.env.STRIPE_READINESS_RUN_ID,
+            stripe_readiness_run_attempt:
+              process.env.STRIPE_READINESS_RUN_ATTEMPT,
+            stripe_readiness_sha256: process.env.STRIPE_READINESS_SHA256,
+            stripe_readiness_artifact_id:
+              process.env.STRIPE_READINESS_ARTIFACT_ID,
+            stripe_readiness_artifact_digest:
+              process.env.STRIPE_READINESS_ARTIFACT_DIGEST,
+            backend_run_id: process.env.GITHUB_RUN_ID,
+            backend_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+            project_id: process.env.PRODUCTION_PROJECT_ID,
+            deployment_id: cloudflare.value.deployment_id,
+            deployment_url: cloudflare.value.deployment_url,
+            rollback_performed: false,
+            release_status: "passed",
+            evidence_sha256: {
+              database: database.digest,
+              edge: edge.digest,
+              cloudflare: cloudflare.digest,
+              stripe_readiness: stripeDigest,
+              mutation_lease: sha256(leaseBytes),
+            },
+            completed_at: new Date().toISOString(),
+          };
+          writeFileSync(
+            "production-release-attestation.json",
+            `${JSON.stringify(aggregate, null, 2)}\n`,
+          );
+          NODE
+
+      - name: Upload coordinated production release evidence
+        id: production_release_upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-release-attestation-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: production-release-attestation.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Create signed coordinated production release binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.production_release_upload.outputs.artifact-digest }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.production_release_upload.outputs.artifact-id }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate.outputs.source_tree }}
+        run: |
+          set -euo pipefail
+          artifact_name="production-release-attestation-${RELEASE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p production-release-binding production-release-binding-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > production-release-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > production-release-binding-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root production-release-attestation.json \
+            --out production-release-binding/release-artifact-binding.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/deploy-production-release.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$artifact_name" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding production-release-binding/release-artifact-binding.json \
+            --payload-root production-release-attestation.json \
+            --artifact-metadata production-release-binding-metadata/artifact.json \
+            --producer-run production-release-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/deploy-production-release.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$artifact_name" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > production-release-binding/verification.json
+
+      - name: Upload coordinated production release binding
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-release-attestation-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}-binding
+          path: production-release-binding/
+          if-no-files-found: error
+          retention-days: 90

@@ -20,12 +20,15 @@ function deployment({
   sha,
   project = stagingProject,
   status = "success",
+  commitDirty = false,
+  usesFunctions = true,
 }) {
   return {
     id,
     project_name: project,
     environment: "production",
     is_skipped: false,
+    uses_functions: usesFunctions,
     latest_stage: {
       name: "deploy",
       status,
@@ -34,6 +37,7 @@ function deployment({
       metadata: {
         branch: "main",
         commit_hash: sha,
+        commit_dirty: commitDirty,
       },
     },
   };
@@ -207,6 +211,29 @@ describe("staging rollback authorization", () => {
     expect(sameIdResult.stderr).toMatch(/distinct from the failed deployment/i);
   });
 
+  it("rejects dirty or functionless rollback deployments", () => {
+    for (const previousDeployment of [
+      deployment({
+        id: previousDeploymentId,
+        sha: previousReleaseSha,
+        commitDirty: true,
+      }),
+      deployment({
+        id: previousDeploymentId,
+        sha: previousReleaseSha,
+        usesFunctions: false,
+      }),
+    ]) {
+      const result = runValidator({
+        priorProject: projectSnapshot(previousDeployment),
+        previousDeployment,
+      });
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/successful rollback target/i);
+    }
+  });
+
   it("wires only the rollback authorization block to recovery validation", () => {
     const workflow = readFileSync(
       resolve(root, ".github", "workflows", "stage-release.yml"),
@@ -237,7 +264,7 @@ describe("staging rollback authorization", () => {
       "- name: Revalidate staging lease before Pages mutation",
     );
     expect(workflow).toContain(
-      "npm run release:validate -- github-staging-lease",
+      "npm run --silent release:validate -- github-staging-lease",
     );
   });
 });

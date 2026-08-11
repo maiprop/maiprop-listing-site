@@ -168,9 +168,29 @@ describe("small interaction widgets", () => {
     render(<CookieConsentBanner />);
     act(() => vi.advanceTimersByTime(1300));
     expect(screen.getByText("cookie.title")).toBeInTheDocument();
-    expect(screen.getByTestId("cookie-consent-banner")).toHaveClass("max-h-[38svh]");
+    expect(screen.getByTestId("cookie-consent-banner")).toHaveClass(
+      "flex",
+      "flex-col",
+      "max-h-[calc(100svh-5rem)]",
+      "left-2",
+      "right-2",
+      "sm:left-4",
+      "sm:right-4",
+      "sm:mx-auto",
+    );
+    expect(screen.getByTestId("cookie-consent-banner")).not.toHaveClass("sm:-translate-x-1/2");
 
     fireEvent.click(screen.getByRole("button", { name: /cookie.managePreferences/i }));
+    expect(screen.getByTestId("cookie-preferences-panel")).toHaveClass(
+      "min-h-0",
+      "flex-1",
+      "overflow-y-auto",
+    );
+    expect(screen.getByRole("switch", { name: "cookie.essential.title" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "cookie.functional.title" })).toBeEnabled();
+    expect(screen.getByRole("switch", { name: "cookie.analytics.title" })).toBeEnabled();
+    expect(screen.getByRole("switch", { name: "cookie.mapping.title" })).toBeEnabled();
+    expect(screen.getByTestId("cookie-actions")).toHaveClass("shrink-0");
     fireEvent.click(screen.getByText("cookie.analytics.title").closest("div")!.parentElement!.querySelector("button")!);
     fireEvent.click(screen.getByText("cookie.mapping.title").closest("div")!.parentElement!.querySelector("button")!);
     fireEvent.click(screen.getByRole("button", { name: /cookie.savePreferences/i }));

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   mutate: vi.fn(),
   pipeline: vi.fn(),
+  refetch: vi.fn(),
   trackUserSearch: vi.fn(),
   search: "city=Athens&type=apartment",
 }));
@@ -43,7 +44,13 @@ vi.mock("@/hooks/useTrackUserSearch", () => ({
 
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
 vi.mock("@/components/Footer", () => ({ Footer: () => <footer data-testid="footer" /> }));
-vi.mock("@/components/auctions/AuctionHero", () => ({ AuctionHero: () => <section data-testid="auction-hero" /> }));
+vi.mock("@/components/auctions/AuctionHero", () => ({
+  AuctionHero: ({ stats }: { stats: Array<{ label: string; value: string }> }) => (
+    <section data-testid="auction-hero">
+      {stats.map((stat) => <span key={stat.label} data-testid="auction-stat-value">{stat.value}</span>)}
+    </section>
+  ),
+}));
 vi.mock("@/components/AuctionAlertModal", () => ({
   AuctionAlertModal: ({ onClose }: { onClose: () => void }) => (
     <div role="dialog" aria-label="auction alert"><button onClick={onClose}>close alert</button></div>
@@ -127,6 +134,7 @@ function setPipeline(overrides: Record<string, unknown> = {}) {
     totalRaw: 10,
     mapListings: [auction],
     mappableCount: 1,
+    refetch: mocks.refetch,
     ...overrides,
   };
   mocks.pipeline.mockReturnValue(value);
@@ -268,13 +276,44 @@ describe("Auctions page coverage", () => {
     await waitFor(() => expect(screen.getByText(/No auctions match your filters/i)).toBeInTheDocument());
   });
 
-  it("renders the API error state without presenting stale auction cards", () => {
-    setPipeline({ error: new Error("upstream unavailable"), visibleFiltered: [], paginated: [] });
+  it("renders unavailable stats and a targeted retry without presenting stale auction cards", () => {
+    setPipeline({
+      error: new Error("upstream unavailable"),
+      visibleFiltered: [],
+      visibleCount: 0,
+      paginated: [],
+      mapListings: [],
+      mappableCount: 0,
+    });
 
     renderWithProviders(<Auctions />);
 
-    expect(screen.getByText("Failed to load auctions. Please try again.")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Failed to load auctions. Please try again.");
+    expect(screen.getAllByTestId("auction-stat-value")).toHaveLength(3);
+    expect(screen.getAllByTestId("auction-stat-value").every((node) => node.textContent === "—")).toBe(true);
     expect(screen.queryByText("Athens Auction")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(mocks.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps map failures distinct from a factual no-results state and localizes retry", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+    setPipeline({
+      error: new Error("upstream unavailable"),
+      visibleFiltered: [],
+      visibleCount: 0,
+      paginated: [],
+      mapListings: [],
+      mappableCount: 0,
+    });
+
+    renderWithProviders(<Auctions />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Προβολή χάρτη" })[0]);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Δεν ήταν δυνατή η φόρτωση των πλειστηριασμών");
+    expect(screen.queryByText("Δεν υπάρχουν πλειστηριασμοί που ταιριάζουν στα φίλτρα.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Δοκιμάστε ξανά" }));
+    expect(mocks.refetch).toHaveBeenCalledTimes(1);
   });
 
   it("distinguishes no map matches from auctions that lack coordinates", async () => {

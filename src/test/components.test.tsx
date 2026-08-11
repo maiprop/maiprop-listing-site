@@ -69,7 +69,7 @@ vi.mock("@/hooks/useFavorites", () => ({
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, opts?: Record<string, unknown>) => {
+    t: (key: string, opts?: Record<string, unknown> | string) => {
       // Return recognisable values for key strings used in assertions
       const map: Record<string, string> = {
         "common.bed": "bed",
@@ -103,6 +103,13 @@ vi.mock("react-i18next", () => ({
         "listings.filters.reset": "Reset filters",
       };
       if (map[key]) return map[key];
+      if (typeof opts === "string") return opts;
+      if (key === "propertyAIInsights.quota.remainingFree") {
+        return `${opts?.remaining} of ${opts?.limit} Free AI insight requests remaining this month.`;
+      }
+      if (key === "propertyAIInsights.quota.remainingPro") {
+        return `${opts?.remaining} of ${opts?.limit} Pro AI insight requests remaining this month.`;
+      }
       if (opts?.price) return `From €${opts.price}`;
       return key;
     },

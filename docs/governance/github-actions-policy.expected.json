@@ -1,7 +1,6 @@
 {
   "requirePinnedActions": true,
   "allowedActionRepositories": [
-    "actions/attest-build-provenance",
     "actions/checkout",
     "actions/download-artifact",
     "actions/setup-java",
@@ -22,7 +21,6 @@
     "github_owned_allowed": true,
     "verified_allowed": false,
     "patterns_allowed": [
-      "actions/attest-build-provenance@*",
       "actions/checkout@*",
       "actions/download-artifact@*",
       "actions/setup-java@*",

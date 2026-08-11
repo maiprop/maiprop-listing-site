@@ -25,15 +25,19 @@ const publicApiPaths = [
   "/api/public/homepage?section=auction-count",
 ];
 
-const publicApiBudgets = new Map([
+export const PUBLIC_API_BUDGETS = new Map([
   ["/api/public/listings?listing_type=sale&page=1&pageSize=12", { maxMs: 1_800, maxBytes: 180_000 }],
   ["/api/public/listings?listing_type=sale&page=1&pageSize=28&offset=12", { maxMs: 2_500, maxBytes: 320_000 }],
   ["/api/public/listings?listing_type=sale&page=1&limit=40", { maxMs: 4_000, maxBytes: 450_000 }],
   ["/api/public/listings?listing_type=rent&page=1&pageSize=12", { maxMs: 1_800, maxBytes: 180_000 }],
   ["/api/public/listings?listing_type=rent&page=1&limit=40", { maxMs: 4_000, maxBytes: 450_000 }],
   ["/api/public/homepage?section=featured", { maxMs: 2_500, maxBytes: 100_000 }],
+  ["/api/public/open-houses?limit=1", { maxMs: 1_800, maxBytes: 180_000 }],
+  ["/api/public/open-houses?limit=1&includeMeta=1", { maxMs: 1_800, maxBytes: 180_000 }],
   ["/api/public/auctions?limit=60", { maxMs: 3_500, maxBytes: 120_000 }],
   ["/api/public/auctions?limit=600", { maxMs: 3_500, maxBytes: 120_000 }],
+  ["/api/public/homepage?section=auctions", { maxMs: 2_500, maxBytes: 120_000 }],
+  ["/api/public/homepage?section=open-houses", { maxMs: 2_500, maxBytes: 100_000 }],
 ]);
 
 const listingDetailSourcePaths = new Set([
@@ -205,7 +209,7 @@ async function validateJsonApiPath(
   { assertOk, fetchText, requestHeaders },
 ) {
   const apiUrl = new URL(path, baseUrl).toString();
-  const budget = publicApiBudgets.get(path);
+  const budget = PUBLIC_API_BUDGETS.get(path);
   const startedAt = performance.now();
   const { res, text } = await fetchText(apiUrl, {
     headers: {

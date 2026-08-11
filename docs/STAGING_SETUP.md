@@ -132,6 +132,13 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   acknowledgement, and an exact project-ref allowlist match, so it cannot
   prepare identities in production.
 - Required when migrations change: add `SUPABASE_STAGING_DB_URL`, the percent-encoded Postgres connection string used by CI to run `supabase db push --db-url` before deploying staging edge functions. Without it, CI fails the staging migration path instead of deploying functions against a stale schema.
+- Legacy migration convergence is forward-only. The staging release train
+  validates the fixed anomaly manifest in
+  `supabase/reconciliation/production-history-v1.json`, runs one dry-run and one
+  acknowledged `supabase db push`, and packages read-only schema evidence plus
+  the pgTap convergence proof. Do not add `supabase migration repair` or write
+  directly to `supabase_migrations.schema_migrations`; production accepts only
+  the signed manifest and exact staged schema evidence.
 - `STAGING_SUPABASE_PROJECT_ID`, `STAGING_SUPABASE_URL`, and
   `STAGING_SUPABASE_PUBLISHABLE_KEY` must all point to the same non-production
   project. The dedicated Pages project's `SUPABASE_*` and `VITE_SUPABASE_*`
@@ -146,22 +153,28 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
 1. PR against `main` -> CI runs validation only, including quality, E2E, and
    migration checks. It does not mutate staging or production.
 2. Merge to `main` -> CI builds the immutable candidate, verifies its manifest,
-   and creates mandatory GitHub/Sigstore build provenance. CI does not mutate
-   staging or production; failed provenance creation fails the candidate.
+   records the GitHub artifact ID and digest, and creates a mandatory
+   repository-secret HMAC binding over the exact payload and attempt-one
+   producer metadata. CI does not mutate staging or production; failed binding
+   creation fails the candidate.
 3. When `STAGING_RELEASE_ENABLED=true`, the successful main CI run stages that
-   exact candidate only after `gh attestation verify` validates the manifest,
-   source SHA, `main` ref, and signer workflow. The staging run then emits its
+   exact candidate only after the binding verifier checks the HMAC, artifact
+   API metadata, payload files, source SHA/tree, `main` ref, workflow, and
+   attempt-one actor tuple. The staging run then emits its
    own exact-candidate evidence. It checks the immutable deployment URL and the
    canonical staging URL, including an authenticated HTTP 200 TURN issuance
    proof. Tokens, room IDs, usernames, credentials, and ICE server values are
-   excluded from the attestation; only status, TTL, and aggregate counts remain.
+   excluded from uploaded evidence; only status, TTL, and aggregate counts remain.
    The workflow re-fetches and validates both staging and production Pages
-   projects immediately before attestation, so Git auto-deploy suppression and
+   projects immediately before evidence upload, so Git auto-deploy suppression and
    binding isolation cannot rely on stale pre-deploy evidence. Raw project,
    binding, and deployment API responses remain job-local; uploaded artifacts
    contain only redacted posture and minimized deployment identity.
-4. Production promotion remains disabled until independent approval and
-   immutable Edge bundle promotion are implemented.
+4. Production promotion remains disabled until the exact staged SHA has valid
+   catalogue and health evidence, Stripe live readiness is signed, a different
+   allowlisted actor approves it, and the production dispatcher is explicitly
+   enabled. Promotion then runs database, Edge Functions, and Cloudflare Pages
+   in that order without rebuilding the candidate.
 5. Smoke-test staging using the checklist below.
 
 ## Manual smoke-test checklist (staging)

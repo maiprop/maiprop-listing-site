@@ -12,6 +12,7 @@ import {
   readHomepageSnapshot,
   writeHomepageSnapshot,
 } from "@/lib/homepageSnapshotCache";
+import { normalizePublicCollectionWindow } from "@/lib/publicCollectionWindow";
 
 /**
  * Homepage data hooks.
@@ -84,12 +85,13 @@ export function useHomepageOpenHouseListings(options: HomepageQueryOptions = {})
     queryKey: ["homepage-open-houses"],
     queryFn: async ({ signal }) => {
       try {
-        const cached = await fetchPublicApi<HomepageOpenHouseWindow>(
+        const cached = await fetchPublicApi<HomepageOpenHouseWindow | HomepageListing[]>(
           "/api/public/open-houses?showPast=0&limit=60&includeMeta=1",
           { throwOnError: true, timeoutMs: HOMEPAGE_SECTION_TIMEOUT_MS, signal },
         );
         if (cached) {
-          const rows = publicHomepageRows(cached.data, 6);
+          const window = normalizePublicCollectionWindow(cached, 60);
+          const rows = publicHomepageRows(window.data, 6);
           writeHomepageSnapshot(HOMEPAGE_OPEN_HOUSES_SNAPSHOT_KEY, rows);
           return rows;
         }

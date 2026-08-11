@@ -119,15 +119,26 @@ describe("Cloudflare Pages function routes", () => {
 });
 
 describe("Cloudflare Pages deploy workflow routing", () => {
-  it("keeps the production workflow credential-free and non-mutating", () => {
+  it("promotes the exact immutable candidate with scoped credentials and reconciliation", () => {
     const workflow = readFileSync(productionDeployWorkflowPath, "utf8");
 
     expect(workflow).toContain(
-      "promote the exact staged artifact without rebuilding it",
+      "Promote immutable candidate to Cloudflare production",
     );
-    expect(workflow).toContain("if: ${{ false }}");
-    expect(workflow).not.toContain("secrets.CLOUDFLARE");
-    expect(workflow).not.toContain("pages deploy");
+    expect(workflow).toContain("environment: production");
+    expect(workflow).toContain("secrets.CLOUDFLARE_PAGES_READ_TOKEN");
+    expect(workflow).toContain("secrets.CLOUDFLARE_PAGES_EDIT_TOKEN");
+    expect(workflow).toContain("pages deploy dist");
+    expect(workflow).toContain('--commit-hash="$RELEASE_SHA"');
+    expect(workflow).toContain("--commit-dirty=false");
+    expect(workflow).toContain("mutation_attempted=true");
+    expect(workflow).toContain(
+      "cloudflare-pages-candidate-guard.mjs resolve-candidate",
+    );
+    expect(workflow).toContain(
+      "always() && steps.deploy.outputs.mutation_attempted == 'true'",
+    );
+    expect(workflow).not.toContain("secrets.CLOUDFLARE_API_TOKEN");
     expect(workflow).not.toContain("npm run build");
   });
 
@@ -227,7 +238,9 @@ describe("Cloudflare Pages deploy workflow routing", () => {
 
     expect(productionWorkflow).not.toContain("build:homepage-initial");
     expect(productionWorkflow).not.toContain("npm run build");
-    expect(productionWorkflow).not.toContain("pages deploy");
+    expect(productionWorkflow).toContain("pages deploy dist");
+    expect(productionWorkflow).toContain('--commit-hash="$RELEASE_SHA"');
+    expect(productionWorkflow).toContain("--commit-dirty=false");
 
     const candidateBuildIndex = ciWorkflow.indexOf("Type-check & build");
     const candidatePackageIndex = ciWorkflow.indexOf(

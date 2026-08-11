@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { validateLiveReleaseMarkers } from "./verify-live-release-marker.mjs";
+import {
+  validateLiveReleaseMarkers,
+  validateLiveReleaseSha,
+} from "./verify-live-release-marker.mjs";
 
 const manifest = {
   schema_version: 1,
@@ -51,6 +54,33 @@ describe("live release marker verification", () => {
         manifest,
         staticMarker: marker,
         apiMarker: { error: "release_marker_unavailable" },
+      }),
+    ).toThrow(/function marker/i);
+  });
+
+  it("verifies an exact rollback SHA without requiring the old manifest", () => {
+    expect(
+      validateLiveReleaseSha({
+        expectedSha: manifest.release_sha,
+        staticMarker: marker,
+        apiMarker: { ...marker },
+      }),
+    ).toEqual(marker);
+  });
+
+  it("rejects stale or split-brain rollback markers", () => {
+    expect(() =>
+      validateLiveReleaseSha({
+        expectedSha: "f".repeat(40),
+        staticMarker: marker,
+        apiMarker: marker,
+      }),
+    ).toThrow(/rollback SHA/i);
+    expect(() =>
+      validateLiveReleaseSha({
+        expectedSha: manifest.release_sha,
+        staticMarker: marker,
+        apiMarker: { ...marker, source_tree: "f".repeat(40) },
       }),
     ).toThrow(/function marker/i);
   });

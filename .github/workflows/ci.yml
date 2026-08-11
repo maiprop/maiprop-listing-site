@@ -31,6 +31,9 @@ jobs:
     name: Build / Lint / Test
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    outputs:
+      release_candidate_artifact_id: ${{ steps.release_candidate_upload.outputs.artifact-id }}
+      release_candidate_artifact_digest: ${{ steps.release_candidate_upload.outputs.artifact-digest }}
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -177,11 +180,11 @@ jobs:
           done
 
       - name: Package Cloudflare Pages Functions worker
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.actor == github.triggering_actor
         run: npm run build:cloudflare-pages-worker
 
       - name: Create immutable release candidate
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.actor == github.triggering_actor
         run: |
           set -euo pipefail
           supabase_status="$(
@@ -204,10 +207,11 @@ jobs:
             --run-attempt "$GITHUB_RUN_ATTEMPT"
 
       - name: Upload immutable release candidate
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: release_candidate_upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.actor == github.triggering_actor
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: production-release-candidate-${{ github.sha }}
+          name: production-release-candidate-${{ github.sha }}-${{ github.run_attempt }}
           path: release-candidate/
           if-no-files-found: error
           retention-days: 30
@@ -521,15 +525,15 @@ jobs:
     if: >
       always() &&
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' &&
+      github.run_attempt == 1 &&
+      github.actor == github.triggering_actor
     needs: [quality, release-safety, e2e, migrations-validate, lighthouse]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       actions: read
-      attestations: write
       contents: read
-      id-token: write
     steps:
       - name: Require every static release gate
         env:
@@ -560,7 +564,7 @@ jobs:
       - name: Download immutable release candidate
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: production-release-candidate-${{ github.sha }}
+          name: production-release-candidate-${{ github.sha }}-${{ github.run_attempt }}
           path: release-candidate
 
       - name: Verify immutable release candidate
@@ -574,11 +578,78 @@ jobs:
             --run-id "$GITHUB_RUN_ID" \
             --run-attempt "$GITHUB_RUN_ATTEMPT"
 
-      - name: Attest immutable release manifest
-        id: provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+      - name: Create and verify immutable release candidate binding
+        env:
+          CANDIDATE_ARTIFACT_DIGEST: ${{ needs.quality.outputs.release_candidate_artifact_digest }}
+          CANDIDATE_ARTIFACT_ID: ${{ needs.quality.outputs.release_candidate_artifact_id }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$CANDIDATE_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::The release candidate upload did not return an immutable artifact ID."
+            exit 1
+          fi
+          mkdir -p release-candidate-binding release-candidate-binding-metadata
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT_ID" \
+            > release-candidate-binding-metadata/artifact.json
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            > release-candidate-binding-metadata/run.json
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          artifact_name="production-release-candidate-${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}"
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root release-candidate \
+            --out release-candidate-binding/release-artifact-binding.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$GITHUB_SHA" \
+            --source-tree "$source_tree" \
+            --workflow-path .github/workflows/ci.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$GITHUB_WORKFLOW_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$CANDIDATE_ARTIFACT_ID" \
+            --artifact-name "$artifact_name" \
+            --artifact-digest "$CANDIDATE_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding release-candidate-binding/release-artifact-binding.json \
+            --payload-root release-candidate \
+            --artifact-metadata release-candidate-binding-metadata/artifact.json \
+            --producer-run release-candidate-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$GITHUB_SHA" \
+            --source-tree "$source_tree" \
+            --workflow-path .github/workflows/ci.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$GITHUB_WORKFLOW_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > release-candidate-binding/verification.json
+
+      - name: Upload immutable release candidate binding
+        id: release_candidate_binding_upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          subject-path: release-candidate/release-manifest.json
+          name: production-release-candidate-binding-${{ github.sha }}-${{ github.run_attempt }}
+          path: release-candidate-binding/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Record candidate readiness
         run: |
@@ -586,7 +657,7 @@ jobs:
             echo "### Immutable release candidate built"
             echo
             echo "Static CI passed and the exact artifact for \`${GITHUB_SHA}\` was verified."
-            echo "GitHub build provenance: ${{ steps.provenance.outputs.attestation-url }}"
+            echo "Signed binding artifact ID: ${{ steps.release_candidate_binding_upload.outputs.artifact-id }}"
             echo "No staging or production service was mutated by this workflow."
           } >> "$GITHUB_STEP_SUMMARY"
 

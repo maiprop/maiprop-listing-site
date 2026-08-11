@@ -33,6 +33,21 @@ on:
       production_run_attempt:
         required: true
         type: string
+      stripe_readiness_run_id:
+        required: true
+        type: string
+      stripe_readiness_run_attempt:
+        required: true
+        type: string
+      stripe_readiness_sha256:
+        required: true
+        type: string
+      stripe_readiness_artifact_id:
+        required: true
+        type: string
+      stripe_readiness_artifact_digest:
+        required: true
+        type: string
       artifact_sha256:
         required: true
         type: string
@@ -51,28 +66,43 @@ on:
       database_attestation_sha256:
         required: true
         type: string
+      database_binding_artifact:
+        required: true
+        type: string
     secrets:
+      RELEASE_EVIDENCE_SIGNING_KEY:
+        required: true
       SUPABASE_ACCESS_TOKEN:
         required: true
       VITE_SUPABASE_PROJECT_ID:
         required: true
       VITE_SUPABASE_URL:
         required: true
+    outputs:
+      edge_attestation_artifact:
+        value: ${{ jobs.deploy.outputs.edge_attestation_artifact }}
+      edge_attestation_sha256:
+        value: ${{ jobs.deploy.outputs.edge_attestation_sha256 }}
+      edge_binding_artifact:
+        value: ${{ jobs.deploy.outputs.edge_binding_artifact }}
 
 permissions:
   actions: read
-  attestations: write
   contents: read
-  id-token: write
 
 jobs:
   deploy:
     name: Deploy to Supabase
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
+    outputs:
+      edge_attestation_artifact: ${{ steps.edge_attestation.outputs.artifact_name }}
+      edge_attestation_sha256: ${{ steps.edge_attestation.outputs.attestation_sha256 }}
+      edge_binding_artifact: ${{ steps.edge_binding.outputs.binding_artifact_name }}
     env:
+      PRODUCTION_CALLER_WORKFLOW_PATH: ".github/workflows/deploy-production-release.yml"
       PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"
+      RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
       RELEASE_SHA: ${{ inputs.release_sha }}
       SOURCE_TREE: ${{ inputs.source_tree }}
       SOURCE_RUN_ID: ${{ inputs.source_run_id }}
@@ -83,6 +113,11 @@ jobs:
       APPROVAL_RUN_ATTEMPT: ${{ inputs.approval_run_attempt }}
       PRODUCTION_RUN_ID: ${{ inputs.production_run_id }}
       PRODUCTION_RUN_ATTEMPT: ${{ inputs.production_run_attempt }}
+      STRIPE_READINESS_RUN_ID: ${{ inputs.stripe_readiness_run_id }}
+      STRIPE_READINESS_RUN_ATTEMPT: ${{ inputs.stripe_readiness_run_attempt }}
+      STRIPE_READINESS_SHA256: ${{ inputs.stripe_readiness_sha256 }}
+      STRIPE_READINESS_ARTIFACT_ID: ${{ inputs.stripe_readiness_artifact_id }}
+      STRIPE_READINESS_ARTIFACT_DIGEST: ${{ inputs.stripe_readiness_artifact_digest }}
       ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
       MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
       APPROVAL_NONCE: ${{ inputs.approval_nonce }}
@@ -120,6 +155,23 @@ jobs:
             echo "::error::The production Edge workflow is not bound to the current production run."
             exit 1
           fi
+          if [ "$GITHUB_RUN_ATTEMPT" != "1" ] ||
+             [ "$SOURCE_RUN_ATTEMPT" != "1" ] ||
+             [ "$STAGING_RUN_ATTEMPT" != "1" ] ||
+             [ "$APPROVAL_RUN_ATTEMPT" != "1" ] ||
+             [ "$PRODUCTION_RUN_ATTEMPT" != "1" ] ||
+             [ "$STRIPE_READINESS_RUN_ATTEMPT" != "1" ]; then
+            echo "::error::Production provider evidence is accepted only from attempt 1."
+            exit 1
+          fi
+          if [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ]; then
+            echo "::error::Production provider actor and triggering actor must match."
+            exit 1
+          fi
+          if [ -z "$RELEASE_EVIDENCE_SIGNING_KEY_ID" ]; then
+            echo "::error::RELEASE_EVIDENCE_SIGNING_KEY_ID is required."
+            exit 1
+          fi
           current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
           if [ "$current_main" != "$RELEASE_SHA" ]; then
             echo "::error::Release SHA is no longer current main."
@@ -129,7 +181,7 @@ jobs:
       - name: Download immutable release candidate
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: production-release-candidate-${{ inputs.release_sha }}
+          name: production-release-candidate-${{ inputs.release_sha }}-${{ inputs.source_run_attempt }}
           path: release-candidate
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
@@ -156,39 +208,21 @@ jobs:
             echo "::error::Production candidate artifact digest mismatch."
             exit 1
           fi
-          gh attestation verify \
-            release-candidate/release-manifest.json \
-            --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
-            --signer-digest "$RELEASE_SHA" \
-            --source-digest "$RELEASE_SHA" \
-            --source-ref "refs/heads/main" \
-            --deny-self-hosted-runners
           npx --no-install supabase --workdir release-candidate --version
 
       - name: Download signed staging release attestation
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: release-candidate-attestation-${{ inputs.release_sha }}
+          name: release-candidate-attestation-${{ inputs.release_sha }}-${{ inputs.staging_run_attempt }}
           path: evidence/staging-aggregate
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.staging_run_id }}
 
-      - name: Verify signed staging release attestation
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Verify signed staging release evidence contract
         run: |
           set -euo pipefail
-          gh attestation verify \
-            evidence/staging-aggregate/release-candidate-attestation.json \
-            --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/stage-release.yml" \
-            --signer-digest "$RELEASE_SHA" \
-            --source-digest "$RELEASE_SHA" \
-            --source-ref "refs/heads/main" \
-            --deny-self-hosted-runners
-          npm run release:validate -- release-candidate-attestation \
+          npm run --silent release:validate -- release-candidate-attestation \
             --file evidence/staging-aggregate/release-candidate-attestation.json \
             --sha "$RELEASE_SHA" \
             --source-tree "$SOURCE_TREE" \
@@ -197,16 +231,62 @@ jobs:
             --staging-run-id "$STAGING_RUN_ID" \
             --staging-run-attempt "$STAGING_RUN_ATTEMPT"
 
+      - name: Resolve exact staging Supabase artifact
+        id: staging_supabase_artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const aggregate = JSON.parse(readFileSync(
+            "evidence/staging-aggregate/release-candidate-attestation.json",
+            "utf8",
+          ));
+          const binding = aggregate.artifact_bindings.supabase;
+          const expectedName =
+            `supabase-staging-edge-attestation-${process.env.RELEASE_SHA}-${process.env.STAGING_RUN_ATTEMPT}`;
+          if (
+            !binding ||
+            binding.name !== expectedName ||
+            !/^[1-9][0-9]*$/.test(String(binding.id ?? "")) ||
+            !/^[0-9a-f]{64}$/.test(String(binding.digest ?? "")) ||
+            String(binding.run_id) !== process.env.STAGING_RUN_ID ||
+            String(binding.run_attempt) !== process.env.STAGING_RUN_ATTEMPT ||
+            binding.release_sha !== process.env.RELEASE_SHA
+          ) {
+            throw new Error("Signed Supabase artifact binding does not match the selected staging run.");
+          }
+          writeFileSync(
+            "evidence/staging-aggregate/supabase-artifact-binding.json",
+            `${JSON.stringify(binding, null, 2)}\n`,
+          );
+          NODE
+          artifact_id="$(node -p "require('./evidence/staging-aggregate/supabase-artifact-binding.json').id")"
+          producer_run_id="$(node -p "require('./evidence/staging-aggregate/supabase-artifact-binding.json').run_id")"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$artifact_id" \
+            > evidence/staging-aggregate/supabase-artifact-metadata.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$producer_run_id" \
+            > evidence/staging-aggregate/supabase-producer-run.json
+          node scripts/github-artifact-metadata.mjs \
+            --binding evidence/staging-aggregate/supabase-artifact-binding.json \
+            --artifact evidence/staging-aggregate/supabase-artifact-metadata.json \
+            --producer-run evidence/staging-aggregate/supabase-producer-run.json \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Download exact staging Supabase evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: supabase-staging-edge-attestation-${{ inputs.release_sha }}
+          artifact-ids: ${{ steps.staging_supabase_artifact.outputs.artifact_id }}
           path: evidence/staging-supabase
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.staging_run_id }}
 
       - name: Verify signed staging Supabase evidence
+        env:
+          STAGING_SUPABASE_ARTIFACT_DIGEST: ${{ steps.staging_supabase_artifact.outputs.artifact_digest }}
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -227,6 +307,8 @@ jobs:
           ));
           const digest = createHash("sha256").update(bytes).digest("hex");
           if (
+            aggregate.artifact_bindings?.supabase?.digest !==
+              process.env.STAGING_SUPABASE_ARTIFACT_DIGEST ||
             aggregate.evidence_sha256?.supabase !== digest ||
             staging.release_sha !== process.env.RELEASE_SHA ||
             staging.artifact_sha256 !== process.env.ARTIFACT_SHA256 ||
@@ -254,19 +336,9 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.production_run_id }}
 
-      - name: Verify production database evidence
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Verify production database evidence contract
         run: |
           set -euo pipefail
-          gh attestation verify \
-            evidence/production-database/production-supabase-db-attestation.json \
-            --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "github.com/$GITHUB_REPOSITORY/.github/workflows/deploy-supabase-production-db.yml" \
-            --signer-digest "$RELEASE_SHA" \
-            --source-digest "$RELEASE_SHA" \
-            --source-ref "refs/heads/main" \
-            --deny-self-hosted-runners
           node --input-type=module <<'NODE'
           import { createHash } from "node:crypto";
           import { readFileSync } from "node:fs";
@@ -275,11 +347,18 @@ jobs:
             "evidence/production-database/production-supabase-db-attestation.json",
           );
           const evidence = JSON.parse(bytes);
+          const reconciliationBytes = readFileSync(
+            "evidence/production-database/production-migration-history-reconciliation.json",
+          );
+          const reconciliation = JSON.parse(reconciliationBytes);
           const releaseManifest = JSON.parse(readFileSync(
             "release-candidate/release-manifest.json",
             "utf8",
           ));
           const digest = createHash("sha256").update(bytes).digest("hex");
+          const reconciliationDigest = createHash("sha256")
+            .update(reconciliationBytes)
+            .digest("hex");
           if (
             digest !== process.env.DATABASE_ATTESTATION_SHA256 ||
             evidence.evidence_type !==
@@ -302,7 +381,17 @@ jobs:
             evidence.artifact_sha256 !== process.env.ARTIFACT_SHA256 ||
             evidence.manifest_sha256 !== process.env.MANIFEST_SHA256 ||
             evidence.supabase_sha256 !== releaseManifest.supabase_sha256 ||
-            evidence.project_ref !== "qvvicunqcrwpioqnvzxf"
+            evidence.project_ref !== "qvvicunqcrwpioqnvzxf" ||
+            evidence.canonical_history_reconciliation?.ok !== true ||
+            evidence.canonical_history_reconciliation
+              ?.staging_is_exact_candidate !== true ||
+            evidence.canonical_history_reconciliation
+              ?.production_is_canonical_prefix !== true ||
+            evidence.canonical_history_reconciliation_sha256 !==
+              reconciliationDigest ||
+            reconciliation.ok !== true ||
+            reconciliation.release_sha !== process.env.RELEASE_SHA ||
+            reconciliation.source_tree !== process.env.SOURCE_TREE
           ) {
             throw new Error("Production database evidence does not match this release tuple.");
           }
@@ -317,18 +406,147 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.production_run_id }}
 
+      - name: Download exact Stripe readiness evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ inputs.stripe_readiness_artifact_id }}
+          path: evidence/stripe
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.stripe_readiness_run_id }}
+
+      - name: Resolve exact signed provider artifacts
+        env:
+          DATABASE_BINDING_ARTIFACT: ${{ inputs.database_binding_artifact }}
+          DATABASE_PAYLOAD_ARTIFACT: ${{ inputs.database_attestation_artifact }}
+          GH_TOKEN: ${{ github.token }}
+          MUTATION_LEASE_ARTIFACT: ${{ inputs.mutation_lease_artifact }}
+          STAGING_SUPABASE_ARTIFACT_ID: ${{ steps.staging_supabase_artifact.outputs.artifact_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/api evidence/bindings
+          if [ "$DATABASE_BINDING_ARTIFACT" != "${DATABASE_PAYLOAD_ARTIFACT}-binding" ]; then
+            echo "::error::Production database payload and binding artifact names are not paired."
+            exit 1
+          fi
+
+          resolve_payload() {
+            local key="$1" run_id="$2" expected_name="$3" expected_id="$4"
+            local metadata="evidence/api/${key}-artifact.json"
+            local run_metadata="evidence/api/${key}-run.json"
+            local artifact_id="$expected_id"
+            if [ -z "$artifact_id" ]; then
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \
+                | jq -s '[.[].artifacts[]]' \
+                > "evidence/api/${key}-artifacts.json"
+              local count
+              count="$(jq --arg name "$expected_name" \
+                '[.[] | select(.name == $name and .expired == false)] | length' \
+                "evidence/api/${key}-artifacts.json")"
+              if [ "$count" != "1" ]; then
+                echo "::error::Expected exactly one non-expired ${key} payload artifact."
+                exit 1
+              fi
+              artifact_id="$(jq -r --arg name "$expected_name" \
+                '.[] | select(.name == $name and .expired == false) | .id' \
+                "evidence/api/${key}-artifacts.json")"
+            fi
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" > "$metadata"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$run_metadata"
+            jq -e \
+              --arg id "$artifact_id" \
+              --arg name "$expected_name" \
+              --arg run_id "$run_id" \
+              --arg release_sha "$RELEASE_SHA" '
+                (.expired == false) and
+                ((.id | tostring) == $id) and
+                (.name == $name) and
+                ((.workflow_run.id | tostring) == $run_id) and
+                (.workflow_run.head_sha == $release_sha) and
+                (.digest | test("^sha256:[0-9a-f]{64}$"))
+              ' "$metadata" > /dev/null
+          }
+
+          download_binding() {
+            local key="$1" run_id="$2" binding_name="$3"
+            local list="evidence/api/${key}-binding-artifacts.json"
+            local metadata="evidence/api/${key}-binding-artifact.json"
+            local destination="evidence/bindings/${key}"
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \
+              | jq -s '[.[].artifacts[]]' > "$list"
+            local count binding_id
+            count="$(jq --arg name "$binding_name" \
+              '[.[] | select(.name == $name and .expired == false)] | length' "$list")"
+            if [ "$count" != "1" ]; then
+              echo "::error::Expected exactly one non-expired ${key} binding artifact."
+              exit 1
+            fi
+            binding_id="$(jq -r --arg name "$binding_name" \
+              '.[] | select(.name == $name and .expired == false) | .id' "$list")"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${binding_id}" > "$metadata"
+            jq -e \
+              --arg id "$binding_id" \
+              --arg name "$binding_name" \
+              --arg run_id "$run_id" \
+              --arg release_sha "$RELEASE_SHA" '
+                (.expired == false) and
+                ((.id | tostring) == $id) and
+                (.name == $name) and
+                ((.workflow_run.id | tostring) == $run_id) and
+                (.workflow_run.head_sha == $release_sha)
+              ' "$metadata" > /dev/null
+            mkdir -p "$destination"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${binding_id}/zip" \
+              > "evidence/api/${key}-binding.zip"
+            unzip -q "evidence/api/${key}-binding.zip" -d "$destination"
+            test -f "${destination}/release-artifact-binding.json"
+          }
+
+          source_name="production-release-candidate-${RELEASE_SHA}-${SOURCE_RUN_ATTEMPT}"
+          staging_name="release-candidate-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}"
+          staging_supabase_name="supabase-staging-edge-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}"
+          stripe_name="stripe-live-readiness-${RELEASE_SHA}-${STRIPE_READINESS_RUN_ID}-${STRIPE_READINESS_RUN_ATTEMPT}"
+
+          resolve_payload source "$SOURCE_RUN_ID" "$source_name" ""
+          download_binding source "$SOURCE_RUN_ID" \
+            "production-release-candidate-binding-${RELEASE_SHA}-${SOURCE_RUN_ATTEMPT}"
+          resolve_payload staging-aggregate "$STAGING_RUN_ID" "$staging_name" ""
+          download_binding staging-aggregate "$STAGING_RUN_ID" "${staging_name}-binding"
+          resolve_payload staging-supabase "$STAGING_RUN_ID" "$staging_supabase_name" \
+            "$STAGING_SUPABASE_ARTIFACT_ID"
+          download_binding staging-supabase "$STAGING_RUN_ID" "${staging_supabase_name}-binding"
+          resolve_payload stripe "$STRIPE_READINESS_RUN_ID" "$stripe_name" \
+            "$STRIPE_READINESS_ARTIFACT_ID"
+          download_binding stripe "$STRIPE_READINESS_RUN_ID" "${stripe_name}-binding"
+          resolve_payload production-database "$PRODUCTION_RUN_ID" \
+            "$DATABASE_PAYLOAD_ARTIFACT" ""
+          download_binding production-database "$PRODUCTION_RUN_ID" \
+            "$DATABASE_BINDING_ARTIFACT"
+          resolve_payload mutation-lease "$PRODUCTION_RUN_ID" "$MUTATION_LEASE_ARTIFACT" ""
+          download_binding mutation-lease "$PRODUCTION_RUN_ID" "${MUTATION_LEASE_ARTIFACT}-binding"
+
+          actual_stripe_digest="$(jq -r '.digest | sub("^sha256:"; "")' \
+            evidence/api/stripe-artifact.json)"
+          expected_stripe_digest="${STRIPE_READINESS_ARTIFACT_DIGEST#sha256:}"
+          if [ "$actual_stripe_digest" != "$expected_stripe_digest" ]; then
+            echo "::error::Stripe readiness artifact API digest does not match the selected release tuple."
+            exit 1
+          fi
+
       - name: Validate current production mutation lease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test -f evidence/mutation-lease/production-mutation-lease.json
-          npm run release:validate -- github-staging-lease \
+          npm run --silent release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
             --sha "$RELEASE_SHA" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
-          npm run release:validate -- mutation-lease \
+          npm run --silent release:validate -- mutation-lease \
             --file evidence/mutation-lease/production-mutation-lease.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -342,7 +560,144 @@ jobs:
             --approval-run-id "$APPROVAL_RUN_ID" \
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --production-run-id "$PRODUCTION_RUN_ID" \
-            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT"
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+
+      - name: Verify signed provider artifact bindings
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/verify-production-provider-bindings.sh" <<'VERIFY_SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          verify_binding() {
+            local key="$1" payload_root="$2" binding="$3" workflow_path="$4"
+            local event="$5" run_id="$6" run_attempt="$7" same_run="$8"
+            shift 8
+            local metadata="evidence/api/${key}-artifact.json"
+            local run_metadata="evidence/api/${key}-run.json"
+            local artifact_id artifact_name artifact_digest actor triggering_actor
+            local expected_artifact_id expected_artifact_digest
+            artifact_id="$(jq -r '.id' "$metadata")"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" \
+              > "${metadata}.fresh"
+            mv "${metadata}.fresh" "$metadata"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" \
+              > "${run_metadata}.fresh"
+            mv "${run_metadata}.fresh" "$run_metadata"
+            artifact_name="$(jq -r '.name' "$metadata")"
+            artifact_digest="$(jq -r '.digest' "$metadata")"
+            expected_artifact_id="$artifact_id"
+            expected_artifact_digest="$artifact_digest"
+            if [ "$key" = "stripe" ]; then
+              expected_artifact_id="$STRIPE_READINESS_ARTIFACT_ID"
+              expected_artifact_digest="$STRIPE_READINESS_ARTIFACT_DIGEST"
+              if [ "$artifact_id" != "$expected_artifact_id" ] ||
+                 [ "${artifact_digest#sha256:}" != "${expected_artifact_digest#sha256:}" ]; then
+                echo "::error::Stripe binding metadata does not match the selected artifact ID and digest."
+                exit 1
+              fi
+            fi
+            actor="$(jq -r '.actor.login' "$run_metadata")"
+            triggering_actor="$(jq -r '.triggering_actor.login' "$run_metadata")"
+            if [ "$actor" != "$triggering_actor" ]; then
+              echo "::error::${key} producer actor does not match triggering actor."
+              exit 1
+            fi
+            if [ "$same_run" = "true" ] && {
+              [ "$run_id" != "$GITHUB_RUN_ID" ] ||
+              [ "$actor" != "$GITHUB_ACTOR" ] ||
+              [ "$triggering_actor" != "$GITHUB_TRIGGERING_ACTOR" ];
+            }; then
+              echo "::error::${key} same-run producer identity does not match this production run."
+              exit 1
+            fi
+            local args=(
+              node scripts/verify-release-artifact-binding.mjs
+              --binding "$binding"
+              --payload-root "$payload_root"
+              --file-root "$payload_root"
+              --artifact-metadata "$metadata"
+              --producer-run "$run_metadata"
+              --repository "$GITHUB_REPOSITORY"
+              --release-sha "$RELEASE_SHA"
+              --source-tree "$SOURCE_TREE"
+              --workflow-path "$workflow_path"
+              --workflow-ref "$GITHUB_REPOSITORY/$workflow_path@refs/heads/main"
+              --workflow-sha "$RELEASE_SHA"
+              --event "$event"
+              --run-id "$run_id"
+              --run-attempt "$run_attempt"
+              --actor "$actor"
+              --triggering-actor "$triggering_actor"
+              --artifact-id "$expected_artifact_id"
+              --artifact-name "$artifact_name"
+              --artifact-digest "$expected_artifact_digest"
+              --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+            )
+            if [ "$same_run" = "true" ]; then
+              args+=(
+                --same-run
+                --trusted-current-run-id "$GITHUB_RUN_ID"
+                --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT"
+                --trusted-current-actor "$GITHUB_ACTOR"
+                --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR"
+              )
+            fi
+            local file
+            for file in "$@"; do
+              args+=(--file "$file")
+            done
+            "${args[@]}" > "evidence/api/${key}-binding-verification.json"
+          }
+
+          verify_binding source release-candidate \
+            evidence/bindings/source/release-artifact-binding.json \
+            .github/workflows/ci.yml push "$SOURCE_RUN_ID" "$SOURCE_RUN_ATTEMPT" false \
+            release-manifest.json
+          verify_binding staging-aggregate evidence/staging-aggregate \
+            evidence/bindings/staging-aggregate/release-artifact-binding.json \
+            .github/workflows/stage-release.yml workflow_run \
+            "$STAGING_RUN_ID" "$STAGING_RUN_ATTEMPT" false \
+            release-candidate-attestation.json
+          verify_binding staging-supabase evidence/staging-supabase \
+            evidence/bindings/staging-supabase/release-artifact-binding.json \
+            .github/workflows/stage-release.yml workflow_run \
+            "$STAGING_RUN_ID" "$STAGING_RUN_ATTEMPT" false \
+            supabase-staging-edge-attestation.json \
+            supabase-staging-db-attestation.json
+          verify_binding stripe evidence/stripe \
+            evidence/bindings/stripe/release-artifact-binding.json \
+            .github/workflows/verify-stripe-live-readiness.yml workflow_dispatch \
+            "$STRIPE_READINESS_RUN_ID" "$STRIPE_READINESS_RUN_ATTEMPT" false \
+            stripe-live-migration-evidence.json
+          verify_binding production-database evidence/production-database \
+            evidence/bindings/production-database/release-artifact-binding.json \
+            "$PRODUCTION_CALLER_WORKFLOW_PATH" workflow_dispatch \
+            "$PRODUCTION_RUN_ID" "$PRODUCTION_RUN_ATTEMPT" true \
+            production-supabase-db-attestation.json \
+            production-migration-history-reconciliation.json
+          verify_binding mutation-lease evidence/mutation-lease \
+            evidence/bindings/mutation-lease/release-artifact-binding.json \
+            "$PRODUCTION_CALLER_WORKFLOW_PATH" workflow_dispatch \
+            "$PRODUCTION_RUN_ID" "$PRODUCTION_RUN_ATTEMPT" true \
+            production-mutation-lease.json
+
+          stripe_sha256="$(sha256sum evidence/stripe/stripe-live-migration-evidence.json | awk '{print $1}')"
+          if [ "$stripe_sha256" != "$STRIPE_READINESS_SHA256" ]; then
+            echo "::error::Signed Stripe readiness payload SHA-256 does not match the mutation lease tuple."
+            exit 1
+          fi
+          VERIFY_SCRIPT
+          chmod 700 "$RUNNER_TEMP/verify-production-provider-bindings.sh"
+          "$RUNNER_TEMP/verify-production-provider-bindings.sh"
 
       - name: Validate production target identity
         env:
@@ -355,7 +710,7 @@ jobs:
             echo "::error::Production Supabase project secret does not match the fixed target."
             exit 1
           fi
-          npm run release:validate -- supabase-target \
+          npm run --silent release:validate -- supabase-target \
             > production-supabase-edge-target.json
 
       - name: Build exact artifact Edge source inventory
@@ -428,12 +783,12 @@ jobs:
             echo "::error::Release SHA is no longer current main."
             exit 1
           fi
-          npm run release:validate -- github-staging-lease \
+          npm run --silent release:validate -- github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
             --sha "$RELEASE_SHA" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
-          npm run release:validate -- mutation-lease \
+          npm run --silent release:validate -- mutation-lease \
             --file evidence/mutation-lease/production-mutation-lease.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -447,13 +802,19 @@ jobs:
             --approval-run-id "$APPROVAL_RUN_ID" \
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --production-run-id "$PRODUCTION_RUN_ID" \
-            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT"
-          npm run release:validate -- supabase-target \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+          npm run --silent release:validate -- supabase-target \
             > production-supabase-edge-target-pre-deploy.json
 
       - name: Forward-converge exact artifact Edge functions serially
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -469,12 +830,12 @@ jobs:
               echo "::error::Release SHA is no longer current main before deploying $function_name."
               exit 1
             fi
-            npm run release:validate -- github-staging-lease \
+            npm run --silent release:validate -- github-staging-lease \
               --repository "$GITHUB_REPOSITORY" \
               --sha "$RELEASE_SHA" \
               --source-run-id "$SOURCE_RUN_ID" \
               --source-run-attempt "$SOURCE_RUN_ATTEMPT"
-            npm run release:validate -- mutation-lease \
+            npm run --silent release:validate -- mutation-lease \
               --file evidence/mutation-lease/production-mutation-lease.json \
               --sha "$RELEASE_SHA" \
               --repository "$GITHUB_REPOSITORY" \
@@ -488,8 +849,13 @@ jobs:
               --approval-run-id "$APPROVAL_RUN_ID" \
               --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
               --production-run-id "$PRODUCTION_RUN_ID" \
-              --production-run-attempt "$PRODUCTION_RUN_ATTEMPT"
-            npm run release:validate -- supabase-target \
+              --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+              --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+              --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+              --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+              --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+              --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+            npm run --silent release:validate -- supabase-target \
               > "production-supabase-edge-target-${function_name}.json"
             actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
             if [ "$actual_manifest_sha256" != "$MANIFEST_SHA256" ]; then
@@ -527,6 +893,7 @@ jobs:
             candidate.edge_source_manifest,
           );
           NODE
+            "$RUNNER_TEMP/verify-production-provider-bindings.sh"
             set +e
             npx --no-install supabase --workdir release-candidate functions deploy "$function_name" \
               --use-api \
@@ -590,6 +957,7 @@ jobs:
           NODE
 
       - name: Create production Edge attestation
+        id: edge_attestation
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -676,29 +1044,117 @@ jobs:
             `${JSON.stringify(attestation, null, 2)}\n`,
           );
           NODE
+          artifact_name="production-supabase-edge-attestation-${RELEASE_SHA}-${PRODUCTION_RUN_ID}-${PRODUCTION_RUN_ATTEMPT}"
+          attestation_sha256="$(sha256sum production-supabase-edge-attestation.json | awk '{print $1}')"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "attestation_sha256=$attestation_sha256" >> "$GITHUB_OUTPUT"
+          payload_root="production-edge-evidence-payload"
+          mkdir -p "$payload_root"
+          for pattern in \
+            production-supabase-edge-attestation.json \
+            production-supabase-edge-target.json \
+            production-supabase-edge-target-pre-deploy.json \
+            'production-supabase-edge-target-*.json' \
+            production-candidate-release-safety.json \
+            production-candidate-release-safety-mutation-boundary.json \
+            release-safety-production-live-functions-before.json \
+            release-safety-production-live-functions.json \
+            production-edge-forward-plan.json \
+            production-edge-deploy-progress.jsonl; do
+            for file in $pattern; do
+              if [ -f "$file" ]; then
+                cp -- "$file" "$payload_root/$(basename "$file")"
+              fi
+            done
+          done
 
       - name: Upload production Edge evidence
+        id: edge_payload_upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: production-supabase-edge-attestation-${{ inputs.release_sha }}-${{ inputs.production_run_id }}
-          path: |
-            production-supabase-edge-attestation.json
-            production-supabase-edge-target.json
-            production-supabase-edge-target-pre-deploy.json
-            production-supabase-edge-target-*.json
-            production-candidate-release-safety.json
-            production-candidate-release-safety-mutation-boundary.json
-            release-safety-production-live-functions-before.json
-            release-safety-production-live-functions.json
-            production-edge-forward-plan.json
-            production-edge-deploy-progress.jsonl
+          name: ${{ steps.edge_attestation.outputs.artifact_name }}
+          path: production-edge-evidence-payload/
           if-no-files-found: error
           retention-days: 30
 
-      - name: Attest production Edge evidence
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+      - name: Create signed production Edge evidence binding
+        id: edge_binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.edge_payload_upload.outputs.artifact-digest }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.edge_payload_upload.outputs.artifact-id }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          payload_root="production-edge-evidence-payload"
+          binding_root="production-edge-evidence-binding"
+          binding_artifact_name="${{ steps.edge_attestation.outputs.artifact_name }}-binding"
+          mkdir -p "$binding_root" production-edge-evidence-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > production-edge-evidence-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > production-edge-evidence-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root "$payload_root" \
+            --file-root "$payload_root" \
+            --file production-supabase-edge-attestation.json \
+            --file production-edge-forward-plan.json \
+            --file release-safety-production-live-functions.json \
+            --out "$binding_root/release-artifact-binding.json" \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path "$PRODUCTION_CALLER_WORKFLOW_PATH" \
+            --workflow-ref "$GITHUB_REPOSITORY/$PRODUCTION_CALLER_WORKFLOW_PATH@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "${{ steps.edge_attestation.outputs.artifact_name }}" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding "$binding_root/release-artifact-binding.json" \
+            --payload-root "$payload_root" \
+            --file-root "$payload_root" \
+            --file production-supabase-edge-attestation.json \
+            --file production-edge-forward-plan.json \
+            --file release-safety-production-live-functions.json \
+            --artifact-metadata production-edge-evidence-metadata/artifact.json \
+            --producer-run production-edge-evidence-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path "$PRODUCTION_CALLER_WORKFLOW_PATH" \
+            --workflow-ref "$GITHUB_REPOSITORY/$PRODUCTION_CALLER_WORKFLOW_PATH@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "${{ steps.edge_attestation.outputs.artifact_name }}" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > "$binding_root/verification.json"
+          echo "binding_artifact_name=$binding_artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload signed production Edge evidence binding
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          subject-path: production-supabase-edge-attestation.json
+          name: ${{ steps.edge_binding.outputs.binding_artifact_name }}
+          path: production-edge-evidence-binding/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Create production Edge terminal evidence
         if: ${{ always() }}
@@ -787,25 +1243,79 @@ jobs:
             `${JSON.stringify(evidence, null, 2)}\n`,
           );
           NODE
+          terminal_root="production-edge-terminal-evidence-payload"
+          mkdir -p "$terminal_root"
+          for pattern in \
+            production-supabase-edge-terminal-evidence.json \
+            'production-supabase-edge-target*.json' \
+            'production-candidate-release-safety*.json' \
+            'release-safety-production-live-functions*.json' \
+            production-edge-forward-plan.json \
+            production-edge-deploy-progress.jsonl \
+            production-supabase-edge-attestation.json; do
+            for file in $pattern; do
+              if [ -f "$file" ]; then
+                cp -- "$file" "$terminal_root/$(basename "$file")"
+              fi
+            done
+          done
 
       - name: Upload production Edge terminal evidence
+        id: edge_terminal_payload_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-supabase-edge-terminal-${{ inputs.release_sha }}-${{ inputs.production_run_id }}-${{ inputs.production_run_attempt }}
-          path: |
-            production-supabase-edge-terminal-evidence.json
-            production-supabase-edge-target*.json
-            production-candidate-release-safety*.json
-            release-safety-production-live-functions*.json
-            production-edge-forward-plan.json
-            production-edge-deploy-progress.jsonl
-            production-supabase-edge-attestation.json
+          path: production-edge-terminal-evidence-payload/
           if-no-files-found: error
           retention-days: 30
 
-      - name: Attest production Edge terminal evidence
+      - name: Create signed production Edge terminal binding
+        id: edge_terminal_binding
         if: ${{ always() }}
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.edge_terminal_payload_upload.outputs.artifact-digest }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.edge_terminal_payload_upload.outputs.artifact-id }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          payload_root="production-edge-terminal-evidence-payload"
+          binding_root="production-edge-terminal-evidence-binding"
+          payload_artifact_name="production-supabase-edge-terminal-${RELEASE_SHA}-${PRODUCTION_RUN_ID}-${PRODUCTION_RUN_ATTEMPT}"
+          binding_artifact_name="${payload_artifact_name}-binding"
+          mkdir -p "$binding_root" production-edge-terminal-evidence-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > production-edge-terminal-evidence-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > production-edge-terminal-evidence-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root "$payload_root" \
+            --file-root "$payload_root" \
+            --file production-supabase-edge-terminal-evidence.json \
+            --out "$binding_root/release-artifact-binding.json" \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path "$PRODUCTION_CALLER_WORKFLOW_PATH" \
+            --workflow-ref "$GITHUB_REPOSITORY/$PRODUCTION_CALLER_WORKFLOW_PATH@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$payload_artifact_name" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          echo "binding_artifact_name=$binding_artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload signed production Edge terminal binding
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          subject-path: production-supabase-edge-terminal-evidence.json
+          name: ${{ steps.edge_terminal_binding.outputs.binding_artifact_name }}
+          path: production-edge-terminal-evidence-binding/
+          if-no-files-found: error
+          retention-days: 30

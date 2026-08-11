@@ -7,7 +7,13 @@ const mocks = vi.hoisted(() => ({
   language: "en",
   auctionListings: { data: [] as Record<string, unknown>[], isLoading: false },
   subscription: { isPro: false },
-  queryResult: { data: null as Record<string, unknown> | null, isLoading: false },
+  queryResult: {
+    data: null as Record<string, unknown> | null,
+    isLoading: false,
+    isFetching: false,
+    isFetched: true,
+    isError: false,
+  },
   queryOptions: null as Record<string, unknown> | null,
   share: vi.fn(),
   writeText: vi.fn(),
@@ -16,7 +22,33 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ i18n: { language: mocks.language } }),
+  useTranslation: () => ({
+    i18n: { language: mocks.language },
+    t: (key: string, options?: { defaultValue?: string }) => {
+      const isGreek = mocks.language.toLowerCase().startsWith("el");
+      const translations: Record<string, [string, string]> = {
+        "auctions.detail.verifyingCached": [
+          "Showing cached auction details while we verify the latest information.",
+          "Προβάλλονται προσωρινά αποθηκευμένα στοιχεία ενώ επαληθεύουμε τις πιο πρόσφατες πληροφορίες.",
+        ],
+        "auctions.detail.refreshFailed": [
+          "Live auction details could not be refreshed. The information shown may be outdated.",
+          "Δεν ήταν δυνατή η ανανέωση των στοιχείων του πλειστηριασμού. Οι πληροφορίες που εμφανίζονται ενδέχεται να μην είναι ενημερωμένες.",
+        ],
+        "property.area": ["Surface", "Εμβαδόν"],
+        "property.bedrooms": ["Bedrooms", "Υπνοδωμάτια"],
+        "property.bathrooms": ["Bathrooms", "Μπάνια"],
+        "property.floor": ["Floor", "Όροφος"],
+        "property.yearBuilt": ["Built", "Έτος κατασκευής"],
+        "property.energyClass": ["Energy", "Ενεργειακή κλάση"],
+        "auctions.detail.auction": ["Auction", "Πλειστηριασμός"],
+        "auctions.detail.timing": ["Timing", "Χρονισμός"],
+        "auctions.detail.ownership": ["Ownership", "Κυριότητα"],
+        "auctions.detail.share": ["Share", "Ποσοστό"],
+      };
+      return translations[key]?.[isGreek ? 1 : 0] ?? options?.defaultValue ?? key;
+    },
+  }),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -96,8 +128,12 @@ vi.mock("@/components/property/PropertyDetailsAndEnergy", () => ({
   ),
 }));
 vi.mock("@/components/property/PropertyHeroSpecsBar", () => ({
-  PropertyHeroSpecsBar: ({ items }: { items: Array<{ key: string; value: unknown }> }) => (
-    <div data-testid="hero-specs">{items.map((item) => `${item.key}:${String(item.value)}`).join("|")}</div>
+  PropertyHeroSpecsBar: ({ items }: { items: Array<{ key: string; label: string; value: unknown }> }) => (
+    <div data-testid="hero-specs">
+      {items.map((item) => (
+        <span key={item.key}>{item.key}:{String(item.value)}|{item.label}:{String(item.value)};</span>
+      ))}
+    </div>
   ),
 }));
 vi.mock("@/components/AIAssistantWidget", () => ({
@@ -162,7 +198,13 @@ describe("AuctionDetail branch coverage", () => {
     mocks.language = "en";
     mocks.auctionListings = { data: [], isLoading: false };
     mocks.subscription = { isPro: false };
-    mocks.queryResult = { data: null, isLoading: false };
+    mocks.queryResult = {
+      data: null,
+      isLoading: false,
+      isFetching: false,
+      isFetched: true,
+      isError: false,
+    };
     mocks.queryOptions = null;
     Object.defineProperty(navigator, "share", { configurable: true, value: mocks.share });
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: mocks.writeText } });
@@ -172,7 +214,13 @@ describe("AuctionDetail branch coverage", () => {
 
   it("renders the loading shell only while neither list nor exact lookup has resolved", () => {
     mocks.auctionListings = { data: [], isLoading: true };
-    mocks.queryResult = { data: null, isLoading: true };
+    mocks.queryResult = {
+      data: null,
+      isLoading: true,
+      isFetching: true,
+      isFetched: false,
+      isError: false,
+    };
 
     const { container } = renderDetail();
 
@@ -189,12 +237,22 @@ describe("AuctionDetail branch coverage", () => {
     expect(screen.getByTestId("footer")).toBeInTheDocument();
   });
 
-  it("uses complete route state without redundant fetching and preserves Pro pricing inputs", async () => {
+  it("renders complete route state immediately while authoritative verification remains visible", async () => {
     mocks.subscription = { isPro: true };
+    mocks.queryResult = {
+      data: null,
+      isLoading: true,
+      isFetching: true,
+      isFetched: false,
+      isError: false,
+    };
     renderDetail({ auction: auction() });
 
     expect(vi.mocked(useAuctionListings)).toHaveBeenCalledWith(60, { enabled: false });
-    expect(mocks.queryOptions?.enabled).toBe(false);
+    expect(mocks.queryOptions?.enabled).toBe(true);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Showing cached auction details while we verify the latest information.",
+    );
     expect(screen.getAllByText("Athens Auction Flat").length).toBeGreaterThan(0);
     expect(screen.getByTestId("gallery")).toHaveTextContent("2 images");
     expect(await screen.findByTestId("mini-map")).toHaveTextContent("37.98,23.72");
@@ -215,16 +273,38 @@ describe("AuctionDetail branch coverage", () => {
     mocks.queryResult = {
       data: auction({ website_url: "https://www.eauction.gr/Auction/Details/exact", price: 170000 }),
       isLoading: false,
+      isFetching: false,
+      isFetched: true,
+      isError: false,
     };
 
     renderDetail({ listing: auction({ listing_type: "auction", website_url: "javascript:alert(1)", title: "State title" }) });
 
     expect(vi.mocked(useAuctionListings)).toHaveBeenCalledWith(60, { enabled: false });
     expect(mocks.queryOptions?.enabled).toBe(true);
-    expect(screen.getAllByText("State title").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Athens Auction Flat").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Open eAuction/i })[0]).toHaveAttribute(
       "href",
       "https://www.eauction.gr/Auction/Details/exact",
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps cached detail visible with a refresh-failed warning after exact lookup fails", () => {
+    mocks.queryResult = {
+      data: null,
+      isLoading: false,
+      isFetching: false,
+      isFetched: true,
+      isError: true,
+    };
+
+    renderDetail({ auction: auction() });
+
+    expect(screen.getAllByText("Athens Auction Flat").length).toBeGreaterThan(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Live auction details could not be refreshed. The information shown may be outdated.",
     );
   });
 
@@ -302,5 +382,25 @@ describe("AuctionDetail branch coverage", () => {
     expect(screen.queryByTestId("mini-map")).not.toBeInTheDocument();
     expect(screen.getByTestId("gallery")).toHaveTextContent("0 images");
     expect(screen.getByTestId("hero-specs")).toHaveTextContent("energy:null");
+  });
+
+  it("localizes auction hero labels and month names in Greek", () => {
+    mocks.language = "el-GR";
+    mocks.queryResult = {
+      data: auction(),
+      isLoading: false,
+      isFetching: false,
+      isFetched: true,
+      isError: false,
+    };
+
+    renderDetail();
+
+    const specs = screen.getByTestId("hero-specs");
+    expect(specs).toHaveTextContent("Εμβαδόν");
+    expect(specs).toHaveTextContent("Υπνοδωμάτια");
+    expect(specs).toHaveTextContent("Πλειστηριασμός");
+    expect(specs).toHaveTextContent(/Αυγ/);
+    expect(specs).not.toHaveTextContent(/\bAug\b/);
   });
 });

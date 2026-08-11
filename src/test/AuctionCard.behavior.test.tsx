@@ -1,6 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
+import i18n from "@/i18n";
+
+vi.unmock("react-i18next");
 
 const toastSuccess = vi.fn();
 const toastInfo = vi.fn();
@@ -46,6 +49,10 @@ describe("AuctionCard behavior", () => {
       configurable: true,
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
+  });
+
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
   });
 
   it("renders spotlight auction metadata, universal specs, saved state, and external eAuction link", async () => {
@@ -165,5 +172,27 @@ describe("AuctionCard behavior", () => {
     expect(screen.queryByText("Ownership")).not.toBeInTheDocument();
     expect(screen.queryByText(/50%/)).not.toBeInTheDocument();
     expect(screen.queryByText("Property")).not.toBeInTheDocument();
+  });
+
+  it("renders Greek auction controls, specs, and month names without English leakage", async () => {
+    await i18n.changeLanguage("el");
+    const { AuctionCard } = await import("@/components/auctions/AuctionCard");
+
+    renderWithProviders(
+      <AuctionCard
+        a={auction({ auction_date: "2026-08-01T10:00:00.000Z", floor: 0, total_floors: 5 })}
+        favoritedIds={new Set()}
+        onToggleFav={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Αυγ/)).toBeInTheDocument();
+    expect(screen.queryByText(/\bAug\b/)).not.toBeInTheDocument();
+    expect(screen.getByText(i18n.t("auctions.startingBid"))).toBeInTheDocument();
+    expect(screen.getByText("Όροφος Ισόγειο / 5")).toBeInTheDocument();
+    expect(screen.getByText("Έτος 1980")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Αποθήκευση" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Κοινοποίηση" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Αναφορά" })).toBeInTheDocument();
   });
 });

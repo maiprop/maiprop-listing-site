@@ -116,28 +116,29 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
   const pageMeta = auctionQuery.auctionPage;
   const isLoading = auctionQuery.isLoading && auctionQuery.data == null;
   const error = auctionQuery.error;
+  const refetch = auctionQuery.refetch;
   const visibleCount = pageMeta?.total ?? auctions.length;
   const totalRaw = pageMeta?.totalRaw ?? visibleCount;
 
   /** Distinct city list seeded with "All Cities". */
   const cityOptions = useMemo(() => {
     const cities = Array.from(new Set(
-      pageMeta?.facets.cities.filter(Boolean) ??
+      pageMeta?.facets?.cities?.filter(Boolean) ??
       auctions.map((auction) => auction.city).filter((city): city is string => Boolean(city)),
     )).sort();
     return ["All Cities", ...cities];
-  }, [auctions, pageMeta?.facets.cities]);
+  }, [auctions, pageMeta?.facets?.cities]);
 
   /** Round dropdown options inferred from the data so we don't show "3rd+ Auction" if no row matches. */
   const roundOptions = useMemo(() => {
-    const rounds = pageMeta?.facets.rounds ??
+    const rounds = pageMeta?.facets?.rounds ??
       auctions.map((auction) => getAuctionRound(auction.tags)).filter((round): round is number => round != null);
     const result: { value: string; label: string }[] = [{ value: "", label: "All Rounds" }];
     if (rounds.some((n) => n === 1)) result.push({ value: "1", label: "1st Auction" });
     if (rounds.some((n) => n === 2)) result.push({ value: "2", label: "2nd Auction" });
     if (rounds.some((n) => n >= 3)) result.push({ value: "3plus", label: "3rd+ Auction" });
     return result;
-  }, [auctions, pageMeta?.facets.rounds]);
+  }, [auctions, pageMeta?.facets?.rounds]);
 
   // The API has already filtered, applied the entitlement cap, and paginated.
   const visibleFiltered = auctions;
@@ -167,8 +168,8 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
   ].filter(Boolean).length;
 
   /** Derived stats cover the complete server-filtered entitlement window. */
-  const thisWeek = pageMeta?.stats.thisWeek ?? 0;
-  const avgBid = pageMeta?.stats.avgBid ?? 0;
+  const thisWeek = pageMeta?.stats?.thisWeek ?? 0;
+  const avgBid = pageMeta?.stats?.avgBid ?? 0;
 
   /** Map markers for the current server page. */
   const mapListings: MapListing[] = useMemo(() => {
@@ -204,6 +205,7 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
     /** Loading / error from the underlying React Query. */
     isLoading,
     error,
+    refetch,
     /** Distinct city list. */
     cityOptions,
     /** Round dropdown options inferred from the data. */
