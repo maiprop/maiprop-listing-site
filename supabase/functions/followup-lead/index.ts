@@ -1,6 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { SchemaValidationError } from "../_shared/schema.ts";
+import { parseFollowupLeadRequest } from "./request.ts";
 
 const requireEnv = (key: string): string => {
   const value = Deno.env.get(key);
@@ -528,6 +530,12 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const {
+      lead_id,
+      step: requestedStep,
+      preview_only,
+    } = await parseFollowupLeadRequest(req);
+
     // ── Auth guard: require admin JWT or internal service-role key ───────────
     {
       const authHeader = req.headers.get("Authorization");
@@ -570,15 +578,6 @@ Deno.serve(async (req) => {
       }
     }
     // ────────────────────────────────────────────────────────────────────────
-
-    const { lead_id, step: requestedStep, preview_only } = await req.json();
-
-    if (!lead_id || typeof lead_id !== "string") {
-      return new Response(JSON.stringify({ error: "Missing lead_id" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const supabaseKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -717,6 +716,16 @@ Deno.serve(async (req) => {
       },
     );
   } catch (error: unknown) {
+    if (error instanceof SchemaValidationError) {
+      return new Response(JSON.stringify({
+        error: error.message,
+        code: error.code,
+        issues: error.issues,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     console.error("Followup error:", error);
     return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,

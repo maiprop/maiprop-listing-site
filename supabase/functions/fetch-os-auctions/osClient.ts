@@ -8,18 +8,43 @@ import type { OsApiFailure, OsAuction, OsConfig, OsResponse } from "./types.ts";
 
 const log = createLogger("fetch-os-auctions");
 
-async function fetchWithTimeout(
+const DEFAULT_AUTH_TIMEOUT_MS = 15_000;
+const DEFAULT_AUCTION_TIMEOUT_MS = 20_000;
+
+export type OsClientTimeouts = {
+  authTimeoutMs?: number;
+  auctionTimeoutMs?: number;
+};
+
+type ConsumedResponse = {
+  response: Response;
+  bodyText: string;
+};
+
+async function fetchTextWithTimeout(
   url: string,
   options: RequestInit,
   timeoutMs: number,
-): Promise<Response> {
+): Promise<ConsumedResponse> {
   const controller = new AbortController();
   const timer = setTimeout(function abortRequest() {
     controller.abort();
   }, timeoutMs);
   try {
     // nosemgrep: javascript.lang.security.audit.detect-non-literal-url
-    return await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    const bodyText = await response.text();
+    return { response, bodyText };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`OS request timed out after ${timeoutMs}ms`, {
+        cause: error,
+      });
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }
@@ -29,21 +54,24 @@ async function getOsToken(
   baseUrl: string,
   email: string,
   password: string,
+  timeoutMs = DEFAULT_AUTH_TIMEOUT_MS,
 ): Promise<string> {
-  const res = await fetchWithTimeout(
+  const { response, bodyText } = await fetchTextWithTimeout(
     `${baseUrl}/auth/login`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     },
-    15_000,
+    timeoutMs,
   );
-  const json = await res.json();
+  const json = JSON.parse(bodyText);
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
   if (!token) {
     throw new Error(
-      `OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 200)}`,
+      `OS auth failed (${response.status}): ${
+        JSON.stringify(json).slice(0, 200)
+      }`,
     );
   }
   return token;
@@ -55,12 +83,13 @@ async function fetchOsAuctionDetailsWithToken(
   page: number,
   size: number,
   filterRequest: Record<string, unknown>,
+  timeoutMs = DEFAULT_AUCTION_TIMEOUT_MS,
 ): Promise<OsResponse | OsAuction[]> {
   const endpoint =
     `${osConfig.url}/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
   log.info("fetching auctions", { page, size, filter: filterRequest });
 
-  const auctionResponse = await fetchWithTimeout(
+  const { response: auctionResponse, bodyText } = await fetchTextWithTimeout(
     endpoint,
     {
       method: "POST",
@@ -70,11 +99,11 @@ async function fetchOsAuctionDetailsWithToken(
       },
       body: JSON.stringify(filterRequest),
     },
-    20_000,
+    timeoutMs,
   );
 
   if (!auctionResponse.ok) {
-    const detail = (await auctionResponse.text()).slice(0, 300);
+    const detail = bodyText.slice(0, 300);
     log.error("OS API error", { status: auctionResponse.status, detail });
     throw {
       kind: "os-api",
@@ -83,7 +112,7 @@ async function fetchOsAuctionDetailsWithToken(
     } satisfies OsApiFailure;
   }
 
-  return (await auctionResponse.json()) as OsResponse | OsAuction[];
+  return JSON.parse(bodyText) as OsResponse | OsAuction[];
 }
 
 export async function fetchOsAuctionDetails(
@@ -91,12 +120,14 @@ export async function fetchOsAuctionDetails(
   page: number,
   size: number,
   filterRequest: Record<string, unknown>,
+  timeouts: OsClientTimeouts = {},
 ): Promise<OsResponse | OsAuction[]> {
   log.info("authenticating with OS API");
   const token = await getOsToken(
     osConfig.url,
     osConfig.email,
     osConfig.password,
+    timeouts.authTimeoutMs ?? DEFAULT_AUTH_TIMEOUT_MS,
   );
 
   return await fetchOsAuctionDetailsWithToken(
@@ -105,6 +136,7 @@ export async function fetchOsAuctionDetails(
     page,
     size,
     filterRequest,
+    timeouts.auctionTimeoutMs ?? DEFAULT_AUCTION_TIMEOUT_MS,
   );
 }
 

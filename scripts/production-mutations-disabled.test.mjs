@@ -40,4 +40,41 @@ describe("production mutation hard disable", () => {
       /No Supabase DB\/function diff detected: Supabase prep skipped\.[\s\S]*?eligible=false/,
     );
   });
+
+  it("keeps legacy credentialed CI jobs disabled until the exact-SHA train owns them", () => {
+    const ci = parsedWorkflow("ci.yml");
+
+    for (const jobName of [
+      "e2e-security-staging",
+      "lighthouse",
+      "deploy-supabase-staging",
+      "deploy-staging",
+    ]) {
+      expect(ci.jobs[jobName].if, jobName).toBe("${{ false }}");
+    }
+
+    expect(ci.jobs["deploy-supabase-staging"].secrets).toBeUndefined();
+    expect(workflow("ci.yml")).not.toContain(
+      "E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}",
+    );
+    expect(workflow("ci.yml")).not.toContain(
+      "E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}",
+    );
+  });
+
+  it("rejects standalone manual Supabase staging mutation requests", () => {
+    const staging = parsedWorkflow("reusable-supabase-staging.yml");
+    const steps = staging.jobs["deploy-supabase-staging"].steps;
+    const detector = steps.find((step) => step.id === "supabase_changes");
+    const target = steps.find(
+      (step) => step.name === "Resolve Supabase staging target",
+    );
+
+    expect(detector.run).toMatch(
+      /Manual run: standalone Supabase staging prep is disabled\.[\s\S]*?eligible=false[\s\S]*?deploy=false[\s\S]*?db_changes=false/,
+    );
+    expect(target.if).toBe(
+      "steps.supabase_changes.outputs.eligible == 'true'",
+    );
+  });
 });

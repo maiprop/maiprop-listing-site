@@ -234,6 +234,9 @@ export default function BillingTab() { // skipcq: JS-0067
             ...(data.subscription?.id
               ? { subscription_id: data.subscription.id }
               : {}),
+            ...(action === "resume_subscription"
+              ? { operation_id: crypto.randomUUID() }
+              : {}),
           },
         });
       if (action === "resume_subscription" && pData?.resumed) {

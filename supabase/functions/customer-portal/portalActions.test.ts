@@ -9,11 +9,13 @@ Deno.test("portal action parser defaults to generic billing management", () => {
   assertEquals(parsePortalActionRequest({}), {
     action: "manage",
     subscriptionId: null,
+    operationId: null,
   });
-  assertEquals(parsePortalActionRequest({ action: "unknown" }), {
-    action: "manage",
-    subscriptionId: null,
-  });
+  assertThrows(
+    () => parsePortalActionRequest({ action: "unknown" }),
+    PortalActionValidationError,
+    "Invalid action",
+  );
 });
 
 Deno.test("portal action parser validates subscription actions", () => {
@@ -22,7 +24,7 @@ Deno.test("portal action parser validates subscription actions", () => {
       action: "subscription_cancel",
       subscription_id: "sub_123",
     }),
-    { action: "subscription_cancel", subscriptionId: "sub_123" },
+    { action: "subscription_cancel", subscriptionId: "sub_123", operationId: null },
   );
   assertThrows(
     () => parsePortalActionRequest({
@@ -38,6 +40,38 @@ Deno.test("portal action parser validates subscription actions", () => {
     }),
     PortalActionValidationError,
     "Invalid subscription_id",
+  );
+  assertEquals(
+    parsePortalActionRequest({
+      action: "resume_subscription",
+      subscription_id: "sub_123",
+      operation_id: "11111111-1111-4111-8111-111111111111",
+    }),
+    {
+      action: "resume_subscription",
+      subscriptionId: "sub_123",
+      operationId: "11111111-1111-4111-8111-111111111111",
+    },
+  );
+  assertThrows(
+    () => parsePortalActionRequest({
+      action: "resume_subscription",
+      subscription_id: "sub_123",
+    }),
+    PortalActionValidationError,
+    "operation_id is required",
+  );
+  assertThrows(
+    () => parsePortalActionRequest({
+      action: "subscription_cancel",
+      subscription_id: `sub_${"x".repeat(252)}`,
+    }),
+    PortalActionValidationError,
+    "Invalid subscription_id",
+  );
+  assertThrows(
+    () => parsePortalActionRequest({ action: "manage", unexpected: true }),
+    PortalActionValidationError,
   );
 });
 

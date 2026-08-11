@@ -2,6 +2,10 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { execFileSync } from "node:child_process";
+import {
+  cloudflareHttpMutationViolation,
+  findCloudflareHttpMutations,
+} from "./cloudflare-http-mutation-policy.mjs";
 
 const root = process.cwd();
 const checkMode = process.argv.includes("--check");
@@ -128,6 +132,7 @@ function scanWorkflows() {
     .map((name) => join(workflowDir, name));
 
   const violations = [];
+  const providerHttpMutations = [];
   const secrets = new Set();
   const workflowText = {};
   for (const file of files) {
@@ -152,6 +157,21 @@ function scanWorkflows() {
     });
   }
 
+  for (const [workflowPath, text] of Object.entries(workflowText)) {
+    for (const method of findCloudflareHttpMutations(text)) {
+      providerHttpMutations.push({
+        provider: "cloudflare",
+        workflow: workflowPath,
+        method,
+      });
+    }
+    const violation = cloudflareHttpMutationViolation({
+      workflowPath,
+      text,
+    });
+    if (violation) violations.push(violation);
+  }
+
   const ci = workflowText[".github/workflows/ci.yml"] ?? "";
   const deployBlock = yamlJobBlock(ci, "deploy");
   for (const need of productionDeployNeeds) {
@@ -174,6 +194,7 @@ function scanWorkflows() {
 
   return {
     violations,
+    provider_http_mutations: providerHttpMutations,
     secrets: [...secrets].sort(),
     undocumented_secrets: undocumentedSecrets,
   };

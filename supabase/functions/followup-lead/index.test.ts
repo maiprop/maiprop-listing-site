@@ -5,6 +5,8 @@ import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
 const SERVICE_ROLE = "placeholder-supabase-service-role";
+const CRM_LEAD_ID = "11111111-1111-4111-8111-111111111111";
+const MARKETING_LEAD_ID = "22222222-2222-4222-8222-222222222222";
 const { handler, restore } = await captureHandler(import.meta.url, "./index.ts", {
   SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE,
   OPENAI_API_KEY: "placeholder-openai",
@@ -83,7 +85,7 @@ Deno.test("CRM lead preview defaults to step 1 and uses OpenAI with vetted recen
 
   try {
     const res = await handler(req("POST", {
-      lead_id: "lead-1",
+      lead_id: CRM_LEAD_ID,
       preview_only: true,
     }, {
       authorization: `Bearer ${SERVICE_ROLE}`,
@@ -144,7 +146,7 @@ Deno.test("Golden Visa follow-up preview avoids unsupported static urgency and e
 
   try {
     const res = await handler(req("POST", {
-      lead_id: "lead-visa",
+      lead_id: MARKETING_LEAD_ID,
       step: 3,
       preview_only: true,
     }, {
@@ -157,6 +159,54 @@ Deno.test("Golden Visa follow-up preview avoids unsupported static urgency and e
     assertEquals(body.html?.includes("6-9 Months"), false);
     assertEquals(body.html?.includes("27 Countries"), false);
     assertEquals(body.html?.includes("<p style=\"margin:0;color:#e0fafa;font-size:15px;\">None</p>"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("invalid follow-up bodies return structured 400 before database or provider work", async () => {
+  const originalFetch = globalThis.fetch;
+  let sideEffectCalls = 0;
+
+  globalThis.fetch = (() => {
+    sideEffectCalls += 1;
+    throw new Error("invalid follow-up input reached a side effect");
+  }) as typeof fetch;
+
+  const requestFor = (body: unknown) =>
+    req("POST", body, {
+      authorization: `Bearer ${SERVICE_ROLE}`,
+    });
+  const malformed = new Request("https://functions.test/followup-lead", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${SERVICE_ROLE}`,
+      "content-type": "application/json",
+    },
+    body: "{",
+  });
+
+  try {
+    for (const request of [
+      malformed,
+      requestFor({ lead_id: "x".repeat(1000) }),
+      requestFor({ lead_id: 42 }),
+      requestFor({ lead_id: CRM_LEAD_ID, invented: true }),
+    ]) {
+      const res = await handler(request);
+      const body = await res.json() as {
+        code?: string;
+        issues?: unknown[];
+      };
+
+      assertEquals(res.status, 400);
+      assertEquals(
+        ["invalid_json", "validation_error"].includes(body.code ?? ""),
+        true,
+      );
+      assertEquals(Array.isArray(body.issues), true);
+    }
+    assertEquals(sideEffectCalls, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }

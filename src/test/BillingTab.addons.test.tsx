@@ -953,7 +953,13 @@ describe("BillingTab add-on checkout", () => {
 
     await waitFor(() => {
       expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("customer-portal", {
-        body: { action: "resume_subscription", subscription_id: "sub_resume" },
+        body: {
+          action: "resume_subscription",
+          subscription_id: "sub_resume",
+          operation_id: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          ),
+        },
         timeout: 20_000,
       });
       expect(toast.success).toHaveBeenCalledWith("Your subscription renewal has been resumed.");

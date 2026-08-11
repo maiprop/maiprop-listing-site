@@ -8,6 +8,9 @@ type StripeAccountIdentityClient = {
   accounts: {
     retrieve(id: string | null): Promise<{ id?: string | null }>;
   };
+  balance: {
+    retrieve(): Promise<{ livemode?: boolean | null }>;
+  };
 };
 
 export type StripeAccountIdentityOptions = {
@@ -15,6 +18,7 @@ export type StripeAccountIdentityOptions = {
   eventAccount?: string | null;
   timeoutMs?: number;
   cacheTtlMs?: number;
+  runtimeMode?: StripeRuntimeMode;
 };
 
 export const STRIPE_SAAS_PERSONAL_TAX_CODE = "txcd_10103000";
@@ -96,11 +100,11 @@ const STRIPE_ACCOUNT_VERIFICATION_TIMEOUT_MS = 3_000;
 const STRIPE_ACCOUNT_VERIFICATION_CACHE_TTL_MS = 5 * 60 * 1000;
 const stripeAccountVerificationCache = new WeakMap<
   object,
-  { accountId: string; expiresAt: number }
+  { accountId: string; livemode: boolean; expiresAt: number }
 >();
 const stripeAccountVerificationRequests = new WeakMap<
   object,
-  Promise<string>
+  Promise<{ accountId: string; livemode: boolean }>
 >();
 
 const normalizeStripeAccountId = (
@@ -137,14 +141,26 @@ export function assertStripeEventAccountMatchesExpected(
 
 const stripeAccountRequest = (
   stripe: StripeAccountIdentityClient,
-): Promise<string> => {
+): Promise<{ accountId: string; livemode: boolean }> => {
   const cacheKey = stripe as object;
   const existing = stripeAccountVerificationRequests.get(cacheKey);
   if (existing) return existing;
 
-  const request = stripe.accounts.retrieve(null).then((account) =>
-    normalizeStripeAccountId(account.id, "Stripe authenticated account")
-  );
+  const request = Promise.all([
+    stripe.accounts.retrieve(null),
+    stripe.balance.retrieve(),
+  ]).then(([account, balance]) => {
+    if (typeof balance.livemode !== "boolean") {
+      throw new Error("Stripe balance response did not include livemode.");
+    }
+    return {
+      accountId: normalizeStripeAccountId(
+        account.id,
+        "Stripe authenticated account",
+      ),
+      livemode: balance.livemode,
+    };
+  });
   stripeAccountVerificationRequests.set(cacheKey, request);
   void request.finally(() => {
     if (stripeAccountVerificationRequests.get(cacheKey) === request) {
@@ -183,6 +199,8 @@ export async function verifyStripeAccountIdentity(
     options.eventAccount,
     expectedAccountId,
   );
+  const runtimeMode = options.runtimeMode ?? getStripeRuntimeMode();
+  const expectedLivemode = runtimeMode === "live";
 
   const cacheKey = stripe as object;
   const now = Date.now();
@@ -197,6 +215,11 @@ export async function verifyStripeAccountIdentity(
         `Stripe authenticated account ${cached.accountId} does not match expected account ${expectedAccountId}.`,
       );
     }
+    if (cached.livemode !== expectedLivemode) {
+      throw new Error(
+        `Stripe balance livemode=${cached.livemode} does not match configured ${runtimeMode} mode.`,
+      );
+    }
     return cached.accountId;
   }
 
@@ -205,27 +228,33 @@ export async function verifyStripeAccountIdentity(
     options.timeoutMs ?? STRIPE_ACCOUNT_VERIFICATION_TIMEOUT_MS,
   );
   const request = stripeAccountRequest(stripe);
-  let accountId: string;
+  let identity: { accountId: string; livemode: boolean };
   try {
-    accountId = await withStripeAccountDeadline(request, timeoutMs);
+    identity = await withStripeAccountDeadline(request, timeoutMs);
   } catch (error) {
     if (stripeAccountVerificationRequests.get(cacheKey) === request) {
       stripeAccountVerificationRequests.delete(cacheKey);
     }
     throw error;
   }
-  if (accountId !== expectedAccountId) {
+  if (identity.accountId !== expectedAccountId) {
     throw new Error(
-      `Stripe authenticated account ${accountId} does not match expected account ${expectedAccountId}.`,
+      `Stripe authenticated account ${identity.accountId} does not match expected account ${expectedAccountId}.`,
+    );
+  }
+  if (identity.livemode !== expectedLivemode) {
+    throw new Error(
+      `Stripe balance livemode=${identity.livemode} does not match configured ${runtimeMode} mode.`,
     );
   }
   if (cacheTtlMs > 0) {
     stripeAccountVerificationCache.set(cacheKey, {
-      accountId,
+      accountId: identity.accountId,
+      livemode: identity.livemode,
       expiresAt: now + cacheTtlMs,
     });
   }
-  return accountId;
+  return identity.accountId;
 }
 
 export function getStripeRuntimeMode(): StripeRuntimeMode {
@@ -245,7 +274,17 @@ export function assertStripeKeyMatchesRuntimeMode(
   stripeKey: string,
   runtimeMode: StripeRuntimeMode = getStripeRuntimeMode(),
 ): void {
-  if (runtimeMode === "test" && stripeKey.startsWith("sk_live_")) {
+  const keyMode: StripeRuntimeMode | null = /^(sk|rk)_test_/.test(stripeKey)
+    ? "test"
+    : /^(sk|rk)_live_/.test(stripeKey)
+    ? "live"
+    : null;
+  if (!keyMode) {
+    throw new Error(
+      "STRIPE_SECRET_KEY must use a recognized Stripe secret or restricted key prefix.",
+    );
+  }
+  if (runtimeMode === "test" && keyMode === "live") {
     throw new Error(
       "Stripe test mode is active, but STRIPE_SECRET_KEY is a live key.",
     );
@@ -256,7 +295,7 @@ export function assertStripeKeyMatchesRuntimeMode(
         "Live Stripe mode requires STRIPE_LIVE_MODE=true as an explicit opt-in.",
       );
     }
-    if (stripeKey.startsWith("sk_test_")) {
+    if (keyMode === "test") {
       throw new Error(
         "Stripe live mode is active, but STRIPE_SECRET_KEY is a test key.",
       );
@@ -269,6 +308,15 @@ export function createStripeClient(stripeKey?: string): Stripe {
   if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
   assertStripeKeyMatchesRuntimeMode(key);
   return new Stripe(key, { apiVersion: STRIPE_API_VERSION });
+}
+
+export async function createVerifiedStripeClient(
+  stripeKey?: string,
+  options: StripeAccountIdentityOptions = {},
+): Promise<Stripe> {
+  const stripe = createStripeClient(stripeKey);
+  await verifyStripeAccountIdentity(stripe, options);
+  return stripe;
 }
 
 export function stripeLivemodeFromRuntime(

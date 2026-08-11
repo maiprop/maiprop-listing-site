@@ -14,16 +14,33 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
-import type { Database, Json } from "../../../src/integrations/supabase/types.ts";
+import { fetchBufferedProviderResponse } from "../_shared/providerFetch.ts";
+import { SchemaValidationError } from "../_shared/schema.ts";
+import type {
+  Database,
+  Json,
+} from "../../../src/integrations/supabase/types.ts";
+import { parseReportRequest } from "./request.ts";
 
 const log = createLogger("fetch-report-from-os");
-const limiter = makeRateLimiter({ bucket: "fetch-report-from-os", maxRequests: 20, windowMs: 60_000 });
+const limiter = makeRateLimiter({
+  bucket: "fetch-report-from-os",
+  maxRequests: 20,
+  windowMs: 60_000,
+});
 export const OS_TOKEN_TIMEOUT_MS = 7_000;
 export const OS_HTML_REPORT_TIMEOUT_MS = 25_000;
 export const OS_AI_REPORT_TIMEOUT_MS = 4_000;
 const OS_GENERIC_REPORT_TIMEOUT_MS = 12_000;
+export const OS_TOKEN_RESPONSE_MAX_BYTES = 64 * 1_024;
+export const OS_HTML_REPORT_RESPONSE_MAX_BYTES = 5 * 1_024 * 1_024;
+export const OS_AI_REPORT_RESPONSE_MAX_BYTES = 1 * 1_024 * 1_024;
+export const OS_GENERIC_REPORT_RESPONSE_MAX_BYTES = 5 * 1_024 * 1_024;
 const REPORT_GENERATION_LEASE_SECONDS = 40;
 const REPORT_GENERATION_WAIT_MS = 32_000;
 const REPORT_GENERATION_POLL_MS = 350;
@@ -75,18 +92,18 @@ type PropertyReportCacheDbRow = {
   created_by: string | null;
 };
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 type FunctionDatabase = Database & {
   public: Database["public"] & {
     Tables: Database["public"]["Tables"] & {
       property_report_cache: {
         Row: PropertyReportCacheDbRow;
-        Insert: Omit<PropertyReportCacheDbRow, "id" | "generated_at" | "expires_at"> & {
-          id?: string;
-          generated_at?: string;
-          expires_at?: string;
-        };
+        Insert:
+          & Omit<PropertyReportCacheDbRow, "id" | "generated_at" | "expires_at">
+          & {
+            id?: string;
+            generated_at?: string;
+            expires_at?: string;
+          };
         Update: Partial<PropertyReportCacheDbRow>;
         Relationships: [];
       };
@@ -151,7 +168,9 @@ type ReportCacheRpcClient = SupabaseAdminClient & {
 
 type ReportGenerationLeaseRpcClient = SupabaseAdminClient & {
   rpc(
-    functionName: "claim_property_report_generation" | "release_property_report_generation",
+    functionName:
+      | "claim_property_report_generation"
+      | "release_property_report_generation",
     args: Record<string, unknown>,
   ): PromiseLike<{
     data: boolean | null;
@@ -194,24 +213,23 @@ function isAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
 }
 
-async function fetchWithTimeout(
+export async function fetchWithTimeout(
   url: string,
   options: RequestInit,
-  timeoutMs: number
+  timeoutMs: number,
+  maxResponseBytes = OS_GENERIC_REPORT_RESPONSE_MAX_BYTES,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  return await fetchBufferedProviderResponse(url, options, {
+    timeoutMs,
+    maxResponseBytes,
+    timeoutMessage: "OS provider request timed out",
+  });
 }
 
 async function getOsToken(
   baseUrl: string,
   email: string,
-  password: string
+  password: string,
 ): Promise<string> {
   const res = await fetchWithTimeout(
     `${baseUrl}/auth/login`,
@@ -220,12 +238,16 @@ async function getOsToken(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     },
-    OS_TOKEN_TIMEOUT_MS
+    OS_TOKEN_TIMEOUT_MS,
+    OS_TOKEN_RESPONSE_MAX_BYTES,
   );
   const json = await res.json();
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
-  if (!token)
-    throw new Error(`OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 200)}`);
+  if (!token) {
+    throw new Error(
+      `OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 200)}`,
+    );
+  }
   return token;
 }
 
@@ -234,18 +256,24 @@ function coerceFiniteNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function buildPropertyFeatures(listing: ListingRow): PropertyFeaturesRequest | null {
+function buildPropertyFeatures(
+  listing: ListingRow,
+): PropertyFeaturesRequest | null {
   const propertyLatitude = coerceFiniteNumber(listing.latitude);
   const propertyLongitude = coerceFiniteNumber(listing.longitude);
   const propertySquareMeters = coerceFiniteNumber(listing.sqm);
 
-  if (propertyLatitude == null || propertyLongitude == null || propertySquareMeters == null) {
+  if (
+    propertyLatitude == null || propertyLongitude == null ||
+    propertySquareMeters == null
+  ) {
     return null;
   }
 
   const rawYear = coerceFiniteNumber(listing.year_built);
-  const constructionYear =
-    rawYear != null && rawYear >= 1900 && rawYear <= 2200 ? Math.round(rawYear) : 2000;
+  const constructionYear = rawYear != null && rawYear >= 1900 && rawYear <= 2200
+    ? Math.round(rawYear)
+    : 2000;
   const propertyFloor = coerceFiniteNumber(listing.floor) ?? 0;
   const address = [listing.address, listing.city].filter(Boolean).join(", ");
   const propertyCategory = listing.property_type
@@ -264,7 +292,11 @@ function buildPropertyFeatures(listing: ListingRow): PropertyFeaturesRequest | n
 }
 
 function getSafeReportFileName(listingId: string): string {
-  const safeId = listingId.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "external";
+  const safeId =
+    listingId.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "").slice(
+      0,
+      80,
+    ) || "external";
   return `maiprop-property-report-${safeId}.html`;
 }
 
@@ -274,12 +306,22 @@ function getHtmlReportFileName(fileName: string): string {
 }
 
 function sanitizeOsReportHtml(html: string): string {
-  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:;">`;
+  const csp =
+    `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:;">`;
   const sanitized = html
-    .replace(/<\s*(script|iframe|object|embed|form)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
-    .replace(/<\s*(script|iframe|object|embed|base|form|input|button|textarea|select|link|meta)\b[^>]*\/?>/gi, "")
+    .replace(
+      /<\s*(script|iframe|object|embed|form)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi,
+      "",
+    )
+    .replace(
+      /<\s*(script|iframe|object|embed|base|form|input|button|textarea|select|link|meta)\b[^>]*\/?>/gi,
+      "",
+    )
     .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/\s+(href|src|xlink:href)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, "")
+    .replace(
+      /\s+(href|src|xlink:href)\s*=\s*(["'])\s*javascript:[^"']*\2/gi,
+      "",
+    )
     .replace(/\s+(href|src|xlink:href)\s*=\s*javascript:[^\s>]+/gi, "")
     .replace(/\s+srcdoc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
 
@@ -289,14 +331,22 @@ function sanitizeOsReportHtml(html: string): string {
   return `<!doctype html><html><head>${csp}</head><body>${sanitized}</body></html>`;
 }
 
-function appendFeatures(params: URLSearchParams, features: PropertyFeaturesRequest): void {
+function appendFeatures(
+  params: URLSearchParams,
+  features: PropertyFeaturesRequest,
+): void {
   for (const [key, value] of Object.entries(features)) {
     if (value == null || value === "") continue;
     params.append(key, String(value));
   }
 }
 
-async function fetchTextIfOk(url: string, token: string, timeoutMs = 30_000): Promise<Response> {
+async function fetchTextIfOk(
+  url: string,
+  token: string,
+  timeoutMs = 30_000,
+  maxResponseBytes = OS_GENERIC_REPORT_RESPONSE_MAX_BYTES,
+): Promise<Response> {
   return await fetchWithTimeout(
     url,
     {
@@ -307,6 +357,7 @@ async function fetchTextIfOk(url: string, token: string, timeoutMs = 30_000): Pr
       },
     },
     timeoutMs,
+    maxResponseBytes,
   );
 }
 
@@ -317,7 +368,9 @@ async function getActiveCachedReport(
 ): Promise<PropertyReportCacheRow | null> {
   const { data, error } = await supabase
     .from("property_report_cache")
-    .select("id,listing_id,report_type,lang,source,html,ai,features,file_name,generated_at,expires_at")
+    .select(
+      "id,listing_id,report_type,lang,source,html,ai,features,file_name,generated_at,expires_at",
+    )
     .eq("listing_id", listingId)
     .eq("report_type", "valuation")
     .eq("lang", lang)
@@ -345,7 +398,9 @@ async function chargeReportFetchIfNeeded(
   );
 
   if (error) {
-    throw new ReportBillingError(error.hint ?? error.message ?? "Property report charge failed");
+    throw new ReportBillingError(
+      error.hint ?? error.message ?? "Property report charge failed",
+    );
   }
 
   return {
@@ -369,7 +424,9 @@ async function chargeUncachedReportFetch(
   );
 
   if (error) {
-    throw new ReportBillingError(error.hint ?? error.message ?? "Property report charge failed");
+    throw new ReportBillingError(
+      error.hint ?? error.message ?? "Property report charge failed",
+    );
   }
   return {
     charged: data?.charged === true,
@@ -390,7 +447,9 @@ async function claimReportGenerationLease(
     p_holder: holder,
     p_lease_seconds: REPORT_GENERATION_LEASE_SECONDS,
   });
-  if (error) throw new Error(error.message ?? "Property report generation lease failed");
+  if (error) {
+    throw new Error(error.message ?? "Property report generation lease failed");
+  }
   return data === true;
 }
 
@@ -427,7 +486,9 @@ async function acquireOrAwaitReportGeneration(
     if (await claimReportGenerationLease(supabase, listingId, lang, holder)) {
       return { acquired: true, cached: null };
     }
-    await new Promise((resolve) => setTimeout(resolve, REPORT_GENERATION_POLL_MS));
+    await new Promise((resolve) =>
+      setTimeout(resolve, REPORT_GENERATION_POLL_MS)
+    );
   }
   return {
     acquired: false,
@@ -464,7 +525,9 @@ async function storeReportGeneration(
   );
 
   if (error || !data) {
-    throw new Error(error?.message ?? "Property report cache publication failed");
+    throw new Error(
+      error?.message ?? "Property report cache publication failed",
+    );
   }
   return data;
 }
@@ -480,10 +543,15 @@ async function authorizeReportGeneration(
   );
 
   if (error) {
-    throw new ReportBillingError(error.hint ?? error.message ?? "Property report is not available on this plan");
+    throw new ReportBillingError(
+      error.hint ?? error.message ??
+        "Property report is not available on this plan",
+    );
   }
   if (data?.allowed !== true) {
-    throw new ReportBillingError("Property report is not available on this plan");
+    throw new ReportBillingError(
+      "Property report is not available on this plan",
+    );
   }
 }
 
@@ -518,16 +586,29 @@ function cachedReportResponse(
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: "Missing or invalid Authorization header" }),
+      {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -542,67 +623,44 @@ Deno.serve(async (req) => {
   const supabase = createClient<FunctionDatabase>(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
+  const { data: { user }, error: authError } = await supabase.auth.getUser(
+    authHeader.slice(7),
+  );
   if (authError || !user) {
     return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
     const {
       listing_id,
       report_type,
-      lang = "en",
+      lang: normalizedLang,
       since,
       to,
-    } = body as {
-      listing_id?: string;
-      report_type?: string;
-      lang?: string;
-      since?: string;
-      to?: string;
-    };
-
-    if (!listing_id || !report_type) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "listing_id and report_type are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const allowedTypes = ["valuation", "neighbourhood"];
-    if (!allowedTypes.includes(report_type)) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "report_type must be 'valuation' or 'neighbourhood'" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const normalizedLang: "en" | "el" = lang === "el" ? "el" : "en";
-    const isDatabaseListing = UUID_RE.test(listing_id);
-
-    if (!isDatabaseListing) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "listing_id must identify a platform listing" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    } = await parseReportRequest(req);
 
     // Resolve the listing through the caller's JWT before reading a cached
     // report or contacting the external provider. This deliberately delegates
     // draft/off-market/tenant access to the same RLS policy used by the app.
-    const callerSupabase = createClient<FunctionDatabase>(supabaseUrl, anonKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { headers: { Authorization: authHeader } },
-    });
-    const listingSelect = "id,address,city,latitude,longitude,sqm,property_type,floor,year_built";
-    const { data: publicListings, error: publicListingError } = await callerSupabase
-      .rpc("get_public_listing_catalogue")
-      .eq("id", listing_id)
-      .select(listingSelect)
-      .limit(1);
+    const callerSupabase = createClient<FunctionDatabase>(
+      supabaseUrl,
+      anonKey,
+      {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { Authorization: authHeader } },
+      },
+    );
+    const listingSelect =
+      "id,address,city,latitude,longitude,sqm,property_type,floor,year_built";
+    const { data: publicListings, error: publicListingError } =
+      await callerSupabase
+        .rpc("get_public_listing_catalogue")
+        .eq("id", listing_id)
+        .select(listingSelect)
+        .limit(1);
     const publicListing = publicListings?.[0] ?? null;
 
     if (publicListingError) {
@@ -610,10 +668,13 @@ Deno.serve(async (req) => {
         listing_id,
         error: publicListingError.message,
       });
-      return new Response(JSON.stringify({ error: "Listing access unavailable" }), {
-        status: 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Listing access unavailable" }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const privateListingResult = publicListing
@@ -632,10 +693,13 @@ Deno.serve(async (req) => {
         listing_id,
         error: listingAccessError.message,
       });
-      return new Response(JSON.stringify({ error: "Listing access unavailable" }), {
-        status: 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Listing access unavailable" }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
     if (!accessibleListing) {
       return new Response(JSON.stringify({ error: "Listing not found" }), {
@@ -645,10 +709,19 @@ Deno.serve(async (req) => {
     }
     const listingForFeatures = accessibleListing as ListingRow;
 
-    if (report_type === "valuation" && isDatabaseListing) {
-      const cached = await getActiveCachedReport(supabase, listing_id, normalizedLang);
+    if (report_type === "valuation") {
+      const cached = await getActiveCachedReport(
+        supabase,
+        listing_id,
+        normalizedLang,
+      );
       if (cached) {
-        const charge = await chargeReportFetchIfNeeded(supabase, user.id, listing_id, cached.generated_at);
+        const charge = await chargeReportFetchIfNeeded(
+          supabase,
+          user.id,
+          listing_id,
+          cached.generated_at,
+        );
         return cachedReportResponse(cached, charge, corsHeaders, true);
       }
     }
@@ -661,8 +734,13 @@ Deno.serve(async (req) => {
 
     if (!OS_URL || !OS_EMAIL || !OS_PASS) {
       return new Response(
-        JSON.stringify({ ok: true, report: null, source: null, reason: "OS credentials not configured" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          ok: true,
+          report: null,
+          source: null,
+          reason: "OS credentials not configured",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -681,107 +759,147 @@ Deno.serve(async (req) => {
           listing_id,
           generation.cached.generated_at,
         );
-        return cachedReportResponse(generation.cached, charge, corsHeaders, true);
+        return cachedReportResponse(
+          generation.cached,
+          charge,
+          corsHeaders,
+          true,
+        );
       }
       if (!generation.acquired) {
-        return new Response(JSON.stringify({
-          ok: true,
-          report: null,
-          source: "os",
-          reason: "Report generation is already in progress. Please retry shortly.",
-          retry_after_ms: 1_500,
-        }), {
-          status: 202,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-            "Retry-After": "2",
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            report: null,
+            source: "os",
+            reason:
+              "Report generation is already in progress. Please retry shortly.",
+            retry_after_ms: 1_500,
+          }),
+          {
+            status: 202,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+              "Retry-After": "2",
+            },
           },
-        });
+        );
       }
 
       try {
-      const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
-      const features = buildPropertyFeatures(listingForFeatures);
-      if (!features) {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            report: null,
-            source: "os",
-            reason: "Listing is missing coordinates or square meters required by OS reports",
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
+        const features = buildPropertyFeatures(listingForFeatures);
+        if (!features) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              report: null,
+              source: "os",
+              reason:
+                "Listing is missing coordinates or square meters required by OS reports",
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        const params = new URLSearchParams({ lang: normalizedLang });
+        if (since) params.set("since", since);
+        if (to) params.set("to", to);
+        appendFeatures(params, features);
+
+        const reportUrl =
+          `${OS_URL}/api/v1/reports/valuation/property?${params.toString()}`;
+        const aiUrl =
+          `${OS_URL}/api/v1/reports/valuation/property/ai?${params.toString()}`;
+        const reportRes = await fetchTextIfOk(
+          reportUrl,
+          token,
+          OS_HTML_REPORT_TIMEOUT_MS,
+          OS_HTML_REPORT_RESPONSE_MAX_BYTES,
+        ).catch((err: unknown) => {
+          if (!isAbortError(err)) throw err;
+          log.warn("OS valuation HTML report timed out", {
+            timeout_ms: OS_HTML_REPORT_TIMEOUT_MS,
+          });
+          return null;
+        });
+        if (!reportRes) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              report: null,
+              source: "os",
+              reason: "OS HTML report generation timed out. Please try again.",
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        if (reportRes.status === 404 || reportRes.status === 204) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              report: null,
+              source: "os",
+              reason: "No valuation report for this listing",
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        if (!reportRes.ok) {
+          const text = await reportRes.text();
+          log.warn("OS valuation report returned non-ok", {
+            status: reportRes.status,
+            body: text.slice(0, 200),
+          });
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              report: null,
+              source: null,
+              reason: `OS returned ${reportRes.status}`,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        const html = sanitizeOsReportHtml(await reportRes.text());
+        const aiRes = await fetchTextIfOk(
+          aiUrl,
+          token,
+          OS_AI_REPORT_TIMEOUT_MS,
+          OS_AI_REPORT_RESPONSE_MAX_BYTES,
+        )
+          .catch(() => null);
+        const ai = aiRes?.ok ? await aiRes.json().catch(() => null) : null;
+        const fileName = getSafeReportFileName(listing_id);
+
+        const generatedAt = new Date();
+        const expiresAt = new Date(
+          generatedAt.getTime() + 30 * 24 * 60 * 60 * 1000,
         );
-      }
 
-      const params = new URLSearchParams({ lang: normalizedLang });
-      if (since) params.set("since", since);
-      if (to) params.set("to", to);
-      appendFeatures(params, features);
+        const cache = await storeReportGeneration(supabase, {
+          listingId: listing_id,
+          lang: normalizedLang,
+          html,
+          ai,
+          features,
+          fileName,
+          generatedAt: generatedAt.toISOString(),
+          expiresAt: expiresAt.toISOString(),
+        });
 
-      const reportUrl = `${OS_URL}/api/v1/reports/valuation/property?${params.toString()}`;
-      const aiUrl = `${OS_URL}/api/v1/reports/valuation/property/ai?${params.toString()}`;
-      const reportRes = await fetchTextIfOk(reportUrl, token, OS_HTML_REPORT_TIMEOUT_MS).catch((err: unknown) => {
-        if (!isAbortError(err)) throw err;
-        log.warn("OS valuation HTML report timed out", { timeout_ms: OS_HTML_REPORT_TIMEOUT_MS });
-        return null;
-      });
-      if (!reportRes) {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            report: null,
-            source: "os",
-            reason: "OS HTML report generation timed out. Please try again.",
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        const charge = await chargeReportFetchIfNeeded(
+          supabase,
+          user.id,
+          listing_id,
+          cache.generated_at,
         );
-      }
 
-      if (reportRes.status === 404 || reportRes.status === 204) {
-        return new Response(
-          JSON.stringify({ ok: true, report: null, source: "os", reason: "No valuation report for this listing" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-
-      if (!reportRes.ok) {
-        const text = await reportRes.text();
-        log.warn("OS valuation report returned non-ok", { status: reportRes.status, body: text.slice(0, 200) });
-        return new Response(
-          JSON.stringify({ ok: true, report: null, source: null, reason: `OS returned ${reportRes.status}` }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-
-      const html = sanitizeOsReportHtml(await reportRes.text());
-      const aiRes = await fetchTextIfOk(aiUrl, token, OS_AI_REPORT_TIMEOUT_MS).catch(() => null);
-      const ai = aiRes?.ok ? await aiRes.json().catch(() => null) : null;
-      const fileName = getSafeReportFileName(listing_id);
-
-      const generatedAt = new Date();
-      const expiresAt = new Date(generatedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-      const cache = await storeReportGeneration(supabase, {
-        listingId: listing_id,
-        lang: normalizedLang,
-        html,
-        ai,
-        features,
-        fileName,
-        generatedAt: generatedAt.toISOString(),
-        expiresAt: expiresAt.toISOString(),
-      });
-
-      const charge = await chargeReportFetchIfNeeded(
-        supabase,
-        user.id,
-        listing_id,
-        cache.generated_at,
-      );
-
-      return cachedReportResponse(cache, charge, corsHeaders, false);
+        return cachedReportResponse(cache, charge, corsHeaders, false);
       } finally {
         await releaseReportGenerationLease(
           supabase,
@@ -795,11 +913,14 @@ Deno.serve(async (req) => {
     // OS report endpoint: GET /api/v1/reports/listing/:listingId?type=valuation|neighbourhood
     // Override with MAIPROP_OS_REPORT_PATH e.g. /api/v1/analytics/report (then we use ?listingId= &type=)
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
-    const pathTemplate = Deno.env.get("MAIPROP_OS_REPORT_PATH") || "/api/v1/reports/listing";
+    const pathTemplate = Deno.env.get("MAIPROP_OS_REPORT_PATH") ||
+      "/api/v1/reports/listing";
     const base = pathTemplate.replace(/:listingId|:id/g, listing_id);
     const url = base.includes(listing_id)
       ? `${OS_URL}${base}?type=${report_type}`
-      : `${OS_URL}${base}?listingId=${encodeURIComponent(listing_id)}&type=${report_type}`;
+      : `${OS_URL}${base}?listingId=${
+        encodeURIComponent(listing_id)
+      }&type=${report_type}`;
 
     const res = await fetchWithTimeout(
       url,
@@ -810,22 +931,36 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
         },
       },
-      OS_GENERIC_REPORT_TIMEOUT_MS
+      OS_GENERIC_REPORT_TIMEOUT_MS,
+      OS_GENERIC_REPORT_RESPONSE_MAX_BYTES,
     );
 
     if (res.status === 404 || res.status === 204) {
       return new Response(
-        JSON.stringify({ ok: true, report: null, source: "os", reason: "No report for this listing" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          ok: true,
+          report: null,
+          source: "os",
+          reason: "No report for this listing",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     if (!res.ok) {
       const text = await res.text();
-      log.warn("OS returned non-ok", { status: res.status, body: text.slice(0, 200) });
+      log.warn("OS returned non-ok", {
+        status: res.status,
+        body: text.slice(0, 200),
+      });
       return new Response(
-        JSON.stringify({ ok: true, report: null, source: null, reason: `OS returned ${res.status}` }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          ok: true,
+          report: null,
+          source: null,
+          reason: `OS returned ${res.status}`,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -833,27 +968,53 @@ Deno.serve(async (req) => {
     if (!report) {
       return new Response(
         JSON.stringify({ ok: true, report: null, source: "os" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     const charge = await chargeUncachedReportFetch(supabase, user.id);
     return new Response(
       JSON.stringify({ ok: true, report, source: "os", billing: charge }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: unknown) {
     const message = errorMessage(err);
     log.error("fetch-report error", { err: message });
+    if (err instanceof SchemaValidationError) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: message,
+          report: null,
+          code: err.code,
+          issues: err.issues,
+        }),
+        {
+          status: err.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
     if (err instanceof ReportBillingError) {
       return new Response(
-        JSON.stringify({ ok: false, error: message, report: null, code: "report_billing_failed" }),
-        { status: err.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        JSON.stringify({
+          ok: false,
+          error: message,
+          report: null,
+          code: "report_billing_failed",
+        }),
+        {
+          status: err.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
     return new Response(
       JSON.stringify({ ok: false, error: message, report: null }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

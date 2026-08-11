@@ -117,6 +117,7 @@ describe("dashboard utility tabs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.defineProperty(window, "location", { writable: true, value: { href: "http://localhost/dashboard/billing" } });
+    localStorage.clear();
     sessionStorage.clear();
     mocks.useAuth.mockReturnValue({
       user: { id: "u1" },
@@ -134,10 +135,16 @@ describe("dashboard utility tabs", () => {
       subscriptionEnd: null,
       accessSource: "stripe",
     });
-    mocks.invoke.mockImplementation((fn: string) => {
+    mocks.invoke.mockImplementation((fn: string, options?: { body?: Record<string, unknown> }) => {
       if (fn === "get-invoices") return Promise.resolve({ data: billingInfo, error: null });
       if (fn === "customer-portal") return Promise.resolve({ data: { url: "https://stripe.example/portal" }, error: null });
       if (fn === "create-checkout") return Promise.resolve({ data: { url: "https://stripe.example/addon" }, error: null });
+      if (fn === "log-role-switch") {
+        return Promise.resolve({
+          data: { audit_id: options?.body?.operation_id },
+          error: null,
+        });
+      }
       return Promise.resolve({ data: null, error: null });
     });
     mocks.useAuctionAlerts.mockReturnValue({ data: [], isLoading: false });
@@ -238,6 +245,16 @@ describe("dashboard utility tabs", () => {
 
   it("switches participant type, handles RPC errors, deletes accounts, and shows permission fallbacks", async () => {
     const refreshProfile = vi.fn().mockResolvedValue(undefined);
+    let operationWasDurableBeforeFirstRequest = false;
+    const invokeImplementation = mocks.invoke.getMockImplementation();
+    mocks.invoke.mockImplementation((fn: string, options?: { body?: Record<string, unknown> }) => {
+      if (fn === "begin-role-switch" && options?.body?.validate_only === true) {
+        operationWasDurableBeforeFirstRequest = localStorage
+          .getItem("maiprop_role_switch_operation_v1")
+          ?.includes("operationId") === true;
+      }
+      return invokeImplementation?.(fn, options);
+    });
     renderHarness(<SettingsSection roleLabel="Agent" onUpdate={vi.fn()} refreshProfile={refreshProfile} currentType="agent" hasActiveSub />);
 
     expect(screen.getByText("Lead management")).toBeInTheDocument();
@@ -246,17 +263,21 @@ describe("dashboard utility tabs", () => {
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("begin-role-switch", {
       body: { validate_only: true },
     }));
-    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("begin-role-switch", {
-      body: {},
-    }));
-    expect(mocks.invoke).toHaveBeenCalledWith("log-role-switch", {
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("log-role-switch", {
       body: expect.objectContaining({
+        operation_id: expect.any(String),
         from_type: "agent",
         to_type: "",
-        had_active_sub: true,
         cancel_subscription: true,
       }),
-    });
+    }));
+    const logCall = mocks.invoke.mock.calls.find(([fn]) => fn === "log-role-switch");
+    const operationId = logCall?.[1]?.body?.operation_id;
+    expect(operationId).toEqual(expect.any(String));
+    expect(operationWasDurableBeforeFirstRequest).toBe(true);
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("begin-role-switch", {
+      body: { audit_id: operationId },
+    }));
     const preflightIndex = mocks.invoke.mock.calls.findIndex(([fn, options]) =>
       fn === "begin-role-switch" &&
       JSON.stringify(options) === JSON.stringify({ body: { validate_only: true } })
@@ -266,12 +287,13 @@ describe("dashboard utility tabs", () => {
     );
     const beginIndex = mocks.invoke.mock.calls.findIndex(([fn, options]) =>
       fn === "begin-role-switch" &&
-      JSON.stringify(options) === JSON.stringify({ body: {} })
+      JSON.stringify(options) === JSON.stringify({ body: { audit_id: operationId } })
     );
     expect(preflightIndex).toBeGreaterThanOrEqual(0);
     expect(logIndex).toBeGreaterThan(preflightIndex);
     expect(beginIndex).toBeGreaterThan(logIndex);
     expect(sessionStorage.getItem("role_switch_ctx")).toContain("agent");
+    expect(sessionStorage.getItem("role_switch_ctx")).toContain(String(operationId));
     expect(refreshProfile).toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledWith("/onboarding");
     cleanup();
@@ -285,7 +307,9 @@ describe("dashboard utility tabs", () => {
     expect(screen.getByText(/determined server-side/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
     fireEvent.click(screen.getByRole("button", { name: /switch my type/i }));
-    await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith("Your session has expired. Please sign in again."));
+    await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith(
+      "Could not identify your current account type. Please refresh and try again.",
+    ));
 
     mocks.getSession.mockResolvedValue({ data: { session: { access_token: "token" } } });
     mocks.invoke.mockResolvedValue({ error: null });
@@ -302,6 +326,33 @@ describe("dashboard utility tabs", () => {
     fireEvent.click(screen.getByRole("button", { name: /Yes, delete my account/i }));
     await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith(
       "Deletion was not completed. Your account is still active. Please try again.",
+    ));
+  });
+
+  it("verifies billing server-side before a role switch when the client cache says free", async () => {
+    const refreshProfile = vi.fn().mockResolvedValue(undefined);
+    renderHarness(
+      <SettingsSection
+        roleLabel="Buyer"
+        onUpdate={vi.fn()}
+        refreshProfile={refreshProfile}
+        currentType="buyer"
+        hasActiveSub={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
+    fireEvent.click(screen.getByRole("button", { name: /switch my type/i }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith(
+      "log-role-switch",
+      {
+        body: expect.objectContaining({
+          operation_id: expect.any(String),
+          from_type: "buyer",
+          cancel_subscription: true,
+        }),
+      },
     ));
   });
 

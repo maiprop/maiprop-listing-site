@@ -13,7 +13,7 @@ Deno.test("create-investor-payment creates an admin-only custom annual investor 
   assertEquals(source.includes('INVESTOR_PAYMENT_CURRENCY = "eur"'), true);
   assertEquals(source.includes("INVESTOR_ACCESS_PERIOD_DAYS = 365"), true);
   assertEquals(source.includes('INVESTOR_BILLING_CYCLE = "annual"'), true);
-  assertEquals(source.includes("createStripeClient"), true);
+  assertEquals(source.includes("createVerifiedStripeClient"), true);
   assertEquals(source.includes("stripe.checkout.sessions.create"), true);
   assertEquals(source.includes('mode: "payment"'), true);
   assertEquals(source.includes('.select("id, user_id, status, email")'), true);

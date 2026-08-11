@@ -31,4 +31,104 @@ Deno.test("parseSmartFilterArgs accepts Gemini/OpenAI text JSON responses", () =
   assertEquals(parsed.priceLabel, "Asking Price");
 });
 
+Deno.test("accepts legacy commercial office and other subtype combinations", async () => {
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = ((input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      providerCalls += 1;
+    }
+    const content = JSON.stringify({
+      sections: ["size", "commercial_details"],
+      featureKeys: ["has_facade"],
+      sizeLabel: "Usable Area",
+      priceLabel: "Asking Price",
+      bedsLabel: null,
+      featuresLabel: "Commercial Features",
+    });
+    return Promise.resolve(new Response(JSON.stringify({
+      choices: [{ message: { content } }],
+      candidates: [{ content: { parts: [{ text: content }] } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }) as typeof fetch;
+
+  try {
+    for (const subtype of ["office", "other"]) {
+      const res = await handler(req("POST", {
+        type: "commercial",
+        subtype,
+        listing_type: "sale",
+      }, { authorization: "Bearer test-valid-token" }));
+      assertEquals(res.status, 200, subtype);
+    }
+    assertEquals(providerCalls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("rejects property subtype combinations outside the canonical mapping before provider calls", async () => {
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = ((input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      providerCalls += 1;
+    }
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    for (const body of [
+      { type: "land", subtype: "studio", listing_type: "sale" },
+      { type: "office", subtype: "shop", listing_type: "rent" },
+      { type: "studio", subtype: "studio", listing_type: "sale" },
+    ]) {
+      const res = await handler(req("POST", body, {
+        authorization: "Bearer test-valid-token",
+      }));
+      assertEquals(res.status, 400);
+      const payload = await res.json();
+      assertEquals(payload.code, "validation_error");
+      assertEquals(Array.isArray(payload.issues), true);
+    }
+    assertEquals(providerCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("rejects unknown filter domains and extra fields before calling the AI provider", async () => {
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = ((input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      providerCalls += 1;
+    }
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    for (const body of [
+      { type: "castle", subtype: null, listing_type: "sale" },
+      { type: "apartment", subtype: "unsupported-subtype", listing_type: "sale" },
+      { type: "apartment", subtype: "studio", listing_type: "lease" },
+      { type: "apartment", subtype: null, listing_type: "sale", unexpected: true },
+    ]) {
+      const res = await handler(req("POST", body, {
+        authorization: "Bearer test-valid-token",
+      }));
+      assertEquals(res.status, 400);
+      const payload = await res.json();
+      assertEquals(payload.code, "validation_error");
+      assertEquals(Array.isArray(payload.issues), true);
+    }
+    assertEquals(providerCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 restore();

@@ -42,10 +42,10 @@ jobs:
           set -euo pipefail
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "eligible=true" >> "$GITHUB_OUTPUT"
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "db_changes=true" >> "$GITHUB_OUTPUT"
-            echo "Manual run: Supabase prep enabled."
+            echo "Manual run: standalone Supabase staging prep is disabled."
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "db_changes=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -143,6 +143,7 @@ jobs:
 
       - name: Resolve Supabase staging target
         id: supabase_target
+        if: steps.supabase_changes.outputs.eligible == 'true'
         run: |
           set -euo pipefail
 

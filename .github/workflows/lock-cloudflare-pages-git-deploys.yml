@@ -1,0 +1,340 @@
+name: Lock Cloudflare Pages Git Deploys
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DISABLE_CLOUDFLARE_GIT_DEPLOYS to lock both fixed Pages projects"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify-lock-environment:
+    name: Verify Cloudflare lock namespace
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm == 'DISABLE_CLOUDFLARE_GIT_DEPLOYS' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify current main workflow identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if [ "$CURRENT_MAIN" != "$GITHUB_WORKFLOW_SHA" ]; then
+            echo "::error::Lock workflow SHA $GITHUB_WORKFLOW_SHA is not current main $CURRENT_MAIN."
+            exit 1
+          fi
+
+      - name: Verify main-only lock namespace
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ENVIRONMENT_FILE="$RUNNER_TEMP/cloudflare-lock-environment.json"
+          POLICIES_FILE="$RUNNER_TEMP/cloudflare-lock-branch-policies.json"
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/environments/cloudflare-git-deploy-lock" \
+            > "$ENVIRONMENT_FILE"
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/environments/cloudflare-git-deploy-lock/deployment-branch-policies?per_page=100" \
+            > "$POLICIES_FILE"
+          jq -e '
+            .name == "cloudflare-git-deploy-lock" and
+            .can_admins_bypass == false and
+            .deployment_branch_policy.protected_branches == false and
+            .deployment_branch_policy.custom_branch_policies == true
+          ' "$ENVIRONMENT_FILE" > /dev/null
+          jq -e '
+            .total_count == 1 and
+            (.branch_policies | length) == 1 and
+            .branch_policies[0].name == "main" and
+            .branch_policies[0].type == "branch"
+          ' "$POLICIES_FILE" > /dev/null
+
+  lock:
+    name: Lock Cloudflare Pages Git deployments
+    needs: verify-lock-environment
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm == 'DISABLE_CLOUDFLARE_GIT_DEPLOYS' }}
+    environment: cloudflare-git-deploy-lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: maiprop-cloudflare-pages-git-deploy-lock
+      cancel-in-progress: false
+    steps:
+      - name: Lock both Cloudflare Pages Git integrations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_PAGES_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_PRODUCTION_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          EXPECTED_STAGING_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          PRODUCTION_PROJECT="maiprop-listing-site"
+          STAGING_PROJECT="maiprop-listing-site-staging"
+          API_BASE="https://api.cloudflare.com/client/v4"
+          RAW_DIR="$RUNNER_TEMP/cloudflare-pages-lock-raw"
+          EVIDENCE_DIR="$RUNNER_TEMP/cloudflare-pages-lock-evidence"
+          mkdir -p "$RAW_DIR" "$EVIDENCE_DIR"
+          trap 'rm -rf "$RAW_DIR"' EXIT
+
+          if [ -z "$CLOUDFLARE_PAGES_READ_TOKEN" ] ||
+             [ -z "$CLOUDFLARE_PAGES_EDIT_TOKEN" ] ||
+             [ -z "$CLOUDFLARE_ACCOUNT_ID" ] ||
+             [ -z "$EXPECTED_PRODUCTION_PROJECT_ID" ] ||
+             [ -z "$EXPECTED_STAGING_PROJECT_ID" ]; then
+            echo "::error::Cloudflare read/edit credentials and exact project IDs are required."
+            exit 1
+          fi
+          if [ "$EXPECTED_PRODUCTION_PROJECT_ID" = "$EXPECTED_STAGING_PROJECT_ID" ]; then
+            echo "::error::Production and staging Pages project IDs must be distinct."
+            exit 1
+          fi
+
+          get_project() {
+            local name="$1"
+            local out="$2"
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $CLOUDFLARE_PAGES_READ_TOKEN" \
+              -H "Accept: application/json" \
+              "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$name" \
+              > "$out"
+          }
+
+          validate_project() {
+            local file="$1"
+            local name="$2"
+            local id="$3"
+            local source_type="${4:-}"
+            jq -e \
+              --arg name "$name" \
+              --arg id "$id" \
+              --arg source_type "$source_type" '
+                .success == true and .result.name == $name and .result.id == $id and
+                (.result | has("source")) and
+                (.result.source | type == "object") and
+                (.result.source.type == "github" or .result.source.type == "gitlab") and
+                ($source_type == "" or .result.source.type == $source_type)
+              ' "$file" > /dev/null
+          }
+
+          validate_locked() {
+            jq -e '
+              .result.source.config.deployments_enabled == false and
+              .result.source.config.production_deployments_enabled == false and
+              .result.source.config.preview_deployment_setting == "none"
+            ' "$1" > /dev/null
+          }
+
+          minimize_project() {
+            local file="$1"
+            local out="$2"
+            jq '{
+              id: .result.id,
+              name: .result.name,
+              source: {
+                type: .result.source.type,
+                config: {
+                  deployments_enabled: .result.source.config.deployments_enabled,
+                  production_deployments_enabled: .result.source.config.production_deployments_enabled,
+                  preview_deployment_setting: .result.source.config.preview_deployment_setting
+                }
+              }
+            }' "$file" > "$out"
+          }
+
+          write_capture_failure() {
+            local name="$1"
+            local id="$2"
+            local out="$3"
+            jq -n --arg name "$name" --arg id "$id" '{
+              id: $id,
+              name: $name,
+              "capture_status": "failed",
+              source: null
+            }' > "$out"
+          }
+
+          write_two_project_evidence() {
+            local evidence_type="$1"
+            local production_file="$2"
+            local staging_file="$3"
+            local out="$4"
+            jq -n \
+              --arg evidence_type "$evidence_type" \
+              --slurpfile production "$production_file" \
+              --slurpfile staging "$staging_file" \
+              '{
+                schema_version: 1,
+                evidence_type: $evidence_type,
+                projects: {
+                  production: $production[0],
+                  staging: $staging[0]
+                }
+              }' > "$out"
+          }
+
+          patch_project() {
+            local name="$1"
+            local source_type="$2"
+            local out="$3"
+            local body="$RAW_DIR/$name-patch-body.json"
+            local CURRENT_MAIN
+            jq -n --arg source_type "$source_type" '{
+              source: {
+                "type": $source_type,
+                config: {
+                  "deployments_enabled": false,
+                  "production_deployments_enabled": false,
+                  "preview_deployment_setting": "none"
+                }
+              }
+            }' > "$body"
+            CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+            if [ "$CURRENT_MAIN" != "$GITHUB_WORKFLOW_SHA" ]; then
+              echo "::error::Lock workflow SHA $GITHUB_WORKFLOW_SHA is not current main $CURRENT_MAIN."
+              return 1
+            fi
+            curl -fsS --retry 3 \
+              --request PATCH \
+              -H "Authorization: Bearer $CLOUDFLARE_PAGES_EDIT_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data-binary "@$body" \
+              "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$name" \
+              > "$out"
+            jq -e '.success == true' "$out" > /dev/null
+          }
+
+          PRODUCTION_PRE="$RAW_DIR/production-pre.json"
+          STAGING_PRE="$RAW_DIR/staging-pre.json"
+          PRODUCTION_PRE_MIN="$RAW_DIR/production-pre-min.json"
+          STAGING_PRE_MIN="$RAW_DIR/staging-pre-min.json"
+          get_project "$PRODUCTION_PROJECT" "$PRODUCTION_PRE"
+          get_project "$STAGING_PROJECT" "$STAGING_PRE"
+          validate_project \
+            "$PRODUCTION_PRE" \
+            "$PRODUCTION_PROJECT" \
+            "$EXPECTED_PRODUCTION_PROJECT_ID"
+          validate_project \
+            "$STAGING_PRE" \
+            "$STAGING_PROJECT" \
+            "$EXPECTED_STAGING_PROJECT_ID"
+          PRODUCTION_SOURCE_TYPE="$(jq -r '.result.source.type' "$PRODUCTION_PRE")"
+          STAGING_SOURCE_TYPE="$(jq -r '.result.source.type' "$STAGING_PRE")"
+          minimize_project "$PRODUCTION_PRE" "$PRODUCTION_PRE_MIN"
+          minimize_project "$STAGING_PRE" "$STAGING_PRE_MIN"
+          write_two_project_evidence \
+            "cloudflare-pages-git-auto-deploy-pre-state" \
+            "$PRODUCTION_PRE_MIN" \
+            "$STAGING_PRE_MIN" \
+            "$EVIDENCE_DIR/cloudflare-pages-git-auto-deploy-pre-state.json"
+
+          patch_failed=0
+          if ! patch_project \
+            "$PRODUCTION_PROJECT" \
+            "$PRODUCTION_SOURCE_TYPE" \
+            "$RAW_DIR/production-patch.json"; then
+            echo "::error::Production Pages project PATCH failed."
+            patch_failed=1
+          fi
+          if ! patch_project \
+            "$STAGING_PROJECT" \
+            "$STAGING_SOURCE_TYPE" \
+            "$RAW_DIR/staging-patch.json"; then
+            echo "::error::Staging Pages project PATCH failed."
+            patch_failed=1
+          fi
+
+          post_failed=0
+          PRODUCTION_POST="$RAW_DIR/production-post.json"
+          STAGING_POST="$RAW_DIR/staging-post.json"
+          PRODUCTION_POST_MIN="$RAW_DIR/production-post-min.json"
+          STAGING_POST_MIN="$RAW_DIR/staging-post-min.json"
+          if ! get_project "$PRODUCTION_PROJECT" "$PRODUCTION_POST" ||
+             ! validate_project \
+               "$PRODUCTION_POST" \
+               "$PRODUCTION_PROJECT" \
+               "$EXPECTED_PRODUCTION_PROJECT_ID" \
+               "$PRODUCTION_SOURCE_TYPE"; then
+            echo "::error::Production Pages post-state capture failed."
+            write_capture_failure \
+              "$PRODUCTION_PROJECT" \
+              "$EXPECTED_PRODUCTION_PROJECT_ID" \
+              "$PRODUCTION_POST_MIN"
+            post_failed=1
+          else
+            minimize_project "$PRODUCTION_POST" "$PRODUCTION_POST_MIN"
+          fi
+          if ! get_project "$STAGING_PROJECT" "$STAGING_POST" ||
+             ! validate_project \
+               "$STAGING_POST" \
+               "$STAGING_PROJECT" \
+               "$EXPECTED_STAGING_PROJECT_ID" \
+               "$STAGING_SOURCE_TYPE"; then
+            echo "::error::Staging Pages post-state capture failed."
+            write_capture_failure \
+              "$STAGING_PROJECT" \
+              "$EXPECTED_STAGING_PROJECT_ID" \
+              "$STAGING_POST_MIN"
+            post_failed=1
+          else
+            minimize_project "$STAGING_POST" "$STAGING_POST_MIN"
+          fi
+          write_two_project_evidence \
+            "cloudflare-pages-git-auto-deploy-post-state" \
+            "$PRODUCTION_POST_MIN" \
+            "$STAGING_POST_MIN" \
+            "$EVIDENCE_DIR/cloudflare-pages-git-auto-deploy-post-state.json"
+
+          strict_failed=0
+          if [ "$post_failed" -eq 0 ]; then
+            if ! validate_locked "$PRODUCTION_POST"; then
+              echo "::error::Production Pages Git deployments remain enabled."
+              strict_failed=1
+            fi
+            if ! validate_locked "$STAGING_POST"; then
+              echo "::error::Staging Pages Git deployments remain enabled."
+              strict_failed=1
+            fi
+          else
+            strict_failed=1
+          fi
+
+          jq -n \
+            --argjson patch_failed "$patch_failed" \
+            --argjson post_failed "$post_failed" \
+            --argjson strict_failed "$strict_failed" \
+            '{
+              schema_version: 1,
+              evidence_type: "cloudflare-pages-git-deploy-lock-result",
+              patch_failed: ($patch_failed == 1),
+              post_capture_failed: ($post_failed == 1),
+              strict_validation_failed: ($strict_failed == 1),
+              verified_locked: (
+                $patch_failed == 0 and
+                $post_failed == 0 and
+                $strict_failed == 0
+              )
+            }' > "$EVIDENCE_DIR/cloudflare-pages-git-deploy-lock-result.json"
+
+          if [ "$patch_failed" -ne 0 ] ||
+             [ "$post_failed" -ne 0 ] ||
+             [ "$strict_failed" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Upload minimized Cloudflare Pages lock evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cloudflare-pages-git-deploy-lock-${{ github.run_id }}
+          path: ${{ runner.temp }}/cloudflare-pages-lock-evidence/
+          if-no-files-found: error
+          retention-days: 30

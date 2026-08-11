@@ -4,6 +4,8 @@ import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent }
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
+import { errorResponse } from "../_shared/response.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("property-pois");
 
@@ -12,6 +14,51 @@ const poisLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs:
 const VETTED_POI_RULES = buildVettedAnswerRules({
   scope: "nearby points-of-interest estimates",
   timeSensitiveTopics: ["business hours", "school names", "transit stops", "healthcare facilities", "shop availability"],
+});
+
+const optionalBoundedText = (label: string, maxLength: number) =>
+  z.preprocess(
+    (value) => value === null || value === undefined ? undefined : value,
+    z.string().trim().max(maxLength, `Invalid ${label}`).optional(),
+  );
+
+const optionalCoordinate = (label: string, min: number, max: number) =>
+  z.preprocess(
+    (value) => value === null || value === undefined || value === "" ? undefined : value,
+    z.union([
+      z.number(),
+      z.string().trim().min(1, `Invalid ${label}`),
+    ])
+      .transform((value) => typeof value === "number" ? value : Number(value))
+      .pipe(
+        z.number(`Invalid ${label}`)
+          .finite(`Invalid ${label}`)
+          .min(min, `Invalid ${label}`)
+          .max(max, `Invalid ${label}`),
+      )
+      .optional(),
+  );
+
+const propertyPoisRequestSchema = z.object({
+  address: optionalBoundedText("property address", 240),
+  city: optionalBoundedText("property city", 120),
+  lat: optionalCoordinate("property latitude", -90, 90),
+  lng: optionalCoordinate("property longitude", -180, 180),
+  latitude: optionalCoordinate("property latitude", -90, 90),
+  longitude: optionalCoordinate("property longitude", -180, 180),
+}).strict().superRefine((body, context) => {
+  if (body.lat == null && body.latitude == null) {
+    context.addIssue({ code: "custom", path: ["latitude"], message: "lat/lng required" });
+  }
+  if (body.lng == null && body.longitude == null) {
+    context.addIssue({ code: "custom", path: ["longitude"], message: "lat/lng required" });
+  }
+  if (body.lat != null && body.latitude != null && body.lat !== body.latitude) {
+    context.addIssue({ code: "custom", path: ["latitude"], message: "Conflicting latitude values" });
+  }
+  if (body.lng != null && body.longitude != null && body.lng !== body.longitude) {
+    context.addIssue({ code: "custom", path: ["longitude"], message: "Conflicting longitude values" });
+  }
 });
 
 type FallbackPoi = {
@@ -62,17 +109,10 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
   if (await poisLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   try {
-    const body = await req.json();
+    const body = await parseJsonBody(req, propertyPoisRequestSchema);
     const { address, city } = body;
     const lat = body.lat ?? body.latitude;
     const lng = body.lng ?? body.longitude;
-
-    if (!lat || !lng) {
-      return new Response(
-        JSON.stringify({ error: "lat/lng required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
     if (quota.errorResponse) return quota.errorResponse;
@@ -216,6 +256,12 @@ Rules:
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    if (e instanceof SchemaValidationError) {
+      return errorResponse(e.message, 400, corsHeaders, {
+        code: e.code,
+        issues: e.issues,
+      });
+    }
     log.error("property-pois error", { err: e instanceof Error ? e.message : String(e) });
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),

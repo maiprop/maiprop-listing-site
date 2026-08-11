@@ -32,3 +32,4 @@ abuse control, and an owning area.
 | `fetch-os-auctions` | Public-facing auction fetch integration. | Source validation and sanitized published auction output. | Rate-limit and cache imported results. | auctions/integrations |
 | `record-listing-view` | Anonymous listing view analytics. | Listing-id validation and aggregate-only writes. | Bot/rate controls and duplicate suppression. | analytics/listings |
 | `scheduled-followups` | Scheduled follow-up notification worker. | Scheduler token and idempotent writes. | Cron-only invocation policy and alerting. | crm/notifications |
+| `reconcile-role-switch-billing` | Scheduled recovery for incomplete role-switch billing audits. | Vault-backed scheduler token, service-role-only lease RPCs, exact audit/user/lock binding, and runtime-scoped Stripe ownership. | Cron-only invocation, bounded batches, stale-lock recovery, exponential backoff, and a hard retry ceiling. | billing/stripe |

@@ -7,6 +7,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { ParticipantId } from "@/lib/participantConfig";
 import { logger } from "@/lib/logger";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  markRoleSwitchOperationBegun,
+  prepareRoleSwitchOperation,
+} from "@/pages/onboarding/onboardingHelpers";
 
 const ROLE_PERMISSIONS: Record<ParticipantId, { label: string; can: string[] }> = {
   buyer:         { label: "Buyer / Renter",      can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
@@ -47,14 +52,18 @@ export function SettingsSection({
   hasActiveSub: boolean;
 }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [switching, setSwitching] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const invokeBeginRoleSwitch = async (validateOnly: boolean): Promise<boolean> => {
+  const invokeBeginRoleSwitch = async (
+    validateOnly: boolean,
+    auditId?: string,
+  ): Promise<boolean> => {
     const { error } = await supabase.functions.invoke("begin-role-switch", {
-      body: validateOnly ? { validate_only: true } : {},
+      body: validateOnly ? { validate_only: true } : { audit_id: auditId },
     });
     if (error) {
       const friendlyMsg = ROLE_SWITCH_ERROR_MESSAGES[error.message]
@@ -65,33 +74,42 @@ export function SettingsSection({
     return true;
   };
 
-  const logRoleSwitchStart = async (): Promise<boolean> => {
-    if (!currentType || !hasActiveSub) return true;
+  const logRoleSwitchStart = async (
+    operationId: string,
+  ): Promise<string | null> => {
+    if (!currentType) return null;
 
     try {
       const { data, error } = await supabase.functions.invoke("log-role-switch", {
         body: {
+          operation_id: operationId,
           from_type: currentType,
           to_type: "",
-          switch_kind: "same-tier",
-          had_active_sub: true,
           cancel_subscription: true,
         },
       });
       if (error) {
         logger.warn("[SettingsSection] log-role-switch start failed:", error.message);
         toast.error("We couldn't cancel your active Stripe subscription. Please manage it from Billing before switching account type.");
-        return false;
+        return null;
       }
       if (stripeErrorFromResponse(data)) {
         toast.error("We couldn't cancel your active Stripe subscription. Please manage it from Billing before switching account type.");
-        return false;
+        return null;
       }
-      return true;
+      const auditId = data && typeof data === "object"
+        ? (data as { audit_id?: unknown }).audit_id
+        : null;
+      if (auditId !== operationId) {
+        logger.warn("[SettingsSection] log-role-switch returned an unexpected audit id");
+        toast.error("We couldn't establish a safe account-switch audit. Please try again.");
+        return null;
+      }
+      return auditId;
     } catch (err: unknown) {
       logger.warn("[SettingsSection] log-role-switch start threw:", err instanceof Error ? err.message : err);
       toast.error("We couldn't cancel your active Stripe subscription. Please manage it from Billing before switching account type.");
-      return false;
+      return null;
     }
   };
 
@@ -108,27 +126,60 @@ export function SettingsSection({
   const handleSwitchRole = async () => {
     setSwitching(true);
 
+    if (!currentType) {
+      toast.error("Could not identify your current account type. Please refresh and try again.");
+      setSwitching(false);
+      return;
+    }
+    if (!user?.id) {
+      toast.error(ROLE_SWITCH_ERROR_MESSAGES.role_switch_user_id_required);
+      setSwitching(false);
+      return;
+    }
+
+    let operationId: string;
+    try {
+      operationId = prepareRoleSwitchOperation({
+        userId: user.id,
+        fromType: currentType,
+        hadActiveSub: hasActiveSub,
+      }).operationId;
+    } catch (error: unknown) {
+      logger.warn("[SettingsSection] role-switch operation could not be persisted", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      toast.error("Could not safely start the account switch in this browser. Enable site storage and try again.");
+      setSwitching(false);
+      return;
+    }
+
     if (!(await invokeBeginRoleSwitch(true))) {
       setSwitching(false);
       return;
     }
 
-    if (!(await logRoleSwitchStart())) {
+    const auditId = await logRoleSwitchStart(operationId);
+    if (!auditId) {
       setSwitching(false);
       return;
     }
 
-    try {
-      sessionStorage.setItem("role_switch_ctx", JSON.stringify({
-        fromType: currentType,
-        hadActiveSub: hasActiveSub,
-      }));
-    } catch (_err: unknown) { /* ignore storage errors */ }
-
-    if (!(await invokeBeginRoleSwitch(false))) {
-      try { sessionStorage.removeItem("role_switch_ctx"); } catch { /* ignore */ }
+    if (!(await invokeBeginRoleSwitch(false, auditId))) {
       setSwitching(false);
       return;
+    }
+    try {
+      markRoleSwitchOperationBegun(auditId, user.id);
+      sessionStorage.setItem("role_switch_ctx", JSON.stringify({
+        userId: user.id,
+        fromType: currentType,
+        hadActiveSub: hasActiveSub,
+        auditId,
+      }));
+    } catch (error: unknown) {
+      logger.warn("[SettingsSection] role-switch navigation context could not be persisted", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
     await refreshProfile();
     setSwitching(false);

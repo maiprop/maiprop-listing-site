@@ -12,10 +12,33 @@ import {
   jsonBody,
   req,
 } from "../_shared/testUtils.ts";
+import { MAX_OS_FILTER_BODY_BYTES } from "./osFilterContract.ts";
 
 const { handler, restore } = await captureHandler(
   import.meta.url,
   "./index.ts",
+  {
+    RATE_LIMIT_FORCE_MEMORY: "true",
+    MAIPROP_OS_URL: "https://app.os.maiprop.co",
+  },
+);
+const {
+  handler: productionBoundaryHandler,
+  restore: restoreProductionBoundary,
+} = await captureHandler(
+  import.meta.url,
+  "./index.ts?production-boundary",
+  {
+    RATE_LIMIT_FORCE_MEMORY: "false",
+    MAIPROP_OS_URL: "https://app.os.maiprop.co",
+  },
+);
+const {
+  handler: rateBeforeBodyHandler,
+  restore: restoreRateBeforeBody,
+} = await captureHandler(
+  import.meta.url,
+  "./index.ts?rate-before-body",
   {
     RATE_LIMIT_FORCE_MEMORY: "true",
     MAIPROP_OS_URL: "https://app.os.maiprop.co",
@@ -34,14 +57,58 @@ const {
   clearAuctionResponseCache,
 } = await import("./index.ts");
 
+function rawPost(body: string): Request {
+  return new Request("https://functions.supabase.co/fetch-os-auctions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "https://maiprop.co",
+    },
+    body,
+  });
+}
+
+async function assertBoundaryRejection(
+  request: Request,
+  expectedCode: string,
+  expectedStatus = 400,
+): Promise<void> {
+  const originalFetch = globalThis.fetch;
+  let externalRequests = 0;
+  globalThis.fetch = (() => {
+    externalRequests += 1;
+    return Promise.reject(new Error("invalid input must not reach an external service"));
+  }) as typeof fetch;
+
+  try {
+    const response = await handler(request);
+    const payload = await jsonBody(response) as {
+      code?: string;
+      issues?: unknown[];
+    };
+
+    assertEquals(response.status, expectedStatus);
+    assertEquals(payload.code, expectedCode);
+    assertEquals(Array.isArray(payload.issues), true);
+    assertEquals(response.headers.get("Access-Control-Allow-Origin"), "https://maiprop.co");
+    assertEquals(externalRequests, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 Deno.test("buildFilterRequest forwards sort fields to OS", () => {
   const request = buildFilterRequest({
     auctionDateFrom: "2026-05-07",
+    prefectureId: 10,
+    propertyMunicipalityId: 101,
     sortBy: "AUCTION_DATE",
     order: "ASC",
   });
 
   assertEquals(request.auctionDateFrom, "2026-05-07");
+  assertEquals(request.prefectureId, 10);
+  assertEquals(request.propertyMunicipalityId, 101);
   assertEquals(request.sortBy, "AUCTION_DATE");
   assertEquals(request.order, "ASC");
 });
@@ -221,6 +288,125 @@ Deno.test("pagination validation rejects malformed page/pageSize", () => {
     page: 2,
     size: 10,
   });
+});
+
+Deno.test("handler rejects malformed JSON before Supabase, RPC, or OS requests", async () => {
+  await assertBoundaryRejection(rawPost('{"page":'), "invalid_json");
+});
+
+Deno.test("handler returns structured 413 for oversized request bodies", async () => {
+  const request = rawPost("{}");
+  request.headers.set("content-length", String(MAX_OS_FILTER_BODY_BYTES + 1));
+
+  await assertBoundaryRejection(request, "payload_too_large", 413);
+  assertEquals(request.bodyUsed, false);
+});
+
+Deno.test("handler rejects unknown OS enum values before Supabase, RPC, or OS requests", async () => {
+  await assertBoundaryRejection(
+    req("POST", { auctionStatuses: ["SCHEDULED"] }),
+    "validation_error",
+  );
+});
+
+Deno.test("production rate limiting runs before invalid-body parsing", async () => {
+  const originalFetch = globalThis.fetch;
+  let transportCalls = 0;
+  globalThis.fetch = ((input: URL | RequestInfo) => {
+    transportCalls += 1;
+    const url = String(input);
+    if (!url.includes("/rest/v1/rpc/check_and_increment_rate_limit")) {
+      return Promise.reject(new Error(`unexpected transport ${url}`));
+    }
+    return Promise.resolve(new Response(JSON.stringify({
+      allowed: true,
+      count: transportCalls,
+      limit: 20,
+      window_start: "2026-08-05T00:00:00.000Z",
+      reset_in_seconds: 60,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+  }) as typeof fetch;
+
+  try {
+    for (const [request, expectedCode] of [
+      [rawPost('{"page":'), "invalid_json"],
+      [rawPost(JSON.stringify({ sortBy: "CREATED_AT" })), "validation_error"],
+    ] as const) {
+      const response = await productionBoundaryHandler(request);
+      const payload = await jsonBody(response) as { code?: string };
+      assertEquals(response.status, 400);
+      assertEquals(payload.code, expectedCode);
+    }
+    assertEquals(transportCalls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("rate limiting rejects an exhausted caller without reading its body", async () => {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await rateBeforeBodyHandler(rawPost('{"page":'));
+    assertEquals(response.status, 400);
+  }
+
+  let bodyRead = false;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      bodyRead = true;
+      controller.enqueue(new TextEncoder().encode("{}"));
+      controller.close();
+    },
+  }, { highWaterMark: 0 });
+  const request = new Request("https://functions.supabase.co/fetch-os-auctions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "https://maiprop.co",
+    },
+    body: stream,
+  });
+  const originalFetch = globalThis.fetch;
+  let externalRequests = 0;
+  globalThis.fetch = (() => {
+    externalRequests += 1;
+    return Promise.reject(new Error("rate-limited request must not fetch"));
+  }) as typeof fetch;
+
+  try {
+    const response = await rateBeforeBodyHandler(request);
+    assertEquals(response.status, 429);
+    assertEquals(bodyRead, false);
+    assertEquals(externalRequests, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("handler rejects unknown filters before contacting OS", async () => {
+  const globalForFetch = globalThis as typeof globalThis & {
+    fetch: typeof fetch;
+  };
+  const originalFetch = globalForFetch.fetch;
+  let providerRequests = 0;
+
+  try {
+    globalForFetch.fetch = (() => {
+      providerRequests += 1;
+      return Promise.reject(new Error("OS must not be called for an invalid request"));
+    }) as typeof fetch;
+
+    const response = await handler(req("POST", { arbitraryFilter: true }));
+    const payload = await jsonBody(response) as { code?: string };
+
+    assertEquals(response.status, 400);
+    assertEquals(payload.code, "validation_error");
+    assertEquals(providerRequests, 0);
+  } finally {
+    globalForFetch.fetch = originalFetch;
+  }
 });
 
 Deno.test("handler caches identical anonymous auction reads by cap and filter", async () => {
@@ -425,3 +611,5 @@ Deno.test("OS portal access accepts only investor-scoped pricing products", asyn
 });
 
 restore();
+restoreProductionBoundary();
+restoreRateBeforeBody();

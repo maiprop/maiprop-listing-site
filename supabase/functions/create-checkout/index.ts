@@ -13,7 +13,7 @@ import {
   buildIdempotencyKey,
   buildPaymentModeInvoiceCreationParams,
   CHECKOUT_TAX_COLLECTION_PARAMS,
-  createStripeClient,
+  createVerifiedStripeClient,
   getStripeRuntimeMode,
 } from "../_shared/stripeClient.ts";
 import { upsertBillingCustomer } from "../_shared/billingState.ts";
@@ -501,7 +501,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         );
       }
 
-      const stripe = createStripeClient();
+      const stripe = await createVerifiedStripeClient();
       const stripePrice = await stripe.prices.retrieve(checkoutAddon.priceId);
       assertStripePriceMatchesCheckoutAddon(
         checkoutAddon,
@@ -789,7 +789,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       );
     }
 
-    const stripe = createStripeClient();
+    const stripe = await createVerifiedStripeClient();
 
     if (
       wantsTrial &&

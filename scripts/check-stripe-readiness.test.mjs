@@ -35,5 +35,14 @@ describe("Stripe readiness environment helpers", () => {
       keyPrefix: "rk_live_...",
     });
     expect(() => getStripeSecretKey({ STRIPE_SECRET_KEY: key })).toThrow(/secret key/i);
+    expect(() => getStripeReadOnlyKey({
+      STRIPE_RESTRICTED_KEY: "rk_test_synthetic",
+    })).toThrow(/rk_live/i);
+    expect(() => getStripeReadOnlyKey({
+      STRIPE_RESTRICTED_KEY: "sk_live_synthetic",
+    })).toThrow(/rk_live/i);
+    expect(() => getStripeReadOnlyKey({
+      STRIPE_SECRET_KEY: "sk_live_synthetic",
+    })).toThrow(/STRIPE_RESTRICTED_KEY/i);
   });
 });

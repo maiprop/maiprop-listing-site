@@ -5,6 +5,7 @@ import { openAIChatCompletion } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("pro-ai-tools");
 
@@ -14,6 +15,14 @@ const VETTED_ANSWER_RULES = `\n\n${buildVettedAnswerRules({
   scope: "specialist pro assistant tools",
   timeSensitiveTopics: ["construction costs", "professional availability", "planning timelines"],
 })}`;
+const proAiMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().trim().min(1, "Message content is required").max(8000, "Message content is too long"),
+}).strict();
+const proAiRequestSchema = z.object({
+  messages: z.array(proAiMessageSchema).min(1, "At least one message is required").max(30, "Too many messages"),
+  groupId: z.enum(["agents", "legal", "design", "trades", "finance", "management"]),
+}).strict();
 
 const requireAuth = async (req: Request): Promise<{ error: Response | null; userId: string | null }> => {
   const corsHeaders = getCorsHeaders(req);
@@ -99,16 +108,15 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
   const { error: authErr, userId } = await requireAuth(req);
   if (authErr) return authErr;
 
-  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
-  if (quota.errorResponse) return quota.errorResponse;
-
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? userId ?? "anonymous";
-  if (await proAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   try {
-    const { messages, groupId } = await req.json();
+    const { messages, groupId } = await parseJsonBody(req, proAiRequestSchema);
+    const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+    if (quota.errorResponse) return quota.errorResponse;
 
-    const systemContent = `${systemPrompts[groupId] || systemPrompts["legal"]}${VETTED_ANSWER_RULES}`;
+    const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? userId ?? "anonymous";
+    if (await proAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
+
+    const systemContent = `${systemPrompts[groupId]}${VETTED_ANSWER_RULES}`;
 
     const response = await openAIChatCompletion({
       messages: [
@@ -144,6 +152,12 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
+    if (e instanceof SchemaValidationError) {
+      return new Response(JSON.stringify({ error: e.message, code: e.code, issues: e.issues }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     log.error("pro-ai-tools error", { err: e instanceof Error ? e.message : String(e) });
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
       status: 500,

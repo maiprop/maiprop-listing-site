@@ -4,6 +4,8 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { errorResponse } from "../_shared/response.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("property-valuation");
 
@@ -13,6 +15,167 @@ const NEW_BUILD_OPENAI_REASONING_EFFORT = "medium";
 const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 const OS_VALUATION_TIMEOUT_MS = 25_000;
 const OS_AUTH_TOKEN_CACHE_TTL_MS = 10 * 60_000;
+const MAX_BUILDING_ALLOWANCE_SQM = 100_000;
+
+const PROPERTY_TYPES = [
+  "apartment",
+  "house",
+  "villa",
+  "land",
+  "commercial",
+  "office",
+  "studio",
+  "maisonette",
+  "warehouse",
+  "hotel",
+  "mixed_use",
+  "parking",
+  "storage",
+] as const;
+
+const LISTING_TYPES = [
+  "sale",
+  "rent",
+  "auction",
+  "firesale",
+  "open_house",
+  "new_build",
+] as const;
+
+const OPEN_HOUSE_TRANSACTION_TYPES = ["sale", "rent"] as const;
+
+const optionalBoundedText = (label: string, maxLength: number) =>
+  z.preprocess(
+    (value) => value === null || value === undefined ? undefined : value,
+    z.string().trim().max(maxLength, `Invalid ${label}`).optional(),
+  );
+
+const boundedNumberInput = (
+  label: string,
+  min: number,
+  max: number,
+  integer = false,
+) => {
+  let output = z.number(`Invalid ${label}`)
+    .finite(`Invalid ${label}`)
+    .min(min, `Invalid ${label}`)
+    .max(max, `Invalid ${label}`);
+  if (integer) output = output.int(`Invalid ${label}`);
+  return z.union([
+    z.number(),
+    z.string().trim().min(1, `Invalid ${label}`),
+  ])
+    .transform((value) => typeof value === "number" ? value : Number(value))
+    .pipe(output);
+};
+
+const optionalBoundedNumber = (
+  label: string,
+  min: number,
+  max: number,
+  integer = false,
+) =>
+  z.preprocess(
+    (value) => value === null || value === undefined || value === "" ? undefined : value,
+    boundedNumberInput(label, min, max, integer).optional(),
+  );
+
+const optionalBoolean = z.preprocess(
+  (value) => value === null || value === undefined ? undefined : value,
+  z.boolean().optional(),
+);
+
+const optionalPropertyType = z.preprocess(
+  (value) => {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value !== "string") return value;
+    const normalized = value.trim();
+    return normalized === "" ? undefined : normalized;
+  },
+  z.enum(PROPERTY_TYPES).optional(),
+);
+
+const optionalListingType = z.preprocess(
+  (value) => {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value !== "string") return value;
+    const normalized = value.trim();
+    return normalized === "" ? undefined : normalized;
+  },
+  z.enum(LISTING_TYPES).optional(),
+);
+
+const optionalOpenHouseTransactionType = z.preprocess(
+  (value) => {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value !== "string") return value;
+    const normalized = value.trim();
+    return normalized === "" ? undefined : normalized;
+  },
+  z.enum(OPEN_HOUSE_TRANSACTION_TYPES).optional(),
+);
+
+const propertyValuationRequestSchema = z.object({
+  listingId: optionalBoundedText("listing id", 120),
+  title: optionalBoundedText("valuation title", 180),
+  city: z.string("Invalid valuation city")
+    .trim()
+    .min(1, "Invalid valuation city")
+    .max(120, "Invalid valuation city"),
+  address: optionalBoundedText("valuation address", 500),
+  price: boundedNumberInput("valuation price", 1, 1_000_000_000),
+  sqm: boundedNumberInput("valuation size", 1, 10_000_000),
+  bedrooms: optionalBoundedNumber("bedroom count", 0, 100, true),
+  bathrooms: optionalBoundedNumber("bathroom count", 0, 100, true),
+  propertyType: optionalPropertyType,
+  listingType: optionalListingType,
+  openHouseTransactionType: optionalOpenHouseTransactionType,
+  askingMonthlyRent: optionalBoundedNumber("asking monthly rent", 1, 10_000_000),
+  floor: optionalBoundedNumber("floor", -20, 250, true),
+  totalFloors: optionalBoundedNumber("total floors", 0, 250, true),
+  yearBuilt: optionalBoundedNumber("construction year", 1000, 2100, true),
+  heatingSystem: optionalBoundedText("heating system", 120),
+  energyClass: optionalBoundedText("energy class", 40),
+  pricePerSqm: optionalBoundedNumber("price per sqm", 0, 1_000_000),
+  hasParking: optionalBoolean,
+  hasPool: optionalBoolean,
+  hasElevator: optionalBoolean,
+  hasGarden: optionalBoolean,
+  hasStorage: optionalBoolean,
+  hasBalcony: optionalBoolean,
+  hasView: optionalBoolean,
+  hasFurnished: optionalBoolean,
+  region: optionalBoundedText("valuation region", 120),
+  description: optionalBoundedText("valuation description", 5000),
+  tags: z.preprocess(
+    (value) => value === null || value === undefined ? undefined : value,
+    z.array(
+      z.string().trim().min(1, "Invalid valuation tag").max(80, "Invalid valuation tag"),
+    ).max(30, "Invalid valuation tags").optional(),
+  ),
+  ownershipStatus: optionalBoundedText("ownership status", 80),
+  ownershipPercentage: optionalBoundedNumber("ownership percentage", 0, 100),
+  auctionCourt: optionalBoundedText("auction court", 240),
+  plotSurface: optionalBoundedNumber("plot surface", 0, 100_000_000),
+  condition: optionalBoundedText("property condition", 1000),
+  isNeoclassical: optionalBoolean,
+  isPreserved: optionalBoolean,
+  distanceFromSea: optionalBoundedNumber("distance from sea", 0, 2_000_000),
+  withinCityPlan: optionalBoolean,
+  withinSettlement: optionalBoolean,
+  buildingAllowance: optionalBoundedNumber(
+    "building allowance",
+    0,
+    MAX_BUILDING_ALLOWANCE_SQM,
+  ),
+  coverageRatio: optionalBoundedNumber("coverage ratio", 0, 100),
+  isBuildable: optionalBoolean,
+  cadastreNumber: optionalBoundedText("cadastre number", 160),
+  hasLandConcession: optionalBoolean,
+  landUse: optionalBoundedText("land use", 240),
+  latitude: optionalBoundedNumber("property latitude", -90, 90),
+  longitude: optionalBoundedNumber("property longitude", -180, 180),
+}).strict();
 
 type CachedOsAuthToken = {
   cacheKey: string;
@@ -1106,7 +1269,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
   // Signed-in access gate is handled by enforceAiQuota; free vs Pro caps live in the DB.
   try {
-    const body = await req.json();
+    const body = await parseJsonBody(req, propertyValuationRequestSchema);
     const {
       listingId, title, city, address, price, sqm, bedrooms, bathrooms,
       propertyType, listingType, floor, totalFloors, yearBuilt,
@@ -1121,14 +1284,8 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       latitude, longitude,
     } = body;
 
-    const numericPrice = coerceFiniteNumber(price);
-    const numericSqm = coerceFiniteNumber(sqm);
-    if (!city || numericPrice == null || numericPrice <= 0 || numericSqm == null || numericSqm <= 0) {
-      return new Response(
-        JSON.stringify({ error: "city, sqm and price are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const numericPrice = price;
+    const numericSqm = sqm;
 
     const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
     if (quota.errorResponse) return quota.errorResponse;
@@ -1200,7 +1357,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
     // ── Key property specifics (construction year, condition, heating) for valuation ──
     const keySpecifics = [
-      yearBuilt != null && yearBuilt !== "" ? `Construction year: ${yearBuilt}` : null,
+      yearBuilt != null ? `Construction year: ${yearBuilt}` : null,
       condition ? `Condition: ${String(condition).replace(/_/g, " ")}` : null,
       heatingSystem ? `Heating: ${String(heatingSystem).replace(/_/g, " ")}` : null,
     ].filter(Boolean).join(". ") || "Not specified";
@@ -1234,7 +1391,9 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       withinCityPlan != null ? `Within city plan: ${withinCityPlan ? "YES" : "NO"}` : "City plan status: UNKNOWN",
       withinSettlement != null ? `Within settlement: ${withinSettlement ? "YES" : "NO"}` : null,
       isBuildable != null ? `Buildable: ${isBuildable ? "YES" : "NO"}` : "Buildability: UNKNOWN",
-      buildingAllowance ? `Building allowance (SD): ${buildingAllowance}` : "SD: UNKNOWN",
+      buildingAllowance
+        ? `Maximum building allowance: ${buildingAllowance} m2`
+        : "Maximum building allowance: UNKNOWN",
       coverageRatio ? `Coverage ratio: ${coverageRatio}` : null,
       isNeoclassical ? "Neoclassical (preservation risk)" : null,
       isPreserved ? "Preserved building (protection constraint)" : null,
@@ -1469,6 +1628,12 @@ Rules:
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    if (err instanceof SchemaValidationError) {
+      return errorResponse(err.message, 400, corsHeaders, {
+        code: err.code,
+        issues: err.issues,
+      });
+    }
     log.error("valuation error", { err: err instanceof Error ? err.message : String(err) });
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),

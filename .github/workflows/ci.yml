@@ -242,9 +242,6 @@ jobs:
           VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_real
           VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
-          # Auth tests skip gracefully when these secrets are not set in repo settings
-          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
-          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
       - name: Upload Playwright report
         if: failure()
@@ -258,29 +255,9 @@ jobs:
     name: E2E Security (Live-safe)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Run automatically for release-bearing branches and same-repo PRs. Dependabot
-    # PRs are excluded because repository secrets are intentionally unavailable.
-    # Main/manual runs wait for Supabase prep so isolated staging can receive
-    # migrations first. Production-only setups run with destructive checks off.
-    if: >
-      always() &&
-      !cancelled() &&
-      needs.quality.result == 'success' &&
-      needs['release-safety'].result == 'success' &&
-      needs['migrations-validate'].result == 'success' &&
-      (
-        needs['deploy-supabase-staging'].result == 'success' ||
-        (github.event_name == 'pull_request' && needs['deploy-supabase-staging'].result == 'skipped')
-      ) &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        github.event_name == 'push' ||
-        (github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-          github.event.pull_request.user.login != 'dependabot[bot]' &&
-          !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
-          github.event.pull_request.draft == false)
-      )
+    # The exact-SHA stage-release train owns credentialed browser validation.
+    # Keep this legacy job name for governance/status compatibility only.
+    if: ${{ false }}
     needs: [quality, release-safety, migrations-validate, deploy-supabase-staging]
     env:
       CI: true
@@ -835,15 +812,8 @@ jobs:
     name: Lighthouse CI
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    if: >
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' &&
-        startsWith(github.ref, 'refs/heads/release-please--')) ||
-      (github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-        github.event.pull_request.draft == false &&
-        github.event.pull_request.user.login != 'dependabot[bot]' &&
-        !startsWith(github.event.pull_request.head.ref, 'release-please--'))
+    # Credentialed Lighthouse validation runs only from the exact-SHA release train.
+    if: ${{ false }}
     needs: [quality, release-safety]
     env:
       # Lighthouse audits protected app surfaces. Prefer isolated staging when
@@ -936,8 +906,8 @@ jobs:
   deploy-supabase-staging:
     name: Prepare Supabase
     needs: [quality, release-safety, migrations-validate]
+    if: ${{ false }}
     uses: ./.github/workflows/reusable-supabase-staging.yml
-    secrets: inherit
 
   deploy-staging:
     name: Deploy to Cloudflare Pages (preview)
@@ -948,13 +918,8 @@ jobs:
     # Dependabot bumps are validated by quality + e2e checks; a preview deploy
     # adds no value there. Human PRs get previews only when the Supabase
     # runtime has been proven to point at an isolated staging project.
-    if: >
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-      github.event.pull_request.user.login != 'dependabot[bot]' &&
-      !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
-      needs['deploy-supabase-staging'].outputs.isolated_staging == 'true'
+    # Cloudflare previews are promoted from the immutable release artifact.
+    if: ${{ false }}
     needs: [quality, release-safety, deploy-supabase-staging]
 
     steps:

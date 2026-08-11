@@ -12,7 +12,7 @@ import {
 } from "../_shared/rateLimit.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 import {
-  createStripeClient,
+  createVerifiedStripeClient,
   resolveStripeSoftwareTaxCode,
   STRIPE_DEFAULT_PRODUCT_TAX_CODE,
   STRIPE_DEFAULT_TAX_BEHAVIOR,
@@ -324,7 +324,7 @@ Deno.serve(async (req) => {
 
     if (amount <= 0) throw new Error("Amount must be greater than 0");
 
-    const stripe = createStripeClient(stripeKey);
+    const stripe = await createVerifiedStripeClient(stripeKey);
     const audience = normalizeAudience(config.audience) ?? "participant";
     const entitlementMetadata = {
       pricing_config_key: config.key,

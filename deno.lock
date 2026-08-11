@@ -1,11 +1,17 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@supabase/functions-js@*": "2.104.1"
+    "jsr:@supabase/functions-js@*": "2.104.1",
+    "npm:stripe@22.3.0": "22.3.0"
   },
   "jsr": {
     "@supabase/functions-js@2.104.1": {
       "integrity": "69d68f90f659f3b369edd6e5b1b0cb05790777caf66f3f60fbd56b2644a84a86"
+    }
+  },
+  "npm": {
+    "stripe@22.3.0": {
+      "integrity": "sha512-ypO6xjVrMWs9SmIMeHr8naCx3dAQ0clxMdUTxn7Ejd7hmY9meBGfE+N4pVHkf9sUNebAHp6uJo6mV3GxDIc2cA=="
     }
   },
   "redirects": {
@@ -327,7 +333,7 @@
       "dependencies": [
         "npm:@axe-core/playwright@^4.12.1",
         "npm:@capacitor/android@7.6.7",
-        "npm:@capacitor/cli@7.6.5",
+        "npm:@capacitor/cli@7.6.8",
         "npm:@capacitor/core@7.6.7",
         "npm:@cloudflare/workers-types@^4.20260608.1",
         "npm:@commitlint/cli@^20.5.3",
@@ -428,10 +434,19 @@
       "overrides": {
         "js-yaml": "4.2.0",
         "tmp": "^0.2.7",
-        "tar": "7.5.16",
+        "tar": "7.5.21",
         "uuid": "^14.0.0",
         "undici": "7.28.0",
-        "ws": "8.21.0"
+        "ws": "8.21.0",
+        "sucrase": {
+          "glob": {
+            ".": "13.0.6",
+            "minimatch": {
+              ".": "10.2.6",
+              "brace-expansion": "5.0.8"
+            }
+          }
+        }
       }
     }
   }

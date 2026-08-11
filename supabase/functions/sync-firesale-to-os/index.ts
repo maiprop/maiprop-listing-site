@@ -11,6 +11,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { SchemaValidationError } from "../_shared/schema.ts";
 import {
   asLooseSupabaseClient,
   asSupabaseAuthAdminClient,
@@ -18,6 +19,7 @@ import {
   type LooseSupabaseClient,
   type SupabaseAuthAdminClient,
 } from "../_shared/supabaseClientTypes.ts";
+import { parseSyncFiresaleToOsRequest } from "./request.ts";
 
 const log = createLogger("sync-firesale-to-os");
 
@@ -130,27 +132,19 @@ Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
-
-  const authErr = await requireAgent(req, asSupabaseAuthAdminClient(supabase), corsHeaders);
-  if (authErr) return authErr;
-
-  const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
-  const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
-  const OS_PASS  = Deno.env.get("MAIPROP_OS_PASSWORD");
-
   try {
-    const body = await req.json().catch(() => ({}));
-    const { firesale_id } = body;
+    const { firesale_id } = await parseSyncFiresaleToOsRequest(req);
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
 
-    if (!firesale_id) {
-      return new Response(JSON.stringify({ error: "firesale_id is required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const authErr = await requireAgent(req, asSupabaseAuthAdminClient(supabase), corsHeaders);
+    if (authErr) return authErr;
+
+    const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
+    const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
+    const OS_PASS = Deno.env.get("MAIPROP_OS_PASSWORD");
 
     // Fetch firesale request — `firesale_requests` isn't in the generated
     // Supabase types; cast through the narrow `from` overload bridge.
@@ -243,6 +237,16 @@ Deno.serve(async (req) => {
     });
 
   } catch (err: unknown) {
+    if (err instanceof SchemaValidationError) {
+      return new Response(JSON.stringify({
+        error: err.message,
+        code: err.code,
+        issues: err.issues,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const message = err instanceof Error ? err.message : String(err);
     log.error("sync error", { err: message });
     return new Response(JSON.stringify({ error: message }), {
