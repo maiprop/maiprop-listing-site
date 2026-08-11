@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import yaml from "js-yaml";
+import yaml from "npm:js-yaml@4.2.0";
 
 const document = yaml.load(readFileSync(
   new URL("../../../docs/api/edge-functions.openapi.yaml", import.meta.url),
