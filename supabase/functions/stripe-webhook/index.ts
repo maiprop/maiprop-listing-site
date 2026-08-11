@@ -24,13 +24,14 @@ import {
   beginStripeWebhookEvent,
   type BillingSubscriptionCanonical,
   type BillingSubscriptionObservation,
-  type SupabaseAdminClient,
   finishStripeWebhookEvent,
   stripeRuntimeModeFromLivemode,
+  type SupabaseAdminClient,
   upsertBillingCustomer,
   upsertBillingSubscription,
 } from "../_shared/billingState.ts";
 import {
+  buildIdempotencyKey,
   createStripeClient,
   ensureSubscriptionCompanyInvoiceSettings,
   verifyStripeAccountIdentity,
@@ -38,6 +39,13 @@ import {
 import { pricingConfigMatchesStripeItem } from "../_shared/entitlements.ts";
 import { fulfillAddonCheckoutSession } from "../_shared/addonFulfillment.ts";
 import { shouldSkipProfileEntitlementSync } from "./addonGuard.ts";
+import {
+  type AgentDataInputCreditReservationExpectation,
+  assertAgentDataInputCreditReservationExpectation,
+  assertAgentDataInputInvoiceCreditMatches,
+  findAgentDataInputInvoiceCredit,
+  type StripeInvoiceCreditItem,
+} from "./agentDataInputInvoiceCredit.ts";
 
 export {
   addonCreditsGranted,
@@ -233,6 +241,11 @@ Deno.serve(async (req) => {
 
         case "invoice.payment_failed": {
           const invoice = event.data.object as Stripe.Invoice;
+          await reconcileFinalizedAgentDataInputDiscount(
+            supabase,
+            stripe,
+            invoice,
+          );
           await syncInvoiceSubscription(
             supabase,
             stripe,
@@ -249,17 +262,17 @@ Deno.serve(async (req) => {
           // Idempotent — apply_verified_data_input_discount() flips
           // discount_applied=true atomically, so a retry returns 0 entries.
           const invoice = event.data.object as Stripe.Invoice;
-          try {
-            await applyAgentDataInputDiscount(supabase, stripe, invoice);
-          } catch (err: unknown) {
-            // Discount application is best-effort — log but don't block the
-            // invoice. Stripe will still bill the regular amount and the
-            // unapplied entries remain available for the next invoice cycle.
-            log.error("agent data input discount failed", {
-              invoice_id: invoice.id,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          }
+          await applyAgentDataInputDiscount(supabase, stripe, invoice);
+          break;
+        }
+
+        case "invoice.finalized": {
+          const invoice = event.data.object as Stripe.Invoice;
+          await reconcileFinalizedAgentDataInputDiscount(
+            supabase,
+            stripe,
+            invoice,
+          );
           break;
         }
 
@@ -337,6 +350,11 @@ Deno.serve(async (req) => {
           // Fires on every successful recurring charge. Re-sync to handle plan upgrades
           // where the subscription object may already be updated before this fires.
           const invoice = event.data.object as Stripe.Invoice;
+          await reconcileFinalizedAgentDataInputDiscount(
+            supabase,
+            stripe,
+            invoice,
+          );
           await syncInvoiceSubscription(
             supabase,
             stripe,
@@ -738,7 +756,9 @@ export async function applyAddonRefund(
 ): Promise<boolean> {
   const sessionId = input.metadata?.stripe_session_id ??
     input.metadata?.checkout_session_id;
-  if (!input.paymentIntentId && !input.chargeId && !sessionId && !input.invoiceId) {
+  if (
+    !input.paymentIntentId && !input.chargeId && !sessionId && !input.invoiceId
+  ) {
     return false;
   }
 
@@ -1646,6 +1666,172 @@ function errorResponse(
   });
 }
 
+function isDefinitiveStripeCreditFailure(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const statusCode = Number(
+    (error as { statusCode?: number }).statusCode ?? 0,
+  );
+  return statusCode >= 400 && statusCode < 500 &&
+    ![408, 409, 429].includes(statusCode);
+}
+
+async function agentDataInputCreditIdempotencyKey(
+  invoiceId: string,
+  userId: string,
+): Promise<string> {
+  return await buildIdempotencyKey("agent-data-input-invoice-credit", [
+    invoiceId,
+    userId,
+  ]);
+}
+
+async function persistAgentDataInputInvoiceCredit(
+  supabase: SupabaseAdminClient,
+  userId: string,
+  invoiceId: string,
+  expectedCount: number,
+  credit: StripeInvoiceCreditItem,
+): Promise<void> {
+  const amountMinor = Math.abs(credit.amount);
+  const { data: persistedRows, error: persistError } = await supabase.from(
+    "agent_data_inputs",
+  )
+    .update({
+      stripe_credit_id: credit.id,
+      stripe_credit_amount_cents: amountMinor,
+      stripe_credit_currency: credit.currency,
+    })
+    .eq("user_id", userId)
+    .eq("discount_invoice_id", invoiceId)
+    .select<{ id: string }[]>("id");
+  if (
+    persistError ||
+    !Array.isArray(persistedRows) ||
+    persistedRows.length !== expectedCount
+  ) {
+    log.error("Stripe credit succeeded but durable persistence failed", {
+      user_id: userId,
+      invoice_id: invoiceId,
+      stripe_credit_id: credit.id,
+      persisted_count: Array.isArray(persistedRows) ? persistedRows.length : 0,
+      expected_count: expectedCount,
+      err: persistError ? String(persistError.message ?? persistError) : null,
+    });
+    throw new Error("Stripe credit persistence failed after provider success");
+  }
+}
+
+async function loadAgentDataInputCreditReservations(
+  supabase: SupabaseAdminClient,
+  userId: string,
+  invoiceId: string,
+): Promise<AgentDataInputCreditReservationExpectation[]> {
+  const { data, error } = await supabase.from("agent_data_inputs")
+    .select<AgentDataInputCreditReservationExpectation[]>(
+      "id, stripe_credit_id, stripe_credit_expected_amount_cents, stripe_credit_operation_key",
+    )
+    .eq("user_id", userId)
+    .eq("discount_invoice_id", invoiceId);
+  if (error) {
+    throw new Error(
+      `Agent data-input reservation lookup failed: ${
+        String(error.message ?? error)
+      }`,
+    );
+  }
+  return Array.isArray(data) ? data : [];
+}
+
+async function reconcileFinalizedAgentDataInputDiscount(
+  supabase: SupabaseAdminClient,
+  stripe: Stripe,
+  invoice: Stripe.Invoice,
+): Promise<void> {
+  if (!invoice.id || !invoice.customer) return;
+  const customerId = typeof invoice.customer === "string"
+    ? invoice.customer
+    : invoice.customer.id;
+  const customer = await stripe.customers.retrieve(customerId);
+  const userId = "metadata" in customer
+    ? customer.metadata?.user_id ?? null
+    : null;
+  if (!userId) return;
+
+  const reservations = await loadAgentDataInputCreditReservations(
+    supabase,
+    userId,
+    invoice.id,
+  );
+  if (reservations.length === 0) return;
+
+  const operationKey = await agentDataInputCreditIdempotencyKey(
+    invoice.id,
+    userId,
+  );
+  const expectedAmountMinor = reservations[0]
+    ?.stripe_credit_expected_amount_cents;
+  if (
+    !Number.isInteger(expectedAmountMinor) || Number(expectedAmountMinor) <= 0
+  ) {
+    throw new Error(
+      "Agent data-input credit reservation has no durable expected amount.",
+    );
+  }
+  assertAgentDataInputCreditReservationExpectation(reservations, {
+    expectedCount: reservations.length,
+    amountMinor: Number(expectedAmountMinor),
+    operationKey,
+  });
+  const credit = await findAgentDataInputInvoiceCredit(
+    stripe as unknown as Parameters<
+      typeof findAgentDataInputInvoiceCredit
+    >[0],
+    invoice.id,
+    operationKey,
+  );
+  if (credit) {
+    if (credit.amount >= 0) {
+      throw new Error(
+        "Stripe invoice credit reconciliation found a non-credit item.",
+      );
+    }
+    assertAgentDataInputInvoiceCreditMatches(credit, {
+      invoiceId: invoice.id,
+      customerId,
+      amountMinor: Number(expectedAmountMinor),
+      currency: invoice.currency,
+      operationKey,
+      userId,
+      appliedCount: reservations.length,
+    });
+    await persistAgentDataInputInvoiceCredit(
+      supabase,
+      userId,
+      invoice.id,
+      reservations.length,
+      credit,
+    );
+    return;
+  }
+
+  if (reservations.some((reservation) => reservation.stripe_credit_id)) {
+    throw new Error(
+      "A persisted data-input invoice credit is missing from canonical Stripe state.",
+    );
+  }
+  await releaseAgentDataInputCreditReservation(
+    supabase,
+    userId,
+    invoice.id,
+    reservations.length,
+  );
+  log.warn("Released unfulfilled finalized invoice credit reservation", {
+    user_id: userId,
+    invoice_id: invoice.id,
+    reservation_count: reservations.length,
+  });
+}
+
 /**
  * Agent "Data Input" discount.
  *
@@ -1666,6 +1852,36 @@ function errorResponse(
  *     verified inputs are possible yet).
  *   - Customer has no user_id metadata.
  */
+async function releaseAgentDataInputCreditReservation(
+  supabase: SupabaseAdminClient,
+  userId: string,
+  invoiceId: string,
+  expectedCount: number,
+): Promise<void> {
+  const { data, error } = await supabase.from("agent_data_inputs")
+    .update({
+      discount_applied: false,
+      discount_applied_at: null,
+      discount_invoice_id: null,
+      applied_to_invoice_at: null,
+      stripe_credit_id: null,
+      stripe_credit_amount_cents: null,
+      stripe_credit_currency: null,
+      stripe_credit_expected_amount_cents: null,
+      stripe_credit_operation_key: null,
+    })
+    .eq("user_id", userId)
+    .eq("discount_invoice_id", invoiceId)
+    .select<{ id: string }[]>("id");
+  const releasedRows = Array.isArray(data) ? data : [];
+  if (error || releasedRows.length !== expectedCount) {
+    throw new Error(
+      error?.message ??
+        `Expected to release ${expectedCount} data-input reservations, released ${releasedRows.length}`,
+    );
+  }
+}
+
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function applyAgentDataInputDiscount(
   supabase: SupabaseAdminClient,
@@ -1674,14 +1890,25 @@ async function applyAgentDataInputDiscount(
 ): Promise<void> {
   if (invoice.status && invoice.status !== "draft") return;
   if (!invoice.id || !invoice.customer) return;
+  const customerId = typeof invoice.customer === "string"
+    ? invoice.customer
+    : invoice.customer.id;
   // Skip initial signup invoices — no prior verified inputs are possible yet.
   if (
     (invoice as unknown as Record<string, unknown>).billing_reason ===
       "subscription_create"
   ) return;
+  const subtotalMinor = invoice.subtotal ?? 0;
+  if (subtotalMinor <= 0) {
+    log.warn("invoice subtotal non-positive; skipping discount", {
+      invoice_id: invoice.id,
+      subtotal: subtotalMinor,
+    });
+    return;
+  }
 
   const customer = await stripe.customers.retrieve(
-    invoice.customer as string,
+    customerId,
   ) as Stripe.Customer;
   const userId = customer.metadata?.user_id ?? null;
   if (!userId) {
@@ -1692,11 +1919,18 @@ async function applyAgentDataInputDiscount(
     return;
   }
 
+  const idempotencyKey = await agentDataInputCreditIdempotencyKey(
+    invoice.id,
+    userId,
+  );
+
   const { data, error } = await supabase.rpc(
     "apply_verified_data_input_discount",
     {
       p_user_id: userId,
       p_invoice_id: invoice.id,
+      p_subtotal_minor: subtotalMinor,
+      p_operation_key: idempotencyKey,
     },
   );
   if (error) {
@@ -1705,12 +1939,18 @@ async function applyAgentDataInputDiscount(
       invoice_id: invoice.id,
       err: String(error.message ?? error),
     });
-    return;
+    throw new Error(
+      `apply_verified_data_input_discount failed: ${
+        String(error.message ?? error)
+      }`,
+    );
   }
 
   const row = (Array.isArray(data) ? data[0] : data) as {
     applied_count?: number;
     applied_pct?: number | string;
+    expected_amount_cents?: number;
+    operation_key?: string;
   } | null;
   const appliedCount = Number(row?.applied_count ?? 0);
   const appliedPct = Number(row?.applied_pct ?? 0);
@@ -1722,68 +1962,113 @@ async function applyAgentDataInputDiscount(
     return;
   }
 
-  // Compute discount on the current pre-tax subtotal of the invoice. We round
-  // toward the nearest cent. Stripe expects integer minor units.
-  const subtotalMinor = invoice.subtotal ?? 0;
-  if (subtotalMinor <= 0) {
-    log.warn("invoice subtotal non-positive — skipping discount", {
-      invoice_id: invoice.id,
-      subtotal: subtotalMinor,
-    });
-    return;
+  const discountMinor = Number(row?.expected_amount_cents ?? 0);
+  if (
+    !Number.isInteger(discountMinor) ||
+    discountMinor <= 0 ||
+    row?.operation_key !== idempotencyKey
+  ) {
+    throw new Error(
+      "Agent data-input discount RPC returned an invalid durable expectation.",
+    );
   }
-  const discountMinor = Math.round((subtotalMinor * appliedPct) / 100);
-  if (discountMinor <= 0) return;
-
-  try {
-    await stripe.invoiceItems.create({
-      customer: invoice.customer as string,
-      invoice: invoice.id,
-      amount: -discountMinor, // negative = credit
+  const reservations = await loadAgentDataInputCreditReservations(
+    supabase,
+    userId,
+    invoice.id,
+  );
+  assertAgentDataInputCreditReservationExpectation(reservations, {
+    expectedCount: appliedCount,
+    amountMinor: discountMinor,
+    operationKey: idempotencyKey,
+  });
+  let credit = await findAgentDataInputInvoiceCredit(
+    stripe as unknown as Parameters<
+      typeof findAgentDataInputInvoiceCredit
+    >[0],
+    invoice.id,
+    idempotencyKey,
+  );
+  if (credit) {
+    assertAgentDataInputInvoiceCreditMatches(credit, {
+      invoiceId: invoice.id,
+      customerId,
+      amountMinor: discountMinor,
       currency: invoice.currency,
-      description:
-        `Data Input reward — ${appliedCount} verified closing(s) × 0.5% (${appliedPct}% off)`,
-      metadata: {
-        type: "agent_data_input_discount",
-        user_id: userId,
-        applied_count: String(appliedCount),
-        applied_pct: String(appliedPct),
-      },
+      operationKey: idempotencyKey,
+      userId,
+      appliedCount,
     });
-  } catch (stripeErr: unknown) {
-    // Stripe call failed — roll back the DB rows so they remain eligible
-    // for the next invoice cycle instead of being permanently lost.
-    log.error("stripe invoiceItem create failed, rolling back DB", {
-      user_id: userId,
-      invoice_id: invoice.id,
-      err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
-    });
-    const { error: rollbackErr } = await supabase.from(
-      "agent_data_inputs",
-    )
-      .update({
-        discount_applied: false,
-        discount_applied_at: null,
-        discount_invoice_id: null,
-        applied_to_invoice_at: null,
-        stripe_credit_id: null,
-        stripe_credit_amount_cents: null,
-        stripe_credit_currency: null,
-      })
-      .eq("user_id", userId)
-      .eq("discount_invoice_id", invoice.id);
-    if (rollbackErr) {
-      log.error(
-        "CRITICAL: rollback of discount rows failed — credits permanently lost",
-        {
+  } else {
+    try {
+      credit = await stripe.invoiceItems.create({
+        customer: customerId,
+        invoice: invoice.id,
+        amount: -discountMinor, // negative = credit
+        currency: invoice.currency,
+        description:
+          `Data Input reward — ${appliedCount} verified closing(s) × 0.5% (${appliedPct}% off)`,
+        metadata: {
+          type: "agent_data_input_discount",
+          user_id: userId,
+          applied_count: String(appliedCount),
+          applied_pct: String(appliedPct),
+          operation_key: idempotencyKey,
+          expected_amount_cents: String(discountMinor),
+          invoice_id: invoice.id,
+        },
+      }, { idempotencyKey });
+    } catch (stripeErr: unknown) {
+      if (!isDefinitiveStripeCreditFailure(stripeErr)) {
+        log.error("Ambiguous Stripe credit outcome remains reserved", {
           user_id: userId,
           invoice_id: invoice.id,
-          err: String(rollbackErr.message ?? rollbackErr),
-        },
-      );
+          idempotency_key: idempotencyKey,
+          err: stripeErr instanceof Error
+            ? stripeErr.message
+            : String(stripeErr),
+        });
+        throw stripeErr;
+      }
+
+      // Stripe call failed — roll back the DB rows so they remain eligible
+      // for the next invoice cycle instead of being permanently lost.
+      log.error("Definitive Stripe credit failure; releasing reservation", {
+        user_id: userId,
+        invoice_id: invoice.id,
+        err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
+      });
+      try {
+        await releaseAgentDataInputCreditReservation(
+          supabase,
+          userId,
+          invoice.id,
+          appliedCount,
+        );
+      } catch (rollbackErr: unknown) {
+        log.error(
+          "CRITICAL: release of discount reservations failed",
+          {
+            user_id: userId,
+            invoice_id: invoice.id,
+            err: rollbackErr instanceof Error
+              ? rollbackErr.message
+              : String(rollbackErr),
+          },
+        );
+        throw rollbackErr;
+      }
+      return;
     }
-    return;
   }
+
+  await persistAgentDataInputInvoiceCredit(
+    supabase,
+    userId,
+    invoice.id,
+    appliedCount,
+    credit,
+  );
 
   log.info("applied agent data input discount", {
     user_id: userId,
@@ -1791,5 +2076,6 @@ async function applyAgentDataInputDiscount(
     applied_count: appliedCount,
     applied_pct: appliedPct,
     discount_minor: discountMinor,
+    stripe_credit_id: credit.id,
   });
 }

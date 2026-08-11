@@ -27,6 +27,7 @@ import {
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { SchemaValidationError } from "../_shared/schema.ts";
 import {
   OS_ALLOWED_HOST_SUFFIX,
   TRAILING_SLASH_RE,
@@ -50,6 +51,8 @@ import {
 import {
   buildFilterRequest,
   getValidatedPagination,
+  parseAuctionRequest,
+  type AuctionRequest,
 } from "./requestFilters.ts";
 import { getPlanCap, hasPortalProAccess } from "./entitlements.ts";
 import { getFetchErrorPayload, isOsApiFailure } from "./fetchErrors.ts";
@@ -88,6 +91,7 @@ export {
   getValidatedPagination,
   hasPortalProAccess,
   mapAuction,
+  parseAuctionRequest,
   readAuctionResponseCache,
   selectDiverseAuctionSample,
 };
@@ -145,25 +149,14 @@ function getSupabaseConfig(): SupabaseConfig | null {
   return url && serviceRoleKey ? { url, serviceRoleKey } : null;
 }
 
-async function parseRequestBody(
-  req: Request,
-): Promise<Record<string, unknown>> {
-  const body = await req.json().catch(function getEmptyBody() {
-    return {};
-  });
-  return body && typeof body === "object" && !Array.isArray(body)
-    ? body as Record<string, unknown>
-    : {};
-}
-
 function isNationalSampleRequest(
   body: Record<string, unknown>,
   filterRequest: Record<string, unknown>,
 ): boolean {
   return body.sampleAcrossGreece !== false &&
-    !filterRequest.prefectureId &&
-    !filterRequest.propertyMunicipalityId &&
-    !filterRequest.boundingBox;
+    filterRequest.prefectureId === undefined &&
+    filterRequest.propertyMunicipalityId === undefined &&
+    filterRequest.boundingBox === undefined;
 }
 
 function getBearerToken(req: Request): string | null {
@@ -276,13 +269,13 @@ function handleFetchError(
 
 async function handleAuctionRequest(
   req: Request,
+  body: AuctionRequest,
   corsHeaders: Record<string, string>,
   runtimeConfig: RuntimeConfig,
   sb: SupabaseClient,
   verifiedUserId: string | null,
 ): Promise<Response> {
   try {
-    const body = await parseRequestBody(req);
     const planCap = await getPlanCap(req, sb, verifiedUserId);
     const pagination = getValidatedPagination(body, planCap);
     if ("error" in pagination) {
@@ -375,8 +368,28 @@ async function handleRequest(req: Request): Promise<Response> {
   const guardResponse = await getGuardResponse(corsHeaders, authIdentity.rateLimitKey);
   if (guardResponse) return guardResponse;
 
+  let body: AuctionRequest;
+  try {
+    body = await parseAuctionRequest(req);
+  } catch (err: unknown) {
+    if (err instanceof SchemaValidationError) {
+      const status = err.code === "payload_too_large"
+        ? 413
+        : err.code === "request_body_timeout"
+        ? 408
+        : 400;
+      return jsonResponse(
+        { error: err.message, code: err.code, issues: err.issues },
+        corsHeaders,
+        status,
+      );
+    }
+    throw err;
+  }
+
   return await handleAuctionRequest(
     req,
+    body,
     corsHeaders,
     runtimeConfig,
     sb,

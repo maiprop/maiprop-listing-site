@@ -12,6 +12,11 @@ import { verifiedGatewayUserFromJwt } from "../_shared/gatewayJwt.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
 import {
+  parseJsonBody,
+  SchemaValidationError,
+  z,
+} from "../_shared/schema.ts";
+import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
@@ -23,11 +28,6 @@ const limiter = makeRateLimiter({
   windowMs: 60_000,
   databaseTimeoutMs: 500,
 });
-
-type QuotaStatusRequest = {
-  bucket?: unknown;
-  buckets?: unknown;
-};
 
 type QuotaStatus = {
   allowed: boolean;
@@ -48,28 +48,37 @@ const jsonResponse = (
 
 const BUCKET_RE = /^[a-z0-9-]{2,64}$/;
 const MAX_BATCHED_BUCKETS = 12;
-
-function parseBucketValue(bucket: unknown): string {
-  if (typeof bucket !== "string" || !BUCKET_RE.test(bucket)) {
-    throw new Error("Invalid bucket");
+const bucketSchema = z.string().regex(BUCKET_RE, "Invalid bucket");
+const quotaStatusRequestSchema = z.object({
+  bucket: bucketSchema.optional(),
+  buckets: z.array(bucketSchema)
+    .min(1, "Invalid buckets")
+    .max(MAX_BATCHED_BUCKETS, "Invalid buckets")
+    .optional(),
+}).strict().superRefine((body, ctx) => {
+  const requestModes = Number(body.bucket !== undefined) +
+    Number(body.buckets !== undefined);
+  if (requestModes !== 1) {
+    ctx.addIssue({
+      code: "custom",
+      path: [],
+      message: body.buckets !== undefined ? "Invalid buckets" : "Invalid bucket",
+    });
   }
-  return bucket;
-}
+});
 
-function parseBucketRequest(body: QuotaStatusRequest): {
+function parseBucketRequest(
+  body: z.infer<typeof quotaStatusRequestSchema>,
+): {
   buckets: string[];
   batched: boolean;
 } {
   if (body.buckets !== undefined) {
-    if (!Array.isArray(body.buckets)) throw new Error("Invalid buckets");
-    const buckets = Array.from(new Set(body.buckets.map(parseBucketValue)));
-    if (buckets.length === 0 || buckets.length > MAX_BATCHED_BUCKETS) {
-      throw new Error("Invalid buckets");
-    }
+    const buckets = Array.from(new Set(body.buckets));
     return { buckets, batched: true };
   }
 
-  return { buckets: [parseBucketValue(body.bucket)], batched: false };
+  return { buckets: [body.bucket as string], batched: false };
 }
 
 function normalizeQuota(quota: Partial<QuotaStatus> | null): QuotaStatus {
@@ -99,19 +108,19 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405, corsHeaders);
   }
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
-
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  if (!serviceRoleKey || !supabaseUrl) {
-    return jsonResponse({ error: "Service unavailable" }, 503, corsHeaders);
-  }
-
   try {
-    const body = await req.json().catch(() => ({})) as QuotaStatusRequest;
+    const body = await parseJsonBody(req, quotaStatusRequestSchema);
     const { buckets, batched } = parseBucketRequest(body);
+
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "anonymous";
+    if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
+
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    if (!serviceRoleKey || !supabaseUrl) {
+      return jsonResponse({ error: "Service unavailable" }, 503, corsHeaders);
+    }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
@@ -145,6 +154,13 @@ Deno.serve(async (req) => {
       corsHeaders,
     );
   } catch (err: unknown) {
+    if (err instanceof SchemaValidationError) {
+      return jsonResponse(
+        { error: err.message, code: err.code, issues: err.issues },
+        400,
+        corsHeaders,
+      );
+    }
     if (err instanceof AuthError) {
       return jsonResponse({ error: err.message }, err.status, corsHeaders);
     }

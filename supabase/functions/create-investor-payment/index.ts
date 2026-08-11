@@ -10,7 +10,7 @@ import {
   buildIdempotencyKey,
   buildPaymentModeInvoiceCreationParams,
   CHECKOUT_TAX_COLLECTION_PARAMS,
-  createStripeClient,
+  createVerifiedStripeClient,
   getStripeRuntimeMode,
   STRIPE_DEFAULT_TAX_BEHAVIOR,
   STRIPE_SAAS_BUSINESS_TAX_CODE,
@@ -264,7 +264,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const stripe = createStripeClient();
+    const stripe = await createVerifiedStripeClient();
     const customerId = await getOrCreateOwnedStripeCustomer(
       stripe,
       { id: userId, email },

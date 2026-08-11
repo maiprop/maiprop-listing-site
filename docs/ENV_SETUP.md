@@ -206,6 +206,7 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `RATE_LIMIT_DB_TIMEOUT_MS` | Optional database timeout for shared Edge rate-limit checks; defaults to `2500`. |
 | `GEMINI_API_KEY` | AI provider fallback for report/search/assist functions when `OPENAI_API_KEY` is not configured |
 | `GEMINI_MODEL` | Optional Gemini model override; defaults to `gemini-2.5-flash` |
+| `GEMINI_TRANSLATION_MODEL` | Optional Gemini model override for translation; falls back to `GEMINI_MODEL`, then `gemini-2.5-flash` |
 | `OPENAI_API_KEY` | Primary AI provider for `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation`, `property-pois` |
 | `OPENAI_MODEL` | Optional OpenAI model override for non-translation AI functions; defaults to `gpt-5.4-mini` |
 | `OPENAI_TRANSLATION_MODEL` | Optional OpenAI model override for translation; defaults to `gpt-5.4-mini` |
@@ -235,8 +236,16 @@ workflows use it as the immutable source revision and require an exact-SHA
 successful CI run before a manual recovery deployment can proceed. Do not set
 or override it in repository secrets.
 
+`RELEASE_SHA` is an optional full 40-character assertion for standalone
+release-evidence commands. The live Stripe migration check derives the release
+identity from the clean checked-out Git `HEAD` and rejects any supplied SHA that
+does not match it. Workflows must check out their immutable candidate SHA; do
+not store `RELEASE_SHA` as a repository or environment secret.
+
 | Secret | Purpose | Scope |
 |---|---|---|
+| `RELEASE_EVIDENCE_SIGNING_KEY` | HMAC-SHA256 signing and verification of exact-commit Stripe live-migration evidence; use at least 32 random bytes | protected GitHub release environment |
+| `RELEASE_EVIDENCE_SIGNING_KEY_ID` | Stable non-secret identifier for the active evidence-signing key; rotate when the key rotates | protected GitHub release environment |
 | `E2E_TEST_EMAIL` | auth E2E spec sign-in | repo or `production` env |
 | `E2E_TEST_PASSWORD` | same | same |
 | `LHCI_GITHUB_APP_TOKEN` | Lighthouse CI status checks | repo. See `LIGHTHOUSE_CI_SETUP.md` |

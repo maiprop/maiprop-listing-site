@@ -221,6 +221,20 @@ const policies = {
     requiredSnippets: ["CRON_SECRET", "x-cron-secret"],
     notes: "Cron-only follow-up job; browser callers must be rejected.",
   },
+  "reconcile-role-switch-billing": {
+    status: "ready",
+    caller: "cron",
+    classification: "private_mutation_cron",
+    mechanisms: ["cron_secret", "service_role", "leased_rows", "bounded_retries"],
+    requiredSnippets: [
+      "CRON_SECRET",
+      "x-cron-secret",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "RECONCILIATION_CLAIM_RPC",
+      "MAX_RECONCILIATION_ATTEMPTS",
+    ],
+    notes: "Cron-only billing recovery worker with exact row leases and a bounded retry ceiling.",
+  },
 };
 
 const read = (path) => {

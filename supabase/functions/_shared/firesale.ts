@@ -1,0 +1,1 @@
+export const MAX_FIRE_SALE_AMOUNT_EUR = 1_000_000_000;

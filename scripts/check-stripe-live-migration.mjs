@@ -9,9 +9,15 @@
  * enabled.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 
 import { formatStripeKeyEvidence, getStripeReadOnlyKey } from "./stripe-readiness-env.mjs";
+import {
+  buildStripeLiveMigrationEvidence,
+  resolveCheckedOutReleaseSha,
+  signStripeLiveMigrationEvidence,
+} from "./stripe-live-migration-evidence.mjs";
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -41,6 +47,17 @@ const EXPECTED_CURRENCY = "eur";
 const EXPECTED_VAT_ID = (process.env.STRIPE_COMPANY_VAT_ID ?? "EL802708301").replace(/\s+/g, "").toUpperCase();
 const EXPECTED_WEBHOOK_URL = process.env.STRIPE_WEBHOOK_EXPECTED_URL ??
   "https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/stripe-webhook";
+const PRODUCTION_SUPABASE_PROJECT_REF = "qvvicunqcrwpioqnvzxf";
+
+function optionValue(name) {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : null;
+}
+
+const RELEASE_SHA = optionValue("--release-sha") ?? process.env.RELEASE_SHA;
+const OUTPUT_PATH = optionValue("--out");
+const EVIDENCE_SIGNING_KEY = process.env.RELEASE_EVIDENCE_SIGNING_KEY;
+const EVIDENCE_SIGNING_KEY_ID = process.env.RELEASE_EVIDENCE_SIGNING_KEY_ID;
 
 const REQUIRED_WEBHOOK_EVENTS = [
   "checkout.session.completed",
@@ -57,6 +74,7 @@ const REQUIRED_WEBHOOK_EVENTS = [
   "customer.subscription.resumed",
   "customer.subscription.deleted",
   "invoice.created",
+  "invoice.finalized",
   "invoice.payment_failed",
   "invoice.payment_succeeded",
   "subscription_schedule.aborted",
@@ -185,6 +203,13 @@ function getSupabaseUrl() {
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
     throw new Error("VITE_SUPABASE_URL or SUPABASE_URL must be set to the production Supabase URL.");
   }
+  const parsed = new URL(url);
+  const projectRef = parsed.hostname.split(".")[0];
+  if (projectRef !== PRODUCTION_SUPABASE_PROJECT_REF) {
+    throw new Error(
+      `Stripe live migration gate requires production Supabase ${PRODUCTION_SUPABASE_PROJECT_REF}.`,
+    );
+  }
   return url.replace(/\/$/, "");
 }
 
@@ -266,6 +291,17 @@ function endpointCoversEvents(endpoint) {
 async function main() {
   const issues = [];
   const warnings = [];
+  const releaseSha = resolveCheckedOutReleaseSha({
+    requestedSha: RELEASE_SHA,
+    headSha: execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim(),
+    statusPorcelain: execFileSync(
+      "git",
+      ["status", "--porcelain=v1", "--untracked-files=all"],
+      { encoding: "utf8" },
+    ),
+  });
   const stripeKey = getStripeKey();
 
   const account = await stripeRequest("/v1/account");
@@ -379,8 +415,10 @@ async function main() {
     issues.push("No active live Billing Customer Portal configuration found.");
   }
 
-  const report = {
-    ok: issues.length === 0,
+  const unsignedReport = buildStripeLiveMigrationEvidence({
+    releaseSha,
+    supabaseProjectRef: PRODUCTION_SUPABASE_PROJECT_REF,
+    stripeApiVersion: STRIPE_API_VERSION,
     account: {
       id: account.id,
       display_name: account.display_name ?? account.settings?.dashboard?.display_name ?? null,
@@ -401,7 +439,18 @@ async function main() {
     webhook: webhook ? { id: webhook.id, url: webhook.url } : null,
     issues,
     warnings,
-  };
+  });
+  const report = signStripeLiveMigrationEvidence(unsignedReport, {
+    signingKey: EVIDENCE_SIGNING_KEY,
+    keyId: EVIDENCE_SIGNING_KEY_ID,
+  });
+
+  if (OUTPUT_PATH) {
+    writeFileSync(OUTPUT_PATH, `${JSON.stringify(report, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+    });
+  }
 
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify(report, null, 2));

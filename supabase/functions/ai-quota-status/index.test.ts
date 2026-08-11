@@ -17,7 +17,6 @@ type MockScenario = {
 };
 
 declare global {
-  // deno-lint-ignore no-var
   var __aiQuotaStatusScenario: MockScenario;
 }
 
@@ -74,6 +73,7 @@ const transformedSource = functionSource
   )
   .replace('from "../_shared/cors.ts"', `from "${shared("cors.ts")}"`)
   .replace('from "../_shared/logger.ts"', `from "${shared("logger.ts")}"`)
+  .replace('from "../_shared/schema.ts"', `from "${shared("schema.ts")}"`)
   .replace(
     'from "../_shared/rateLimit.ts"',
     `from "${shared("rateLimit.ts")}"`,
@@ -154,6 +154,43 @@ Deno.test("invalid bucket is rejected before auth or quota lookup", async () => 
   assertEquals(res.status, 400);
   const body = await res.json();
   assertEquals(body.error, "Invalid bucket");
+  assertEquals(globalThis.__aiQuotaStatusScenario.calls.length, 0);
+});
+
+Deno.test("quota request parsing fails closed with structured errors before RPC", async () => {
+  const invalidBodies = [
+    { buckets: Array.from({ length: 13 }, () => "property-valuation") },
+    { buckets: ["property-valuation", "../invalid"] },
+    { bucket: "property-valuation", buckets: ["property-pois"] },
+    { bucket: "property-valuation", unexpected: true },
+  ];
+
+  for (const invalidBody of invalidBodies) {
+    resetScenario();
+    const res = await handler(authedJson(invalidBody));
+    assertEquals(res.status, 400);
+    const body = await res.json();
+    assertEquals(body.code, "validation_error");
+    assertEquals(Array.isArray(body.issues), true);
+    assertEquals(globalThis.__aiQuotaStatusScenario.calls.length, 0);
+  }
+});
+
+Deno.test("malformed quota JSON returns invalid_json before RPC", async () => {
+  resetScenario();
+  const res = await handler(new Request("https://functions.test/ai-quota-status", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${jwtFor()}`,
+      "content-type": "application/json",
+      "x-forwarded-for": crypto.randomUUID(),
+    },
+    body: "{",
+  }));
+
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.code, "invalid_json");
   assertEquals(globalThis.__aiQuotaStatusScenario.calls.length, 0);
 });
 

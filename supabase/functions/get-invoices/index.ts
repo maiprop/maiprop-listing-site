@@ -7,7 +7,7 @@ import {
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
 import { isStripeMockMode } from "../_shared/stripeMode.ts";
-import { createStripeClient } from "../_shared/stripeClient.ts";
+import { createVerifiedStripeClient } from "../_shared/stripeClient.ts";
 import { hasProvisionedSubscriptionAccess } from "../_shared/subscriptionStatus.ts";
 
 type PriceWithRecurring = Stripe.Price & {
@@ -563,7 +563,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const stripe = createStripeClient(stripeKey);
+    const stripe = await createVerifiedStripeClient(stripeKey);
     let customer: Stripe.Customer | null = null;
     let subscription: Stripe.Subscription | null = null;
     try {

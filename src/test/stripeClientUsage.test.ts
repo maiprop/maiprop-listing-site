@@ -14,7 +14,6 @@ const criticalStripeFunctions = [
   "delete-account",
   "get-invoices",
   "log-role-switch",
-  "stripe-webhook",
   "sync-stripe-pricing",
 ] as const;
 
@@ -24,12 +23,23 @@ describe("Stripe client runtime guard", () => {
       const file = path.join(root, "supabase", "functions", fnName, "index.ts");
       const source = fs.readFileSync(file, "utf8");
 
-      expect(source, `${fnName} should import createStripeClient`).toContain(
-        "createStripeClient",
+      expect(source, `${fnName} should import createVerifiedStripeClient`).toContain(
+        "createVerifiedStripeClient",
       );
       expect(source, `${fnName} should not instantiate Stripe directly`)
         .not.toMatch(/\bnew\s+Stripe\s*\(/);
     }
+
+    const webhookSource = fs.readFileSync(
+      path.join(root, "supabase", "functions", "stripe-webhook", "index.ts"),
+      "utf8",
+    );
+    expect(webhookSource).toContain("createStripeClient");
+    expect(webhookSource).toContain("verifyStripeAccountIdentity");
+    expect(webhookSource.indexOf("constructEventAsync")).toBeLessThan(
+      webhookSource.indexOf("await verifyStripeAccountIdentity"),
+    );
+    expect(webhookSource).not.toMatch(/\bnew\s+Stripe\s*\(/);
   });
 
   it("keeps Stripe Tax wired for checkout sessions and catalog creation", () => {

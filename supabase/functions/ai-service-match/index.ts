@@ -4,11 +4,15 @@ import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.t
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("ai-service-match");
 
 const BUCKET = "ai-service-match";
 const serviceMatchLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
+const serviceMatchRequestSchema = z.object({
+  need: z.string().trim().min(1, "Need description is required").max(2000, "Need description is too long"),
+}).strict();
 
 const SYSTEM_PROMPT = `You are a Greek real estate professional matchmaker. A user describes their property need in plain text, and you must:
 
@@ -60,20 +64,13 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
-  if (quota.errorResponse) return quota.errorResponse;
-
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
-  if (await serviceMatchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   try {
-    const { need } = await req.json();
-    if (!need?.trim()) {
-      return new Response(JSON.stringify({ error: "Need description is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const { need } = await parseJsonBody(req, serviceMatchRequestSchema);
+    const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+    if (quota.errorResponse) return quota.errorResponse;
+
+    const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+    if (await serviceMatchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
     const response = await openAIChatCompletion({
       messages: [
@@ -120,6 +117,12 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    if (e instanceof SchemaValidationError) {
+      return new Response(JSON.stringify({ error: e.message, code: e.code, issues: e.issues }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     log.error("ai-service-match error", { err: e instanceof Error ? e.message : String(e) });
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
       status: 500,

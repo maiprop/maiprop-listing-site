@@ -169,8 +169,11 @@ vi.mock("react-router-dom", async () => {
 
 import Onboarding from "@/pages/Onboarding";
 
+const ROLE_SWITCH_AUDIT_ID = "11111111-1111-4111-8111-111111111111";
+const AUTH_USER_ID = "u-1";
+
 const authState = (overrides: Record<string, unknown> = {}) => ({
-  user: { id: "u-1", user_metadata: { full_name: "A Pro" } },
+  user: { id: AUTH_USER_ID, user_metadata: { full_name: "A Pro" } },
   profile: { role: null, participant_type: null },
   refreshProfile: vi.fn(),
   loading: false,
@@ -190,6 +193,12 @@ beforeEach(() => {
       options?.body?.role === "professional"
     ) {
       return Promise.resolve({ data: { professionalId: "pro-1" }, error: null });
+    }
+    if (functionName === "log-role-switch") {
+      return Promise.resolve({
+        data: { audit_id: options?.body?.operation_id },
+        error: null,
+      });
     }
     return Promise.resolve({ data: {}, error: null });
   });
@@ -481,7 +490,12 @@ describe("Onboarding page handlers", () => {
   });
 
   it("keeps role-switch confirmation cancellable before proceeding", async () => {
-    sessionStorage.setItem("role_switch_ctx", JSON.stringify({ fromType: "agent", hadActiveSub: true }));
+    sessionStorage.setItem("role_switch_ctx", JSON.stringify({
+      userId: AUTH_USER_ID,
+      fromType: "agent",
+      hadActiveSub: true,
+      auditId: ROLE_SWITCH_AUDIT_ID,
+    }));
     renderOnboarding();
 
     fireEvent.click(screen.getByRole("button", { name: /seller role/i }));
@@ -496,12 +510,72 @@ describe("Onboarding page handlers", () => {
 
     await waitFor(() => expect(screen.getByText("done-screen")).toBeInTheDocument());
     expect(invokeMock).toHaveBeenCalledWith("log-role-switch", {
-      body: expect.objectContaining({ from_type: "agent", to_type: "seller", had_active_sub: true }),
+      body: expect.objectContaining({
+        operation_id: ROLE_SWITCH_AUDIT_ID,
+        from_type: "agent",
+        to_type: "seller",
+        cancel_subscription: true,
+      }),
     });
   });
 
+  it("does not bypass the server billing audit for a same-tier buyer-to-seller switch", async () => {
+    sessionStorage.setItem("role_switch_ctx", JSON.stringify({
+      userId: AUTH_USER_ID,
+      fromType: "buyer",
+      hadActiveSub: false,
+      auditId: ROLE_SWITCH_AUDIT_ID,
+    }));
+    renderOnboarding();
+
+    fireEvent.click(screen.getByRole("button", { name: /seller role/i }));
+    expect(screen.getByTestId("role-switch-modal")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /confirm switch/i }));
+
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith(
+      "log-role-switch",
+      {
+        body: {
+          operation_id: ROLE_SWITCH_AUDIT_ID,
+          from_type: "buyer",
+          to_type: "seller",
+          cancel_subscription: true,
+        },
+      },
+    ));
+    expect(await screen.findByText("done-screen")).toBeInTheDocument();
+  });
+
+  it("recovers a begun role-switch operation from durable storage after a reload", async () => {
+    localStorage.setItem("maiprop_role_switch_operation_v1", JSON.stringify({
+      userId: AUTH_USER_ID,
+      operationId: ROLE_SWITCH_AUDIT_ID,
+      fromType: "buyer",
+      hadActiveSub: false,
+      status: "begun",
+      createdAt: Date.now(),
+    }));
+
+    renderOnboarding();
+    fireEvent.click(screen.getByRole("button", { name: /seller role/i }));
+    expect(screen.getByTestId("role-switch-modal")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /confirm switch/i }));
+
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith(
+      "log-role-switch",
+      { body: expect.objectContaining({ operation_id: ROLE_SWITCH_AUDIT_ID }) },
+    ));
+    expect(await screen.findByText("done-screen")).toBeInTheDocument();
+    expect(localStorage.getItem("maiprop_role_switch_operation_v1")).toBeNull();
+  });
+
   it("routes paid role-switch upgrades to the target pricing audience", async () => {
-    sessionStorage.setItem("role_switch_ctx", JSON.stringify({ fromType: "buyer", hadActiveSub: true }));
+    sessionStorage.setItem("role_switch_ctx", JSON.stringify({
+      userId: AUTH_USER_ID,
+      fromType: "buyer",
+      hadActiveSub: true,
+      auditId: ROLE_SWITCH_AUDIT_ID,
+    }));
     renderOnboarding();
 
     fireEvent.click(screen.getByRole("button", { name: /agent role/i }));
@@ -512,20 +586,53 @@ describe("Onboarding page handlers", () => {
     expect(screen.getByText(/Activate your Agent Pro/i)).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("log-role-switch", {
       body: expect.objectContaining({
+        operation_id: ROLE_SWITCH_AUDIT_ID,
         from_type: "buyer",
         to_type: "agent",
-        switch_kind: "upgrade",
-        had_active_sub: true,
         cancel_subscription: true,
       }),
     });
   });
 
+  it("asks the server to verify billing even when the client cache reports no active subscription", async () => {
+    sessionStorage.setItem(
+      "role_switch_ctx",
+      JSON.stringify({
+        userId: AUTH_USER_ID,
+        fromType: "buyer",
+        hadActiveSub: false,
+        auditId: ROLE_SWITCH_AUDIT_ID,
+      }),
+    );
+    renderOnboarding();
+
+    fireEvent.click(screen.getByRole("button", { name: /agent role/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm switch/i }));
+
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith(
+      "log-role-switch",
+      {
+        body: expect.objectContaining({
+          operation_id: ROLE_SWITCH_AUDIT_ID,
+          from_type: "buyer",
+          to_type: "agent",
+          cancel_subscription: true,
+        }),
+      },
+    ));
+  });
+
   it.each([
     [{ data: null, error: new Error("stripe unavailable") }, "returned error"],
     [{ data: { stripe_error: "cancel failed" }, error: null }, "returned Stripe failure"],
+    [{ data: { audit_id: "22222222-2222-4222-8222-222222222222" }, error: null }, "returned audit mismatch"],
   ])("blocks paid role switches when subscription cancellation %s", async (response) => {
-    sessionStorage.setItem("role_switch_ctx", JSON.stringify({ fromType: "buyer", hadActiveSub: true }));
+    sessionStorage.setItem("role_switch_ctx", JSON.stringify({
+      userId: AUTH_USER_ID,
+      fromType: "buyer",
+      hadActiveSub: true,
+      auditId: ROLE_SWITCH_AUDIT_ID,
+    }));
     invokeMock.mockImplementation((functionName: string) => {
       if (functionName === "log-role-switch") return Promise.resolve(response);
       return Promise.resolve({ data: {}, error: null });
@@ -535,9 +642,7 @@ describe("Onboarding page handlers", () => {
     fireEvent.click(screen.getByRole("button", { name: /agent role/i }));
     fireEvent.click(screen.getByRole("button", { name: /confirm switch/i }));
 
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(
-      "We couldn't update your active Stripe subscription. Please manage it from Billing before completing this switch.",
-    ));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
     expect(screen.queryByText("done-screen")).not.toBeInTheDocument();
     expect(screen.getByTestId("role-switch-modal")).toBeInTheDocument();
   });

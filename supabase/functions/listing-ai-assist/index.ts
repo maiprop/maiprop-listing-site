@@ -4,6 +4,8 @@ import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent }
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
+import type { Database } from "../../../src/integrations/supabase/types.ts";
 
 const log = createLogger("listing-ai-assist");
 
@@ -14,20 +16,85 @@ const VETTED_LISTING_RULES = buildVettedAnswerRules({
   timeSensitiveTopics: ["market demand", "area amenities", "property availability"],
 });
 
+type CanonicalPropertyType = Database["public"]["Enums"]["property_type"];
+const CANONICAL_PROPERTY_TYPE_SET = {
+  apartment: true,
+  house: true,
+  villa: true,
+  land: true,
+  commercial: true,
+  office: true,
+  studio: true,
+  maisonette: true,
+  warehouse: true,
+  hotel: true,
+  mixed_use: true,
+  parking: true,
+  storage: true,
+} as const satisfies Record<CanonicalPropertyType, true>;
+const CANONICAL_PROPERTY_TYPES = Object.keys(CANONICAL_PROPERTY_TYPE_SET) as [
+  CanonicalPropertyType,
+  ...CanonicalPropertyType[],
+];
+const canonicalPropertyTypeSchema = z.enum(CANONICAL_PROPERTY_TYPES);
+
+const finiteNumericInput = (min: number, max: number) =>
+  z.union([
+    z.number(),
+    z.string().trim().regex(/^-?(?:\d+\.?\d*|\.\d+)$/, "Invalid numeric property value"),
+  ]).transform((value) => typeof value === "number" ? value : Number(value))
+    .pipe(z.number().finite().min(min).max(max));
+
+const optionalNumericInput = (min: number, max: number) =>
+  z.preprocess(
+    (value) => value === "" || value === null ? undefined : value,
+    finiteNumericInput(min, max).optional(),
+  );
+
+const optionalText = (max: number) =>
+  z.preprocess(
+    (value) => value === null ? undefined : value,
+    z.string().trim().max(max).optional(),
+  );
+
+const listingAssistPropertySchema = z.object({
+  property_type: canonicalPropertyTypeSchema,
+  listing_type: z.enum(["sale", "rent", "auction", "open_house"]),
+  city: z.string().trim().min(1).max(120),
+  address: optionalText(240),
+  region: optionalText(120),
+  sqm: finiteNumericInput(0.1, 10_000_000),
+  bedrooms: optionalNumericInput(0, 100),
+  bathrooms: optionalNumericInput(0, 100),
+  floor: optionalNumericInput(-20, 300),
+  year_built: optionalNumericInput(1000, 2200),
+  energy_class: optionalText(20),
+  features: z.array(z.string().trim().min(1).max(80)).max(24).optional(),
+  condition: optionalText(80),
+}).strict();
+
+const listingAssistRequestSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("ping") }).strict(),
+  z.object({ type: z.literal("description"), property: listingAssistPropertySchema }).strict(),
+  z.object({ type: z.literal("price"), property: listingAssistPropertySchema }).strict(),
+]);
+
 const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider errors, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const { type, property } = body;
+    const body = await parseJsonBody(req, listingAssistRequestSchema);
+    const { type } = body;
 
     if (type === "ping") {
       return new Response(JSON.stringify({ ok: true, message: "listing-ai-assist is available" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const { property } = body;
 
     if (!hasAIProviderCredentials()) throw new Error("AI provider key required");
 
@@ -75,11 +142,6 @@ ${property.energy_class ? `Energy class: ${property.energy_class}` : ""}
 ${property.condition ? `Condition: ${property.condition}` : ""}
 ${property.features?.length ? `Key features: ${property.features.join(", ")}` : ""}
 ${property.listing_type === "rent" ? "Provide monthly rent estimate in EUR." : "Provide sale price estimate in EUR."}`;
-    } else {
-      return new Response(
-        JSON.stringify({ error: `Unsupported type: "${type}". Use "description", "price", or "ping".` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
     const response = await openAIChatCompletion({
@@ -116,6 +178,12 @@ ${property.listing_type === "rent" ? "Provide monthly rent estimate in EUR." : "
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    if (e instanceof SchemaValidationError) {
+      return new Response(JSON.stringify({ error: e.message, code: e.code, issues: e.issues }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     log.error("listing-ai-assist error", { err: e instanceof Error ? e.message : String(e) });
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
       status: 500,

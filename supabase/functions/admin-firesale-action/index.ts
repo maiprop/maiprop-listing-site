@@ -11,10 +11,12 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
+import { MAX_FIRE_SALE_AMOUNT_EUR } from "../_shared/firesale.ts";
 
 const log = createLogger("admin-firesale-action");
 const limiter = makeRateLimiter({
@@ -23,30 +25,76 @@ const limiter = makeRateLimiter({
   windowMs: 60_000,
 });
 
-type FiresaleAction = "update_pipeline_deal" | "set_investor_publication" | "update_interest_workflow";
-
-type FiresaleActionRequest = {
-  action?: unknown;
-  dealId?: unknown;
-  interestId?: unknown;
-  status?: unknown;
-  adminNotes?: unknown;
-  offerPrice?: unknown;
-  sellerResponse?: unknown;
-  sellerResponsePrice?: unknown;
-  published?: unknown;
-  reservationHours?: unknown;
-  verifyProof?: unknown;
-  adminNote?: unknown;
-  proofAmount?: unknown;
-};
-
-const UUID_RE = /^[0-9a-f-]{36}$/i;
-const ACTIONS = new Set<FiresaleAction>([
-  "update_pipeline_deal",
-  "set_investor_publication",
-  "update_interest_workflow",
-]);
+const optionalText = (field: string, maxLength: number) =>
+  z.preprocess(
+    (value) => {
+      if (value === null || value === undefined) return null;
+      if (typeof value !== "string") return value;
+      const trimmed = value.trim();
+      return trimmed.length === 0 ? null : trimmed;
+    },
+    z.string().max(maxLength, `Invalid ${field}`).nullable(),
+  ).optional();
+const optionalAmount = (field: string) =>
+  z.number()
+    .finite(`Invalid ${field}`)
+    .min(0, `Invalid ${field}`)
+    .max(MAX_FIRE_SALE_AMOUNT_EUR, `Invalid ${field}`)
+    .nullable()
+    .optional();
+const optionalSellerResponse = z.preprocess(
+  (value) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== "string") return value;
+    const normalized = value.trim().toLowerCase();
+    return normalized.length === 0 ? null : normalized;
+  },
+  z.enum(["accepted", "countered", "rejected"], {
+    error: "Invalid sellerResponse",
+  }).nullable(),
+).optional();
+const firesaleActionRequestSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("update_pipeline_deal"),
+    dealId: z.string().uuid("Invalid dealId"),
+    status: z.enum(["pending", "reviewed", "offer_sent", "closed"], {
+      error: "Invalid status",
+    }),
+    adminNotes: optionalText("adminNotes", 4_000),
+    offerPrice: optionalAmount("offerPrice"),
+    sellerResponse: optionalSellerResponse,
+    sellerResponsePrice: optionalAmount("sellerResponsePrice"),
+  }).strict(),
+  z.object({
+    action: z.literal("set_investor_publication"),
+    dealId: z.string().uuid("Invalid dealId"),
+    published: z.boolean({ error: "Invalid published" }),
+  }).strict(),
+  z.object({
+    action: z.literal("update_interest_workflow"),
+    interestId: z.string().uuid("Invalid interestId"),
+    status: z.enum([
+      "interested",
+      "prioritized",
+      "reserved",
+      "engaged",
+      "won",
+      "passed",
+      "expired",
+    ], { error: "Invalid status" }),
+    reservationHours: z.number()
+      .int("Invalid reservationHours")
+      .min(1, "Invalid reservationHours")
+      .max(24 * 30, "Invalid reservationHours")
+      .nullable()
+      .optional(),
+    verifyProof: z.boolean({ error: "Invalid verifyProof" }).optional().default(
+      false,
+    ),
+    adminNote: optionalText("adminNote", 2_000),
+    proofAmount: optionalAmount("proofAmount"),
+  }).strict(),
+], { error: "Invalid action" });
 
 const jsonResponse = (
   body: unknown,
@@ -58,59 +106,6 @@ const jsonResponse = (
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-function parseAction(value: unknown): FiresaleAction {
-  if (typeof value !== "string" || !ACTIONS.has(value as FiresaleAction)) {
-    throw new AuthError("Invalid action", 400);
-  }
-  return value as FiresaleAction;
-}
-
-function parseUuid(value: unknown, field: string): string {
-  if (typeof value !== "string" || !UUID_RE.test(value)) {
-    throw new AuthError(`Invalid ${field}`, 400);
-  }
-  return value;
-}
-
-function optionalText(value: unknown, field: string): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "string") throw new AuthError(`Invalid ${field}`, 400);
-  return value;
-}
-
-function requiredText(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new AuthError(`Invalid ${field}`, 400);
-  }
-  return value;
-}
-
-function optionalNumber(value: unknown, field: string): number | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new AuthError(`Invalid ${field}`, 400);
-  }
-  return value;
-}
-
-function optionalInteger(value: unknown, field: string): number | null {
-  const parsed = optionalNumber(value, field);
-  if (parsed === null) return null;
-  if (!Number.isInteger(parsed)) throw new AuthError(`Invalid ${field}`, 400);
-  return parsed;
-}
-
-function requiredBoolean(value: unknown, field: string): boolean {
-  if (typeof value !== "boolean") throw new AuthError(`Invalid ${field}`, 400);
-  return value;
-}
-
-function optionalBoolean(value: unknown): boolean {
-  if (value === null || value === undefined) return false;
-  if (typeof value !== "boolean") throw new AuthError("Invalid verifyProof", 400);
-  return value;
-}
-
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (err && typeof err === "object") {
@@ -121,7 +116,9 @@ function errorMessage(err: unknown): string {
 }
 
 function statusForRpcError(message: string): number {
-  if (message.includes("forbidden") || message.includes("admin_only")) return 403;
+  if (message.includes("forbidden") || message.includes("admin_only")) {
+    return 403;
+  }
   if (message.includes("not_found")) return 404;
   return 400;
 }
@@ -135,19 +132,21 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405, corsHeaders);
   }
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
-
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  if (!serviceRoleKey || !supabaseUrl) {
-    return jsonResponse({ error: "Service unavailable" }, 503, corsHeaders);
-  }
-
   try {
-    const body = await req.json().catch(() => ({})) as FiresaleActionRequest;
-    const action = parseAction(body.action);
+    const body = await parseJsonBody(req, firesaleActionRequestSchema);
+    const action = body.action;
+
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "anonymous";
+    if (await limiter.isLimited(ip)) {
+      return tooManyRequestsResponse(corsHeaders);
+    }
+
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    if (!serviceRoleKey || !supabaseUrl) {
+      return jsonResponse({ error: "Service unavailable" }, 503, corsHeaders);
+    }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
@@ -161,43 +160,58 @@ Deno.serve(async (req) => {
       rpcName = "admin_update_firesale_pipeline_deal_for_user";
       rpcArgs = {
         _admin_user_id: caller.id,
-        p_deal_id: parseUuid(body.dealId, "dealId"),
-        p_status: requiredText(body.status, "status"),
-        p_admin_notes: optionalText(body.adminNotes, "adminNotes"),
-        p_offer_price: optionalNumber(body.offerPrice, "offerPrice"),
-        p_seller_response: optionalText(body.sellerResponse, "sellerResponse"),
-        p_seller_response_price: optionalNumber(body.sellerResponsePrice, "sellerResponsePrice"),
+        p_deal_id: body.dealId,
+        p_status: body.status,
+        p_admin_notes: body.adminNotes ?? null,
+        p_offer_price: body.offerPrice ?? null,
+        p_seller_response: body.sellerResponse ?? null,
+        p_seller_response_price: body.sellerResponsePrice ?? null,
       };
     } else if (action === "set_investor_publication") {
       rpcName = "admin_set_firesale_investor_publication_for_user";
       rpcArgs = {
         _admin_user_id: caller.id,
-        p_deal_id: parseUuid(body.dealId, "dealId"),
-        p_published: requiredBoolean(body.published, "published"),
+        p_deal_id: body.dealId,
+        p_published: body.published,
       };
     } else {
       rpcName = "admin_update_firesale_interest_workflow_for_user";
       rpcArgs = {
         _admin_user_id: caller.id,
-        p_interest_id: parseUuid(body.interestId, "interestId"),
-        p_status: requiredText(body.status, "status"),
-        p_reservation_hours: optionalInteger(body.reservationHours, "reservationHours"),
-        p_verify_pof: optionalBoolean(body.verifyProof),
-        p_admin_note: optionalText(body.adminNote, "adminNote"),
-        p_proof_amount: optionalNumber(body.proofAmount, "proofAmount"),
+        p_interest_id: body.interestId,
+        p_status: body.status,
+        p_reservation_hours: body.reservationHours ?? null,
+        p_verify_pof: body.verifyProof,
+        p_admin_note: body.adminNote ?? null,
+        p_proof_amount: body.proofAmount ?? null,
       };
     }
 
     const { data, error } = await supabase.rpc(rpcName, rpcArgs);
     if (error) {
       const message = errorMessage(error);
-      log.warn("admin firesale action rejected", { action, adminId: caller.id, err: message });
-      return jsonResponse({ data: null, error: message }, statusForRpcError(message), corsHeaders);
+      log.warn("admin firesale action rejected", {
+        action,
+        adminId: caller.id,
+        err: message,
+      });
+      return jsonResponse(
+        { data: null, error: message },
+        statusForRpcError(message),
+        corsHeaders,
+      );
     }
 
     log.info("admin firesale action completed", { action, adminId: caller.id });
     return jsonResponse({ data, error: null }, 200, corsHeaders);
   } catch (err: unknown) {
+    if (err instanceof SchemaValidationError) {
+      return jsonResponse(
+        { error: err.message, code: err.code, issues: err.issues },
+        400,
+        corsHeaders,
+      );
+    }
     const status = err instanceof AuthError ? err.status : 500;
     const message = errorMessage(err);
     log.warn("admin firesale action failed", { status, err: message });

@@ -3,11 +3,63 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
+import type { Database } from "../../../src/integrations/supabase/types.ts";
 
 const log = createLogger("smart-filters");
 
 const BUCKET = "smart-filters";
 const smartFiltersLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
+type CanonicalPropertyType = Database["public"]["Enums"]["property_type"];
+
+// Current app catalogue plus the documented legacy commercial values "office" and "other".
+const PROPERTY_SUBTYPES_BY_TYPE = {
+  apartment: [
+    "studio", "1bedroom", "2bedroom", "3bedroom", "4bedroom", "ground_floor", "basement",
+    "penthouse", "loft", "maisonette",
+  ],
+  house: ["detached", "semi_detached", "terraced", "townhouse", "bungalow", "neoclassical", "traditional"],
+  villa: ["seafront", "hilltop", "countryside", "island", "gated", "golden_visa"],
+  land: ["buildable", "agricultural", "coastal", "forest", "industrial", "tourism"],
+  commercial: [
+    "shop", "office", "warehouse", "hotel", "restaurant", "showroom", "clinic", "industrial", "other",
+    "craft_workshop", "commercial_building", "hall", "mixed_use", "office_private", "office_open_plan",
+    "office_coworking", "office_business", "office_floor", "other_commercial",
+  ],
+  office: ["private_office", "open_plan", "coworking", "business_centre", "floor", "converted"],
+  studio: [],
+  maisonette: [],
+  warehouse: [],
+  hotel: [],
+  mixed_use: [],
+  parking: [],
+  storage: [],
+} as const satisfies Record<CanonicalPropertyType, readonly string[]>;
+
+const CANONICAL_PROPERTY_TYPES = Object.keys(PROPERTY_SUBTYPES_BY_TYPE) as [
+  CanonicalPropertyType,
+  ...CanonicalPropertyType[],
+];
+const ALL_PROPERTY_SUBTYPES = [
+  ...new Set(Object.values(PROPERTY_SUBTYPES_BY_TYPE).flat()),
+] as [string, ...string[]];
+const propertyTypeSchema = z.enum(CANONICAL_PROPERTY_TYPES);
+const propertySubtypeSchema = z.enum(ALL_PROPERTY_SUBTYPES);
+const smartFiltersRequestSchema = z.object({
+  type: propertyTypeSchema,
+  subtype: propertySubtypeSchema.nullable().optional(),
+  listing_type: z.enum(["sale", "rent", "auction", "firesale", "open_house", "new_build"]).nullable().optional(),
+}).strict().superRefine((request, context) => {
+  if (request.subtype == null) return;
+  const allowedSubtypes = PROPERTY_SUBTYPES_BY_TYPE[request.type] as readonly string[];
+  if (!allowedSubtypes.includes(request.subtype)) {
+    context.addIssue({
+      code: "custom",
+      path: ["subtype"],
+      message: `Invalid subtype for property type ${request.type}`,
+    });
+  }
+});
 
 // All available boolean feature fields on listings
 const AVAILABLE_FEATURES = [
@@ -107,14 +159,13 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
-  if (quota.errorResponse) return quota.errorResponse;
-
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
-  if (await smartFiltersLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   try {
-    const { type, subtype, listing_type } = await req.json();
+    const { type, subtype, listing_type } = await parseJsonBody(req, smartFiltersRequestSchema);
+    const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+    if (quota.errorResponse) return quota.errorResponse;
+
+    const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+    if (await smartFiltersLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
     const availableFeatureKeys = AVAILABLE_FEATURES.map((f) => f.key).join(", ");
     const sectionKeys = AVAILABLE_SECTIONS.join(", ");
@@ -193,6 +244,12 @@ Rules:
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    if (e instanceof SchemaValidationError) {
+      return new Response(JSON.stringify({ error: e.message, code: e.code, issues: e.issues }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     log.error("smart-filters error", { err: e instanceof Error ? e.message : String(e) });
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
       status: 500,

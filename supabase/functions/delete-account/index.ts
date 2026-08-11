@@ -37,7 +37,7 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
-import { createStripeClient } from "../_shared/stripeClient.ts";
+import { createVerifiedStripeClient } from "../_shared/stripeClient.ts";
 
 const log = createLogger("delete-account");
 const limiter = makeRateLimiter({ bucket: "delete-account", maxRequests: 3, windowMs: 60_000 });
@@ -523,7 +523,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates c
         deleteOwnedListings(supabase as unknown as MutationClient, userId),
       cancelSubscriptions: async (userId) => {
         if (!stripeKey) throw new Error("stripe_configuration_missing");
-        stripe ??= createStripeClient(stripeKey) as unknown as StripeCleanupClient;
+        stripe ??= await createVerifiedStripeClient(stripeKey) as unknown as StripeCleanupClient;
         await cancelUserSubscriptions(
           supabase as unknown as BillingCustomerClient,
           stripe,

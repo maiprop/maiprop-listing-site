@@ -271,6 +271,15 @@ export function createStripeClient(stripeKey?: string): Stripe {
   return new Stripe(key, { apiVersion: STRIPE_API_VERSION });
 }
 
+export async function createVerifiedStripeClient(
+  stripeKey?: string,
+  options: StripeAccountIdentityOptions = {},
+): Promise<Stripe> {
+  const stripe = createStripeClient(stripeKey);
+  await verifyStripeAccountIdentity(stripe, options);
+  return stripe;
+}
+
 export function stripeLivemodeFromRuntime(
   runtimeMode: StripeRuntimeMode = getStripeRuntimeMode(),
 ): boolean {

@@ -16,7 +16,7 @@ import {
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 import {
-  createStripeClient,
+  createVerifiedStripeClient,
   resolveStripeSoftwareTaxCode,
   STRIPE_DEFAULT_PRODUCT_TAX_CODE,
   STRIPE_DEFAULT_TAX_BEHAVIOR,
@@ -443,7 +443,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       throw new Error("Failed to fetch configs: " + configsError.message);
     }
 
-    const stripe = createStripeClient(stripeKey);
+    const stripe = await createVerifiedStripeClient(stripeKey);
     const results: SyncResult[] = [];
 
     const typedConfigs = (configs ?? []) as PricingConfigRow[];

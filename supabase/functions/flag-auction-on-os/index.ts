@@ -13,14 +13,27 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { SchemaValidationError } from "../_shared/schema.ts";
+import { parseFlagAuctionRequest } from "./request.ts";
 
 const log = createLogger("flag-auction-on-os");
-const limiter = makeRateLimiter({ bucket: "flag-auction-on-os", maxRequests: 10, windowMs: 60_000 });
+const limiter = makeRateLimiter({
+  bucket: "flag-auction-on-os",
+  maxRequests: 10,
+  windowMs: 60_000,
+});
 
-async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
+async function getOsToken(
+  baseUrl: string,
+  email: string,
+  password: string,
+): Promise<string> {
   const res = await fetchWithTimeout(
     `${baseUrl}/auth/login`,
     {
@@ -33,7 +46,9 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
   const json = await res.json();
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
   if (!token) {
-    throw new Error(`OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 200)}`);
+    throw new Error(
+      `OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 200)}`,
+    );
   }
   return token;
 }
@@ -50,14 +65,53 @@ Deno.serve(async (req) => {
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  let requestBody: Awaited<ReturnType<typeof parseFlagAuctionRequest>>;
+  try {
+    requestBody = await parseFlagAuctionRequest(req);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (err instanceof SchemaValidationError) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: message,
+          code: err.code,
+          issues: err.issues,
+        }),
+        {
+          status: err.code === "payload_too_large" ? 413 : 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    return new Response(
+      JSON.stringify({ ok: false, error: message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(
       JSON.stringify({ error: "Missing or invalid Authorization header" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
@@ -65,32 +119,21 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
-  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
+  const { data: { user }, error: authError } = await supabase.auth.getUser(
+    authHeader.slice(7),
+  );
   if (authError || !user) {
     return new Response(
       JSON.stringify({ error: "Invalid or expired token" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const { listing_id, message } = body as { listing_id?: string; message?: string };
-
-    if (!listing_id) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "listing_id is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // FlagAuctionRequest.message: maxLength 1000
-    if (message && message.length > 1000) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "message must be 1000 characters or fewer" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    const { listing_id, message } = requestBody;
 
     // Resolve Hub listing → OS auction ID via the os_auction: tag
     const { data: listing, error: listError } = await supabase
@@ -102,14 +145,20 @@ Deno.serve(async (req) => {
     if (listError || !listing) {
       return new Response(
         JSON.stringify({ ok: false, error: "Listing not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     if (listing.listing_type !== "auction") {
       return new Response(
         JSON.stringify({ ok: false, error: "Listing is not an auction" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -118,7 +167,11 @@ Deno.serve(async (req) => {
       // Gracefully acknowledge the flag even if no OS ID exists
       log.info("Flag submitted but no OS auction ID found", { listing_id });
       return new Response(
-        JSON.stringify({ ok: true, flagged: false, reason: "No OS auction ID for this listing" }),
+        JSON.stringify({
+          ok: true,
+          flagged: false,
+          reason: "No OS auction ID for this listing",
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -130,7 +183,11 @@ Deno.serve(async (req) => {
     if (!OS_URL || !OS_EMAIL || !OS_PASS) {
       log.warn("OS credentials not configured");
       return new Response(
-        JSON.stringify({ ok: true, flagged: false, reason: "OS credentials not configured" }),
+        JSON.stringify({
+          ok: true,
+          flagged: false,
+          reason: "OS credentials not configured",
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -152,10 +209,17 @@ Deno.serve(async (req) => {
 
     if (!res.ok) {
       const text = await res.text();
-      log.warn("OS flag returned non-ok", { status: res.status, body: text.slice(0, 200) });
+      log.warn("OS flag returned non-ok", {
+        status: res.status,
+        body: text.slice(0, 200),
+      });
       // Treat as success from user's perspective — the intent was recorded
       return new Response(
-        JSON.stringify({ ok: true, flagged: false, reason: `OS returned ${res.status}` }),
+        JSON.stringify({
+          ok: true,
+          flagged: false,
+          reason: `OS returned ${res.status}`,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -166,11 +230,30 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: unknown) {
-    log.error("flag-auction error", { err: err instanceof Error ? err.message : String(err) });
+    log.error("flag-auction error", {
+      err: err instanceof Error ? err.message : String(err),
+    });
     const message = err instanceof Error ? err.message : "Unknown error";
+    if (err instanceof SchemaValidationError) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: message,
+          code: err.code,
+          issues: err.issues,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
     return new Response(
       JSON.stringify({ ok: false, error: message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

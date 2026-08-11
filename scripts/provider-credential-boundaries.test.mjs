@@ -7,6 +7,7 @@ const root = resolve(import.meta.dirname, "..");
 const workflow = (name) =>
   readFileSync(resolve(root, ".github", "workflows", name), "utf8");
 const parsedWorkflow = (name) => yaml.load(workflow(name));
+const source = (path) => readFileSync(resolve(root, path), "utf8");
 
 describe("provider credential boundaries", () => {
   it("keeps the scheduled live smoke unauthenticated and read-only", () => {
@@ -73,5 +74,27 @@ describe("provider credential boundaries", () => {
     );
     expect(capture.run).toContain("assert_current_main");
     expect(capture.run.match(/assert_current_main/g)).toHaveLength(3);
+  });
+
+  it("verifies Stripe account identity before every non-webhook billing path", () => {
+    const billingPaths = [
+      "supabase/functions/apply-data-input-credit/index.ts",
+      "supabase/functions/check-subscription/index.ts",
+      "supabase/functions/create-checkout/index.ts",
+      "supabase/functions/create-investor-payment/index.ts",
+      "supabase/functions/create-stripe-price/index.ts",
+      "supabase/functions/customer-portal/index.ts",
+      "supabase/functions/delete-account/index.ts",
+      "supabase/functions/get-invoices/index.ts",
+      "supabase/functions/log-role-switch/index.ts",
+      "supabase/functions/reconcile-role-switch-billing/index.ts",
+      "supabase/functions/sync-stripe-pricing/index.ts",
+    ];
+
+    for (const path of billingPaths) {
+      const billingSource = source(path);
+      expect(billingSource, path).toContain("createVerifiedStripeClient");
+      expect(billingSource, path).not.toMatch(/\bcreateStripeClient\(/);
+    }
   });
 });

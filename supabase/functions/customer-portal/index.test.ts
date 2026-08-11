@@ -3,7 +3,7 @@
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { captureHandler, req, authedReq } from "../_shared/testUtils.ts";
+import { captureHandler, req } from "../_shared/testUtils.ts";
 
 const { handler, restore } = await captureHandler(import.meta.url, "./index.ts");
 
@@ -11,6 +11,26 @@ Deno.test("OPTIONS preflight returns 200", async () => {
   const res = await handler(req("OPTIONS"));
   assertEquals(res.status, 200);
   assertEquals(res.headers.get("Access-Control-Allow-Origin"), "https://maiprop.co");
+});
+
+Deno.test("non-POST portal requests are rejected before provider access", async () => {
+  const originalFetch = globalThis.fetch;
+  let downstreamCalls = 0;
+  globalThis.fetch = (() => {
+    downstreamCalls += 1;
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("PUT", { action: "manage" }, {
+      authorization: "Bearer test-valid-token",
+      "x-forwarded-for": crypto.randomUUID(),
+    }));
+    assertEquals(res.status, 405);
+    assertEquals(downstreamCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 Deno.test("missing Authorization returns 401 with error message", async () => {
@@ -25,8 +45,52 @@ Deno.test("missing Authorization returns 401 with error message", async () => {
 
 Deno.test("rate limiter allows < 10 requests from same IP", async () => {
   // Just verify the first request hits auth (not rate limit)
-  const res = await handler(authedReq("POST"));
+  const res = await handler(req("POST", undefined, {
+    "x-forwarded-for": crypto.randomUUID(),
+  }));
   assertEquals(res.status !== 429, true);
+});
+
+Deno.test("malformed and invalid portal actions return structured 400 before provider access", async () => {
+  const originalFetch = globalThis.fetch;
+  let downstreamCalls = 0;
+  globalThis.fetch = (() => {
+    downstreamCalls += 1;
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    const malformed = await handler(new Request("https://functions.test/customer-portal", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-valid-token",
+        "content-type": "application/json",
+        "x-forwarded-for": crypto.randomUUID(),
+      },
+      body: "{",
+    }));
+    assertEquals(malformed.status, 400);
+    const malformedBody = await malformed.json();
+    assertEquals(malformedBody.code, "invalid_json");
+
+    for (const body of [
+      { action: "refund_subscription" },
+      { action: "subscription_cancel", subscription_id: `sub_${"x".repeat(252)}` },
+      { action: "manage", unexpected: true },
+    ]) {
+      const res = await handler(req("POST", body, {
+        authorization: "Bearer test-valid-token",
+        "x-forwarded-for": crypto.randomUUID(),
+      }));
+      assertEquals(res.status, 400);
+      const payload = await res.json();
+      assertEquals(payload.code, "validation_error");
+      assertEquals(Array.isArray(payload.issues), true);
+    }
+    assertEquals(downstreamCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 Deno.test("portal return URL uses the allowlisted Checkout origin resolver", async () => {
