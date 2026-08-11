@@ -1,11 +1,17 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@supabase/functions-js@*": "2.104.1"
+    "jsr:@supabase/functions-js@*": "2.104.1",
+    "npm:stripe@22.3.0": "22.3.0"
   },
   "jsr": {
     "@supabase/functions-js@2.104.1": {
       "integrity": "69d68f90f659f3b369edd6e5b1b0cb05790777caf66f3f60fbd56b2644a84a86"
+    }
+  },
+  "npm": {
+    "stripe@22.3.0": {
+      "integrity": "sha512-ypO6xjVrMWs9SmIMeHr8naCx3dAQ0clxMdUTxn7Ejd7hmY9meBGfE+N4pVHkf9sUNebAHp6uJo6mV3GxDIc2cA=="
     }
   },
   "redirects": {
