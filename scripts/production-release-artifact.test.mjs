@@ -130,6 +130,33 @@ describe("immutable production release artifact", () => {
     expect(verifyReleaseArtifact(out)).toEqual(manifest);
   });
 
+  it("packages ESM modules in Supabase Edge Function source", () => {
+    const { root, dist, supabase, out } = fixture();
+    const esmModule = join(
+      supabase,
+      "functions",
+      "alpha",
+      "openapi.test.mjs",
+    );
+    writeFileSync(esmModule, "export const contract = true;\n");
+
+    const manifest = createReleaseArtifact({
+      distDir: dist,
+      sbomPath: join(root, "sbom.cdx.json"),
+      supabaseDir: supabase,
+      outDir: out,
+      releaseSha: sha,
+      sourceTree: sha,
+      runId: "123",
+      runAttempt: "2",
+    });
+
+    expect(manifest.supabase_files.map((record) => record.path)).toContain(
+      "supabase/functions/alpha/openapi.test.mjs",
+    );
+    expect(verifyReleaseArtifact(out)).toEqual(manifest);
+  });
+
   it("rejects unexpected deploy source paths", () => {
     const { root, dist, supabase, out } = fixture();
     writeFileSync(

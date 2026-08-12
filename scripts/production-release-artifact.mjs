@@ -19,7 +19,13 @@ const MANIFEST_NAME = "release-manifest.json";
 const MARKER_NAME = "deploy-version.json";
 const MIGRATION_FILE = /^\d{14}_[a-z0-9_-]+\.sql$/;
 const FUNCTION_DIRECTORY = /^[A-Za-z0-9_-]+$/;
-const FUNCTION_SOURCE_EXTENSIONS = new Set([".json", ".lock", ".ts", ".tsx"]);
+const FUNCTION_SOURCE_EXTENSIONS = new Set([
+  ".json",
+  ".lock",
+  ".mjs",
+  ".ts",
+  ".tsx",
+]);
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -89,7 +95,7 @@ function assertPackagedSupabasePath(path) {
     return;
   }
   if (
-    /^supabase\/functions\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(?:json|lock|ts|tsx)$/.test(
+    /^supabase\/functions\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(?:json|lock|mjs|ts|tsx)$/.test(
       path,
     )
   ) {
