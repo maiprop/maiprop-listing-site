@@ -6,6 +6,26 @@
       "reason": "Supabase Management API reports this setting is available only on Supabase Pro plans and up for the current project.",
       "next_action": "Upgrade the Supabase project plan or accept the warning with compensating app-side password checks.",
       "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "rls_enabled_no_policy",
+        "cache_key_contains": "public_storage_cleanup_jobs"
+      },
+      "owner": "storage/platform",
+      "reason": "The cleanup outbox is service-role-only: PUBLIC, anon, and authenticated have no table privileges, while RLS remains enabled as defense in depth.",
+      "next_action": "Keep grants service-role-only and retain storage cleanup boundary tests whenever the outbox contract changes.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "rls_enabled_no_policy",
+        "cache_key_contains": "public_storage_cleanup_invocations"
+      },
+      "owner": "storage/platform",
+      "reason": "Invocation reconciliation is service-role-only: PUBLIC, anon, and authenticated have no table privileges, while RLS remains enabled as defense in depth.",
+      "next_action": "Keep grants service-role-only and retain invocation lifecycle tests whenever reconciliation changes.",
+      "review_cadence": "monthly"
     }
   ],
   "review": [
@@ -41,6 +61,26 @@
       "owner": "listings/security",
       "reason": "Authenticated listing cards consume the same constrained public profile projection as anonymous cards. The RPC does not return plan, pricing, billing, organization, or authoritative role data.",
       "next_action": "Keep RPC output and execute grants covered by public API and RLS tests; remove browser execution if card enrichment moves behind a service boundary.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "anon_security_definer_function_executable",
+        "cache_key_contains": "public_get_public_professionals"
+      },
+      "owner": "professionals/security",
+      "reason": "The public directory function returns a fixed allowlist of marketplace fields and excludes moderation, calendar, and internal notes while raw professional rows remain owner/admin-only.",
+      "next_action": "Keep the output allowlist, raw-table denial policy, and invoker-view regression tests as hard release gates.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "authenticated_security_definer_function_executable",
+        "cache_key_contains": "public_get_public_professionals"
+      },
+      "owner": "professionals/security",
+      "reason": "Authenticated directory readers use the same constrained public projection without receiving raw professional moderation or calendar fields.",
+      "next_action": "Keep the output allowlist, raw-table denial policy, and invoker-view regression tests as hard release gates.",
       "review_cadence": "monthly"
     },
     {

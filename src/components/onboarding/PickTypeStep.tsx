@@ -14,6 +14,8 @@ interface Props {
   onPendingChange: (id: string | null) => void;
   loading: boolean;
   authLoading: boolean;
+  /** Restricts destination choices during a destination-bound role switch. */
+  allowedParticipantIds?: readonly string[];
   /** Called when developer card is clicked — parent handles billing gate + navigation */
   onDeveloperImmediate: () => void;
   /** Called when professional card is clicked — parent handles billing gate + navigation */
@@ -38,6 +40,7 @@ export function PickTypeStep({
   onPendingChange,
   loading,
   authLoading,
+  allowedParticipantIds,
   onDeveloperImmediate,
   onProfessionalImmediate,
   onConfirm,
@@ -93,6 +96,9 @@ export function PickTypeStep({
       immediate: onProfessionalImmediate,
     },
   ];
+  const visibleCards = allowedParticipantIds
+    ? flatCards.filter((card) => allowedParticipantIds.includes(card.id))
+    : flatCards;
 
   return (
     <div className={cn(pendingCardId && "pb-24 md:pb-0")}>
@@ -109,7 +115,7 @@ export function PickTypeStep({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {flatCards.map((card) => {
+        {visibleCards.map((card) => {
           const c = colorMap[card.color] ?? colorMap.blue;
           const isSelected = pendingCardId === card.id;
           return (
@@ -158,7 +164,7 @@ export function PickTypeStep({
         })}
       </div>
 
-      {pendingCardId && !flatCards.find((c) => c.id === pendingCardId)?.immediate && (
+      {pendingCardId && !visibleCards.find((c) => c.id === pendingCardId)?.immediate && (
         <div className="fixed inset-x-4 bottom-4 z-40 md:static md:inset-auto md:z-auto md:mt-5">
           <Button
             className="w-full bg-gradient-primary border-0 text-primary-foreground"
@@ -170,7 +176,7 @@ export function PickTypeStep({
             ) : (
               <ArrowRight className="w-4 h-4 mr-2" />
             )}
-            {isGreek ? "Συνέχεια ως" : "Continue as"} {flatCards.find((c) => c.id === pendingCardId)?.label}
+            {isGreek ? "Συνέχεια ως" : "Continue as"} {visibleCards.find((c) => c.id === pendingCardId)?.label}
           </Button>
         </div>
       )}

@@ -2,12 +2,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
-import { logger } from "@/lib/logger";
 import { getOwnerParticipantType } from "@/lib/participantConfig";
 import { CATALOG_STATIC_QUERY_STALE_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
-import { fetchPublicApi, isPublicApiAbort } from "@/lib/publicApi";
+import { fetchPublicApi } from "@/lib/publicApi";
 import { getListingLocationSearchTokenGroups } from "@/lib/location/locationSearchSemantics";
 import { readInitialListingsPage } from "@/lib/homepageSnapshotCache";
+import type { NewBuildProject } from "@/lib/newBuildProjectDetail";
 
 export {
   useCreateListing,
@@ -97,133 +97,13 @@ const CATALOG_TYPES_WITH_NEW_BUILD: Partial<Record<Enums<"listing_type">, Enums<
   sale: ["sale", "new_build"],
 };
 
-const LISTING_DETAIL_SCALAR_COLUMNS = [
-  "id",
-  "owner_id",
-  "created_at",
-  "updated_at",
-  "status",
-  "title",
-  "description",
-  "address",
-  "city",
-  "region",
-  "postal_code",
-  "price",
-  "price_per_sqm",
-  "sqm",
-  "bedrooms",
-  "bathrooms",
-  "wc_count",
-  "kitchens",
-  "living_rooms",
-  "floor",
-  "total_floors",
-  "levels",
-  "year_built",
-  "energy_class",
-  "cover_image_url",
-  "property_type",
-  "listing_type",
-  "commercial_subtype",
-  "heating_system",
-  "construction_status",
-  "available_from",
-  "deposit_months",
-  "monthly_expenses",
-  "agent_fee_included",
-  "min_rental_months",
-  "open_house_date",
-  "open_house_transaction_type",
-  "auction_date",
-  "auction_starting_bid",
-  "auction_court",
-  "website_url",
-  "ai_score",
-  "views_count",
-  "tags",
-  "has_video_tour",
-  "has_virtual_tour",
-  "is_featured",
-  "featured_until",
-  "priority_placement",
-  "priority_until",
-  "is_pre_sale",
-  "walkability_score",
-  "safety_score",
-  "noise_score",
-  "latitude",
-  "longitude",
-  "distance_from_city",
-  "distance_from_sea",
-  "plot_surface",
-  "plot_depth",
-  "coverage_ratio",
-  "building_allowance",
-  "facade_length",
-  "floor_height",
-  "slope",
-  "zone_type",
-  "road_type",
-  "land_use",
-  "is_buildable",
-  "is_corner",
-  "is_neoclassical",
-  "is_penthouse",
-  "is_preserved",
-  "within_city_plan",
-  "within_settlement",
-  "short_term_rental",
-  "suitable_commercial_use",
-  "suitable_holiday",
-  "suitable_investment",
-  "suitable_student",
-  "pets_allowed",
-  "has_ac",
-  "has_alarm",
-  "has_attic",
-  "has_awning",
-  "has_balcony",
-  "has_cctv",
-  "has_disability_access",
-  "has_double_glazing",
-  "has_electricity_supply",
-  "has_elevator",
-  "has_equipped",
-  "has_facade",
-  "has_fireplace",
-  "has_furnished",
-  "has_garden",
-  "has_internal_staircase",
-  "has_land_concession",
-  "has_loading_dock",
-  "has_night_power",
-  "has_painted",
-  "has_parking",
-  "has_pool",
-  "has_satellite",
-  "has_secure_door",
-  "has_security",
-  "has_smart_home",
-  "has_solar_water",
-  "has_storage",
-  "has_structured_cabling",
-  "has_three_phase_power",
-  "has_underfloor_heating",
-  "has_view",
-  "has_water_supply",
-  "has_window_screens",
-];
-const PUBLIC_LISTING_DETAIL_SELECT = [
-  ...LISTING_DETAIL_SCALAR_COLUMNS,
-  "listing_images:listing_images_detail",
-].join(",");
-
 /**
  * A listings row augmented with joined tables and computed fields added by useListing().
  * Using this type eliminates type casting in consuming components.
  */
 export type ListingWithJoins = Database["public"]["Tables"]["listings"]["Row"] & {
+  /** Immutable catalogue publication that produced this public row. */
+  publicationId?: number;
   /** Images joined from listing_images table */
   listing_images: { url: string; sort_order: number }[];
   /** Owner profile joined from profiles_public */
@@ -240,6 +120,9 @@ export type ListingWithJoins = Database["public"]["Tables"]["listings"]["Row"] &
   ownerIsPro: boolean;
   /** Participant role of the owner (agent vs private seller) */
   ownerParticipantType: "agent" | "seller" | null;
+  /** Public project detail attached to canonical new-build publications. */
+  project?: NewBuildProject | null;
+  projects?: NewBuildProject | null;
   /** Score columns stored by neighbourhood-report edge function (not in generated types yet) */
   walkability_score?: number | null;
   safety_score?: number | null;
@@ -251,10 +134,15 @@ export type ListingsFilters = {
   location_lat?: number;
   location_lng?: number;
   location_radius_m?: number;
+  boundsWest?: number;
+  boundsSouth?: number;
+  boundsEast?: number;
+  boundsNorth?: number;
   listing_type?: string;
   property_type?: string;
   status?: string;
   owner_id?: string;
+  personalOnly?: boolean;
   includeAuctions?: boolean;
   limit?: number;
   page?: number;
@@ -277,12 +165,17 @@ export type ListingsFilters = {
   commercial_subtype?: string;
   is_pre_sale?: boolean;
   is_off_market?: boolean;
+  has_video_tour?: boolean;
+  has_virtual_tour?: boolean;
+  ai_score_min?: number;
+  walkability_min?: number;
   features?: string[];
   sort?: "featured" | "newest" | "price-asc" | "price-desc" | "ai-score" | "views";
 };
 
 type ListingsQueryScope = {
   publicScope?: boolean;
+  manageableScope?: boolean;
 };
 
 type AbortableQuery<T> = T & { abortSignal?: (signal: AbortSignal) => T };
@@ -337,14 +230,18 @@ function listingLocationBounds(filters?: ListingsFilters): LocationBounds | null
  */
 export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize = PAGE_SIZE, scope: ListingsQueryScope = {}) => { // skipcq: JS-R1005 - Listing filters intentionally map one public search model onto Supabase query clauses.
   const sort = filters?.sort ?? "featured";
-  const ownerScoped = Boolean(filters?.owner_id) && !scope.publicScope;
+  const managementScoped = (Boolean(filters?.owner_id) || Boolean(scope.manageableScope)) && !scope.publicScope;
   const publicQuery = supabase
     .rpc("get_public_listing_catalogue")
     .select(PUBLIC_LISTING_CARD_SELECT);
   let query = publicQuery;
-  if (ownerScoped) {
+  if (managementScoped) {
     const ownerQuery = supabase
-      .rpc("get_listing_management_catalogue")
+      .rpc(
+        scope.manageableScope
+          ? "get_manageable_listing_catalogue"
+          : "get_listing_management_catalogue",
+      )
       .select(LISTING_MANAGEMENT_CARD_SELECT);
     query = ownerQuery as unknown as typeof publicQuery;
   }
@@ -387,13 +284,14 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
     const listingType = filters.listing_type as Enums<"listing_type">;
     const catalogTypes = CATALOG_TYPES_WITH_NEW_BUILD[listingType];
     query = catalogTypes ? query.in("listing_type", catalogTypes) : query.eq("listing_type", listingType);
-  } else if (!ownerScoped && !filters?.includeAuctions) {
+  } else if (!managementScoped && !filters?.includeAuctions) {
     query = query.in("listing_type", ["sale", "rent", "firesale", "new_build"] as Enums<"listing_type">[]);
   }
   if (filters?.property_type) query = query.eq("property_type", filters.property_type as Enums<"property_type">);
   if (filters?.owner_id) query = query.eq("owner_id", filters.owner_id);
+  if (filters?.personalOnly) query = query.is("organization_id", null);
   // Always apply status filter; for owner queries don't default to 'active' so all own listings show
-  if (ownerScoped) {
+  if (managementScoped) {
     if (filters?.status) query = query.eq("status", filters.status as Enums<"listing_status">);
   } else {
     query = query.eq("status", (filters?.status || "active") as Enums<"listing_status">);
@@ -419,10 +317,14 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   if (filters?.heating_system) query = query.eq("heating_system", filters.heating_system);
   if (filters?.construction_status) query = query.eq("construction_status", filters.construction_status);
   if (filters?.commercial_subtype) query = query.eq("commercial_subtype", filters.commercial_subtype);
+  if (filters?.has_video_tour) query = query.eq("has_video_tour", true);
+  if (filters?.has_virtual_tour) query = query.eq("has_virtual_tour", true);
+  if (filters?.ai_score_min != null) query = query.gte("ai_score", filters.ai_score_min);
+  if (filters?.walkability_min != null) query = query.gte("walkability_score", filters.walkability_min);
   if (filters?.is_pre_sale === true && !filters?.listing_type) {
     query = query.eq("listing_type", "new_build" as Enums<"listing_type">);
   }
-  if (ownerScoped && filters?.is_off_market === true) query = query.eq("is_off_market", true);
+  if (managementScoped && filters?.is_off_market === true) query = query.eq("is_off_market", true);
   if (filters?.energy_class?.length) query = query.in("energy_class", filters.energy_class);
 
   // Feature booleans — only allow known DB column names to prevent column injection
@@ -450,6 +352,7 @@ type PublicListingsResponse = {
   page: number;
   pageSize: number;
   offset?: number;
+  publicationId?: number;
 };
 
 type ListingsPageParam = {
@@ -507,13 +410,19 @@ function getDefaultCatalogueType(filters?: ListingsFilters): "sale" | "rent" | u
   return filters.listing_type;
 }
 
-function getInitialListingsPlaceholder(filters?: ListingsFilters) {
+function getInitialListingsPlaceholder(
+  filters?: ListingsFilters,
+): { pages: ListingsPageResponse[]; pageParams: ListingsPageParam[] } | undefined {
   const listingType = getDefaultCatalogueType(filters);
   if (!listingType) return undefined;
   const page = readInitialListingsPage<ListingWithJoins>(listingType);
   if (!page || page.data.length === 0) return undefined;
+  const normalizedPage: ListingsPageResponse = {
+    ...page,
+    data: page.data.map(normalizeListingWithJoins),
+  };
   return {
-    pages: [{ ...page, data: page.data.map(normalizeListingWithJoins) } satisfies ListingsPageResponse],
+    pages: [normalizedPage],
     pageParams: [INITIAL_LISTINGS_PAGE_PARAM],
   };
 }
@@ -544,6 +453,10 @@ function publicListingsPath(
   append("location_lat");
   append("location_lng");
   append("location_radius_m");
+  append("boundsWest");
+  append("boundsSouth");
+  append("boundsEast");
+  append("boundsNorth");
   append("listing_type");
   append("property_type");
   append("includeAuctions");
@@ -565,6 +478,10 @@ function publicListingsPath(
   append("commercial_subtype");
   append("is_pre_sale");
   append("is_off_market");
+  append("has_video_tour");
+  append("has_virtual_tour");
+  append("ai_score_min");
+  append("walkability_min");
   append("features");
   append("sort");
 
@@ -574,6 +491,7 @@ function publicListingsPath(
 type UseListingsOptions = {
   enabled?: boolean;
   publicScope?: boolean;
+  manageableScope?: boolean;
 };
 
 const fetchListingsPageFromSupabase = async (
@@ -586,7 +504,10 @@ const fetchListingsPageFromSupabase = async (
 ): Promise<ListingsPageResponse> => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   const from = offset ?? (page - 1) * pageSize;
   const { data, error } = await withAbortSignal(
-    buildListingsQuery(filters, from, pageSize, { publicScope: options.publicScope }),
+    buildListingsQuery(filters, from, pageSize, {
+      publicScope: options.publicScope,
+      manageableScope: options.manageableScope,
+    }),
     signal,
   );
 
@@ -632,19 +553,13 @@ const fetchListingsPage = async (
   offset?: number,
   cursor?: string,
 ): Promise<ListingsPageResponse> => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
-  if (shouldUsePublicListingsApi(filters)) {
-    try {
-      const cached = await fetchPublicApi<PublicListingsResponse>(
-        publicListingsPath(filters, page, pageSize, cursor, offset),
-        { throwOnError: true, signal },
-      );
-      if (!cached) throw new Error("Public listings API returned no data");
-      return { ...cached, data: cached.data.map(normalizeListingWithJoins) };
-    } catch (error) {
-      if (isPublicApiAbort(error)) throw error;
-      logger.warn("Public listings API failed; falling back to constrained Supabase listing read:", error);
-      return fetchListingsPageFromSupabase(filters, page, pageSize, { ...options, publicScope: true }, signal, offset);
-    }
+  if (!options.manageableScope && shouldUsePublicListingsApi(filters)) {
+    const cached = await fetchPublicApi<PublicListingsResponse>(
+      publicListingsPath(filters, page, pageSize, cursor, offset),
+      { throwOnError: true, signal },
+    );
+    if (!cached) throw new Error("Public listings API returned no data");
+    return { ...cached, data: cached.data.map(normalizeListingWithJoins) };
   }
 
   return fetchListingsPageFromSupabase(filters, page, pageSize, options, signal, offset);
@@ -656,7 +571,14 @@ export const useListingsPaginated = (
 ) => {
   const placeholderData = getInitialListingsPlaceholder(filters);
   return useInfiniteQuery({
-    queryKey: ["listings-paginated", filters, { publicScope: Boolean(options?.publicScope) }],
+    queryKey: [
+      "listings-paginated",
+      filters,
+      {
+        publicScope: Boolean(options?.publicScope),
+        manageableScope: Boolean(options?.manageableScope),
+      },
+    ],
     queryFn: ({ pageParam = INITIAL_LISTINGS_PAGE_PARAM, signal }) => {
       const { page, pageSize, cursor, offset } = normalizeListingsPageParam(pageParam);
       return fetchListingsPage(filters, page, pageSize, options, signal, offset, cursor);
@@ -684,51 +606,73 @@ export const useListingsPaginated = (
     initialPageParam: INITIAL_LISTINGS_PAGE_PARAM,
     placeholderData,
     enabled: options?.enabled ?? true,
-    staleTime: filters?.owner_id && !options?.publicScope ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
+    staleTime:
+      (filters?.owner_id || options?.manageableScope) && !options?.publicScope
+        ? USER_SCOPED_QUERY_STALE_TIME
+        : CATALOG_STATIC_QUERY_STALE_TIME,
   });
 };
 
 /** All listings for map/split view — single bounded fetch, max 200 rows. Set enabled: false to skip. */
 export const MAP_FETCH_LIMIT = 200;
 
-export const useListings = (
+export const useListingsWindow = (
   filters?: ListingsFilters,
   options?: UseListingsOptions
 ) => {
   return useQuery({
-    queryKey: ["listings", filters, { publicScope: Boolean(options?.publicScope) }],
+    queryKey: [
+      "listings",
+      filters,
+      {
+        publicScope: Boolean(options?.publicScope),
+        manageableScope: Boolean(options?.manageableScope),
+      },
+    ],
     enabled: options?.enabled ?? true,
-    staleTime: filters?.owner_id && !options?.publicScope ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
+    staleTime:
+      (filters?.owner_id || options?.manageableScope) && !options?.publicScope
+        ? USER_SCOPED_QUERY_STALE_TIME
+        : CATALOG_STATIC_QUERY_STALE_TIME,
     queryFn: async ({ signal }) => { // skipcq: JS-R1005 - Owner profile enrichment keeps the map fetch result self-contained.
       const limit = filters?.limit ?? MAP_FETCH_LIMIT;
-      if (shouldUsePublicListingsApi(filters)) {
-        try {
-          const cached = await fetchPublicApi<PublicListingsResponse>(
-            publicListingsPath(filters, 1, limit),
-            { throwOnError: true, signal },
-          );
-          if (!cached) throw new Error("Public listings API returned no data");
-          return cached.data.map(normalizeListingWithJoins);
-        } catch (error) {
-          if (isPublicApiAbort(error)) throw error;
-          logger.warn("Public listings API failed; falling back to constrained Supabase listing read:", error);
-          const fallback = await fetchListingsPageFromSupabase(filters, 1, limit, { ...options, publicScope: true }, signal);
-          return fallback.data as ListingWithJoins[];
-        }
+      if (!options?.manageableScope && shouldUsePublicListingsApi(filters)) {
+        const cached = await fetchPublicApi<PublicListingsResponse>(
+          publicListingsPath(filters, 1, limit),
+          { throwOnError: true, signal },
+        );
+        if (!cached) throw new Error("Public listings API returned no data");
+        return { ...cached, data: cached.data.map(normalizeListingWithJoins) };
       }
 
-      const fallback = await fetchListingsPageFromSupabase(filters, 1, limit, options, signal);
-      return fallback.data as ListingWithJoins[];
+      return fetchListingsPageFromSupabase(filters, 1, limit, options, signal);
     },
   });
 };
 
-type UseListingOptions = {
-  initialData?: ListingWithJoins | null;
-  publicScope?: boolean;
+export const useListings = (
+  filters?: ListingsFilters,
+  options?: UseListingsOptions,
+) => {
+  const query = useListingsWindow(filters, options);
+  return {
+    ...query,
+    data: query.data?.data,
+  };
 };
 
-function normalizeListingWithJoins(listing: Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>): ListingWithJoins {
+type ListingDetailSeed = Database["public"]["Tables"]["listings"]["Row"] &
+  Omit<Partial<ListingWithJoins>, "listing_images"> & {
+    listing_images?: ListingWithJoins["listing_images"] | null;
+  };
+
+type UseListingOptions = {
+  initialData?: ListingDetailSeed | null;
+  publicScope?: boolean;
+  publicationId?: number;
+};
+
+function normalizeListingWithJoins(listing: ListingDetailSeed): ListingWithJoins {
   const profiles = listing.profiles ?? null;
   return {
     ...listing,
@@ -781,43 +725,24 @@ const fetchListingOwnerContext = async (
 };
 
 type PublicListingResponse = {
-  data: (Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>) | null;
-};
-
-const fetchPublicListingFromSupabase = async (id: string, signal?: AbortSignal): Promise<ListingWithJoins | null> => {
-  const { data, error } = await withAbortSignal(supabase
-    .rpc("get_public_listing_catalogue")
-    .select(PUBLIC_LISTING_DETAIL_SELECT)
-    .eq("id", id)
-    .eq("status", "active")
-    .eq("is_off_market", false)
-    .maybeSingle(), signal);
-
-  if (error) throw error;
-  if (!data) return null;
-
-  const row = data as unknown as Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>;
-  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(row.owner_id, signal, false);
-  return normalizeListingWithJoins({ ...row, profiles, ownerParticipantType });
+  data: ListingDetailSeed | null;
 };
 
 const fetchListingById = async (
   id: string,
-  options: { publicScope?: boolean } = {},
+  options: { publicScope?: boolean; publicationId?: number } = {},
   signal?: AbortSignal,
 ): Promise<ListingWithJoins | null> => {
   if (options.publicScope) {
-    try {
-      const response = await fetchPublicApi<PublicListingResponse>(
-        `/api/public/listing?id=${encodeURIComponent(id)}`,
-        { throwOnError: true, signal },
-      );
-      return response?.data ? normalizeListingWithJoins(response.data) : null;
-    } catch (error) {
-      if (isPublicApiAbort(error)) throw error;
-      logger.warn("Public listing API failed; falling back to constrained Supabase detail read:", error);
-      return fetchPublicListingFromSupabase(id, signal);
-    }
+    const response = await fetchPublicApi<PublicListingResponse>(
+      `/api/public/listing?id=${encodeURIComponent(id)}${
+        options.publicationId != null
+          ? `&publicationId=${encodeURIComponent(String(options.publicationId))}`
+          : ""
+      }`,
+      { throwOnError: true, signal },
+    );
+    return response?.data ? normalizeListingWithJoins(response.data) : null;
   }
 
   const { data, error } = await withAbortSignal(supabase
@@ -830,15 +755,29 @@ const fetchListingById = async (
   if (error) throw error;
   if (!data) return null;
 
-  const row = data as unknown as Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>;
+  const row = data as unknown as ListingDetailSeed;
   const { profiles, ownerParticipantType } = await fetchListingOwnerContext(row.owner_id, signal);
   return normalizeListingWithJoins({ ...row, profiles, ownerParticipantType });
 };
 
 export const useListing = (id: string, options: UseListingOptions = {}) => {
   return useQuery({
-    queryKey: ["listing", id, { publicScope: Boolean(options.publicScope) }],
-    queryFn: ({ signal }) => fetchListingById(id, { publicScope: options.publicScope }, signal),
+    queryKey: [
+      "listing",
+      id,
+      {
+        publicScope: Boolean(options.publicScope),
+        publicationId: options.publicationId ?? null,
+      },
+    ],
+    queryFn: ({ signal }) => fetchListingById(
+      id,
+      {
+        publicScope: options.publicScope,
+        publicationId: options.publicationId,
+      },
+      signal,
+    ),
     enabled: Boolean(id),
     placeholderData: options.initialData ? normalizeListingWithJoins(options.initialData) : undefined,
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
@@ -875,8 +814,151 @@ export const useOwnerProStatus = (
   });
 };
 
-/** Shorthand: returns all listings owned by the currently logged-in user. */
+/** Personal inventory used for user-funded quota calculations. */
+export const useActorOwnedListings = () => {
+  const { user } = useAuth();
+  return useListings(
+    { owner_id: user?.id, personalOnly: true },
+    { enabled: Boolean(user) },
+  );
+};
+
+export const MANAGEABLE_LISTINGS_PAGE_SIZE = 50;
+
+type ManageableListingCursor = {
+  createdAt: string;
+  id: string;
+};
+
+type ManageableListingsPage = {
+  data: ListingWithJoins[];
+  total: number;
+  nextCursor: ManageableListingCursor | null;
+};
+
+export type ManageableListingSummary = {
+  totalListings: number;
+  activeListings: number;
+  totalViews: number;
+  averageViews: number;
+  averageActiveDays: number;
+  bestListing: {
+    id: string;
+    title: string;
+    viewsCount: number;
+  } | null;
+};
+
+const EMPTY_MANAGEABLE_LISTING_SUMMARY: ManageableListingSummary = {
+  totalListings: 0,
+  activeListings: 0,
+  totalViews: 0,
+  averageViews: 0,
+  averageActiveDays: 0,
+  bestListing: null,
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function finiteNonNegativeNumber(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+async function fetchManageableListingsPage(
+  cursor: ManageableListingCursor | null,
+  signal?: AbortSignal,
+): Promise<ManageableListingsPage> {
+  const args = {
+    p_limit: MANAGEABLE_LISTINGS_PAGE_SIZE,
+    ...(cursor
+      ? {
+          p_before_created_at: cursor.createdAt,
+          p_before_id: cursor.id,
+        }
+      : {}),
+  };
+  const { data, error } = await withAbortSignal(
+    supabase.rpc("get_manageable_listing_catalogue_page", args),
+    signal,
+  );
+  if (error) throw error;
+
+  const response = Array.isArray(data) ? data[0] : null;
+  const rows = response && Array.isArray(response.data) ? response.data : [];
+  const listings = rows
+    .map(asRecord)
+    .filter((row): row is Record<string, unknown> => row !== null)
+    .map((row) => normalizeListingWithJoins(
+      row as unknown as Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>,
+    ));
+  const nextCursor =
+    response?.next_created_at && response?.next_id
+      ? { createdAt: response.next_created_at, id: response.next_id }
+      : null;
+
+  return {
+    data: listings,
+    total: finiteNonNegativeNumber(response?.total_count),
+    nextCursor,
+  };
+}
+
+/** Personal plus organization inventory the current actor can manage. */
 export const useMyListings = () => {
   const { user } = useAuth();
-  return useListings({ owner_id: user?.id });
+  const query = useInfiniteQuery({
+    queryKey: ["manageable-listings", user?.id],
+    queryFn: ({ pageParam, signal }) =>
+      fetchManageableListingsPage(pageParam, signal),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    initialPageParam: null as ManageableListingCursor | null,
+    enabled: Boolean(user),
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
+  });
+  const pages = query.data?.pages ?? [];
+  const listings = pages.flatMap((page) => page.data);
+
+  return {
+    ...query,
+    data: listings,
+    total: pages[0]?.total ?? 0,
+    loadedCount: listings.length,
+  };
+};
+
+export const useManageableListingSummary = () => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["manageable-listing-summary", user?.id],
+    queryFn: async (): Promise<ManageableListingSummary> => {
+      const { data, error } = await supabase.rpc("get_manageable_listing_summary");
+      if (error) throw error;
+
+      const summary = asRecord(data);
+      if (!summary) return EMPTY_MANAGEABLE_LISTING_SUMMARY;
+      const best = asRecord(summary.bestListing);
+
+      return {
+        totalListings: finiteNonNegativeNumber(summary.totalListings),
+        activeListings: finiteNonNegativeNumber(summary.activeListings),
+        totalViews: finiteNonNegativeNumber(summary.totalViews),
+        averageViews: finiteNonNegativeNumber(summary.averageViews),
+        averageActiveDays: finiteNonNegativeNumber(summary.averageActiveDays),
+        bestListing: best && typeof best.id === "string" && typeof best.title === "string"
+          ? {
+              id: best.id,
+              title: best.title,
+              viewsCount: finiteNonNegativeNumber(best.viewsCount),
+            }
+          : null,
+      };
+    },
+    enabled: Boolean(user),
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
+  });
 };

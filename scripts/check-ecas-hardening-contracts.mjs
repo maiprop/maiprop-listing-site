@@ -47,10 +47,22 @@ const walkFiles = (root, relativeDir, matcher, files = []) => {
   return files;
 };
 
-export function checkModuleSizeBudget(root = process.cwd()) {
+const isRealIsoDate = (value) => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+};
+
+export function checkModuleSizeBudget(root = process.cwd(), { now = new Date() } = {}) {
   const failures = [];
   const budget = readJson(root, "docs/governance/module-size-budget.json", failures);
   if (!budget) return result(failures);
+  const reviewDate = now instanceof Date ? now : new Date(now);
+  if (!Number.isFinite(reviewDate.getTime())) {
+    failures.push("module-size-budget validation clock must be a valid date");
+    return result(failures);
+  }
+  const today = reviewDate.toISOString().slice(0, 10);
 
   const defaultMaxBytes = Number(budget.defaultMaxBytes);
   if (!Number.isFinite(defaultMaxBytes) || defaultMaxBytes < 20_000) {
@@ -61,6 +73,23 @@ export function checkModuleSizeBudget(root = process.cwd()) {
   const generated = new Set((budget.generatedExemptions ?? []).map((entry) => entry.path));
   const legacy = new Map((budget.legacyExceptions ?? []).map((entry) => [entry.path, entry]));
   const owners = new Set(["app-web", "shared-ui", "domain", "data-access"]);
+
+  for (const exception of budget.legacyExceptions ?? []) {
+    const relativePath = exception.path ?? "<unknown module>";
+    if (!owners.has(exception.owner)) {
+      failures.push(`${relativePath} module-size-budget owner must map to a repository boundary`);
+    }
+    for (const key of ["targetPackage", "refactorStrategy", "reviewBy"]) {
+      if (typeof exception[key] !== "string" || exception[key].trim().length === 0) {
+        failures.push(`${relativePath} module-size-budget exception must include ${key}`);
+      }
+    }
+    if (!isRealIsoDate(exception.reviewBy)) {
+      failures.push(`${relativePath} module-size-budget reviewBy must be a real ISO date (YYYY-MM-DD)`);
+    } else if (exception.reviewBy < today) {
+      failures.push(`${relativePath} module-size-budget reviewBy ${exception.reviewBy} has expired`);
+    }
+  }
 
   for (const { relativePath, absolutePath, stat } of walkFiles(
     root,
@@ -82,14 +111,6 @@ export function checkModuleSizeBudget(root = process.cwd()) {
     }
     if (Number(exception.allowedMaxBytes) < normalizedBytes) {
       failures.push(`${relativePath} is ${normalizedBytes} bytes and exceeds allowedMaxBytes ${exception.allowedMaxBytes}`);
-    }
-    if (!owners.has(exception.owner)) {
-      failures.push(`${relativePath} module-size-budget owner must map to a repository boundary`);
-    }
-    for (const key of ["targetPackage", "refactorStrategy", "reviewBy"]) {
-      if (typeof exception[key] !== "string" || exception[key].trim().length === 0) {
-        failures.push(`${relativePath} module-size-budget exception must include ${key}`);
-      }
     }
   }
 
@@ -299,10 +320,31 @@ export function checkLiveGithubAdminEvidence(root = process.cwd()) {
     "patterns_allowed",
     "Branch protection API result: blocked",
     "Upgrade to GitHub Pro or make this repository public",
-    "Environment approvals: pending repository admin",
+    "Protected-environment approvals are not an active control for this private",
+    "repository on GitHub Free.",
+    "workflows must not claim that their",
+    "secrets or reviewer settings provide isolation.",
+    "attempt-one approval artifact",
+    "allowlisted GitHub actor who differs from the allowlisted deployer",
+    "current-`main` SHA/tree checks",
+    "GitHub artifact API metadata",
+    "repository-secret HMAC binding",
+    "short-lived mutation",
+    "leases are revalidated before each provider mutation.",
     "Push protection: pending repository admin",
   ])) {
     failures.push(`LIVE_GITHUB_ADMIN_SETTINGS.md must mention ${marker}`);
+  }
+
+  for (const [pattern, label] of [
+    [/Environment approvals:\s*pending repository admin/i, "Enterprise environment approvals"],
+    [/actions\/attest-build-provenance@/i, "GitHub build attestations"],
+    [/\bgh\s+attestation\b/i, "gh attestation"],
+    [/\bid-token:\s*(?:read|write)\b/i, "OIDC permissions"],
+  ]) {
+    if (pattern.test(text)) {
+      failures.push(`LIVE_GITHUB_ADMIN_SETTINGS.md must not claim ${label} as an active release gate`);
+    }
   }
 
   return result(failures);
@@ -327,9 +369,12 @@ export function checkLoadProofEvidence(root = process.cwd()) {
   return result(failures);
 }
 
-export function checkEcasHardeningContracts(root = process.cwd()) {
+export function checkEcasHardeningContracts(
+  root = process.cwd(),
+  { now = new Date() } = {},
+) {
   const checks = [
-    checkModuleSizeBudget(root),
+    checkModuleSizeBudget(root, { now }),
     checkSensitiveMutationBoundaries(root),
     checkFunctionInvocationBoundaryEvidence(root),
     checkLiveGithubAdminEvidence(root),

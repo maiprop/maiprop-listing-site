@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { getListingDetailPath } from "@/lib/listingRoutes";
+import { invalidatePublicCatalogueQueries } from "@/lib/publicCatalogueQueryInvalidation";
 import { parseMutationInput, rowUpdateMutationSchema } from "@/lib/mutationSchemas";
 
 type ListingStatus = Database["public"]["Enums"]["listing_status"];
@@ -263,6 +264,7 @@ export default function AdminFeaturedListings() {
       try {
         await updateFeaturedListing(listing.id, { is_featured: next }, "spotlight listing update");
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
+        void invalidatePublicCatalogueQueries(queryClient, listing.id);
         toast.success(next ? "Spotlight enabled for listing" : "Spotlight removed from listing");
       } catch (e: unknown) {
         toast.error((e as Error)?.message ?? "Failed to update Spotlight status");
@@ -284,6 +286,7 @@ export default function AdminFeaturedListings() {
       try {
         await updateFeaturedListing(listing.id, { priority_placement: enabled ? 1 : 0 }, "priority listing update");
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
+        void invalidatePublicCatalogueQueries(queryClient, listing.id);
         toast.success(enabled ? "Priority enabled for listing" : "Priority removed from listing");
       } catch (e: unknown) {
         toast.error((e as Error)?.message ?? "Failed to update priority");
@@ -305,6 +308,7 @@ export default function AdminFeaturedListings() {
       try {
         await updateFeaturedListing(listing.id, { featured_until: newVal }, "featured expiry update");
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
+        void invalidatePublicCatalogueQueries(queryClient, listing.id);
         toast.success(`Expires ${formatDate(newVal)}`);
       } catch (e: unknown) {
         toast.error((e as Error)?.message ?? "Failed to update expiry");

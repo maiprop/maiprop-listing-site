@@ -1,7 +1,7 @@
 /**
- * Tests for the useAuctionListings hook. Public auction list reads use the
- * cached public API first and fall back to bounded public Supabase reads when
- * Cloudflare Pages Functions fail open.
+ * Tests for the useAuctionListings hook. Public auction reads stay on the
+ * canonical cached API so a transient edge failure cannot change ordering or
+ * reveal a different catalogue window.
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -12,6 +12,7 @@ const fromMock = vi.fn();
 const rpcMock = vi.fn((fn: string) =>
   fromMock(fn === "get_public_listing_catalogue" ? "public_listing_catalogue" : fn));
 const invokeMock = vi.fn();
+const getSessionMock = vi.fn();
 const publicApiMock = vi.fn();
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -19,6 +20,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     from: (...args: unknown[]) => fromMock(...args),
     rpc: (...args: unknown[]) => rpcMock(...args),
     functions: { invoke: (...args: unknown[]) => invokeMock(...args) },
+    auth: { getSession: (...args: unknown[]) => getSessionMock(...args) },
   },
 }));
 
@@ -29,11 +31,11 @@ vi.mock("@/lib/publicApi", () => ({
 
 import {
   fetchAuctionListingById,
-  randomizeAuctionPresentation,
+  type AuctionListingRow,
   useAuctionListings,
 } from "@/hooks/useAuctionListings";
 
-type AuctionRow = Parameters<typeof randomizeAuctionPresentation>[0][number];
+type AuctionRow = AuctionListingRow;
 
 const auctionRow = (id: string, overrides: Partial<AuctionRow> = {}): AuctionRow => {
   return {
@@ -79,19 +81,12 @@ const renderHookWithQuery = <T,>(hook: () => T) => {
   return renderHook(hook, { wrapper: ({ children }) => wrap(children) });
 };
 
-const makeThenableBuilder = (data: unknown[] = []) => {
-  const b: Record<string, unknown> = {};
-  const chain = ["select", "eq", "or", "contains", "limit", "order"];
-  for (const method of chain) b[method] = vi.fn().mockReturnValue(b);
-  b.then = (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
-    Promise.resolve({ data, error: null }).then(resolve, reject);
-  return b;
-};
-
 beforeEach(() => {
   fromMock.mockReset();
   rpcMock.mockClear();
   invokeMock.mockReset();
+  getSessionMock.mockReset();
+  getSessionMock.mockResolvedValue({ data: { session: null }, error: null });
   publicApiMock.mockReset();
   publicApiMock.mockResolvedValue(null);
 });
@@ -106,6 +101,14 @@ describe("useAuctionListings", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.[0]).toMatchObject({ id: "api-a1" });
+    expect(result.current.auctionPage).toMatchObject({
+      facets: { cities: ["Athens"], rounds: [] },
+      stats: { avgBid: 0, mappableCount: 0 },
+      page: 1,
+      pageSize: 60,
+      total: 1,
+      totalPages: 1,
+    });
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/auctions?limit=60",
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
@@ -114,20 +117,92 @@ describe("useAuctionListings", () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("requests the full normalized public auction window for Pro-sized pages", async () => {
+  it("requests a canonical server-filtered Pro page with the user JWT", async () => {
+    getSessionMock.mockResolvedValue({
+      data: { session: { access_token: "pro-access-token" } },
+      error: null,
+    });
     publicApiMock.mockResolvedValue({
-      data: Array.from({ length: 600 }, (_, i) => auctionRow(`api-${i}`)),
+      data: Array.from({ length: 20 }, (_, i) => auctionRow(`api-${i}`)),
+      revision: "auction-v1",
+      page: 2,
+      pageSize: 20,
+      total: 80,
+      totalRaw: 80,
+      totalPages: 4,
+      facets: { cities: ["Athens", "Patras"], rounds: [1, 2] },
+      stats: { thisWeek: 3, avgBid: 120_000, mappableCount: 60 },
     });
 
-    const { result } = renderHookWithQuery(() => useAuctionListings(9999));
+    const { result } = renderHookWithQuery(() => useAuctionListings(9999, {
+      page: 2,
+      pageSize: 20,
+      filters: {
+        city: "Patras",
+        propertyType: "apartment",
+        bidRange: "50000-150000",
+      },
+    }));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data).toHaveLength(600);
-    expect(publicApiMock).toHaveBeenCalledWith(
-      "/api/public/auctions?limit=600",
-      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
-    );
+    expect(result.current.data).toHaveLength(20);
+    expect(result.current.auctionPage).toMatchObject({
+      revision: "auction-v1",
+      page: 2,
+      total: 80,
+    });
+    const [input, options] = publicApiMock.mock.calls[0];
+    const requestUrl = new URL(String(input), "https://portal.maiprop.co");
+    expect(requestUrl.pathname).toBe("/api/public/auctions");
+    expect(requestUrl.searchParams.get("limit")).toBe("600");
+    expect(requestUrl.searchParams.get("page")).toBe("2");
+    expect(requestUrl.searchParams.get("pageSize")).toBe("20");
+    expect(requestUrl.searchParams.get("city")).toBe("Patras");
+    expect(requestUrl.searchParams.get("propertyType")).toBe("apartment");
+    expect(requestUrl.searchParams.get("bidRange")).toBe("50000-150000");
+    expect(options).toEqual(expect.objectContaining({
+      headers: { Authorization: "Bearer pro-access-token" },
+      signal: expect.any(AbortSignal),
+      throwOnError: true,
+      timeoutMs: 15_000,
+    }));
+    expect(invokeMock).not.toHaveBeenCalled();
     expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("does not attempt a paid catalogue read without an authenticated session", async () => {
+    const { result } = renderHookWithQuery(() => useAuctionListings(600));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(result.current.error).toEqual(expect.objectContaining({
+      message: "Authentication is required for the expanded auction catalogue",
+    }));
+    expect(publicApiMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("aborts the authenticated network request when React Query cancels it", async () => {
+    getSessionMock.mockResolvedValue({
+      data: { session: { access_token: "pro-access-token" } },
+      error: null,
+    });
+    let requestSignal: AbortSignal | undefined;
+    publicApiMock.mockImplementation((_path, options) => {
+      requestSignal = options?.signal;
+      return new Promise((_resolve, reject) => {
+        requestSignal?.addEventListener("abort", () => {
+          reject(new DOMException("Aborted", "AbortError"));
+        }, { once: true });
+      });
+    });
+
+    const rendered = renderHookWithQuery(() => useAuctionListings(600));
+    await waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
+    rendered.unmount();
+    await waitFor(() => expect(requestSignal?.aborted).toBe(true));
+
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it("slices public API rows to the caller entitlement window", async () => {
@@ -142,119 +217,64 @@ describe("useAuctionListings", () => {
     expect(result.current.data?.at(-1)?.id).toBe("api-19");
   });
 
-  it("falls back to constrained Supabase auction reads when the public API is unavailable", async () => {
-    publicApiMock.mockResolvedValue(null);
-    const builder = makeThenableBuilder([auctionRow("db-a1")]);
-    fromMock.mockReturnValue(builder);
+  it("surfaces a retryable error without switching catalogue authority", async () => {
+    publicApiMock.mockRejectedValue(new Error("public auction catalogue unavailable"));
 
     const { result } = renderHookWithQuery(() => useAuctionListings(60));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isError).toBe(true));
 
-    expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
-    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
-    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("featured_until"));
-    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("priority_until"));
-    expect(invokeMock).not.toHaveBeenCalled();
-  });
-
-  it("uses a deterministic daily rotation helper for DB-sourced exact lookup fallbacks", () => {
-    const municipalitySorted = [
-      auctionRow("athens-a", { city: "Athens" }),
-      auctionRow("athens-b", { city: "Athens" }),
-      auctionRow("marousi-a", { city: "Marousi" }),
-      auctionRow("piraeus-a", { city: "Piraeus" }),
-    ];
-
-    const firstPass = randomizeAuctionPresentation(municipalitySorted, "seed:2026-05-15");
-    const secondPass = randomizeAuctionPresentation(municipalitySorted, "seed:2026-05-15");
-
-    expect(firstPass.map((row) => row.id)).toEqual(secondPass.map((row) => row.id));
-    expect(firstPass.map((row) => row.id)).not.toEqual(municipalitySorted.map((row) => row.id));
-  });
-
-  it("ranks only active Priority while Spotlight remains visual-only", () => {
-    const rows = [
-      auctionRow("organic-a"),
-      auctionRow("spotlight", {
-        is_featured: true,
-        featured_until: "2099-01-01T00:00:00.000Z",
-      }),
-      auctionRow("priority", {
-        priority_placement: 1,
-        priority_until: "2099-01-01T00:00:00.000Z",
-      }),
-      auctionRow("organic-b"),
-    ];
-    const withoutSpotlight = rows.map((row) => row.id === "spotlight"
-      ? { ...row, is_featured: false }
-      : row);
-
-    const ordered = randomizeAuctionPresentation(rows, "seed:2026-05-15");
-    const comparison = randomizeAuctionPresentation(withoutSpotlight, "seed:2026-05-15");
-
-    expect(ordered[0].id).toBe("priority");
-    expect(ordered.map((row) => row.id)).toEqual(comparison.map((row) => row.id));
-  });
-
-  it("suppresses expired paid state before presentation", () => {
-    const ordered = randomizeAuctionPresentation([
-      auctionRow("expired", {
-        is_featured: true,
-        featured_until: "2000-01-01T00:00:00.000Z",
-        priority_placement: 1,
-        priority_until: "2000-01-01T00:00:00.000Z",
-      }),
-      auctionRow("organic"),
-    ], "seed:2026-05-15");
-
-    expect(ordered.find((row) => row.id === "expired")).toMatchObject({
-      is_featured: false,
-      priority_placement: 0,
-    });
-  });
-
-  it("limits active Priority auctions to three slots per twelve results", () => {
-    const priorityRows = Array.from({ length: 8 }, (_, index) => auctionRow(`priority-${index}`, {
-      priority_placement: 1,
-      priority_until: "2099-01-01T00:00:00.000Z",
+    expect(result.current.error).toEqual(expect.objectContaining({
+      message: "public auction catalogue unavailable",
     }));
-    const organicRows = Array.from({ length: 20 }, (_, index) => auctionRow(`organic-${index}`));
-
-    const ordered = randomizeAuctionPresentation([...priorityRows, ...organicRows], "seed:2026-05-15");
-
-    expect(ordered.slice(0, 12).filter((row) => row.priority_placement > 0)).toHaveLength(3);
-    expect(ordered.slice(12, 24).filter((row) => row.priority_placement > 0)).toHaveLength(3);
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });
 
 describe("fetchAuctionListingById", () => {
-  it("uses the public detail API for exact UUID auction lookup", async () => {
+  it("uses the canonical auction revision for exact UUID lookup", async () => {
     publicApiMock.mockResolvedValue({
-      data: auctionRow("11111111-1111-4111-8111-111111111111", {
+      data: [auctionRow("11111111-1111-4111-8111-111111111111", {
         listing_type: "auction",
-      }),
+      })],
     });
 
     await expect(fetchAuctionListingById("11111111-1111-4111-8111-111111111111"))
       .resolves.toMatchObject({ id: "11111111-1111-4111-8111-111111111111" });
 
     expect(publicApiMock).toHaveBeenCalledWith(
-      "/api/public/listing?id=11111111-1111-4111-8111-111111111111",
+      "/api/public/auctions?limit=60&page=1&pageSize=1&ids=11111111-1111-4111-8111-111111111111",
       { throwOnError: true, signal: undefined },
     );
     expect(fromMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("uses osTag query routing for non-UUID detail ids", async () => {
+  it("uses the canonical auction revision for OS-tag lookup", async () => {
     publicApiMock.mockResolvedValue({
-      data: auctionRow("os-db-row", {
+      data: [auctionRow("os-db-row", {
         listing_type: "auction",
-      }),
+      })],
     });
 
     await expect(fetchAuctionListingById("os-123")).resolves.toMatchObject({ id: "os-db-row" });
 
-    expect(publicApiMock).toHaveBeenCalledWith("/api/public/listing?osTag=os-123", { throwOnError: true, signal: undefined });
+    expect(publicApiMock).toHaveBeenCalledWith(
+      "/api/public/auctions?limit=60&page=1&pageSize=1&osTag=os-123",
+      { throwOnError: true, signal: undefined },
+    );
     expect(fromMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("does not switch to a direct Supabase detail read on an edge failure", async () => {
+    publicApiMock.mockRejectedValue(new Error("public auction detail unavailable"));
+
+    await expect(fetchAuctionListingById("os-123"))
+      .rejects.toThrow("public auction detail unavailable");
+
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 });

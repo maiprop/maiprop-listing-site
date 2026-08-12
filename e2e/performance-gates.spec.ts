@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 const RUNNING_PRODUCTION_PERF_GATE =
@@ -5,6 +8,8 @@ const RUNNING_PRODUCTION_PERF_GATE =
   process.env.CI ||
   process.env.npm_lifecycle_event === "test:perf" ||
   process.argv.some((arg) => arg.includes("performance-gates.spec.ts"));
+const CWV_EVIDENCE_PATH = process.env.MAIPROP_CWV_EVIDENCE_PATH?.trim() ?? "";
+const EVIDENCE_RELEASE_SHA = process.env.MAIPROP_STAGING_RELEASE_SHA?.trim().toLowerCase() ?? "";
 
 const AUTH_STORAGE_KEY = "sb-abcdefghijklmnop-auth-token";
 const PERF_USER_ID = "00000000-0000-4000-8000-000000000001";
@@ -20,6 +25,8 @@ const ROUTE_JS_BUDGET_KB: Record<string, number> = {
 const WEB_VITAL_ROUTES = [
   "/",
   "/listings",
+  "/auctions",
+  "/open-houses",
   "/pricing",
   `/property/${PERF_LISTING_ID}`,
   "/dashboard",
@@ -46,6 +53,23 @@ type WebVitalsSnapshot = {
 
 type BrowserVitalsState = WebVitalsSnapshot & {
   eventDurations: number[];
+};
+
+type CwvRouteMeasurement = {
+  path: string;
+  measurements: {
+    fcp_ms: number;
+    lcp_ms: number;
+    cls: number;
+    inp_ms: number;
+    inp_samples: number;
+  };
+  budgets: {
+    lcp_ms: number;
+    cls: number;
+    inp_ms: number;
+  };
+  passed: boolean;
 };
 
 declare global {
@@ -159,6 +183,28 @@ async function installAuthenticatedSupabaseMocks(page: Page) {
     };
   }, { key: AUTH_STORAGE_KEY, userId: PERF_USER_ID, expiresAtValue: expiresAt });
 
+  await page.route("**/api/public/**", async (route) => {
+    const url = new URL(route.request().url());
+    const section = url.searchParams.get("section");
+
+    if (url.pathname.endsWith("/homepage")) {
+      if (section === "auction-count") return json(route, 0);
+      if (section === "type-counts") return json(route, {});
+      return json(route, []);
+    }
+    if (url.pathname.endsWith("/listings")) {
+      return json(route, { data: [perfListing], hasMore: false, page: 1, pageSize: 24 });
+    }
+    if (url.pathname.endsWith("/auctions")) {
+      return json(route, { data: [], total: 0, page: 1, pageSize: 60, hasMore: false });
+    }
+    if (url.pathname.endsWith("/open-houses")) {
+      return json(route, { data: [], hasMore: false, limit: 60, nextCursor: null });
+    }
+
+    return json(route, {});
+  });
+
   await page.route("**/functions/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith("/owner-pro-status")) return json(route, { isPro: true });
@@ -197,6 +243,86 @@ async function installAuthenticatedSupabaseMocks(page: Page) {
 
 function getAppOrigin(baseURL: string | undefined): string {
   return new URL(baseURL ?? (process.env.CI ? "http://localhost:4173" : "http://localhost:8080")).origin;
+}
+
+function cloudflareAccessHeaders(): Record<string, string> {
+  const clientId = process.env.CF_ACCESS_CLIENT_ID?.trim() ?? "";
+  const clientSecret = process.env.CF_ACCESS_CLIENT_SECRET?.trim() ?? "";
+  if (Boolean(clientId) !== Boolean(clientSecret)) {
+    throw new Error("CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be configured together.");
+  }
+  return clientId && clientSecret
+    ? {
+        "CF-Access-Client-Id": clientId,
+        "CF-Access-Client-Secret": clientSecret,
+      }
+    : {};
+}
+
+async function configureProtectedPagesContext(page: Page, baseURL: string | undefined): Promise<void> {
+  const appOrigin = getAppOrigin(baseURL);
+  const accessHeaders = cloudflareAccessHeaders();
+  if (Object.keys(accessHeaders).length > 0) {
+    await page.context().route(`${appOrigin}/**`, async (route) => {
+      const response = await route.fetch({
+        headers: { ...route.request().headers(), ...accessHeaders },
+        maxRedirects: 0,
+      });
+      await route.fulfill({ response });
+    });
+  }
+
+  const siteLockPassword = process.env.STAGING_SITE_LOCK_PASSWORD?.trim() ?? "";
+  if (siteLockPassword) {
+    await page.context().addCookies([{
+      name: "maiprop_unlock",
+      value: createHash("sha256").update(siteLockPassword).digest("hex"),
+      url: appOrigin,
+      httpOnly: true,
+      secure: new URL(appOrigin).protocol === "https:",
+      sameSite: "Lax",
+    }]);
+  }
+}
+
+function writeCwvEvidence(routes: CwvRouteMeasurement[]): void {
+  if (!CWV_EVIDENCE_PATH) return;
+  const outputPath = resolve(process.cwd(), CWV_EVIDENCE_PATH);
+  mkdirSync(dirname(outputPath), { recursive: true });
+  writeFileSync(outputPath, `${JSON.stringify({
+    schema_version: 1,
+    evidence_type: "maiprop-cwv-route-measurements",
+    release_sha: EVIDENCE_RELEASE_SHA,
+    complete: routes.length === WEB_VITAL_ROUTES.length,
+    routes,
+  }, null, 2)}\n`, "utf8");
+}
+
+function toCwvRouteMeasurement(path: string, vitals: WebVitalsSnapshot): CwvRouteMeasurement {
+  const measurements = {
+    fcp_ms: Number(vitals.fcp.toFixed(3)),
+    lcp_ms: Number(vitals.lcp.toFixed(3)),
+    cls: Number(vitals.cls.toFixed(6)),
+    inp_ms: Number(vitals.inp.toFixed(3)),
+    inp_samples: vitals.inpSamples,
+  };
+  const budgets = {
+    lcp_ms: WEB_VITAL_BUDGETS.lcp,
+    cls: WEB_VITAL_BUDGETS.cls,
+    inp_ms: WEB_VITAL_BUDGETS.inp,
+  };
+  return {
+    path,
+    measurements,
+    budgets,
+    passed:
+      measurements.fcp_ms > 0 &&
+      measurements.lcp_ms > 0 &&
+      measurements.inp_samples > 0 &&
+      measurements.lcp_ms <= budgets.lcp_ms &&
+      measurements.cls <= budgets.cls &&
+      measurements.inp_ms <= budgets.inp_ms,
+  };
 }
 
 async function installWebVitalsCollector(page: Page) {
@@ -372,15 +498,23 @@ async function waitForInteractionIdle(page: Page) {
 test.describe("authenticated performance gates @perf", () => {
   test.skip(!RUNNING_PRODUCTION_PERF_GATE, "Run npm run test:perf to measure production preview bundle budgets.");
 
+  test.beforeEach(async ({ page }, testInfo) => {
+    await configureProtectedPagesContext(page, testInfo.project.use.baseURL);
+  });
+
   test("public routes stay within Core Web Vitals budgets", async ({ page }) => {
     await installWebVitalsCollector(page);
     await installAuthenticatedSupabaseMocks(page);
+    const routeMeasurements: CwvRouteMeasurement[] = [];
+    writeCwvEvidence(routeMeasurements);
 
     for (const path of WEB_VITAL_ROUTES) {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
       await expect(page.locator("body")).toBeVisible();
       const vitals = await collectStableWebVitals(page);
+      routeMeasurements.push(toCwvRouteMeasurement(path, vitals));
+      writeCwvEvidence(routeMeasurements);
 
       expect(vitals.fcp, `${path} FCP was not captured`).toBeGreaterThan(0);
       expect(vitals.lcp, `${path} LCP was not captured`).toBeGreaterThan(0);

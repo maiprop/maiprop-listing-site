@@ -28,8 +28,11 @@ export type CatalogueStreamAnchor = {
 };
 
 export type CatalogueCursor = {
-  v: 1;
+  v: 3;
+  publicationId: number;
   sort: CatalogueSortName;
+  asOf: string;
+  scope: string;
   slot: number;
   priorityOffset: number;
   organicOffset: number;
@@ -85,7 +88,7 @@ const SORTS: Record<CatalogueSortName, CatalogueSort> = {
     field: "ai_score",
     order: "ai_score.desc.nullslast",
     keysetOperator: "lt",
-    usesOffset: true,
+    usesOffset: false,
   },
   views: {
     name: "views",
@@ -222,14 +225,40 @@ export function catalogueStreamOffsetsForAvailableRows(
 }
 
 function validCursorId(value: unknown): value is string {
-  return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      .test(value);
+}
+
+function validIsoTimestamp(value: unknown): value is string {
+  return typeof value === "string" &&
+    value.length <= 64 &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/
+      .test(value) &&
+    Number.isFinite(Date.parse(value));
+}
+
+function validSnapshotTime(value: unknown): value is string {
+  if (!validIsoTimestamp(value)) return false;
+  const snapshot = Date.parse(value);
+  const now = Date.now();
+  return snapshot <= now + 30_000 &&
+    snapshot >= now - 45 * 60_000;
+}
+
+function validPublicationId(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) > 0;
+}
+
+function validScope(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 1_536;
 }
 
 function validSortValue(value: unknown, sort: CatalogueSort): value is string | number | null {
+  if (sort.name === "ai-score" && value === null) return true;
   if (sort.usesOffset) return value === null || (typeof value === "number" && Number.isFinite(value));
   if (sort.field === "created_at") {
-    return typeof value === "string" &&
-      value.length <= 64 &&
+    return validIsoTimestamp(value) &&
       !/[(),]/.test(value) &&
       Number.isFinite(Date.parse(value));
   }
@@ -256,13 +285,20 @@ function encodeBase64Url(value: string): string {
   return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-export function decodeCatalogueCursor(encoded: string | null | undefined, sort: CatalogueSort): CatalogueCursor | null {
-  if (!encoded || encoded.length > 2_048 || !encoded.startsWith("v1.")) return null;
+export function decodeCatalogueCursor(
+  encoded: string | null | undefined,
+  sort: CatalogueSort,
+  expectedScope?: string,
+): CatalogueCursor | null {
+  if (!encoded || encoded.length > 2_048 || !encoded.startsWith("v3.")) return null;
   try {
     const parsed = JSON.parse(decodeBase64Url(encoded.slice(3))) as Partial<CatalogueCursor>;
     if (
-      parsed.v !== 1 ||
+      parsed.v !== 3 ||
+      !validPublicationId(parsed.publicationId) ||
       parsed.sort !== sort.name ||
+      !validSnapshotTime(parsed.asOf) ||
+      !validScope(parsed.scope) ||
       !Number.isInteger(parsed.slot) ||
       Number(parsed.slot) < 0 ||
       Number(parsed.slot) >= CATALOGUE_BLOCK_SIZE ||
@@ -277,6 +313,7 @@ export function decodeCatalogueCursor(encoded: string | null | undefined, sort: 
     }
 
     const cursor = parsed as CatalogueCursor;
+    if (expectedScope !== undefined && cursor.scope !== expectedScope) return null;
     if (cursor.priority && !validAnchor(cursor.priority, sort, cursor.priorityOffset)) return null;
     if (cursor.organic && !validAnchor(cursor.organic, sort, cursor.organicOffset)) return null;
     return cursor;
@@ -300,12 +337,22 @@ export function buildNextCatalogueCursor<T extends CatalogueRow>(
   previous: CatalogueCursor | null,
   sort: CatalogueSort,
   page: CatalogueInterleaveResult<T>,
+  publicationId: number,
+  asOf: string,
+  scope: string,
 ): string {
-  const base = previous?.sort === sort.name
+  if (!validPublicationId(publicationId)) {
+    throw new Error("Catalogue publication ID is invalid");
+  }
+  const base = previous?.sort === sort.name &&
+      previous.publicationId === publicationId
     ? previous
     : {
-        v: 1 as const,
+        v: 3 as const,
+        publicationId,
         sort: sort.name,
+        asOf,
+        scope,
         slot: 0,
         priorityOffset: 0,
         organicOffset: 0,
@@ -313,8 +360,11 @@ export function buildNextCatalogueCursor<T extends CatalogueRow>(
   const priorityOffset = safeStreamOffset(base.priorityOffset + page.consumedPriority);
   const organicOffset = safeStreamOffset(base.organicOffset + page.consumedOrganic);
   const cursor: CatalogueCursor = {
-    v: 1,
+    v: 3,
+    publicationId: base.publicationId,
     sort: sort.name,
+    asOf: base.asOf,
+    scope: base.scope,
     slot: page.nextSlot,
     priorityOffset,
     organicOffset,
@@ -322,7 +372,7 @@ export function buildNextCatalogueCursor<T extends CatalogueRow>(
     organic: rowAnchor(page.lastOrganic, sort, organicOffset) ?? base.organic,
   };
   const payload = encodeBase64Url(JSON.stringify(cursor));
-  return `v1.${payload}`;
+  return `v3.${payload}`;
 }
 
 export function canAdvanceCatalogueCursor<T extends CatalogueRow>(
@@ -345,6 +395,19 @@ export function applyCatalogueStreamCursor(
   params.set("order", `${sort.order},id.desc`);
 
   if (!anchor) return;
+  if (sort.name === "ai-score") {
+    if (!validAnchor(anchor, sort, MAX_CATALOGUE_STREAM_OFFSET)) return;
+    if (anchor.value === null) {
+      params.set("ai_score", "is.null");
+      params.set("id", `lt.${anchor.id}`);
+      return;
+    }
+    params.append(
+      "or",
+      `(ai_score.lt.${anchor.value},and(ai_score.eq.${anchor.value},id.lt.${anchor.id}),ai_score.is.null)`,
+    );
+    return;
+  }
   if (sort.usesOffset) {
     if (anchor.offset > 0) params.set("offset", String(safeStreamOffset(anchor.offset)));
     return;

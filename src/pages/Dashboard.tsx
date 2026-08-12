@@ -21,7 +21,11 @@ import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { profileRoleSwitchInProgress, useAuth } from "@/contexts/AuthContext";
-import { useMyListings } from "@/hooks/useListings";
+import {
+  useActorOwnedListings,
+  useManageableListingSummary,
+  useMyListings,
+} from "@/hooks/useListings";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings } from "@/hooks/useViewings";
 import { useSavedSearches } from "@/hooks/useSavedSearches";
@@ -182,6 +186,11 @@ export default function Dashboard() { // skipcq: JS-R1005
   }, [activeSection, requestedSection, sectionNavItems]);
 
   const { data: myListings = [] } = useMyListings();
+  const { data: manageableListingSummary } = useManageableListingSummary();
+  const {
+    data: actorOwnedListings = [],
+    isLoading: actorOwnedListingsLoading,
+  } = useActorOwnedListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
   const { data: viewings = [] } = useViewings("requester");
   const { data: ownViewings = [] } = useViewings("owner");
@@ -312,8 +321,10 @@ export default function Dashboard() { // skipcq: JS-R1005
   );
 
   const stats = useMemo(() => {
-    const activeListings = myListings.filter(l => l.status === "active").length;
-    const totalViews = myListings.reduce((s, l) => s + (l.views_count || 0), 0);
+    const activeListings = manageableListingSummary?.activeListings ??
+      myListings.filter(l => l.status === "active").length;
+    const totalViews = manageableListingSummary?.totalViews ??
+      myListings.reduce((s, l) => s + (l.views_count || 0), 0);
     const sellSideStats = [
       { label: tr("dashboard.stats.activeListings", "Active Listings"), value: activeListings, icon: Building2, color: "text-primary" },
       { label: tr("dashboard.stats.totalViews", "Total Views"), value: totalViews, icon: Eye, color: "text-brand-emerald" },
@@ -336,7 +347,7 @@ export default function Dashboard() { // skipcq: JS-R1005
         ? (role === "institutional" ? "institutional" : "investor")
         : (bioType ?? (role === "seller" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "developer" ? "developer" : "buyer"));
     return statsByType[key] ?? statsByType.buyer;
-  }, [myListings, favorites, savedSearches, auctionAlerts, upcomingViewingsCount, ownViewingsCount, professionalServices, pendingLeadsCount, leads, bioType, role, hasInvestorAccess, tr]);
+  }, [manageableListingSummary, myListings, favorites, savedSearches, auctionAlerts, upcomingViewingsCount, ownViewingsCount, professionalServices, pendingLeadsCount, leads, bioType, role, hasInvestorAccess, tr]);
 
   const planUsage = useMemo(() => {
     const monthStart = startOfCurrentMonth().toISOString();
@@ -348,9 +359,17 @@ export default function Dashboard() { // skipcq: JS-R1005
       viewingsThisMonth: (usesHostedViewingAllowance ? ownViewings : viewings)
         .filter(v => v.created_at >= monthStart).length,
       auctionAlerts: auctionAlerts.filter(a => a.active).length,
-      listings: myListings.filter(l => l.status === "active").length,
+      listings: actorOwnedListings.filter(l => l.status === "active").length,
     };
-  }, [savedSearches, viewings, ownViewings, auctionAlerts, myListings, bioType, role]);
+  }, [
+    savedSearches,
+    viewings,
+    ownViewings,
+    auctionAlerts,
+    actorOwnedListings,
+    bioType,
+    role,
+  ]);
 
   const showPlanCard = useMemo(
     () => !hasInvestorAccess && (["buyer", "seller", "agent", "developer", "professional"].includes(bioType ?? "") || role === "seller"),
@@ -458,6 +477,7 @@ export default function Dashboard() { // skipcq: JS-R1005
                 <DashboardPlanCard
                   audience={role === "admin" ? "admin" : (bioType ?? "buyer") as ParticipantId}
                   isPro={isPro}
+                  loading={subscriptionLoading || actorOwnedListingsLoading}
                   hasPaidPromotionCredits={hasPaidPromotionCredits}
                   usage={planUsage}
                 />

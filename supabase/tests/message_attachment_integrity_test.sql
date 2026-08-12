@@ -1,18 +1,20 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(4);
+SELECT plan(6);
 
 SET LOCAL session_replication_role = replica;
 
 INSERT INTO auth.users (id)
 VALUES
   ('a1000000-0000-4000-8000-000000000001'),
-  ('a1000000-0000-4000-8000-000000000002');
+  ('a1000000-0000-4000-8000-000000000002'),
+  ('a1000000-0000-4000-8000-000000000003');
 
 INSERT INTO public.profiles (user_id, role)
 VALUES
   ('a1000000-0000-4000-8000-000000000001', 'buyer'),
-  ('a1000000-0000-4000-8000-000000000002', 'seller');
+  ('a1000000-0000-4000-8000-000000000002', 'seller'),
+  ('a1000000-0000-4000-8000-000000000003', 'buyer');
 
 INSERT INTO public.conversations (id, participant_a, participant_b)
 VALUES (
@@ -20,21 +22,6 @@ VALUES (
   'a1000000-0000-4000-8000-000000000001',
   'a1000000-0000-4000-8000-000000000002'
 );
-
-INSERT INTO public.messages (id, conversation_id, sender_id, content)
-VALUES
-  (
-    'a3000000-0000-4000-8000-000000000001',
-    'a2000000-0000-4000-8000-000000000001',
-    'a1000000-0000-4000-8000-000000000001',
-    'participant A message'
-  ),
-  (
-    'a3000000-0000-4000-8000-000000000002',
-    'a2000000-0000-4000-8000-000000000001',
-    'a1000000-0000-4000-8000-000000000002',
-    'participant B message'
-  );
 
 SET LOCAL session_replication_role = origin;
 SELECT set_config(
@@ -44,40 +31,78 @@ SELECT set_config(
 );
 SET LOCAL ROLE authenticated;
 
-SELECT lives_ok(
-  $$
-    INSERT INTO public.message_attachments (
-      id,
-      message_id,
-      storage_path,
-      filename
-    ) VALUES (
-      'a4000000-0000-4000-8000-000000000001',
-      'a3000000-0000-4000-8000-000000000001',
-      'a1000000-0000-4000-8000-000000000001/own-file.pdf',
-      'own-file.pdf'
-    )
-  $$,
-  'a sender can attach a file to their own message'
-);
-
 SELECT throws_ok(
   $$
     INSERT INTO public.message_attachments (
-      id,
       message_id,
       storage_path,
       filename
     ) VALUES (
-      'a4000000-0000-4000-8000-000000000002',
-      'a3000000-0000-4000-8000-000000000002',
-      'a1000000-0000-4000-8000-000000000001/forged-file.pdf',
-      'forged-file.pdf'
+      'a3000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000001/direct-file.pdf',
+      'direct-file.pdf'
     )
   $$,
   '42501',
   NULL,
-  'a participant cannot attach a file to another sender message'
+  'authenticated callers cannot insert attachment metadata directly'
+);
+
+SELECT lives_ok(
+  $$
+    SELECT public.send_message_with_attachments(
+      'a2000000-0000-4000-8000-000000000001',
+      'participant A message',
+      'a4000000-0000-4000-8000-000000000001',
+      '[{"storage_path":"a1000000-0000-4000-8000-000000000001/own-file.pdf","filename":"own-file.pdf","mime_type":"application/pdf"}]'::jsonb
+    )
+  $$,
+  'a participant can atomically deliver a message with attachment metadata'
+);
+
+RESET ROLE;
+
+SELECT is(
+  (
+    SELECT sender_id
+    FROM public.messages
+    WHERE client_delivery_id = 'a4000000-0000-4000-8000-000000000001'
+  ),
+  'a1000000-0000-4000-8000-000000000001'::uuid,
+  'the delivery RPC binds the message sender to the authenticated participant'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM public.message_attachments AS attachment
+    JOIN public.messages AS message ON message.id = attachment.message_id
+    WHERE message.client_delivery_id = 'a4000000-0000-4000-8000-000000000001'
+      AND attachment.storage_path = 'a1000000-0000-4000-8000-000000000001/own-file.pdf'
+  ),
+  1,
+  'the attachment metadata is committed with the message'
+);
+
+SELECT set_config(
+  'request.jwt.claim.sub',
+  'a1000000-0000-4000-8000-000000000003',
+  true
+);
+SET LOCAL ROLE authenticated;
+
+SELECT throws_ok(
+  $$
+    SELECT public.send_message_with_attachments(
+      'a2000000-0000-4000-8000-000000000001',
+      'outsider message',
+      'a4000000-0000-4000-8000-000000000002',
+      '[]'::jsonb
+    )
+  $$,
+  '42501',
+  'conversation_not_available',
+  'a nonparticipant cannot deliver a message to the conversation'
 );
 
 RESET ROLE;
@@ -85,21 +110,11 @@ RESET ROLE;
 SELECT is(
   (
     SELECT count(*)::integer
-    FROM public.message_attachments
-    WHERE id = 'a4000000-0000-4000-8000-000000000001'
-  ),
-  1,
-  'the legitimate sender attachment is stored'
-);
-
-SELECT is(
-  (
-    SELECT count(*)::integer
-    FROM public.message_attachments
-    WHERE id = 'a4000000-0000-4000-8000-000000000002'
+    FROM public.messages
+    WHERE client_delivery_id = 'a4000000-0000-4000-8000-000000000002'
   ),
   0,
-  'the forged participant attachment is not stored'
+  'a rejected outsider delivery leaves no message behind'
 );
 
 SELECT * FROM finish();

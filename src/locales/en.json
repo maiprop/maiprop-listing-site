@@ -81,6 +81,72 @@
       "auctions": "Auctions",
       "newBuilds": "New Buildings",
       "quickSale": "Quick Sale"
+    },
+    "catalogue": {
+      "featuredError": "Could not load Spotlight properties.",
+      "auctionsEyebrow": "Greek auctions",
+      "auctionsTitle": "This week's auctions",
+      "allAuctions": "All auctions",
+      "auctionsError": "Could not load auctions.",
+      "auctionsEmpty": "There are no scheduled auctions right now.",
+      "openHousesEyebrow": "Open Houses",
+      "openHousesTitle": "Scheduled viewings — no appointment needed",
+      "allOpenHouses": "All Open Houses",
+      "openHousesError": "Could not load Open Houses.",
+      "openHousesEmpty": "Open Houses are coming soon.",
+      "openHousesEmptyDetail": "New Open House viewings are added regularly."
+    }
+  },
+  "propertyAIInsights": {
+    "title": "AI Market Insights",
+    "poweredBy": "Powered by mAI Prop OS",
+    "prompt": "Run AI analysis when you need it",
+    "quota": {
+      "checking": "Checking AI request allowance...",
+      "pending": "AI request allowance will be checked before loading.",
+      "unlimited": "Unlimited AI insight requests this month",
+      "remainingFree": "{{remaining}} of {{limit}} Free AI insight requests remaining this month",
+      "remainingPro": "{{remaining}} of {{limit}} Pro AI insight requests remaining this month"
+    },
+    "actions": {
+      "upgrade": "Upgrade to Pro",
+      "buyAddon": "Buy AI add-on",
+      "load": "Load AI insights",
+      "refresh": "Refresh AI insights",
+      "loading": "Loading insights..."
+    },
+    "analysing": "Analysing market data...",
+    "unavailable": "Unavailable",
+    "analysisUnavailable": "Market analysis unavailable",
+    "labels": {
+      "vsMarket": "vs Market",
+      "vsRentalMarket": "vs Rental Market",
+      "rentalYield": "Rental Yield",
+      "rentPerSqmMonth": "Rent / m² / mo",
+      "rentDensity": "Estimated monthly rent density",
+      "grossYield": "Est. gross annual yield",
+      "estimate": "AI Estimate",
+      "rentEstimate": "AI Rent Estimate",
+      "confidence": "Confidence"
+    },
+    "benchmarkMissing": {
+      "market": "Market benchmark not returned",
+      "rent": "Rent benchmark not returned"
+    },
+    "comparison": {
+      "belowMarket": "Below Market",
+      "atMarket": "At Market",
+      "aboveMarket": "Above Market"
+    },
+    "confidence": {
+      "veryLow": "Very Low",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "veryHigh": "Very High"
+    },
+    "units": {
+      "month": "mo"
     }
   },
   "listings": {
@@ -161,6 +227,15 @@
     "alarm": "Alarm",
     "airConditioning": "A/C",
     "heating": "Heating",
+    "condition": "Condition",
+    "notProvided": "Not provided",
+    "listingLabels": {
+      "sale": "For sale",
+      "rent": "For rent",
+      "auction": "For auction",
+      "openHouseRental": "Open house rental",
+      "openHouseSale": "Open house sale"
+    },
     "askingPrice": "Asking price",
     "minimumBid": "First offer price",
     "requestViewing": "Request a viewing",
@@ -265,6 +340,31 @@
     "syncStatus": "Sync status",
     "lastSync": "Last synced",
     "noAuctions": "No auctions found",
+    "loadingFullCatalogue": "Loading the full Pro auction catalogue...",
+    "fullCatalogueFailed": "The public preview is available, but the full Pro catalogue could not load.",
+    "retryFullCatalogue": "Retry full catalogue",
+    "card": {
+      "spotlight": "Spotlight",
+      "built": "Built",
+      "save": "Save",
+      "saved": "Saved",
+      "share": "Share",
+      "report": "Report",
+      "eAuction": "eAuction",
+      "linkCopied": "Link copied to clipboard",
+      "reportSubmitted": "Report submitted. Our team will review it."
+    },
+    "detail": {
+      "verifyingCached": "Showing cached auction details while we verify the latest information.",
+      "refreshFailed": "Live auction details could not be refreshed. The information shown may be outdated.",
+      "auction": "Auction",
+      "timing": "Timing",
+      "ownership": "Ownership",
+      "share": "Share",
+      "today": "Today",
+      "daysToGo": "{{count}} day to go",
+      "daysToGo_other": "{{count}} days to go"
+    },
     "filters": {
       "allCourts": "All auction officers / platforms",
       "allTypes": "All types",
@@ -389,6 +489,9 @@
       "mapItemOther": "{{count}} open houses",
       "noMapListings": "No open houses with location data to show on the map.",
       "switchToList": "Switch to list",
+      "mapWindowIncomplete": "Zoom in to load all open houses",
+      "loadMoreError": "Could not load more open houses.",
+      "retryLoadMore": "Retry loading more open houses",
       "errorTitle": "Unable to load open houses",
       "retryPrompt": "Please try again.",
       "retryButton": "Retry",
@@ -1391,6 +1494,15 @@
   "createListing": {
     "title": "Create New Listing",
     "stepProgress": "Step {{current}} of {{total}} - {{label}}",
+    "owner": {
+      "label": "Listing owner",
+      "personal": "My personal account",
+      "help": "Choose the account responsible for this listing.",
+      "locked": "Listing ownership cannot be changed after creation."
+    },
+    "edit": {
+      "notAllowedBody": "You can only edit listings you own or manage for an active organization."
+    },
     "steps": {
       "type": "Type",
       "details": "Details",
@@ -1970,6 +2082,9 @@
     },
     "building": {
       "heading": "Building & Project Details",
+      "ownerScope": "Publish under",
+      "personalAccount": "Personal account",
+      "ownerScopeHint": "The selected account owns the project, listing, units, media, and leads.",
       "projectName": "Project name",
       "projectNamePlaceholder": "e.g. Marina Heights",
       "permitNumber": "Building permit number",

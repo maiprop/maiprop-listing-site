@@ -1,36 +1,39 @@
 import {
   cachedJson,
+  isPublicCatalogueSnapshotExpiredError,
   isSupabaseTransientError,
   jsonResponse,
   methodNotAllowed,
   missingRuntime,
   normalizedCacheUrl,
+  publicCatalogueValidityHeaders,
   safeToken,
-  supabaseCount,
-  supabaseJson,
+  supabaseRpcJson,
   upstreamUnavailable,
   type PublicApiCtx,
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
-import { PUBLIC_LISTING_CATALOGUE_PATH } from "../../_publicListingProjection";
 import { publicAuctions } from "./auctions";
 import { publicListingRows } from "./_fixture-content";
 import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
 import { normalizePublicPromotionState } from "./_promotionState";
 
-type ListingRow = Record<string, unknown> & {
-  owner_id?: string | null;
-  property_type?: string | null;
-  cover_image_url?: string | null;
-  listing_images?: Array<{ url: string; sort_order: number }>;
-  city?: string | null;
-  price_per_sqm?: number | string | null;
-  created_at?: string | null;
-  is_featured?: boolean | null;
-  featured_until?: string | null;
-  priority_placement?: number | null;
-  priority_until?: string | null;
+type HomepagePublicationRow = {
+  publication_id?: unknown;
+  published_at?: unknown;
+  retain_until?: unknown;
+  payload?: unknown;
+};
+
+type HomepagePayload = {
+  publication_id?: unknown;
+  featured?: unknown;
+  open_houses?: unknown;
+  property_type_counts?: unknown;
+  popular_locations?: unknown;
+  price_index?: unknown;
+  auction_count?: unknown;
 };
 
 const SECTIONS = [
@@ -42,8 +45,8 @@ const SECTIONS = [
   "price-index",
   "auction-count",
 ] as const;
-const HOMEPAGE_CACHE_VERSION = "popular-location-live-v2";
-const FEATURED_CACHE_VERSION = "active-spotlight-v4";
+const HOMEPAGE_CACHE_VERSION = "catalogue-publication-v4";
+const FEATURED_CACHE_VERSION = "catalogue-publication-featured-v6";
 const FEATURED_CACHE_SECONDS = 60;
 const HOMEPAGE_PRODUCER_TIMEOUT_MS = 4_500;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
@@ -57,223 +60,149 @@ const PRICE_INDEX_FALLBACK = [
 ] as const;
 const POPULAR_LOCATION_NAMES = ["Athens", "Thessaloniki", "Mykonos", "Santorini"] as const;
 
-const featuredSelect =
-  "id,owner_id,created_at,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,project,listing_images";
-
-const openHouseSelect =
-  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,open_house_transaction_type,ai_score,views_count,tags,open_house_date,latitude,longitude,listing_images";
-
-function sortByImagePresence<T extends ListingRow>(rows: T[]): T[] {
-  return [...rows].sort((a, b) => {
-    const aHasImg = Boolean(a.cover_image_url || a.listing_images?.length);
-    const bHasImg = Boolean(b.cover_image_url || b.listing_images?.length);
-    return Number(bHasImg) - Number(aHasImg);
-  });
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
-function dailyCacheBucket(): string {
-  return new Date().toISOString().slice(0, 10);
+function recordArray(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value)
+    ? value.map(recordValue).filter((row): row is Record<string, unknown> => row !== null)
+    : [];
 }
 
-async function fetchPopularLocations(env: PublicApiEnv) {
-  const cities = [...POPULAR_LOCATION_NAMES];
-  const countEntries = await Promise.all(
-    cities.map(async (city) => {
-      const params = new URLSearchParams();
-      params.set("select", "id");
-      params.set("status", "eq.active");
-      params.set("is_off_market", "eq.false");
-      params.set("city", `eq.${city}`);
-      return [city, await supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, params, {
-        failOnTransient: true,
-        countStrategy: "estimated",
-      })] as const;
-    }),
+async function fetchHomepagePublication(env: PublicApiEnv): Promise<{
+  publicationId: number;
+  publishedAt: string;
+  retainUntil: string;
+  payload: HomepagePayload;
+}> {
+  const rows = await supabaseRpcJson<HomepagePublicationRow>(
+    env,
+    "get_public_catalogue_homepage",
+    { p_publication_id: null },
+    { failOnTransient: true },
   );
-  const listingsByCity = Object.fromEntries(countEntries);
-
-  const now = new Date();
-  const currStart = new Date(now);
-  currStart.setDate(currStart.getDate() - 30);
-  const prevStart = new Date(now);
-  prevStart.setDate(prevStart.getDate() - 60);
-
-  const params = new URLSearchParams();
-  params.set("select", "city,price_per_sqm,created_at");
-  params.set("status", "eq.active");
-  params.set("listing_type", "eq.sale");
-  params.set("is_off_market", "eq.false");
-  params.set("city", `in.(${cities.join(",")})`);
-  params.append("price_per_sqm", "not.is.null");
-  params.set("created_at", `gte.${prevStart.toISOString()}`);
-  params.append("created_at", `lt.${now.toISOString()}`);
-  params.set("limit", "1000");
-  const priceRows = await supabaseJson<ListingRow>(env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true });
-
-  const currentPrices: Record<string, number[]> = {};
-  const prevPrices: Record<string, number[]> = {};
-  for (const row of priceRows) {
-    const city = row.city?.trim();
-    const price = row.price_per_sqm == null ? NaN : Number(row.price_per_sqm);
-    const createdAt = row.created_at ? new Date(row.created_at) : null;
-    if (!city || !Number.isFinite(price) || !createdAt) continue;
-    const bucket = createdAt >= currStart ? currentPrices : prevPrices;
-    bucket[city] = bucket[city] ?? [];
-    bucket[city].push(price);
+  const publicationId = Number(rows[0]?.publication_id);
+  const publishedAt = rows[0]?.published_at;
+  const retainUntil = rows[0]?.retain_until;
+  const payload = recordValue(rows[0]?.payload) as HomepagePayload | null;
+  if (
+    !Number.isSafeInteger(publicationId) ||
+    publicationId < 1 ||
+    typeof publishedAt !== "string" ||
+    !Number.isFinite(Date.parse(publishedAt)) ||
+    typeof retainUntil !== "string" ||
+    !Number.isFinite(Date.parse(retainUntil)) ||
+    !payload ||
+    Number(payload.publication_id) !== publicationId
+  ) {
+    throw new Error("Homepage catalogue publication is invalid");
   }
-
-  return cities.map((name) => {
-    const prev = prevPrices[name] ?? [];
-    const curr = currentPrices[name] ?? [];
-    let trend: string | null = null;
-    let trendUp: boolean | null = null;
-    let trendIsLive = false;
-    if (prev.length >= 2 && curr.length >= 2) {
-      const prevAvg = prev.reduce((sum, price) => sum + price, 0) / prev.length;
-      const currAvg = curr.reduce((sum, price) => sum + price, 0) / curr.length;
-      if (Number.isFinite(prevAvg) && prevAvg > 0 && Number.isFinite(currAvg)) {
-        const pct = ((currAvg - prevAvg) / prevAvg) * 100;
-        trendUp = pct >= 0;
-        trend = `${trendUp ? "+" : "-"}${Math.abs(Math.round(pct * 10) / 10).toFixed(1)}%`;
-        trendIsLive = true;
-      }
-    }
-    return {
-      name,
-      listings: listingsByCity[name] ?? 0,
-      trend,
-      trendUp,
-      trendIsLive,
-    };
-  });
+  return {
+    publicationId,
+    publishedAt: new Date(Date.parse(publishedAt)).toISOString(),
+    retainUntil: new Date(Date.parse(retainUntil)).toISOString(),
+    payload,
+  };
 }
 
-async function fetchPriceIndex(env: PublicApiEnv) {
-  const now = new Date();
-  const currStart = new Date(now);
-  currStart.setDate(currStart.getDate() - 30);
-  const prevStart = new Date(now);
-  prevStart.setDate(prevStart.getDate() - 60);
-  const cities = PRICE_INDEX_FALLBACK.map((fallback) => fallback.city);
-  const params = new URLSearchParams();
-  params.set("select", "id,city,price_per_sqm,created_at");
-  params.set("status", "eq.active");
-  params.set("listing_type", "eq.sale");
-  params.set("is_off_market", "eq.false");
-  params.set("city", `in.(${cities.join(",")})`);
-  params.append("price_per_sqm", "not.is.null");
-  params.append("price_per_sqm", "gt.100");
-  params.set("created_at", `gte.${prevStart.toISOString()}`);
-  params.append("created_at", `lt.${now.toISOString()}`);
-  params.set("limit", "1000");
-  const rows = await supabaseJson<ListingRow>(env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true });
-
-  const currentPrices: Record<string, number[]> = {};
-  const previousPrices: Record<string, number[]> = {};
-  for (const row of rows) {
-    const city = row.city?.trim();
-    const price = row.price_per_sqm == null ? NaN : Number(row.price_per_sqm);
-    const createdAt = row.created_at ? new Date(row.created_at) : null;
-    if (!city || !Number.isFinite(price) || !createdAt) continue;
-    const bucket = createdAt >= currStart ? currentPrices : previousPrices;
-    bucket[city] = bucket[city] ?? [];
-    bucket[city].push(price);
-  }
-
-  return PRICE_INDEX_FALLBACK.map((fallback) => {
-    const current = currentPrices[fallback.city] ?? [];
-    const previous = previousPrices[fallback.city] ?? [];
-    if (current.length < 2) return fallback;
-    const currentAvg = current.reduce((sum, price) => sum + price, 0) / current.length;
-    let trendChangePct: number | null = null;
-    let trendUp: boolean | null = null;
-    if (previous.length >= 2) {
-      const previousAvg = previous.reduce((sum, price) => sum + price, 0) / previous.length;
-      if (Number.isFinite(previousAvg) && previousAvg > 0) {
-        trendChangePct = Math.round(((currentAvg - previousAvg) / previousAvg) * 1000) / 10;
-        trendUp = trendChangePct >= 0;
-      }
-    }
-    return {
-      city: fallback.city,
-      avg_price_per_sqm: Math.round(currentAvg),
-      listing_count: current.length,
-      is_live: true,
-      trend_change_pct: trendChangePct,
-      trend_up: trendUp,
-      trend_is_live: trendChangePct !== null,
-    };
-  });
-}
-
-async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number]): Promise<unknown> {
+async function fetchSection(
+  env: PublicApiEnv,
+  section: (typeof SECTIONS)[number],
+): Promise<{ data: unknown; retainUntil: string }> {
+  const { payload, publishedAt, publicationId, retainUntil } =
+    await fetchHomepagePublication(env);
+  const result = (data: unknown) => ({ data, retainUntil });
   if (section === "type-counts") {
-    const counts = await Promise.all(
-      COUNTED_PROPERTY_TYPES.map(async (propertyType) => {
-        const params = new URLSearchParams();
-        params.set("select", "id");
-        params.set("status", "eq.active");
-        params.set("is_off_market", "eq.false");
-        params.set("property_type", `eq.${propertyType}`);
-        return [propertyType, await supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, params, {
-          failOnTransient: true,
-          countStrategy: "estimated",
-        })] as const;
-      }),
-    );
-    return Object.fromEntries(counts);
+    const counts = recordValue(payload.property_type_counts) ?? {};
+    return result(Object.fromEntries(
+      COUNTED_PROPERTY_TYPES.map((propertyType) => [
+        propertyType,
+        Number(counts[propertyType] ?? 0),
+      ]),
+    ));
   }
-
-  const params = new URLSearchParams();
-  params.set("status", "eq.active");
-  params.set("is_off_market", "eq.false");
-  params.set("limit", "6");
 
   if (section === "featured") {
-    params.set("select", featuredSelect);
-    params.set("listing_type", "in.(sale,new_build)");
-    params.set("is_featured", "eq.true");
-    params.set("featured_until", `gt.${new Date().toISOString()}`);
-    params.set("order", "created_at.desc");
-    params.set("limit", "12");
-    const nowMs = Date.now();
-    const rows = publicListingRows(
-      await supabaseJson<ListingRow>(env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true }),
-      4,
-    ).map((row) => normalizePublicPromotionState(row, nowMs));
-    const ownerIds = rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
+    const nowMs = Date.parse(publishedAt);
+    const rows = publicListingRows(recordArray(payload.featured), 4)
+      .map((row) => normalizePublicPromotionState(row, nowMs));
+    const ownerIds = rows
+      .map((row) => row.owner_id)
+      .filter((id): id is string => typeof id === "string");
     const profiles = await fetchPublicProfileSummaries(env, ownerIds);
-    return rows.map((row) => ({
-      ...row,
-      profiles: publicProfileDisplay(row.owner_id ? profiles.get(row.owner_id) : null),
-      ownerParticipantType: row.owner_id ? profiles.get(row.owner_id)?.owner_participant_type ?? null : null,
+    return result(rows.map((row) => {
+      const ownerId = typeof row.owner_id === "string" ? row.owner_id : null;
+      return {
+        ...row,
+        publicationId,
+        profiles: publicProfileDisplay(
+          ownerId ? profiles.get(ownerId) : null,
+        ),
+        ownerParticipantType: ownerId
+          ? profiles.get(ownerId)?.owner_participant_type ?? null
+          : null,
+      };
     }));
   }
 
+  if (section === "open-houses") {
+    return result(
+      publicListingRows(recordArray(payload.open_houses), 6)
+        .map((row) => ({ ...row, publicationId })),
+    );
+  }
+
   if (section === "auction-count") {
-    params.set("select", "id");
-    params.set("listing_type", "eq.auction");
-    return supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, params, {
-      failOnTransient: true,
-      countStrategy: "estimated",
-    });
+    const count = Number(payload.auction_count ?? 0);
+    return result(Number.isSafeInteger(count) && count >= 0 ? count : 0);
   }
 
   if (section === "popular-locations") {
-    return fetchPopularLocations(env);
+    const liveCounts = new Map(
+      recordArray(payload.popular_locations).map((row) => [
+        String(row.city ?? ""),
+        Number(row.listing_count ?? 0),
+      ]),
+    );
+    return result(POPULAR_LOCATION_NAMES.map((name) => ({
+      name,
+      listings: liveCounts.get(name) ?? 0,
+      trend: null,
+      trendUp: null,
+      trendIsLive: false,
+    })));
   }
 
   if (section === "price-index") {
-    return fetchPriceIndex(env);
+    const liveRows = new Map(
+      recordArray(payload.price_index).map((row) => [
+        String(row.city ?? ""),
+        row,
+      ]),
+    );
+    return result(PRICE_INDEX_FALLBACK.map((fallback) => {
+      const live = liveRows.get(fallback.city);
+      const average = Number(live?.avg_price_per_sqm);
+      const count = Number(live?.listing_count);
+      if (!Number.isFinite(average) || !Number.isSafeInteger(count) || count < 1) {
+        return fallback;
+      }
+      return {
+        city: fallback.city,
+        avg_price_per_sqm: Math.round(average),
+        listing_count: count,
+        is_live: true,
+        trend_change_pct: null,
+        trend_up: null,
+        trend_is_live: false,
+      };
+    }));
   }
 
-  const now = new Date().toISOString();
-  params.set("select", openHouseSelect);
-  params.set("listing_type", "eq.open_house");
-  params.set("open_house_date", `gte.${now}`);
-  params.set("order", "open_house_date.asc");
-  params.set("limit", "12");
-  return sortByImagePresence(publicListingRows(await supabaseJson<ListingRow>(env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true }), 6));
+  throw new Error(`Unsupported homepage section: ${section}`);
 }
 
 async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
@@ -296,12 +225,10 @@ async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
     auctionUrl.searchParams.set("limit", "6");
     return publicAuctions(ctx, auctionUrl);
   }
-
   const cacheParams = new URLSearchParams([
     ["section", section],
     ["v", section === "featured" ? FEATURED_CACHE_VERSION : HOMEPAGE_CACHE_VERSION],
   ]);
-  if (section === "featured") cacheParams.set("day", dailyCacheBucket());
   const cacheKey = normalizedCacheUrl(requestUrl, "homepage", cacheParams);
   const cacheOptions = section === "featured"
     ? {
@@ -320,8 +247,28 @@ async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
       };
   return cachedJson(ctx, cacheKey, async () => {
     try {
-      return jsonResponse(await fetchSection(ctx.env, section));
+      const result = await fetchSection(ctx.env, section);
+      return jsonResponse(
+        result.data,
+        {
+          headers: publicCatalogueValidityHeaders({
+            retainUntil: result.retainUntil,
+          }),
+        },
+      );
     } catch (error) {
+      if (isPublicCatalogueSnapshotExpiredError(error)) {
+        return jsonResponse(
+          { error: "Homepage catalogue publication is no longer active" },
+          {
+            status: 409,
+            headers: {
+              "Cache-Control": "no-store",
+              "CDN-Cache-Control": "no-store",
+            },
+          },
+        );
+      }
       if (isSupabaseTransientError(error)) return upstreamUnavailable();
       throw error;
     }

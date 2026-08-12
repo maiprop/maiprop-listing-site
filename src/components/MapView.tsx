@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   MapPin, Maximize2, PenLine,
-  X, Flame, CheckCircle2,
+  X, Flame, CheckCircle2, Loader2,
 } from "lucide-react";
 import { MAPBOX_TOKEN } from "@/lib/config";
 import {
@@ -17,10 +17,24 @@ import { PropertyPopup } from "@/components/map/PropertyPopup";
 
 export type { MapListing };
 
+export type MapViewportBounds = {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+};
+
+export type MapPolygon = Array<[number, number]>;
+
 export interface MapViewProps {
   listings: MapListing[];
   onVisibleListingsChange?: (ids: Set<string>) => void;
+  onViewportBoundsChange?: (bounds: MapViewportBounds) => void;
   onPolygonFilter?: (ids: Set<string> | null) => void;
+  polygonPoints?: MapPolygon | null;
+  onPolygonChange?: (points: MapPolygon | null) => void;
+  isLoading?: boolean;
+  resultsIncomplete?: boolean;
   height?: string;
   itemLabelSingular?: string;
   itemLabelPlural?: string;
@@ -73,7 +87,12 @@ function boundsKey(bounds: { getWest: () => number; getSouth: () => number; getE
 export function MapView({
   listings,
   onVisibleListingsChange,
+  onViewportBoundsChange,
   onPolygonFilter,
+  polygonPoints,
+  onPolygonChange,
+  isLoading = false,
+  resultsIncomplete = false,
   height,
   itemLabelSingular = "property",
   itemLabelPlural = "properties",
@@ -104,9 +123,24 @@ export function MapView({
 
   // Draw state
   const [drawMode, setDrawMode] = useState(false);
-  const [drawnPoints, setDrawnPoints] = useState<[number, number][]>([]);
+  const [drawnPoints, setDrawnPoints] = useState<MapPolygon>(
+    () => polygonPoints ?? [],
+  );
   const [hoverPoint, setHoverPoint] = useState<[number, number] | null>(null);
-  const [polygonClosed, setPolygonClosed] = useState(false);
+  const [polygonClosed, setPolygonClosed] = useState(
+    () => (polygonPoints?.length ?? 0) >= 3,
+  );
+
+  useEffect(() => {
+    if (polygonPoints === undefined) return;
+    const nextPoints = polygonPoints ?? [];
+    setDrawnPoints(nextPoints);
+    setPolygonClosed(nextPoints.length >= 3);
+    if (nextPoints.length < 3) {
+      setDrawMode(false);
+      setHoverPoint(null);
+    }
+  }, [polygonPoints]);
 
   // Heatmap state
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -200,7 +234,15 @@ export function MapView({
     );
   }, [mapBounds]);
 
-  useEffect(() => { const t = setTimeout(fitBounds, 300); return () => clearTimeout(t); }, [fitBounds]);
+  const hasAutoFitRef = useRef(false);
+  useEffect(() => {
+    if (!mapBounds || hasAutoFitRef.current) return;
+    const timer = window.setTimeout(() => {
+      fitBounds();
+      hasAutoFitRef.current = true;
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [fitBounds, mapBounds]);
 
   // ── Compute visible listings ─────────────────────────────────────────────
   const computeVisible = useCallback(() => { // skipcq: JS-R1005 - Visible listing computation is tied to map bounds and callback state.
@@ -214,12 +256,24 @@ export function MapView({
     onVisibleListingsChange(ids);
   }, [mapped, onVisibleListingsChange]);
 
+  const emitViewportBounds = useCallback(() => {
+    if (!onViewportBoundsChange) return;
+    const bounds = mapRef.current?.getMap?.()?.getBounds?.();
+    if (!bounds) return;
+    onViewportBoundsChange({
+      west: Number(bounds.getWest().toFixed(4)),
+      south: Number(bounds.getSouth().toFixed(4)),
+      east: Number(bounds.getEast().toFixed(4)),
+      north: Number(bounds.getNorth().toFixed(4)),
+    });
+  }, [onViewportBoundsChange]);
+
   const lastVisibleBoundsKeyRef = useRef<string | null>(null);
   const visibleTimerRef = useRef<number | null>(null);
   const visibleRafRef = useRef<number | null>(null);
 
   const scheduleComputeVisible = useCallback((force = false) => { // skipcq: JS-R1005 - Scheduler coordinates bounds dedupe, timer cleanup, and RAF batching.
-    if (!onVisibleListingsChange) return;
+    if (!onVisibleListingsChange && !onViewportBoundsChange) return;
     const map = mapRef.current?.getMap?.();
     const bounds = map?.getBounds?.();
     if (!bounds) return;
@@ -237,9 +291,14 @@ export function MapView({
       visibleRafRef.current = window.requestAnimationFrame(() => {
         visibleRafRef.current = null;
         computeVisible();
+        emitViewportBounds();
       });
     }, force ? 0 : VISIBLE_RECALC_THROTTLE_MS);
-  }, [computeVisible, onVisibleListingsChange]);
+  }, [computeVisible, emitViewportBounds, onViewportBoundsChange, onVisibleListingsChange]);
+
+  useEffect(() => {
+    scheduleComputeVisible(true);
+  }, [mapped, scheduleComputeVisible]);
 
   useEffect(() => () => {
     if (visibleTimerRef.current != null) window.clearTimeout(visibleTimerRef.current);
@@ -252,15 +311,13 @@ export function MapView({
     setPolygonClosed(true);
     setDrawMode(false);
     setHoverPoint(null);
-    if (!onPolygonFilter) return;
-    const ids = new Set<string>();
-    for (const l of mapped) {
-      if (l.longitude != null && l.latitude != null &&
-        pointInPolygon([Number(l.longitude), Number(l.latitude)], points))
-        ids.add(l.id);
-    }
-    onPolygonFilter(ids);
-  }, [mapped, onPolygonFilter]);
+    onPolygonChange?.([...points]);
+  }, [onPolygonChange]);
+
+  useEffect(() => {
+    if (!areaFilterActive || !onPolygonFilter) return;
+    onPolygonFilter(new Set(displayMapped.map((listing) => listing.id)));
+  }, [areaFilterActive, displayMapped, onPolygonFilter]);
 
   // ── Clear polygon ────────────────────────────────────────────────────────
   const clearPolygon = useCallback(() => {
@@ -269,7 +326,8 @@ export function MapView({
     setDrawMode(false);
     setHoverPoint(null);
     onPolygonFilter?.(null);
-  }, [onPolygonFilter]);
+    onPolygonChange?.(null);
+  }, [onPolygonChange, onPolygonFilter]);
 
   // ── Click handler ────────────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -505,7 +563,7 @@ export function MapView({
       {polygonClosed && (
         <div className="absolute top-24 sm:top-14 left-1/2 -translate-x-1/2 z-10 pointer-events-none w-[calc(100%-1.5rem)] sm:w-auto">
           <p className="text-xs bg-primary/15 backdrop-blur-sm rounded-xl px-3 py-2 border border-primary/35 text-primary font-semibold shadow-sm text-center">
-            {polygonMatchCount} {polygonMatchCount === 1 ? itemLabelSingular : itemLabelPlural} in area
+            {polygonMatchCount}{resultsIncomplete ? "+" : ""} {polygonMatchCount === 1 ? itemLabelSingular : itemLabelPlural} in area
           </p>
         </div>
       )}
@@ -533,7 +591,16 @@ export function MapView({
         </p>
       </div>
 
-      {mapped.length === 0 && (
+      {isLoading && mapped.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="glass-card rounded-xl px-6 py-4 text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">Updating map results</p>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && mapped.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="glass-card rounded-xl px-6 py-4 text-center">
             <MapPin className="w-8 h-8 text-muted-foreground mx-auto mb-2" />

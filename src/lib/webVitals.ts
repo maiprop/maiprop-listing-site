@@ -1,3 +1,5 @@
+import { getRuntimeValue } from "@/lib/runtimeConfig";
+
 type WebVitalsMetricName = "fcp" | "lcp" | "cls" | "inp";
 
 export type WebVitalsSnapshot = Record<WebVitalsMetricName, number> & {
@@ -48,7 +50,7 @@ declare global {
 }
 
 function getConfiguredSampleRate(): number {
-  const raw = import.meta.env.VITE_WEB_VITALS_SAMPLE_RATE;
+  const raw = getRuntimeValue("VITE_WEB_VITALS_SAMPLE_RATE");
   const parsed = typeof raw === "string" ? Number(raw) : Number.NaN;
   return Number.isFinite(parsed) ? parsed : DEFAULT_SAMPLE_RATE;
 }

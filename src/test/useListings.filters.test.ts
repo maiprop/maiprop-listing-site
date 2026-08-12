@@ -20,7 +20,7 @@ const { recorded, supabaseMock } = vi.hoisted(() => {
   // Each chainable method records the call and returns the same proxy so the
   // chain in the SUT (`.from().select().order().eq().range().eq()...`) works.
   const builder: Record<string, unknown> = {};
-  const methods = ["select", "order", "limit", "range", "eq", "ilike", "or", "in", "gte", "lte"] as const;
+  const methods = ["select", "order", "limit", "range", "eq", "is", "ilike", "or", "in", "gte", "lte"] as const;
   for (const m of methods) {
     builder[m] = vi.fn((...args: unknown[]) => {
       recorded.push({ method: m, args });
@@ -191,6 +191,25 @@ describe("buildListingsQuery — listing-type / status scoping", () => {
     expect(calls("select").some((c) => String(c.args[0]).includes("listing_images"))).toBe(true);
     expect(calls("eq").some((c) => c.args[0] === "status")).toBe(false);
     expect(calls("eq").some((c) => c.args[0] === "owner_id" && c.args[1] === "owner-1")).toBe(true);
+  });
+
+  it("personal quota inventory excludes organization-owned rows from the same actor", () => {
+    buildListingsQuery({ owner_id: "owner-1", personalOnly: true });
+
+    expect(
+      calls("is").some((call) =>
+        call.args[0] === "organization_id" && call.args[1] === null
+      ),
+    ).toBe(true);
+  });
+
+  it("uses the capability-scoped catalogue for personal and organization-managed inventory", () => {
+    buildListingsQuery(undefined, 0, 40, { manageableScope: true });
+
+    expect(calls("rpc")[1]?.args[0]).toBe("get_manageable_listing_catalogue");
+    expect(calls("eq").some((c) => c.args[0] === "owner_id")).toBe(false);
+    expect(calls("eq").some((c) => c.args[0] === "status")).toBe(false);
+    expect(calls("in").find((c) => c.args[0] === "listing_type")).toBeUndefined();
   });
 
   it("with owner_id, omits the public listing-type allowlist so owned open houses are visible", () => {

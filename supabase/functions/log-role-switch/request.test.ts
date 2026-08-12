@@ -39,7 +39,7 @@ function stalledRequest(): { request: Request; wasCancelled: () => boolean } {
   };
 }
 
-Deno.test("role switch accepts destination binding and cancellation preflight contracts", async () => {
+Deno.test("role switch accepts an exact destination-bound cancellation contract", async () => {
   assertEquals(
     await parseRoleSwitchRequest(request({
       operation_id: operationId,
@@ -55,20 +55,6 @@ Deno.test("role switch accepts destination binding and cancellation preflight co
     },
   );
 
-  assertEquals(
-    await parseRoleSwitchRequest(request({
-      operation_id: operationId,
-      from_type: "agent",
-      to_type: "",
-      cancel_subscription: true,
-    })),
-    {
-      operation_id: operationId,
-      from_type: "agent",
-      to_type: "",
-      cancel_subscription: true,
-    },
-  );
 });
 
 Deno.test("role switch rejects invalid identities and client-authored audit facts", async () => {
@@ -82,6 +68,12 @@ Deno.test("role switch rejects invalid identities and client-authored audit fact
     const body of [
       { ...base, operation_id: "not-a-uuid" },
       { ...base, from_type: "admin" },
+      { ...base, to_type: "" },
+      {
+        operation_id: operationId,
+        from_type: "buyer",
+        cancel_subscription: true,
+      },
       { ...base, to_type: "root" },
       { ...base, cancel_subscription: false },
       { ...base, switch_kind: "same-tier" },

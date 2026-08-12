@@ -6,6 +6,7 @@ import { PropertyCard, type Property } from "@/components/PropertyCard";
 import { useInView } from "@/hooks/useInView";
 import { AUCTION_FALLBACK_LOGO_URL, getAuctionStreetViewCandidateUrl } from "@/lib/auctionStreetView";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
+import { useTranslation } from "react-i18next";
 
 type HomepageAuctionImage = {
   sort_order?: number | null;
@@ -45,6 +46,8 @@ type HomepageAuctionListing = {
 interface Props {
   listings: HomepageAuctionListing[];
   isLoading: boolean;
+  isError?: boolean;
+  onRetry?: () => unknown;
 }
 
 const HOMEPAGE_AUCTION_STREET_VIEW_SIZE = "480x270";
@@ -96,10 +99,17 @@ const valueOrUndefined = <T,>(value: T | null | undefined): T | undefined =>
 const textOr = (value: string | null | undefined, fallback: string): string =>
   value || fallback;
 
-const formatAuctionDate = (value: unknown): string | undefined =>
-  typeof value === "string" && value
-    ? new Date(value).toLocaleDateString("en-GB")
-    : undefined;
+const formatAuctionDate = (value: unknown, locale: string): string | undefined => {
+  if (typeof value !== "string" || !value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Europe/Athens",
+  }).format(date);
+};
 
 const getAuctionLocation = (listing: HomepageAuctionListing) => ({
   address: textOr(listing.address, listing.city),
@@ -126,11 +136,11 @@ const getAuctionDetails = (listing: HomepageAuctionListing) => ({ // skipcq: JS-
   energyClass: valueOrUndefined(listing.energy_class),
 });
 
-const getAuctionMetadata = (listing: HomepageAuctionListing) => ({ // skipcq: JS-R1005
+const getAuctionMetadata = (listing: HomepageAuctionListing, locale: string) => ({ // skipcq: JS-R1005
   images: getHomepageAuctionImages(listing),
   type: valueOr(listing.property_type, "apartment"),
   listingType: valueOr(listing.listing_type, "auction"),
-  auctionDate: formatAuctionDate(listing.auction_date),
+  auctionDate: formatAuctionDate(listing.auction_date, locale),
   aiScore: valueOrUndefined(listing.ai_score),
   views: valueOrUndefined(listing.views_count),
   tags: valueOr(listing.tags, []),
@@ -138,18 +148,18 @@ const getAuctionMetadata = (listing: HomepageAuctionListing) => ({ // skipcq: JS
   constructionStatus: valueOrUndefined(listing.construction_status),
 });
 
-const toAuctionCardProperty = (listing: HomepageAuctionListing): Property => ({
+const toAuctionCardProperty = (listing: HomepageAuctionListing, locale: string): Property => ({
   id: listing.id,
   title: listing.title,
   ...getAuctionLocation(listing),
   ...getAuctionPriceFields(listing),
   ...getAuctionDetails(listing),
-  ...getAuctionMetadata(listing),
+  ...getAuctionMetadata(listing, locale),
   _raw: listing,
 });
 
 const LoadingCard = () => (
-  <div className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
+  <div data-testid="auction-loading-card" className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
     <div className="bg-muted h-52 w-full" />
     <div className="p-4 space-y-3">
       <div className="h-4 bg-muted rounded-md w-3/4" />
@@ -161,40 +171,50 @@ const LoadingCard = () => (
 
 const LOADING_CARD_KEYS = ["auction-loading-1", "auction-loading-2", "auction-loading-3", "auction-loading-4"];
 
-export const HomepageAuctionsSection = ({ listings, isLoading }: Props) => {
+export const HomepageAuctionsSection = ({ listings, isLoading, isError = false, onRetry }: Props) => {
   const { ref, inView } = useInView();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language?.toLowerCase().startsWith("el") ? "el-GR" : "en-GB";
   const featuredListings = listings.slice(0, 4);
-  const showLoadingCards = isLoading && listings.length === 0;
 
   return (
     <section className="py-10 sm:py-16 bg-secondary">
       <div ref={ref} className="container">
-        <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${inView ? "in-view" : ""}`}>
+        <div className={`flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mb-6 sm:mb-8 reveal ${inView ? "in-view" : ""}`}>
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Gavel className="w-4 h-4 text-brand-purple-dark" />
-              <span className="text-xs font-semibold text-brand-purple-dark uppercase tracking-widest">Greek Auctions</span>
+              <span className="text-xs font-semibold text-brand-purple-dark uppercase tracking-widest">{t("home.catalogue.auctionsEyebrow")}</span>
             </div>
-            <h2 className="font-display text-xl sm:text-2xl font-bold">This Week's Auctions</h2>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">{t("home.catalogue.auctionsTitle")}</h2>
           </div>
-          <Button variant="outline" size="sm" className="border-brand-purple-dark/30 text-brand-purple-dark hover:bg-brand-purple-dark/10 text-xs" asChild>
+          <Button variant="outline" size="sm" className="max-w-full shrink-0 border-brand-purple-dark/30 text-brand-purple-dark hover:bg-brand-purple-dark/10 text-xs" asChild>
             <Link to="/auctions">
-              All Auctions <ArrowRight className="w-3 h-3 ml-1" />
+              {t("home.catalogue.allAuctions")} <ArrowRight className="w-3 h-3 ml-1" />
             </Link>
           </Button>
         </div>
         <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${inView ? "in-view" : ""}`}>
-          {featuredListings.map((listing, index) => (
-            <PropertyCard
-              key={listing.id}
-              property={toAuctionCardProperty(listing)}
-              imagePriority={index < 4}
-              deferOffscreenRendering={false}
-            />
-          ))}
-          {showLoadingCards &&
-            LOADING_CARD_KEYS.map((key) => (
-              <LoadingCard key={key} />
+          {isLoading ? (
+            LOADING_CARD_KEYS.map((key) => <LoadingCard key={key} />)
+          ) : isError ? (
+            <div role="alert" className="col-span-full py-12 text-center text-sm text-muted-foreground">
+              <p>{t("home.catalogue.auctionsError")}</p>
+              <Button type="button" variant="outline" size="sm" className="mt-4" onClick={onRetry}>
+                {t("common.retry")}
+              </Button>
+            </div>
+          ) : featuredListings.length === 0 ? (
+            <p className="col-span-full py-12 text-center text-sm text-muted-foreground">
+              {t("home.catalogue.auctionsEmpty")}
+            </p>
+          ) : featuredListings.map((listing, index) => (
+              <PropertyCard
+                key={listing.id}
+                property={toAuctionCardProperty(listing, dateLocale)}
+                imagePriority={index < 4}
+                deferOffscreenRendering={false}
+              />
             ))}
         </div>
       </div>

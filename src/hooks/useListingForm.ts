@@ -51,6 +51,7 @@ type UseListingFormOptions = {
   mode?: "create" | "edit";
   listingId?: string;
   initialListing?: ListingWithJoins | null;
+  organizationId?: string | null;
 };
 
 /**
@@ -587,7 +588,10 @@ export function useListingForm(options?: UseListingFormOptions) {
           validatedPayload as ListingUpdate,
         );
       } else {
-        savedListing = await createListingForUser(validatedPayload as ListingInsert);
+        savedListing = await createListingForUser(
+          validatedPayload as ListingInsert,
+          options?.organizationId ?? null,
+        );
       }
 
       const additionalImages = images.filter(img => img.url !== coverImageUrl && !img.uploading && !img.error);
@@ -658,7 +662,7 @@ export function useListingForm(options?: UseListingFormOptions) {
     } finally {
       setSubmitting(false);
     }
-  }, [editListingId, form, images, coverImageId, initialListing, isEditMode, user, navigate, options?.allowPreSale, tr]);
+  }, [editListingId, form, images, coverImageId, initialListing, isEditMode, user, navigate, options?.allowPreSale, options?.organizationId, tr]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 

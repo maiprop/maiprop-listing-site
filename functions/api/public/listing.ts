@@ -1,18 +1,20 @@
 import {
   cachedJson,
+  getPublicCataloguePublication,
   isSupabaseTransientError,
+  isPublicCatalogueSnapshotExpiredError,
   jsonResponse,
   methodNotAllowed,
   missingRuntime,
   normalizedCacheUrl,
+  publicCatalogueValidityHeaders,
   safeText,
-  supabaseJson,
+  supabaseRpcJson,
   upstreamUnavailable,
   type PublicApiCtx,
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
-import { PUBLIC_LISTING_CATALOGUE_PATH } from "../../_publicListingProjection";
 import { publicListingRows } from "./_fixture-content";
 import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
 import { normalizePublicPromotionState } from "./_promotionState";
@@ -29,127 +31,18 @@ type ListingRow = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXTERNAL_TAG_RE = /^[A-Za-z0-9:_-]{1,120}$/;
-const LISTING_DETAIL_CACHE_VERSION = "promotion-expiry-v2";
-const LISTING_DETAIL_SELECT = [
-  "id",
-  "owner_id",
-  "project_id",
-  "created_at",
-  "updated_at",
-  "status",
-  "title",
-  "description",
-  "address",
-  "city",
-  "region",
-  "postal_code",
-  "price",
-  "price_per_sqm",
-  "sqm",
-  "bedrooms",
-  "bathrooms",
-  "wc_count",
-  "kitchens",
-  "living_rooms",
-  "floor",
-  "total_floors",
-  "levels",
-  "year_built",
-  "energy_class",
-  "cover_image_url",
-  "property_type",
-  "listing_type",
-  "open_house_transaction_type",
-  "commercial_subtype",
-  "heating_system",
-  "construction_status",
-  "available_from",
-  "deposit_months",
-  "monthly_expenses",
-  "agent_fee_included",
-  "min_rental_months",
-  "open_house_date",
-  "auction_date",
-  "auction_starting_bid",
-  "auction_court",
-  "website_url",
-  "ai_score",
-  "views_count",
-  "tags",
-  "has_video_tour",
-  "has_virtual_tour",
-  "is_featured",
-  "featured_until",
-  "priority_placement",
-  "priority_until",
-  "is_pre_sale",
-  "walkability_score",
-  "safety_score",
-  "noise_score",
-  "latitude",
-  "longitude",
-  "distance_from_city",
-  "distance_from_sea",
-  "plot_surface",
-  "plot_depth",
-  "coverage_ratio",
-  "building_allowance",
-  "facade_length",
-  "floor_height",
-  "slope",
-  "zone_type",
-  "road_type",
-  "land_use",
-  "is_buildable",
-  "is_corner",
-  "is_neoclassical",
-  "is_penthouse",
-  "is_preserved",
-  "within_city_plan",
-  "within_settlement",
-  "short_term_rental",
-  "suitable_commercial_use",
-  "suitable_holiday",
-  "suitable_investment",
-  "suitable_student",
-  "pets_allowed",
-  "has_ac",
-  "has_alarm",
-  "has_attic",
-  "has_awning",
-  "has_balcony",
-  "has_cctv",
-  "has_disability_access",
-  "has_double_glazing",
-  "has_electricity_supply",
-  "has_elevator",
-  "has_equipped",
-  "has_facade",
-  "has_fireplace",
-  "has_furnished",
-  "has_garden",
-  "has_internal_staircase",
-  "has_land_concession",
-  "has_loading_dock",
-  "has_night_power",
-  "has_painted",
-  "has_parking",
-  "has_pool",
-  "has_satellite",
-  "has_secure_door",
-  "has_security",
-  "has_smart_home",
-  "has_solar_water",
-  "has_storage",
-  "has_structured_cabling",
-  "has_three_phase_power",
-  "has_underfloor_heating",
-  "has_view",
-  "has_water_supply",
-  "has_window_screens",
-  "project:project_detail",
-  "listing_images:listing_images_detail",
-].join(",");
+const LISTING_DETAIL_CACHE_VERSION = "publication-detail-v3";
+
+type ListingDetailRpcRow = {
+  publication_id?: unknown;
+  detail_payload?: unknown;
+};
+
+type ListingIdentity = {
+  id: string | null;
+  osTag: string | null;
+  publicationId: number | null;
+};
 
 function invalidListingRequest(): Response {
   return jsonResponse(
@@ -164,6 +57,32 @@ function invalidListingRequest(): Response {
   );
 }
 
+function invalidCatalogueIdentity(): Response {
+  return jsonResponse(
+    { error: "Catalogue detail identity mismatch" },
+    {
+      status: 502,
+      headers: {
+        "Cache-Control": "no-store",
+        "CDN-Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
+function detailMatchesIdentity(
+  detailPayload: Record<string, unknown>,
+  identity: ListingIdentity,
+): boolean {
+  if (identity.id) {
+    return typeof detailPayload.id === "string" &&
+      detailPayload.id.toLowerCase() === identity.id.toLowerCase();
+  }
+  if (!identity.osTag || detailPayload.listing_type !== "auction") return false;
+  return Array.isArray(detailPayload.tags) &&
+    detailPayload.tags.some((tag) => tag === `os_auction:${identity.osTag}`);
+}
+
 async function fetchOwnerProfile(env: PublicApiEnv, ownerId: string | null | undefined) {
   if (!ownerId) return null;
 
@@ -175,24 +94,30 @@ async function fetchOwnerProfile(env: PublicApiEnv, ownerId: string | null | und
   }
 }
 
-function buildListingDetailParams(requestUrl: URL): URLSearchParams | null {
+function buildListingIdentity(requestUrl: URL): ListingIdentity | null {
   const id = requestUrl.searchParams.get("id")?.trim() ?? "";
   const osTag = safeText(requestUrl.searchParams.get("osTag"), 120);
-  const params = new URLSearchParams();
-  params.set("select", LISTING_DETAIL_SELECT);
-  params.set("status", "eq.active");
-  params.set("is_off_market", "eq.false");
-  params.set("limit", "1");
+  const publicationValue = requestUrl.searchParams.get("publicationId");
+  const publicationId = publicationValue == null
+    ? null
+    : Number(publicationValue);
+  if (
+    publicationValue != null &&
+    (
+      publicationId == null ||
+      !Number.isSafeInteger(publicationId) ||
+      publicationId < 1
+    )
+  ) {
+    return null;
+  }
 
   if (UUID_RE.test(id)) {
-    params.set("id", `eq.${id}`);
-    return params;
+    return { id, osTag: null, publicationId };
   }
 
   if (osTag && EXTERNAL_TAG_RE.test(osTag)) {
-    params.set("listing_type", "eq.auction");
-    params.set("tags", `cs.{os_auction:${osTag}}`);
-    return params;
+    return { id: null, osTag, publicationId };
   }
 
   return null;
@@ -201,40 +126,108 @@ function buildListingDetailParams(requestUrl: URL): URLSearchParams | null {
 async function publicListing(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
   if (!getSupabaseRuntime(ctx.env)) return missingRuntime();
 
-  const params = buildListingDetailParams(requestUrl);
-  if (!params) return invalidListingRequest();
+  const identity = buildListingIdentity(requestUrl);
+  if (!identity) return invalidListingRequest();
 
-  const cacheParams = new URLSearchParams(params);
+  const cacheParams = new URLSearchParams();
+  if (identity.id) cacheParams.set("id", identity.id);
+  if (identity.osTag) cacheParams.set("osTag", identity.osTag);
+  cacheParams.set(
+    "publicationId",
+    identity.publicationId == null ? "current" : String(identity.publicationId),
+  );
   cacheParams.set("v", LISTING_DETAIL_CACHE_VERSION);
   const cacheKey = normalizedCacheUrl(requestUrl, "listing", cacheParams);
 
   return cachedJson(ctx, cacheKey, async () => {
     try {
-      const rows = await supabaseJson<ListingRow>(ctx.env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true });
-      const cleanRows = publicListingRows(rows);
+      const publication = await getPublicCataloguePublication(
+        ctx.env,
+        identity.publicationId,
+      );
+      const rows = await supabaseRpcJson<ListingDetailRpcRow>(
+        ctx.env,
+        "get_public_catalogue_listing",
+        {
+          p_publication_id: publication.publicationId,
+          p_listing_id: identity.id,
+          p_os_tag: identity.osTag,
+        },
+        { failOnTransient: true },
+      );
+      if (rows.length > 1) return invalidCatalogueIdentity();
+      if (rows[0] && Number(rows[0].publication_id) !== publication.publicationId) {
+        return invalidCatalogueIdentity();
+      }
+      const detailPayload = rows[0]?.detail_payload;
+      if (
+        detailPayload &&
+        typeof detailPayload === "object" &&
+        !Array.isArray(detailPayload) &&
+        !detailMatchesIdentity(detailPayload as Record<string, unknown>, identity)
+      ) {
+        return invalidCatalogueIdentity();
+      }
+      const cleanRows = publicListingRows(
+        detailPayload &&
+        typeof detailPayload === "object" &&
+        !Array.isArray(detailPayload)
+          ? [detailPayload as ListingRow]
+          : [],
+      );
       const row = cleanRows[0]
-        ? normalizePublicPromotionState(cleanRows[0], Date.now())
+        ? {
+          ...normalizePublicPromotionState(
+            cleanRows[0],
+            Date.parse(publication.snapshotMinute),
+          ),
+          publicationId: publication.publicationId,
+        }
         : null;
       const profile = await fetchOwnerProfile(ctx.env, row?.owner_id);
 
-      return jsonResponse({
-        data: row
-          ? {
-            ...row,
-            profiles: publicProfileDisplay(profile),
-            ownerParticipantType: profile?.owner_participant_type ?? null,
-          }
-          : null,
-      });
+      return jsonResponse(
+        {
+          data: row
+            ? {
+                ...row,
+                profiles: publicProfileDisplay(profile),
+                ownerParticipantType: profile?.owner_participant_type ?? null,
+              }
+            : null,
+          publicationId: publication.publicationId,
+        },
+        { headers: publicCatalogueValidityHeaders(publication) },
+      );
     } catch (error) {
+      if (isPublicCatalogueSnapshotExpiredError(error)) {
+        return jsonResponse(
+          { error: "Listing catalogue publication is no longer active" },
+          {
+            status: 409,
+            headers: {
+              "Cache-Control": "no-store",
+              "CDN-Cache-Control": "no-store",
+            },
+          },
+        );
+      }
       if (isSupabaseTransientError(error)) return upstreamUnavailable();
       throw error;
     }
-  }, {
-    edgeTtlSeconds: 300,
-    browserTtlSeconds: 60,
-    staleSeconds: 900,
-  });
+  }, identity.publicationId == null
+    ? {
+      edgeTtlSeconds: 30,
+      browserTtlSeconds: 30,
+      staleSeconds: 0,
+      staleFallbackSeconds: 0,
+    }
+    : {
+      edgeTtlSeconds: 300,
+      browserTtlSeconds: 60,
+      staleSeconds: 900,
+      staleFallbackSeconds: 900,
+    });
 }
 
 export const onRequest: PagesFunction<PublicApiEnv> = async (ctx) => {

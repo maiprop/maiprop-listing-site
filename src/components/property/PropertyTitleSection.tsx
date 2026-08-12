@@ -5,6 +5,7 @@ import type { ListingWithJoins } from "@/hooks/useListings";
 import { PropertyHeroSpecsBar } from "@/components/property/PropertyHeroSpecsBar";
 import { buildListingHeroSpecs } from "@/components/property/propertyHeroSpecs";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   db: ListingWithJoins;
@@ -15,17 +16,28 @@ const isRentalPricingListing = (db: ListingWithJoins) =>
   db.listing_type === "rent" ||
   (db.listing_type === "open_house" && db.open_house_transaction_type === "rent");
 
-const getListingLabel = (db: ListingWithJoins) => {
+const getListingLabel = (
+  db: ListingWithJoins,
+  translate: (key: string, fallback: string) => string,
+) => {
   const listingType = db.listing_type;
   if (!listingType) return null;
-  if (listingType === "sale") return "For sale";
-  if (listingType === "rent") return "For rent";
-  if (listingType === "auction") return "For auction";
-  if (listingType === "open_house") return isRentalPricingListing(db) ? "Open house rental" : "Open house sale";
+  if (listingType === "sale") return translate("property.listingLabels.sale", "For sale");
+  if (listingType === "rent") return translate("property.listingLabels.rent", "For rent");
+  if (listingType === "auction") return translate("property.listingLabels.auction", "For auction");
+  if (listingType === "open_house") {
+    return isRentalPricingListing(db)
+      ? translate("property.listingLabels.openHouseRental", "Open house rental")
+      : translate("property.listingLabels.openHouseSale", "Open house sale");
+  }
   return `For ${listingType.replace(/_/g, " ")}`;
 };
 
 export function PropertyTitleSection({ db, isAuction }: Props) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.toLowerCase().startsWith("el") ? "el" : "en";
+  const numberLocale = locale === "el" ? "el-GR" : "en-GB";
+  const translate = (key: string, fallback: string) => t(key, { defaultValue: fallback });
   const title = db.title;
   const city = db.city;
   const address = db.address ?? city;
@@ -38,8 +50,11 @@ export function PropertyTitleSection({ db, isAuction }: Props) {
     sqm: db.sqm,
     storedPricePerSqm: db.price_per_sqm,
   });
-  const heroSpecs = buildListingHeroSpecs(db);
-  const listingLabel = getListingLabel(db);
+  const heroSpecs = buildListingHeroSpecs(db, {
+    locale,
+    t: (key, options) => t(key, options),
+  });
+  const listingLabel = getListingLabel(db, translate);
   const isRentalPricing = isRentalPricingListing(db);
 
   const rentExtras = [
@@ -78,15 +93,15 @@ export function PropertyTitleSection({ db, isAuction }: Props) {
           <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight line-clamp-3 sm:line-clamp-none pr-2">
             {title}
           </h1>
-          <div className="flex items-start gap-1.5 mt-2 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-start gap-1.5 mt-2 text-sm text-muted-foreground">
             <MapPin className="w-3.5 h-3.5 shrink-0" />
             <span className="min-w-0 break-words leading-snug">
               {address && address !== city ? `${address}, ${city}` : city}
               {db.region ? ` - ${db.region}` : ""}
             </span>
             {isAuction && !!pricePerSqm && (
-              <span className="ml-2 text-xs font-semibold text-muted-foreground border-l border-border pl-2">
-                {"\u20ac"}{Number(pricePerSqm).toLocaleString()}/m2
+              <span className="w-full text-xs font-semibold text-muted-foreground sm:ml-2 sm:w-auto sm:border-l sm:border-border sm:pl-2">
+                {"\u20ac"}{Number(pricePerSqm).toLocaleString(numberLocale)}/m²
               </span>
             )}
           </div>

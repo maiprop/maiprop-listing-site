@@ -33,6 +33,32 @@ export const RECONCILIATION_REQUEST_DEADLINE_MS =
 const RECONCILIATION_COMPLETION_RESERVE_MS =
   DEFAULT_RECONCILIATION_COMPLETION_RESERVE_MS;
 
+type FunctionDatabase = Omit<Database, "public"> & {
+  public: Omit<Database["public"], "Functions"> & {
+    Functions:
+      & Omit<
+        Database["public"]["Functions"],
+        "complete_role_switch_reconciliation_attempt"
+      >
+      & {
+        complete_role_switch_reconciliation_attempt: {
+          Args: {
+            _audit_id: string;
+            _user_id: string;
+            _lock_token: string;
+            _billing_outcome: string;
+            _billing_error: string | null;
+            _had_active_sub: boolean | null;
+            _subscription_count: number | null;
+            _cancelled_count: number | null;
+            _max_attempts?: number;
+          };
+          Returns: undefined;
+        };
+      };
+  };
+};
+
 const jsonResponse = (body: Record<string, unknown>, status: number) =>
   new Response(JSON.stringify(body), {
     status,
@@ -77,7 +103,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Service unavailable" }, 503);
   }
 
-  const supabase = createClient<Database>(supabaseUrl, serviceRoleKey, {
+  const supabase = createClient<FunctionDatabase>(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const stripe = await createVerifiedStripeClient(stripeKey);

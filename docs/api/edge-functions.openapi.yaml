@@ -932,6 +932,29 @@ paths:
         '405': { description: Method not allowed }
         '503': { description: Required billing service configuration unavailable }
 
+  /process-storage-cleanup:
+    post:
+      operationId: processStorageCleanup
+      summary: Cron-only compensating cleanup for abandoned public Storage objects
+      security: [{ CronSecretHeader: [] }]
+      responses:
+        '200':
+          description: Claimed jobs were completed, preserved, or queued for retry
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [claimed, completed, retried, dead]
+                properties:
+                  claimed: { type: integer, minimum: 0, maximum: 25 }
+                  completed: { type: integer, minimum: 0 }
+                  retried: { type: integer, minimum: 0 }
+                  dead: { type: integer, minimum: 0 }
+        '401': { description: Missing or invalid cron secret }
+        '405': { description: Method other than POST }
+        '500': { description: Queue claim failed or one or more jobs became terminal }
+        '503': { description: Required Supabase service configuration is unavailable }
+
   /process-email-queue:
     post:
       operationId: processEmailQueue

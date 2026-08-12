@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-05T20:05:46.341Z",
-  "public_function_count": 26,
+  "generated_at": "2026-08-12T00:51:57.730Z",
+  "public_function_count": 27,
   "entries": [
     {
       "name": "ai-search",
@@ -255,6 +255,28 @@
         "auth.getUser"
       ],
       "notes": "Public platform JWT is disabled; handler auth and rate limit are the control plane.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "process-storage-cleanup",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "cron",
+      "classification": "private_mutation_cron",
+      "mechanisms": [
+        "cron_secret",
+        "service_role",
+        "exact_object_path",
+        "lease_token"
+      ],
+      "requiredSnippets": [
+        "CRON_SECRET",
+        "x-cron-secret",
+        "claim_storage_cleanup_jobs",
+        "prepare_storage_cleanup_delete"
+      ],
+      "notes": "Cron-only exact-object compensating cleanup. Database leases and a final commitment check prevent stale workers from deleting committed listing or project media.",
       "missing_required_snippets": []
     },
     {

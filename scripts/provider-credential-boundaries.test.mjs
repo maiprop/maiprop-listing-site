@@ -29,22 +29,25 @@ describe("provider credential boundaries", () => {
     expect(source).toMatch(/exit 1/);
   });
 
-  it("runs live release-safety probes only for trusted main pushes", () => {
-    const parsed = parsedWorkflow("reusable-release-safety.yml");
-    const source = workflow("reusable-release-safety.yml");
-    const liveSteps = parsed.jobs["release-safety"].steps.filter((step) =>
-      JSON.stringify(step.env ?? {}).includes("secrets."),
+  it("keeps reusable release safety secretless and live credentials in trusted provider jobs", () => {
+    const releaseSafety = workflow("reusable-release-safety.yml");
+    const staging = workflow("reusable-supabase-staging.yml");
+    const productionDatabase = workflow("deploy-supabase-production-db.yml");
+    const productionCloudflare = workflow(
+      "reusable-cloudflare-production-deploy.yml",
     );
 
-    expect(source).toContain(
+    expect(releaseSafety).toContain(
       "npm ci --ignore-scripts --prefer-offline --no-audit",
     );
-    expect(liveSteps.length).toBeGreaterThan(0);
-    for (const step of liveSteps) {
-      expect(step.if, step.name).toBe(
-        "github.event_name == 'push' && github.ref == 'refs/heads/main'",
-      );
-    }
+    expect(releaseSafety).not.toContain("secrets.");
+    expect(staging).toContain("secrets.SUPABASE_STAGING_DB_URL");
+    expect(productionDatabase).toContain(
+      "secrets.SUPABASE_PRODUCTION_DB_URL",
+    );
+    expect(productionCloudflare).toContain(
+      "secrets.CLOUDFLARE_PAGES_EDIT_TOKEN",
+    );
   });
 
   it("binds the weekly Supabase advisor report to the current main SHA", () => {

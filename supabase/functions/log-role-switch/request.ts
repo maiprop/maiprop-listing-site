@@ -49,10 +49,10 @@ export type RolePrices = Partial<Record<ParticipantType, number>>;
 
 export function canonicalRoleSwitchKind(
   fromType: ParticipantType,
-  toType: ParticipantType | "",
+  toType: ParticipantType,
   prices: RolePrices,
 ): RoleSwitchKind {
-  if (toType === "" || audienceByRole[fromType] === audienceByRole[toType]) {
+  if (audienceByRole[fromType] === audienceByRole[toType]) {
     return "same-tier";
   }
   if (toType === "investor" || toType === "institutional") {
@@ -91,7 +91,7 @@ function isParticipantType(value: unknown): value is ParticipantType {
 const roleSwitchRequestSchema = z.object({
   operation_id: z.string().uuid(),
   from_type: participantType,
-  to_type: z.union([participantType, z.literal("")]).default(""),
+  to_type: participantType,
   cancel_subscription: z.literal(true),
 }).strict();
 
@@ -104,7 +104,7 @@ export function resolveAuthoritativeRoleSwitch(
 ): {
   operationId: string;
   fromType: ParticipantType;
-  toType: ParticipantType | "";
+  toType: ParticipantType;
   switchKind: RoleSwitchKind;
 } {
   const currentRole = isParticipantType(profile.participant_type)

@@ -2,6 +2,52 @@ name: Reusable Supabase Staging Prep
 
 on:
   workflow_call:
+    inputs:
+      release_sha:
+        description: Exact main SHA whose immutable artifact is being staged.
+        required: true
+        type: string
+      source_run_id:
+        description: Trusted CI run that built the immutable artifact.
+        required: true
+        type: string
+      source_run_attempt:
+        description: Trusted CI run attempt that built the immutable artifact.
+        required: true
+        type: string
+      artifact_sha256:
+        description: Immutable release artifact digest.
+        required: true
+        type: string
+      manifest_sha256:
+        description: SHA-256 digest of the signed immutable release manifest.
+        required: true
+        type: string
+      production_supabase_project_id:
+        description: Production project ref used only to prove staging isolation.
+        required: true
+        type: string
+      staging_mutation_acknowledgement:
+        description: Exact acknowledgement authorizing mutations only in the fixed MaiProp staging project.
+        required: true
+        type: string
+      trusted_control_sha:
+        description: Manually approved immutable SHA containing this reusable control workflow.
+        required: true
+        type: string
+    secrets:
+      STAGING_SUPABASE_PROJECT_ID:
+        required: true
+      STAGING_SUPABASE_URL:
+        required: true
+      STAGING_SUPABASE_PUBLISHABLE_KEY:
+        required: true
+      SUPABASE_STAGING_DB_URL:
+        required: true
+      SUPABASE_ACCESS_TOKEN:
+        required: true
+      RELEASE_EVIDENCE_SIGNING_KEY:
+        required: true
     outputs:
       deploy:
         description: Whether Supabase deployment work was required for this run.
@@ -12,193 +58,112 @@ on:
       isolated_staging:
         description: Whether the configured staging Supabase target is isolated from production.
         value: ${{ jobs.deploy-supabase-staging.outputs.isolated_staging }}
+      edge_attestation_artifact:
+        description: Exact-SHA staging Edge bundle attestation artifact.
+        value: ${{ jobs.deploy-supabase-staging.outputs.edge_attestation_artifact }}
+      edge_attestation_artifact_id:
+        description: Immutable GitHub artifact ID for the exact-SHA Supabase staging evidence.
+        value: ${{ jobs.deploy-supabase-staging.outputs.edge_attestation_artifact_id }}
+      edge_attestation_artifact_digest:
+        description: GitHub-computed SHA-256 digest for the Supabase staging artifact archive.
+        value: ${{ jobs.deploy-supabase-staging.outputs.edge_attestation_artifact_digest }}
+      edge_attestation_run_id:
+        description: Producer workflow run ID for the Supabase staging artifact.
+        value: ${{ jobs.deploy-supabase-staging.outputs.edge_attestation_run_id }}
+      edge_attestation_run_attempt:
+        description: Producer workflow run attempt for the Supabase staging artifact.
+        value: ${{ jobs.deploy-supabase-staging.outputs.edge_attestation_run_attempt }}
+      edge_attestation_release_sha:
+        description: Exact release SHA attested by the Supabase staging artifact.
+        value: ${{ jobs.deploy-supabase-staging.outputs.edge_attestation_release_sha }}
 
 permissions:
+  actions: read
   contents: read
-  pull-requests: read
 
 jobs:
   deploy-supabase-staging:
     name: Prepare Supabase
+    if: github.run_attempt == 1 && github.actor == github.triggering_actor && inputs.source_run_attempt == '1'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Keep deployments out of arbitrary PRs. If an isolated staging Supabase
-    # project exists, it is reconciled to the repository DB and function state
-    # after quality gates pass. Production-only setups use this as a no-op ordering
-    # point and keep production Supabase changes in protected manual flows.
+    timeout-minutes: 25
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
+      TRUSTED_CONTROL_SHA: ${{ inputs.trusted_control_sha }}
+      EXPECTED_ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+      EXPECTED_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
     outputs:
       deploy: ${{ steps.supabase_changes.outputs.deploy }}
       db_changes: ${{ steps.supabase_changes.outputs.db_changes }}
       isolated_staging: ${{ steps.supabase_target.outputs.isolated_staging }}
+      edge_attestation_artifact: ${{ steps.edge_attestation.outputs.artifact_name }}
+      edge_attestation_artifact_id: ${{ steps.upload_edge_attestation.outputs.artifact-id }}
+      edge_attestation_artifact_digest: ${{ steps.upload_edge_attestation.outputs.artifact-digest }}
+      edge_attestation_run_id: ${{ github.run_id }}
+      edge_attestation_run_attempt: ${{ github.run_attempt }}
+      edge_attestation_release_sha: ${{ inputs.release_sha }}
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          fetch-depth: 2
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
-      - name: Detect Supabase deployment changes
+      - name: Validate exact staging mutation lease
         id: supabase_changes
+        env:
+          CONTROL_WORKFLOW_SHA: ${{ job.workflow_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual run: standalone Supabase staging prep is disabled."
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "db_changes=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ "$TRUSTED_CONTROL_SHA" != "$CONTROL_WORKFLOW_SHA" ] ||
+             [ "$CONTROL_WORKFLOW_SHA" != "$RELEASE_SHA" ]; then
+            echo "::error::The reusable staging control workflow is not pinned to the exact approved release SHA."
+            exit 1
           fi
-
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.event.pull_request.base.repo.full_name }}" ] ||
-               [ "${{ github.event.pull_request.draft }}" = "true" ] ||
-               [ "${{ github.event.pull_request.user.login }}" = "dependabot[bot]" ] ||
-               [[ "${{ github.event.pull_request.head.ref }}" == release-please--* ]]; then
-              echo "deploy=false" >> "$GITHUB_OUTPUT"
-              echo "db_changes=false" >> "$GITHUB_OUTPUT"
-              echo "PR is not eligible for isolated Supabase staging prep."
-              echo "eligible=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-
-            echo "eligible=true" >> "$GITHUB_OUTPUT"
-
-            base="${{ github.event.pull_request.base.sha }}"
-            if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-              git fetch --no-tags --depth=50 origin "${{ github.base_ref }}" || true
-            fi
-
-            if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-              echo "::warning::Could not inspect the PR base; enabling Supabase prep."
-              echo "deploy=true" >> "$GITHUB_OUTPUT"
-              echo "db_changes=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-
-            changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
-            echo "$changed_files"
-
-            if grep -Eq '^supabase/migrations/' <<< "$changed_files"; then
-              echo "db_changes=true" >> "$GITHUB_OUTPUT"
-              echo "Supabase migration changes detected."
-            else
-              echo "db_changes=false" >> "$GITHUB_OUTPUT"
-            fi
-
-            if grep -Eq '^(supabase/|deno\.(json|lock)$)' <<< "$changed_files"; then
-              echo "deploy=true" >> "$GITHUB_OUTPUT"
-              echo "Supabase changes detected."
-            else
-              echo "deploy=false" >> "$GITHUB_OUTPUT"
-              echo "No Supabase DB/function changes detected: Supabase prep skipped."
-              echo "eligible=false" >> "$GITHUB_OUTPUT"
-            fi
-            exit 0
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$RELEASE_SHA" ]; then
+            echo "::error::Staging checkout SHA $actual_sha does not match the requested release SHA $RELEASE_SHA."
+            exit 1
           fi
-
-          if [ "${{ github.event_name }}" != "push" ] || [ "${{ github.ref }}" != "refs/heads/main" ]; then
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "db_changes=false" >> "$GITHUB_OUTPUT"
-            echo "Not a mainline push: Supabase prep skipped."
-            exit 0
+          if ! [[ "$EXPECTED_ARTIFACT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::The immutable artifact digest is invalid."
+            exit 1
           fi
-
+          if ! [[ "$EXPECTED_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::The immutable manifest digest is invalid."
+            exit 1
+          fi
           echo "eligible=true" >> "$GITHUB_OUTPUT"
-
-          base="${{ github.event.before }}"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            base="$(git rev-list --max-parents=0 HEAD)"
-          fi
-
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            git fetch --no-tags --depth=50 origin "${{ github.ref_name }}" || true
-          fi
-
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "::warning::Could not inspect the previous commit; enabling Supabase prep."
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "db_changes=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
-          echo "$changed_files"
-
-          if grep -Eq '^supabase/migrations/' <<< "$changed_files"; then
-            echo "db_changes=true" >> "$GITHUB_OUTPUT"
-            echo "Supabase migration changes detected."
-          else
-            echo "db_changes=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if grep -Eq '^(supabase/|deno\.(json|lock)$)' <<< "$changed_files"; then
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "Supabase changes detected."
-          else
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "No Supabase DB/function diff detected: Supabase prep skipped."
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+          echo "db_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Resolve Supabase staging target
         id: supabase_target
-        if: steps.supabase_changes.outputs.eligible == 'true'
         run: |
           set -euo pipefail
 
           if [ -z "$STAGING_SUPABASE_PROJECT_ID" ]; then
             echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "### Supabase staging"
-              echo "No isolated staging Supabase project is configured, so staging DB/function deploy steps are skipped."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "::error::An isolated staging Supabase project is required."
+            exit 1
           fi
 
           missing=()
           [ -z "$STAGING_SUPABASE_URL" ] && missing+=("STAGING_SUPABASE_URL")
           [ -z "$STAGING_SUPABASE_PUBLISHABLE_KEY" ] && missing+=("STAGING_SUPABASE_PUBLISHABLE_KEY")
           if [ "${#missing[@]}" -gt 0 ]; then
-            echo "::warning::Supabase staging project ref is set, but required staging runtime secrets are missing: ${missing[*]}."
+            echo "::error::Required staging runtime secrets are missing: ${missing[*]}."
             echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "### Supabase staging"
-              echo "Staging project ref is configured, but required staging runtime secrets are missing: ${missing[*]}."
-              echo "Staging DB/function deploy and preview deploy steps are skipped until the runtime points to the same isolated project."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          if [ -n "$PRODUCTION_SUPABASE_PROJECT_ID" ] && [ "$STAGING_SUPABASE_PROJECT_ID" = "$PRODUCTION_SUPABASE_PROJECT_ID" ]; then
-            echo "::warning::STAGING_SUPABASE_PROJECT_ID matches production; skipping staging DB/function deploy steps to avoid mutating production under a staging label."
-            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "### Supabase staging"
-              echo "STAGING_SUPABASE_PROJECT_ID matches production. Staging DB/function deploy steps are skipped."
-              echo "Use the production Supabase DB and edge-function deployment workflows for intentional production changes."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          if [ -n "$PRODUCTION_SUPABASE_URL" ] && [ "$STAGING_SUPABASE_URL" = "$PRODUCTION_SUPABASE_URL" ]; then
-            echo "::warning::STAGING_SUPABASE_URL matches production; skipping staging DB/function deploy steps to keep preview traffic off production."
-            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "### Supabase staging"
-              echo "STAGING_SUPABASE_URL matches production. Staging and preview deploy steps are skipped."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          if [ -n "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" ] && [ "$STAGING_SUPABASE_PUBLISHABLE_KEY" = "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" ]; then
-            echo "::warning::STAGING_SUPABASE_PUBLISHABLE_KEY matches production; skipping staging DB/function deploy steps to keep preview traffic off production."
-            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "### Supabase staging"
-              echo "STAGING_SUPABASE_PUBLISHABLE_KEY matches production. Staging and preview deploy steps are skipped."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            exit 1
           fi
 
           if ! STAGING_URL_PROJECT_ID=$(node - "$STAGING_SUPABASE_URL" <<'NODE'
@@ -218,35 +183,31 @@ jobs:
           process.exit(1);
           NODE
           ); then
-            echo "::warning::STAGING_SUPABASE_URL must be a valid https://<ref>.supabase.co URL; skipping staging deploy steps."
+            echo "::error::STAGING_SUPABASE_URL must be a valid https://<ref>.supabase.co URL."
             echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "### Supabase staging"
-              echo "STAGING_SUPABASE_URL is not a valid Supabase project URL. Staging and preview deploy steps are skipped."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            exit 1
           fi
 
           if [ "$STAGING_URL_PROJECT_ID" != "$STAGING_SUPABASE_PROJECT_ID" ]; then
-            echo "::warning::STAGING_SUPABASE_URL project ref does not match STAGING_SUPABASE_PROJECT_ID; skipping staging deploy steps."
+            echo "::error::STAGING_SUPABASE_URL project ref does not match STAGING_SUPABASE_PROJECT_ID."
             echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "### Supabase staging"
-              echo "STAGING_SUPABASE_URL and STAGING_SUPABASE_PROJECT_ID point to different projects. Staging and preview deploy steps are skipped."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            exit 1
           fi
+
+          node scripts/assert-staging-mutation-target.mjs \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+            --database-url "$SUPABASE_STAGING_DB_URL" \
+            --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
 
           echo "isolated_staging=true" >> "$GITHUB_OUTPUT"
           echo "Isolated staging Supabase project detected."
         env:
-          STAGING_SUPABASE_PROJECT_ID:         ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
-          STAGING_SUPABASE_URL:                ${{ secrets.STAGING_SUPABASE_URL }}
-          STAGING_SUPABASE_PUBLISHABLE_KEY:    ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
-          SUPABASE_STAGING_DB_URL:             ${{ secrets.SUPABASE_STAGING_DB_URL }}
-          PRODUCTION_SUPABASE_PROJECT_ID:      ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-          PRODUCTION_SUPABASE_URL:             ${{ secrets.VITE_SUPABASE_URL }}
-          PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+          PRODUCTION_SUPABASE_PROJECT_ID: ${{ inputs.production_supabase_project_id }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ inputs.staging_mutation_acknowledgement }}
 
       - name: Skip Supabase prep
         if: steps.supabase_changes.outputs.eligible != 'true'
@@ -280,11 +241,11 @@ jobs:
             exit 1
           fi
         env:
-          STAGING_SUPABASE_PROJECT_ID:      ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
-          STAGING_SUPABASE_URL:             ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
           STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
-          SUPABASE_STAGING_DB_URL:          ${{ secrets.SUPABASE_STAGING_DB_URL }}
-          SUPABASE_ACCESS_TOKEN:            ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -298,13 +259,99 @@ jobs:
 
       - name: Install dependencies
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: npm ci --prefer-offline --no-audit
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
 
-      - name: Install Supabase CLI
+      - name: Download immutable Supabase release candidate binding
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-release-candidate-binding-${{ inputs.release_sha }}-${{ inputs.source_run_attempt }}
+          path: source-binding
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Resolve immutable Supabase release candidate metadata
+        id: supabase_source_binding
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          npm install -g supabase@2.104.0
-          supabase --version
+          set -euo pipefail
+          artifact_id="$(jq -er '.artifact.id' source-binding/release-artifact-binding.json)"
+          if ! [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::The source binding does not contain a valid artifact ID."
+            exit 1
+          fi
+          mkdir -p source-binding-metadata
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id" \
+            > source-binding-metadata/artifact.json
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" \
+            > source-binding-metadata/run.json
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download immutable Supabase release candidate
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ steps.supabase_source_binding.outputs.artifact_id }}
+          path: release-candidate
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Verify immutable Supabase release candidate
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        env:
+          EXPECTED_ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+          EXPECTED_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+        run: |
+          set -euo pipefail
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Downloaded release manifest digest does not match the trusted source run."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Downloaded release artifact digest does not match the trusted source run."
+            exit 1
+          fi
+          source_actor="$(jq -er '.actor.login' source-binding-metadata/run.json)"
+          source_triggering_actor="$(jq -er '.triggering_actor.login' source-binding-metadata/run.json)"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding source-binding/release-artifact-binding.json \
+            --payload-root release-candidate \
+            --artifact-metadata source-binding-metadata/artifact.json \
+            --producer-run source-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$source_tree" \
+            --workflow-path .github/workflows/ci.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event push \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --actor "$source_actor" \
+            --triggering-actor "$source_triggering_actor" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > source-binding-verification.json
+
+      - name: Verify pinned Supabase CLI
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npx --no-install supabase --workdir release-candidate --version
 
       - name: Check staging database migration secret
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -330,7 +377,7 @@ jobs:
           fi
 
           projects_json="[]"
-          if ! projects_json="$(supabase projects list --output json 2>/tmp/supabase-projects-list.err)"; then
+          if ! projects_json="$(npx --no-install supabase --workdir release-candidate projects list --output json 2>/tmp/supabase-projects-list.err)"; then
             echo "::warning::Could not list Supabase projects to resolve pooler region. Trying the Supabase Management API project endpoint."
             sed 's/./*/g' /tmp/supabase-projects-list.err || true
             projects_json="[]"
@@ -396,129 +443,1317 @@ jobs:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
-      - name: Repair legacy staging migration aliases
-        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: node scripts/reconcile-staging-migration-aliases.mjs
-        env:
-          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
-          VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-
-      - name: Repair staging add-on credit migration drift
+      - name: Dry-run staging database migrations
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           set -euo pipefail
-
-          if ! command -v psql >/dev/null 2>&1; then
-            echo "::error::The GitHub runner must provide psql for staging schema-drift verification."
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Release manifest changed at the staging dry-run boundary."
             exit 1
           fi
-
-          credit_column_count="$(psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
-            --no-psqlrc \
-            --set ON_ERROR_STOP=1 \
-            --tuples-only \
-            --no-align \
-            --command "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'addon_purchases' AND column_name IN ('credits_granted', 'credits_consumed');")"
-          credit_column_count="$(tr -d '[:space:]' <<< "$credit_column_count")"
-
-          if [ "$credit_column_count" = "2" ]; then
-            echo "Staging add-on credit columns match the canonical migration."
-            exit 0
-          fi
-
-          canonical_history_count="$(psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
-            --no-psqlrc \
-            --set ON_ERROR_STOP=1 \
-            --tuples-only \
-            --no-align \
-            --command "SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version = '20260628193711';")"
-          canonical_history_count="$(tr -d '[:space:]' <<< "$canonical_history_count")"
-
-          if [ "$canonical_history_count" = "0" ]; then
-            echo "The canonical add-on credit migration is pending; the normal migration push will apply it."
-            exit 0
-          fi
-
-          if [ "$canonical_history_count" != "1" ]; then
-            echo "::error::Unexpected history count for migration 20260628193711: $canonical_history_count"
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Release artifact changed at the staging dry-run boundary."
             exit 1
           fi
+          npx --no-install supabase --workdir release-candidate db push \
+            --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --dry-run \
+            --include-all
 
-          echo "Repairing staging history for canonical add-on credit migration 20260628193711."
-          supabase migration repair "20260628193711" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes
-
-      - name: Dry-run staging database migrations
+      - name: Revalidate staging lease before database apply
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --dry-run --include-all
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
 
       - name: Apply database migrations to staging
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --yes --include-all
+        run: |
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+            --database-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Release manifest changed at the staging database mutation boundary."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Release artifact changed at the staging database mutation boundary."
+            exit 1
+          fi
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npx --no-install supabase --workdir release-candidate db push \
+            --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --yes \
+            --include-all
+          psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file release-candidate/supabase/reconciliation/role-switch-online-finalization.sql
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ inputs.staging_mutation_acknowledgement }}
+
+      - name: Capture legacy migration convergence evidence
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          set -euo pipefail
+          raw_evidence="$(mktemp)"
+          psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --quiet \
+            --file supabase/reconciliation/production-history-v1.sql \
+            | sed '/^[[:space:]]*$/d' > "$raw_evidence"
+          if [ "$(wc -l < "$raw_evidence" | tr -d '[:space:]')" != "1" ]; then
+            echo "::error::Legacy migration schema evidence must contain exactly one JSON object."
+            exit 1
+          fi
+          jq -e '
+            (keys | sort) == [
+              "checks",
+              "evidence_type",
+              "ok",
+              "reconciliation_id",
+              "schema_version"
+            ] and
+            .schema_version == 1 and
+            .evidence_type == "maiprop-legacy-migration-schema-evidence" and
+            .reconciliation_id == "production-history-v1" and
+            .ok == true and
+            (.checks | type == "array" and length > 0) and
+            ([.checks[].name] == ([.checks[].name] | sort)) and
+            (([.checks[].name] | unique | length) == (.checks | length)) and
+            all(
+              .checks[];
+              ((keys | sort) == ["fingerprint", "name", "ok"]) and
+              (.name | type == "string" and length > 0) and
+              (.ok | type == "boolean") and
+              (.fingerprint | type == "string" and test("^sha256:[0-9a-f]{64}$"))
+            )
+          ' "$raw_evidence" >/dev/null
+          canonical_evidence="$(jq -cS . "$raw_evidence")"
+          printf '%s' "$canonical_evidence" \
+            > staging-legacy-migration-schema-evidence.json
+          sha256sum staging-legacy-migration-schema-evidence.json \
+            | awk '{print $1}' \
+            > staging-legacy-migration-schema-evidence.sha256
+
+          psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/legacy_migration_convergence_test.sql \
+            > staging-legacy-migration-convergence-pgtap.txt
+          node scripts/parse-tap-proof.mjs \
+            --file staging-legacy-migration-convergence-pgtap.txt \
+            > staging-legacy-migration-convergence-pgtap-proof.json
+
+      - name: Capture post-migration catalogue cron baseline
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          set -euo pipefail
+          psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --command "
+              SELECT json_build_object(
+                'captured_at', clock_timestamp(),
+                'publication_id',
+                  (
+                    SELECT current_publication.publication_id
+                    FROM private.public_catalogue_current AS current_publication
+                    WHERE current_publication.singleton
+                  ),
+                'cron_run_id',
+                  COALESCE(
+                    (
+                      SELECT max(run.runid)
+                      FROM cron.job AS job
+                      LEFT JOIN cron.job_run_details AS run
+                        ON run.jobid = job.jobid
+                      WHERE job.jobname = 'publish-public-catalogue'
+                    ),
+                    0
+                  )
+              )::text;
+            " | sed '/^[[:space:]]*$/d' \
+              > staging-public-catalogue-cron-baseline.json
+          jq -e '
+            (.captured_at | type == "string") and
+            (.publication_id | type == "number" and . > 0) and
+            (.cron_run_id | type == "number" and . >= 0)
+          ' staging-public-catalogue-cron-baseline.json >/dev/null
 
       - name: Capture staging Supabase index stats
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm run capture:supabase-index-stats -- --out supabase-index-stats.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Check staging Supabase advisors
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --index-stats supabase-index-stats.json --out supabase-advisor-staging-summary.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Check staging Supabase generated types
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: |
-          if ! npm run check:supabase-types -- -- --strict; then
-            echo "::warning title=Staging Supabase type drift::Staging generated types differ from the committed production types. Migration replay, staging apply, advisors, and security posture remain hard gates."
-            {
-              echo "### Staging Supabase type drift"
-              echo ""
-              echo "The isolated staging project generated types differ from the committed production-source types."
-              echo "This is recorded as staging environment drift, not accepted as source-of-truth type output."
-              echo "Blocking gates still cover clean migration replay, staging migration apply, advisors, security posture, edge function deploy, preview deploy, and E2E security."
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
+        run: npm run check:supabase-types -- -- --strict
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Check staging Supabase security posture
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm run check:live-security-posture
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Verify exact staging migration and RPC contract
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          set -euo pipefail
+          find release-candidate/supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' \
+            | sort \
+            | awk '
+                BEGIN { OFS = "\t" }
+                {
+                  filename = $0
+                  sub(/\.sql$/, "", filename)
+                  version = filename
+                  sub(/_.*/, "", version)
+                  name = filename
+                  sub(/^[0-9]+_/, "", name)
+                  print version, name
+                }
+              ' > staging-expected-migrations.txt
+          psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --command "SELECT version || E'\t' || COALESCE(name, '') FROM supabase_migrations.schema_migrations ORDER BY version;" \
+            | sed '/^[[:space:]]*$/d' > staging-actual-migrations.txt
+          if ! cmp -s staging-expected-migrations.txt staging-actual-migrations.txt; then
+            echo "::error::Staging migration history names and versions do not exactly match this release SHA."
+            diff -u staging-expected-migrations.txt staging-actual-migrations.txt || true
+            exit 1
+          fi
+          sha256sum staging-expected-migrations.txt \
+            | awk '{print $1}' > staging-migrations.sha256
+          psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --quiet \
+            --command "
+              SELECT COALESCE(
+                json_agg(
+                  json_build_object(
+                    'version', version,
+                    'name', COALESCE(name, ''),
+                    'statement_count', COALESCE(cardinality(statements), 0),
+                    'statement_marker_only', COALESCE(
+                      cardinality(statements) = 1 AND
+                      statements[1] = version || '_' || COALESCE(name, '') || '.sql',
+                      FALSE
+                    ),
+                    'statements_sha256', encode(
+                      extensions.digest(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
+                        'sha256'
+                      ),
+                      'hex'
+                    )
+                  )
+                  ORDER BY version
+                ),
+                '[]'::json
+              )::text
+              FROM supabase_migrations.schema_migrations;
+            " > staging-migration-history.json
+          node -e "JSON.parse(require('fs').readFileSync('staging-migration-history.json','utf8'))"
+
+          psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --command "
+              WITH expected_rpc AS (
+                SELECT *
+                FROM (
+                  VALUES
+                    (
+                      'publication',
+                      to_regprocedure(
+                        'public.get_public_catalogue_publication(bigint)'
+                      )
+                    ),
+                    (
+                      'query',
+                      to_regprocedure(
+                        'public.query_public_catalogue(bigint,text,text,text,text,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,integer,integer,text[],text,text,text,text,text[],numeric,numeric,numeric,numeric,numeric,numeric,text,text,text,timestamp with time zone,numeric,uuid,boolean,integer,integer,jsonb)'
+                      )
+                    ),
+                    (
+                      'homepage',
+                      to_regprocedure(
+                        'public.get_public_catalogue_homepage(bigint)'
+                      )
+                    ),
+                    (
+                      'detail',
+                      to_regprocedure(
+                        'public.get_public_catalogue_listing(bigint,uuid,text)'
+                      )
+                    ),
+                    (
+                      'publish',
+                      to_regprocedure('public.publish_public_catalogue()')
+                    ),
+                    (
+                      'guard',
+                      to_regprocedure(
+                        'private.guard_public_catalogue_version_update()'
+                      )
+                    ),
+                    (
+                      'resolver',
+                      to_regprocedure(
+                        'private.resolve_public_catalogue_publication(bigint)'
+                      )
+                    ),
+                    (
+                      'private_publish',
+                      to_regprocedure('private.publish_public_catalogue()')
+                    )
+                ) AS expected(label, oid)
+              ),
+              rpc AS (
+                SELECT
+                  expected.label,
+                  p.oid::regprocedure::text AS signature,
+                  p.provolatile,
+                  p.prosecdef,
+                  pg_get_userbyid(p.proowner) AS owner,
+                  COALESCE(to_json(p.proconfig), '[]'::json) AS proconfig,
+                  EXISTS (
+                    SELECT 1
+                    FROM aclexplode(
+                      COALESCE(p.proacl, acldefault('f', p.proowner))
+                    ) AS privilege
+                    WHERE privilege.grantee = 0
+                      AND privilege.privilege_type = 'EXECUTE'
+                  ) AS public_execute,
+                  has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_execute,
+                  has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_execute,
+                  has_function_privilege('service_role', p.oid, 'EXECUTE') AS service_execute
+                FROM expected_rpc AS expected
+                LEFT JOIN pg_proc AS p ON p.oid = expected.oid
+              )
+              SELECT json_build_object(
+                'rpc', (
+                  SELECT json_object_agg(
+                    label,
+                    json_build_object(
+                      'signature', signature,
+                      'provolatile', provolatile,
+                      'security_definer', prosecdef,
+                      'owner', owner,
+                      'proconfig', proconfig,
+                      'public_execute', public_execute,
+                      'anon_execute', anon_execute,
+                      'authenticated_execute', authenticated_execute,
+                      'service_execute', service_execute
+                    )
+                  )
+                  FROM rpc
+                ),
+                'anon_private_publications_select',
+                  has_table_privilege(
+                    'anon',
+                    'private.public_catalogue_publications',
+                    'SELECT'
+                  ),
+                'anon_private_current_select',
+                  has_table_privilege(
+                    'anon',
+                    'private.public_catalogue_current',
+                    'SELECT'
+                  ),
+                'anon_private_versions_select',
+                  has_table_privilege(
+                    'anon',
+                    'private.public_catalogue_versions',
+                    'SELECT'
+                  ),
+                'authenticated_private_publications_select',
+                  has_table_privilege(
+                    'authenticated',
+                    'private.public_catalogue_publications',
+                    'SELECT'
+                  ),
+                'authenticated_private_current_select',
+                  has_table_privilege(
+                    'authenticated',
+                    'private.public_catalogue_current',
+                    'SELECT'
+                  ),
+                'authenticated_private_versions_select',
+                  has_table_privilege(
+                    'authenticated',
+                    'private.public_catalogue_versions',
+                    'SELECT'
+                  )
+              )::text;
+            " > staging-public-catalogue-rpc-contract.json
+          jq -e '
+            .rpc.publication.signature == "get_public_catalogue_publication(bigint)" and
+            .rpc.publication.provolatile == "s" and
+            .rpc.publication.security_definer == true and
+            .rpc.publication.owner == "postgres" and
+            .rpc.publication.proconfig == ["search_path=\"\""] and
+            .rpc.publication.public_execute == false and
+            .rpc.publication.anon_execute == true and
+            .rpc.publication.authenticated_execute == true and
+            (.rpc.query.signature | startswith("query_public_catalogue(")) and
+            (.rpc.query.signature | endswith(",integer,integer,jsonb)")) and
+            .rpc.query.provolatile == "s" and
+            .rpc.query.security_definer == true and
+            .rpc.query.owner == "postgres" and
+            .rpc.query.proconfig == ["search_path=\"\""] and
+            .rpc.query.public_execute == false and
+            .rpc.query.anon_execute == true and
+            .rpc.query.authenticated_execute == true and
+            .rpc.homepage.signature == "get_public_catalogue_homepage(bigint)" and
+            .rpc.homepage.provolatile == "s" and
+            .rpc.homepage.security_definer == true and
+            .rpc.homepage.owner == "postgres" and
+            .rpc.homepage.proconfig == ["search_path=\"\""] and
+            .rpc.homepage.public_execute == false and
+            .rpc.homepage.anon_execute == true and
+            .rpc.homepage.authenticated_execute == true and
+            .rpc.detail.signature == "get_public_catalogue_listing(bigint,uuid,text)" and
+            .rpc.detail.provolatile == "s" and
+            .rpc.detail.security_definer == true and
+            .rpc.detail.owner == "postgres" and
+            .rpc.detail.proconfig == ["search_path=\"\""] and
+            .rpc.detail.public_execute == false and
+            .rpc.detail.anon_execute == true and
+            .rpc.detail.authenticated_execute == true and
+            .rpc.detail.service_execute == true and
+            .rpc.publish.signature == "publish_public_catalogue()" and
+            .rpc.publish.provolatile == "v" and
+            .rpc.publish.security_definer == false and
+            .rpc.publish.owner == "postgres" and
+            .rpc.publish.proconfig == ["search_path=\"\""] and
+            .rpc.publish.public_execute == false and
+            .rpc.publish.anon_execute == false and
+            .rpc.publish.authenticated_execute == false and
+            .rpc.publish.service_execute == true and
+            .rpc.guard.signature == "private.guard_public_catalogue_version_update()" and
+            .rpc.guard.provolatile == "v" and
+            .rpc.guard.security_definer == false and
+            .rpc.guard.owner == "postgres" and
+            .rpc.guard.proconfig == ["search_path=\"\""] and
+            .rpc.guard.public_execute == false and
+            .rpc.guard.anon_execute == false and
+            .rpc.guard.authenticated_execute == false and
+            .rpc.guard.service_execute == false and
+            .rpc.resolver.signature == "private.resolve_public_catalogue_publication(bigint)" and
+            .rpc.resolver.provolatile == "s" and
+            .rpc.resolver.security_definer == true and
+            .rpc.resolver.owner == "postgres" and
+            .rpc.resolver.proconfig == ["search_path=\"\""] and
+            .rpc.resolver.public_execute == false and
+            .rpc.resolver.anon_execute == false and
+            .rpc.resolver.authenticated_execute == false and
+            .rpc.resolver.service_execute == true and
+            .rpc.private_publish.signature == "private.publish_public_catalogue()" and
+            .rpc.private_publish.provolatile == "v" and
+            .rpc.private_publish.security_definer == true and
+            .rpc.private_publish.owner == "postgres" and
+            .rpc.private_publish.proconfig == ["search_path=\"\""] and
+            .rpc.private_publish.public_execute == false and
+            .rpc.private_publish.anon_execute == false and
+            .rpc.private_publish.authenticated_execute == false and
+            .rpc.private_publish.service_execute == true and
+            .anon_private_publications_select == false and
+            .anon_private_current_select == false and
+            .anon_private_versions_select == false and
+            .authenticated_private_publications_select == false and
+            .authenticated_private_current_select == false and
+            .authenticated_private_versions_select == false
+          ' staging-public-catalogue-rpc-contract.json >/dev/null
+
+          baseline_publication_id="$(
+            jq -r '.publication_id' \
+              staging-public-catalogue-cron-baseline.json
+          )"
+          baseline_cron_run_id="$(
+            jq -r '.cron_run_id' \
+              staging-public-catalogue-cron-baseline.json
+          )"
+          cron_contract_ready=false
+          for attempt in $(seq 1 18); do
+            psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --tuples-only \
+              --no-align \
+              --command "
+                WITH catalogue_job AS (
+                  SELECT
+                    jobid,
+                    jobname,
+                    schedule,
+                    command,
+                    active
+                  FROM cron.job
+                  WHERE jobname = 'publish-public-catalogue'
+                ),
+                latest_success AS (
+                  SELECT max(run.runid) AS runid
+                  FROM cron.job_run_details AS run
+                  JOIN catalogue_job AS job
+                    ON job.jobid = run.jobid
+                  WHERE run.status = 'succeeded'
+                )
+                SELECT json_build_object(
+                  'captured_at', clock_timestamp(),
+                  'job_count', (SELECT count(*) FROM catalogue_job),
+                  'jobname', (SELECT min(jobname) FROM catalogue_job),
+                  'schedule', (SELECT min(schedule) FROM catalogue_job),
+                  'command', (SELECT min(command) FROM catalogue_job),
+                  'active', (SELECT bool_and(active) FROM catalogue_job),
+                  'latest_success_run_id',
+                    COALESCE((SELECT runid FROM latest_success), 0),
+                  'publication_id',
+                    (
+                      SELECT current_publication.publication_id
+                      FROM private.public_catalogue_current
+                        AS current_publication
+                      WHERE current_publication.singleton
+                    )
+                )::text;
+              " | sed '/^[[:space:]]*$/d' \
+                > staging-public-catalogue-cron-contract.json
+            if jq -e \
+              --argjson baseline_publication_id "$baseline_publication_id" \
+              --argjson baseline_cron_run_id "$baseline_cron_run_id" '
+                .job_count == 1 and
+                .jobname == "publish-public-catalogue" and
+                .schedule == "* * * * *" and
+                .command == "SELECT private.publish_public_catalogue();" and
+                .active == true and
+                .latest_success_run_id > $baseline_cron_run_id and
+                .publication_id > $baseline_publication_id
+              ' staging-public-catalogue-cron-contract.json >/dev/null; then
+              cron_contract_ready=true
+              break
+            fi
+            echo "Waiting for staging catalogue cron proof ($attempt/18)."
+            sleep 10
+          done
+          if [ "$cron_contract_ready" != "true" ]; then
+            echo "::error::The staging catalogue cron did not advance the publication."
+            cat staging-public-catalogue-cron-contract.json
+            exit 1
+          fi
+
+          psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/public_catalogue_snapshot_test.sql \
+            > staging-public-catalogue-pgtap.txt
+          node scripts/parse-tap-proof.mjs \
+            --file staging-public-catalogue-pgtap.txt \
+            > staging-public-catalogue-pgtap-proof.json
+          psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/public_catalogue_20k_scale_test.sql \
+            > staging-public-catalogue-scale-pgtap.txt
+          node scripts/parse-tap-proof.mjs \
+            --file staging-public-catalogue-scale-pgtap.txt \
+            > staging-public-catalogue-scale-pgtap-proof.json
+
+      - name: Revalidate staging lease before live PostgREST mutation
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+
+      - name: Verify live staging PostgREST catalogue contract
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          PUBLIC_CATALOGUE_TEST_TARGET: staging
+          PUBLIC_CATALOGUE_TEST_API_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          PUBLIC_CATALOGUE_TEST_ANON_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          PUBLIC_CATALOGUE_TEST_STAGING_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          PUBLIC_CATALOGUE_TEST_PRODUCTION_PROJECT_REF: ${{ inputs.production_supabase_project_id }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ inputs.staging_mutation_acknowledgement }}
+        run: |
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+            --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID/api-keys" \
+            > /tmp/staging-api-keys.json
+          service_role_key="$(jq -r '
+            (if type == "array" then . else (.keys // .result // []) end)
+            | map(select((.name // .role // .id // "") == "service_role"))
+            | .[0]
+            | (.api_key // .key // .value // empty)
+          ' /tmp/staging-api-keys.json)"
+          if [ -z "$service_role_key" ]; then
+            echo "::error::Could not resolve the staging service-role key for the live database contract."
+            exit 1
+          fi
+          echo "::add-mask::$service_role_key"
+          PUBLIC_CATALOGUE_TEST_DATABASE_URL="$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+          PUBLIC_CATALOGUE_TEST_SERVICE_ROLE_KEY="$service_role_key" \
+            node supabase/tests/public_catalogue_postgrest_contract.mjs \
+            > public-catalogue-postgrest-contract.json
+          jq -e '
+            .target == "staging" and
+            .concurrent_publish_calls == 16 and
+            .publication_id > 0 and
+            .row_count >= 0 and
+            .anonymous_metadata_status == 200 and
+            .anonymous_query_status == 200 and
+            (.anonymous_head_status == 200 or .anonymous_head_status == 206) and
+            .anonymous_homepage_status == 200 and
+            .anonymous_writer_status >= 401 and
+            .missing_publication_status == 400
+          ' public-catalogue-postgrest-contract.json >/dev/null
+
+      - name: Create exact staging database attestation
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
+          ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          STAGING_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+          const releaseManifest = readJson(
+            "release-candidate/release-manifest.json",
+          );
+          const migrationSha = readFileSync(
+            "staging-migrations.sha256",
+            "utf8",
+          ).trim();
+          const migrations = readFileSync(
+            "staging-actual-migrations.txt",
+            "utf8",
+          ).trim().split(/\r?\n/).filter(Boolean);
+          const migrationHistory = readJson("staging-migration-history.json");
+          const historyByKey = new Map(
+            migrationHistory.map((record) => [
+              `${String(record.version ?? "")}_${String(record.name ?? "")}`,
+              record,
+            ]),
+          );
+          const signedSupabaseFiles = new Map(
+            (releaseManifest.supabase_files ?? []).map((record) => [
+              record.path,
+              record,
+            ]),
+          );
+          const migrationInventory = migrations.map((line) => {
+            const [version = "", name = ""] = line.split("\t", 2);
+            if (
+              !/^\d{14}$/.test(version) ||
+              !/^[A-Za-z0-9_-]+$/.test(name)
+            ) {
+              throw new Error(`Invalid staged migration inventory row: ${line}`);
+            }
+            const path = `supabase/migrations/${version}_${name}.sql`;
+            const signedFile = signedSupabaseFiles.get(path);
+            const live = historyByKey.get(`${version}_${name}`);
+            if (
+              signedFile?.path !== path ||
+              !/^[0-9a-f]{64}$/.test(signedFile.sha256 ?? "")
+            ) {
+              throw new Error(
+                `Staged migration ${path} is missing its signed SQL file digest.`,
+              );
+            }
+            if (
+              !live ||
+              !Number.isSafeInteger(Number(live.statement_count)) ||
+              Number(live.statement_count) < 1 ||
+              live.statement_marker_only !== false ||
+              !/^[0-9a-f]{64}$/.test(String(live.statements_sha256 ?? ""))
+            ) {
+              throw new Error(
+                `Staged migration ${path} lacks verified executed SQL history.`,
+              );
+            }
+            return {
+              version,
+              name,
+              file_sha256: signedFile.sha256,
+              statements_sha256: String(live.statements_sha256),
+              statement_count: Number(live.statement_count),
+              statement_marker_only: false,
+            };
+          });
+          if (historyByKey.size !== migrationInventory.length) {
+            throw new Error(
+              "Staging executed SQL history contains an unexpected migration row.",
+            );
+          }
+          const migrationInventorySha256 = createHash("sha256")
+            .update(JSON.stringify(migrationInventory))
+            .digest("hex");
+          const legacyMigrationSchemaEvidenceBytes = readFileSync(
+            "staging-legacy-migration-schema-evidence.json",
+          );
+          const legacyMigrationSchemaEvidence = JSON.parse(
+            legacyMigrationSchemaEvidenceBytes.toString("utf8"),
+          );
+          const legacyMigrationSchemaEvidenceSha256 = readFileSync(
+            "staging-legacy-migration-schema-evidence.sha256",
+            "utf8",
+          ).trim();
+          const computedLegacyMigrationSchemaEvidenceSha256 = createHash(
+            "sha256",
+          )
+            .update(legacyMigrationSchemaEvidenceBytes)
+            .digest("hex");
+          const legacyMigrationConvergencePgtap = readFileSync(
+            "staging-legacy-migration-convergence-pgtap.txt",
+            "utf8",
+          );
+          const legacyMigrationConvergencePgtapProof = readJson(
+            "staging-legacy-migration-convergence-pgtap-proof.json",
+          );
+          const rpc = readJson("staging-public-catalogue-rpc-contract.json");
+          const pgtap = readFileSync(
+            "staging-public-catalogue-pgtap.txt",
+            "utf8",
+          );
+          const pgtapProof = readJson(
+            "staging-public-catalogue-pgtap-proof.json",
+          );
+          const scalePgtap = readFileSync(
+            "staging-public-catalogue-scale-pgtap.txt",
+            "utf8",
+          );
+          const scalePgtapProof = readJson(
+            "staging-public-catalogue-scale-pgtap-proof.json",
+          );
+          const postgrest = readJson("public-catalogue-postgrest-contract.json");
+          const cronBaseline = readJson(
+            "staging-public-catalogue-cron-baseline.json",
+          );
+          const cron = readJson(
+            "staging-public-catalogue-cron-contract.json",
+          );
+          const indexStatsBytes = readFileSync("supabase-index-stats.json");
+          const advisorBytes = readFileSync(
+            "supabase-advisor-staging-summary.json",
+          );
+          JSON.parse(indexStatsBytes.toString("utf8"));
+          JSON.parse(advisorBytes.toString("utf8"));
+          const indexStatsSha256 = createHash("sha256")
+            .update(indexStatsBytes)
+            .digest("hex");
+          const advisorSha256 = createHash("sha256")
+            .update(advisorBytes)
+            .digest("hex");
+
+          if (
+            !/^[0-9a-f]{64}$/.test(migrationSha) ||
+            releaseManifest.release_sha !== process.env.RELEASE_SHA ||
+            releaseManifest.artifact_sha256 !==
+              process.env.ARTIFACT_SHA256 ||
+            !/^[0-9a-f]{64}$/.test(releaseManifest.supabase_sha256 ?? "") ||
+            !/^[0-9a-f]{64}$/.test(process.env.MANIFEST_SHA256 ?? "") ||
+            migrations.length === 0 ||
+            !/^[0-9a-f]{64}$/.test(migrationInventorySha256) ||
+            legacyMigrationSchemaEvidenceSha256 !==
+              computedLegacyMigrationSchemaEvidenceSha256 ||
+            legacyMigrationSchemaEvidence.schema_version !== 1 ||
+            legacyMigrationSchemaEvidence.evidence_type !==
+              "maiprop-legacy-migration-schema-evidence" ||
+            legacyMigrationSchemaEvidence.reconciliation_id !==
+              "production-history-v1" ||
+            legacyMigrationSchemaEvidence.ok !== true ||
+            JSON.stringify(
+              Object.keys(legacyMigrationSchemaEvidence).sort(),
+            ) !==
+              JSON.stringify([
+                "checks",
+                "evidence_type",
+                "ok",
+                "reconciliation_id",
+                "schema_version",
+              ]) ||
+            !Array.isArray(legacyMigrationSchemaEvidence.checks) ||
+            legacyMigrationSchemaEvidence.checks.length < 1 ||
+            legacyMigrationSchemaEvidence.checks.some(
+              (check, index, checks) =>
+                JSON.stringify(Object.keys(check).sort()) !==
+                  JSON.stringify(["fingerprint", "name", "ok"]) ||
+                typeof check.name !== "string" ||
+                check.name.length < 1 ||
+                typeof check.ok !== "boolean" ||
+                check.ok !== true ||
+                !/^sha256:[0-9a-f]{64}$/.test(check.fingerprint ?? "") ||
+                (index > 0 && checks[index - 1].name >= check.name),
+            ) ||
+            /(^|[\s])not ok([\s]|$)/m.test(
+              legacyMigrationConvergencePgtap,
+            ) ||
+            legacyMigrationConvergencePgtapProof.status !== "passed" ||
+            !Number.isSafeInteger(
+              legacyMigrationConvergencePgtapProof.plan,
+            ) ||
+            legacyMigrationConvergencePgtapProof.plan < 1 ||
+            legacyMigrationConvergencePgtapProof.okCount !==
+              legacyMigrationConvergencePgtapProof.plan ||
+            /(^|[\s])not ok([\s]|$)/m.test(pgtap) ||
+            pgtapProof.status !== "passed" ||
+            !Number.isSafeInteger(pgtapProof.plan) ||
+            pgtapProof.plan < 1 ||
+            pgtapProof.okCount !== pgtapProof.plan ||
+            /(^|[\s])not ok([\s]|$)/m.test(scalePgtap) ||
+            scalePgtapProof.status !== "passed" ||
+            !Number.isSafeInteger(scalePgtapProof.plan) ||
+            scalePgtapProof.plan < 1 ||
+            scalePgtapProof.okCount !== scalePgtapProof.plan ||
+            rpc.rpc?.publication?.signature !==
+              "get_public_catalogue_publication(bigint)" ||
+            rpc.rpc?.publication?.provolatile !== "s" ||
+            rpc.rpc?.publication?.security_definer !== true ||
+            rpc.rpc?.publication?.owner !== "postgres" ||
+            JSON.stringify(rpc.rpc?.publication?.proconfig) !==
+              JSON.stringify(['search_path=""']) ||
+            rpc.rpc?.publication?.public_execute !== false ||
+            rpc.rpc?.publication?.anon_execute !== true ||
+            rpc.rpc?.publication?.authenticated_execute !== true ||
+            !rpc.rpc?.query?.signature?.startsWith(
+              "query_public_catalogue(",
+            ) ||
+            !rpc.rpc?.query?.signature?.endsWith(
+              ",integer,integer,jsonb)",
+            ) ||
+            rpc.rpc?.query?.provolatile !== "s" ||
+            rpc.rpc?.query?.security_definer !== true ||
+            rpc.rpc?.query?.owner !== "postgres" ||
+            JSON.stringify(rpc.rpc?.query?.proconfig) !==
+              JSON.stringify(['search_path=""']) ||
+            rpc.rpc?.query?.public_execute !== false ||
+            rpc.rpc?.query?.anon_execute !== true ||
+            rpc.rpc?.query?.authenticated_execute !== true ||
+            rpc.rpc?.homepage?.signature !==
+              "get_public_catalogue_homepage(bigint)" ||
+            rpc.rpc?.homepage?.provolatile !== "s" ||
+            rpc.rpc?.homepage?.security_definer !== true ||
+            rpc.rpc?.homepage?.owner !== "postgres" ||
+            JSON.stringify(rpc.rpc?.homepage?.proconfig) !==
+              JSON.stringify(['search_path=""']) ||
+            rpc.rpc?.homepage?.public_execute !== false ||
+            rpc.rpc?.homepage?.anon_execute !== true ||
+            rpc.rpc?.homepage?.authenticated_execute !== true ||
+            rpc.rpc?.detail?.signature !==
+              "get_public_catalogue_listing(bigint,uuid,text)" ||
+            rpc.rpc?.detail?.provolatile !== "s" ||
+            rpc.rpc?.detail?.security_definer !== true ||
+            rpc.rpc?.detail?.owner !== "postgres" ||
+            JSON.stringify(rpc.rpc?.detail?.proconfig) !==
+              JSON.stringify(['search_path=""']) ||
+            rpc.rpc?.detail?.public_execute !== false ||
+            rpc.rpc?.detail?.anon_execute !== true ||
+            rpc.rpc?.detail?.authenticated_execute !== true ||
+            rpc.rpc?.detail?.service_execute !== true ||
+            rpc.rpc?.publish?.signature !== "publish_public_catalogue()" ||
+            rpc.rpc?.publish?.provolatile !== "v" ||
+            rpc.rpc?.publish?.security_definer !== false ||
+            rpc.rpc?.publish?.owner !== "postgres" ||
+            JSON.stringify(rpc.rpc?.publish?.proconfig) !==
+              JSON.stringify(['search_path=""']) ||
+            rpc.rpc?.publish?.public_execute !== false ||
+            rpc.rpc?.publish?.anon_execute !== false ||
+            rpc.rpc?.publish?.authenticated_execute !== false ||
+            rpc.rpc?.publish?.service_execute !== true ||
+            rpc.rpc?.guard?.signature !==
+              "private.guard_public_catalogue_version_update()" ||
+            rpc.rpc?.guard?.provolatile !== "v" ||
+            rpc.rpc?.guard?.security_definer !== false ||
+            rpc.rpc?.guard?.owner !== "postgres" ||
+            JSON.stringify(rpc.rpc?.guard?.proconfig) !==
+              JSON.stringify(['search_path=""']) ||
+            rpc.rpc?.guard?.public_execute !== false ||
+            rpc.rpc?.guard?.anon_execute !== false ||
+            rpc.rpc?.guard?.authenticated_execute !== false ||
+            rpc.rpc?.guard?.service_execute !== false ||
+            rpc.rpc?.resolver?.signature !==
+              "private.resolve_public_catalogue_publication(bigint)" ||
+            rpc.rpc?.resolver?.provolatile !== "s" ||
+            rpc.rpc?.resolver?.security_definer !== true ||
+            rpc.rpc?.resolver?.owner !== "postgres" ||
+            JSON.stringify(rpc.rpc?.resolver?.proconfig) !==
+              JSON.stringify(['search_path=""']) ||
+            rpc.rpc?.resolver?.public_execute !== false ||
+            rpc.rpc?.resolver?.anon_execute !== false ||
+            rpc.rpc?.resolver?.authenticated_execute !== false ||
+            rpc.rpc?.resolver?.service_execute !== true ||
+            rpc.rpc?.private_publish?.signature !==
+              "private.publish_public_catalogue()" ||
+            rpc.rpc?.private_publish?.provolatile !== "v" ||
+            rpc.rpc?.private_publish?.security_definer !== true ||
+            rpc.rpc?.private_publish?.owner !== "postgres" ||
+            JSON.stringify(rpc.rpc?.private_publish?.proconfig) !==
+              JSON.stringify(['search_path=""']) ||
+            rpc.rpc?.private_publish?.public_execute !== false ||
+            rpc.rpc?.private_publish?.anon_execute !== false ||
+            rpc.rpc?.private_publish?.authenticated_execute !== false ||
+            rpc.rpc?.private_publish?.service_execute !== true ||
+            rpc.anon_private_publications_select !== false ||
+            rpc.anon_private_current_select !== false ||
+            rpc.anon_private_versions_select !== false ||
+            rpc.authenticated_private_publications_select !== false ||
+            rpc.authenticated_private_current_select !== false ||
+            rpc.authenticated_private_versions_select !== false ||
+            postgrest.target !== "staging" ||
+            postgrest.concurrent_publish_calls !== 16 ||
+            !(postgrest.publication_id > 0) ||
+            !(postgrest.row_count >= 0) ||
+            postgrest.anonymous_metadata_status !== 200 ||
+            postgrest.anonymous_query_status !== 200 ||
+            ![200, 206].includes(postgrest.anonymous_head_status) ||
+            postgrest.anonymous_homepage_status !== 200 ||
+            !(postgrest.anonymous_writer_status >= 401) ||
+            postgrest.missing_publication_status !== 400 ||
+            typeof cronBaseline.captured_at !== "string" ||
+            !Number.isSafeInteger(cronBaseline.publication_id) ||
+            cronBaseline.publication_id < 1 ||
+            !Number.isSafeInteger(cronBaseline.cron_run_id) ||
+            cronBaseline.cron_run_id < 0 ||
+            cron.job_count !== 1 ||
+            cron.jobname !== "publish-public-catalogue" ||
+            cron.schedule !== "* * * * *" ||
+            cron.command !== "SELECT private.publish_public_catalogue();" ||
+            cron.active !== true ||
+            !Number.isSafeInteger(cron.latest_success_run_id) ||
+            cron.latest_success_run_id <= cronBaseline.cron_run_id ||
+            !Number.isSafeInteger(cron.publication_id) ||
+            cron.publication_id <= cronBaseline.publication_id ||
+            !/^[0-9a-f]{64}$/.test(indexStatsSha256) ||
+            !/^[0-9a-f]{64}$/.test(advisorSha256)
+          ) {
+            throw new Error("The staging database contract is incomplete.");
+          }
+
+          const attestation = {
+            schema_version: 2,
+            evidence_type: "maiprop-staging-database-contract",
+            release_sha: process.env.RELEASE_SHA,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            manifest_sha256: process.env.MANIFEST_SHA256,
+            supabase_sha256: releaseManifest.supabase_sha256,
+            project_ref: process.env.STAGING_PROJECT_REF,
+            migrations_sha256: migrationSha,
+            migration_count: migrations.length,
+            migration_inventory: migrationInventory,
+            migration_inventory_sha256: migrationInventorySha256,
+            legacy_migration_schema_evidence:
+              legacyMigrationSchemaEvidence,
+            legacy_migration_schema_evidence_sha256:
+              legacyMigrationSchemaEvidenceSha256,
+            legacy_migration_convergence_pgtap_plan:
+              legacyMigrationConvergencePgtapProof.plan,
+            legacy_migration_convergence_pgtap_ok_count:
+              legacyMigrationConvergencePgtapProof.okCount,
+            legacy_migration_convergence_pgtap_sha256: createHash("sha256")
+              .update(legacyMigrationConvergencePgtap)
+              .digest("hex"),
+            pgtap_plan: pgtapProof.plan,
+            pgtap_ok_count: pgtapProof.okCount,
+            pgtap_sha256: createHash("sha256").update(pgtap).digest("hex"),
+            scale_pgtap_plan: scalePgtapProof.plan,
+            scale_pgtap_ok_count: scalePgtapProof.okCount,
+            scale_pgtap_sha256: createHash("sha256")
+              .update(scalePgtap)
+              .digest("hex"),
+            index_stats_sha256: indexStatsSha256,
+            advisor_sha256: advisorSha256,
+            rpc,
+            cron_baseline: cronBaseline,
+            cron,
+            postgrest,
+            attested_at: new Date().toISOString(),
+          };
+          writeFileSync(
+            "supabase-staging-db-attestation.json",
+            `${JSON.stringify(attestation, null, 2)}\n`,
+          );
+          NODE
+
+      - name: Revalidate staging lease before Edge mutation
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
 
       - name: Deploy edge functions to staging
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
-          supabase functions deploy \
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+            --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Release manifest changed at the staging Edge mutation boundary."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Release artifact changed at the staging Edge mutation boundary."
+            exit 1
+          fi
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npx --no-install supabase --workdir release-candidate functions deploy \
             --use-api \
             --project-ref "$STAGING_SUPABASE_PROJECT_ID"
         env:
-          SUPABASE_ACCESS_TOKEN:         ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ inputs.staging_mutation_acknowledgement }}
 
       - name: Capture staging live function drift inventory
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: npm run check:release-safety -- --live-functions --out release-safety-staging-live-functions.json
+        run: npm run check:release-safety -- --supabase-workdir release-candidate --live-functions --require-live-source-evidence --out release-safety-staging-live-functions.json
         env:
-          SUPABASE_ACCESS_TOKEN:                 ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          RELEASE_SAFETY_SUPABASE_PROJECT_REF:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          RELEASE_SAFETY_RELEASE_SHA: ${{ inputs.release_sha }}
 
-      - name: Upload staging live drift inventory
-        if: always() && steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+      - name: Create exact staging Edge attestation
+        id: edge_attestation
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
+          ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          STAGING_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const inventoryPath = "release-safety-staging-live-functions.json";
+          const inventoryBytes = readFileSync(inventoryPath);
+          const inventory = JSON.parse(inventoryBytes);
+          const releaseManifest = JSON.parse(
+            readFileSync(
+              "release-candidate/release-manifest.json",
+              "utf8",
+            ),
+          );
+          const database = JSON.parse(
+            readFileSync("supabase-staging-db-attestation.json", "utf8"),
+          );
+          const legacyMigrationSchemaEvidenceBytes = readFileSync(
+            "staging-legacy-migration-schema-evidence.json",
+          );
+          const legacyMigrationSchemaEvidenceSha256 = createHash("sha256")
+            .update(legacyMigrationSchemaEvidenceBytes)
+            .digest("hex");
+          const edgeBundles = (inventory.live_function_inventory?.deployed ?? [])
+            .map(({ name, ezbr_sha256, verify_jwt }) => ({
+              name,
+              ezbr_sha256,
+              verify_jwt,
+            }))
+            .sort((left, right) => left.name.localeCompare(right.name));
+          if (
+            edgeBundles.length === 0 ||
+            edgeBundles.some(
+              (entry) =>
+                !/^[A-Za-z0-9_-]+$/.test(entry.name) ||
+                !/^[0-9a-f]{64}$/i.test(String(entry.ezbr_sha256 ?? "")) ||
+                typeof entry.verify_jwt !== "boolean",
+            )
+          ) {
+            throw new Error("Staging Edge inventory is incomplete.");
+          }
+          if (
+            database.release_sha !== process.env.RELEASE_SHA ||
+            database.artifact_sha256 !== process.env.ARTIFACT_SHA256 ||
+            database.manifest_sha256 !== process.env.MANIFEST_SHA256 ||
+            database.supabase_sha256 !== releaseManifest.supabase_sha256 ||
+            database.project_ref !== process.env.STAGING_PROJECT_REF ||
+            database.schema_version !== 2 ||
+            database.legacy_migration_schema_evidence?.schema_version !== 1 ||
+            database.legacy_migration_schema_evidence?.evidence_type !==
+              "maiprop-legacy-migration-schema-evidence" ||
+            database.legacy_migration_schema_evidence?.reconciliation_id !==
+              "production-history-v1" ||
+            database.legacy_migration_schema_evidence?.ok !== true ||
+            database.legacy_migration_schema_evidence_sha256 !==
+              legacyMigrationSchemaEvidenceSha256 ||
+            !Number.isSafeInteger(
+              database.legacy_migration_convergence_pgtap_plan,
+            ) ||
+            database.legacy_migration_convergence_pgtap_plan < 1 ||
+            database.legacy_migration_convergence_pgtap_ok_count !==
+              database.legacy_migration_convergence_pgtap_plan ||
+            !/^[0-9a-f]{64}$/.test(
+              database.legacy_migration_convergence_pgtap_sha256 ?? "",
+            ) ||
+            inventory.edge_source_manifest?.release_sha !==
+              process.env.RELEASE_SHA ||
+            !/^[0-9a-f]{64}$/.test(
+              inventory.edge_source_manifest?.manifest_sha256 ?? "",
+            ) ||
+            database.rpc?.rpc?.publication?.provolatile !== "s" ||
+            database.rpc?.rpc?.query?.provolatile !== "s" ||
+            database.rpc?.rpc?.homepage?.provolatile !== "s" ||
+            database.rpc?.rpc?.detail?.signature !==
+              "get_public_catalogue_listing(bigint,uuid,text)" ||
+            database.rpc?.rpc?.detail?.provolatile !== "s" ||
+            database.rpc?.rpc?.detail?.public_execute !== false ||
+            database.rpc?.rpc?.detail?.anon_execute !== true ||
+            database.rpc?.rpc?.detail?.authenticated_execute !== true ||
+            database.rpc?.rpc?.publish?.provolatile !== "v" ||
+            database.rpc?.rpc?.guard?.signature !==
+              "private.guard_public_catalogue_version_update()" ||
+            database.rpc?.rpc?.guard?.public_execute !== false ||
+            database.rpc?.rpc?.guard?.service_execute !== false ||
+            database.rpc?.rpc?.resolver?.signature !==
+              "private.resolve_public_catalogue_publication(bigint)" ||
+            database.rpc?.rpc?.resolver?.public_execute !== false ||
+            database.rpc?.rpc?.resolver?.service_execute !== true ||
+            database.rpc?.rpc?.private_publish?.signature !==
+              "private.publish_public_catalogue()" ||
+            database.rpc?.rpc?.private_publish?.public_execute !== false ||
+            database.rpc?.rpc?.private_publish?.service_execute !== true ||
+            database.cron?.job_count !== 1 ||
+            database.cron?.schedule !== "* * * * *" ||
+            database.cron?.command !==
+              "SELECT private.publish_public_catalogue();" ||
+            database.cron?.active !== true ||
+            !(database.cron?.latest_success_run_id >
+              database.cron_baseline?.cron_run_id) ||
+            !(database.cron?.publication_id >
+              database.cron_baseline?.publication_id) ||
+            !/^[0-9a-f]{64}$/.test(database.index_stats_sha256 ?? "") ||
+            !/^[0-9a-f]{64}$/.test(database.advisor_sha256 ?? "") ||
+            !Number.isSafeInteger(database.scale_pgtap_plan) ||
+            database.scale_pgtap_plan < 1 ||
+            database.scale_pgtap_ok_count !== database.scale_pgtap_plan ||
+            !/^[0-9a-f]{64}$/.test(database.scale_pgtap_sha256 ?? "") ||
+            database.postgrest?.target !== "staging"
+          ) {
+            throw new Error("Staging database attestation does not match the Edge candidate.");
+          }
+          const attestation = {
+            schema_version: 1,
+            evidence_type: "maiprop-staging-edge-bundles",
+            release_sha: process.env.RELEASE_SHA,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            manifest_sha256: process.env.MANIFEST_SHA256,
+            supabase_sha256: releaseManifest.supabase_sha256,
+            project_ref: process.env.STAGING_PROJECT_REF,
+            inventory_sha256: createHash("sha256")
+              .update(inventoryBytes)
+              .digest("hex"),
+            database,
+            edge_source_manifest: inventory.edge_source_manifest,
+            edge_bundles: edgeBundles,
+            attested_at: new Date().toISOString(),
+          };
+          writeFileSync(
+            "supabase-staging-edge-attestation.json",
+            `${JSON.stringify(attestation, null, 2)}\n`,
+          );
+          NODE
+          artifact_name="supabase-staging-edge-attestation-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact staging Supabase evidence
+        id: upload_edge_attestation
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-safety-staging-live-functions
+          name: ${{ steps.edge_attestation.outputs.artifact_name }}
           path: |
+            supabase-staging-db-attestation.json
+            supabase-staging-edge-attestation.json
             release-safety-staging-live-functions.json
+            public-catalogue-postgrest-contract.json
+            staging-public-catalogue-rpc-contract.json
+            staging-public-catalogue-pgtap.txt
+            staging-public-catalogue-pgtap-proof.json
+            staging-public-catalogue-scale-pgtap.txt
+            staging-public-catalogue-scale-pgtap-proof.json
+            staging-public-catalogue-cron-baseline.json
+            staging-public-catalogue-cron-contract.json
+            staging-legacy-migration-schema-evidence.json
+            staging-legacy-migration-schema-evidence.sha256
+            staging-legacy-migration-convergence-pgtap.txt
+            staging-legacy-migration-convergence-pgtap-proof.json
+            staging-expected-migrations.txt
+            staging-actual-migrations.txt
+            staging-migrations.sha256
             supabase-index-stats.json
             supabase-advisor-staging-summary.json
-          if-no-files-found: ignore
-          retention-days: 7
+          if-no-files-found: error
+          retention-days: 30
 
+      - name: Create and verify staging Supabase evidence binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.upload_edge_attestation.outputs.artifact-digest }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.upload_edge_attestation.outputs.artifact-id }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+        run: |
+          set -euo pipefail
+          payload_name="${{ steps.edge_attestation.outputs.artifact_name }}"
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          mkdir -p staging-supabase-binding staging-supabase-binding-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > staging-supabase-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > staging-supabase-binding-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root . \
+            --file-root . \
+            --file supabase-staging-edge-attestation.json \
+            --file supabase-staging-db-attestation.json \
+            --out staging-supabase-binding/release-artifact-binding.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$source_tree" \
+            --workflow-path .github/workflows/stage-release.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/stage-release.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$payload_name" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding staging-supabase-binding/release-artifact-binding.json \
+            --payload-root . \
+            --file-root . \
+            --file supabase-staging-edge-attestation.json \
+            --file supabase-staging-db-attestation.json \
+            --artifact-metadata staging-supabase-binding-metadata/artifact.json \
+            --producer-run staging-supabase-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$source_tree" \
+            --workflow-path .github/workflows/stage-release.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/stage-release.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$payload_name" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > staging-supabase-binding/verification.json
+
+      - name: Upload staging Supabase evidence binding
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.edge_attestation.outputs.artifact_name }}-binding
+          path: staging-supabase-binding/
+          if-no-files-found: error
+          retention-days: 30

@@ -96,7 +96,7 @@ steps:
     ).toEqual(["DELETE"]);
   });
 
-  it("authorizes only the dedicated bootstrap lock workflow", () => {
+  it("authorizes only the three structurally constrained release workflows", () => {
     const lock =
       ".github/workflows/lock-cloudflare-pages-git-deploys.yml";
     const patch =
@@ -112,7 +112,12 @@ steps:
       isAuthorizedCloudflareHttpMutationWorkflow(
         ".github/workflows/stage-release.yml",
       ),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      isAuthorizedCloudflareHttpMutationWorkflow(
+        ".github/workflows/reusable-cloudflare-production-deploy.yml",
+      ),
+    ).toBe(true);
     expect(
       cloudflareHttpMutationViolation({
         workflowPath: lock,
@@ -205,7 +210,7 @@ curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCT
     ).toMatch(/unauthorized/i);
   });
 
-  it("preserves current-main compatibility without widening bootstrap authorization", () => {
+  it("accepts the controlled release rollback and rejects a widened endpoint", () => {
     const root = resolve(import.meta.dirname, "..");
     const ciPath = ".github/workflows/ci.yml";
     const productionPath =
@@ -220,9 +225,7 @@ curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCT
         text: ci,
       }),
     ).toBeNull();
-    expect(isAuthorizedCloudflareHttpMutationWorkflow(productionPath)).toBe(
-      false,
-    );
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(productionPath)).toBe(true);
     expect(
       cloudflareHttpMutationViolation({
         workflowPath: productionPath,
@@ -232,10 +235,7 @@ curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCT
     expect(
       cloudflareHttpMutationViolation({
         workflowPath: productionPath,
-        text: production.replace(
-          "if: ${{ false }}",
-          "if: ${{ true }}",
-        ),
+        text: production.replaceAll("/rollback", "/promote"),
       }),
     ).toMatch(/unauthorized/i);
     expect(
@@ -248,10 +248,10 @@ curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCT
   });
 
   it.each([
-    ".github/workflows/ci.yml",
     ".github/workflows/reusable-cloudflare-production-deploy.yml",
+    ".github/workflows/stage-release.yml",
   ])(
-    "accepts LF and CRLF forms of pinned %s but rejects altered content",
+    "accepts LF and CRLF forms of controlled %s but rejects a widened rollback endpoint",
     (workflowPath) => {
       const root = resolve(import.meta.dirname, "..");
       const baseline = readFileSync(resolve(root, workflowPath), "utf8");
@@ -265,7 +265,7 @@ curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCT
         expect(
           cloudflareHttpMutationViolation({
             workflowPath,
-            text: `${text}# altered\n`,
+            text: text.replaceAll("/rollback", "/promote"),
           }),
         ).toMatch(/unauthorized/i);
       }

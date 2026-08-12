@@ -13,6 +13,7 @@ import {
   createVerifiedStripeClient,
   getStripeRuntimeMode,
   STRIPE_DEFAULT_TAX_BEHAVIOR,
+  STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER,
   STRIPE_SAAS_BUSINESS_TAX_CODE,
   stripeMetadata,
 } from "../_shared/stripeClient.ts";
@@ -301,7 +302,7 @@ Deno.serve(async (req) => {
         ...CHECKOUT_TAX_COLLECTION_PARAMS,
         customer: customerId,
         mode: "payment",
-        payment_method_types: ["card"],
+        integration_identifier: STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER,
         line_items: [
           {
             price_data: {
@@ -325,7 +326,7 @@ Deno.serve(async (req) => {
         ...buildPaymentModeInvoiceCreationParams(metadata),
       },
       {
-        idempotencyKey: await buildIdempotencyKey("investor-payment", [
+        idempotencyKey: await buildIdempotencyKey("investor-payment-v2", [
           INVESTOR_PAYMENT_CONTRACT_VERSION,
           requestId,
           userId,

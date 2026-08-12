@@ -204,7 +204,7 @@ type DbResult<T = DbRow> = {
   data: T | null;
   error: DbError;
 };
-type SelectFilter = {
+type SelectFilter = PromiseLike<DbResult<DbRow[]>> & {
   maybeSingle(): PromiseLike<DbResult>;
 };
 type SelectQuery = {
@@ -224,6 +224,10 @@ type InsertQuery = {
 type TableQuery = {
   select(columns: string): SelectQuery;
   insert(payload: DbRow | DbRow[]): InsertQuery;
+  upsert(
+    payload: DbRow | DbRow[],
+    options: { onConflict: string },
+  ): PromiseLike<{ error: DbError }>;
   update(payload: DbRow): MutationFilter;
   delete(): MutationFilter;
 };
@@ -238,6 +242,10 @@ type SupabaseClient = {
   // The Edge runtime does not have generated database types available here.
   // Zod schemas above define the public contract; table calls stay structural.
   from(table: string): TableQuery;
+  rpc<T = DbRow>(
+    functionName: string,
+    args: Record<string, unknown>,
+  ): Promise<DbResult<T>>;
 };
 
 type ProfileRow = {
@@ -245,9 +253,19 @@ type ProfileRow = {
   role_switch_in_progress_at: string | null;
 };
 
-type ProjectOwnerRow = {
+type ProjectManagementContextRow = {
   id: string;
   owner_id: string;
+  organization_id: string | null;
+};
+
+type ProjectMediaCleanupJob = {
+  bucket: "project-media";
+  object_path: string;
+  object_url: string;
+  owner_id: string;
+  project_id: string;
+  reason: "project_deleted";
 };
 
 type ProjectUnitPriceRow = {
@@ -302,6 +320,130 @@ function responseRowId(data: DbRow | null, fallback: string): string {
   return typeof data?.id === "string" ? data.id : fallback;
 }
 
+function exactProjectMediaCleanupJob(
+  rawUrl: unknown,
+  supabaseUrl: string,
+  project: ProjectManagementContextRow,
+): ProjectMediaCleanupJob | null {
+  if (typeof rawUrl !== "string" || rawUrl.length === 0) return null;
+
+  try {
+    const url = new URL(rawUrl);
+    const expectedOrigin = new URL(supabaseUrl).origin;
+    const marker = "/storage/v1/object/public/project-media/";
+    if (url.origin !== expectedOrigin || !url.pathname.startsWith(marker)) return null;
+
+    const encodedSegments = url.pathname.slice(marker.length).split("/");
+    if (encodedSegments.length < 3) return null;
+    const segments = encodedSegments.map((segment) => decodeURIComponent(segment));
+    if (segments.some((segment) =>
+      !segment
+      || segment === "."
+      || segment === ".."
+      || segment.includes("/")
+      || segment.includes("\\")
+    )) {
+      return null;
+    }
+    if (
+      segments[0].toLowerCase() !== project.owner_id.toLowerCase()
+      || segments[1].toLowerCase() !== project.id.toLowerCase()
+    ) {
+      return null;
+    }
+
+    return {
+      bucket: "project-media",
+      object_path: segments.join("/"),
+      object_url: rawUrl,
+      owner_id: project.owner_id,
+      project_id: project.id,
+      reason: "project_deleted",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function loadProjectMediaCleanupJobs(
+  supabase: SupabaseClient,
+  supabaseUrl: string,
+  project: ProjectManagementContextRow,
+): Promise<ProjectMediaCleanupJob[]> {
+  const { data, error } = await supabase
+    .from("project_media")
+    .select("url")
+    .eq("project_id", project.id);
+  if (error) throw error;
+
+  const jobs = new Map<string, ProjectMediaCleanupJob>();
+  let skipped = 0;
+  for (const row of data ?? []) {
+    const job = exactProjectMediaCleanupJob(row.url, supabaseUrl, project);
+    if (!job) {
+      skipped += 1;
+      continue;
+    }
+    jobs.set(`${job.bucket}:${job.object_path}`, job);
+  }
+  if (skipped > 0) {
+    log.warn("project deletion preserved non-owned or invalid project media references", {
+      projectId: project.id,
+      skipped,
+    });
+  }
+  return [...jobs.values()];
+}
+
+function projectMediaLifecycleObjects(
+  jobs: readonly ProjectMediaCleanupJob[],
+) {
+  return jobs.map((job) => ({
+    bucket: job.bucket,
+    object_path: job.object_path,
+    object_url: job.object_url,
+  }));
+}
+
+async function stageProjectMediaCleanupJobs(
+  supabase: SupabaseClient,
+  jobs: readonly ProjectMediaCleanupJob[],
+): Promise<DbError> {
+  if (jobs.length === 0) return null;
+  const first = jobs[0];
+  const { error } = await supabase.rpc(
+    "stage_storage_cleanup_jobs_for_service",
+    {
+      p_owner_id: first.owner_id,
+      p_project_id: first.project_id,
+      p_reason: first.reason,
+      p_objects: projectMediaLifecycleObjects(jobs),
+      p_mode: "hold",
+      p_last_error: "awaiting_project_delete",
+    },
+  );
+  return error;
+}
+
+async function settleProjectMediaCleanupJobs(
+  supabase: SupabaseClient,
+  jobs: readonly ProjectMediaCleanupJob[],
+  outcome: "release" | "complete",
+): Promise<DbError> {
+  if (jobs.length === 0) return null;
+  const first = jobs[0];
+  const { error } = await supabase.rpc(
+    "settle_storage_cleanup_jobs_for_service",
+    {
+      p_owner_id: first.owner_id,
+      p_project_id: first.project_id,
+      p_objects: projectMediaLifecycleObjects(jobs),
+      p_outcome: outcome,
+    },
+  );
+  return error;
+}
+
 async function requireDeveloperAccess(supabase: SupabaseClient, userId: string) {
   const { data, error } = await supabase
     .from("profiles")
@@ -317,17 +459,24 @@ async function requireDeveloperAccess(supabase: SupabaseClient, userId: string) 
   }
 }
 
-async function requireOwnedProject(supabase: SupabaseClient, projectId: string, userId: string) {
-  const { data, error } = await supabase
-    .from("projects")
-    .select("id, owner_id")
-    .eq("id", projectId)
-    .maybeSingle();
+async function requireManageableProject(
+  supabase: SupabaseClient,
+  projectId: string,
+  userId: string,
+): Promise<ProjectManagementContextRow> {
+  const { data, error } = await supabase.rpc<ProjectManagementContextRow[]>(
+    "get_project_management_context_for_service",
+    {
+      p_project_id: projectId,
+      p_actor_user_id: userId,
+    },
+  );
   if (error) throw error;
-  const project = data as ProjectOwnerRow | null;
-  if (!project || project.owner_id !== userId) {
-    throw new AuthError("project_not_owned", 403);
+  const project = data?.[0] ?? null;
+  if (!project) {
+    throw new AuthError("project_not_managed", 403);
   }
+  return project;
 }
 
 async function assertLeadUnitScope(
@@ -370,15 +519,97 @@ async function handleProjectMutation(
   supabase: SupabaseClient,
   userId: string,
   payload: RequestPayload,
+  supabaseUrl: string,
 ) {
+  if (payload.action === "delete_project") {
+    const project = await requireManageableProject(supabase, payload.id, userId);
+    const cleanupJobs = await loadProjectMediaCleanupJobs(supabase, supabaseUrl, project);
+    const stagingError = await stageProjectMediaCleanupJobs(supabase, cleanupJobs);
+    if (stagingError) throw stagingError;
+
+    const { error } = await supabase.rpc<boolean>("delete_project_for_service", {
+      p_project_id: payload.id,
+      p_actor_user_id: userId,
+    });
+    if (error) {
+      const {
+        data: survivingProject,
+        error: reconciliationError,
+      } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("id", payload.id)
+        .maybeSingle();
+
+      if (reconciliationError) {
+        // The deletion may have committed before the response was lost. Keep
+        // the hold intact so stale-held recovery can safely settle it later.
+        log.warn("project deletion outcome could not be reconciled; cleanup remains held", {
+          projectId: payload.id,
+          err: reconciliationError.message,
+        });
+        throw error;
+      }
+
+      if (survivingProject) {
+        const cancellationError = await settleProjectMediaCleanupJobs(
+          supabase,
+          cleanupJobs,
+          "complete",
+        );
+        if (cancellationError) {
+          log.error("project media cleanup hold cancellation failed", {
+            projectId: payload.id,
+            err: cancellationError.message,
+          });
+        }
+        if (error.message.includes("project_not_managed")) {
+          throw new AuthError("project_not_managed", 403);
+        }
+        throw error;
+      }
+
+      log.warn("project deletion response failed after commit; releasing cleanup hold", {
+        projectId: payload.id,
+        err: error.message,
+      });
+    }
+    const releaseError = await settleProjectMediaCleanupJobs(
+      supabase,
+      cleanupJobs,
+      "release",
+    );
+    if (releaseError) {
+      // The held rows are deliberately retained. The outbox reclaims stale
+      // holds after 15 minutes, so a committed project
+      // deletion remains recoverable without reporting a false failure.
+      log.warn("project media cleanup release failed; staged jobs will be reclaimed", {
+        projectId: payload.id,
+        count: cleanupJobs.length,
+        err: releaseError.message,
+      });
+    }
+    await logAuditEvent({
+      actor_id: userId,
+      target_id: payload.id,
+      entity: "project",
+      action: "DELETED",
+      reason: "project_management.delete_project",
+    });
+    return { id: payload.id };
+  }
+
+  const projectId = payload.action === "update_project"
+    ? payload.id
+    : payload.projectId;
+  await requireManageableProject(supabase, projectId, userId);
+
   switch (payload.action) {
     case "update_project": {
-      await requireOwnedProject(supabase, payload.id, userId);
       const { data, error } = await supabase
         .from("projects")
         .update(payload.updates)
         .eq("id", payload.id)
-        .eq("owner_id", userId)
         .select()
         .single();
       if (error) throw error;
@@ -392,46 +623,16 @@ async function handleProjectMutation(
       });
       return data;
     }
-    case "delete_project": {
-      await requireOwnedProject(supabase, payload.id, userId);
-      const { error: listingError } = await supabase
-        .from("listings")
-        .update({
-          project_id: null,
-          listing_type: "sale",
-          is_pre_sale: false,
-        })
-        .eq("project_id", payload.id)
-        .eq("owner_id", userId);
-      if (listingError) throw listingError;
-
-      const { data, error } = await supabase
-        .from("projects")
-        .delete()
-        .eq("id", payload.id)
-        .eq("owner_id", userId)
-        .select("id")
-        .single();
-      if (error) throw error;
-      await logAuditEvent({
-        actor_id: userId,
-        target_id: payload.id,
-        entity: "project",
-        action: "DELETED",
-        reason: "project_management.delete_project",
-      });
-      return data;
-    }
     case "update_listing_cover": {
-      await requireOwnedProject(supabase, payload.projectId, userId);
-      const { data, error } = await supabase
-        .from("listings")
-        .update({ cover_image_url: payload.coverImageUrl })
-        .eq("id", payload.listingId)
-        .eq("project_id", payload.projectId)
-        .eq("owner_id", userId)
-        .select("id, project_id, cover_image_url")
-        .single();
+      const { data, error } = await supabase.rpc(
+        "update_listing_cover_with_storage_for_service",
+        {
+          p_actor_user_id: userId,
+          p_project_id: payload.projectId,
+          p_listing_id: payload.listingId,
+          p_cover_image_url: payload.coverImageUrl,
+        },
+      );
       if (error) throw error;
       await logAuditEvent({
         actor_id: userId,
@@ -444,7 +645,6 @@ async function handleProjectMutation(
       return data;
     }
     case "create_unit": {
-      await requireOwnedProject(supabase, payload.projectId, userId);
       const { data, error } = await supabase
         .from("project_units")
         .insert(withComputedUnitPricePerSqm({ ...payload.unit, project_id: payload.projectId }))
@@ -462,7 +662,6 @@ async function handleProjectMutation(
       return data;
     }
     case "update_unit": {
-      await requireOwnedProject(supabase, payload.projectId, userId);
       const currentUnit = await requireOwnedProjectUnit(supabase, payload.projectId, payload.id);
       const unitUpdates = withComputedUnitPricePerSqm(payload.updates, currentUnit);
       const { data, error } = await supabase
@@ -484,7 +683,6 @@ async function handleProjectMutation(
       return data;
     }
     case "delete_unit": {
-      await requireOwnedProject(supabase, payload.projectId, userId);
       const { data, error } = await supabase
         .from("project_units")
         .delete()
@@ -504,17 +702,14 @@ async function handleProjectMutation(
       return data;
     }
     case "add_media": {
-      await requireOwnedProject(supabase, payload.projectId, userId);
-      const { data, error } = await supabase
-        .from("project_media")
-        .insert({
-          ...payload.media,
-          project_id: payload.projectId,
-          title: payload.media.title ?? null,
-          sort_order: payload.media.sort_order ?? 0,
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc(
+        "attach_project_media_for_service",
+        {
+          p_actor_user_id: userId,
+          p_project_id: payload.projectId,
+          p_media: payload.media,
+        },
+      );
       if (error) throw error;
       await logAuditEvent({
         actor_id: userId,
@@ -527,7 +722,6 @@ async function handleProjectMutation(
       return data;
     }
     case "delete_media": {
-      await requireOwnedProject(supabase, payload.projectId, userId);
       const { data, error } = await supabase
         .from("project_media")
         .delete()
@@ -547,7 +741,6 @@ async function handleProjectMutation(
       return data;
     }
     case "create_lead": {
-      await requireOwnedProject(supabase, payload.projectId, userId);
       await assertLeadUnitScope(supabase, payload.projectId, payload.lead.unit_id);
       const { data, error } = await supabase
         .from("project_leads")
@@ -566,7 +759,6 @@ async function handleProjectMutation(
       return data;
     }
     case "update_lead": {
-      await requireOwnedProject(supabase, payload.projectId, userId);
       await assertLeadUnitScope(supabase, payload.projectId, payload.updates.unit_id);
       const { data, error } = await supabase
         .from("project_leads")
@@ -587,7 +779,6 @@ async function handleProjectMutation(
       return data;
     }
     case "delete_lead": {
-      await requireOwnedProject(supabase, payload.projectId, userId);
       const { data, error } = await supabase
         .from("project_leads")
         .delete()
@@ -639,7 +830,7 @@ Deno.serve(async (req) => {
       audience: "developer",
     });
     if (proCheck.errorResponse) return proCheck.errorResponse;
-    const data = await handleProjectMutation(supabase, user.id, payload);
+    const data = await handleProjectMutation(supabase, user.id, payload, supabaseUrl);
     return jsonResponse({ data, error: null }, 200, corsHeaders);
   } catch (err: unknown) {
     if (err instanceof AuthError) {

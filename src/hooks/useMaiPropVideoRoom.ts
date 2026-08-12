@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchPublicApi } from "@/lib/publicApi";
 
 type RoomStatus = "idle" | "checking" | "ready" | "joining" | "waiting" | "connected" | "failed";
 
@@ -29,19 +30,38 @@ const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:global.stun.twilio.com:3478" },
 ];
 
-function getIceServers(): RTCIceServer[] {
-  const configuredTurnUrls = import.meta.env.VITE_MAIPROP_TURN_URLS as string | undefined;
-  const turnUrls = configuredTurnUrls?.split(",").map((url: string) => url.trim()).filter(Boolean) ?? [];
-  if (turnUrls.length === 0) return DEFAULT_ICE_SERVERS;
+type TurnCredentialsResponse = {
+  iceServers?: unknown;
+};
 
-  return [
+function isIceServer(value: unknown): value is RTCIceServer {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const urls = (value as { urls?: unknown }).urls;
+  return typeof urls === "string" ||
+    (
+      Array.isArray(urls) &&
+      urls.length > 0 &&
+      urls.every((url) => typeof url === "string")
+    );
+}
+
+async function getIceServers(
+  roomId: string,
+  accessToken: string,
+): Promise<RTCIceServer[]> {
+  const response = await fetchPublicApi<TurnCredentialsResponse>(
+    "/api/turn-credentials",
     {
-      urls: turnUrls,
-      username: import.meta.env.VITE_MAIPROP_TURN_USERNAME,
-      credential: import.meta.env.VITE_MAIPROP_TURN_CREDENTIAL,
+      method: "POST",
+      body: { roomId },
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeoutMs: 5_000,
     },
-    ...DEFAULT_ICE_SERVERS,
-  ];
+  );
+  return Array.isArray(response?.iceServers) &&
+    response.iceServers.every(isIceServer)
+    ? response.iceServers
+    : DEFAULT_ICE_SERVERS;
 }
 
 function createPeerId() {
@@ -60,6 +80,7 @@ export function useMaiPropVideoRoom({ roomId, displayName }: UseMaiPropVideoRoom
   const remotePeerIdRef = useRef<string | null>(null);
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const joinInFlightRef = useRef(false);
+  const iceServersRef = useRef<RTCIceServer[]>(DEFAULT_ICE_SERVERS);
 
   const [status, setStatus] = useState<RoomStatus>("idle");
   const [cameraChecked, setCameraChecked] = useState(false);
@@ -128,7 +149,9 @@ export function useMaiPropVideoRoom({ roomId, displayName }: UseMaiPropVideoRoom
     const existing = peerConnectionRef.current;
     if (existing) return existing;
 
-    const pc = new RTCPeerConnection({ iceServers: getIceServers() });
+    const pc = new RTCPeerConnection({
+      iceServers: iceServersRef.current,
+    });
     const remoteStream = new MediaStream();
     attachRemoteStream(remoteStream);
 
@@ -261,6 +284,10 @@ export function useMaiPropVideoRoom({ roomId, displayName }: UseMaiPropVideoRoom
         setErrorMessage("Please sign in again before joining the mAI prop video room.");
         return;
       }
+      iceServersRef.current = await getIceServers(
+        roomId,
+        session.access_token,
+      );
       await supabase.realtime.setAuth(session.access_token);
       let subscriptionFailed = false;
 

@@ -2,7 +2,6 @@ import { memo, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Crown, Calendar, Clock, MapPin, Euro, Heart, Share2, Flag, ExternalLink, Lock, Layers } from "lucide-react";
-import { format } from "date-fns";
 import { toast } from "sonner";
 import { daysUntil, countdownBadge, getPropertyTypeLabel } from "@/lib/auctionUtils";
 import { APP_ORIGIN } from "@/lib/config";
@@ -24,23 +23,53 @@ type AuctionCardProps = {
 
 type AuctionCountdownBadge = ReturnType<typeof countdownBadge>;
 
+type AuctionCardCopy = {
+  spotlight: string;
+  built: string;
+  floor: string;
+  sqm: string;
+  startingBid: string;
+  save: string;
+  saved: string;
+  share: string;
+  report: string;
+  eAuction: string;
+  linkCopied: string;
+  reportSubmitted: string;
+};
+
+const formatAuctionCardDate = (value: string, isGreek: boolean) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(isGreek ? "el-GR" : "en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Europe/Athens",
+  }).format(date);
+};
+
 const AuctionTopBadges = ({
   isFeatured,
   auctionDate,
+  isGreek,
+  spotlightLabel,
 }: {
   isFeatured: boolean;
   auctionDate?: string | null;
+  isGreek: boolean;
+  spotlightLabel: string;
 }) => (
   <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
     {isFeatured && (
       <span className="inline-flex items-center gap-1 bg-gradient-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
-        <Crown className="w-2.5 h-2.5" /> Spotlight
+        <Crown className="w-2.5 h-2.5" /> {spotlightLabel}
       </span>
     )}
     {auctionDate && (
       <div className="flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
         <Calendar className="w-3 h-3 text-primary" />
-        {format(new Date(auctionDate), "dd MMM yyyy")}
+        {formatAuctionCardDate(auctionDate, isGreek)}
       </div>
     )}
   </div>
@@ -74,6 +103,8 @@ const AuctionMedia = ({
   isLogoFallback,
   propertyTypeLabel,
   badge,
+  isGreek,
+  spotlightLabel,
 }: {
   a: AuctionCardProps["a"];
   imgSrc: string;
@@ -81,6 +112,8 @@ const AuctionMedia = ({
   isLogoFallback: boolean;
   propertyTypeLabel: string | null;
   badge: AuctionCountdownBadge;
+  isGreek: boolean;
+  spotlightLabel: string;
 }) => (
   <Link to={`/auction/${a.id}`} state={{ auction: a }} className="relative h-44 bg-secondary overflow-hidden block">
     <img
@@ -99,7 +132,12 @@ const AuctionMedia = ({
       onLoad={e => switchImageToNextFallbackIfEmpty(e.currentTarget, imageChain)}
       onError={e => switchImageToNextFallback(e.currentTarget, imageChain)}
     />
-    <AuctionTopBadges isFeatured={Boolean(a.is_featured)} auctionDate={a.auction_date} />
+    <AuctionTopBadges
+      isFeatured={Boolean(a.is_featured)}
+      auctionDate={a.auction_date}
+      isGreek={isGreek}
+      spotlightLabel={spotlightLabel}
+    />
     <AuctionPropertyTypeBadge label={propertyTypeLabel} />
     <AuctionCountdown badge={badge} />
   </Link>
@@ -147,19 +185,12 @@ const formatAuctionFloorValue = (floorValue: unknown, totalFloorsValue: unknown,
   return totalFloors !== null ? `${base} / ${totalFloors}` : base;
 };
 
-const formatAuctionFloor = (floorValue: unknown, totalFloorsValue: unknown, isGreek: boolean): string | null => {
-  const value = formatAuctionFloorValue(floorValue, totalFloorsValue, isGreek);
-  if (!value) return null;
-  const label = isGreek ? "\u038c\u03c1\u03bf\u03c6\u03bf\u03c2" : "Floor";
-  return `${label} ${value}`;
-};
-
-const AuctionYearBuiltPill = ({ yearBuilt, isGreek }: { yearBuilt?: string | number | null; isGreek: boolean }) => {
+const AuctionYearBuiltPill = ({ yearBuilt, label }: { yearBuilt?: string | number | null; label: string }) => {
   if (!yearBuilt) return null;
 
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
-      {isGreek ? "Έτος" : "Built"} {yearBuilt}
+      {label} {yearBuilt}
     </span>
   );
 };
@@ -168,12 +199,15 @@ const AuctionFloorPill = ({
   floor,
   totalFloors,
   isGreek,
+  label,
 }: {
   floor?: string | number | null;
   totalFloors?: string | number | null;
   isGreek: boolean;
+  label: string;
 }) => {
-  const floorLabel = formatAuctionFloor(floor, totalFloors, isGreek);
+  const floorValue = formatAuctionFloorValue(floor, totalFloors, isGreek);
+  const floorLabel = floorValue ? `${label} ${floorValue}` : null;
   if (!floorLabel) return null;
 
   return (
@@ -184,18 +218,19 @@ const AuctionFloorPill = ({
   );
 };
 
-const AuctionSizePill = ({ sqm }: { sqm?: number | null }) => {
+const AuctionSizePill = ({ sqm, unit }: { sqm?: number | null; unit: string }) => {
   if (!hasUsableSqm(sqm)) return null;
 
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
-      {sqm} τ.μ.
+      {sqm} {unit}
     </span>
   );
 };
 
-const AuctionPrice = ({ amount }: { amount: number }) => (
-  <div className="flex items-center justify-between pt-1">
+const AuctionPrice = ({ amount, label }: { amount: number; label: string }) => (
+  <div className="pt-1">
+    <p className="mb-0.5 text-[10px] leading-tight text-muted-foreground">{label}</p>
     <div className="flex items-center gap-1 font-display font-bold bg-gradient-primary bg-clip-text text-transparent">
       <Euro className="w-3.5 h-3.5 text-primary" />
       {amount.toLocaleString("el-GR")}
@@ -209,7 +244,7 @@ const AuctionCourt = ({ court }: { court?: string | null }) => {
   return <div className="text-xs text-muted-foreground truncate">{court}</div>;
 };
 
-const shareAuctionLink = async (title: string, url: string, isGreek: boolean): Promise<void> => {
+const shareAuctionLink = async (title: string, url: string, copiedMessage: string): Promise<void> => {
   if (navigator.share) {
     try {
       await navigator.share({ title, url });
@@ -220,10 +255,10 @@ const shareAuctionLink = async (title: string, url: string, isGreek: boolean): P
   }
 
   await navigator.clipboard.writeText(url);
-  toast.success(isGreek ? "Ο σύνδεσμος αντιγράφηκε" : "Link copied to clipboard");
+  toast.success(copiedMessage);
 };
 
-const ExternalAuctionLink = ({ websiteUrl, isGreek }: { websiteUrl?: string | null; isGreek: boolean }) => {
+const ExternalAuctionLink = ({ websiteUrl, label }: { websiteUrl?: string | null; label: string }) => {
   if (!websiteUrl) return null;
 
   return (
@@ -235,7 +270,7 @@ const ExternalAuctionLink = ({ websiteUrl, isGreek }: { websiteUrl?: string | nu
       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-primary/10 border border-primary/25 text-primary hover:bg-primary/20 transition-all"
     >
       <ExternalLink className="w-3 h-3" />
-      {isGreek ? "Στο eAuction" : "eAuction"}
+      {label}
     </a>
   );
 };
@@ -244,12 +279,12 @@ const AuctionActions = ({
   a,
   isFav,
   onToggleFav,
-  isGreek,
+  copy,
 }: {
   a: AuctionCardProps["a"];
   isFav: boolean;
   onToggleFav: AuctionCardProps["onToggleFav"];
-  isGreek: boolean;
+  copy: AuctionCardCopy;
 }) => {
   const handleFavorite = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -258,12 +293,12 @@ const AuctionActions = ({
 
   const handleShare = async (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    await shareAuctionLink(a.title, `${APP_ORIGIN}/auction/${a.id}`, isGreek);
+    await shareAuctionLink(a.title, `${APP_ORIGIN}/auction/${a.id}`, copy.linkCopied);
   };
 
   const handleReport = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    toast.info(isGreek ? "Η αναφορά υποβλήθηκε. Η ομάδα μας θα την εξετάσει." : "Report submitted. Our team will review it.");
+    toast.info(copy.reportSubmitted);
   };
 
   return (
@@ -273,35 +308,49 @@ const AuctionActions = ({
         className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
           isFav ? "bg-rose-500/15 border-rose-500/30 text-rose-400" : "bg-secondary border-border text-muted-foreground hover:text-foreground"
         }`}
-        aria-label={isGreek ? "Αποθήκευση" : "Save"}
+        aria-label={copy.save}
       >
         <Heart className={`w-3.5 h-3.5 ${isFav ? "fill-current text-rose-400" : ""}`} />
-        {isFav ? (isGreek ? "Αποθηκεύτηκε" : "Saved") : (isGreek ? "Αποθήκευση" : "Save")}
+        {isFav ? copy.saved : copy.save}
       </button>
       <button
         onClick={handleShare}
         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-secondary border border-border text-muted-foreground hover:text-foreground transition-all"
-        aria-label={isGreek ? "Κοινοποίηση" : "Share"}
+        aria-label={copy.share}
       >
         <Share2 className="w-3.5 h-3.5" />
-        {isGreek ? "Κοινοποίηση" : "Share"}
+        {copy.share}
       </button>
       <button
         onClick={handleReport}
         className="ml-auto p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary transition-all"
-        aria-label={isGreek ? "Αναφορά" : "Report"}
+        aria-label={copy.report}
       >
         <Flag className="w-3.5 h-3.5" />
       </button>
-      <ExternalAuctionLink websiteUrl={a.website_url} isGreek={isGreek} />
+      <ExternalAuctionLink websiteUrl={a.website_url} label={copy.eAuction} />
     </div>
   );
 };
 
 const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps) => { // skipcq: JS-R1005 - Auction cards compose independent image, date, and action affordances.
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const locale = isGreek ? "el" : "en";
+  const copy: AuctionCardCopy = {
+    spotlight: t("auctions.card.spotlight"),
+    built: t("auctions.card.built"),
+    floor: t("property.floor"),
+    sqm: t("common.sqm"),
+    startingBid: t("auctions.startingBid"),
+    save: t("auctions.card.save"),
+    saved: t("auctions.card.saved"),
+    share: t("auctions.card.share"),
+    report: t("auctions.card.report"),
+    eAuction: t("auctions.card.eAuction"),
+    linkCopied: t("auctions.card.linkCopied"),
+    reportSubmitted: t("auctions.card.reportSubmitted"),
+  };
   const badge = countdownBadge(daysUntil(a.auction_date), locale);
   const imageChain = getAuctionImageList(a);
   const imgSrc = imageChain[0] ?? AUCTION_FALLBACK_LOGO_URL;
@@ -321,6 +370,8 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
         isLogoFallback={isLogoFallback}
         propertyTypeLabel={propertyTypeLabel}
         badge={badge}
+        isGreek={isGreek}
+        spotlightLabel={copy.spotlight}
       />
 
       <div className="p-4 space-y-2 flex-1 flex flex-col">
@@ -329,13 +380,13 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
         </Link>
         <AuctionLocation address={a.address} city={a.city} />
         <div className="flex flex-wrap items-center gap-1.5 mt-1 empty:hidden">
-          <AuctionSizePill sqm={a.sqm} />
-          <AuctionFloorPill floor={floor} totalFloors={totalFloors} isGreek={isGreek} />
-          <AuctionYearBuiltPill yearBuilt={a.year_built} isGreek={isGreek} />
+          <AuctionSizePill sqm={a.sqm} unit={copy.sqm} />
+          <AuctionFloorPill floor={floor} totalFloors={totalFloors} isGreek={isGreek} label={copy.floor} />
+          <AuctionYearBuiltPill yearBuilt={a.year_built} label={copy.built} />
         </div>
-        <AuctionPrice amount={price} />
+        <AuctionPrice amount={price} label={copy.startingBid} />
         <AuctionCourt court={a.auction_court} />
-        <AuctionActions a={a} isFav={isFav} onToggleFav={onToggleFav} isGreek={isGreek} />
+        <AuctionActions a={a} isFav={isFav} onToggleFav={onToggleFav} copy={copy} />
       </div>
     </div>
   );

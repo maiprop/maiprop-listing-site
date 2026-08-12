@@ -39,6 +39,7 @@ type SubscriptionAccessSource =
   | "stripe"
   | "investor"
   | "override"
+  | "unknown"
   | "free";
 type PricingEntitlementRow = {
   key?: string | null;
@@ -49,21 +50,17 @@ type PricingEntitlementRow = {
 const isLoadingSubscriptionAccess = (options: {
   profileLoading: boolean;
   subscriptionLoading: boolean;
-  subscribed: boolean;
-  hasEffectiveProduct: boolean;
+  entitlementUnresolved: boolean;
+  needsLegacyProductValidation: boolean;
   proProductLoading: boolean;
   hasImmediateAccess: boolean;
-}) =>
-  !options.hasImmediateAccess &&
-  (
-    options.profileLoading ||
+}) => {
+  if (options.hasImmediateAccess) return false;
+  return options.profileLoading ||
     options.subscriptionLoading ||
-    [
-      options.subscribed,
-      options.hasEffectiveProduct,
-      options.proProductLoading,
-    ].every(Boolean)
-  );
+    options.entitlementUnresolved ||
+    (options.needsLegacyProductValidation && options.proProductLoading);
+};
 
 const getCurrentPricingAudience = (
   profile: ReturnType<typeof useAuth>["profile"],
@@ -161,6 +158,8 @@ export const useSubscription = () => {
       currentAudience,
     );
   const hasCurrentGrant = hasCurrentSubscriptionGrant(subscription);
+  const entitlementUnresolved = subscription.syncStatus === "timeout" &&
+    !hasCurrentGrant;
   const hasStripePro = hasCurrentGrant &&
     (hasServerValidatedProduct || Boolean(validatedProProduct));
   const hasInvestorPro =
@@ -184,7 +183,9 @@ export const useSubscription = () => {
         ? "investor"
         : forceProAccess
           ? "override"
-          : "free";
+          : entitlementUnresolved
+            ? "unknown"
+            : "free";
   const hasPaidPromotionCredits =
     accessSource === "stripe" && subscription.billingStatus === "active";
 
@@ -204,8 +205,8 @@ export const useSubscription = () => {
     loading: isLoadingSubscriptionAccess({
       profileLoading: Boolean(profileLoading),
       subscriptionLoading: subscription.loading,
-      subscribed: subscription.subscribed,
-      hasEffectiveProduct,
+      entitlementUnresolved,
+      needsLegacyProductValidation,
       proProductLoading: validatedProProductLoading,
       hasImmediateAccess: isAdmin || forceProAccess,
     }),

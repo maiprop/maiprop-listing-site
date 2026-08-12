@@ -4,6 +4,8 @@ import { Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import { PastDealsTable } from "@/components/PastDealsTable";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { canAccessPastDeals } from "@/lib/pastDealsAccess";
 
 interface OwnershipDisplay {
   label: string;
@@ -30,6 +32,7 @@ export function PropertyAuctionSection({
   websiteUrl,
 }: Props) {
   const { isPro } = useSubscription();
+  const { profile } = useAuth();
   const { i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const dateLocale = isGreek ? "el-GR" : "en-GB";
@@ -94,7 +97,7 @@ export function PropertyAuctionSection({
           </Button>
         )}
 
-        {isPro && (
+        {canAccessPastDeals(profile, isPro) && (
           <div className="pt-4 border-t border-border mt-4">
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
               <History className="w-3.5 h-3.5" /> {isGreek ? "Ιστορικές συναλλαγές (OS)" : "Past Deals (OS)"}

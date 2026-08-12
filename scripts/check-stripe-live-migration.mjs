@@ -3,74 +3,32 @@
 /**
  * Live Stripe migration gate.
  *
- * This check is intentionally read-only. It requires a live Stripe secret key
+ * This check is intentionally read-only. It requires a restricted live Stripe key
  * and verifies that live Stripe objects, production Supabase pricing metadata,
  * webhooks, Tax, VAT, and Customer Portal are aligned before real payments are
  * enabled.
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
-
 import { formatStripeKeyEvidence, getStripeReadOnlyKey } from "./stripe-readiness-env.mjs";
-import {
-  buildStripeLiveMigrationEvidence,
-  resolveCheckedOutReleaseSha,
-  signStripeLiveMigrationEvidence,
-} from "./stripe-live-migration-evidence.mjs";
 import { getSupabaseReadOnlyKey } from "./supabase-readonly-key.mjs";
-
-function loadEnvFile(path) {
-  if (!existsSync(path)) return;
-  const contents = readFileSync(path, "utf8");
-  for (const line of contents.split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-    if (!match || match[1].startsWith("#")) continue;
-    let value = match[2].trim();
-    const commentIndex = value.search(/\s#/);
-    if (commentIndex >= 0) value = value.slice(0, commentIndex).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    if (process.env[match[1]] === undefined) process.env[match[1]] = value;
-  }
-}
-
-loadEnvFile(".env");
-loadEnvFile(".env.local");
-loadEnvFile(".stripe.live.env");
+import {
+  assessPaymentMethodConfigurations,
+  assertRestrictedKeyWriteDenied,
+  MAIPROP_PRODUCTION_STRIPE_ACCOUNT_ID,
+} from "./stripe-live-readiness-contract.mjs";
+import { createStripeLiveMigrationEvidence } from "./verify-stripe-live-migration-evidence.mjs";
 
 const STRIPE_API_BASE = "https://api.stripe.com";
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION ?? "2026-06-24.dahlia";
-const EXPECTED_ACCOUNT_ID = process.env.STRIPE_EXPECTED_ACCOUNT_ID ?? "acct_1TnuLTGfOEgBOxtl";
+const EXPECTED_ACCOUNT_ID = MAIPROP_PRODUCTION_STRIPE_ACCOUNT_ID;
 const EXPECTED_COUNTRY = (process.env.STRIPE_TAX_EXPECT_COUNTRY ?? "GR").toUpperCase();
 const EXPECTED_CURRENCY = "eur";
+const PRODUCTION_SUPABASE_PROJECT_REF = "qvvicunqcrwpioqnvzxf";
+const PRODUCTION_SUPABASE_URL =
+  `https://${PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co`;
 const EXPECTED_VAT_ID = (process.env.STRIPE_COMPANY_VAT_ID ?? "EL802708301").replace(/\s+/g, "").toUpperCase();
 const EXPECTED_WEBHOOK_URL = process.env.STRIPE_WEBHOOK_EXPECTED_URL ??
   "https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/stripe-webhook";
-const PRODUCTION_SUPABASE_PROJECT_REF = "qvvicunqcrwpioqnvzxf";
-
-function optionValue(name) {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : null;
-}
-
-const RELEASE_SHA = optionValue("--release-sha") ?? process.env.RELEASE_SHA;
-const OUTPUT_PATH = optionValue("--out");
-const EVIDENCE_SIGNING_KEY = process.env.RELEASE_EVIDENCE_SIGNING_KEY;
-const EVIDENCE_SIGNING_KEY_ID = process.env.RELEASE_EVIDENCE_SIGNING_KEY_ID;
-const EVIDENCE_WORKFLOW_RUN_ID = optionValue("--workflow-run-id") ?? process.env.GITHUB_RUN_ID;
-const EVIDENCE_WORKFLOW_RUN_ATTEMPT = optionValue("--workflow-run-attempt") ??
-  process.env.GITHUB_RUN_ATTEMPT;
-const EVIDENCE_NONCE = optionValue("--evidence-nonce") ?? process.env.RELEASE_EVIDENCE_NONCE;
-const EVIDENCE_REPOSITORY = optionValue("--repository") ?? process.env.GITHUB_REPOSITORY;
-const EVIDENCE_WORKFLOW_SHA = optionValue("--workflow-sha") ?? process.env.GITHUB_WORKFLOW_SHA;
-const EVIDENCE_WORKFLOW_REF = optionValue("--workflow-ref") ?? process.env.GITHUB_WORKFLOW_REF;
-const EVIDENCE_EVENT_SHA = optionValue("--event-sha") ?? process.env.GITHUB_SHA;
-const EVIDENCE_EVENT_NAME = optionValue("--event-name") ?? process.env.GITHUB_EVENT_NAME;
-const EVIDENCE_ACTOR = optionValue("--actor") ?? process.env.GITHUB_ACTOR;
-const EVIDENCE_TRIGGERING_ACTOR = optionValue("--triggering-actor") ??
-  process.env.GITHUB_TRIGGERING_ACTOR;
 
 const REQUIRED_WEBHOOK_EVENTS = [
   "checkout.session.completed",
@@ -79,6 +37,8 @@ const REQUIRED_WEBHOOK_EVENTS = [
   "refund.created",
   "refund.updated",
   "credit_note.created",
+  "credit_note.updated",
+  "credit_note.voided",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.paused",
@@ -153,11 +113,7 @@ function encodeForm(values) {
 }
 
 function getStripeKey() {
-  const key = getStripeReadOnlyKey(process.env);
-  if (!/^rk_live_/.test(key)) {
-    throw new Error("Refusing to run live migration gate without an rk_live_ Stripe restricted key.");
-  }
-  return key;
+  return getStripeReadOnlyKey(process.env);
 }
 
 async function stripeRequest(path, values = undefined) {
@@ -195,27 +151,39 @@ async function listAll(path, values = {}) {
   return rows;
 }
 
+async function probeRestrictedKeyCannotWrite() {
+  const response = await fetch(`${STRIPE_API_BASE}/v1/products`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${getStripeKey()}`,
+      "content-type": "application/x-www-form-urlencoded",
+      "idempotency-key": `maiprop-readiness-deny-${crypto.randomUUID()}`,
+      "stripe-version": STRIPE_API_VERSION,
+      "user-agent": "maiprop-stripe-live-migration-check/1.0",
+    },
+    body: new URLSearchParams(),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : {};
+  return assertRestrictedKeyWriteDenied({ status: response.status, body });
+}
+
 function getSupabaseUrl() {
-  const url = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
-  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
-    throw new Error("VITE_SUPABASE_URL or SUPABASE_URL must be set to the production Supabase URL.");
-  }
-  const parsed = new URL(url);
-  const projectRef = parsed.hostname.split(".")[0];
-  if (projectRef !== PRODUCTION_SUPABASE_PROJECT_REF) {
+  const url = String(process.env.VITE_SUPABASE_URL ?? "").replace(/\/$/, "");
+  if (url !== PRODUCTION_SUPABASE_URL) {
     throw new Error(
-      `Stripe live migration gate requires production Supabase ${PRODUCTION_SUPABASE_PROJECT_REF}.`,
+      `VITE_SUPABASE_URL must target production Supabase ${PRODUCTION_SUPABASE_PROJECT_REF}.`,
     );
   }
-  return url.replace(/\/$/, "");
+  return url;
 }
 
 async function supabaseRest(path) {
-  const key = getSupabaseReadOnlyKey();
+  const key = getSupabaseReadOnlyKey(process.env);
   const response = await fetch(`${getSupabaseUrl()}${path}`, {
     headers: {
       apikey: key,
-      authorization: `Bearer ${key}`,
       "content-type": "application/json",
     },
     signal: AbortSignal.timeout(30_000),
@@ -280,17 +248,6 @@ function endpointCoversEvents(endpoint) {
 async function main() {
   const issues = [];
   const warnings = [];
-  const releaseSha = resolveCheckedOutReleaseSha({
-    requestedSha: RELEASE_SHA,
-    headSha: execFileSync("git", ["rev-parse", "HEAD"], {
-      encoding: "utf8",
-    }).trim(),
-    statusPorcelain: execFileSync(
-      "git",
-      ["status", "--porcelain=v1", "--untracked-files=all"],
-      { encoding: "utf8" },
-    ),
-  });
   const stripeKey = getStripeKey();
 
   const account = await stripeRequest("/v1/account");
@@ -404,10 +361,26 @@ async function main() {
     issues.push("No active live Billing Customer Portal configuration found.");
   }
 
-  const unsignedReport = buildStripeLiveMigrationEvidence({
-    releaseSha,
-    supabaseProjectRef: PRODUCTION_SUPABASE_PROJECT_REF,
-    stripeApiVersion: STRIPE_API_VERSION,
+  const paymentMethodConfigurations = await listAll(
+    "/v1/payment_method_configurations",
+  );
+  const paymentMethodConfiguration = assessPaymentMethodConfigurations(
+    paymentMethodConfigurations,
+  );
+  if (!paymentMethodConfiguration.ok) {
+    issues.push(paymentMethodConfiguration.issue);
+  }
+
+  let restrictedKeyPermission;
+  try {
+    restrictedKeyPermission = await probeRestrictedKeyCannotWrite();
+  } catch (error) {
+    issues.push(error instanceof Error ? error.message : String(error));
+    restrictedKeyPermission = { denied: false, status: null };
+  }
+
+  const report = {
+    ok: issues.length === 0,
     account: {
       id: account.id,
       display_name: account.display_name ?? account.settings?.dashboard?.display_name ?? null,
@@ -424,34 +397,44 @@ async function main() {
       account_tax_ids: taxIds.length,
       webhook_endpoints: webhooks.length,
       portal_configurations: portalConfigs.length,
+      payment_method_configurations: paymentMethodConfigurations.length,
     },
     webhook: webhook ? { id: webhook.id, url: webhook.url } : null,
+    payment_method_configuration: paymentMethodConfiguration,
+    restricted_key_permission: restrictedKeyPermission,
     issues,
     warnings,
-    workflowRunId: EVIDENCE_WORKFLOW_RUN_ID,
-    workflowRunAttempt: EVIDENCE_WORKFLOW_RUN_ATTEMPT,
-    evidenceNonce: EVIDENCE_NONCE,
-    repository: EVIDENCE_REPOSITORY,
-    workflowSha: EVIDENCE_WORKFLOW_SHA,
-    workflowRef: EVIDENCE_WORKFLOW_REF,
-    eventSha: EVIDENCE_EVENT_SHA,
-    eventName: EVIDENCE_EVENT_NAME,
-    actor: EVIDENCE_ACTOR,
-    triggeringActor: EVIDENCE_TRIGGERING_ACTOR,
-  });
-  const report = signStripeLiveMigrationEvidence(unsignedReport, {
-    signingKey: EVIDENCE_SIGNING_KEY,
-    keyId: EVIDENCE_SIGNING_KEY_ID,
-  });
+  };
 
-  if (OUTPUT_PATH) {
-    writeFileSync(OUTPUT_PATH, `${JSON.stringify(report, null, 2)}\n`, {
-      encoding: "utf8",
-      flag: "wx",
-    });
+  const outputJson = process.argv.includes("--json");
+  const outputEvidence = process.argv.includes("--evidence-json");
+  if (outputJson && outputEvidence) {
+    throw new Error("Choose exactly one of --json or --evidence-json.");
   }
 
-  if (process.argv.includes("--json")) {
+  if (outputEvidence) {
+    const evidence = createStripeLiveMigrationEvidence({
+      report,
+      stripeKey,
+      apiVersion: STRIPE_API_VERSION,
+      supabaseProjectRef: PRODUCTION_SUPABASE_PROJECT_REF,
+      provenance: {
+        repository: process.env.GITHUB_REPOSITORY,
+        release_sha: process.env.RELEASE_SHA,
+        source_tree: process.env.SOURCE_TREE,
+        workflow_path: ".github/workflows/verify-stripe-live-readiness.yml",
+        workflow_ref: process.env.GITHUB_WORKFLOW_REF,
+        workflow_sha: process.env.GITHUB_WORKFLOW_SHA,
+        event: process.env.GITHUB_EVENT_NAME,
+        workflow_run_id: process.env.GITHUB_RUN_ID,
+        workflow_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+        actor: process.env.GITHUB_ACTOR,
+        triggering_actor: process.env.GITHUB_TRIGGERING_ACTOR,
+        evidence_nonce: process.env.RELEASE_EVIDENCE_NONCE,
+      },
+    });
+    console.log(JSON.stringify(evidence, null, 2));
+  } else if (outputJson) {
     console.log(JSON.stringify(report, null, 2));
   } else {
     console.log(formatStripeKeyEvidence(stripeKey));

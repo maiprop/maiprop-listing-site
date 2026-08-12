@@ -53,7 +53,7 @@ const CookieDescription = ({ t }: { t: CookieTranslator }) => (
 );
 
 const CookieBannerHeader = ({ t, onDismiss }: { t: CookieTranslator; onDismiss: () => void }) => (
-  <div className="flex items-start gap-2 sm:gap-4 p-3 sm:p-5">
+  <div className="flex shrink-0 items-start gap-2 p-3 sm:gap-4 sm:p-5">
     <CookieIconBadge />
     <div className="flex-1 min-w-0">
       <p className="font-display font-semibold text-sm mb-1">{t("cookie.title")}</p>
@@ -70,8 +70,8 @@ const CookieBannerHeader = ({ t, onDismiss }: { t: CookieTranslator; onDismiss: 
 );
 
 const PreferenceRow = ({ title, description, control }: PreferenceRowProps) => (
-  <div className="flex items-start justify-between gap-4">
-    <div>
+  <div className="flex min-w-0 items-start justify-between gap-2 sm:gap-4">
+    <div className="min-w-0">
       <p className="text-sm font-semibold text-foreground">{title}</p>
       <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
     </div>
@@ -83,7 +83,12 @@ const EssentialPreference = ({ t }: { t: CookieTranslator }) => {
   const control = (
     <div className="flex items-center gap-2 shrink-0">
       <span className="text-xs text-brand-emerald font-semibold">{t("cookie.essential.alwaysOn")}</span>
-      <Switch checked disabled className="data-[state=checked]:bg-brand-emerald" />
+      <Switch
+        checked
+        disabled
+        aria-label={t("cookie.essential.title")}
+        className="data-[state=checked]:bg-brand-emerald"
+      />
     </div>
   );
 
@@ -111,6 +116,7 @@ const TogglePreference = ({ title, description, checked, onCheckedChange }: Togg
       <Switch
         checked={checked}
         onCheckedChange={onCheckedChange}
+        aria-label={title}
         className="shrink-0 data-[state=checked]:bg-primary"
       />
     }
@@ -136,7 +142,10 @@ const CookiePreferencesPanel = ({
   onAnalyticsChange,
   onMappingChange,
 }: CookiePreferencesPanelProps) => (
-  <div className="px-3 sm:px-5 pb-3 sm:pb-4 border-t border-border pt-3 sm:pt-4 space-y-3 sm:space-y-4 max-h-[40vh] overflow-y-auto">
+  <div
+    data-testid="cookie-preferences-panel"
+    className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain border-t border-border px-3 pb-3 pt-3 sm:space-y-4 sm:px-5 sm:pb-4 sm:pt-4"
+  >
     <EssentialPreference t={t} />
     <TogglePreference
       title={t("cookie.functional.title")}
@@ -193,15 +202,15 @@ const CookieActions = ({
   onSavePreferences,
   onAcceptAll,
 }: Omit<CookieActionRowProps, "onToggleExpanded">) => (
-  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-    <Button size="sm" variant="outline" className="text-xs h-8 border-border" onClick={onRejectAll}>
+  <div className="grid w-full grid-cols-1 gap-1.5 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-2">
+    <Button size="sm" variant="outline" className="h-8 w-full text-xs border-border sm:w-auto" onClick={onRejectAll}>
       {t("cookie.rejectOptional")}
     </Button>
     {expanded && (
       <Button
         size="sm"
         variant="outline"
-        className="text-xs h-8 border-primary/40 text-primary hover:bg-primary/10"
+        className="h-8 w-full text-xs border-primary/40 text-primary hover:bg-primary/10 sm:w-auto"
         onClick={onSavePreferences}
       >
         <Check className="w-3 h-3 mr-1" aria-hidden="true" /> {t("cookie.savePreferences")}
@@ -209,7 +218,7 @@ const CookieActions = ({
     )}
     <Button
       size="sm"
-      className="text-xs h-8 bg-gradient-primary border-0 text-primary-foreground font-semibold"
+      className="h-8 w-full text-xs bg-gradient-primary border-0 text-primary-foreground font-semibold sm:w-auto"
       onClick={onAcceptAll}
     >
       {t("cookie.acceptAll")}
@@ -225,7 +234,10 @@ const CookieActionRow = ({
   onSavePreferences,
   onAcceptAll,
 }: CookieActionRowProps) => (
-  <div className="flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-5 py-2.5 sm:py-4 bg-secondary/40 border-t border-border flex-wrap">
+  <div
+    data-testid="cookie-actions"
+    className="flex shrink-0 flex-col items-stretch gap-2 border-t border-border bg-secondary/40 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5 sm:py-4"
+  >
     <PreferencesToggle t={t} expanded={expanded} onToggleExpanded={onToggleExpanded} />
     <CookieActions
       t={t}
@@ -276,7 +288,7 @@ export const CookieConsentBanner = () => {
   return (
     <div
       data-testid="cookie-consent-banner"
-      className="fixed bottom-[calc(env(safe-area-inset-bottom)+4rem)] sm:bottom-4 left-2 right-2 sm:left-1/2 sm:right-auto z-[100] sm:w-[calc(100%-2rem)] sm:max-w-4xl sm:-translate-x-1/2 max-h-[38svh] sm:max-h-[80vh] animate-cookie-banner-up bg-card border border-border rounded-xl sm:rounded-2xl shadow-elevated overflow-hidden"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom)+4rem)] left-2 right-2 z-[100] flex max-h-[calc(100svh-5rem)] min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-elevated animate-cookie-banner-up sm:bottom-4 sm:left-4 sm:right-4 sm:mx-auto sm:max-h-[80vh] sm:max-w-4xl sm:rounded-2xl"
     >
       <CookieBannerHeader t={t} onDismiss={() => setVisible(false)} />
       {expanded && (

@@ -1,81 +1,97 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
-const workflowSource = readFileSync(
-  resolve(".github/workflows/verify-stripe-live-readiness.yml"),
-  "utf8",
+const workflowPath = resolve(
+  ".github/workflows/verify-stripe-live-readiness.yml",
 );
-const workflow = yaml.load(workflowSource);
-const job = workflow.jobs["verify-live-catalogue"];
+const checkerPath = resolve("scripts/check-stripe-live-migration.mjs");
+const contractPath = resolve("scripts/stripe-live-readiness-contract.mjs");
+const supabaseKeyPath = resolve("scripts/supabase-readonly-key.mjs");
+const webhookPath = resolve("supabase/functions/stripe-webhook/index.ts");
 
-describe("Stripe live readiness workflow", () => {
-  it("uses GitHub Free-compatible signed artifact controls", () => {
-    expect(workflow.permissions).toEqual({ contents: "read" });
-    expect(job.environment).toBeUndefined();
+describe("Stripe live readiness producer workflow", () => {
+  it("produces an exact-SHA attempt-one HMAC-bound read-only artifact", () => {
+    expect(existsSync(workflowPath), "Stripe readiness workflow is missing").toBe(true);
+    const source = readFileSync(workflowPath, "utf8");
+    const parsed = yaml.load(source);
+    const job = parsed.jobs["verify-stripe-readiness"];
 
-    const upload = job.steps.find((step) =>
-      step.name === "Upload signed live-catalogue evidence"
-    );
-    expect(upload.with).toMatchObject({
-      name: "stripe-live-readiness-${{ inputs.release_sha }}-${{ github.run_id }}-1",
-      path: "stripe-live-migration-evidence.json",
-      "if-no-files-found": "error",
-      "retention-days": 30,
+    expect(Object.keys(parsed.on)).toEqual(["workflow_dispatch"]);
+    expect(parsed.on.workflow_dispatch.inputs.release_sha).toMatchObject({
+      required: true,
+      type: "string",
     });
-
-    expect(workflowSource).not.toContain("actions/attest-build-provenance@");
-    expect(workflowSource).not.toContain("attestations: write");
-    expect(workflowSource).not.toContain("id-token: write");
+    expect(parsed.on.workflow_dispatch.inputs.confirm).toMatchObject({
+      required: true,
+      type: "string",
+    });
+    expect(parsed.permissions).toEqual({ actions: "read", contents: "read" });
+    expect(job.name).toBe("Verify exact-SHA Stripe live catalogue");
+    expect(job.permissions).toEqual({ actions: "read", contents: "read" });
+    expect(source).toContain("github.ref != 'refs/heads/main'");
+    expect(source).toContain("github.run_attempt != 1");
+    expect(source).toContain("github.actor != github.triggering_actor");
+    expect(source).toContain("PRODUCTION_RELEASE_APPROVERS");
+    expect(source).toContain("VERIFY_STRIPE_LIVE_READINESS");
+    expect(source).not.toContain("environment: production");
+    expect(source).toContain("^[0-9a-f]{40}$");
+    expect(source).toContain("repos/${GITHUB_REPOSITORY}/branches/main");
+    expect(source).toContain('ACTUAL_SHA="$(git rev-parse HEAD)"');
+    expect(source).toContain("STRIPE_RESTRICTED_KEY: ${{ secrets.STRIPE_RESTRICTED_KEY }}");
+    expect(source).not.toContain("STRIPE_EXPECTED_ACCOUNT_ID:");
+    expect(readFileSync(checkerPath, "utf8")).toContain(
+      "MAIPROP_PRODUCTION_STRIPE_ACCOUNT_ID",
+    );
+    expect(readFileSync(contractPath, "utf8")).toContain(
+      '"acct_1TnuLTGfOEgBOxtl"',
+    );
+    expect(source).toContain("VITE_SUPABASE_PUBLISHABLE_KEY");
+    expect(source).toContain("check:stripe-live-migration -- --evidence-json");
+    expect(source).toContain("verify:stripe-live-migration-evidence --");
+    expect(source).toContain(
+      "stripe-live-readiness-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
+    expect(source).toContain("scripts/create-release-artifact-binding.mjs");
+    expect(source).toContain("scripts/verify-release-artifact-binding.mjs");
+    expect(source).toContain("--same-run");
+    expect(source).toContain("-binding");
+    expect(source).not.toContain("STRIPE_SECRET_KEY: ${{ secrets.");
+    expect(source).not.toMatch(/stripe\s+products\s+create|stripe\s+prices\s+create/i);
+    expect(source).not.toMatch(/curl[^\n]+(?:-X|--request)\s+(?:POST|PUT|PATCH|DELETE)/i);
   });
 
-  it("binds the trusted workflow source and original allowlisted dispatcher", () => {
-    const guard = job.steps.find((step) =>
-      step.name === "Reject reruns and substituted actors"
-    );
-    expect(guard.env).toMatchObject({
-      RELEASE_SHA: "${{ inputs.release_sha }}",
-      EVENT_SHA: "${{ github.sha }}",
-      WORKFLOW_SHA: "${{ github.workflow_sha }}",
-      WORKFLOW_REF: "${{ github.workflow_ref }}",
-      REPOSITORY: "${{ github.repository }}",
-      ALLOWED_ACTORS: "${{ vars.PRODUCTION_RELEASE_APPROVERS }}",
-    });
-    expect(guard.run).toContain('[ "$EVENT_SHA" != "$RELEASE_SHA" ]');
-    expect(guard.run).toContain('[ "$WORKFLOW_SHA" != "$RELEASE_SHA" ]');
-    expect(guard.run).toContain(
-      'EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/verify-stripe-live-readiness.yml@refs/heads/main"',
-    );
-    expect(guard.run).toContain('[ "$WORKFLOW_REF" != "$EXPECTED_WORKFLOW_REF" ]');
-    expect(guard.run).toContain('[ "$REPOSITORY" != "maiprop/maiprop-listing-site" ]');
-    expect(guard.run).toContain('case ",${ALLOWED_ACTORS// /}," in');
-    expect(guard.run).toContain('*,"$ACTOR",*)');
-    expect(guard.run).toContain("dispatcher is not allowlisted");
+  it("keeps provider verification unprivileged with one non-mutating deny probe", () => {
+    const workflow = readFileSync(workflowPath, "utf8");
+    const checker = readFileSync(checkerPath, "utf8");
+    const supabaseKey = readFileSync(supabaseKeyPath, "utf8");
+
+    expect(checker.match(/\bmethod\s*:\s*"POST"/g)).toHaveLength(1);
+    expect(checker).toContain("assertRestrictedKeyWriteDenied");
+    expect(checker).toContain("body: new URLSearchParams()");
+    expect(checker).not.toMatch(/\bmethod\s*:\s*"(?:PUT|PATCH|DELETE)"/);
+    expect(checker).toContain("getSupabaseReadOnlyKey(process.env)");
+    expect(supabaseKey).toContain("VITE_SUPABASE_PUBLISHABLE_KEY");
+    expect(supabaseKey).toContain("Privileged Supabase keys are forbidden");
+    expect(workflow).not.toMatch(/SUPABASE_(?:SERVICE_ROLE|SECRET)_KEY|SB_SERVICE_ROLE_KEY/);
+    expect(workflow).not.toMatch(/STRIPE_(?:SECRET|API|READ_ONLY)_KEY/);
   });
 
-  it("signs exact workflow provenance with repository-scoped credentials", () => {
-    const generate = job.steps.find((step) =>
-      step.name === "Generate and verify signed live-catalogue evidence"
-    );
-    expect(generate.env).toMatchObject({
-      RELEASE_EVIDENCE_SIGNING_KEY:
-        "${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}",
-      RELEASE_EVIDENCE_SIGNING_KEY_ID:
-        "${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}",
-      STRIPE_RESTRICTED_KEY: "${{ secrets.STRIPE_RESTRICTED_KEY }}",
-      WORKFLOW_SHA: "${{ github.workflow_sha }}",
-      WORKFLOW_REF: "${{ github.workflow_ref }}",
-      REPOSITORY: "${{ github.repository }}",
-      ACTOR: "${{ github.actor }}",
-      TRIGGERING_ACTOR: "${{ github.triggering_actor }}",
-      EVENT_NAME: "${{ github.event_name }}",
-    });
-    expect(generate.run).toContain('--workflow-sha "$WORKFLOW_SHA"');
-    expect(generate.run).toContain('--workflow-ref "$WORKFLOW_REF"');
-    expect(generate.run).toContain('--repository "$REPOSITORY"');
-    expect(generate.run).toContain('--actor "$ACTOR"');
-    expect(generate.run).toContain("verify:stripe-live-migration-evidence");
+  it("requires every billing-reconciliation webhook event", () => {
+    const checker = readFileSync(checkerPath, "utf8");
+    const webhook = readFileSync(webhookPath, "utf8");
+    const reconciliationEvents = [
+      "invoice.finalized",
+      "credit_note.created",
+      "credit_note.updated",
+      "credit_note.voided",
+    ];
+
+    for (const event of reconciliationEvents) {
+      expect(webhook).toContain(`case "${event}"`);
+      expect(checker).toContain(`"${event}"`);
+    }
   });
 });

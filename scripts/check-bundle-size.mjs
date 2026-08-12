@@ -29,10 +29,11 @@ const INDEX_HTML = "dist/index.html";
 export const BUDGETS_KB = {
   // The initial entry chunk (Vite names it index-<hash>.js).
   "index": 500,
-  // Manual chunks from vite.config.ts. vendor-react bundles
-  // react + react-dom + react-router-dom + scheduler; the floor is
-  // ~182 kB raw on the current pinned versions.
+  // Manual chunks from vite.config.ts.
   "vendor-react": 200,
+  // Core Sentry error/performance instrumentation only. Replay, Feedback,
+  // canvas replay, and provider-specific integrations must remain tree-shaken.
+  "vendor-sentry": 180,
   // @radix-ui packages split into stable core and overlay/menu primitive chunks.
   "vendor-radix-core": 230,
   "vendor-radix-overlays": 90,

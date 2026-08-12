@@ -12,6 +12,8 @@ import {
   rowIdSchema,
 } from "@/lib/mutationSchemas";
 import { fetchProjectListingReferences } from "@/lib/listingReferences";
+import { accountQueryKey } from "@/lib/identityQueryBoundary";
+import { invalidatePublicCatalogueQueries } from "@/lib/publicCatalogueQueryInvalidation";
 
 const PROJECT_SELECT = `
   id, owner_id, organization_id, name, description, city, address, municipality, cover_image_url,
@@ -35,7 +37,7 @@ async function attachProjectListings<T extends { id: string | null }>(projects: 
 export function useProjects(ownerId?: string) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ["projects", user?.id, ownerId],
+    queryKey: accountQueryKey(user?.id, "projects", ownerId ?? null),
     queryFn: async () => {
       let query = supabase
         .from("projects")
@@ -53,8 +55,9 @@ export function useProjects(ownerId?: string) {
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useProject(id: string | undefined) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["project", id],
+    queryKey: accountQueryKey(user?.id, "project", id),
     queryFn: async () => {
       if (!id) return null;
       const { data, error } = await supabase
@@ -66,7 +69,7 @@ export function useProject(id: string | undefined) {
       const [project] = await attachProjectListings([data]);
       return project ?? null;
     },
-    enabled: !!id,
+    enabled: Boolean(user && id),
     staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
@@ -86,8 +89,13 @@ export function useUpdateProject() {
       });
     },
     onSuccess: (_, { id }) => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["project", id] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "projects"),
+      });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project", id),
+      });
+      void invalidatePublicCatalogueQueries(qc);
       toast.success("Project updated");
     },
     onError: () => toast.error("Failed to update project. Please try again."),
@@ -109,12 +117,13 @@ export function useUpdateProjectListingCover() {
       });
     },
     onSuccess: (_, { projectId, listingId }) => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["project", projectId] });
-      qc.invalidateQueries({ queryKey: ["listing", listingId] });
-      qc.invalidateQueries({ queryKey: ["listings"] });
-      qc.invalidateQueries({ queryKey: ["listings-paginated"] });
-      qc.invalidateQueries({ queryKey: ["homepage-featured"] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "projects"),
+      });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project", projectId),
+      });
+      void invalidatePublicCatalogueQueries(qc, listingId);
       toast.success("Listing cover updated");
     },
     onError: () => toast.error("Failed to update cover image. Please try again."),
@@ -135,9 +144,10 @@ export function useDeleteProject() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["listings"] });
-      qc.invalidateQueries({ queryKey: ["listings-paginated"] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "projects"),
+      });
+      void invalidatePublicCatalogueQueries(qc);
       toast.success("Project deleted. Linked listings are now individual listings.");
     },
     onError: () => toast.error("Failed to delete project. Please try again."),

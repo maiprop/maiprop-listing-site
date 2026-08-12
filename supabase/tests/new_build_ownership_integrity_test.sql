@@ -135,7 +135,7 @@ SELECT throws_ok(
   'a developer cannot move an owned listing onto another developer project'
 );
 
-SELECT lives_ok(
+SELECT throws_ok(
   $$
     INSERT INTO public.listings (
       id,
@@ -161,7 +161,9 @@ SELECT lives_ok(
       'b2000000-0000-4000-8000-000000000004'
     )
   $$,
-  'a developer can create the canonical listing for their own project'
+  '42501',
+  NULL,
+  'authenticated browser callers cannot bypass the server listing mutation boundary'
 );
 
 SELECT throws_ok(
@@ -216,9 +218,9 @@ SELECT throws_ok(
     SET owner_id = 'b1000000-0000-4000-8000-000000000001'
     WHERE id = 'b2000000-0000-4000-8000-000000000004'
   $$,
-  '23514',
-  'project_listing_owner_mismatch',
-  'project ownership cannot change away from its canonical listing owner'
+  '42501',
+  'permission_denied: tenant resource ownership cannot be reassigned',
+  'tenant project ownership cannot be reassigned after creation'
 );
 
 SELECT is(
@@ -238,7 +240,7 @@ SELECT is(
     WHERE id = 'b2000000-0000-4000-8000-000000000004'
   ),
   'b1000000-0000-4000-8000-000000000002'::uuid,
-  'a rejected project transfer preserves canonical ownership'
+  'a rejected project transfer preserves tenant ownership'
 );
 
 SELECT * FROM finish();

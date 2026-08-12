@@ -11,6 +11,8 @@ const {
   subscriptionState,
   quickSaleState,
   listingsState,
+  listingSummaryState,
+  ownedListingsState,
   favoritesState,
   requesterViewingsState,
   ownerViewingsState,
@@ -36,6 +38,11 @@ const {
   subscriptionState: { isPro: false },
   quickSaleState: { eligible: false },
   listingsState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
+  listingSummaryState: {
+    data: undefined as Record<string, unknown> | undefined,
+    isLoading: false,
+  },
+  ownedListingsState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
   favoritesState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
   requesterViewingsState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
   ownerViewingsState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
@@ -65,7 +72,11 @@ vi.mock("@/contexts/AuthContext", () => ({
 }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => subscriptionState }));
 vi.mock("@/hooks/useEligibleForQuickSale", () => ({ useEligibleForQuickSale: () => quickSaleState }));
-vi.mock("@/hooks/useListings", () => ({ useMyListings: () => listingsState }));
+vi.mock("@/hooks/useListings", () => ({
+  useMyListings: () => listingsState,
+  useManageableListingSummary: () => listingSummaryState,
+  useActorOwnedListings: () => ownedListingsState,
+}));
 vi.mock("@/hooks/useFavorites", () => ({ useFavorites: () => favoritesState }));
 vi.mock("@/hooks/useViewings", () => ({
   useViewings: (scope: string) => (scope === "owner" ? ownerViewingsState : requesterViewingsState),
@@ -102,12 +113,21 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
 vi.mock("@/components/DashboardPlanCard", () => ({
-  DashboardPlanCard: ({ usage, hasPaidPromotionCredits }: { usage: Record<string, number>; hasPaidPromotionCredits?: boolean }) => (
+  DashboardPlanCard: ({
+    usage,
+    hasPaidPromotionCredits,
+    loading,
+  }: {
+    usage: Record<string, number>;
+    hasPaidPromotionCredits?: boolean;
+    loading?: boolean;
+  }) => (
     <div data-testid="dashboard-plan-card">
       <span>Saved searches: {usage.savedSearches}</span>
       <span>Listings: {usage.listings}</span>
       <span>Plan viewings: {usage.viewingsThisMonth}</span>
       <span>Paid promotions: {String(Boolean(hasPaidPromotionCredits))}</span>
+      <span>Loading: {String(Boolean(loading))}</span>
     </div>
   ),
 }));
@@ -168,6 +188,11 @@ beforeEach(() => {
   subscriptionState.refreshSubscription = vi.fn();
   quickSaleState.eligible = false;
   listingsState.data = [];
+  listingsState.isLoading = false;
+  listingSummaryState.data = undefined;
+  listingSummaryState.isLoading = false;
+  ownedListingsState.data = [];
+  ownedListingsState.isLoading = false;
   favoritesState.data = [];
   requesterViewingsState.data = [];
   ownerViewingsState.data = [];
@@ -295,19 +320,30 @@ describe("Dashboard behavior", () => {
     expect(main?.className).not.toContain("max-md:h-");
   });
 
-  it("counts seller active listings from the same listing rows shown in the overview", () => {
+  it("uses the authoritative managed summary while previewing only loaded listing rows", () => {
     authState.profile = { id: "p-1", role: "seller", participant_type: "seller", first_name: "Sofia" };
     listingsState.data = [
       { id: "l-1", status: "active", title: "Athens Flat", city: "Athens", price: 250000, views_count: 9 },
       { id: "l-2", status: "active", title: "Piraeus Loft", city: "Piraeus", price: 310000, views_count: 4 },
       { id: "l-3", status: "active", title: "Chania Villa", city: "Chania", price: 640000, views_count: 12 },
     ];
+    listingSummaryState.data = {
+      totalListings: 203,
+      activeListings: 120,
+      totalViews: 9999,
+      averageViews: 49,
+      averageActiveDays: 31,
+      bestListing: null,
+    };
 
     renderWithProviders(<Dashboard />);
 
     const activeListingsStat = screen.getByText("Active Listings").closest(".glass-card");
     expect(activeListingsStat).not.toBeNull();
-    expect(within(activeListingsStat as HTMLElement).getByText("3")).toBeInTheDocument();
+    expect(within(activeListingsStat as HTMLElement).getByText("120")).toBeInTheDocument();
+    const totalViewsStat = screen.getByText("Total Views").closest(".glass-card");
+    expect(totalViewsStat).not.toBeNull();
+    expect(within(totalViewsStat as HTMLElement).getByText("9999")).toBeInTheDocument();
     expect(screen.getByText("Athens Flat")).toBeInTheDocument();
     expect(screen.getByText("Piraeus Loft")).toBeInTheDocument();
     expect(screen.getByText("Chania Villa")).toBeInTheDocument();
@@ -329,10 +365,36 @@ describe("Dashboard behavior", () => {
       { id: "l-2", status: "draft", title: "Draft flat", views_count: 0 },
       { id: "l-3", status: "paused", title: "Paused flat", views_count: 0 },
     ];
+    ownedListingsState.data = listingsState.data;
 
     renderWithProviders(<Dashboard />);
 
     expect(screen.getByTestId("dashboard-plan-card")).toHaveTextContent("Listings: 1");
+  });
+
+  it("keeps managed organization inventory out of personal plan usage", () => {
+    authState.profile = { id: "p-1", role: "agent", participant_type: "agent", first_name: "Greca" };
+    const personal = [
+      { id: "personal-1", owner_id: "u-1", organization_id: null, status: "active", views_count: 1 },
+      { id: "personal-2", owner_id: "u-1", organization_id: null, status: "active", views_count: 1 },
+    ];
+    listingsState.data = [
+      ...personal,
+      ...Array.from({ length: 100 }, (_, index) => ({
+        id: `managed-${index}`,
+        owner_id: "colleague",
+        organization_id: "organization-1",
+        status: "active",
+        views_count: 1,
+      })),
+    ];
+    ownedListingsState.data = personal;
+    ownedListingsState.isLoading = true;
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.getByTestId("dashboard-plan-card")).toHaveTextContent("Listings: 2");
+    expect(screen.getByTestId("dashboard-plan-card")).toHaveTextContent("Loading: true");
   });
 
   it("counts seller outbound booking requests instead of hosted listing viewings", () => {

@@ -159,6 +159,11 @@ export default defineConfig(({ mode }) => {
           // causes clsx (a shared dep) to be statically imported into the entry
           // bundle, adding ~106 kB gzip to every page load unnecessarily.
           if (id.includes("/lucide-react/")) return "vendor-icons";
+          // Match Sentry before React: @sentry/react otherwise satisfies the
+          // generic "/react/" package test and bloats the React core chunk.
+          if (id.includes("/@sentry/")) {
+            return "vendor-sentry";
+          }
           if (
             id.includes("/react-router") ||
             id.includes("/react-router-dom/") ||
@@ -176,10 +181,6 @@ export default defineConfig(({ mode }) => {
           // i18n — translation libraries, isolated for cache stability.
           if (id.includes("/i18next") || id.includes("/react-i18next/")) {
             return "vendor-i18n";
-          }
-          // Sentry — error tracking, isolated so app code changes don't bust it.
-          if (id.includes("/@sentry/")) {
-            return "vendor-sentry";
           }
           if (
             id.includes("/cmdk/") ||

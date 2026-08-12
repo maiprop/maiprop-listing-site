@@ -2,392 +2,2102 @@ name: Reusable Cloudflare Production Deploy
 
 on:
   workflow_call:
+    inputs:
+      release_sha:
+        required: true
+        type: string
+      source_tree:
+        required: true
+        type: string
+      source_run_id:
+        required: true
+        type: string
+      source_run_attempt:
+        required: true
+        type: string
+      staging_run_id:
+        required: true
+        type: string
+      staging_run_attempt:
+        required: true
+        type: string
+      approval_run_id:
+        required: true
+        type: string
+      approval_run_attempt:
+        required: true
+        type: string
+      production_run_id:
+        required: true
+        type: string
+      production_run_attempt:
+        required: true
+        type: string
+      backend_run_id:
+        required: true
+        type: string
+      backend_run_attempt:
+        required: true
+        type: string
+      backend_approval_run_id:
+        required: true
+        type: string
+      backend_approval_run_attempt:
+        required: true
+        type: string
+      stripe_readiness_run_id:
+        required: true
+        type: string
+      stripe_readiness_run_attempt:
+        required: true
+        type: string
+      stripe_readiness_sha256:
+        required: true
+        type: string
+      stripe_readiness_artifact_id:
+        required: true
+        type: string
+      stripe_readiness_artifact_digest:
+        required: true
+        type: string
+      artifact_sha256:
+        required: true
+        type: string
+      manifest_sha256:
+        required: true
+        type: string
+      approval_nonce:
+        required: true
+        type: string
+      allowed_approvers:
+        required: true
+        type: string
+      allowed_deployers:
+        required: true
+        type: string
+      deploy_actor:
+        required: true
+        type: string
+      release_evidence_signing_key_id:
+        required: true
+        type: string
+      mutation_lease_artifact:
+        required: true
+        type: string
+      production_project_id:
+        required: true
+        type: string
+      staging_project_id:
+        required: true
+        type: string
+      database_attestation_artifact:
+        required: true
+        type: string
+      database_attestation_sha256:
+        required: true
+        type: string
+      database_binding_artifact:
+        required: true
+        type: string
+      edge_attestation_artifact:
+        required: true
+        type: string
+      edge_attestation_sha256:
+        required: true
+        type: string
+      edge_binding_artifact:
+        required: true
+        type: string
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+      CLOUDFLARE_PAGES_READ_TOKEN:
+        required: true
+      CLOUDFLARE_PAGES_EDIT_TOKEN:
+        required: true
+      CLOUDFLARE_STAGING_ACCOUNT_ID:
+        required: true
+      CLOUDFLARE_STAGING_PAGES_READ_TOKEN:
+        required: true
+      VITE_SUPABASE_PROJECT_ID:
+        required: true
+      VITE_SUPABASE_URL:
+        required: true
+      VITE_SUPABASE_PUBLISHABLE_KEY:
+        required: true
+      CLOUDFLARE_TURN_KEY_ID:
+        required: true
+      CLOUDFLARE_TURN_API_TOKEN:
+        required: true
+      CF_ACCESS_CLIENT_ID:
+        required: false
+      CF_ACCESS_CLIENT_SECRET:
+        required: false
+      RELEASE_EVIDENCE_SIGNING_KEY:
+        required: true
+    outputs:
+      evidence_artifact:
+        value: ${{ jobs.deploy.outputs.evidence_artifact }}
+      evidence_sha256:
+        value: ${{ jobs.deploy.outputs.evidence_sha256 }}
+      evidence_binding_artifact:
+        value: ${{ jobs.deploy.outputs.evidence_binding_artifact }}
+      deployment_id:
+        value: ${{ jobs.deploy.outputs.deployment_id }}
+      deployment_url:
+        value: ${{ jobs.deploy.outputs.deployment_url }}
+      rollback_performed:
+        value: ${{ jobs.deploy.outputs.rollback_performed }}
 
 permissions:
+  actions: read
   contents: read
-  id-token: write
-  attestations: write
 
 jobs:
   deploy:
-    name: Deploy to Cloudflare Pages
-    if: ${{ false }}
+    name: Promote immutable candidate to Cloudflare production
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: production
-    concurrency:
-      group: cloudflare-pages-production
-      cancel-in-progress: false
-
+    timeout-minutes: 40
+    outputs:
+      evidence_artifact: ${{ steps.evidence.outputs.artifact_name }}
+      evidence_sha256: ${{ steps.evidence.outputs.evidence_sha256 }}
+      evidence_binding_artifact: ${{ steps.cloudflare_evidence_binding.outputs.binding_artifact_name }}
+      deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+      deployment_url: ${{ steps.deployment.outputs.deployment_url }}
+      rollback_performed: ${{ steps.evidence.outputs.rollback_performed }}
     env:
-      CF_API_TOKEN:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CF_ACCOUNT_ID:  ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CF_PROJECT:     maiprop-listing-site
-      CF_API_BASE:    https://api.cloudflare.com/client/v4
-
+      PRODUCTION_PROJECT: "maiprop-listing-site"
+      STAGING_PROJECT: "maiprop-listing-site-staging"
+      CLOUDFLARE_PAGES_PROJECT_ID: ${{ inputs.production_project_id }}
+      CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ inputs.staging_project_id }}
+      VITE_STRIPE_PUBLISHABLE_KEY: ${{ vars.VITE_STRIPE_PUBLISHABLE_KEY }}
+      VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY }}
+      VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL }}
+      VITE_STRIPE_PRICE_AGENT_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_AGENT_MONTHLY }}
+      VITE_STRIPE_PRICE_AGENT_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_AGENT_ANNUAL }}
+      VITE_STRIPE_PRICE_DEVELOPER_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_DEVELOPER_MONTHLY }}
+      VITE_STRIPE_PRICE_DEVELOPER_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_DEVELOPER_ANNUAL }}
+      VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY }}
+      VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL }}
+      PRODUCTION_APP_URL: "https://portal.maiprop.co"
+      PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"
+      WRANGLER_VERSION: "4.86.0"
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      SOURCE_TREE: ${{ inputs.source_tree }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
+      STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+      STAGING_RUN_ATTEMPT: ${{ inputs.staging_run_attempt }}
+      APPROVAL_RUN_ID: ${{ inputs.approval_run_id }}
+      APPROVAL_RUN_ATTEMPT: ${{ inputs.approval_run_attempt }}
+      PRODUCTION_RUN_ID: ${{ inputs.production_run_id }}
+      PRODUCTION_RUN_ATTEMPT: ${{ inputs.production_run_attempt }}
+      BACKEND_RUN_ID: ${{ inputs.backend_run_id }}
+      BACKEND_RUN_ATTEMPT: ${{ inputs.backend_run_attempt }}
+      BACKEND_APPROVAL_RUN_ID: ${{ inputs.backend_approval_run_id }}
+      BACKEND_APPROVAL_RUN_ATTEMPT: ${{ inputs.backend_approval_run_attempt }}
+      STRIPE_READINESS_RUN_ID: ${{ inputs.stripe_readiness_run_id }}
+      STRIPE_READINESS_RUN_ATTEMPT: ${{ inputs.stripe_readiness_run_attempt }}
+      STRIPE_READINESS_SHA256: ${{ inputs.stripe_readiness_sha256 }}
+      STRIPE_READINESS_ARTIFACT_ID: ${{ inputs.stripe_readiness_artifact_id }}
+      STRIPE_READINESS_ARTIFACT_DIGEST: ${{ inputs.stripe_readiness_artifact_digest }}
+      ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+      MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+      APPROVAL_NONCE: ${{ inputs.approval_nonce }}
+      DEPLOY_ACTOR: ${{ inputs.deploy_actor }}
+      ALLOWED_DEPLOYERS: ${{ inputs.allowed_deployers }}
+      RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ inputs.release_evidence_signing_key_id }}
+      MUTATION_LEASE_ARTIFACT: ${{ inputs.mutation_lease_artifact }}
+      DATABASE_ATTESTATION_ARTIFACT: ${{ inputs.database_attestation_artifact }}
+      DATABASE_ATTESTATION_SHA256: ${{ inputs.database_attestation_sha256 }}
+      EDGE_ATTESTATION_ARTIFACT: ${{ inputs.edge_attestation_artifact }}
+      EDGE_ATTESTATION_SHA256: ${{ inputs.edge_attestation_sha256 }}
     steps:
-      - name: Checkout (for Pages Functions in functions/)
+      - name: Require original allowlisted production deployer
+        env:
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_RUN_ATTEMPT" != "1" ] ||
+             [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ] ||
+             [ "$DEPLOY_ACTOR" != "$GITHUB_ACTOR" ] ||
+             [ -z "$RELEASE_EVIDENCE_SIGNING_KEY" ] ||
+             [ -z "$RELEASE_EVIDENCE_SIGNING_KEY_ID" ]; then
+            echo "::error::Cloudflare promotion requires attempt 1, one original actor, and repository signing credentials."
+            exit 1
+          fi
+          case ",${ALLOWED_DEPLOYERS// /}," in
+            *,"$DEPLOY_ACTOR",*) ;;
+            *)
+              echo "::error::Cloudflare promotion actor is not an allowlisted deployer."
+              exit 1
+              ;;
+          esac
+
+      - name: Check out exact release SHA
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version
           cache: npm
 
-      - name: Check runtime
-        run: npm run check:runtime
+      - name: Install pinned release tooling
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
 
-      - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
-
-      # Production build uses *real* Supabase + optional service secrets so the
-      # deployed bundle can actually talk to the live backend. The earlier
-      # `quality` job build (which produced the artifact used by E2E tests) used
-      # placeholder values — we intentionally throw that artifact away here and
-      # rebuild with the real values. These Vite vars are baked into the bundle
-      # at build time, so they must be present in the build environment.
-      - name: Build app with production environment
-        run: npm run build
+      - name: Validate exact production promotion tuple
         env:
-          # Required — app refuses to start without these.
-          VITE_SUPABASE_URL:             ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_PROJECT_ID:      ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-          # Optional — features degrade gracefully when empty.
-          VITE_MAPBOX_TOKEN:             ${{ secrets.VITE_MAPBOX_TOKEN }}
-          VITE_SENTRY_DSN:               ${{ secrets.VITE_SENTRY_DSN }}
-          VITE_STRIPE_PRO_PRODUCT_ID:    ${{ secrets.VITE_STRIPE_PRO_PRODUCT_ID }}
-          VITE_TURNSTILE_SITE_KEY:       ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
-          VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-          VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE: "true"
-          VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
-          VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
-
-      - name: Generate homepage initial payload
-        run: npm run build:homepage-initial -- --strict
-        env:
-          HOMEPAGE_INITIAL_ORIGIN: ${{ secrets.VITE_APP_URL }}
-
-      - name: Package Cloudflare Pages Functions worker
-        run: npm run build:cloudflare-pages-worker
-
-      - name: Write deployment version marker
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PRODUCTION_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          TURN_KEY_ID: ${{ secrets.CLOUDFLARE_TURN_KEY_ID }}
+          TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_TURN_API_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           set -euo pipefail
-          jq -n \
-            --arg sha "${{ github.sha }}" \
-            --arg run_id "${{ github.run_id }}" \
-            --arg run_attempt "${{ github.run_attempt }}" \
-            --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{
-              sha: $sha,
-              run_id: $run_id,
-              run_attempt: $run_attempt,
-              created_at: $created_at
-            }' > dist/deploy-version.json
-          test -s dist/deploy-version.json
+          if [ "$(git rev-parse HEAD)" != "$RELEASE_SHA" ] ||
+             [ "$(git rev-parse 'HEAD^{tree}')" != "$SOURCE_TREE" ]; then
+            echo "::error::Cloudflare production checkout does not match the exact release SHA and tree."
+            exit 1
+          fi
+          if [ "$GITHUB_RUN_ID" != "$PRODUCTION_RUN_ID" ] ||
+             [ "$GITHUB_RUN_ATTEMPT" != "$PRODUCTION_RUN_ATTEMPT" ]; then
+            echo "::error::Cloudflare production workflow is not bound to the current production run."
+            exit 1
+          fi
+          if [ "$PRODUCTION_SUPABASE_PROJECT_ID" != "$PRODUCTION_PROJECT_REF" ]; then
+            echo "::error::Cloudflare production runtime is not bound to the fixed Supabase project."
+            exit 1
+          fi
+          for value in \
+            "$CF_ACCOUNT_ID" \
+            "$CF_READ_TOKEN" \
+            "$STAGING_CF_ACCOUNT_ID" \
+            "$STAGING_CF_READ_TOKEN" \
+            "$SUPABASE_URL" \
+            "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" \
+            "$TURN_KEY_ID" \
+            "$TURN_API_TOKEN"; do
+            if [ -z "$value" ]; then
+              echo "::error::Explicit production Cloudflare and runtime secrets are required."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+          done
+          if { [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -z "$CF_ACCESS_CLIENT_SECRET" ]; } ||
+             { [ -z "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; }; then
+            echo "::error::Cloudflare Access client credentials must be supplied as a pair."
+            exit 1
+          fi
+          npm run --silent release:validate -- supabase-target
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
 
-      - name: Generate production SBOM for provenance
-        run: npm sbom --sbom-format cyclonedx > sbom.cdx.json
-
-      - name: Pack production build for provenance
-        run: tar -czf maiprop-production-dist.tgz dist sbom.cdx.json
-
-      - name: Attest production build provenance
-        id: attest_provenance
-        continue-on-error: true
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+      - name: Download immutable release candidate from source CI
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          subject-path: maiprop-production-dist.tgz
-          # Private org attestation storage is plan-gated; keep the DSSE bundle
-          # generation without blocking production deploys on unavailable storage.
-          create-storage-record: false
+          name: production-release-candidate-${{ inputs.release_sha }}-${{ inputs.source_run_attempt }}
+          path: release-candidate
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
 
-      - name: Warn when GitHub Artifact Attestations are unavailable
-        if: steps.attest_provenance.outcome == 'failure'
-        run: |
-          echo "::warning::GitHub Artifact Attestations are unavailable for this repository/organization plan. Continuing production deploy with generated SBOM and packaged build evidence."
-
-      - name: Capture current production deployment ID (for rollback)
-        id: prev_deploy
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          HTTP_CODE=$(curl -sS -o /tmp/cf_prev_deployments.json -w "%{http_code}" \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments?env=production&per_page=20")
-          if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' /tmp/cf_prev_deployments.json >/dev/null; then
-            echo "::warning::Could not capture Cloudflare rollback candidate (HTTP $HTTP_CODE)."
-            cat /tmp/cf_prev_deployments.json
-            exit 1
-          fi
-          PREV_ID=$(jq -r '
-            .result
-            | map(select(.environment == "production" and .latest_stage.status == "success" and (.is_skipped | not)))
-            | .[0].id // empty
-          ' /tmp/cf_prev_deployments.json)
-          echo "id=${PREV_ID}" >> "$GITHUB_OUTPUT"
-          echo "Previous successful production deployment: ${PREV_ID:-<none>}"
-
-      # Direct Upload projects still have a production branch. If Cloudflare's
-      # project setting drifts away from `main`, Wrangler deployments from CI
-      # are published as preview deployments: the hash URL exists, but the
-      # custom domain keeps serving the previous production deployment. Keep
-      # the Pages project aligned before deploying.
-      - name: Ensure Cloudflare Pages production branch is main
-        run: |
-          set -euo pipefail
-          PAYLOAD=$(jq -n --arg branch "main" '{ production_branch: $branch }')
-          HTTP_CODE=$(curl -sS -o /tmp/cf_branch_patch.json -w "%{http_code}" -X PATCH \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data "$PAYLOAD" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
-          if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' /tmp/cf_branch_patch.json >/dev/null; then
-            echo "::error::Could not set Cloudflare Pages production branch to main (HTTP $HTTP_CODE)."
-            cat /tmp/cf_branch_patch.json
-            exit 1
-          fi
-
-          HTTP_CODE=$(curl -sS -o /tmp/cf_branch_verify.json -w "%{http_code}" \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
-          if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' /tmp/cf_branch_verify.json >/dev/null; then
-            echo "::error::Could not verify Cloudflare Pages production branch (HTTP $HTTP_CODE)."
-            cat /tmp/cf_branch_verify.json
-            exit 1
-          fi
-          CURRENT_BRANCH=$(jq -r '.result.production_branch // empty' /tmp/cf_branch_verify.json)
-          if [ "$CURRENT_BRANCH" != "main" ]; then
-            echo "::error::Cloudflare Pages production branch is '$CURRENT_BRANCH', expected 'main'."
-            exit 1
-          fi
-          echo "Cloudflare Pages production branch verified: main"
-
-      # Pages Functions run on Cloudflare Workers and read env vars from the
-      # Pages *project* settings (NOT from the GitHub Actions env and NOT from
-      # the built Vite bundle). Sync the runtime bindings from GitHub secrets
-      # so functions/sitemap-dynamic.xml.ts can resolve SUPABASE_PROJECT_ID on
-      # every request, the SEO Pages Functions can read public listing data via
-      # SUPABASE_PUBLISHABLE_KEY, and functions/_middleware.ts can resolve the
-      # optional SITE_LOCK_PASSWORD for the pre-launch passcode gate.
-      - name: Sync Cloudflare Pages runtime environment variables
+      - name: Verify source candidate and provenance
         env:
-          SUPABASE_URL:              ${{ secrets.VITE_SUPABASE_URL }}
-          SUPABASE_PROJECT_ID:       ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-          SUPABASE_PUBLISHABLE_KEY:  ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          SITE_LOCK_PASSWORD:        ${{ secrets.SITE_LOCK_PASSWORD }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if ! NORMALIZED_SUPABASE_PROJECT_ID=$(node - "$SUPABASE_PROJECT_ID" "$SUPABASE_URL" <<'NODE'
-          const [, , explicitProjectId = "", supabaseUrl = ""] = process.argv;
-          const validProjectRef = (value) => /^[a-z0-9]{20}$/.test(value);
-          if (validProjectRef(explicitProjectId)) {
-            console.log(explicitProjectId);
-            process.exit(0);
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$MANIFEST_SHA256" ]; then
+            echo "::error::Source candidate manifest digest does not match the release tuple."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$SOURCE_TREE" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          candidate_artifact_sha256="$(jq -er '.artifact_sha256' release-candidate/release-manifest.json)"
+          if [ "$candidate_artifact_sha256" != "$ARTIFACT_SHA256" ]; then
+            echo "::error::Source candidate artifact digest does not match the release tuple."
+            exit 1
+          fi
+
+      - name: Download signed staging release attestation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-candidate-attestation-${{ inputs.release_sha }}-${{ inputs.staging_run_attempt }}
+          path: evidence/staging-aggregate
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.staging_run_id }}
+
+      - name: Verify signed staging release attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          npm run --silent release:validate -- release-candidate-attestation \
+            --file evidence/staging-aggregate/release-candidate-attestation.json \
+            --sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT"
+          jq -e \
+            --arg artifact "$ARTIFACT_SHA256" \
+            --arg manifest "$MANIFEST_SHA256" '
+              .artifact_sha256 == $artifact and
+              .manifest_sha256 == $manifest
+            ' evidence/staging-aggregate/release-candidate-attestation.json \
+            > /dev/null
+
+      - name: Download signed production approval
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-release-approval-${{ inputs.release_sha }}-${{ inputs.approval_run_id }}-${{ inputs.approval_run_attempt }}
+          path: evidence/approval
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.approval_run_id }}
+
+      - name: Verify signed production approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALLOWED_APPROVERS: ${{ inputs.allowed_approvers }}
+        run: |
+          set -euo pipefail
+          npm run --silent release:validate -- release-approval \
+            --file evidence/approval/production-release-approval.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --deploy-actor "$GITHUB_ACTOR" \
+            --allowed-approvers "$ALLOWED_APPROVERS"
+          jq -e --arg nonce "$APPROVAL_NONCE" '.nonce == $nonce' \
+            evidence/approval/production-release-approval.json > /dev/null
+
+      - name: Download current production mutation lease
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ inputs.mutation_lease_artifact }}
+          path: evidence/mutation-lease
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.production_run_id }}
+
+      - name: Validate current production mutation lease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f evidence/mutation-lease/production-mutation-lease.json
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npm run --silent release:validate -- mutation-lease \
+            --file evidence/mutation-lease/production-mutation-lease.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$PRODUCTION_RUN_ID" \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+
+      - name: Download production database attestation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ inputs.database_attestation_artifact }}
+          path: evidence/production-database
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.backend_run_id }}
+
+      - name: Download production Edge attestation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ inputs.edge_attestation_artifact }}
+          path: evidence/production-edge
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.backend_run_id }}
+
+      - name: Verify signed release and provider artifact bindings
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          DATABASE_BINDING_ARTIFACT: ${{ inputs.database_binding_artifact }}
+          EDGE_BINDING_ARTIFACT: ${{ inputs.edge_binding_artifact }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/bindings evidence/api evidence/stripe
+          stripe_name="stripe-live-readiness-${RELEASE_SHA}-${STRIPE_READINESS_RUN_ID}-${STRIPE_READINESS_RUN_ATTEMPT}"
+          gh run download "$STRIPE_READINESS_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$stripe_name" \
+            --dir evidence/stripe
+
+          download_binding() {
+            local key="$1"
+            local run_id="$2"
+            local artifact_name="$3"
+            local destination="evidence/bindings/${key}"
+            mkdir -p "$destination"
+            gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "$artifact_name" \
+              --dir "$destination"
+            test -f "$destination/release-artifact-binding.json"
           }
-          try {
-            const host = new URL(supabaseUrl).hostname;
-            const suffix = ".supabase.co";
-            const derived = host.endsWith(suffix) ? host.slice(0, -suffix.length) : "";
-            if (validProjectRef(derived)) {
-              console.log(derived);
-              process.exit(0);
-            }
-          } catch {
-            // Fall through to the deployment error below.
+
+          download_binding source "$SOURCE_RUN_ID" \
+            "production-release-candidate-binding-${RELEASE_SHA}-${SOURCE_RUN_ATTEMPT}"
+          download_binding staging "$STAGING_RUN_ID" \
+            "release-candidate-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}-binding"
+          download_binding approval "$APPROVAL_RUN_ID" \
+            "production-release-approval-binding-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}"
+          download_binding stripe "$STRIPE_READINESS_RUN_ID" "${stripe_name}-binding"
+          download_binding mutation-lease "$PRODUCTION_RUN_ID" \
+            "${{ inputs.mutation_lease_artifact }}-binding"
+          download_binding database "$BACKEND_RUN_ID" "$DATABASE_BINDING_ARTIFACT"
+          download_binding edge "$BACKEND_RUN_ID" "$EDGE_BINDING_ARTIFACT"
+
+          cat > "$RUNNER_TEMP/verify-cloudflare-release-bindings.sh" <<'VERIFY_SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          verify_binding() {
+            local key="$1"
+            local payload_root="$2"
+            local expected_name="$3"
+            local workflow_path="$4"
+            local event="$5"
+            local run_id="$6"
+            local run_attempt="$7"
+            local mode="$8"
+            shift 8
+            local binding="evidence/bindings/${key}/release-artifact-binding.json"
+            local metadata="evidence/api/${key}-artifact.json"
+            local run_metadata="evidence/api/${key}-run.json"
+            local artifact_id artifact_name artifact_digest actor triggering_actor
+            artifact_id="$(jq -er '.artifact.id' "$binding")"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" > "$metadata"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$run_metadata"
+            artifact_name="$(jq -er '.name' "$metadata")"
+            artifact_digest="$(jq -er '.digest' "$metadata")"
+            actor="$(jq -er '.actor.login' "$run_metadata")"
+            triggering_actor="$(jq -er '.triggering_actor.login' "$run_metadata")"
+            if [ "$artifact_name" != "$expected_name" ]; then
+              echo "::error::${key} artifact name does not match the trusted release tuple."
+              exit 1
+            fi
+            local args=(
+              node scripts/verify-release-artifact-binding.mjs
+              --binding "$binding"
+              --payload-root "$payload_root"
+              --artifact-metadata "$metadata"
+              --producer-run "$run_metadata"
+              --repository "$GITHUB_REPOSITORY"
+              --release-sha "$RELEASE_SHA"
+              --source-tree "$SOURCE_TREE"
+              --workflow-path "$workflow_path"
+              --workflow-ref "$GITHUB_REPOSITORY/$workflow_path@refs/heads/main"
+              --workflow-sha "$RELEASE_SHA"
+              --event "$event"
+              --run-id "$run_id"
+              --run-attempt "$run_attempt"
+              --actor "$actor"
+              --triggering-actor "$triggering_actor"
+              --artifact-id "$artifact_id"
+              --artifact-name "$expected_name"
+              --artifact-digest "$artifact_digest"
+              --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+            )
+            if [ "$#" -gt 0 ]; then
+              args+=(--file-root "$payload_root")
+              local file
+              for file in "$@"; do
+                args+=(--file "$file")
+              done
+            fi
+            if [ "$mode" = "same-run" ]; then
+              args+=(
+                --same-run
+                --trusted-current-run-id "$GITHUB_RUN_ID"
+                --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT"
+                --trusted-current-actor "$GITHUB_ACTOR"
+                --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR"
+              )
+            elif [ "$mode" != "prior-run" ]; then
+              echo "::error::Unknown binding verification mode for ${key}."
+              exit 1
+            fi
+            "${args[@]}" > "evidence/api/${key}-binding-verification.json"
           }
-          process.exit(1);
-          NODE
-          ); then
-            echo "::error::VITE_SUPABASE_PROJECT_ID must be a 20-character project ref or VITE_SUPABASE_URL must be a valid https://<ref>.supabase.co URL."
+
+          current_workflow_path="${GITHUB_WORKFLOW_REF#${GITHUB_REPOSITORY}/}"
+          current_workflow_path="${current_workflow_path%@*}"
+          case "$current_workflow_path" in
+            .github/workflows/deploy-production-release.yml|.github/workflows/direct-cloudflare-production-deploy.yml) ;;
+            *)
+              echo "::error::Untrusted Cloudflare production caller workflow path."
+              exit 1
+              ;;
+          esac
+          provider_mode="prior-run"
+          if [ "$BACKEND_RUN_ID" = "$GITHUB_RUN_ID" ]; then
+            provider_mode="same-run"
+          fi
+
+          verify_binding source release-candidate \
+            "production-release-candidate-${RELEASE_SHA}-${SOURCE_RUN_ATTEMPT}" \
+            .github/workflows/ci.yml push \
+            "$SOURCE_RUN_ID" "$SOURCE_RUN_ATTEMPT" prior-run
+          verify_binding staging evidence/staging-aggregate/release-candidate-attestation.json \
+            "release-candidate-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}" \
+            .github/workflows/stage-release.yml workflow_run \
+            "$STAGING_RUN_ID" "$STAGING_RUN_ATTEMPT" prior-run
+          verify_binding approval evidence/approval/production-release-approval.json \
+            "production-release-approval-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}" \
+            .github/workflows/approve-production-release.yml workflow_dispatch \
+            "$APPROVAL_RUN_ID" "$APPROVAL_RUN_ATTEMPT" prior-run
+          verify_binding stripe evidence/stripe/stripe-live-migration-evidence.json \
+            "stripe-live-readiness-${RELEASE_SHA}-${STRIPE_READINESS_RUN_ID}-${STRIPE_READINESS_RUN_ATTEMPT}" \
+            .github/workflows/verify-stripe-live-readiness.yml workflow_dispatch \
+            "$STRIPE_READINESS_RUN_ID" "$STRIPE_READINESS_RUN_ATTEMPT" prior-run
+          verify_binding mutation-lease evidence/mutation-lease/production-mutation-lease.json \
+            "${MUTATION_LEASE_ARTIFACT}" "$current_workflow_path" workflow_dispatch \
+            "$PRODUCTION_RUN_ID" "$PRODUCTION_RUN_ATTEMPT" same-run
+          verify_binding database evidence/production-database \
+            "$DATABASE_ATTESTATION_ARTIFACT" \
+            .github/workflows/deploy-production-release.yml workflow_dispatch \
+            "$BACKEND_RUN_ID" "$BACKEND_RUN_ATTEMPT" "$provider_mode" \
+            production-supabase-db-attestation.json \
+            production-migration-plan.json \
+            production-migration-history-reconciliation.json \
+            production-migrations-after.json
+          verify_binding edge evidence/production-edge \
+            "$EDGE_ATTESTATION_ARTIFACT" \
+            .github/workflows/deploy-production-release.yml workflow_dispatch \
+            "$BACKEND_RUN_ID" "$BACKEND_RUN_ATTEMPT" "$provider_mode" \
+            production-supabase-edge-attestation.json \
+            production-edge-forward-plan.json \
+            release-safety-production-live-functions.json
+          VERIFY_SCRIPT
+          chmod 700 "$RUNNER_TEMP/verify-cloudflare-release-bindings.sh"
+          "$RUNNER_TEMP/verify-cloudflare-release-bindings.sh"
+
+          database_file="evidence/production-database/production-supabase-db-attestation.json"
+          edge_file="evidence/production-edge/production-supabase-edge-attestation.json"
+          if [ "$(sha256sum "$database_file" | awk '{print $1}')" != "$DATABASE_ATTESTATION_SHA256" ]; then
+            echo "::error::Production database attestation digest does not match."
             exit 1
           fi
-          if [ -z "${SUPABASE_PUBLISHABLE_KEY}" ]; then
-            echo "::error::VITE_SUPABASE_PUBLISHABLE_KEY secret is required for production Pages Functions."
+          if [ "$(sha256sum "$edge_file" | awk '{print $1}')" != "$EDGE_ATTESTATION_SHA256" ]; then
+            echo "::error::Production Edge attestation digest does not match."
             exit 1
           fi
+          supabase_sha256="$(jq -er '.supabase_sha256' release-candidate/release-manifest.json)"
+          npm run --silent release:validate -- production-upstream-attestations \
+            --database-file "$database_file" \
+            --edge-file "$edge_file" \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$BACKEND_APPROVAL_RUN_ID" \
+            --approval-run-attempt "$BACKEND_APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$BACKEND_RUN_ID" \
+            --production-run-attempt "$BACKEND_RUN_ATTEMPT" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --manifest-sha256 "$MANIFEST_SHA256" \
+            --supabase-sha256 "$supabase_sha256" \
+            --database-sha256 "$DATABASE_ATTESTATION_SHA256" \
+            --edge-sha256 "$EDGE_ATTESTATION_SHA256" \
+            > evidence/production-upstream-attestations.json
 
-          # Build env_vars payload. SITE_LOCK_PASSWORD is optional; when the
-          # GitHub secret is absent, send a null binding so Cloudflare removes
-          # any previously stored passcode instead of preserving stale state.
-          # `secret_text` stores the value encrypted-at-rest on Cloudflare's side.
-          ENV_JSON=$(jq -n \
-            --arg surl "$SUPABASE_URL" \
-            --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" \
-            --arg pkey "$SUPABASE_PUBLISHABLE_KEY" \
-            --arg lock "$SITE_LOCK_PASSWORD" \
-            '
-            ({} +
-              (if $surl != "" then {
-                SUPABASE_URL: { value: $surl, type: "plain_text" },
-                VITE_SUPABASE_URL: { value: $surl, type: "plain_text" }
-              } else {} end) +
-              (if $pid  != "" then {
-                SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" },
-                VITE_SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" }
-              } else {} end) +
-              (if $pkey != "" then {
-                SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
-                VITE_SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
-                VITE_SUPABASE_ANON_KEY: { value: $pkey, type: "plain_text" }
-              } else {} end) +
-              (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else { SITE_LOCK_PASSWORD: null } end)
-            )')
-
-          PAYLOAD=$(jq -n --argjson env "$ENV_JSON" '{
-            deployment_configs: { production: { env_vars: $env } }
-          }')
-
-          HTTP_CODE=$(curl -s -o /tmp/cf_env.json -w "%{http_code}" -X PATCH \
+      - name: Verify fixed Pages projects and capture rollback target
+        id: preflight
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          STAGING_PROJECT: maiprop-listing-site-staging
+          PRODUCTION_PROJECT: maiprop-listing-site
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          if [ "$STAGING_CF_ACCOUNT_ID" = "$CF_ACCOUNT_ID" ]; then
+            echo "::error::Staging and production Cloudflare account IDs must be distinct."
+            exit 1
+          fi
+          staging_file="$RUNNER_TEMP/cloudflare-staging-project-before.json"
+          production_file="$RUNNER_TEMP/cloudflare-production-project-before.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_file"
+          curl -fsS --retry 3 \
             -H "Authorization: Bearer $CF_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data "$PAYLOAD" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Failed to sync Pages env vars (HTTP $HTTP_CODE)"
-            cat /tmp/cf_env.json
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$production_file"
+          STAGING_PROJECT="$STAGING_PROJECT" \
+          PRODUCTION_PROJECT="$PRODUCTION_PROJECT" \
+            node scripts/validate-cloudflare-pages-staging-posture.mjs \
+              --mode git-lock \
+              --staging-project-file "$staging_file" \
+              --production-project-file "$production_file" \
+              --out evidence/cloudflare-production-git-lock.json
+          jq '.result.canonical_deployment' "$production_file" \
+            > "$RUNNER_TEMP/cloudflare-production-rollback-target.json"
+          rollback_id="$(jq -er '.id' "$RUNNER_TEMP/cloudflare-production-rollback-target.json")"
+          rollback_sha="$(jq -er '.deployment_trigger.metadata.commit_hash' "$RUNNER_TEMP/cloudflare-production-rollback-target.json")"
+          if [ "${rollback_sha,,}" = "${RELEASE_SHA,,}" ]; then
+            echo "::error::Rollback target must differ from the candidate release SHA."
             exit 1
           fi
-          HTTP_CODE=$(curl -s -o /tmp/cf_env_verify.json -w "%{http_code}" \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Failed to verify Pages env vars (HTTP $HTTP_CODE)"
-            cat /tmp/cf_env_verify.json
-            exit 1
-          fi
-          for key in SUPABASE_URL VITE_SUPABASE_URL SUPABASE_PROJECT_ID VITE_SUPABASE_PROJECT_ID SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_ANON_KEY; do
-            if ! jq -e --arg key "$key" '.success == true and (.result.deployment_configs.production.env_vars[$key].type == "plain_text")' /tmp/cf_env_verify.json >/dev/null; then
-              echo "::error::Cloudflare Pages production env var $key was not persisted."
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file "$RUNNER_TEMP/cloudflare-production-rollback-target.json" \
+            --project "$PRODUCTION_PROJECT" \
+            --project-id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$rollback_sha"
+          npm run --silent release:verify-live-marker -- \
+            "$PRODUCTION_APP_URL" \
+            --expected-sha "$rollback_sha" \
+            > evidence/cloudflare-production-rollback-marker-before.json
+          jq '{
+              schema_version: 1,
+              evidence_type: "maiprop-pages-production-rollback-target",
+              project_id: .project_id,
+              project_name: .project_name,
+              deployment_id: .id,
+              environment: .environment,
+              branch: .deployment_trigger.metadata.branch,
+              commit_hash: .deployment_trigger.metadata.commit_hash,
+              commit_dirty: .deployment_trigger.metadata.commit_dirty,
+              is_skipped: .is_skipped,
+              uses_functions: .uses_functions,
+              status: .latest_stage.status
+            }' "$RUNNER_TEMP/cloudflare-production-rollback-target.json" \
+            > evidence/cloudflare-production-rollback-target.json
+          echo "rollback_id=$rollback_id" >> "$GITHUB_OUTPUT"
+          echo "rollback_sha=$rollback_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Install production health browser
+        run: npx playwright install chromium
+
+      - name: Prepare isolated immutable Pages candidate
+        id: isolated
+        run: |
+          set -euo pipefail
+          isolated_directory="$RUNNER_TEMP/maiprop-cloudflare-production-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -rf "$isolated_directory"
+          mkdir -p "$isolated_directory"
+          cp -a release-candidate/. "$isolated_directory/"
+          npm run release:artifact:verify -- \
+            --dir "$isolated_directory" \
+            --sha "$RELEASE_SHA" \
+            --tree "$SOURCE_TREE" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          test -d "$isolated_directory/dist"
+          workspace_real="$(realpath "$GITHUB_WORKSPACE")"
+          isolated_real="$(realpath "$isolated_directory")"
+          case "$isolated_real" in
+            "$workspace_real"|"$workspace_real"/*)
+              echo "::error::Immutable Pages candidate must be isolated outside the checkout."
+              exit 1
+              ;;
+          esac
+          ancestor="$isolated_real"
+          while true; do
+            for config_name in wrangler.toml wrangler.json wrangler.jsonc; do
+              if [ -e "$ancestor/$config_name" ]; then
+                echo "::error::Wrangler config discovery is possible from $isolated_real via $ancestor/$config_name."
               exit 1
             fi
           done
-          if ! jq -e --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" '.result.deployment_configs.production.env_vars.SUPABASE_PROJECT_ID.value == $pid' /tmp/cf_env_verify.json >/dev/null; then
-            echo "::error::Cloudflare Pages production SUPABASE_PROJECT_ID did not match the normalized project ref."
-            exit 1
-          fi
-          if [ -n "${SITE_LOCK_PASSWORD}" ]; then
-            echo "Pages production env vars synced (site lock: ENABLED)"
-          else
-            echo "Pages production env vars synced (site lock: disabled)"
-          fi
-          toml_quote() {
-            jq -Rn --arg value "$1" '$value'
-          }
-          {
-            echo 'name = "maiprop-listing-site"'
-            echo 'pages_build_output_dir = "./dist"'
-            echo 'compatibility_date = "2026-05-19"'
-            echo
-            echo '[vars]'
-            printf 'SUPABASE_URL = %s\n' "$(toml_quote "$SUPABASE_URL")"
-            printf 'VITE_SUPABASE_URL = %s\n' "$(toml_quote "$SUPABASE_URL")"
-            printf 'SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$NORMALIZED_SUPABASE_PROJECT_ID")"
-            printf 'VITE_SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$NORMALIZED_SUPABASE_PROJECT_ID")"
-            printf 'SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$SUPABASE_PUBLISHABLE_KEY")"
-            printf 'VITE_SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$SUPABASE_PUBLISHABLE_KEY")"
-            printf 'VITE_SUPABASE_ANON_KEY = %s\n' "$(toml_quote "$SUPABASE_PUBLISHABLE_KEY")"
-            if [ -n "${SITE_LOCK_PASSWORD}" ]; then
-              printf 'SITE_LOCK_PASSWORD = %s\n' "$(toml_quote "$SITE_LOCK_PASSWORD")"
+            parent="$(dirname "$ancestor")"
+            if [ "$parent" = "$ancestor" ]; then
+              break
             fi
-          } > wrangler.toml
-          echo "Wrangler runtime config prepared for Pages Functions deployment"
+            ancestor="$parent"
+          done
+          echo "directory=$isolated_real" >> "$GITHUB_OUTPUT"
 
-      - name: Install deploy smoke browser
-        timeout-minutes: 4
-        # Keep production deploy checks from waiting on apt mirrors; the browser
-        # binary is enough on hosted Ubuntu for the post-deploy smoke test.
-        run: npx playwright install chromium
-
-      - name: Deploy to Cloudflare Pages (production)
-        id: deploy_pages
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-        with:
-          apiToken:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId:  ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # The step above verifies Cloudflare's production_branch is main.
-          # Keep the deploy branch explicit so Wrangler does not rely on
-          # detached-checkout branch inference in GitHub-hosted runners.
-          command:    pages deploy dist --project-name=maiprop-listing-site --branch=main --commit-hash=${{ github.sha }} --commit-message=${{ github.sha }} --commit-dirty=true
-
-      - name: Log Cloudflare Pages deployment outputs
-        run: |
-          echo "deployment-url=${{ steps.deploy_pages.outputs['deployment-url'] }}"
-          echo "pages-deployment-id=${{ steps.deploy_pages.outputs['pages-deployment-id'] }}"
-          echo "pages-deployment-alias-url=${{ steps.deploy_pages.outputs['pages-deployment-alias-url'] }}"
-          echo "pages-deployment-environment=${{ steps.deploy_pages.outputs['pages-deployment-environment'] }}"
-
-      - name: Inspect Cloudflare Pages deployment aliases
+      - name: Verify pre-provisioned production Pages runtime bindings
+        id: runtime-verify
         continue-on-error: true
+        env:
+          CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          STAGING_PROJECT: maiprop-listing-site-staging
+          PRODUCTION_PROJECT: maiprop-listing-site
+          PRODUCTION_APP_URL: https://portal.maiprop.co
+          PRODUCTION_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          PRODUCTION_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          TURN_KEY_ID: ${{ secrets.CLOUDFLARE_TURN_KEY_ID }}
+          TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_TURN_API_TOKEN }}
         run: |
           set -euo pipefail
-          HTTP_CODE=$(curl -sS -o /tmp/cf_project.json -w "%{http_code}" \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
-          if [ "$HTTP_CODE" = "200" ] && jq -e '.success == true' /tmp/cf_project.json >/dev/null; then
-            jq -r '.result | {
-              name,
-              subdomain,
-              production_branch,
-              domains: (.domains // [])
-            } | @json' /tmp/cf_project.json
-          else
-            echo "::warning::Could not inspect Cloudflare Pages project metadata (HTTP $HTTP_CODE)."
-            cat /tmp/cf_project.json
-          fi
-
-          HTTP_CODE=$(curl -sS -o /tmp/cf_latest_deployments.json -w "%{http_code}" \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments?per_page=5")
-          if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' /tmp/cf_latest_deployments.json >/dev/null; then
-            echo "::warning::Could not inspect Cloudflare Pages deployment aliases (HTTP $HTTP_CODE)."
-            cat /tmp/cf_latest_deployments.json
-            exit 0
-          fi
-          jq -r '.result[] | {
-            id,
-            environment,
-            url,
-            aliases: (.aliases // []),
-            branch: (.deployment_trigger.metadata.branch // ""),
-            status: (.latest_stage.status // ""),
-            created_on
-          } | @json' /tmp/cf_latest_deployments.json
-
-      - name: Post-deploy health check
-        id: health_check
-        env:
-          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.SITE_LOCK_PASSWORD }}
-          CF_ACCESS_CLIENT_ID:                  ${{ secrets.CF_ACCESS_CLIENT_ID || secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET:              ${{ secrets.CF_ACCESS_CLIENT_SECRET || secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
-          CF_ACCESS_TOKEN:                      ${{ secrets.CF_ACCESS_TOKEN || secrets.CLOUDFLARE_ACCESS_TOKEN }}
-          PRODUCTION_DEPLOY_EXPECTED_SHA: ${{ github.sha }}
-          PRODUCTION_DEPLOY_CHECK_ATTEMPTS: 30
-          PRODUCTION_DEPLOY_CHECK_DELAY_MS: 10000
-        run: npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api
-
-      - name: Rollback on health check failure
-        if: failure() && steps.health_check.outcome == 'failure' && steps.prev_deploy.outputs.id != ''
-        env:
-          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.SITE_LOCK_PASSWORD }}
-          CF_ACCESS_CLIENT_ID:                  ${{ secrets.CF_ACCESS_CLIENT_ID || secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET:              ${{ secrets.CF_ACCESS_CLIENT_SECRET || secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
-          CF_ACCESS_TOKEN:                      ${{ secrets.CF_ACCESS_TOKEN || secrets.CLOUDFLARE_ACCESS_TOKEN }}
-        run: |
-          set -euo pipefail
-          ROLLBACK_ID="${{ steps.prev_deploy.outputs.id }}"
-          echo "Rolling back to deployment ${ROLLBACK_ID}"
-          HTTP_CODE=$(curl -sS -o /tmp/cf_rollback.json -w "%{http_code}" -X POST \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments/${ROLLBACK_ID}/rollback")
-          if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' /tmp/cf_rollback.json >/dev/null; then
-            echo "::error::Cloudflare rollback failed with HTTP $HTTP_CODE"
-            cat /tmp/cf_rollback.json
+          if [ -z "$CF_READ_TOKEN" ] || [ -z "$CF_ACCOUNT_ID" ] ||
+             [ -z "$STAGING_CF_READ_TOKEN" ] || [ -z "$STAGING_CF_ACCOUNT_ID" ]; then
+            echo "::error::Dedicated staging and production Cloudflare read credentials are required."
             exit 1
           fi
-          ROLLED_BACK_ID=$(jq -r '.result.id // empty' /tmp/cf_rollback.json)
-          echo "Rollback API accepted deployment: ${ROLLED_BACK_ID:-$ROLLBACK_ID}"
-          npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api
+          if [ "$STAGING_CF_ACCOUNT_ID" = "$CF_ACCOUNT_ID" ]; then
+            echo "::error::Staging and production Cloudflare account IDs must be distinct."
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from "node:fs";
+          import {
+            verifyCloudflareTurnCredentials,
+          } from "./scripts/check-production-deploy.mjs";
 
+          const proof = await verifyCloudflareTurnCredentials({
+            keyId: process.env.TURN_KEY_ID,
+            apiToken: process.env.TURN_API_TOKEN,
+            ttlSeconds: 600,
+          });
+          writeFileSync(
+            "evidence/cloudflare-production-turn-credentials-preflight.json",
+            `${JSON.stringify(proof, null, 2)}\n`,
+          );
+          NODE
+          staging_project_file="$RUNNER_TEMP/cloudflare-staging-project-runtime-verification.json"
+          production_project_file="$RUNNER_TEMP/cloudflare-production-project-runtime-verification.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_project_file"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$production_project_file"
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode git-lock \
+            --staging-project-file "$staging_project_file" \
+            --production-project-file "$production_project_file" \
+            --out evidence/cloudflare-production-git-lock-runtime-verification.json
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode runtime-snapshot \
+            --staging-project-file "$staging_project_file" \
+            --production-project-file "$production_project_file" \
+            --out evidence/cloudflare-production-runtime-boundary-before.json
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode production \
+            --staging-project-file "$staging_project_file" \
+            --production-project-file "$production_project_file" \
+            --out evidence/cloudflare-production-posture.json
+          echo "staging_project_file=$staging_project_file" >> "$GITHUB_OUTPUT"
+          echo "production_project_file=$production_project_file" >> "$GITHUB_OUTPUT"
+
+      - name: Prove N-1 frontend compatibility with pre-provisioned runtime
+        id: n_minus_one
+        if: ${{ steps.runtime-verify.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          PRODUCTION_DEPLOY_EXPECTED_SHA: ${{ steps.preflight.outputs.rollback_sha }}
+          CLOUDFLARE_TURN_KEY_ID: ${{ secrets.CLOUDFLARE_TURN_KEY_ID }}
+          CLOUDFLARE_TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_TURN_API_TOKEN }}
+          MAIPROP_TURN_TTL_SECONDS: "600"
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          PRODUCTION_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          PRODUCTION_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_PROJECT_FILE: ${{ steps.runtime-verify.outputs.staging_project_file }}
+          PRODUCTION_PROJECT_FILE: ${{ steps.runtime-verify.outputs.production_project_file }}
+          ROLLBACK_SHA: ${{ steps.preflight.outputs.rollback_sha }}
+        run: |
+          set -euo pipefail
+          npm run --silent release:verify-live-marker -- \
+            "$PRODUCTION_APP_URL" \
+            --expected-sha "$ROLLBACK_SHA" \
+            > evidence/cloudflare-production-n-minus-one-marker.json
+          npm run --silent release:verify-runtime-config -- \
+            "$PRODUCTION_APP_URL" \
+            "$PRODUCTION_SUPABASE_URL" \
+            "$PRODUCTION_SUPABASE_PROJECT_ID" \
+            "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" \
+            "$PRODUCTION_APP_URL" \
+            --staging-project-file "$STAGING_PROJECT_FILE" \
+            --production-project-file "$PRODUCTION_PROJECT_FILE" \
+            --environment production \
+            > evidence/cloudflare-production-n-minus-one-runtime.json
+          npm run --silent check:production-deploy -- \
+            "$PRODUCTION_APP_URL" \
+            --browser \
+            --public-api \
+            > evidence/cloudflare-production-n-minus-one-health.json
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const digest = (path) => createHash("sha256")
+            .update(readFileSync(path))
+            .digest("hex");
+          const health = JSON.parse(readFileSync(
+            "evidence/cloudflare-production-n-minus-one-health.json",
+            "utf8",
+          ));
+          if (
+            health.schemaVersion !== 1 ||
+            health.status !== "passed" ||
+            health.targets?.length !== 1 ||
+            health.turnService?.status !== "passed" ||
+            health.turnService?.httpStatus !== 201 ||
+            health.turnService?.credentialsPresent !== true ||
+            health.turnService?.credentialsRedacted !== true ||
+            !(health.turnService?.turnUrlCount > 0)
+          ) {
+            throw new Error(
+              "N-1 frontend or Cloudflare TURN compatibility proof is incomplete.",
+            );
+          }
+          const evidence = {
+            schema_version: 1,
+            evidence_type: "maiprop-pages-production-n-minus-one-compatibility",
+            status: "passed",
+            release_sha: process.env.RELEASE_SHA,
+            n_minus_one_sha: process.env.ROLLBACK_SHA,
+            runtime_strategy: "preprovisioned-verified-runtime",
+            secret_binding_verification: "allowlisted-name-and-type",
+            authenticated_live_functional_proof:
+              "signed-staging-attestation-plus-direct-turn-service",
+            runtime_mutation_attempted: false,
+            runtime_restore_required: false,
+            turn_service: health.turnService,
+            evidence_sha256: {
+              runtime_boundary_before: digest(
+                "evidence/cloudflare-production-runtime-boundary-before.json",
+              ),
+              marker: digest(
+                "evidence/cloudflare-production-n-minus-one-marker.json",
+              ),
+              runtime: digest(
+                "evidence/cloudflare-production-n-minus-one-runtime.json",
+              ),
+              health: digest(
+                "evidence/cloudflare-production-n-minus-one-health.json",
+              ),
+            },
+          };
+          writeFileSync(
+            "evidence/cloudflare-production-n-minus-one-compatibility.json",
+            `${JSON.stringify(evidence, null, 2)}\n`,
+          );
+          NODE
+
+      - name: Deploy exact immutable production artifact
+        id: deploy
+        if: ${{ steps.n_minus_one.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
+          CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          ROLLBACK_ID: ${{ steps.preflight.outputs.rollback_id }}
+          ROLLBACK_SHA: ${{ steps.preflight.outputs.rollback_sha }}
+          ISOLATED_DIRECTORY: ${{ steps.isolated.outputs.directory }}
+        run: |
+          set -euo pipefail
+          export PATH="$GITHUB_WORKSPACE/node_modules/.bin:$PATH"
+          wrangler_version="$(npx --no-install wrangler --version)"
+          case "$wrangler_version" in
+            *"$WRANGLER_VERSION"*) ;;
+            *)
+              echo "::error::Wrangler version is not the package-lock-pinned $WRANGLER_VERSION."
+              exit 1
+              ;;
+          esac
+          node "$GITHUB_WORKSPACE/scripts/production-release-artifact.mjs" verify \
+            --dir "$ISOLATED_DIRECTORY" \
+            --sha "$RELEASE_SHA" \
+            --tree "$SOURCE_TREE" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          cd "$ISOLATED_DIRECTORY"
+          node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" mutation-lease \
+            --file "$GITHUB_WORKSPACE/evidence/mutation-lease/production-mutation-lease.json" \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$PRODUCTION_RUN_ID" \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+          staging_mutation_file="$RUNNER_TEMP/cloudflare-staging-project-deploy-mutation.json"
+          production_mutation_file="$RUNNER_TEMP/cloudflare-production-project-deploy-mutation.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_mutation_file"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$production_mutation_file"
+          node "$GITHUB_WORKSPACE/scripts/validate-cloudflare-pages-staging-posture.mjs" \
+            --mode git-lock \
+            --staging-project-file "$staging_mutation_file" \
+            --production-project-file "$production_mutation_file" \
+            --out "$GITHUB_WORKSPACE/evidence/cloudflare-production-git-lock-deploy.json"
+          node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" mutation-lease \
+            --file "$GITHUB_WORKSPACE/evidence/mutation-lease/production-mutation-lease.json" \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$PRODUCTION_RUN_ID" \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+          if ! jq -e \
+            --arg rollback_id "$ROLLBACK_ID" \
+            --arg rollback_sha "${ROLLBACK_SHA,,}" '
+              .result.canonical_deployment.id == $rollback_id and
+              (
+                .result.canonical_deployment.deployment_trigger.metadata.commit_hash
+                | ascii_downcase
+              ) == $rollback_sha
+            ' "$production_mutation_file" > /dev/null; then
+            echo "::error::Production canonical changed after rollback capture; candidate deploy refused."
+            exit 1
+          fi
+          deployments_before="$RUNNER_TEMP/cloudflare-production-deployments-before.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments?env=production&per_page=100" \
+            > "$deployments_before"
+          jq -e '.success == true and (.result | type == "array")' \
+            "$deployments_before" > /dev/null
+          echo "deployments_before=$deployments_before" >> "$GITHUB_OUTPUT"
+          mutation_attempt_file="$GITHUB_WORKSPACE/evidence/cloudflare-production-mutation-attempt.json"
+          jq -n \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg project "$PRODUCTION_PROJECT" \
+            --arg project_id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            --arg attempted_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
+              schema_version: 1,
+              evidence_type: "maiprop-pages-mutation-attempt",
+              mutation_attempted: true,
+              release_sha: $release_sha,
+              project_name: $project,
+              project_id: $project_id,
+              attempted_at: $attempted_at
+            }' > "$mutation_attempt_file"
+          echo "mutation_attempted=true" >> "$GITHUB_OUTPUT"
+          echo "mutation_attempt_file=$mutation_attempt_file" >> "$GITHUB_OUTPUT"
+          wrangler_output_dir="$RUNNER_TEMP/cloudflare-production-wrangler-output"
+          rm -rf "$wrangler_output_dir"
+          mkdir -p "$wrangler_output_dir"
+          WRANGLER_OUTPUT_DIR="$wrangler_output_dir" \
+            npx --no-install wrangler pages deploy dist \
+            --project-name=maiprop-listing-site \
+            --branch=main \
+            --commit-hash="$RELEASE_SHA" \
+            --commit-dirty=false \
+            2>&1 | tee "$RUNNER_TEMP/cloudflare-production-wrangler.log"
+          mapfile -t wrangler_receipts < <(
+            find "$wrangler_output_dir" -type f -name '*.json' -print
+          )
+          if [ "${#wrangler_receipts[@]}" -ne 1 ]; then
+            echo "::error::Wrangler did not emit exactly one structured Pages deployment receipt."
+            exit 1
+          fi
+          reported_deployment_id="$(
+            jq -er \
+              'select(.type == "pages-deploy-detailed") | .deployment_id' \
+              "${wrangler_receipts[0]}"
+          )"
+          if [ -z "$reported_deployment_id" ]; then
+            echo "::error::Wrangler structured output omitted the Pages deployment ID."
+            exit 1
+          fi
+          echo "reported_deployment_id=$reported_deployment_id" >> "$GITHUB_OUTPUT"
+          node "$GITHUB_WORKSPACE/scripts/production-release-artifact.mjs" verify \
+            --dir "$ISOLATED_DIRECTORY" \
+            --sha "$RELEASE_SHA" \
+            --tree "$SOURCE_TREE" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+
+      - name: Resolve and validate exact production deployment
+        id: deployment
+        if: ${{ always() && steps.deploy.outputs.mutation_attempted == 'true' }}
+        continue-on-error: true
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          DEPLOYMENTS_BEFORE: ${{ steps.deploy.outputs.deployments_before }}
+          STAGING_PROJECT: maiprop-listing-site-staging
+          PRODUCTION_PROJECT: maiprop-listing-site
+          PRODUCTION_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          PRODUCTION_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          MUTATION_ATTEMPT_FILE: ${{ steps.deploy.outputs.mutation_attempt_file }}
+          REPORTED_DEPLOYMENT_ID: ${{ steps.deploy.outputs.reported_deployment_id }}
+        run: |
+          set -euo pipefail
+          deployments_after="$RUNNER_TEMP/cloudflare-production-deployments-after.json"
+          production_project_after="$RUNNER_TEMP/cloudflare-production-project-after.json"
+          candidate_receipt="$GITHUB_WORKSPACE/evidence/cloudflare-production-candidate-receipt.json"
+          recovery_candidate_receipt="$GITHUB_WORKSPACE/evidence/cloudflare-production-candidate-recovery-receipt.json"
+          reconciliation_error="$RUNNER_TEMP/cloudflare-production-candidate-reconciliation.err"
+          rm -f "$candidate_receipt" "$recovery_candidate_receipt" "$reconciliation_error"
+          echo "recovery_candidate_receipt=$recovery_candidate_receipt" >> "$GITHUB_OUTPUT"
+          for attempt in $(seq 1 18); do
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments?env=production&per_page=100" \
+              > "$deployments_after"
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+              > "$production_project_after"
+            if ! node scripts/cloudflare-pages-candidate-guard.mjs resolve-recovery-candidate \
+              --mutation-attempt-file "$MUTATION_ATTEMPT_FILE" \
+              --before-deployments-file "$DEPLOYMENTS_BEFORE" \
+              --after-deployments-file "$deployments_after" \
+              --current-project-file "$production_project_after" \
+              --project "$PRODUCTION_PROJECT" \
+              --project-id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+              --release-sha "$RELEASE_SHA" \
+              --out "$recovery_candidate_receipt" \
+              2> "$reconciliation_error"; then
+              if grep -Eq \
+                'Multiple new exact-SHA|malformed|immutable project identity' \
+                "$reconciliation_error"; then
+                cat "$reconciliation_error" >&2
+                exit 1
+              fi
+              sleep 5
+              continue
+            fi
+            if node scripts/cloudflare-pages-candidate-guard.mjs resolve-candidate \
+              --mutation-attempt-file "$MUTATION_ATTEMPT_FILE" \
+              --before-deployments-file "$DEPLOYMENTS_BEFORE" \
+              --after-deployments-file "$deployments_after" \
+              --current-project-file "$production_project_after" \
+              --project "$PRODUCTION_PROJECT" \
+              --project-id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+              --release-sha "$RELEASE_SHA" \
+              --reported-deployment-id "$REPORTED_DEPLOYMENT_ID" \
+              --out "$candidate_receipt" \
+              2> "$reconciliation_error"; then
+              break
+            fi
+            if grep -Eq \
+              'Multiple new exact-SHA|reported deployment ID|malformed|immutable project identity' \
+              "$reconciliation_error"; then
+              cat "$reconciliation_error" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          if [ ! -s "$candidate_receipt" ]; then
+            cat "$reconciliation_error" >&2
+            echo "::error::Production Pages mutation could not be reconciled to one exact canonical candidate."
+            exit 1
+          fi
+          deployment_id="$(jq -er '.deployment_id' "$candidate_receipt")"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "candidate_receipt=$candidate_receipt" >> "$GITHUB_OUTPUT"
+          deployment_file="$RUNNER_TEMP/cloudflare-production-deployment.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments/$deployment_id" \
+            | jq -e '.result' > "$deployment_file"
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file "$deployment_file" \
+            --project "$PRODUCTION_PROJECT" \
+            --project-id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$RELEASE_SHA"
+          canonical_file="$RUNNER_TEMP/cloudflare-production-canonical.json"
+          jq '.result.canonical_deployment' "$production_project_after" \
+            > "$canonical_file"
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file "$canonical_file" \
+            --project "$PRODUCTION_PROJECT" \
+            --project-id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$RELEASE_SHA"
+          staging_project_after="$RUNNER_TEMP/cloudflare-staging-project-after.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_project_after"
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode production \
+            --staging-project-file "$staging_project_after" \
+            --production-project-file "$production_project_after" \
+            --out evidence/cloudflare-production-final-posture.json
+          jq '{
+              schema_version: 1,
+              evidence_type: "maiprop-pages-production-deployment",
+              project_name: .project_name,
+              deployment_id: .id,
+              url: .url,
+              environment: .environment,
+              branch: .deployment_trigger.metadata.branch,
+              commit_hash: .deployment_trigger.metadata.commit_hash,
+              commit_dirty: .deployment_trigger.metadata.commit_dirty,
+              is_skipped: .is_skipped,
+              uses_functions: .uses_functions,
+              status: .latest_stage.status
+            }' "$deployment_file" \
+            > evidence/cloudflare-production-deployment-evidence.json
+          jq '{
+              schema_version: 1,
+              evidence_type: "maiprop-pages-production-canonical",
+              project_name: .project_name,
+              deployment_id: .id,
+              url: .url,
+              environment: .environment,
+              branch: .deployment_trigger.metadata.branch,
+              commit_hash: .deployment_trigger.metadata.commit_hash,
+              commit_dirty: .deployment_trigger.metadata.commit_dirty,
+              is_skipped: .is_skipped,
+              uses_functions: .uses_functions,
+              status: .latest_stage.status
+            }' "$canonical_file" \
+            > evidence/cloudflare-production-canonical-evidence.json
+          echo "deployment_url=$(jq -er '.url' "$deployment_file")" >> "$GITHUB_OUTPUT"
+          echo "staging_project_file=$staging_project_after" >> "$GITHUB_OUTPUT"
+          echo "production_project_file=$production_project_after" >> "$GITHUB_OUTPUT"
+
+      - name: Validate production promotion health
+        id: health
+        if: ${{ steps.deploy.outcome == 'success' && steps.deployment.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          PRODUCTION_DEPLOY_EXPECTED_SHA: ${{ inputs.release_sha }}
+          CLOUDFLARE_TURN_KEY_ID: ${{ secrets.CLOUDFLARE_TURN_KEY_ID }}
+          CLOUDFLARE_TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_TURN_API_TOKEN }}
+          MAIPROP_TURN_TTL_SECONDS: "600"
+          PRODUCTION_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          PRODUCTION_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.deployment_url }}
+          STAGING_PROJECT: maiprop-listing-site-staging
+          PRODUCTION_PROJECT: maiprop-listing-site
+          STAGING_PROJECT_FILE: ${{ steps.deployment.outputs.staging_project_file }}
+          PRODUCTION_PROJECT_FILE: ${{ steps.deployment.outputs.production_project_file }}
+        run: |
+          set -euo pipefail
+          npm run --silent release:verify-live-marker -- \
+            "$DEPLOYMENT_URL" \
+            release-candidate/release-manifest.json \
+            > evidence/cloudflare-production-deployment-marker.json
+          npm run --silent release:verify-live-marker -- \
+            "$PRODUCTION_APP_URL" \
+            release-candidate/release-manifest.json \
+            > evidence/cloudflare-production-stable-marker.json
+          npm run --silent release:verify-runtime-config -- \
+            "$DEPLOYMENT_URL" \
+            "$PRODUCTION_SUPABASE_URL" \
+            "$PRODUCTION_SUPABASE_PROJECT_ID" \
+            "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" \
+            "$PRODUCTION_APP_URL" \
+            --staging-project-file "$STAGING_PROJECT_FILE" \
+            --production-project-file "$PRODUCTION_PROJECT_FILE" \
+            --environment production \
+            > evidence/cloudflare-production-deployment-runtime.json
+          npm run --silent release:verify-runtime-config -- \
+            "$PRODUCTION_APP_URL" \
+            "$PRODUCTION_SUPABASE_URL" \
+            "$PRODUCTION_SUPABASE_PROJECT_ID" \
+            "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" \
+            "$PRODUCTION_APP_URL" \
+            --staging-project-file "$STAGING_PROJECT_FILE" \
+            --production-project-file "$PRODUCTION_PROJECT_FILE" \
+            --environment production \
+            > evidence/cloudflare-production-stable-runtime.json
+          npm run --silent check:production-deploy -- \
+            "$DEPLOYMENT_URL" \
+            "$PRODUCTION_APP_URL" \
+            --browser \
+            --public-api \
+            > evidence/cloudflare-production-deploy-verification.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+
+          const proof = JSON.parse(readFileSync(
+            "evidence/cloudflare-production-deploy-verification.json",
+            "utf8",
+          ));
+          if (
+            proof.schemaVersion !== 1 ||
+            proof.status !== "passed" ||
+            !Array.isArray(proof.targets) ||
+            proof.targets.length !== 2 ||
+            proof.turnService?.status !== "passed" ||
+            proof.turnService?.httpStatus !== 201 ||
+            proof.turnService?.credentialsPresent !== true ||
+            proof.turnService?.credentialsRedacted !== true ||
+            !(proof.turnService?.turnUrlCount > 0)
+          ) {
+            throw new Error(
+              "Production deploy or Cloudflare TURN verification is incomplete.",
+            );
+          }
+          for (const target of proof.targets) {
+            const operational = target.publicApi?.operational;
+            if (
+              target.browser !== "passed" ||
+              target.publicApi?.status !== "passed" ||
+              operational?.auctionConsistency?.status !== "passed" ||
+              operational?.listingsCursor?.status !== "passed" ||
+              operational?.openHousesCursor?.status !== "passed" ||
+              operational?.publicationPinning?.status !== "passed"
+            ) {
+              throw new Error(
+                "Production browser, API, auctionConsistency, listingsCursor, openHousesCursor, or publicationPinning evidence is incomplete.",
+              );
+            }
+          }
+          NODE
+
+      - name: Roll back failed production candidate
+        id: rollback
+        if: ${{ always() && steps.preflight.outcome == 'success' && steps.deploy.outputs.mutation_attempted == 'true' && (steps.deploy.outcome == 'failure' || steps.deployment.outcome == 'failure' || steps.health.outcome == 'failure') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
+          CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          STAGING_PROJECT: maiprop-listing-site-staging
+          ROLLBACK_ID: ${{ steps.preflight.outputs.rollback_id }}
+          ROLLBACK_SHA: ${{ steps.preflight.outputs.rollback_sha }}
+          CANDIDATE_DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          CANDIDATE_RECEIPT: ${{ steps.deployment.outputs.recovery_candidate_receipt }}
+          PRODUCTION_PROJECT: maiprop-listing-site
+          PRODUCTION_RELEASE_APPROVERS: ${{ inputs.allowed_approvers }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+          CLOUDFLARE_TURN_KEY_ID: ${{ secrets.CLOUDFLARE_TURN_KEY_ID }}
+          CLOUDFLARE_TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_TURN_API_TOKEN }}
+          MAIPROP_TURN_TTL_SECONDS: "600"
+        run: |
+          set -euo pipefail
+          if [ -z "$CANDIDATE_RECEIPT" ] || [ ! -s "$CANDIDATE_RECEIPT" ]; then
+            echo "::error::Rollback refused because this run has no durable exact-candidate receipt."
+            exit 1
+          fi
+          jq -e \
+            '.evidence_type == "maiprop-pages-candidate-recovery-receipt" and .status == "api-reconciled"' \
+            "$CANDIDATE_RECEIPT" > /dev/null
+          receipt_candidate_id="$(jq -er '.deployment_id' "$CANDIDATE_RECEIPT")"
+          CANDIDATE_DEPLOYMENT_ID="$receipt_candidate_id"
+          rollback_file="$RUNNER_TEMP/cloudflare-production-rollback-target.json"
+          jq -e --arg rollback_id "$ROLLBACK_ID" \
+            '.id == $rollback_id' "$rollback_file" > /dev/null || {
+              echo "::error::Captured rollback deployment ID changed before rollback authorization."
+              exit 1
+            }
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file "$rollback_file" \
+            --project "$PRODUCTION_PROJECT" \
+            --project-id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$ROLLBACK_SHA"
+          rollback_response="$RUNNER_TEMP/cloudflare-production-rollback-response.json"
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npm run --silent release:validate -- github-release-approval \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            > "$RUNNER_TEMP/cloudflare-rollback-approval-selection.json"
+          if [ "$(jq -er '.approval_run_id' "$RUNNER_TEMP/cloudflare-rollback-approval-selection.json")" != "$APPROVAL_RUN_ID" ] ||
+             [ "$(jq -er '.approval_run_attempt' "$RUNNER_TEMP/cloudflare-rollback-approval-selection.json")" != "$APPROVAL_RUN_ATTEMPT" ]; then
+            echo "::error::The independently approved release changed before rollback authorization."
+            exit 1
+          fi
+          "$RUNNER_TEMP/verify-cloudflare-release-bindings.sh"
+          npm run --silent release:validate -- release-approval \
+            --file evidence/approval/production-release-approval.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --deploy-actor "$DEPLOY_ACTOR" \
+            --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS"
+          node --input-type=module <<'NODE'
+          import { randomBytes } from "node:crypto";
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const issuedAt = new Date();
+          const sourceLease = JSON.parse(readFileSync(
+            "evidence/mutation-lease/production-mutation-lease.json",
+            "utf8",
+          ));
+          const lease = {
+            schema_version: 2,
+            repository: process.env.GITHUB_REPOSITORY,
+            release_sha: process.env.RELEASE_SHA,
+            source_tree: process.env.SOURCE_TREE,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
+            staging_run_id: process.env.STAGING_RUN_ID,
+            staging_run_attempt: process.env.STAGING_RUN_ATTEMPT,
+            approval_run_id: process.env.APPROVAL_RUN_ID,
+            approval_run_attempt: process.env.APPROVAL_RUN_ATTEMPT,
+            production_run_id: process.env.PRODUCTION_RUN_ID,
+            production_run_attempt: process.env.PRODUCTION_RUN_ATTEMPT,
+            backend_run_id: process.env.BACKEND_RUN_ID,
+            backend_run_attempt: process.env.BACKEND_RUN_ATTEMPT,
+            backend_approval_run_id: process.env.BACKEND_APPROVAL_RUN_ID,
+            backend_approval_run_attempt:
+              process.env.BACKEND_APPROVAL_RUN_ATTEMPT,
+            stripe_readiness_run_id: process.env.STRIPE_READINESS_RUN_ID,
+            stripe_readiness_run_attempt:
+              process.env.STRIPE_READINESS_RUN_ATTEMPT,
+            stripe_readiness_sha256: process.env.STRIPE_READINESS_SHA256,
+            stripe_readiness_artifact_id:
+              process.env.STRIPE_READINESS_ARTIFACT_ID,
+            stripe_readiness_artifact_digest:
+              process.env.STRIPE_READINESS_ARTIFACT_DIGEST,
+            stripe_readiness_checked_at:
+              sourceLease.stripe_readiness_checked_at,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            approval_nonce: process.env.APPROVAL_NONCE,
+            rollback_deployment_id: process.env.ROLLBACK_ID,
+            rollback_sha: process.env.ROLLBACK_SHA,
+            candidate_deployment_id: process.env.CANDIDATE_DEPLOYMENT_ID,
+            candidate_sha: process.env.RELEASE_SHA,
+            nonce: randomBytes(32).toString("hex"),
+            issued_at: issuedAt.toISOString(),
+            expires_at: new Date(issuedAt.getTime() + 15 * 60 * 1000)
+              .toISOString(),
+          };
+          writeFileSync(
+            "evidence/cloudflare-production-rollback-mutation-lease.json",
+            `${JSON.stringify(lease, null, 2)}\n`,
+            { mode: 0o600 },
+          );
+          NODE
+          npm run --silent release:validate -- mutation-lease \
+            --file evidence/cloudflare-production-rollback-mutation-lease.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$PRODUCTION_RUN_ID" \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            --rollback-deployment-id "$ROLLBACK_ID" \
+            --rollback-sha "$ROLLBACK_SHA" \
+            --candidate-deployment-id "$CANDIDATE_DEPLOYMENT_ID" \
+            --candidate-sha "$RELEASE_SHA"
+          staging_mutation_file="$RUNNER_TEMP/cloudflare-staging-project-rollback-mutation.json"
+          production_mutation_file="$RUNNER_TEMP/cloudflare-production-project-rollback-mutation.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_mutation_file"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$production_mutation_file"
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode git-lock \
+            --staging-project-file "$staging_mutation_file" \
+            --production-project-file "$production_mutation_file" \
+            --out evidence/cloudflare-production-git-lock-rollback.json
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npm run --silent release:validate -- mutation-lease \
+            --file evidence/cloudflare-production-rollback-mutation-lease.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$PRODUCTION_RUN_ID" \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            --rollback-deployment-id "$ROLLBACK_ID" \
+            --rollback-sha "$ROLLBACK_SHA" \
+            --candidate-deployment-id "$CANDIDATE_DEPLOYMENT_ID" \
+            --candidate-sha "$RELEASE_SHA"
+          staging_deployment_mutation_file="$RUNNER_TEMP/cloudflare-staging-project-rollback-deployment-mutation.json"
+          production_deployment_mutation_file="$RUNNER_TEMP/cloudflare-production-project-rollback-deployment-mutation.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_deployment_mutation_file"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$production_deployment_mutation_file"
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode git-lock \
+            --staging-project-file "$staging_deployment_mutation_file" \
+            --production-project-file "$production_deployment_mutation_file" \
+            --out evidence/cloudflare-production-git-lock-rollback-deployment.json
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npm run --silent release:validate -- mutation-lease \
+            --file evidence/cloudflare-production-rollback-mutation-lease.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$PRODUCTION_RUN_ID" \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            --rollback-deployment-id "$ROLLBACK_ID" \
+            --rollback-sha "$ROLLBACK_SHA" \
+            --candidate-deployment-id "$CANDIDATE_DEPLOYMENT_ID" \
+            --candidate-sha "$RELEASE_SHA"
+          rollback_project="$RUNNER_TEMP/cloudflare-production-project-rollback.json"
+          rollback_canonical="$RUNNER_TEMP/cloudflare-production-canonical-rollback.json"
+          rollback_project_final="$RUNNER_TEMP/cloudflare-production-project-rollback-final.json"
+          rollback_authorization="evidence/cloudflare-production-rollback-authorization.json"
+          rollback_ready=false
+          rollback_performed=false
+          # Cloudflare Pages rollback has no provider-side compare-and-swap precondition.
+          # GitHub concurrency serializes repository workflows; this final read narrows
+          # the residual race from Dashboard or external API mutation principals.
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$rollback_project_final"
+          if ! node scripts/cloudflare-pages-candidate-guard.mjs authorize-rollback \
+            --current-project-file "$rollback_project_final" \
+            --candidate-receipt-file "$CANDIDATE_RECEIPT" \
+            --rollback-target-file "$rollback_file" \
+            --project "$PRODUCTION_PROJECT" \
+            --project-id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            --release-sha "$RELEASE_SHA" \
+            --out "$rollback_authorization"; then
+            echo "::error::Rollback refused because production canonical is neither the captured rollback target nor the exact candidate deployed by this run."
+            exit 1
+          fi
+          rollback_decision="$(jq -er '.decision' "$rollback_authorization")"
+          if [ "$rollback_decision" = "already-rollback-target" ]; then
+            jq '.result.canonical_deployment' \
+              "$rollback_project_final" > "$rollback_canonical"
+            rollback_ready=true
+          elif [ "$rollback_decision" = "rollback-exact-candidate" ]; then
+            rollback_post_status=0
+            curl -fsS \
+              --request POST \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments/$ROLLBACK_ID/rollback" \
+              > "$rollback_response" || rollback_post_status=$?
+            if [ "$rollback_post_status" -eq 0 ]; then
+              jq -e '.success == true' "$rollback_response" > /dev/null || \
+                rollback_post_status=1
+            fi
+            for attempt in $(seq 1 18); do
+              curl -fsS --retry 3 \
+                -H "Authorization: Bearer $CF_READ_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+                > "$rollback_project"
+              if jq -e --arg id "$ROLLBACK_ID" \
+                '.result.canonical_deployment.id == $id' \
+                "$rollback_project" > /dev/null; then
+                jq '.result.canonical_deployment' "$rollback_project" \
+                  > "$rollback_canonical"
+                rollback_ready=true
+                rollback_performed=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "$rollback_ready" != "true" ] && [ "$rollback_post_status" -ne 0 ]; then
+              echo "::error::Cloudflare rollback response was ambiguous and canonical state did not prove recovery."
+            fi
+          else
+            echo "::error::Rollback authorization returned an unsupported decision."
+            exit 1
+          fi
+          if [ "$rollback_ready" != "true" ]; then
+            echo "::error::Production canonical rollback did not converge."
+            exit 1
+          fi
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file "$rollback_canonical" \
+            --project "$PRODUCTION_PROJECT" \
+            --project-id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$ROLLBACK_SHA"
+          npm run --silent release:verify-live-marker -- \
+            "$PRODUCTION_APP_URL" \
+            --expected-sha "$ROLLBACK_SHA" \
+            > evidence/cloudflare-production-rollback-marker.json
+          PRODUCTION_DEPLOY_EXPECTED_SHA="$ROLLBACK_SHA" \
+            npm run --silent check:production-deploy -- \
+              "$PRODUCTION_APP_URL" \
+              --browser \
+              --public-api \
+              > evidence/cloudflare-production-rollback-health.json
+          echo "rollback_performed=$rollback_performed" >> "$GITHUB_OUTPUT"
+
+      - name: Create minimized rollback evidence
+        if: ${{ always() && steps.rollback.outcome != 'skipped' }}
+        env:
+          ROLLBACK_OUTCOME: ${{ steps.rollback.outcome }}
+          ROLLBACK_PERFORMED: ${{ steps.rollback.outputs.rollback_performed }}
+          ROLLBACK_ID: ${{ steps.preflight.outputs.rollback_id }}
+          ROLLBACK_SHA: ${{ steps.preflight.outputs.rollback_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { existsSync, readFileSync, writeFileSync } from "node:fs";
+
+          const digest = (path) => existsSync(path)
+            ? createHash("sha256").update(readFileSync(path)).digest("hex")
+            : null;
+          const readJson = (path) => {
+            if (!existsSync(path)) return null;
+            try {
+              return JSON.parse(readFileSync(path, "utf8"));
+            } catch {
+              return null;
+            }
+          };
+          const canonical = readJson(
+            `${process.env.RUNNER_TEMP}/cloudflare-production-canonical-rollback.json`,
+          );
+          const recoveryLease = readJson(
+            "evidence/cloudflare-production-rollback-mutation-lease.json",
+          );
+          const rollbackSucceeded = process.env.ROLLBACK_OUTCOME === "success";
+          const evidence = {
+            schema_version: 1,
+            evidence_type: "maiprop-pages-production-rollback",
+            repository: process.env.GITHUB_REPOSITORY,
+            release_sha: process.env.RELEASE_SHA,
+            production_run_id: process.env.PRODUCTION_RUN_ID,
+            production_run_attempt: process.env.PRODUCTION_RUN_ATTEMPT,
+            rollback_attempted: true,
+            rollback_outcome: process.env.ROLLBACK_OUTCOME || "unknown",
+            rollback_performed:
+              process.env.ROLLBACK_PERFORMED === "true",
+            runtime_strategy: "preprovisioned-verified-runtime",
+            secret_binding_verification: "allowlisted-name-and-type",
+            authenticated_live_functional_proof:
+              "signed-staging-attestation-plus-direct-turn-service",
+            runtime_mutation_attempted: false,
+            runtime_restore_required: false,
+            rollback_deployment_id: process.env.ROLLBACK_ID || null,
+            rollback_sha: process.env.ROLLBACK_SHA || null,
+            canonical_deployment_id: canonical?.id ?? null,
+            canonical_release_sha:
+              canonical?.deployment_trigger?.metadata?.commit_hash ?? null,
+            canonical_marker_verified: rollbackSucceeded,
+            browser_api_health: rollbackSucceeded ? "passed" : "not-proven",
+            mutation_authorization: recoveryLease
+              ? {
+                  nonce: recoveryLease.nonce,
+                  issued_at: recoveryLease.issued_at,
+                  expires_at: recoveryLease.expires_at,
+                }
+              : null,
+            evidence_sha256: {
+              mutation_lease: digest(
+                "evidence/cloudflare-production-rollback-mutation-lease.json",
+              ),
+              git_lock: digest(
+                "evidence/cloudflare-production-git-lock-rollback.json",
+              ),
+              git_lock_deployment: digest(
+                "evidence/cloudflare-production-git-lock-rollback-deployment.json",
+              ),
+              runtime_boundary_before: digest(
+                "evidence/cloudflare-production-runtime-boundary-before.json",
+              ),
+              n_minus_one_compatibility: digest(
+                "evidence/cloudflare-production-n-minus-one-compatibility.json",
+              ),
+              marker: digest(
+                "evidence/cloudflare-production-rollback-marker.json",
+              ),
+              health: digest(
+                "evidence/cloudflare-production-rollback-health.json",
+              ),
+            },
+            release_status: "failed",
+          };
+          writeFileSync(
+            "evidence/cloudflare-production-rollback-evidence.json",
+            `${JSON.stringify(evidence, null, 2)}\n`,
+          );
+          NODE
+
+      - name: Create minimized production evidence
+        id: evidence
+        if: ${{ always() }}
+        env:
+          RUNTIME_VERIFY_OUTCOME: ${{ steps.runtime-verify.outcome }}
+          N_MINUS_ONE_OUTCOME: ${{ steps.n_minus_one.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          DEPLOYMENT_OUTCOME: ${{ steps.deployment.outcome }}
+          HEALTH_OUTCOME: ${{ steps.health.outcome }}
+          ROLLBACK_OUTCOME: ${{ steps.rollback.outcome }}
+          ROLLBACK_PERFORMED: ${{ steps.rollback.outputs.rollback_performed }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          ROLLBACK_ID: ${{ steps.preflight.outputs.rollback_id }}
+          ROLLBACK_SHA: ${{ steps.preflight.outputs.rollback_sha }}
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { existsSync, readFileSync, writeFileSync } from "node:fs";
+
+          const digest = (path) => existsSync(path)
+            ? createHash("sha256").update(readFileSync(path)).digest("hex")
+            : null;
+          const readJson = (path) => {
+            if (!existsSync(path)) return null;
+            try {
+              return JSON.parse(readFileSync(path, "utf8"));
+            } catch {
+              return null;
+            }
+          };
+          const mutationLease = readJson(
+            "evidence/mutation-lease/production-mutation-lease.json",
+          );
+          const recoveryLease = readJson(
+            "evidence/cloudflare-production-rollback-mutation-lease.json",
+          );
+          const evidence = {
+            schema_version: 1,
+            evidence_type: "maiprop-cloudflare-production-promotion",
+            repository: process.env.GITHUB_REPOSITORY,
+            release_sha: process.env.RELEASE_SHA,
+            source_tree: process.env.SOURCE_TREE,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
+            staging_run_id: process.env.STAGING_RUN_ID,
+            staging_run_attempt: process.env.STAGING_RUN_ATTEMPT,
+            approval_run_id: process.env.APPROVAL_RUN_ID,
+            approval_run_attempt: process.env.APPROVAL_RUN_ATTEMPT,
+            production_run_id: process.env.PRODUCTION_RUN_ID,
+            production_run_attempt: process.env.PRODUCTION_RUN_ATTEMPT,
+            backend_run_id: process.env.BACKEND_RUN_ID,
+            backend_run_attempt: process.env.BACKEND_RUN_ATTEMPT,
+            backend_approval_run_id: process.env.BACKEND_APPROVAL_RUN_ID,
+            backend_approval_run_attempt:
+              process.env.BACKEND_APPROVAL_RUN_ATTEMPT,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            manifest_sha256: process.env.MANIFEST_SHA256,
+            database_attestation_sha256:
+              process.env.DATABASE_ATTESTATION_SHA256,
+            edge_attestation_sha256: process.env.EDGE_ATTESTATION_SHA256,
+            project_name: process.env.PRODUCTION_PROJECT,
+            project_id: process.env.CLOUDFLARE_PAGES_PROJECT_ID,
+            deployment_id: process.env.DEPLOYMENT_ID || null,
+            deployment_url: process.env.DEPLOYMENT_URL || null,
+            rollback_target_id: process.env.ROLLBACK_ID || null,
+            rollback_target_sha: process.env.ROLLBACK_SHA || null,
+            runtime_strategy: "preprovisioned-verified-runtime",
+            secret_binding_verification: "allowlisted-name-and-type",
+            authenticated_live_functional_proof:
+              "signed-staging-attestation-plus-direct-turn-service",
+            runtime_mutation_attempted: false,
+            runtime_restore_required: false,
+            mutation_authorization: mutationLease
+              ? {
+                  nonce: mutationLease.nonce,
+                  issued_at: mutationLease.issued_at,
+                  expires_at: mutationLease.expires_at,
+                }
+              : null,
+            rollback_authorization: recoveryLease
+              ? {
+                  nonce: recoveryLease.nonce,
+                  issued_at: recoveryLease.issued_at,
+                  expires_at: recoveryLease.expires_at,
+                }
+              : null,
+            outcomes: {
+              runtime_verification:
+                process.env.RUNTIME_VERIFY_OUTCOME || "unknown",
+              n_minus_one_compatibility:
+                process.env.N_MINUS_ONE_OUTCOME || "unknown",
+              deploy: process.env.DEPLOY_OUTCOME || "unknown",
+              deployment_validation:
+                process.env.DEPLOYMENT_OUTCOME || "unknown",
+              health: process.env.HEALTH_OUTCOME || "unknown",
+              rollback: process.env.ROLLBACK_OUTCOME || "not-requested",
+            },
+            rollback_performed:
+              process.env.ROLLBACK_OUTCOME === "success" &&
+              process.env.ROLLBACK_PERFORMED === "true",
+            evidence_sha256: {
+              upstream: digest("evidence/production-upstream-attestations.json"),
+              mutation_attempt: digest(
+                "evidence/cloudflare-production-mutation-attempt.json",
+              ),
+               candidate_receipt: digest(
+                 "evidence/cloudflare-production-candidate-receipt.json",
+               ),
+               candidate_recovery_receipt: digest(
+                 "evidence/cloudflare-production-candidate-recovery-receipt.json",
+               ),
+              mutation_lease: digest(
+                "evidence/mutation-lease/production-mutation-lease.json",
+              ),
+              git_lock: digest("evidence/cloudflare-production-git-lock.json"),
+              git_lock_runtime_verification: digest(
+                "evidence/cloudflare-production-git-lock-runtime-verification.json",
+              ),
+              turn_credentials_preflight: digest(
+                "evidence/cloudflare-production-turn-credentials-preflight.json",
+              ),
+              git_lock_deploy: digest(
+                "evidence/cloudflare-production-git-lock-deploy.json",
+              ),
+              git_lock_rollback: digest(
+                "evidence/cloudflare-production-git-lock-rollback.json",
+              ),
+              git_lock_rollback_deployment: digest(
+                "evidence/cloudflare-production-git-lock-rollback-deployment.json",
+              ),
+              runtime_boundary_before: digest(
+                "evidence/cloudflare-production-runtime-boundary-before.json",
+              ),
+              n_minus_one_compatibility: digest(
+                "evidence/cloudflare-production-n-minus-one-compatibility.json",
+              ),
+              rollback_target: digest(
+                "evidence/cloudflare-production-rollback-target.json",
+              ),
+              rollback_marker_before: digest(
+                "evidence/cloudflare-production-rollback-marker-before.json",
+              ),
+              runtime_posture: digest("evidence/cloudflare-production-posture.json"),
+              final_posture: digest("evidence/cloudflare-production-final-posture.json"),
+              deployment: digest("evidence/cloudflare-production-deployment-evidence.json"),
+              canonical: digest("evidence/cloudflare-production-canonical-evidence.json"),
+              deployment_marker: digest(
+                "evidence/cloudflare-production-deployment-marker.json",
+              ),
+              stable_marker: digest(
+                "evidence/cloudflare-production-stable-marker.json",
+              ),
+              deployment_runtime: digest(
+                "evidence/cloudflare-production-deployment-runtime.json",
+              ),
+              stable_runtime: digest(
+                "evidence/cloudflare-production-stable-runtime.json",
+              ),
+              health: digest("evidence/cloudflare-production-deploy-verification.json"),
+              rollback_mutation_lease: digest(
+                "evidence/cloudflare-production-rollback-mutation-lease.json",
+              ),
+              rollback_authorization: digest(
+                "evidence/cloudflare-production-rollback-authorization.json",
+              ),
+              rollback: digest("evidence/cloudflare-production-rollback-evidence.json"),
+            },
+            release_status:
+              process.env.RUNTIME_VERIFY_OUTCOME === "success" &&
+              process.env.N_MINUS_ONE_OUTCOME === "success" &&
+              process.env.DEPLOY_OUTCOME === "success" &&
+              process.env.DEPLOYMENT_OUTCOME === "success" &&
+              process.env.HEALTH_OUTCOME === "success"
+                ? "passed"
+                : "failed",
+          };
+          writeFileSync(
+            "evidence/cloudflare-production-evidence.json",
+            `${JSON.stringify(evidence, null, 2)}\n`,
+          );
+          NODE
+          artifact_name="cloudflare-production-evidence-${RELEASE_SHA}-${PRODUCTION_RUN_ID}-${PRODUCTION_RUN_ATTEMPT}"
+          evidence_sha256="$(sha256sum evidence/cloudflare-production-evidence.json | awk '{print $1}')"
+          rollback_performed="false"
+          if [ "${ROLLBACK_OUTCOME:-}" = "success" ] && [ "${ROLLBACK_PERFORMED:-}" = "true" ]; then
+            rollback_performed="true"
+          fi
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "evidence_sha256=$evidence_sha256" >> "$GITHUB_OUTPUT"
+          echo "rollback_performed=$rollback_performed" >> "$GITHUB_OUTPUT"
+
+      - name: Upload minimized production evidence
+        id: cloudflare_evidence_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cloudflare-production-evidence-${{ inputs.release_sha }}-${{ inputs.production_run_id }}-${{ inputs.production_run_attempt }}
+          path: |
+            evidence/*.json
+            evidence/mutation-lease/production-mutation-lease.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create signed Cloudflare production evidence binding
+        id: cloudflare_evidence_binding
+        if: ${{ always() && steps.cloudflare_evidence_upload.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.cloudflare_evidence_upload.outputs.artifact-id }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.cloudflare_evidence_upload.outputs.artifact-digest }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          artifact_name="cloudflare-production-evidence-${RELEASE_SHA}-${PRODUCTION_RUN_ID}-${PRODUCTION_RUN_ATTEMPT}"
+          binding_artifact_name="${artifact_name}-binding"
+          current_workflow_path="${GITHUB_WORKFLOW_REF#${GITHUB_REPOSITORY}/}"
+          current_workflow_path="${current_workflow_path%@*}"
+          case "$current_workflow_path" in
+            .github/workflows/deploy-production-release.yml|.github/workflows/direct-cloudflare-production-deploy.yml) ;;
+            *)
+              echo "::error::Refusing to bind Cloudflare evidence for an untrusted caller workflow."
+              exit 1
+              ;;
+          esac
+          mkdir -p cloudflare-evidence-binding cloudflare-evidence-binding-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > cloudflare-evidence-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PRODUCTION_RUN_ID}" \
+            > cloudflare-evidence-binding-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root evidence/cloudflare-production-evidence.json \
+            --out cloudflare-evidence-binding/release-artifact-binding.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path "$current_workflow_path" \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$PRODUCTION_RUN_ID" \
+            --run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$artifact_name" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding cloudflare-evidence-binding/release-artifact-binding.json \
+            --payload-root evidence/cloudflare-production-evidence.json \
+            --artifact-metadata cloudflare-evidence-binding-metadata/artifact.json \
+            --producer-run cloudflare-evidence-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path "$current_workflow_path" \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$PRODUCTION_RUN_ID" \
+            --run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" \
+            --artifact-name "$artifact_name" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > cloudflare-evidence-binding/verification.json
+          echo "binding_artifact_name=$binding_artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload signed Cloudflare production evidence binding
+        if: ${{ always() && steps.cloudflare_evidence_binding.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.cloudflare_evidence_binding.outputs.binding_artifact_name }}
+          path: cloudflare-evidence-binding/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload minimized rollback evidence
+        if: ${{ always() && hashFiles('evidence/cloudflare-production-rollback-evidence.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cloudflare-production-rollback-evidence-${{ inputs.release_sha }}-${{ inputs.production_run_id }}-${{ inputs.production_run_attempt }}
+          path: |
+            evidence/cloudflare-production-rollback-evidence.json
+            evidence/cloudflare-production-rollback-mutation-lease.json
+            evidence/cloudflare-production-git-lock-rollback.json
+            evidence/cloudflare-production-git-lock-rollback-deployment.json
+            evidence/cloudflare-production-runtime-boundary-before.json
+            evidence/cloudflare-production-n-minus-one-compatibility.json
+            evidence/cloudflare-production-rollback-marker.json
+            evidence/cloudflare-production-rollback-health.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce production promotion health
+        if: ${{ always() }}
+        env:
+          RUNTIME_VERIFY_OUTCOME: ${{ steps.runtime-verify.outcome }}
+          N_MINUS_ONE_OUTCOME: ${{ steps.n_minus_one.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          DEPLOYMENT_OUTCOME: ${{ steps.deployment.outcome }}
+          HEALTH_OUTCOME: ${{ steps.health.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$RUNTIME_VERIFY_OUTCOME" != "success" ] ||
+             [ "$N_MINUS_ONE_OUTCOME" != "success" ] ||
+             [ "$DEPLOY_OUTCOME" != "success" ] ||
+             [ "$DEPLOYMENT_OUTCOME" != "success" ] ||
+             [ "$HEALTH_OUTCOME" != "success" ]; then
+            echo "::error::Cloudflare production promotion failed. Any successful rollback is evidence of recovery, not release success."
+            exit 1
+          fi

@@ -12,6 +12,14 @@ const latestRealtimePolicyMigration = readFileSync(
   "utf8",
 ).replace(/\s+/g, " ");
 
+const turnAuthorizationMigration = readFileSync(
+  resolve(
+    process.cwd(),
+    "supabase/migrations/20260729094658_authorize_video_room_turn_credentials.sql",
+  ),
+  "utf8",
+).replace(/\s+/g, " ");
+
 const roomHook = readFileSync(
   resolve(process.cwd(), "src/hooks/useMaiPropVideoRoom.ts"),
   "utf8",
@@ -66,5 +74,29 @@ describe("video room authorization hardening", () => {
     expect(latestRealtimePolicyMigration).not.toContain("NULLIF(SUBSTRING(realtime.topic() FROM 8)");
     expect(latestRealtimePolicyMigration).not.toContain("regexp_replace((SELECT realtime.topic())");
     expect(latestRealtimePolicyMigration).not.toContain("request.jwt.claims");
+  });
+
+  it("shares the final room authorization rule with TURN credential issuance", () => {
+    expect(turnAuthorizationMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.can_access_video_room(p_topic text)",
+    );
+    expect(turnAuthorizationMigration).toContain(
+      "SECURITY DEFINER SET search_path = ''",
+    );
+    expect(turnAuthorizationMigration).toContain(
+      "REVOKE ALL ON FUNCTION public.can_access_video_room(text) FROM PUBLIC, anon",
+    );
+    expect(turnAuthorizationMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION public.can_access_video_room(text) TO authenticated, service_role",
+    );
+    expect(turnAuthorizationMigration).toContain(
+      "OR public.can_access_video_room((SELECT realtime.topic()))",
+    );
+    expect(turnAuthorizationMigration).toContain(
+      "viewing.status = 'confirmed'::public.viewing_status",
+    );
+    expect(turnAuthorizationMigration).toContain(
+      "request.meeting_type = 'video'",
+    );
   });
 });

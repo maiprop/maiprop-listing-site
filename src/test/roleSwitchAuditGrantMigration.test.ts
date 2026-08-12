@@ -20,7 +20,7 @@ const billingHelper = readFileSync(
 const auditIntegrityMigration = readFileSync(
   resolve(
     process.cwd(),
-    "supabase/migrations/20260805175433_enforce_role_switch_audit_integrity.sql",
+    "supabase/migrations/20260812102335_enforce_role_switch_audit_integrity.sql",
   ),
   "utf8",
 );
@@ -28,7 +28,7 @@ const auditIntegrityMigration = readFileSync(
 const auditIntegrityFinalizeMigration = readFileSync(
   resolve(
     process.cwd(),
-    "supabase/migrations/20260805175434_finalize_role_switch_audit_integrity.sql",
+    "supabase/migrations/20260812102338_finalize_role_switch_audit_integrity.sql",
   ),
   "utf8",
 );
@@ -169,6 +169,11 @@ describe("role-switch audit RPC grant hardening", () => {
     expect(auditIntegrityMigration).toContain("billing_reconciliation_exhausted_at");
     expect(auditIntegrityMigration).toContain("cron.unschedule('reconcile-role-switch-billing')");
     expect(auditIntegrityMigration).toContain("cron.schedule(");
+    expect(auditIntegrityMigration).toContain("cron.alter_job(");
+    expect(auditIntegrityMigration).toContain("active := FALSE");
+    expect(auditIntegrityMigration).toMatch(
+      /DO \$\$\s*DECLARE\s+v_job_id bigint;\s*BEGIN[\s\S]*v_job_id := cron\.schedule\(/,
+    );
     expect(auditIntegrityMigration).toContain("vault.decrypted_secrets");
     expect(auditIntegrityMigration).toContain("x-cron-secret");
     expect(auditIntegrityMigration).toContain("/functions/v1/reconcile-role-switch-billing");
@@ -244,19 +249,41 @@ describe("role-switch audit RPC grant hardening", () => {
       "LOCK TABLE public.role_switch_history IN SHARE MODE NOWAIT",
     );
     expect(auditIntegrityFinalizeMigration).toContain(
-      "role_switch_audit_index_prebuild_required",
+      "v_online_finalization_required := true",
+    );
+    expect(auditIntegrityFinalizeMigration).not.toContain(
+      "MESSAGE = 'role_switch_audit_index_prebuild_required'",
     );
     expect(auditIntegrityFinalizeMigration).toContain(
       "CREATE INDEX CONCURRENTLY",
+    );
+    expect(auditIntegrityFinalizeMigration).toContain(
+      "index_state.indrelid = 'public.profiles'::regclass",
+    );
+    expect(auditIntegrityFinalizeMigration).toContain(
+      "access_method.amname = 'btree'",
+    );
+    expect(auditIntegrityFinalizeMigration).toContain(
+      "index_state.indisunique = false",
+    );
+    expect(auditIntegrityFinalizeMigration).toContain(
+      "pg_get_expr(index_state.indpred, index_state.indrelid, true)",
+    );
+    expect(auditIntegrityFinalizeMigration).toContain(
+      "pg_get_indexdef(index_state.indexrelid, 1, true)",
     );
 
     const profileIndex = auditIntegrityFinalizeMigration.indexOf(
       "CREATE INDEX idx_profiles_role_switch_audit_id",
     );
+    const guardedFkValidation = auditIntegrityFinalizeMigration.indexOf(
+      "IF NOT v_online_finalization_required THEN",
+    );
     const fkValidation = auditIntegrityFinalizeMigration.indexOf(
       "VALIDATE CONSTRAINT profiles_role_switch_audit_id_fkey",
     );
     expect(profileIndex).toBeGreaterThanOrEqual(0);
+    expect(guardedFkValidation).toBeGreaterThan(profileIndex);
     expect(fkValidation).toBeGreaterThan(profileIndex);
   });
 

@@ -27,6 +27,11 @@ const settingsSection = readFileSync(
   "utf8",
 );
 
+const onboardingPage = readFileSync(
+  resolve(process.cwd(), "src/pages/Onboarding.tsx"),
+  "utf8",
+);
+
 const futureAdvisorHardeningMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260707140000_harden_supabase_advisor_security.sql"),
   "utf8",
@@ -62,7 +67,10 @@ describe("begin role switch grant hardening", () => {
   });
 
   it("routes browser role switches through the authenticated Edge Function", () => {
-    expect(settingsSection).toContain('"begin-role-switch"');
+    expect(settingsSection).not.toContain('"begin-role-switch"');
+    expect(settingsSection).not.toContain('"log-role-switch"');
+    expect(onboardingPage).toContain('"begin-role-switch"');
+    expect(onboardingPage).toContain('"log-role-switch"');
     expect(settingsSection).not.toContain('rpc("begin_role_switch"');
     expect(beginRoleSwitchFunction).toContain("verifyBearerToken");
     expect(beginRoleSwitchFunction).toContain('"validate_role_switch_for_user"');
@@ -89,7 +97,7 @@ describe("begin role switch grant hardening", () => {
     expect(roleSwitchPreflightMigration).toContain(
       "GRANT EXECUTE ON FUNCTION public.validate_role_switch_for_user(UUID)",
     );
-    expect(settingsSection).toContain("validate_only: true");
+    expect(onboardingPage).toContain("validate_only: true");
   });
 
   it("keeps future fresh builds aligned with the live hardening", () => {

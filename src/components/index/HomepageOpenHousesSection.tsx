@@ -11,6 +11,8 @@ import { calculatePricePerSqm } from "@/lib/priceCalculations";
 interface Props {
   listings: HomepageListing[];
   isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => unknown;
 }
 
 const LOADING_CARD_KEYS = ["open-house-loading-1", "open-house-loading-2", "open-house-loading-3", "open-house-loading-4"];
@@ -29,26 +31,25 @@ const LoadingCard = () => (
   </div>
 );
 
-export function HomepageOpenHousesSection({ listings, isLoading = false }: Props) {
+export function HomepageOpenHousesSection({ listings, isLoading = false, isError = false, onRetry }: Props) {
   const { ref, inView } = useInView();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const dateLocale = isGreek ? "el-GR" : "en-GB";
-  const showLoadingCards = isLoading && listings.length === 0;
 
   return (
     <section className="py-10 sm:py-16 bg-background">
       <div className="container">
-        <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${inView ? "in-view" : ""}`}>
+        <div className={`flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mb-6 sm:mb-8 reveal ${inView ? "in-view" : ""}`}>
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">{isGreek ? "Ανοιχτές επισκέψεις" : "Open Houses"}</span>
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">{t("home.catalogue.openHousesEyebrow")}</span>
             </div>
-            <h2 className="font-display text-xl sm:text-2xl font-bold">{isGreek ? "Προγραμματισμένες επισκέψεις σε ακίνητα" : "Scheduled viewings — no appointment needed"}</h2>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">{t("home.catalogue.openHousesTitle")}</h2>
           </div>
-          <Button variant="outline" size="sm" className="border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 text-xs" asChild>
+          <Button variant="outline" size="sm" className="max-w-full shrink-0 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 text-xs" asChild>
             <Link to="/open-houses">
-              {isGreek ? "Όλες οι ανοιχτές επισκέψεις" : "All Open Houses"} <ArrowRight className="w-3 h-3 ml-1" />
+              {t("home.catalogue.allOpenHouses")} <ArrowRight className="w-3 h-3 ml-1" />
             </Link>
           </Button>
         </div>
@@ -56,7 +57,19 @@ export function HomepageOpenHousesSection({ listings, isLoading = false }: Props
           ref={ref}
           className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${inView ? "in-view" : ""}`}
         >
-          {listings.slice(0, 4).map((l, index) => {
+          {isLoading ? LOADING_CARD_KEYS.map((key) => <LoadingCard key={key} />) : isError ? (
+            <div role="alert" className="col-span-full py-12 text-center text-sm text-muted-foreground">
+              <p>{t("home.catalogue.openHousesError")}</p>
+              <Button type="button" variant="outline" size="sm" className="mt-4" onClick={onRetry}>
+                {t("common.retry")}
+              </Button>
+            </div>
+          ) : listings.length === 0 ? (
+            <div className="col-span-full py-12 text-center text-muted-foreground">
+              <p className="text-sm font-medium">{t("home.catalogue.openHousesEmpty")}</p>
+              <p className="text-xs mt-1">{t("home.catalogue.openHousesEmptyDetail")}</p>
+            </div>
+          ) : listings.slice(0, 4).map((l, index) => {
             const imgs = homepageListingImages(l);
             const svFallback =
               l.latitude != null && l.longitude != null
@@ -103,17 +116,11 @@ export function HomepageOpenHousesSection({ listings, isLoading = false }: Props
                   tags: l.tags || [],
                   isPreSale: l.listing_type === "new_build",
                   constructionStatus: l.construction_status ?? undefined,
+                  _raw: l,
                 }}
               />
             );
           })}
-          {showLoadingCards && LOADING_CARD_KEYS.map((key) => <LoadingCard key={key} />)}
-          {!isLoading && listings.length === 0 && (
-            <div className="col-span-full py-12 text-center text-muted-foreground">
-              <p className="text-sm font-medium">{isGreek ? "Οι ανοιχτές επισκέψεις έρχονται σύντομα." : "Open houses coming soon — check back shortly."}</p>
-              <p className="text-xs mt-1">{isGreek ? "Νέες επισκέψεις προστίθενται τακτικά." : "New open house viewings are added regularly."}</p>
-            </div>
-          )}
         </div>
       </div>
     </section>

@@ -51,7 +51,9 @@ export async function validateDeploymentVersion(
     throw new Error(`${markerUrl} returned invalid JSON: ${error.message}`);
   }
 
-  const observedSha = body && typeof body === "object" ? String(body.sha ?? "") : "";
+  const observedSha = body && typeof body === "object"
+    ? String(body.release_sha ?? body.sha ?? "")
+    : "";
   assertOk(
     observedSha === expectedSha,
     `${markerUrl} is serving deployment ${observedSha || "<missing>"} instead of ${expectedSha}`,

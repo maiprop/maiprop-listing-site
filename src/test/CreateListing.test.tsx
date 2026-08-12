@@ -9,13 +9,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const { useAuthMock, useSubMock, useListingFormMock, useMyListingsMock, useListingMock, useConnectionsMock, getPlanLimitsMock, useFormWizardMock, toastMock, navigateMock, paramsState } = vi.hoisted(() => ({
+const { useAuthMock, useSubMock, useListingFormMock, useMyListingsMock, useListingMock, useConnectionsMock, useManageableOrganizationsMock, getPlanLimitsMock, useFormWizardMock, toastMock, navigateMock, paramsState } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   useSubMock: vi.fn(),
   useListingFormMock: vi.fn(),
   useMyListingsMock: vi.fn(),
   useListingMock: vi.fn(),
   useConnectionsMock: vi.fn(),
+  useManageableOrganizationsMock: vi.fn(),
   getPlanLimitsMock: vi.fn(),
   useFormWizardMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
@@ -27,10 +28,14 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubMock() }));
 vi.mock("@/hooks/useListingForm", () => ({ useListingForm: (...a: unknown[]) => useListingFormMock(...a) }));
 vi.mock("@/hooks/useListings", () => ({
+  useActorOwnedListings: () => useMyListingsMock(),
   useMyListings: () => useMyListingsMock(),
   useListing: (id: string) => useListingMock(id),
 }));
 vi.mock("@/hooks/useCreateListingConnections", () => ({ useCreateListingConnections: () => useConnectionsMock() }));
+vi.mock("@/hooks/useManageableOrganizations", () => ({
+  useManageableOrganizations: () => useManageableOrganizationsMock(),
+}));
 vi.mock("@/hooks/usePlanLimits", () => ({ getPlanLimits: (...a: unknown[]) => getPlanLimitsMock(...a) }));
 vi.mock("@/hooks/useFormWizard", () => ({ useFormWizard: () => useFormWizardMock() }));
 vi.mock("sonner", () => ({ toast: toastMock }));
@@ -114,6 +119,8 @@ beforeEach(() => {
   paramsState.listingId = undefined;
   useConnectionsMock.mockReset();
   useConnectionsMock.mockReturnValue({});
+  useManageableOrganizationsMock.mockReset();
+  useManageableOrganizationsMock.mockReturnValue({ data: [], isLoading: false });
   getPlanLimitsMock.mockReset();
   getPlanLimitsMock.mockReturnValue({ listings: 5 });
   useFormWizardMock.mockReset();
@@ -128,6 +135,47 @@ describe("CreateListing", () => {
     render(<CreateListing />, { wrapper: wrap });
     expect(screen.getByText(/Create New Listing/i)).toBeInTheDocument();
     expect(screen.getByTestId("step-type")).toBeInTheDocument();
+  });
+
+  it("passes an explicitly selected organization to the listing form boundary", () => {
+    useManageableOrganizationsMock.mockReturnValue({
+      data: [{ id: "org-1", name: "Athens Agency", role: "owner" }],
+      isLoading: false,
+    });
+
+    render(<CreateListing />, { wrapper: wrap });
+    fireEvent.change(screen.getByLabelText(/listing owner/i), {
+      target: { value: "org-1" },
+    });
+
+    expect(useListingFormMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ organizationId: "org-1" }),
+    );
+  });
+
+  it("allows an active organization manager to open another member's listing editor", () => {
+    paramsState.listingId = "org-listing";
+    useManageableOrganizationsMock.mockReturnValue({
+      data: [{ id: "org-1", name: "Athens Agency", role: "admin" }],
+      isLoading: false,
+    });
+    useListingMock.mockReturnValue({
+      data: {
+        id: "org-listing",
+        owner_id: "another-member",
+        organization_id: "org-1",
+        title: "Managed listing",
+        listing_type: "sale",
+        property_type: "apartment",
+        listing_images: [],
+      },
+      isLoading: false,
+    });
+
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(screen.getByText(/Edit Listing/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Listing unavailable/i)).not.toBeInTheDocument();
   });
 
   it("redirects non-eligible users (participant_type=buyer) and toasts an error", () => {

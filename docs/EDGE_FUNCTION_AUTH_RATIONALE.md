@@ -5,7 +5,7 @@ Last verified: 2026-06-19
 Sources: `supabase/config.toml`, `scripts/public-function-inventory.cjs`, local
 Edge Function tests, and `npm run check:public-functions`.
 
-`npm run check:public-functions` currently reports 25 functions configured with
+`npm run check:public-functions` currently reports 26 functions configured with
 `verify_jwt = false`, with no unclassified functions, missing source files,
 missing required protection snippets, or missing required tests.
 
@@ -55,6 +55,7 @@ provider without one of those controls, treat it as a release blocker.
 | Function | Why public invocation is acceptable | Required in-handler controls |
 | --- | --- | --- |
 | `invitation-notify` | Admin/operator notification sends are custom-authorized in the handler. | Rate limiting, `auth.getUser`, and `is_platform_admin` authorization. |
+| `process-storage-cleanup` | The database cron invokes compensating Storage cleanup without an interactive user JWT. | `CRON_SECRET`/`x-cron-secret`, service-role-only claim and prepare RPCs, exact bucket/path deletion, and per-job lease tokens. |
 | `scheduled-followups` | Scheduled job is invoked by cron infrastructure, not an end-user session. | `CRON_SECRET` and `x-cron-secret`; browser callers must be rejected. |
 | `send-saved-search-alerts` | Cron-only email job cannot use an interactive user JWT. | `CRON_SECRET`, `verifyCronSecret`, and authorization header checks before sending. |
 
@@ -92,3 +93,9 @@ provider without one of those controls, treat it as a release blocker.
   cron, proxy, or analytics endpoint.
 - Re-review this document whenever a required snippet is renamed, because the
   inventory gate intentionally keys on concrete handler controls.
+- Rotate `CRON_SECRET` in Supabase Vault and Edge Function secrets together.
+  After rotation, invoke `process-storage-cleanup` once with the new secret and
+  confirm that a queued exact-object job advances.
+- Investigate `storage_cleanup_dead` admin notifications immediately. After
+  correcting the underlying Storage or configuration issue, requeue only the
+  reviewed job with the service-only `requeue_storage_cleanup_job(uuid)` RPC.

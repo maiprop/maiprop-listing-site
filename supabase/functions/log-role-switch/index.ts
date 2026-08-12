@@ -44,9 +44,15 @@ type BillingOutcome =
   | "already_pending"
   | "unknown";
 
-type FunctionDatabase = Database & {
-  public: Database["public"] & {
-    Functions: Database["public"]["Functions"] & {
+type FunctionDatabase = Omit<Database, "public"> & {
+  public: Omit<Database["public"], "Functions"> & {
+    Functions:
+      & Omit<
+        Database["public"]["Functions"],
+        | "finalize_role_switch_audit_for_user"
+        | "record_role_switch_audit_for_user"
+      >
+      & {
       finalize_role_switch_audit_for_user: {
         Args: {
           _audit_id: string;
@@ -142,8 +148,7 @@ async function loadAuthoritativeRolePrices(
   toType:
     | keyof typeof planKeyByRole
     | "investor"
-    | "institutional"
-    | "",
+    | "institutional",
 ): Promise<RolePrices> {
   const roles = [fromType, toType].filter(
     (role): role is keyof typeof planKeyByRole => role in planKeyByRole,
@@ -339,6 +344,7 @@ Deno.serve(async (req) => {
           sub_cancelled_count: existingAudit.billing_cancelled_count ?? 0,
           billing_outcome: existingAudit.billing_outcome,
           billing_subscription_count: existingAudit.billing_subscription_count,
+          had_active_sub: existingAudit.had_active_sub,
           reconciliation_required: false,
           stripe_error: null,
         },
@@ -467,6 +473,7 @@ Deno.serve(async (req) => {
         sub_already_cancelling_count: alreadyPendingCount,
         billing_outcome: billingOutcome,
         billing_subscription_count: subscriptionCount,
+        had_active_sub: hadActiveSub,
         reconciliation_required: false,
         stripe_error: null,
       },

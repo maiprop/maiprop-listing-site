@@ -56,6 +56,7 @@ export function AuctionPagination({
             key={p}
             variant={p === currentPage ? "default" : "outline"}
             size="sm"
+            aria-current={p === currentPage ? "page" : undefined}
             className={p === currentPage ? "bg-gradient-primary border-0 text-primary-foreground font-bold" : "border-border"}
             onClick={() => { setCurrentPage(p as number); scrollTop(); }}
           >

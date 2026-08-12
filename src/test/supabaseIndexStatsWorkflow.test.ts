@@ -6,10 +6,7 @@ const releaseSafetyWorkflow = readFileSync(
   "utf8",
 );
 
-const ciWorkflow = readFileSync(
-  ".github/workflows/ci.yml",
-  "utf8",
-);
+const ciWorkflow = readFileSync(".github/workflows/ci.yml", "utf8");
 
 const advisorReportWorkflow = readFileSync(
   ".github/workflows/supabase-advisor-report.yml",
@@ -20,6 +17,27 @@ const supabaseStagingWorkflow = readFileSync(
   ".github/workflows/reusable-supabase-staging.yml",
   "utf8",
 );
+
+const supabaseProductionWorkflow = readFileSync(
+  ".github/workflows/deploy-supabase-production-db.yml",
+  "utf8",
+);
+
+function stagingStepBlock(name: string): string {
+  const marker = `      - name: ${name}`;
+  const start = supabaseStagingWorkflow.indexOf(marker);
+
+  expect(start).toBeGreaterThanOrEqual(0);
+
+  const nextStep = supabaseStagingWorkflow.indexOf(
+    "\n      - name:",
+    start + marker.length,
+  );
+  return supabaseStagingWorkflow.slice(
+    start,
+    nextStep === -1 ? supabaseStagingWorkflow.length : nextStep,
+  );
+}
 
 const advisorScript = readFileSync(
   "scripts/check-supabase-advisor.mjs",
@@ -47,21 +65,35 @@ const liveSecurityScript = readFileSync(
 );
 
 describe("Supabase index stats workflow wiring", () => {
-  it("passes a direct production DB URL to clean-checkout index-stat captures", () => {
-    for (const workflow of [releaseSafetyWorkflow, advisorReportWorkflow]) {
-      expect(workflow).toContain(
-        "SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
-      );
-      expect(workflow).toContain(
-        "SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}",
-      );
-      expect(workflow).toContain(
-        "npm run capture:supabase-index-stats -- --out",
-      );
-      expect(workflow).toContain(
-        "--allow-empty-when-unconfigured",
-      );
-    }
+  it("keeps release safety validation-only while staging captures isolated index evidence", () => {
+    expect(releaseSafetyWorkflow).toContain(
+      "npm run check:release-safety -- --out release-safety-inventory.json",
+    );
+    expect(releaseSafetyWorkflow).not.toContain("SUPABASE_PRODUCTION_DB_URL");
+    expect(advisorReportWorkflow).toContain(
+      "SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
+    );
+    expect(advisorReportWorkflow).toContain(
+      "npm run capture:supabase-index-stats -- --out supabase-index-stats.json --allow-empty-when-unconfigured",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "Capture staging Supabase index stats",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}",
+    );
+    expect(supabaseProductionWorkflow).toContain(
+      "Capture production Supabase index stats",
+    );
+    expect(supabaseProductionWorkflow).toContain(
+      "SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf",
+    );
+    expect(supabaseProductionWorkflow).toContain(
+      "scripts/verify-release-artifact-binding.mjs",
+    );
+    expect(supabaseProductionWorkflow).not.toContain(
+      "actions/attest-build-provenance@",
+    );
   });
 
   it("captures enough index metadata to review unused-index risk cautiously", () => {
@@ -78,33 +110,53 @@ describe("Supabase index stats workflow wiring", () => {
 
   it("keeps weekly unused-index reports long enough for trend review", () => {
     expect(advisorReportWorkflow).toContain("retention-days: 90");
-    expect(advisorReportWorkflow).toContain("Managed-schema indexes, do not drop from advisor alone");
-    expect(advisorReportWorkflow).toContain("Protected constraint/unique indexes, do not drop");
-    expect(advisorReportWorkflow).toContain("Public write-path candidates needing query-plan review");
+    expect(advisorReportWorkflow).toContain(
+      "Managed-schema indexes, do not drop from advisor alone",
+    );
+    expect(advisorReportWorkflow).toContain(
+      "Protected constraint/unique indexes, do not drop",
+    );
+    expect(advisorReportWorkflow).toContain(
+      "Public write-path candidates needing query-plan review",
+    );
   });
 
-  it("allows transient advisor unavailability only in release-safety inventory", () => {
-    expect(releaseSafetyWorkflow).toContain("--allow-transient-unavailable");
-    expect(releaseSafetyWorkflow).toContain(
-      "check:supabase-types -- -- --strict --allow-transient-unavailable",
+  it("keeps the reusable release inventory validation-only and advisor gates strict", () => {
+    expect(releaseSafetyWorkflow).not.toContain(
+      "--allow-transient-unavailable",
     );
-    expect(releaseSafetyWorkflow).toContain(
-      "check:live-security-posture -- --allow-transient-unavailable",
+    expect(releaseSafetyWorkflow).not.toContain("check:supabase-advisor");
+    expect(advisorReportWorkflow).not.toContain(
+      "--allow-transient-unavailable",
     );
-    expect(advisorReportWorkflow).not.toContain("--allow-transient-unavailable");
+    expect(supabaseStagingWorkflow).toContain(
+      "npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown",
+    );
+    expect(supabaseProductionWorkflow).toContain(
+      "npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown",
+    );
+    expect(supabaseProductionWorkflow).not.toContain(
+      "--allow-transient-unavailable",
+    );
   });
 
   it("records transient Supabase advisor timeouts without weakening real advisor debt gates", () => {
     expect(advisorScript).toContain("allowTransientUnavailable");
     expect(advisorScript).toContain("isTransientAdvisorFailure");
-    expect(advisorScript).toContain("isPerformanceAdvisorInternalSyntaxFailure");
+    expect(advisorScript).toContain(
+      "isPerformanceAdvisorInternalSyntaxFailure",
+    );
     expect(advisorScript).toContain("transient_advisor_unavailable");
     expect(advisorScript).toContain("throw new Error");
     expect(advisorScript).toContain("failOnError && failingLintCount > 0");
-    expect(advisorScript).toContain("assertAdvisorDebtIsActionable(advisorDebt)");
+    expect(advisorScript).toContain(
+      "assertAdvisorDebtIsActionable(advisorDebt)",
+    );
     expect(advisorHttpHelper).toContain("function isTransientAdvisorFailure");
     expect(advisorHttpHelper).toContain("status === 544");
-    expect(advisorHttpHelper).toContain("function isPerformanceAdvisorInternalSyntaxFailure");
+    expect(advisorHttpHelper).toContain(
+      "function isPerformanceAdvisorInternalSyntaxFailure",
+    );
     expect(advisorHttpHelper).toContain('category === "performance"');
     expect(advisorHttpHelper).toContain("ERROR:\\s*42601");
   });
@@ -113,14 +165,22 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseTypesScript).toContain("allowTransientUnavailable");
     expect(supabaseTypesScript).toContain("isTransientTypesFailure");
     expect(supabaseTypesScript).toContain("error code:\\s*(?:520|522|524|504)");
-    expect(supabaseTypesScript).toContain("generated types check was transiently unavailable");
-    expect(supabaseTypesScript).toContain("normalize(current) !== normalize(generated)");
-    expect(supabaseTypesScript).toContain("src/integrations/supabase/types.ts is stale");
+    expect(supabaseTypesScript).toContain(
+      "generated types check was transiently unavailable",
+    );
+    expect(supabaseTypesScript).toContain(
+      "normalize(current) !== normalize(generated)",
+    );
+    expect(supabaseTypesScript).toContain(
+      "src/integrations/supabase/types.ts is stale",
+    );
   });
 
   it("keeps the generated type size review threshold above the current reviewed schema output", () => {
     expect(ciWorkflow).toContain("REVIEW_THRESHOLD=5500");
-    expect(ciWorkflow).toContain('if [ "$LINES" -gt "$REVIEW_THRESHOLD" ]; then');
+    expect(ciWorkflow).toContain(
+      'if [ "$LINES" -gt "$REVIEW_THRESHOLD" ]; then',
+    );
     expect(ciWorkflow).toContain("threshold: $REVIEW_THRESHOLD");
   });
 
@@ -129,17 +189,54 @@ describe("Supabase index stats workflow wiring", () => {
     expect(liveSecurityScript).toContain("isTransientManagementFailure");
     expect(liveSecurityScript).toContain("status, text");
     expect(liveSecurityScript).toContain("process.exit(0)");
-    expect(liveSecurityScript).toContain("fail(\"posture check failed\", failures)");
+    expect(liveSecurityScript).toContain(
+      'fail("posture check failed", failures)',
+    );
   });
 
-  it("keeps staging migration gates active while resolving direct database URLs through the pooler", () => {
-    expect(supabaseStagingWorkflow).toMatch(
-      /if grep -Eq '\^supabase\/migrations\/' <<< "\$changed_files"; then\s+echo "db_changes=true" >> "\$GITHUB_OUTPUT"[\s\S]*?else\s+echo "db_changes=false" >> "\$GITHUB_OUTPUT"/,
+  it("requires an exact staging lease and isolated target before migration reconciliation", () => {
+    expect(supabaseStagingWorkflow).toContain(
+      "Validate exact staging mutation lease",
     );
-    expect(supabaseStagingWorkflow).toMatch(
-      /if grep -Eq '\^\(supabase\/\|deno\\\.\(json\|lock\)\$\)' <<< "\$changed_files"; then\s+echo "deploy=true" >> "\$GITHUB_OUTPUT"/,
+    expect(supabaseStagingWorkflow).toContain("github-staging-lease");
+    expect(supabaseStagingWorkflow).toContain(
+      "Staging checkout SHA $actual_sha does not match the requested release SHA $RELEASE_SHA.",
     );
-    expect(supabaseStagingWorkflow).toContain('if [ -z "$SUPABASE_STAGING_DB_URL" ]; then');
+    expect(supabaseStagingWorkflow).toContain(
+      'echo "eligible=true" >> "$GITHUB_OUTPUT"',
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      'echo "deploy=true" >> "$GITHUB_OUTPUT"',
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      'echo "db_changes=true" >> "$GITHUB_OUTPUT"',
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "Resolve Supabase staging target",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "An isolated staging Supabase project is required.",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "STAGING_SUPABASE_URL project ref does not match STAGING_SUPABASE_PROJECT_ID.",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "node scripts/assert-staging-mutation-target.mjs",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "Download immutable Supabase release candidate",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "npm run release:artifact:verify --",
+    );
+    expect(supabaseStagingWorkflow).toContain("--dir release-candidate");
+    expect(supabaseStagingWorkflow).not.toContain("npm install -g supabase");
+    expect(supabaseStagingWorkflow).toContain(
+      "npx --no-install supabase --workdir release-candidate --version",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      'if [ -z "$SUPABASE_STAGING_DB_URL" ]; then',
+    );
     expect(supabaseStagingWorkflow).toContain(
       "SUPABASE_STAGING_DB_URL is required for isolated staging schema verification",
     );
@@ -149,14 +246,22 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseStagingWorkflow).toMatch(
       /- name: Resolve staging database URL\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*if \[ -z "\$SUPABASE_STAGING_DB_URL" \]; then[\s\S]*SUPABASE_STAGING_EFFECTIVE_DB_URL=[\s\S]*isolated staging schema verification cannot continue\.[\s\S]*exit 1/,
     );
-    expect(supabaseStagingWorkflow).toContain("https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID");
-    expect(supabaseStagingWorkflow).toContain("PROJECT_JSON=\"$project_json\"");
-    expect(supabaseStagingWorkflow).toContain("const region = project?.region || projectMetadata.region");
+    expect(supabaseStagingWorkflow).toContain(
+      "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID",
+    );
+    expect(supabaseStagingWorkflow).toContain('PROJECT_JSON="$project_json"');
+    expect(supabaseStagingWorkflow).toContain(
+      "const region = project?.region || projectMetadata.region",
+    );
     expect(supabaseStagingWorkflow).toContain(
       "Configure SUPABASE_STAGING_DB_URL as a Supabase pooler URL",
     );
-    expect(supabaseStagingWorkflow).toContain("if (current.hostname.endsWith(\".pooler.supabase.com\"))");
-    expect(supabaseStagingWorkflow).toContain("pooler.hostname = `aws-0-${region}.pooler.supabase.com`");
+    expect(supabaseStagingWorkflow).toContain(
+      'if (current.hostname.endsWith(".pooler.supabase.com"))',
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "pooler.hostname = `aws-0-${region}.pooler.supabase.com`",
+    );
     expect(supabaseStagingWorkflow).not.toContain(
       "direct Supabase DB hostname, which is IPv6-only",
     );
@@ -172,20 +277,18 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseStagingWorkflow).toMatch(
       /- name: Check staging Supabase generated types\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
     );
-    expect(supabaseStagingWorkflow).toMatch(
-      /PR is not eligible for isolated Supabase staging prep\."\s+echo "eligible=false" >> "\$GITHUB_OUTPUT"\s+exit 0/,
-    );
-    expect(supabaseStagingWorkflow).toContain('echo "eligible=true" >> "$GITHUB_OUTPUT"');
   });
 
-  it("reconciles every isolated staging runtime even when the pull request has no Supabase file diff", () => {
+  it("reconciles every exact-SHA candidate in the isolated staging runtime", () => {
     const paritySteps = [
       "Validate isolated staging secrets",
-      "Install Supabase CLI",
-      "Repair legacy staging migration aliases",
-      "Repair staging add-on credit migration drift",
+      "Verify pinned Supabase CLI",
+      "Download immutable Supabase release candidate",
+      "Verify immutable Supabase release candidate",
       "Dry-run staging database migrations",
+      "Revalidate staging lease before database apply",
       "Apply database migrations to staging",
+      "Capture legacy migration convergence evidence",
       "Check staging Supabase security posture",
       "Deploy edge functions to staging",
       "Capture staging live function drift inventory",
@@ -194,44 +297,70 @@ describe("Supabase index stats workflow wiring", () => {
     for (const stepName of paritySteps) {
       const escapedStepName = stepName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       expect(supabaseStagingWorkflow).toMatch(
-        new RegExp(`- name: ${escapedStepName}\\s+if: steps\\.supabase_changes\\.outputs\\.eligible == 'true' && steps\\.supabase_target\\.outputs\\.isolated_staging == 'true'`),
+        new RegExp(
+          `- name: ${escapedStepName}\\s+if: steps\\.supabase_changes\\.outputs\\.eligible == 'true' && steps\\.supabase_target\\.outputs\\.isolated_staging == 'true'`,
+        ),
       );
     }
   });
 
-  it("reconciles staging-only migration aliases before staging dry-run validation", () => {
-    const repairStep = supabaseStagingWorkflow.indexOf("- name: Repair legacy staging migration aliases");
-    const dryRunStep = supabaseStagingWorkflow.indexOf("- name: Dry-run staging database migrations");
+  it("revalidates the exact staging lease inside each mutating shell step", () => {
+    for (const [stepName, mutation] of [
+      ["Apply database migrations to staging", "db push"],
+      ["Deploy edge functions to staging", "functions deploy"],
+    ]) {
+      const block = stagingStepBlock(stepName);
 
-    expect(repairStep).toBeGreaterThan(-1);
+      expect(block, stepName).toContain("GITHUB_TOKEN: ${{ github.token }}");
+      expect(block, stepName).toContain("github-staging-lease");
+      expect(block.indexOf("github-staging-lease"), stepName).toBeLessThan(
+        block.indexOf(mutation),
+      );
+    }
+  });
+
+  it("uses forward-only migration convergence without ledger repair", () => {
+    const dryRunStep = supabaseStagingWorkflow.indexOf(
+      "- name: Dry-run staging database migrations",
+    );
+    const applyStep = supabaseStagingWorkflow.indexOf(
+      "- name: Apply database migrations to staging",
+    );
+    const evidenceStep = supabaseStagingWorkflow.indexOf(
+      "- name: Capture legacy migration convergence evidence",
+    );
+
     expect(dryRunStep).toBeGreaterThan(-1);
-    expect(repairStep).toBeLessThan(dryRunStep);
-
-    expect(supabaseStagingWorkflow).toContain(
-      "node scripts/reconcile-staging-migration-aliases.mjs",
+    expect(applyStep).toBeGreaterThan(dryRunStep);
+    expect(evidenceStep).toBeGreaterThan(applyStep);
+    expect(supabaseStagingWorkflow).not.toContain("migration repair");
+    expect(supabaseStagingWorkflow).not.toMatch(
+      /(?:insert\s+into|update|delete\s+from)\s+supabase_migrations\.schema_migrations/i,
     );
     expect(supabaseStagingWorkflow).toContain(
-      "VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}",
+      "supabase/reconciliation/production-history-v1.sql",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "supabase/tests/legacy_migration_convergence_test.sql",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "PRODUCTION_SUPABASE_PROJECT_ID: ${{ inputs.production_supabase_project_id }}",
     );
     expect(supabaseStagingWorkflow).toContain(
       "STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}",
     );
   });
 
-  it("repairs an applied add-on credit migration when staging is missing its canonical columns", () => {
-    const repairStep = supabaseStagingWorkflow.indexOf("- name: Repair staging add-on credit migration drift");
-    const dryRunStep = supabaseStagingWorkflow.indexOf("- name: Dry-run staging database migrations");
-
-    expect(repairStep).toBeGreaterThan(-1);
-    expect(dryRunStep).toBeGreaterThan(-1);
-    expect(repairStep).toBeLessThan(dryRunStep);
-    expect(supabaseStagingWorkflow).toContain("information_schema.columns");
-    expect(supabaseStagingWorkflow).toContain("credits_granted");
-    expect(supabaseStagingWorkflow).toContain("credits_consumed");
-    expect(supabaseStagingWorkflow).toContain("supabase_migrations.schema_migrations");
-    expect(supabaseStagingWorkflow).toContain("version = '20260628193711'");
+  it("binds deterministic convergence evidence into the staging attestation", () => {
     expect(supabaseStagingWorkflow).toContain(
-      'supabase migration repair "20260628193711" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes',
+      "legacy_migration_schema_evidence:",
     );
+    expect(supabaseStagingWorkflow).toContain(
+      "legacy_migration_schema_evidence_sha256:",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "legacy_migration_convergence_pgtap_sha256:",
+    );
+    expect(supabaseStagingWorkflow).toContain('test("^sha256:[0-9a-f]{64}$")');
   });
 });

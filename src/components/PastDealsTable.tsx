@@ -8,6 +8,9 @@ import { Loader2, Lock, History } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
+import { useSubscription } from "@/hooks/useSubscription";
+import { accountQueryKey } from "@/lib/identityQueryBoundary";
+import { canAccessPastDeals } from "@/lib/pastDealsAccess";
 
 export interface PastDeal {
   round?: number;
@@ -29,10 +32,18 @@ interface PastDealsTableProps {
 import { formatPrice, formatDate } from "@/lib/format";
 
 export function PastDealsTable({ listingId }: PastDealsTableProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { isPro } = useSubscription();
+  const participantType = profile?.role ?? "unknown";
+  const canLoadPastDeals = canAccessPastDeals(profile, isPro);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["past-deals", listingId],
+    queryKey: accountQueryKey(
+      user?.id,
+      "past-deals",
+      participantType,
+      listingId,
+    ),
     queryFn: async (): Promise<PastDeal[]> => {
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
@@ -50,7 +61,7 @@ export function PastDealsTable({ listingId }: PastDealsTableProps) {
       if (!res?.ok && res?.error) throw new Error(res.error);
       return res?.past_deals ?? [];
     },
-    enabled: !!user && !!listingId,
+    enabled: !!user && !!listingId && canLoadPastDeals,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -70,7 +81,7 @@ export function PastDealsTable({ listingId }: PastDealsTableProps) {
     },
   ];
 
-  if (!user) {
+  if (!user || !canLoadPastDeals) {
     return (
       <div className="rounded-xl border border-brand-gold/20 bg-brand-gold/5 p-6 text-center">
         <Lock className="w-8 h-8 text-brand-gold mx-auto mb-3 opacity-70" />

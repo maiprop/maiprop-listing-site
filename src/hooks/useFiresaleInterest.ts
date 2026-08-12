@@ -7,6 +7,12 @@ import {
   parseMutationInput,
   submitFiresaleInterestBodySchema,
 } from "@/lib/mutationSchemas";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  accountQueryKey,
+  captureIdentityEpoch,
+  isCurrentIdentityEpoch,
+} from "@/lib/identityQueryBoundary";
 
 export type InterestStatus =
   | "interested"
@@ -140,10 +146,11 @@ export function getFiresaleInterestUserMessage(error: unknown): string {
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useMyFiresaleInterests() {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["firesale_interest_mine_all"],
+    queryKey: accountQueryKey(user?.id, "firesale-interest-mine"),
     queryFn: async () => {
-      const uid = (await supabase.auth.getUser()).data.user?.id;
+      const uid = user?.id;
       if (!uid) return new Map<string, FiresaleInterestEntry>();
 
       const { data } = await supabase
@@ -158,8 +165,13 @@ export function useMyFiresaleInterests() {
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useFiresaleInterestQueue(dealId: string | undefined) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["firesale_interest_queue", dealId],
+    queryKey: accountQueryKey(
+      user?.id,
+      "firesale-interest-queue",
+      dealId,
+    ),
     queryFn: async () => {
       if (!dealId) return [];
 
@@ -172,13 +184,14 @@ export function useFiresaleInterestQueue(dealId: string | undefined) {
       if (error) throw error;
       return sortFiresaleInterestQueue((data ?? []) as FiresaleInterestEntry[]);
     },
-    enabled: !!dealId,
+    enabled: Boolean(user && dealId),
   });
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useExpressInterest() {
   const qc = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -192,7 +205,7 @@ export function useExpressInterest() {
       proofAmount?: string;
       message?: string;
     }) => {
-      const uid = (await supabase.auth.getUser()).data.user?.id;
+      const uid = user?.id;
       if (!uid) throw new Error("Not authenticated");
 
       let proof_of_funds_url: string | undefined;
@@ -234,19 +247,32 @@ export function useExpressInterest() {
       if (data?.error) throw new Error(getEdgeRpcErrorMessage(data.error));
       return data?.data;
     },
-    onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ["firesale_interest_mine", variables.dealId] });
-      qc.invalidateQueries({ queryKey: ["firesale_interest_mine_all"] });
-      qc.invalidateQueries({ queryKey: ["firesale_interest_queue", variables.dealId] });
+    onMutate: () => ({ identityEpoch: captureIdentityEpoch() }),
+    onSuccess: (_, variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "firesale-interest-mine"),
+      });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(
+          user?.id,
+          "firesale-interest-queue",
+          variables.dealId,
+        ),
+      });
       toast.success("Interest registered. Proof-backed submissions move into the priority queue first.");
     },
-    onError: (error) => toast.error(getFiresaleInterestUserMessage(error)),
+    onError: (error, _variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      toast.error(getFiresaleInterestUserMessage(error));
+    },
   });
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useUpdateInterestStatus() {
   const qc = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -285,12 +311,24 @@ export function useUpdateInterestStatus() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
     },
-    onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ["firesale_interest_queue", variables.dealId] });
-      qc.invalidateQueries({ queryKey: ["firesale_interest_mine", variables.dealId] });
-      qc.invalidateQueries({ queryKey: ["firesale_interest_mine_all"] });
+    onMutate: () => ({ identityEpoch: captureIdentityEpoch() }),
+    onSuccess: (_, variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(
+          user?.id,
+          "firesale-interest-queue",
+          variables.dealId,
+        ),
+      });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "firesale-interest-mine"),
+      });
       toast.success("Status updated");
     },
-    onError: () => toast.error("Failed to update interest status. Please try again."),
+    onError: (_error, _variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      toast.error("Failed to update interest status. Please try again.");
+    },
   });
 }

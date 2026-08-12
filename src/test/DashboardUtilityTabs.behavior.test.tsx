@@ -243,70 +243,31 @@ describe("dashboard utility tabs", () => {
     expect(privateMutate).toHaveBeenCalledWith(true);
   });
 
-  it("switches participant type, handles RPC errors, deletes accounts, and shows permission fallbacks", async () => {
+  it("prepares a destination-bound participant switch without provider mutation, deletes accounts, and shows permission fallbacks", async () => {
     const refreshProfile = vi.fn().mockResolvedValue(undefined);
-    let operationWasDurableBeforeFirstRequest = false;
-    const invokeImplementation = mocks.invoke.getMockImplementation();
-    mocks.invoke.mockImplementation((fn: string, options?: { body?: Record<string, unknown> }) => {
-      if (fn === "begin-role-switch" && options?.body?.validate_only === true) {
-        operationWasDurableBeforeFirstRequest = localStorage
-          .getItem("maiprop_role_switch_operation_v1")
-          ?.includes("operationId") === true;
-      }
-      return invokeImplementation?.(fn, options);
-    });
     renderHarness(<SettingsSection roleLabel="Agent" onUpdate={vi.fn()} refreshProfile={refreshProfile} currentType="agent" hasActiveSub />);
 
     expect(screen.getByText("Lead management")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
-    fireEvent.click(screen.getByRole("button", { name: /switch my type/i }));
-    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("begin-role-switch", {
-      body: { validate_only: true },
-    }));
-    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("log-role-switch", {
-      body: expect.objectContaining({
-        operation_id: expect.any(String),
-        from_type: "agent",
-        to_type: "",
-        cancel_subscription: true,
-      }),
-    }));
-    const logCall = mocks.invoke.mock.calls.find(([fn]) => fn === "log-role-switch");
-    const operationId = logCall?.[1]?.body?.operation_id;
-    expect(operationId).toEqual(expect.any(String));
-    expect(operationWasDurableBeforeFirstRequest).toBe(true);
-    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("begin-role-switch", {
-      body: { audit_id: operationId },
-    }));
-    const preflightIndex = mocks.invoke.mock.calls.findIndex(([fn, options]) =>
-      fn === "begin-role-switch" &&
-      JSON.stringify(options) === JSON.stringify({ body: { validate_only: true } })
-    );
-    const logIndex = mocks.invoke.mock.calls.findIndex(([fn]) =>
-      fn === "log-role-switch"
-    );
-    const beginIndex = mocks.invoke.mock.calls.findIndex(([fn, options]) =>
-      fn === "begin-role-switch" &&
-      JSON.stringify(options) === JSON.stringify({ body: { audit_id: operationId } })
-    );
-    expect(preflightIndex).toBeGreaterThanOrEqual(0);
-    expect(logIndex).toBeGreaterThan(preflightIndex);
-    expect(beginIndex).toBeGreaterThan(logIndex);
-    expect(sessionStorage.getItem("role_switch_ctx")).toContain("agent");
-    expect(sessionStorage.getItem("role_switch_ctx")).toContain(String(operationId));
-    expect(refreshProfile).toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/New participant type/i), {
+      target: { value: "seller" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Review switch/i }));
+    expect(localStorage.getItem("maiprop_role_switch_operation_v1")).toContain('"toType":"seller"');
+    expect(sessionStorage.getItem("role_switch_ctx")).toContain('"status":"prepared"');
+    expect(mocks.invoke).not.toHaveBeenCalledWith("begin-role-switch", expect.anything());
+    expect(mocks.invoke).not.toHaveBeenCalledWith("log-role-switch", expect.anything());
+    expect(refreshProfile).not.toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledWith("/onboarding");
     cleanup();
 
-    mocks.invoke.mockImplementationOnce((fn: string) => (
-      fn === "begin-role-switch"
-        ? Promise.resolve({ data: null, error: { message: "not_authenticated" } })
-        : Promise.resolve({ data: null, error: null })
-    ));
     renderHarness(<SettingsSection roleLabel="Unknown" onUpdate={vi.fn()} refreshProfile={refreshProfile} currentType={null} hasActiveSub={false} />);
     expect(screen.getByText(/determined server-side/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
-    fireEvent.click(screen.getByRole("button", { name: /switch my type/i }));
+    fireEvent.change(screen.getByLabelText(/New participant type/i), {
+      target: { value: "seller" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Review switch/i }));
     await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith(
       "Could not identify your current account type. Please refresh and try again.",
     ));
@@ -329,7 +290,7 @@ describe("dashboard utility tabs", () => {
     ));
   });
 
-  it("verifies billing server-side before a role switch when the client cache says free", async () => {
+  it("records the cached billing hint without treating it as server verification", async () => {
     const refreshProfile = vi.fn().mockResolvedValue(undefined);
     renderHarness(
       <SettingsSection
@@ -342,18 +303,15 @@ describe("dashboard utility tabs", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
-    fireEvent.click(screen.getByRole("button", { name: /switch my type/i }));
+    fireEvent.change(screen.getByLabelText(/New participant type/i), {
+      target: { value: "agent" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Review switch/i }));
 
-    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith(
-      "log-role-switch",
-      {
-        body: expect.objectContaining({
-          operation_id: expect.any(String),
-          from_type: "buyer",
-          cancel_subscription: true,
-        }),
-      },
-    ));
+    expect(sessionStorage.getItem("role_switch_ctx")).toContain('"hadActiveSub":false');
+    expect(sessionStorage.getItem("role_switch_ctx")).toContain('"toType":"agent"');
+    expect(mocks.invoke).not.toHaveBeenCalledWith("log-role-switch", expect.anything());
+    expect(mocks.navigate).toHaveBeenCalledWith("/onboarding");
   });
 
   it("exercises signup validation, password visibility, confirmation view, OAuth, and error variants", async () => {

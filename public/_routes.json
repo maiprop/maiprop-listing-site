@@ -1,15 +1,7 @@
 {
   "version": 1,
   "include": [
-    "/api/public/*",
-    "/sitemap-dynamic.xml",
-    "/listings",
-    "/auctions",
-    "/auction/*",
-    "/new-build/*",
-    "/open-house/*",
-    "/property/*",
-    "/__unlock"
+    "/*"
   ],
   "exclude": [
     "/assets/*",

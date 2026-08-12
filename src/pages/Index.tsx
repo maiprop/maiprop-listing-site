@@ -99,16 +99,21 @@ export default function Index() {
     data: featuredListings = [],
     isLoading: featuredLoading,
     isError: featuredError,
+    refetch: refetchFeatured,
   } = useHomepageFeaturedListings();
 
   const {
     data: auctionListings = [],
     isLoading: auctionsLoading,
+    isError: auctionsError,
+    refetch: refetchAuctions,
   } = useHomepageAuctionListings({ enabled: auctionsSection.enabled });
 
   const {
     data: openHouseListings = [],
     isLoading: openHousesLoading,
+    isError: openHousesError,
+    refetch: refetchOpenHouses,
   } = useHomepageOpenHouseListings({ enabled: openHousesSection.enabled });
 
   return (
@@ -157,15 +162,27 @@ export default function Index() {
 
       <main id="main-content">
         <HeroSection />
-        <FeaturedPropertiesSection listings={featuredListings} isLoading={featuredLoading} isError={featuredError} />
+        <FeaturedPropertiesSection
+          listings={featuredListings}
+          isLoading={featuredLoading}
+          isError={featuredError}
+          onRetry={() => void refetchFeatured()}
+        />
         <BrowseByTypeSection />
         <div ref={auctionsSection.ref}>
-          <HomepageAuctionsSection listings={auctionListings} isLoading={!auctionsSection.enabled || auctionsLoading} />
+          <HomepageAuctionsSection
+            listings={auctionListings}
+            isLoading={!auctionsSection.enabled || auctionsLoading}
+            isError={auctionsSection.enabled && auctionsError}
+            onRetry={() => void refetchAuctions()}
+          />
         </div>
         <div ref={openHousesSection.ref}>
           <HomepageOpenHousesSection
             listings={openHouseListings}
             isLoading={!openHousesSection.enabled || openHousesLoading}
+            isError={openHousesSection.enabled && openHousesError}
+            onRetry={() => void refetchOpenHouses()}
           />
         </div>
         <QuickSaleCTASection />

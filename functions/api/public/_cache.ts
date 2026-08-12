@@ -1,4 +1,7 @@
-import { getSupabaseRuntime, type SeoEnv } from "../../_seo";
+import {
+  getSupabaseRuntime,
+  type SeoEnv,
+} from "../../_seo";
 
 export type PublicApiEnv = SeoEnv;
 
@@ -32,8 +35,27 @@ export class SupabaseTransientError extends Error {
   }
 }
 
+export class PublicCatalogueSnapshotExpiredError extends Error {
+  constructor() {
+    super("Public catalogue snapshot expired");
+    this.name = "PublicCatalogueSnapshotExpiredError";
+  }
+}
+
 export function isSupabaseTransientError(error: unknown): error is SupabaseTransientError {
   return error instanceof SupabaseTransientError;
+}
+
+export function isPublicCatalogueSnapshotExpiredError(
+  error: unknown,
+): boolean {
+  return (
+    error instanceof PublicCatalogueSnapshotExpiredError ||
+    (
+      error instanceof Error &&
+      error.message.includes("public_catalogue_publication_expired")
+    )
+  );
 }
 
 type CacheOptions = {
@@ -54,18 +76,102 @@ type SupabaseFetchOptions = {
   timeoutMs?: number;
 };
 
+export type PublicCataloguePublication = {
+  publicationId: number;
+  snapshotMinute: string;
+  publishedAt: string;
+  retainUntil: string;
+  rowCount: number;
+};
+
+export type PublicCatalogueQueryRpcRow = {
+  publication_id: number;
+  published_at: string;
+  listing_id: string;
+  priority_rank: number;
+  created_at: string;
+  price: number;
+  ai_score: number | null;
+  views_count: number;
+  open_house_date: string | null;
+  card_payload: unknown;
+};
+
+export function publicCatalogueValidityHeaders(
+  publication: Pick<PublicCataloguePublication, "retainUntil">,
+  ...additionalDeadlines: Array<string | null | undefined>
+): Record<string, string> {
+  const deadlines = [publication.retainUntil, ...additionalDeadlines]
+    .map((deadline) => typeof deadline === "string" ? Date.parse(deadline) : Number.NaN)
+    .filter(Number.isFinite);
+  if (deadlines.length === 0) {
+    throw new Error("Catalogue response has no valid retention deadline");
+  }
+  return {
+    [CACHE_VALID_UNTIL_HEADER]: new Date(Math.min(...deadlines)).toISOString(),
+  };
+}
+
 function applyCacheHeaders(headers: Headers, cache: CacheOptions, force = false): void {
-  const browserTtl = cache.browserTtlSeconds ?? DEFAULT_BROWSER_TTL_SECONDS;
-  const edgeTtl = cache.edgeTtlSeconds ?? DEFAULT_EDGE_TTL_SECONDS;
-  const stale = cache.staleSeconds ?? DEFAULT_STALE_SECONDS;
+  const remainingValiditySeconds = cacheValidityRemainingSeconds(headers);
+  if (remainingValiditySeconds === 0) {
+    headers.set("Cache-Control", "no-store");
+    headers.set("CDN-Cache-Control", "no-store");
+    return;
+  }
+
+  const browserPolicy = boundedCachePolicy(
+    cache.browserTtlSeconds ?? DEFAULT_BROWSER_TTL_SECONDS,
+    cache.staleSeconds ?? DEFAULT_STALE_SECONDS,
+    remainingValiditySeconds,
+  );
+  const edgePolicy = boundedCachePolicy(
+    cache.edgeTtlSeconds ?? DEFAULT_EDGE_TTL_SECONDS,
+    cache.staleSeconds ?? DEFAULT_STALE_SECONDS,
+    remainingValiditySeconds,
+  );
   if (force || !headers.has("Cache-Control")) {
-    headers.set("Cache-Control", `public, max-age=${browserTtl}, stale-while-revalidate=${stale}`);
+    headers.set(
+      "Cache-Control",
+      `public, max-age=${browserPolicy.maxAge}, stale-while-revalidate=${browserPolicy.stale}`,
+    );
   }
   if (cache.disableCdnCache) {
     headers.set("CDN-Cache-Control", "no-store");
   } else if (force || !headers.has("CDN-Cache-Control")) {
-    headers.set("CDN-Cache-Control", `public, max-age=${edgeTtl}, stale-while-revalidate=${stale}`);
+    headers.set(
+      "CDN-Cache-Control",
+      `public, max-age=${edgePolicy.maxAge}, stale-while-revalidate=${edgePolicy.stale}`,
+    );
   }
+}
+
+function cacheValidityRemainingSeconds(headers: Headers): number | null {
+  const rawValidUntil = headers.get(CACHE_VALID_UNTIL_HEADER);
+  if (!rawValidUntil) return null;
+  const validUntil = Date.parse(rawValidUntil);
+  if (!Number.isFinite(validUntil)) return 0;
+  return Math.max(0, Math.floor((validUntil - Date.now()) / 1_000));
+}
+
+function boundedCachePolicy(
+  requestedMaxAge: number,
+  requestedStale: number,
+  remainingValiditySeconds: number | null,
+): { maxAge: number; stale: number } {
+  const normalizedMaxAge = Math.max(0, Math.trunc(requestedMaxAge));
+  const normalizedStale = Math.max(0, Math.trunc(requestedStale));
+  if (remainingValiditySeconds == null) {
+    return { maxAge: normalizedMaxAge, stale: normalizedStale };
+  }
+  const maxAge = Math.min(normalizedMaxAge, remainingValiditySeconds);
+  return {
+    maxAge,
+    stale: Math.min(
+      normalizedStale,
+      Math.max(0, remainingValiditySeconds - maxAge),
+    ),
+  };
 }
 
 function applySecurityHeaders(headers: Headers): void {
@@ -278,17 +384,17 @@ function cacheHeaderResponse(response: Response, cacheState: string, cache: Cach
 
 function staleFallbackCacheSeconds(cache: CacheOptions): number {
   const requested = cache.staleFallbackSeconds;
-  if (typeof requested === "number" && Number.isFinite(requested) && requested > 0) return requested;
+  if (typeof requested === "number" && Number.isFinite(requested) && requested >= 0) {
+    return requested;
+  }
   const edgeTtl = cache.edgeTtlSeconds ?? DEFAULT_EDGE_TTL_SECONDS;
   const stale = cache.staleSeconds ?? DEFAULT_STALE_SECONDS;
   return Math.max(DEFAULT_STALE_FALLBACK_SECONDS, edgeTtl + stale);
 }
 
 function cacheResponseIsWithinBusinessValidity(response: Response): boolean {
-  const rawValidUntil = response.headers.get(CACHE_VALID_UNTIL_HEADER);
-  if (!rawValidUntil) return true;
-  const validUntil = Date.parse(rawValidUntil);
-  return !Number.isFinite(validUntil) || validUntil > Date.now();
+  const remainingValiditySeconds = cacheValidityRemainingSeconds(response.headers);
+  return remainingValiditySeconds == null || remainingValiditySeconds > 0;
 }
 
 async function matchStaleFallback(cacheApi: Cache, cacheKey: URL, cache: CacheOptions): Promise<Response | null> {
@@ -318,8 +424,25 @@ function putFreshAndStale(
 ): Promise<void> {
   const freshHeaders = new Headers(headers);
   const staleHeaders = new Headers(headers);
-  const edgeSeconds = cache.edgeTtlSeconds ?? DEFAULT_EDGE_TTL_SECONDS;
-  const staleSeconds = staleFallbackCacheSeconds(cache);
+  const responseCacheControl = headers.get("Cache-Control") ?? "";
+  const remainingValiditySeconds = cacheValidityRemainingSeconds(headers);
+  if (
+    /\bno-store\b/i.test(responseCacheControl) ||
+    remainingValiditySeconds === 0
+  ) {
+    return Promise.resolve();
+  }
+  const edgeSeconds = boundedCachePolicy(
+    cache.edgeTtlSeconds ?? DEFAULT_EDGE_TTL_SECONDS,
+    0,
+    remainingValiditySeconds,
+  ).maxAge;
+  const staleSeconds = boundedCachePolicy(
+    staleFallbackCacheSeconds(cache),
+    0,
+    remainingValiditySeconds,
+  ).maxAge;
+  if (edgeSeconds === 0) return Promise.resolve();
   freshHeaders.set("Cache-Control", `public, max-age=${edgeSeconds}`);
   freshHeaders.delete("CDN-Cache-Control");
   staleHeaders.set("Cache-Control", `public, max-age=${staleSeconds}`);
@@ -335,10 +458,11 @@ function putFreshAndStale(
     headers: staleHeaders,
   });
 
-  const putPromise = Promise.all([
-    cacheApi.put(cacheRequest, freshResponse),
-    cacheApi.put(staleRequest, staleResponse),
-  ]);
+  const cacheWrites = [cacheApi.put(cacheRequest, freshResponse)];
+  if (staleSeconds > 0) {
+    cacheWrites.push(cacheApi.put(staleRequest, staleResponse));
+  }
+  const putPromise = Promise.all(cacheWrites);
   const guardedPut: Promise<void> = putPromise.then(() => undefined).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[public-api] cache seed failed for ${cacheRequest.url}: ${message}`);
@@ -565,10 +689,67 @@ export async function supabaseRpcJson<T>(
         console.warn(`[public-api] Supabase ${path} transiently unavailable with ${res.status}`);
         return [];
       }
-      throw new Error(`Supabase RPC failed with ${res.status}`);
+      const details = (await res.text()).slice(0, 1_000);
+      throw new Error(
+        `Supabase RPC failed with ${res.status}${details ? `: ${details}` : ""}`,
+      );
     }
 
     return (await res.json()) as T[];
+  }
+}
+
+export async function getPublicCataloguePublication(
+  env: PublicApiEnv,
+  requestedPublicationId: number | null,
+): Promise<PublicCataloguePublication> {
+  try {
+    const rows = await supabaseRpcJson<{
+      publication_id?: unknown;
+      snapshot_minute?: unknown;
+      published_at?: unknown;
+      retain_until?: unknown;
+      row_count?: unknown;
+    }>(
+      env,
+      "get_public_catalogue_publication",
+      { p_publication_id: requestedPublicationId },
+      { failOnTransient: true },
+    );
+    const publicationId = Number(rows[0]?.publication_id);
+    const snapshotMinute = rows[0]?.snapshot_minute;
+    const publishedAt = rows[0]?.published_at;
+    const retainUntil = rows[0]?.retain_until;
+    const rowCount = Number(rows[0]?.row_count);
+    if (
+      !Number.isSafeInteger(publicationId) ||
+      publicationId < 1 ||
+      typeof snapshotMinute !== "string" ||
+      !Number.isFinite(Date.parse(snapshotMinute)) ||
+      typeof publishedAt !== "string" ||
+      !Number.isFinite(Date.parse(publishedAt)) ||
+      typeof retainUntil !== "string" ||
+      !Number.isFinite(Date.parse(retainUntil)) ||
+      !Number.isSafeInteger(rowCount) ||
+      rowCount < 0
+    ) {
+      throw new Error("Catalogue publication reader returned invalid metadata");
+    }
+    return {
+      publicationId,
+      snapshotMinute: new Date(Date.parse(snapshotMinute)).toISOString(),
+      publishedAt: new Date(Date.parse(publishedAt)).toISOString(),
+      retainUntil: new Date(Date.parse(retainUntil)).toISOString(),
+      rowCount,
+    };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("public_catalogue_publication_expired")
+    ) {
+      throw new PublicCatalogueSnapshotExpiredError();
+    }
+    throw error;
   }
 }
 

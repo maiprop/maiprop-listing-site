@@ -106,6 +106,8 @@ vi.mock("@/hooks/usePullToRefresh", () => ({
 vi.mock("@/hooks/useListings", () => ({
   useListings: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useMyListings: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useActorOwnedListings: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useManageableListingSummary: vi.fn().mockReturnValue({ data: null, isLoading: false }),
   useListingsPaginated: vi.fn().mockReturnValue({
     data: { pages: [] },
     isLoading: false,
@@ -119,6 +121,10 @@ vi.mock("@/hooks/useListings", () => ({
   useUpdateListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
   useDeleteListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
   useCreateListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+}));
+
+vi.mock("@/hooks/useManageableOrganizations", () => ({
+  useManageableOrganizations: vi.fn().mockReturnValue({ data: [], isLoading: false }),
 }));
 
 vi.mock("@/hooks/useListingsFilters", () => ({

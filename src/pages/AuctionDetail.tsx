@@ -52,9 +52,20 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingWithJoins } from "@/hooks/useListings";
-import { formatDate, formatPrice } from "@/lib/format";
+import { formatPrice } from "@/lib/format";
 import { APP_ORIGIN } from "@/lib/config";
-import { calculatePricePerSqm } from "@/lib/priceCalculations";
+import {
+  AUCTION_DETAIL_LOOKUP_LIMIT,
+  AUCTION_DETAIL_QUERY_STALE_TIME,
+  asNumber,
+  buildAuctionInsightsListing,
+  firstNumber,
+  getAuctionFromRouteState,
+  getNullableString,
+  getSafeAuctionWebsiteUrl,
+  mergeAuctionDetailData,
+  type AuctionRouteState,
+} from "@/lib/auctionDetailData";
 import {
   countdownBadge,
   daysUntil,
@@ -69,9 +80,6 @@ import { getAuctionImageList } from "@/lib/auctionStreetView";
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
 const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
-
-const AUCTION_DETAIL_LOOKUP_LIMIT = 60;
-const AUCTION_DETAIL_QUERY_STALE_TIME = 5 * 60_000;
 
 const AUCTION_INFO_NOTES: { id: string; en: string; el: string }[] = [
   {
@@ -101,104 +109,20 @@ const AUCTION_INFO_NOTES: { id: string; en: string; el: string }[] = [
   },
 ];
 
-const safeUrl = (url: string | null | undefined): string | null =>
-  url && /^https?:\/\//i.test(url) ? url : null;
+type AuctionDetailTranslate = (
+  key: string,
+  options?: { defaultValue?: string; count?: number },
+) => string;
 
-const asNumber = (value: unknown): number | null => { // skipcq: JS-R1005 - Auction values may arrive as numeric or string payloads.
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-};
-
-const firstNumber = (...values: unknown[]): number | null => {
-  for (const value of values) {
-    const numberValue = asNumber(value);
-    if (numberValue !== null) return numberValue;
-  }
-  return null;
-};
-
-type AuctionRouteState = {
-  auction?: Record<string, unknown>;
-  listing?: Record<string, unknown>;
-};
-
-const getStringValue = (value: unknown, fallback: string): string =>
-  typeof value === "string" && value.trim() ? value : fallback;
-
-const getNullableString = (value: unknown): string | null =>
-  typeof value === "string" && value.trim() ? value : null;
-
-const getAuctionTags = (tags: unknown): string[] =>
-  Array.isArray(tags) ? tags.filter((tag): tag is string => typeof tag === "string") : [];
-
-const getAuctionFromRouteState = (state?: AuctionRouteState): Record<string, unknown> | null => {
-  if (state?.auction) return state.auction;
-  if (state?.listing?.listing_type === "auction") return state.listing;
-  return null;
-};
-
-const getSafeAuctionWebsiteUrl = (auction: Record<string, unknown> | null | undefined): string | null =>
-  safeUrl(getNullableString(auction?.website_url));
-
-const mergeAuctionDetailData = (
-  primary: Record<string, unknown> | null,
-  exact: Record<string, unknown> | null,
-): Record<string, unknown> | null => {
-  if (!primary) return exact;
-  if (!exact) return primary;
-
-  const merged = { ...exact, ...primary };
-  const primaryUrl = getSafeAuctionWebsiteUrl(primary);
-  const exactUrl = getSafeAuctionWebsiteUrl(exact);
-  if (!primaryUrl && exactUrl) {
-    merged.website_url = exactUrl;
-  }
-  return merged;
-};
-
-const buildAuctionInsightsListing = (
-  auction: Record<string, unknown>,
-  fallbackId: string,
-): ListingWithJoins => {
-  const bid = asNumber(auction.auction_starting_bid) ?? asNumber(auction.price) ?? 0;
-  const sqm = asNumber(auction.sqm) ?? 1;
-
-  return {
-    ...auction,
-    id: getStringValue(auction.id, fallbackId),
-    title: getStringValue(auction.title, "Auction Property"),
-    city: getStringValue(auction.city, ""),
-    address: getNullableString(auction.address),
-    price: bid,
-    auction_starting_bid: bid,
-    auction_date: getNullableString(auction.auction_date),
-    sqm,
-    bedrooms: asNumber(auction.bedrooms),
-    bathrooms: asNumber(auction.bathrooms),
-    floor: firstNumber(auction.floor, auction.propertyFloor, auction.property_floor),
-    total_floors: firstNumber(auction.total_floors, auction.totalFloors, auction.numberOfFloors, auction.number_of_floors),
-    year_built: asNumber(auction.year_built),
-    energy_class: getNullableString(auction.energy_class),
-    price_per_sqm: calculatePricePerSqm({
-      price: bid,
-      sqm,
-      storedPricePerSqm: auction.price_per_sqm,
-    }),
-    property_type: getNullableString(auction.property_type),
-    listing_type: "auction",
-    region: getNullableString(auction.region),
-    latitude: asNumber(auction.latitude),
-    longitude: asNumber(auction.longitude),
-    tags: getAuctionTags(auction.tags),
-    listing_images: [],
-    profiles: null,
-    ownerIsPro: false,
-    ownerParticipantType: null,
-  } as unknown as ListingWithJoins;
+const formatAuctionDate = (value: string, isGreek: boolean) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(isGreek ? "el-GR" : "en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Europe/Athens",
+  }).format(date);
 };
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -241,6 +165,7 @@ const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionall
   ownershipBadge,
   ownershipPct,
   isGreek,
+  translate,
 }: {
   title: string;
   city: string;
@@ -259,26 +184,32 @@ const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionall
   ownershipBadge: { cls: string; label: string } | null;
   ownershipPct: number | null;
   isGreek: boolean;
+  translate: AuctionDetailTranslate;
 }) => { // skipcq: JS-R1005 - Auction title section renders optional metadata and badges in one header.
   const badge = countdownBadge(days, isGreek ? "el" : "en");
-  const missingLabel = isGreek ? "\u0394\u03b5\u03bd \u03c0\u03b1\u03c1\u03ad\u03c7\u03b5\u03c4\u03b1\u03b9" : "Not provided";
+  const missingLabel = translate("property.notProvided", { defaultValue: "Not provided" });
   const timeToAuction = days < 999
     ? days === 0
-      ? (isGreek ? "Σήμερα" : "Today")
-      : (isGreek ? `Σε ${days} ημέρες` : `${days} day${days !== 1 ? "s" : ""} to go`)
+      ? translate("auctions.detail.today", { defaultValue: isGreek ? "Σήμερα" : "Today" })
+      : translate("auctions.detail.daysToGo", {
+          count: days,
+          defaultValue: isGreek
+            ? `Σε ${days} ημέρες`
+            : `${days} day${days !== 1 ? "s" : ""} to go`,
+        })
     : null;
-  const floorValue = formatFloorSpec(floor, totalFloors) ?? missingLabel;
+  const floorValue = formatFloorSpec(floor, totalFloors, isGreek ? "el" : "en") ?? missingLabel;
   const specItems: HeroSpecItem[] = [
-    { key: "surface", label: "Surface", value: sqm != null && sqm > 1 ? formatAreaSpec(sqm) : null, icon: Square, emphasis: true },
-    { key: "bedrooms", label: "Bedrooms", value: bedrooms, icon: BedDouble },
-    { key: "bathrooms", label: "Bathrooms", value: bathrooms, icon: Bath },
-    { key: "floor", label: "Floor", value: floorValue, icon: Layers },
-    { key: "built", label: "Built", value: yearBuilt, icon: Building2 },
-    { key: "energy", label: "Energy", value: energyClass && energyClass !== "Exempt" ? energyClass : null, icon: Zap, emphasis: true },
-    { key: "auction-date", label: "Auction", value: auctionDate ? formatDate(auctionDate) : null, icon: Calendar, emphasis: true },
-    { key: "countdown", label: "Timing", value: timeToAuction, icon: Clock },
-    { key: "ownership", label: "Ownership", value: ownershipBadge?.label ?? null, icon: Building2 },
-    { key: "ownership-share", label: "Share", value: ownershipPct != null && ownershipPct < 100 ? `${ownershipPct}%` : null, icon: Scale },
+    { key: "surface", label: translate("property.area", { defaultValue: "Surface" }), value: sqm != null && sqm > 1 ? formatAreaSpec(sqm, isGreek ? "el-GR" : "en-GB") : null, icon: Square, emphasis: true },
+    { key: "bedrooms", label: translate("property.bedrooms", { defaultValue: "Bedrooms" }), value: bedrooms, icon: BedDouble },
+    { key: "bathrooms", label: translate("property.bathrooms", { defaultValue: "Bathrooms" }), value: bathrooms, icon: Bath },
+    { key: "floor", label: translate("property.floor", { defaultValue: "Floor" }), value: floorValue, icon: Layers },
+    { key: "built", label: translate("property.yearBuilt", { defaultValue: "Built" }), value: yearBuilt, icon: Building2 },
+    { key: "energy", label: translate("property.energyClass", { defaultValue: "Energy" }), value: energyClass && energyClass !== "Exempt" ? energyClass : null, icon: Zap, emphasis: true },
+    { key: "auction-date", label: translate("auctions.detail.auction", { defaultValue: "Auction" }), value: auctionDate ? formatAuctionDate(auctionDate, isGreek) : null, icon: Calendar, emphasis: true },
+    { key: "countdown", label: translate("auctions.detail.timing", { defaultValue: "Timing" }), value: timeToAuction, icon: Clock },
+    { key: "ownership", label: translate("auctions.detail.ownership", { defaultValue: "Ownership" }), value: ownershipBadge?.label ?? null, icon: Building2 },
+    { key: "ownership-share", label: translate("auctions.detail.share", { defaultValue: "Share" }), value: ownershipPct != null && ownershipPct < 100 ? `${ownershipPct}%` : null, icon: Scale },
   ];
 
   return (
@@ -319,7 +250,7 @@ const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionall
 };
 
 const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates auction state, SEO, media, map, valuation, and assistant sections in one page shell.
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const locale = isGreek ? "el" : "en";
   const { id = "" } = useParams<{ id: string }>();
@@ -327,9 +258,9 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const [walkScore, setWalkScore] = useState<number | null>(null);
   const { user } = useAuth();
   const { isPro } = useSubscription();
+  const translate: AuctionDetailTranslate = (key, options) => t(key, options);
 
   const auctionFromState = getAuctionFromRouteState(state);
-  const stateHasWebsiteUrl = Boolean(getSafeAuctionWebsiteUrl(auctionFromState));
   const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings(AUCTION_DETAIL_LOOKUP_LIMIT, {
     enabled: !auctionFromState,
   });
@@ -337,17 +268,28 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
     () => allAuctions.find((auction) => auction.id === id) ?? null,
     [allAuctions, id],
   );
-  const { data: auctionById = null, isLoading: auctionByIdLoading } = useQuery({
+  const {
+    data: auctionById = null,
+    isLoading: auctionByIdLoading,
+    isFetching: auctionByIdFetching,
+    isFetched: auctionByIdFetched,
+    isError: auctionByIdError,
+  } = useQuery({
     queryKey: ["auction-listing-by-id", id],
     queryFn: () => fetchAuctionListingById(id),
-    enabled: Boolean(id) && (!auctionFromState || !stateHasWebsiteUrl),
+    enabled: Boolean(id),
     staleTime: AUCTION_DETAIL_QUERY_STALE_TIME,
     gcTime: AUCTION_DETAIL_QUERY_STALE_TIME,
   });
-  const auction = mergeAuctionDetailData(
-    auctionFromState ?? (auctionFromCache as Record<string, unknown> | null),
-    auctionById as Record<string, unknown> | null,
+  const fallbackAuction = auctionFromState ?? (auctionFromCache as Record<string, unknown> | null);
+  const exactAuction = auctionById as Record<string, unknown> | null;
+  const auction = mergeAuctionDetailData(exactAuction, fallbackAuction);
+  const hasFallbackAuction = Boolean(fallbackAuction);
+  const verificationFailed = hasFallbackAuction && (
+    auctionByIdError ||
+    (auctionByIdFetched && !auctionByIdFetching && !auctionByIdLoading && !exactAuction)
   );
+  const verificationPending = hasFallbackAuction && !verificationFailed && !exactAuction;
   const aiInsightsListing = useMemo(
     () => auction ? buildAuctionInsightsListing(auction, id) : null,
     [auction, id],
@@ -411,7 +353,7 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const energyClass = getNullableString(auction.energy_class);
   const lat = asNumber(auction.latitude);
   const lng = asNumber(auction.longitude);
-  const websiteUrl = safeUrl(auction.website_url as string | null | undefined);
+  const websiteUrl = getSafeAuctionWebsiteUrl(auction);
   const propertyType = auction.property_type as string | undefined;
   const propertyTypeLabel = getPropertyTypeLabel(auction as Parameters<typeof getPropertyTypeLabel>[0], locale);
   const images = getAuctionImageList({
@@ -452,7 +394,7 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
     {
       title: isGreek ? "Πλειστηριασμός" : "Auction",
       rows: [
-        { label: isGreek ? "Ημερομηνία πλειστηριασμού" : "Auction Date", value: auctionDate ? formatDate(auctionDate) : null },
+        { label: isGreek ? "Ημερομηνία πλειστηριασμού" : "Auction Date", value: auctionDate ? formatAuctionDate(auctionDate, isGreek) : null },
         { label: isGreek ? "Τιμή πρώτης προσφοράς" : "First Offer Price", value: formatPrice(bid) },
         { label: isGreek ? "Καθεστώς κυριότητας" : "Ownership Status", value: ownershipBadge?.label ?? null },
         { label: isGreek ? "Ποσοστό κυριότητας" : "Ownership Share", value: ownershipPct != null && ownershipPct < 100 ? `${ownershipPct}%` : null },
@@ -540,8 +482,28 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
         <AuctionBreadcrumb title={title} isGreek={isGreek} />
 
         <div className="container pb-10">
-          <div className="grid lg:grid-cols-[1fr_340px] gap-6 lg:gap-8">
-            <div className="space-y-5">
+          {verificationPending && (
+            <div
+              role="status"
+              data-testid="auction-verification-status"
+              className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2.5 text-sm text-foreground"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+              <p>{t("auctions.detail.verifyingCached")}</p>
+            </div>
+          )}
+          {verificationFailed && (
+            <div
+              role="alert"
+              data-testid="auction-verification-status"
+              className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2.5 text-sm text-foreground"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <p>{t("auctions.detail.refreshFailed")}</p>
+            </div>
+          )}
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
+            <div className="min-w-0 space-y-5">
               <PropertyGallery
                 images={images}
                 listingType="auction"
@@ -570,6 +532,7 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
                 ownershipBadge={ownershipBadge}
                 ownershipPct={ownershipPct}
                 isGreek={isGreek}
+                translate={translate}
               />
 
               <PropertyAIInsightsSection
@@ -593,7 +556,7 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
                   <div className="grid grid-cols-2 gap-4">
                     <div className="glass-card rounded-xl p-4 border border-border text-center">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">{isGreek ? "Ημερομηνία πλειστηριασμού" : "Auction Date"}</p>
-                      <p className="font-display font-bold text-sm">{auctionDate ? formatDate(auctionDate) : (isGreek ? "Θα ανακοινωθεί" : "TBC")}</p>
+                      <p className="font-display font-bold text-sm">{auctionDate ? formatAuctionDate(auctionDate, isGreek) : (isGreek ? "Θα ανακοινωθεί" : "TBC")}</p>
                     </div>
                     <div className="glass-card rounded-xl p-4 border border-brand-gold/20 text-center">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">{isGreek ? "Τιμή πρώτης προσφοράς" : "First Offer Price"}</p>
@@ -679,12 +642,12 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
               </Section>
             </div>
 
-            <div className="space-y-4 lg:sticky lg:top-24 self-start">
+            <div className="min-w-0 space-y-4 self-start lg:sticky lg:top-24">
               <div className="glass-card rounded-2xl overflow-hidden border border-primary/10 shadow-elevated">
                 <div className="bg-gradient-to-br from-primary/10 to-accent/5 border-b border-border px-5 py-4">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">{isGreek ? "Τιμή πρώτης προσφοράς" : "First Offer Price"}</p>
                   <p className="font-display text-2xl font-black text-foreground">{formatPrice(bid)}</p>
-                  {auctionDate && <p className="text-xs text-muted-foreground mt-1">{isGreek ? "Πλειστηριασμός" : "Auction"}: {formatDate(auctionDate)}</p>}
+                  {auctionDate && <p className="text-xs text-muted-foreground mt-1">{isGreek ? "Πλειστηριασμός" : "Auction"}: {formatAuctionDate(auctionDate, isGreek)}</p>}
                 </div>
                 {websiteUrl && (
                   <div className="p-5 space-y-3">

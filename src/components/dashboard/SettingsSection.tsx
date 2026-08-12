@@ -5,13 +5,10 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import type { ParticipantId } from "@/lib/participantConfig";
+import { PARTICIPANT_LABELS, type ParticipantId } from "@/lib/participantConfig";
 import { logger } from "@/lib/logger";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  markRoleSwitchOperationBegun,
-  prepareRoleSwitchOperation,
-} from "@/pages/onboarding/onboardingHelpers";
+import { prepareRoleSwitchOperation } from "@/pages/onboarding/onboardingHelpers";
 
 const ROLE_PERMISSIONS: Record<ParticipantId, { label: string; can: string[] }> = {
   buyer:         { label: "Buyer / Renter",      can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
@@ -23,25 +20,18 @@ const ROLE_PERMISSIONS: Record<ParticipantId, { label: string; can: string[] }> 
   institutional: { label: "Institutional",       can: ["Bulk listings", "Portfolio management", "Institutional deal flow", "Dedicated support"] },
 };
 
-const ROLE_SWITCH_ERROR_MESSAGES: Record<string, string> = {
-  profile_not_found: "Your profile record was not found. Please sign out, sign back in, and try again. If the problem persists, contact support.",
-  not_authenticated: "Your session has expired. Please sign in again.",
-  profile_update_failed: "Failed to update your profile. Please try again in a moment.",
-  active_firesale_commitment_blocks_role_switch: "You have an active Quick Sale reservation or commitment. Resolve it before switching account type.",
-  accepted_open_house_offer_blocks_role_switch: "You have an accepted open-house offer. Resolve it before switching account type.",
-  role_switch_user_id_required: "Could not identify your account for role switching. Please sign out and back in.",
-};
-
-const stripeErrorFromResponse = (data: unknown): string | null => {
-  if (!data || typeof data !== "object") return null;
-  const value = (data as { stripe_error?: unknown }).stripe_error;
-  return typeof value === "string" && value.length > 0 ? value : null;
-};
+const SELF_SERVICE_ROLE_TARGETS: ParticipantId[] = [
+  "buyer",
+  "seller",
+  "agent",
+  "developer",
+  "professional",
+];
 
 export function SettingsSection({
   roleLabel,
   onUpdate: _onUpdate,
-  refreshProfile,
+  refreshProfile: _refreshProfile,
   currentType,
   hasActiveSub,
 }: {
@@ -53,137 +43,50 @@ export function SettingsSection({
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [switching, setSwitching] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [targetType, setTargetType] = useState<ParticipantId | "">("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const invokeBeginRoleSwitch = async (
-    validateOnly: boolean,
-    auditId?: string,
-  ): Promise<boolean> => {
-    const { error } = await supabase.functions.invoke("begin-role-switch", {
-      body: validateOnly ? { validate_only: true } : { audit_id: auditId },
-    });
-    if (error) {
-      const friendlyMsg = ROLE_SWITCH_ERROR_MESSAGES[error.message]
-        ?? "Could not start role switch. Please try again or contact support.";
-      toast.error(friendlyMsg);
-      return false;
-    }
-    return true;
-  };
-
-  const logRoleSwitchStart = async (
-    operationId: string,
-  ): Promise<string | null> => {
-    if (!currentType) return null;
-
-    try {
-      const { data, error } = await supabase.functions.invoke("log-role-switch", {
-        body: {
-          operation_id: operationId,
-          from_type: currentType,
-          to_type: "",
-          cancel_subscription: true,
-        },
-      });
-      if (error) {
-        logger.warn("[SettingsSection] log-role-switch start failed:", error.message);
-        toast.error("We couldn't cancel your active Stripe subscription. Please manage it from Billing before switching account type.");
-        return null;
-      }
-      if (stripeErrorFromResponse(data)) {
-        toast.error("We couldn't cancel your active Stripe subscription. Please manage it from Billing before switching account type.");
-        return null;
-      }
-      const auditId = data && typeof data === "object"
-        ? (data as { audit_id?: unknown }).audit_id
-        : null;
-      if (auditId !== operationId) {
-        logger.warn("[SettingsSection] log-role-switch returned an unexpected audit id");
-        toast.error("We couldn't establish a safe account-switch audit. Please try again.");
-        return null;
-      }
-      return auditId;
-    } catch (err: unknown) {
-      logger.warn("[SettingsSection] log-role-switch start threw:", err instanceof Error ? err.message : err);
-      toast.error("We couldn't cancel your active Stripe subscription. Please manage it from Billing before switching account type.");
-      return null;
-    }
-  };
-
-  // Role switch starts with a validate-only begin-role-switch call. That checks
-  // business blockers without mutating the profile, so Stripe is not cancelled
-  // for users who cannot switch yet. Once the current core subscription is
-  // safely marked cancel-at-period-end, the real begin-role-switch call:
-  //   - clears participant_type + bio,
-  //   - stamps profiles.role_switch_in_progress_at,
-  //   - pauses/cancels active role-specific public and counterparty workflows.
-  // The subsequent /onboarding flow finalises the switch with
-  // complete_onboarding_role_for_user(), which clears the sentinel and
-  // unarchives the destination role's rows (idempotent).
-  const handleSwitchRole = async () => {
-    setSwitching(true);
-
+  // Settings records only a local, destination-bound intent. Billing and role
+  // mutations happen after the destination-specific review on /onboarding.
+  const prepareRoleSwitchReview = () => {
     if (!currentType) {
       toast.error("Could not identify your current account type. Please refresh and try again.");
-      setSwitching(false);
       return;
     }
     if (!user?.id) {
-      toast.error(ROLE_SWITCH_ERROR_MESSAGES.role_switch_user_id_required);
-      setSwitching(false);
+      toast.error("Could not identify your account for role switching. Please sign out and back in.");
+      return;
+    }
+    if (!targetType || targetType === currentType) {
+      toast.error("Choose a different participant type to continue.");
       return;
     }
 
-    let operationId: string;
     try {
-      operationId = prepareRoleSwitchOperation({
+      const operation = prepareRoleSwitchOperation({
         userId: user.id,
         fromType: currentType,
+        toType: targetType,
         hadActiveSub: hasActiveSub,
-      }).operationId;
+      });
+      sessionStorage.setItem("role_switch_ctx", JSON.stringify({
+        userId: user.id,
+        fromType: currentType,
+        toType: targetType,
+        hadActiveSub: hasActiveSub,
+        auditId: operation.operationId,
+        status: "prepared",
+      }));
     } catch (error: unknown) {
       logger.warn("[SettingsSection] role-switch operation could not be persisted", {
         error: error instanceof Error ? error.message : String(error),
       });
       toast.error("Could not safely start the account switch in this browser. Enable site storage and try again.");
-      setSwitching(false);
       return;
     }
 
-    if (!(await invokeBeginRoleSwitch(true))) {
-      setSwitching(false);
-      return;
-    }
-
-    const auditId = await logRoleSwitchStart(operationId);
-    if (!auditId) {
-      setSwitching(false);
-      return;
-    }
-
-    if (!(await invokeBeginRoleSwitch(false, auditId))) {
-      setSwitching(false);
-      return;
-    }
-    try {
-      markRoleSwitchOperationBegun(auditId, user.id);
-      sessionStorage.setItem("role_switch_ctx", JSON.stringify({
-        userId: user.id,
-        fromType: currentType,
-        hadActiveSub: hasActiveSub,
-        auditId,
-      }));
-    } catch (error: unknown) {
-      logger.warn("[SettingsSection] role-switch navigation context could not be persisted", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-    await refreshProfile();
-    setSwitching(false);
-    toast.success("Account type cleared — redirecting to setup…");
     navigate("/onboarding");
   };
 
@@ -269,17 +172,17 @@ export function SettingsSection({
 
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
           <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
-            <span>⚡</span> Before you switch — important billing &amp; access notes
+            Before you switch: billing and account effects
           </p>
           <ul className="text-xs text-muted-foreground space-y-1.5 leading-relaxed list-none">
             {[
-              { color: "text-brand-gold",    text: <><strong className="text-foreground">Extra charges may apply.</strong> Upgrading to a higher-tier participant type (e.g. Agent, Developer) may activate a paid plan. You will be informed before any charge is made.</> },
-              { color: "text-destructive",   text: <><strong className="text-foreground">No refunds on downgrade.</strong> If you switch to a lower-tier type mid-billing cycle, the remaining period is non-refundable per our Terms of Service.</> },
-              { color: "text-brand-emerald", text: <><strong className="text-foreground">Access rights will change.</strong> Choosing a superior participant type may unlock additional features and data access (e.g. deal flow, leads). Admin features live only at /admin and require platform admin. These are granted server-side upon plan activation.</> },
-              { color: "text-primary",       text: <><strong className="text-foreground">Pricing adjustment.</strong> After selecting your new type, you will be redirected to the Pricing page to choose or update your plan. Switch does not grant admin — only dashboard layout and feature visibility change.</> },
+              { color: "text-brand-gold", text: <><strong className="text-foreground">Billing is checked by Stripe after confirmation.</strong> Any active core subscription is set to cancel at the end of its current period before the role change starts.</> },
+              { color: "text-destructive", text: <><strong className="text-foreground">Operational work is affected.</strong> Active listings are paused; pending viewings, registrations, offers, leads, contacts, and active conversations may be cancelled or closed.</> },
+              { color: "text-brand-emerald", text: <><strong className="text-foreground">Historical account data remains.</strong> Saved properties and message history remain attached to your account. Professional profiles or developer projects are archived while that role is inactive.</> },
+              { color: "text-primary", text: <><strong className="text-foreground">Access and pricing change by destination.</strong> You will review the exact destination before anything is mutated. Switching never grants platform-admin access.</> },
             ].map(({ color, text }, i) => (
               <li key={i} className="flex items-start gap-2">
-                <span className={`${color} shrink-0 mt-0.5`}>▸</span>
+                <span aria-hidden="true" className={`${color} shrink-0 mt-0.5`}>-</span>
                 <span>{text}</span>
               </li>
             ))}
@@ -291,27 +194,47 @@ export function SettingsSection({
             <Settings className="w-4 h-4" /> Switch Participant Type
           </Button>
         ) : (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
-            <p className="text-sm font-semibold text-destructive">Confirm switch</p>
-            <p className="text-xs text-muted-foreground">
-              Your current setup (<strong>{roleLabel}</strong>) will be cleared and you'll go through onboarding again.
-              Your listings, saved properties, and messages won't be affected. By proceeding you acknowledge the billing &amp; access notes above.
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="role-switch-destination" className="text-sm font-semibold">
+                New participant type
+              </label>
+              <select
+                id="role-switch-destination"
+                value={targetType}
+                onChange={(event) => setTargetType(event.target.value as ParticipantId | "")}
+                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Choose a participant type</option>
+                {SELF_SERVICE_ROLE_TARGETS
+                  .filter((type) => type !== currentType)
+                  .map((type) => (
+                    <option key={type} value={type}>{PARTICIPANT_LABELS[type]}</option>
+                  ))}
+              </select>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Next you will review destination pricing and every account effect. Nothing is
+              cancelled, paused, archived, or cleared until you confirm that review.
             </p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="border-border" onClick={() => setConfirmOpen(false)}>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Investor and institutional access require approval and are not available through
+              self-service account switching.
+            </p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" className="min-h-11 border-border" onClick={() => {
+                setConfirmOpen(false);
+                setTargetType("");
+              }}>
                 Cancel
               </Button>
               <Button
-                size="sm"
-                className="bg-destructive/90 border-0 text-destructive-foreground hover:bg-destructive gap-2"
-                disabled={switching}
-                onClick={handleSwitchRole}
+                className="min-h-11 gap-2"
+                disabled={!targetType}
+                onClick={prepareRoleSwitchReview}
               >
-                {switching
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  : <ArrowRight className="w-3.5 h-3.5" />
-                }
-                I understand — switch my type
+                <ArrowRight className="w-4 h-4" />
+                Review switch
               </Button>
             </div>
           </div>

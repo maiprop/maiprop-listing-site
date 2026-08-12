@@ -192,7 +192,13 @@ beforeEach(() => {
   Object.values(mocks.toast).forEach((mock) => mock.mockReset());
   mocks.auth.mockReturnValue({ user: null, profile: null });
   mocks.subscription.mockReturnValue({ isPro: false });
-  mocks.listing.mockReturnValue({ data: baseListing, isLoading: false, isError: false });
+  mocks.listing.mockReturnValue({
+    data: baseListing,
+    isLoading: false,
+    isFetching: false,
+    isPlaceholderData: false,
+    isError: false,
+  });
   mocks.ownerPro.mockReturnValue({ data: false });
   mocks.similar.mockReturnValue({ data: [] });
   mocks.favorites.mockReturnValue({ data: [] });
@@ -308,6 +314,50 @@ describe("PropertyDetail business branches", () => {
     await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ title: "Athens Home" })));
   });
 
+  it("marks UUID auction route state as cached while authoritative revalidation is pending", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const auction = { ...baseListing, id, listing_type: "auction" };
+    mocks.listing.mockImplementation((_listingId: string, options: { initialData?: typeof baseListing }) => ({
+      data: options.initialData ?? null,
+      isLoading: false,
+      isFetching: true,
+      isPlaceholderData: true,
+      isError: false,
+    }));
+
+    renderPage(`/auction/${id}`, { auction });
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Showing cached auction details while we verify the latest information.",
+    );
+    expect(screen.getByRole("heading", { name: "Athens Home" })).toBeInTheDocument();
+  });
+
+  it("keeps UUID auction route state visible and warns when authoritative revalidation fails", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const auction = { ...baseListing, id, listing_type: "auction" };
+    mocks.listing.mockImplementation((_listingId: string, options: { initialData?: typeof baseListing }) => ({
+      data: options.initialData ?? null,
+      isLoading: false,
+      isFetching: false,
+      isPlaceholderData: true,
+      isError: true,
+    }));
+
+    renderPage(`/auction/${id}`, { auction });
+
+    expect(mocks.listing).toHaveBeenCalledWith(
+      id,
+      expect.objectContaining({ initialData: expect.objectContaining({ id }) }),
+    );
+    expect(screen.getByRole("heading", { name: "Athens Home" })).toBeInTheDocument();
+    expect(screen.getByText("ai insights")).toBeInTheDocument();
+    expect(screen.queryByText("property.errorLoad")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Live auction details could not be refreshed. The information shown may be outdated.",
+    );
+  });
+
   it("distinguishes unavailable data from query errors and routes canonical new builds", async () => {
     mocks.listing.mockReturnValue({ data: null, isLoading: false, isError: false });
     const unavailable = renderPage();
@@ -316,8 +366,23 @@ describe("PropertyDetail business branches", () => {
     expect(mocks.navigate).toHaveBeenCalledWith("/listings");
     unavailable.unmount();
 
-    mocks.listing.mockReturnValue({ data: { ...baseListing, listing_type: "new_build" }, isLoading: false, isError: false });
+    mocks.listing.mockReturnValue({
+      data: { ...baseListing, listing_type: "new_build", publicationId: 871 },
+      isLoading: false,
+      isError: false,
+    });
     renderPage();
-    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith("/new-build/listing-1", { replace: true }));
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith(
+      "/new-build/listing-1",
+      {
+        replace: true,
+        state: {
+          listing: expect.objectContaining({
+            id: "listing-1",
+            publicationId: 871,
+          }),
+        },
+      },
+    ));
   });
 });

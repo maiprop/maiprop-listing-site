@@ -36,6 +36,7 @@ describe("budgetKeyFor — Vite 7 (base64url hash)", () => {
 
   it("maps named manual chunks with mixed-case hashes", () => {
     expect(budgetKeyFor("vendor-react-AbCdEfGh.js")).toBe("vendor-react");
+    expect(budgetKeyFor("vendor-sentry-AbCdEfGh.js")).toBe("vendor-sentry");
     expect(budgetKeyFor("vendor-radix-core-ZyXwVuTs.js")).toBe("vendor-radix-core");
     expect(budgetKeyFor("vendor-radix-overlays-QwErTy12.js")).toBe("vendor-radix-overlays");
     expect(budgetKeyFor("vendor-icons-QwErTyUi.js")).toBe("vendor-icons");
@@ -99,6 +100,10 @@ describe("BUDGETS_KB invariants", () => {
   it("has explicit budgets for lazy Mapbox and chart chunks", () => {
     expect(BUDGETS_KB["vendor-mapbox"]).toBeTypeOf("number");
     expect(BUDGETS_KB["vendor-charts"]).toBeTypeOf("number");
+  });
+
+  it("has an explicit Sentry budget so observability integrations cannot grow unnoticed", () => {
+    expect(BUDGETS_KB["vendor-sentry"]).toBeTypeOf("number");
   });
 });
 

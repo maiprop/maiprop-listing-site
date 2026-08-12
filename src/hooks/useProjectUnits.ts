@@ -12,6 +12,7 @@ import {
   projectUnitUpdateMutationSchema,
   scopedRowDeleteMutationSchema,
 } from "@/lib/mutationSchemas";
+import { accountQueryKey } from "@/lib/identityQueryBoundary";
 
 /** A project_units row as fetched by the list query. */
 export type ProjectUnit = Database["public"]["Tables"]["project_units"]["Row"];
@@ -57,8 +58,9 @@ type BulkUpdateProjectUnitPricesResponse = {
 };
 
 export const useProjectUnits = (projectId: string | undefined) => {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["project_units", projectId],
+    queryKey: accountQueryKey(user?.id, "project_units", projectId),
     queryFn: async () => {
       if (!projectId) return [];
       const { data, error } = await supabase
@@ -70,7 +72,7 @@ export const useProjectUnits = (projectId: string | undefined) => {
       if (error) throw error;
       return data || [];
     },
-    enabled: Boolean(projectId),
+    enabled: Boolean(user && projectId),
     staleTime: FAST_CHANGING_QUERY_STALE_TIME,
   });
 };
@@ -89,8 +91,12 @@ export const useCreateProjectUnit = () => {
       });
     },
     onSuccess: (_data, { project_id }) => {
-      qc.invalidateQueries({ queryKey: ["project_units", project_id] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project_units", project_id),
+      });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "projects"),
+      });
       toast.success("Unit added");
     },
     onError: () => toast.error("Failed to add unit. Please try again."),
@@ -116,8 +122,12 @@ export const useUpdateProjectUnit = () => {
       });
     },
     onSuccess: (_data, { projectId }) => {
-      qc.invalidateQueries({ queryKey: ["project_units", projectId] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project_units", projectId),
+      });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "projects"),
+      });
       toast.success("Unit updated");
     },
     onError: () => toast.error("Failed to update unit. Please try again."),
@@ -126,8 +136,10 @@ export const useUpdateProjectUnit = () => {
 
 export const useBulkUpdateProjectUnitPrices = () => {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ projectId, units, percentage }: BulkUpdateProjectUnitPricesInput) => {
+      if (!user) throw new Error("Must be logged in");
       if (units.length === 0) return { updatedCount: 0 };
       const payload = parseMutationInput(
         projectUnitBulkPriceMutationSchema,
@@ -147,8 +159,12 @@ export const useBulkUpdateProjectUnitPrices = () => {
       return { updatedCount: Number(data?.updatedCount ?? 0) };
     },
     onSuccess: (_data, { projectId }) => {
-      qc.invalidateQueries({ queryKey: ["project_units", projectId] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project_units", projectId),
+      });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "projects"),
+      });
     },
     onError: () => toast.error("Failed to update unit prices. Please try again."),
   });
@@ -168,8 +184,12 @@ export const useDeleteProjectUnit = () => {
       });
     },
     onSuccess: (_data, { projectId }) => {
-      qc.invalidateQueries({ queryKey: ["project_units", projectId] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "project_units", projectId),
+      });
+      qc.invalidateQueries({
+        queryKey: accountQueryKey(user?.id, "projects"),
+      });
       toast.success("Unit removed");
     },
     onError: () => toast.error("Failed to remove unit. Please try again."),

@@ -12,6 +12,7 @@ export interface SeoEnv {
   VITE_SUPABASE_URL?: string;
   VITE_SUPABASE_PROJECT_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
   VITE_SUPABASE_PUBLISHABLE_KEY?: string;
   VITE_SUPABASE_ANON_KEY?: string;
 }
@@ -99,6 +100,13 @@ function isSafeToken(value: string, maxLength: number): boolean {
 export function getSupabaseRuntime(env: SeoEnv): SupabaseRuntime | null {
   const projectId = getSupabaseProjectId(env);
   const key = env.SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_ANON_KEY;
+  if (!projectId || !key) return null;
+  return { url: `https://${projectId}.supabase.co`, key };
+}
+
+export function getSupabaseServiceRuntime(env: SeoEnv): SupabaseRuntime | null {
+  const projectId = getSupabaseProjectId(env);
+  const key = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!projectId || !key) return null;
   return { url: `https://${projectId}.supabase.co`, key };
 }

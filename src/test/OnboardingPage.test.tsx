@@ -66,17 +66,29 @@ vi.mock("@/components/onboarding/PickTypeStep", () => ({
     onConfirm,
     onDeveloperImmediate,
     onProfessionalImmediate,
+    allowedParticipantIds,
   }: {
     onConfirm: (id: string) => void;
     onDeveloperImmediate: () => void;
     onProfessionalImmediate: () => void;
+    allowedParticipantIds?: readonly string[];
   }) => (
     <div>
-      <button onClick={() => onConfirm("buyer")}>buyer role</button>
-      <button onClick={() => onConfirm("seller")}>seller role</button>
-      <button onClick={() => onConfirm("agent")}>agent role</button>
-      <button onClick={onDeveloperImmediate}>developer role</button>
-      <button onClick={onProfessionalImmediate}>professional role</button>
+      {(!allowedParticipantIds || allowedParticipantIds.includes("buyer")) && (
+        <button onClick={() => onConfirm("buyer")}>buyer role</button>
+      )}
+      {(!allowedParticipantIds || allowedParticipantIds.includes("seller")) && (
+        <button onClick={() => onConfirm("seller")}>seller role</button>
+      )}
+      {(!allowedParticipantIds || allowedParticipantIds.includes("agent")) && (
+        <button onClick={() => onConfirm("agent")}>agent role</button>
+      )}
+      {(!allowedParticipantIds || allowedParticipantIds.includes("developer")) && (
+        <button onClick={onDeveloperImmediate}>developer role</button>
+      )}
+      {(!allowedParticipantIds || allowedParticipantIds.includes("professional")) && (
+        <button onClick={onProfessionalImmediate}>professional role</button>
+      )}
     </div>
   ),
 }));
@@ -171,6 +183,37 @@ import Onboarding from "@/pages/Onboarding";
 
 const ROLE_SWITCH_AUDIT_ID = "11111111-1111-4111-8111-111111111111";
 const AUTH_USER_ID = "u-1";
+
+const seedRoleSwitch = ({
+  fromType,
+  toType,
+  hadActiveSub,
+  status = "prepared",
+}: {
+  fromType: string;
+  toType: string;
+  hadActiveSub: boolean;
+  status?: "prepared" | "begun";
+}) => {
+  const context = {
+    userId: AUTH_USER_ID,
+    fromType,
+    toType,
+    hadActiveSub,
+    auditId: ROLE_SWITCH_AUDIT_ID,
+    status,
+  };
+  sessionStorage.setItem("role_switch_ctx", JSON.stringify(context));
+  localStorage.setItem("maiprop_role_switch_operation_v1", JSON.stringify({
+    userId: AUTH_USER_ID,
+    operationId: ROLE_SWITCH_AUDIT_ID,
+    fromType,
+    toType,
+    hadActiveSub,
+    status,
+    createdAt: Date.now(),
+  }));
+};
 
 const authState = (overrides: Record<string, unknown> = {}) => ({
   user: { id: AUTH_USER_ID, user_metadata: { full_name: "A Pro" } },
@@ -490,12 +533,7 @@ describe("Onboarding page handlers", () => {
   });
 
   it("keeps role-switch confirmation cancellable before proceeding", async () => {
-    sessionStorage.setItem("role_switch_ctx", JSON.stringify({
-      userId: AUTH_USER_ID,
-      fromType: "agent",
-      hadActiveSub: true,
-      auditId: ROLE_SWITCH_AUDIT_ID,
-    }));
+    seedRoleSwitch({ fromType: "agent", toType: "seller", hadActiveSub: true });
     renderOnboarding();
 
     fireEvent.click(screen.getByRole("button", { name: /seller role/i }));
@@ -504,28 +542,12 @@ describe("Onboarding page handlers", () => {
     fireEvent.click(screen.getByRole("button", { name: /cancel switch/i }));
     expect(screen.queryByTestId("role-switch-modal")).not.toBeInTheDocument();
     expect(invokeMock).not.toHaveBeenCalledWith("log-role-switch", expect.anything());
-
-    fireEvent.click(screen.getByRole("button", { name: /seller role/i }));
-    fireEvent.click(screen.getByRole("button", { name: /confirm switch/i }));
-
-    await waitFor(() => expect(screen.getByText("done-screen")).toBeInTheDocument());
-    expect(invokeMock).toHaveBeenCalledWith("log-role-switch", {
-      body: expect.objectContaining({
-        operation_id: ROLE_SWITCH_AUDIT_ID,
-        from_type: "agent",
-        to_type: "seller",
-        cancel_subscription: true,
-      }),
-    });
+    expect(localStorage.getItem("maiprop_role_switch_operation_v1")).toBeNull();
+    expect(navigateMock).toHaveBeenCalledWith("/dashboard/settings", { replace: true });
   });
 
   it("does not bypass the server billing audit for a same-tier buyer-to-seller switch", async () => {
-    sessionStorage.setItem("role_switch_ctx", JSON.stringify({
-      userId: AUTH_USER_ID,
-      fromType: "buyer",
-      hadActiveSub: false,
-      auditId: ROLE_SWITCH_AUDIT_ID,
-    }));
+    seedRoleSwitch({ fromType: "buyer", toType: "seller", hadActiveSub: false });
     renderOnboarding();
 
     fireEvent.click(screen.getByRole("button", { name: /seller role/i }));
@@ -547,35 +569,35 @@ describe("Onboarding page handlers", () => {
   });
 
   it("recovers a begun role-switch operation from durable storage after a reload", async () => {
-    localStorage.setItem("maiprop_role_switch_operation_v1", JSON.stringify({
-      userId: AUTH_USER_ID,
-      operationId: ROLE_SWITCH_AUDIT_ID,
+    seedRoleSwitch({
       fromType: "buyer",
+      toType: "seller",
       hadActiveSub: false,
       status: "begun",
-      createdAt: Date.now(),
-    }));
+    });
 
     renderOnboarding();
     fireEvent.click(screen.getByRole("button", { name: /seller role/i }));
-    expect(screen.getByTestId("role-switch-modal")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /confirm switch/i }));
-
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith(
-      "log-role-switch",
-      { body: expect.objectContaining({ operation_id: ROLE_SWITCH_AUDIT_ID }) },
-    ));
+    expect(screen.queryByTestId("role-switch-modal")).not.toBeInTheDocument();
     expect(await screen.findByText("done-screen")).toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalledWith("log-role-switch", expect.anything());
     expect(localStorage.getItem("maiprop_role_switch_operation_v1")).toBeNull();
   });
 
   it("routes paid role-switch upgrades to the target pricing audience", async () => {
-    sessionStorage.setItem("role_switch_ctx", JSON.stringify({
-      userId: AUTH_USER_ID,
-      fromType: "buyer",
-      hadActiveSub: true,
-      auditId: ROLE_SWITCH_AUDIT_ID,
-    }));
+    seedRoleSwitch({ fromType: "buyer", toType: "agent", hadActiveSub: true });
+    invokeMock.mockImplementation((functionName: string, options?: { body?: Record<string, unknown> }) => {
+      if (functionName === "log-role-switch") {
+        return Promise.resolve({
+          data: {
+            audit_id: options?.body?.operation_id,
+            had_active_sub: true,
+          },
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: {}, error: null });
+    });
     renderOnboarding();
 
     fireEvent.click(screen.getByRole("button", { name: /agent role/i }));
@@ -595,15 +617,7 @@ describe("Onboarding page handlers", () => {
   });
 
   it("asks the server to verify billing even when the client cache reports no active subscription", async () => {
-    sessionStorage.setItem(
-      "role_switch_ctx",
-      JSON.stringify({
-        userId: AUTH_USER_ID,
-        fromType: "buyer",
-        hadActiveSub: false,
-        auditId: ROLE_SWITCH_AUDIT_ID,
-      }),
-    );
+    seedRoleSwitch({ fromType: "buyer", toType: "agent", hadActiveSub: false });
     renderOnboarding();
 
     fireEvent.click(screen.getByRole("button", { name: /agent role/i }));
@@ -627,12 +641,7 @@ describe("Onboarding page handlers", () => {
     [{ data: { stripe_error: "cancel failed" }, error: null }, "returned Stripe failure"],
     [{ data: { audit_id: "22222222-2222-4222-8222-222222222222" }, error: null }, "returned audit mismatch"],
   ])("blocks paid role switches when subscription cancellation %s", async (response) => {
-    sessionStorage.setItem("role_switch_ctx", JSON.stringify({
-      userId: AUTH_USER_ID,
-      fromType: "buyer",
-      hadActiveSub: true,
-      auditId: ROLE_SWITCH_AUDIT_ID,
-    }));
+    seedRoleSwitch({ fromType: "buyer", toType: "agent", hadActiveSub: true });
     invokeMock.mockImplementation((functionName: string) => {
       if (functionName === "log-role-switch") return Promise.resolve(response);
       return Promise.resolve({ data: {}, error: null });

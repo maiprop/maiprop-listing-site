@@ -20,6 +20,7 @@ import {
   STRIPE_API_VERSION,
   STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
   STRIPE_COMPANY_VAT_ID_DEFAULT,
+  STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER,
   STRIPE_SAAS_BUSINESS_TAX_CODE,
   STRIPE_SAAS_PERSONAL_TAX_CODE,
   stripeMetadata,
@@ -58,6 +59,13 @@ function withEnv(
 
 Deno.test("Stripe helper pins the current API version", () => {
   assertEquals(STRIPE_API_VERSION, "2026-06-24.dahlia");
+});
+
+Deno.test("Stripe Checkout uses a stable integration identifier with an eight-letter suffix", () => {
+  assertEquals(
+    /^maiprop_[a-z]{8}$/.test(STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER),
+    true,
+  );
 });
 
 Deno.test("Stripe Checkout tax helper requires VAT-ready customer details", () => {

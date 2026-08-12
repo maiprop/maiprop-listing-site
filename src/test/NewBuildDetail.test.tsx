@@ -43,7 +43,6 @@ vi.mock("@/integrations/supabase/client", () => ({
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => publicApiMock(...args),
   isPublicApiAbort: () => false,
-  shouldLogPublicApiFallback: () => true,
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubscriptionMock() }));
@@ -330,10 +329,16 @@ describe("NewBuildDetail", () => {
 
     renderPage();
     const queryOptions = useQueryMock.mock.calls[0][0] as {
+      queryKey: unknown[];
       queryFn: (ctx: { signal: AbortSignal }) => Promise<typeof listing & { profiles?: unknown }>;
     };
     const result = await queryOptions.queryFn({ signal: new AbortController().signal });
 
+    expect(queryOptions.queryKey).toEqual([
+      "listing",
+      "listing-1",
+      { publicScope: true, publicationId: null },
+    ]);
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/listing?id=listing-1",
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
@@ -341,6 +346,50 @@ describe("NewBuildDetail", () => {
     expect(fromMock).not.toHaveBeenCalledWith("listings");
     expect(fromMock).not.toHaveBeenCalledWith("profiles_public");
     expect(result.profiles).toEqual(publicProfile);
+  });
+
+  it("pins route-state publications to the canonical listing detail query", () => {
+    render(
+      <MemoryRouter
+        initialEntries={[{
+          pathname: "/new-build/listing-1",
+          state: { listing: { ...listing, publicationId: 913 } },
+        }]}
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+      >
+        <Routes>
+          <Route path="/new-build/:id" element={<NewBuildDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const queryOptions = useQueryMock.mock.calls[0][0] as {
+      placeholderData?: { id?: string; publicationId?: number };
+      queryKey: unknown[];
+    };
+    expect(queryOptions.queryKey).toEqual([
+      "listing",
+      "listing-1",
+      { publicScope: true, publicationId: 913 },
+    ]);
+    expect(queryOptions.placeholderData).toEqual(expect.objectContaining({
+      id: "listing-1",
+      publicationId: 913,
+    }));
+  });
+
+  it("does not switch to a direct Supabase detail read when the public API fails", async () => {
+    publicApiMock.mockRejectedValue(new Error("canonical new-build detail unavailable"));
+
+    renderPage();
+    const queryOptions = useQueryMock.mock.calls[0][0] as {
+      queryFn: (ctx: { signal: AbortSignal }) => Promise<unknown>;
+    };
+
+    await expect(queryOptions.queryFn({ signal: new AbortController().signal }))
+      .rejects.toThrow("canonical new-build detail unavailable");
+    expect(fromMock).not.toHaveBeenCalledWith("listings");
+    expect(fromMock).not.toHaveBeenCalledWith("profiles_public");
   });
 
   it("renders loading and not-found branches", () => {
@@ -380,6 +429,7 @@ describe("NewBuildDetail", () => {
         construction_status: "renovated",
         is_pre_sale: true,
         listing_type: "sale",
+        publicationId: 913,
       },
       isLoading: false,
       error: null,
@@ -388,7 +438,18 @@ describe("NewBuildDetail", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith("/property/listing-1", { replace: true });
+      expect(navigateMock).toHaveBeenCalledWith(
+        "/property/listing-1",
+        {
+          replace: true,
+          state: {
+            listing: expect.objectContaining({
+              id: "listing-1",
+              publicationId: 913,
+            }),
+          },
+        },
+      );
     });
   });
 

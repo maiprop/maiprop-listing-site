@@ -4,6 +4,13 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { parseMutationInput } from "@/lib/mutationSchemas";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  accountQueryKey,
+  captureIdentityEpoch,
+  isCurrentIdentityEpoch,
+} from "@/lib/identityQueryBoundary";
+import { invalidatePublicCatalogueQueries } from "@/lib/publicCatalogueQueryInvalidation";
 
 export type ListingPromotionType = "spotlight" | "priority" | "bundle";
 
@@ -34,12 +41,9 @@ const promotionBalanceSchema = z.object({
 
 export type ListingPromotionBalance = z.infer<typeof promotionBalanceSchema>;
 
-const promotionQueryKeys = [
-  ["listing-promotion-balance"],
-  ["my-listings"],
-  ["homepage-featured"],
-  ["listings"],
-] as const;
+export const listingPromotionBalanceQueryKey = (
+  userId: string | null | undefined,
+) => accountQueryKey(userId, "listing-promotion-balance");
 
 function createRequestKey(listingId: string, promotionType: ListingPromotionType) {
   const nonce = globalThis.crypto?.randomUUID?.()
@@ -55,20 +59,22 @@ function promotionErrorMessage(error: Error) {
 }
 
 export function useListingPromotionBalance(enabled = true) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["listing-promotion-balance"],
+    queryKey: listingPromotionBalanceQueryKey(user?.id),
     queryFn: async (): Promise<ListingPromotionBalance> => {
       const { data, error } = await supabase.rpc("get_listing_promotion_balance");
       if (error) throw error;
       return promotionBalanceSchema.parse(data);
     },
-    enabled,
+    enabled: Boolean(user && enabled),
     staleTime: 30_000,
   });
 }
 
 export function useActivateListingPromotion() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -91,18 +97,25 @@ export function useActivateListingPromotion() {
       if (error) throw error;
       return data;
     },
-    onSuccess: async () => {
-      await Promise.all(
-        promotionQueryKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
-      );
+    onMutate: () => ({ identityEpoch: captureIdentityEpoch() }),
+    onSuccess: (_data, variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      void queryClient.invalidateQueries({
+        queryKey: listingPromotionBalanceQueryKey(user?.id),
+      });
+      void invalidatePublicCatalogueQueries(queryClient, variables.listingId);
       toast.success("Listing promotion activated for 30 days.");
     },
-    onError: (error: Error) => toast.error(promotionErrorMessage(error)),
+    onError: (error: Error, _variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      toast.error(promotionErrorMessage(error));
+    },
   });
 }
 
 export function useDeactivateListingPromotion() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -124,12 +137,18 @@ export function useDeactivateListingPromotion() {
       if (error) throw error;
       return data;
     },
-    onSuccess: async () => {
-      await Promise.all(
-        promotionQueryKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
-      );
+    onMutate: () => ({ identityEpoch: captureIdentityEpoch() }),
+    onSuccess: (_data, variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      void queryClient.invalidateQueries({
+        queryKey: listingPromotionBalanceQueryKey(user?.id),
+      });
+      void invalidatePublicCatalogueQueries(queryClient, variables.listingId);
       toast.success("Listing promotion removed.");
     },
-    onError: () => toast.error("Could not remove this promotion. Please try again."),
+    onError: (_error, _variables, context) => {
+      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      toast.error("Could not remove this promotion. Please try again.");
+    },
   });
 }

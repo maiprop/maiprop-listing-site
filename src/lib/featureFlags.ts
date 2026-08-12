@@ -28,11 +28,16 @@
  * Naming: UPPER_SNAKE_CASE, without the `VITE_FF_` prefix.
  */
 
+import {
+  getRuntimeConfigSnapshot,
+  getRuntimeValue,
+} from "@/lib/runtimeConfig";
+
 const TRUTHY = new Set(["1", "true", "yes", "on"]);
 
 export function isEnabled(name: string): boolean {
   const key = `VITE_FF_${name.toUpperCase()}`;
-  const raw = (import.meta.env as Record<string, string | undefined>)[key];
+  const raw = getRuntimeValue(key);
   if (raw === undefined || raw === null) return false;
   return TRUTHY.has(String(raw).toLowerCase());
 }
@@ -49,7 +54,10 @@ export function useFlag(name: string): boolean {
 /** List every VITE_FF_* that Vite has inlined. Useful for a `/debug` panel. */
 export function listFlags(): Record<string, boolean> {
   const out: Record<string, boolean> = {};
-  const env = import.meta.env as Record<string, string | undefined>;
+  const env = {
+    ...(import.meta.env as Record<string, string | undefined>),
+    ...getRuntimeConfigSnapshot(),
+  };
   for (const key of Object.keys(env)) {
     if (key.startsWith("VITE_FF_")) {
       out[key.slice("VITE_FF_".length)] = TRUTHY.has(String(env[key]).toLowerCase());

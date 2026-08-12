@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { cn } from "@/lib/utils";
-import { PropertyCard } from "@/components/PropertyCard";
+import { PropertyCard, type Property } from "@/components/PropertyCard";
 
 export { fmtDate, fmtTime } from "@/lib/format";
 
@@ -64,11 +64,27 @@ export function RangeInput({
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function OpenHouseCard({ card, imagePriority = false }: { listing: any; card: any; imagePriority?: boolean }) {
+type OpenHouseSourceListing = {
+  id: string;
+  publicationId?: number;
+};
+
+export function OpenHouseCard({
+  listing,
+  card,
+  imagePriority = false,
+}: {
+  listing: OpenHouseSourceListing;
+  card: Property;
+  imagePriority?: boolean;
+}) {
   return (
     <div className={OPEN_HOUSE_CARD_LAYOUT_CLASS}>
-      <PropertyCard property={card} testId="open-house-card" imagePriority={imagePriority} />
+      <PropertyCard
+        property={{ ...card, _raw: listing }}
+        testId="open-house-card"
+        imagePriority={imagePriority}
+      />
     </div>
   );
 }

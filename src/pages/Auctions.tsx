@@ -71,6 +71,28 @@ const AuctionCardSkeleton = () => {
   );
 };
 
+const AuctionLoadError = ({
+  isGreek,
+  onRetry,
+  className = "py-20",
+}: {
+  isGreek: boolean;
+  onRetry: () => unknown;
+  className?: string;
+}) => (
+  <div role="alert" className={`flex flex-col items-center justify-center text-center gap-3 ${className}`}>
+    <AlertCircle className="w-8 h-8 text-destructive" />
+    <p className="text-sm text-muted-foreground">
+      {isGreek
+        ? "Δεν ήταν δυνατή η φόρτωση των πλειστηριασμών. Παρακαλώ δοκιμάστε ξανά."
+        : "Failed to load auctions. Please try again."}
+    </p>
+    <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+      {isGreek ? "Δοκιμάστε ξανά" : "Retry"}
+    </Button>
+  </div>
+);
+
 const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinates filter state, map/list view state, pagination, and Pro upsells.
   const { user } = useAuth();
   const trackUserSearch = useTrackUserSearch();
@@ -117,9 +139,11 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     isMaiPropOsUser,
     isLoading,
     error,
+    refetch,
     cityOptions,
     roundOptions,
     visibleFiltered,
+    visibleCount: serverVisibleCount,
     polygonFilteredCount,
     paginated,
     totalPages,
@@ -142,6 +166,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     currentPage,
     setCurrentPage,
   });
+  const visibleCount = serverVisibleCount ?? visibleFiltered.length;
 
   useEffect(() => {
     const city = selectedCity === "All Cities" ? "" : selectedCity;
@@ -162,7 +187,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
         surface: "auctions",
         query,
         route: `/auctions${window.location.search}`,
-        resultCount: visibleFiltered.length,
+        resultCount: visibleCount,
         filters: {
           city: city || undefined,
           type: filterType || undefined,
@@ -197,7 +222,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     totalRaw,
     trackUserSearch,
     viewMode,
-    visibleFiltered.length,
+    visibleCount,
   ]);
 
   const handleToggleFav = (id: string, isFav: boolean) => {
@@ -226,10 +251,11 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     ? "Περιηγηθείτε σε ηλεκτρονικούς πλειστηριασμούς ακινήτων στην Ελλάδα. Φιλτράρετε ανά πόλη, τύπο και τιμή πρώτης προσφοράς."
     : "Browse Greek electronic property auctions. Filter by city, type, and first offer price.";
   const metaName = isGreek ? "Πλειστηριασμοί Ακινήτων στην Ελλάδα" : "Greek Property Auctions";
+  const statsUnavailable = isLoading || Boolean(error);
   const auctionStats = [
-  { value: isLoading ? "—" : String(thisWeek), label: isGreek ? "Αυτή την εβδομάδα" : "This Week", icon: Gavel },
-  { value: isLoading ? "—" : visibleFiltered.length.toLocaleString(), label: isGreek ? "Ορατοί πλειστηριασμοί" : "Visible Auctions", icon: TrendingUp },
-  { value: isLoading ? "—" : avgBid > 0 ? formatPrice(avgBid) : "—", label: isGreek ? "Μέση τιμή πρώτης προσφοράς" : "Avg First Offer Price", icon: TrendingUp }];
+  { value: statsUnavailable ? "—" : String(thisWeek), label: isGreek ? "Αυτή την εβδομάδα" : "This Week", icon: Gavel },
+  { value: statsUnavailable ? "—" : visibleCount.toLocaleString(), label: isGreek ? "Ορατοί πλειστηριασμοί" : "Visible Auctions", icon: TrendingUp },
+  { value: statsUnavailable ? "—" : avgBid > 0 ? formatPrice(avgBid) : "—", label: isGreek ? "Μέση τιμή πρώτης προσφοράς" : "Avg First Offer Price", icon: TrendingUp }];
   const mobileTypeLabels: Record<string, string> = {
     apartment: "Διαμέρισμα",
     house: "Μονοκατοικία",
@@ -298,6 +324,11 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               </div>
               <button
+                type="button"
+                aria-label={isGreek ? "Φίλτρα" : "Filters"}
+                aria-controls="mobile-auction-filters"
+                aria-expanded={showFilters}
+                aria-pressed={showFilters}
                 onClick={() => setShowFilters((v) => !v)}
                 className={`shrink-0 h-9 flex items-center gap-1.5 px-3 rounded-xl border text-sm font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
                 <SlidersHorizontal className="w-4 h-4" />
@@ -318,11 +349,11 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
 
             {/* Mobile filter dropdown panel */}
             {showFilters && (
-              <div className="border border-border rounded-xl bg-card/95 p-4 space-y-4">
+              <div id="mobile-auction-filters" className="border border-border rounded-xl bg-card/95 p-4 space-y-4">
                 {/* Property type */}
                 <div className="space-y-1.5">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Τύπος ακινήτου" : "Property Type"}</span>
-                  <div className="flex gap-1.5 flex-wrap">
+                  <div className="flex gap-1.5 flex-wrap" role="group" aria-label={isGreek ? "Τύπος ακινήτου" : "Property type"}>
                     {[
                       { value: "", label: isGreek ? "Όλοι οι τύποι" : "All Types" },
                       { value: "apartment", label: isGreek ? "Διαμέρισμα" : "Apartment" },
@@ -332,7 +363,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                       { value: "commercial", label: isGreek ? "Επαγγελματικό ακίνητο" : "Commercial" },
                       { value: "office", label: isGreek ? "Γραφείο" : "Office" },
                     ].map(t => (
-                      <button key={t.value} onClick={() => setFilterType(t.value)}
+                      <button key={t.value} type="button" aria-pressed={filterType === t.value} onClick={() => setFilterType(t.value)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterType === t.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
                         {t.label}
                       </button>
@@ -342,9 +373,9 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 {/* First offer price */}
                 <div className="space-y-1.5">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Τιμή πρώτης προσφοράς" : "First Offer Price"}</span>
-                  <div className="flex gap-1.5 flex-wrap">
+                  <div className="flex gap-1.5 flex-wrap" role="group" aria-label={isGreek ? "Τιμή πρώτης προσφοράς" : "First offer price"}>
                     {BID_RANGES.map(r => (
-                      <button key={r.value} onClick={() => setFilterBidRange(filterBidRange === r.value ? "" : r.value)}
+                      <button key={r.value} type="button" aria-pressed={filterBidRange === r.value} onClick={() => setFilterBidRange(filterBidRange === r.value ? "" : r.value)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterBidRange === r.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
                         {r.label}
                       </button>
@@ -354,9 +385,9 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 {/* Construction year */}
                 <div className="space-y-1.5">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Έτος κατασκευής" : "Construction Year"}</span>
-                  <div className="flex gap-1.5 flex-wrap">
+                  <div className="flex gap-1.5 flex-wrap" role="group" aria-label={isGreek ? "Έτος κατασκευής" : "Construction year"}>
                     {YEAR_RANGES.map(r => (
-                      <button key={r.value} onClick={() => setFilterYearRange(filterYearRange === r.value ? "" : r.value)}
+                      <button key={r.value} type="button" aria-pressed={filterYearRange === r.value} onClick={() => setFilterYearRange(filterYearRange === r.value ? "" : r.value)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterYearRange === r.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
                         {r.label}
                       </button>
@@ -388,6 +419,10 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
             <Button
               variant="outline"
               size="sm"
+              aria-label={isGreek ? "Φίλτρα" : "Filters"}
+              aria-controls="desktop-auction-filters"
+              aria-expanded={showFilters}
+              aria-pressed={showFilters}
               className={`border-border gap-1.5 ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : ""}`}
               onClick={() => setShowFilters((v) => !v)}>
               <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -441,6 +476,12 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
           <div className="flex items-center justify-center mobile-map-panel rounded-2xl bg-card border border-border">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div> :
+          error ?
+          <AuctionLoadError
+            isGreek={isGreek}
+            onRetry={() => void refetch()}
+            className="mobile-map-panel rounded-2xl bg-card border border-border px-6"
+          /> :
           mappableCount === 0 ?
           <div className="flex flex-col items-center justify-center mobile-map-panel rounded-2xl bg-card border border-border gap-3">
                 <MapPin className="w-10 h-10 text-muted-foreground/30" />
@@ -489,8 +530,8 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
                 {isGreek
-                  ? "Περιηγηθείτε σε ηλεκτρονικούς πλειστηριασμούς με ζωντανά φίλτρα και καθημερινή τυχαία εναλλαγή αποτελεσμάτων."
-                  : "Browse electronic auction opportunities with live filters and daily randomized rotation."}
+                  ? "Περιηγηθείτε σε ηλεκτρονικούς πλειστηριασμούς με ζωντανά φίλτρα και ενιαία ημερήσια κατάταξη."
+                  : "Browse electronic auction opportunities with live filters and one consistent daily catalogue."}
               </p>
             </div>
             {isLoading &&
@@ -506,13 +547,10 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
           }
 
             {error &&
-          <div className="text-center py-20">
-                <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">{isGreek ? "Δεν ήταν δυνατή η φόρτωση των πλειστηριασμών. Παρακαλώ δοκιμάστε ξανά." : "Failed to load auctions. Please try again."}</p>
-              </div>
+              <AuctionLoadError isGreek={isGreek} onRetry={() => void refetch()} />
           }
 
-            {!isLoading && !error && visibleFiltered.length === 0 &&
+            {!isLoading && !error && visibleCount === 0 &&
           <div className="text-center py-20">
                 <Gavel className="w-12 h-12 text-primary/30 mx-auto mb-4" />
                 <p className="font-display font-semibold text-lg mb-2">{isGreek ? "Δεν υπάρχουν πλειστηριασμοί που ταιριάζουν στα φίλτρα" : "No auctions match your filters"}</p>
@@ -525,7 +563,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
               </div>
           }
 
-            {!isLoading && visibleFiltered.length > 0 &&
+            {!isLoading && !error && paginated.length > 0 &&
           <>
                  <p className="text-xs text-muted-foreground mb-4">
                    {isGreek ? "Εμφάνιση" : "Showing"} <span className="font-semibold text-foreground">{(currentPage - 1) * AUCTIONS_PAGE_SIZE + 1}–{Math.min(currentPage * AUCTIONS_PAGE_SIZE, polygonFilteredCount)}</span>
@@ -534,7 +572,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                    <span className="font-semibold text-foreground">{polygonFilteredCount}</span> {isGreek ? "πλειστηριασμούς" : "auctions"}
                    {polygonFilterIds && <span className="text-primary"> · {isGreek ? "ενεργό φίλτρο περιοχής" : "area filter active"}</span>}
                    {selectedCity !== "All Cities" ? (isGreek ? ` σε ${selectedCity}` : ` in ${selectedCity}`) : ""}
-                   {" · "}{isGreek ? "καθημερινή τυχαία εναλλαγή" : "daily randomized rotation"}
+                   {" · "}{isGreek ? "ημερήσια έκδοση καταλόγου" : "daily catalogue revision"}
                  </p>
                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                    {paginated.map((a) =>

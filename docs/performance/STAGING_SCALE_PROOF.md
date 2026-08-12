@@ -1,14 +1,19 @@
 # Staging Scale Proof
 
-The `Staging Scale Proof` workflow exercises the real Cloudflare Pages public
-catalogue against the isolated Supabase staging project. It is manual because
-the 1,000-VU growth profile and 40-minute soak consume provider capacity.
+The standalone `Staging Scale Proof` workflow is currently hard-disabled. It
+must not receive database credentials or seed staging independently. Scale
+proof can be re-enabled only after it is invoked from the exact-SHA
+`stage-release.yml` lease and inherits that workflow's CI, target, and mutation
+acknowledgement controls.
 
 ## Safety contract
 
 - The database target must identify Supabase project `xsiehskfgeoqyazcgauv`.
 - The production project ref is rejected independently.
-- The operator must type `RUN_STAGING_LOAD`.
+- The run must originate from the exact release SHA accepted by
+  `stage-release.yml`.
+- `STAGING_RELEASE_ENABLED` and the staging mutation acknowledgement must be
+  validated before database credentials are exposed.
 - The URL must be the protected staging Pages hostname or a branch Pages URL.
 - Synthetic rows are tagged with `ecas-load:<run-id>` and cleaned before and
   after every run.
@@ -29,13 +34,14 @@ Both supported sizes use the same production-like mix:
   Houses.
 - Greek city, price, area, coordinate, and created-date distributions.
 
-## Execution order
+## Planned execution order
 
 1. `1,000` listings with `baseline_100`.
 2. `10,000` listings with `growth_10x`.
 3. `10,000` listings with `enterprise_soak`.
 
-Each run captures catalogue query plans, buffer usage, index counters, route
-p95 latency, error rates, request volume, and peak VUs. Failed runs still invoke
-the cleanup step. If a runner is force-terminated before cleanup, the next run
-first removes all rows carrying the `ecas-load:` tag.
+Once the proof is routed through the release lease, each run will capture
+catalogue query plans, buffer usage, index counters, route p95 latency, error
+rates, request volume, and peak VUs. Failed runs must still invoke cleanup. If a
+runner is force-terminated before cleanup, the next leased run must first
+remove all rows carrying the `ecas-load:` tag.

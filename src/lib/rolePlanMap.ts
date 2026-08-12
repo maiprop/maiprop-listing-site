@@ -31,6 +31,7 @@
  */
 
 import type { ParticipantId, PricingAudienceId } from "@/lib/participantConfig";
+import { getRuntimeValue } from "@/lib/runtimeConfig";
 
 export interface RolePlan {
   /** Stripe plan key sent to create-checkout edge function */
@@ -66,17 +67,23 @@ export interface RolePlan {
 // Set these in .env / Supabase secrets. Fallback strings are placeholders —
 // checkout will fail gracefully if they are not real Stripe Price IDs.
 
-const E = import.meta.env;
-
 const PRICE_IDS = {
-  participant_monthly:  E.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY  ?? null,
-  participant_annual:   E.VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL   ?? null,
-  agent_monthly:        E.VITE_STRIPE_PRICE_AGENT_MONTHLY        ?? null,
-  agent_annual:         E.VITE_STRIPE_PRICE_AGENT_ANNUAL         ?? null,
-  developer_monthly:    E.VITE_STRIPE_PRICE_DEVELOPER_MONTHLY    ?? null,
-  developer_annual:     E.VITE_STRIPE_PRICE_DEVELOPER_ANNUAL     ?? null,
-  professional_monthly: E.VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY ?? null,
-  professional_annual:  E.VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL  ?? null,
+  participant_monthly:
+    getRuntimeValue("VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY") ?? null,
+  participant_annual:
+    getRuntimeValue("VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL") ?? null,
+  agent_monthly:
+    getRuntimeValue("VITE_STRIPE_PRICE_AGENT_MONTHLY") ?? null,
+  agent_annual:
+    getRuntimeValue("VITE_STRIPE_PRICE_AGENT_ANNUAL") ?? null,
+  developer_monthly:
+    getRuntimeValue("VITE_STRIPE_PRICE_DEVELOPER_MONTHLY") ?? null,
+  developer_annual:
+    getRuntimeValue("VITE_STRIPE_PRICE_DEVELOPER_ANNUAL") ?? null,
+  professional_monthly:
+    getRuntimeValue("VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY") ?? null,
+  professional_annual:
+    getRuntimeValue("VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL") ?? null,
 } as const;
 
 // ── Plan definitions ──────────────────────────────────────────────────────────

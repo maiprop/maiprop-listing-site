@@ -38,7 +38,7 @@ const ADMIN_LIMITS: PlanLimits = {
   savedSearches: null,
   searchAlerts: null,
   contactsPerMonth: null,
-  auctionListingsVisible: null,
+  auctionListingsVisible: 600,
   auctionAlerts: null,
   openHouseRsvp: null,
   viewingsPerMonth: null,
@@ -116,7 +116,7 @@ const LIMITS: Record<ParticipantId, RoleLimits> = {
     },
     pro: {
       savedSearches: null, searchAlerts: null, contactsPerMonth: null,
-      auctionListingsVisible: null, auctionAlerts: null,
+      auctionListingsVisible: 600, auctionAlerts: null,
       openHouseRsvp: null, viewingsPerMonth: null,
       listings: null, spotlightAds: 1, priorityAds: 1,
       valuationsPerMonth: 50, reportsPerMonth: null,
@@ -126,7 +126,7 @@ const LIMITS: Record<ParticipantId, RoleLimits> = {
   professional: {
     free: {
       savedSearches: null, searchAlerts: null, contactsPerMonth: null,
-      auctionListingsVisible: null, auctionAlerts: null,
+      auctionListingsVisible: 60, auctionAlerts: null,
       openHouseRsvp: null, viewingsPerMonth: null,
       listings: null, spotlightAds: 0, priorityAds: 0,
       valuationsPerMonth: 5, reportsPerMonth: 0,
@@ -134,7 +134,7 @@ const LIMITS: Record<ParticipantId, RoleLimits> = {
     },
     pro: {
       savedSearches: null, searchAlerts: null, contactsPerMonth: null,
-      auctionListingsVisible: null, auctionAlerts: null,
+      auctionListingsVisible: 600, auctionAlerts: null,
       openHouseRsvp: null, viewingsPerMonth: null,
       listings: null, spotlightAds: 0, priorityAds: 0,
       valuationsPerMonth: 50, reportsPerMonth: null,
@@ -152,7 +152,7 @@ const LIMITS: Record<ParticipantId, RoleLimits> = {
     },
     pro: {
       savedSearches: null, searchAlerts: null, contactsPerMonth: null,
-      auctionListingsVisible: null, auctionAlerts: null,
+      auctionListingsVisible: 600, auctionAlerts: null,
       openHouseRsvp: null, viewingsPerMonth: null,
       listings: null, spotlightAds: 0, priorityAds: 0,
       valuationsPerMonth: 50, reportsPerMonth: null,
@@ -170,7 +170,7 @@ const LIMITS: Record<ParticipantId, RoleLimits> = {
     },
     pro: {
       savedSearches: null, searchAlerts: null, contactsPerMonth: null,
-      auctionListingsVisible: null, auctionAlerts: null,
+      auctionListingsVisible: 600, auctionAlerts: null,
       openHouseRsvp: null, viewingsPerMonth: null,
       listings: null, spotlightAds: 0, priorityAds: 0,
       valuationsPerMonth: 50, reportsPerMonth: null,

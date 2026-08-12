@@ -52,6 +52,7 @@ export type DbListingCardImage = {
 };
 
 export type DbListingCardRow = {
+  publicationId?: number;
   id: string;
   title: string;
   address?: string | null;

@@ -1,18 +1,7 @@
-import { createHash } from "node:crypto";
-
 const cloudflareHttpMutationWorkflows = new Set([
   ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
-]);
-
-const currentMainMutationWorkflowDigests = new Map([
-  [
-    ".github/workflows/ci.yml",
-    "edf06582c2459a720aca464457570ef55bdf4141ab8db676a6d72d09c392021c",
-  ],
-  [
-    ".github/workflows/reusable-cloudflare-production-deploy.yml",
-    "d37f0a6f6adbf6938037d561056a36452736363a364b2d979bd495d700ab0c23",
-  ],
+  ".github/workflows/reusable-cloudflare-production-deploy.yml",
+  ".github/workflows/stage-release.yml",
 ]);
 
 const mutationMethods = /^(?:POST|PUT|PATCH|DELETE)$/i;
@@ -133,37 +122,6 @@ function addMethod(methods, method) {
   }
 }
 
-function hasLiteralFalseJob(text, jobName) {
-  const lines = String(text ?? "").split(/\r?\n/);
-  const jobStart = lines.findIndex(
-    (line) => line === `  ${jobName}:`,
-  );
-  if (jobStart < 0) return false;
-
-  const jobEnd = lines.findIndex(
-    (line, index) =>
-      index > jobStart && /^  [A-Za-z0-9_-]+:\s*$/.test(line),
-  );
-  const block = lines
-    .slice(jobStart, jobEnd < 0 ? lines.length : jobEnd)
-    .join("\n");
-  return /^\s{4}if:\s*\$\{\{\s*false\s*\}\}\s*$/m.test(block);
-}
-
-function matchesCurrentMainMutationWorkflow(workflowPath, text) {
-  const expectedDigest = currentMainMutationWorkflowDigests.get(
-    String(workflowPath),
-  );
-  if (!expectedDigest) return false;
-  const actualDigest = createHash("sha256")
-    .update(String(text ?? "").replace(/\r\n?/g, "\n"))
-    .digest("hex");
-  return (
-    actualDigest === expectedDigest &&
-    hasLiteralFalseJob(text, "deploy")
-  );
-}
-
 export function findCloudflareHttpMutations(text) {
   const source = String(text ?? "");
   const aliases = cloudflareApiAliases(source);
@@ -213,20 +171,38 @@ export function isAuthorizedCloudflareHttpMutationWorkflow(workflowPath) {
 
 export function cloudflareHttpMutationViolation({ workflowPath, text }) {
   const source = String(text ?? "");
-  if (findCloudflareHttpMutations(source).length === 0) return null;
+  const methods = findCloudflareHttpMutations(source);
+  if (methods.length === 0) return null;
   if (/evidence/i.test(workflowPath)) {
     return `${workflowPath} contains Cloudflare HTTP mutation wiring in an evidence workflow`;
   }
-  if (isAuthorizedCloudflareHttpMutationWorkflow(workflowPath)) {
+  if (workflowPath === ".github/workflows/lock-cloudflare-pages-git-deploys.yml") {
     const aliases = cloudflareApiAliases(source);
     if (hasOnlyAuthorizedBootstrapMutations(source, aliases)) return null;
     return `${workflowPath} contains unauthorized Cloudflare HTTP mutation wiring`;
   }
-  if (!isAuthorizedCloudflareHttpMutationWorkflow(workflowPath)) {
-    if (matchesCurrentMainMutationWorkflow(workflowPath, text)) {
-      return null;
-    }
-    return `${workflowPath} contains unauthorized Cloudflare HTTP mutation wiring`;
+  if (workflowPath === ".github/workflows/stage-release.yml") {
+    const controlled =
+      methods.join("\n") === "POST" &&
+      source.includes("workflow_run:") &&
+      source.includes("vars.STAGING_RELEASE_ENABLED == 'true'") &&
+      source.includes("github-staging-lease") &&
+      source.includes("release-artifact-binding.json") &&
+      source.includes("/rollback");
+    if (controlled) return null;
   }
-  return null;
+  if (
+    workflowPath ===
+    ".github/workflows/reusable-cloudflare-production-deploy.yml"
+  ) {
+    const controlled =
+      methods.join("\n") === "POST" &&
+      source.includes("workflow_call:") &&
+      source.includes("github-staging-lease") &&
+      source.includes("mutation-lease") &&
+      source.includes("release-artifact-binding.json") &&
+      source.includes("/rollback");
+    if (controlled) return null;
+  }
+  return `${workflowPath} contains unauthorized Cloudflare HTTP mutation wiring`;
 }

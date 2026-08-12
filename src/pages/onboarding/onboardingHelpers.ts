@@ -46,14 +46,17 @@ export const parseServiceRate = (rate: string): number | null => {
 export type RoleSwitchContext = {
   userId: string;
   fromType: ParticipantId;
+  toType: ParticipantId;
   hadActiveSub: boolean;
   auditId: string;
+  status: "prepared" | "begun";
 };
 
 type DurableRoleSwitchOperation = {
   userId: string;
   operationId: string;
   fromType: ParticipantId;
+  toType: ParticipantId;
   hadActiveSub: boolean;
   status: "prepared" | "begun";
   createdAt: number;
@@ -91,6 +94,9 @@ const parseDurableRoleSwitchOperation = (
       !ROLE_SWITCH_UUID_PATTERN.test(parsed.operationId) ||
       typeof parsed.fromType !== "string" ||
       !ROLE_SWITCH_PARTICIPANTS.has(parsed.fromType as ParticipantId) ||
+      typeof parsed.toType !== "string" ||
+      !ROLE_SWITCH_PARTICIPANTS.has(parsed.toType as ParticipantId) ||
+      parsed.toType === parsed.fromType ||
       typeof parsed.hadActiveSub !== "boolean" ||
       (parsed.status !== "prepared" && parsed.status !== "begun") ||
       typeof parsed.createdAt !== "number" ||
@@ -129,12 +135,14 @@ const persistDurableRoleSwitchOperation = (
 export const prepareRoleSwitchOperation = ({
   userId,
   fromType,
+  toType,
   hadActiveSub,
   now = Date.now(),
   createId = () => crypto.randomUUID(),
 }: {
   userId: string;
   fromType: ParticipantId;
+  toType: ParticipantId;
   hadActiveSub: boolean;
   now?: number;
   createId?: () => string;
@@ -149,7 +157,10 @@ export const prepareRoleSwitchOperation = ({
     window.localStorage.getItem(ROLE_SWITCH_OPERATION_STORAGE_KEY),
     now,
   );
-  if (existing?.userId === userId && existing.fromType === fromType) {
+  if (
+    existing?.userId === userId && existing.fromType === fromType &&
+    existing.toType === toType
+  ) {
     return existing;
   }
 
@@ -161,6 +172,7 @@ export const prepareRoleSwitchOperation = ({
     userId,
     operationId,
     fromType,
+    toType,
     hadActiveSub,
     status: "prepared",
     createdAt: now,
@@ -210,21 +222,29 @@ const parseRoleSwitchContext = (
     const parsed = JSON.parse(raw) as {
       userId?: unknown;
       fromType?: unknown;
+      toType?: unknown;
       hadActiveSub?: unknown;
       auditId?: unknown;
+      status?: unknown;
     };
     if (
       parsed.userId !== userId ||
       typeof parsed.fromType !== "string" ||
       !ROLE_SWITCH_PARTICIPANTS.has(parsed.fromType as ParticipantId) ||
+      typeof parsed.toType !== "string" ||
+      !ROLE_SWITCH_PARTICIPANTS.has(parsed.toType as ParticipantId) ||
+      parsed.toType === parsed.fromType ||
       typeof parsed.auditId !== "string" ||
-      !ROLE_SWITCH_UUID_PATTERN.test(parsed.auditId)
+      !ROLE_SWITCH_UUID_PATTERN.test(parsed.auditId) ||
+      (parsed.status !== "prepared" && parsed.status !== "begun")
     ) return null;
     return {
       userId,
       fromType: parsed.fromType as ParticipantId,
+      toType: parsed.toType as ParticipantId,
       hadActiveSub: parsed.hadActiveSub === true,
       auditId: parsed.auditId,
+      status: parsed.status,
     };
   } catch {
     return null;
@@ -235,23 +255,29 @@ export const readRoleSwitchCtx = (
   userId: string | null | undefined,
 ): RoleSwitchContext | null => {
   if (typeof window === "undefined" || !isRoleSwitchUserId(userId)) return null;
-  const sessionContext = parseRoleSwitchContext(
-    window.sessionStorage.getItem("role_switch_ctx"),
-    userId,
-  );
-  if (sessionContext) return sessionContext;
+  try {
+    const sessionContext = parseRoleSwitchContext(
+      window.sessionStorage.getItem("role_switch_ctx"),
+      userId,
+    );
+    if (sessionContext) return sessionContext;
 
-  const durable = parseDurableRoleSwitchOperation(
-    window.localStorage.getItem(ROLE_SWITCH_OPERATION_STORAGE_KEY),
-    Date.now(),
-  );
-  if (durable?.status !== "begun" || durable.userId !== userId) return null;
-  return {
-    userId,
-    fromType: durable.fromType,
-    hadActiveSub: durable.hadActiveSub,
-    auditId: durable.operationId,
-  };
+    const durable = parseDurableRoleSwitchOperation(
+      window.localStorage.getItem(ROLE_SWITCH_OPERATION_STORAGE_KEY),
+      Date.now(),
+    );
+    if (!durable || durable.userId !== userId) return null;
+    return {
+      userId,
+      fromType: durable.fromType,
+      toType: durable.toType,
+      hadActiveSub: durable.hadActiveSub,
+      auditId: durable.operationId,
+      status: durable.status,
+    };
+  } catch {
+    return null;
+  }
 };
 
 /**

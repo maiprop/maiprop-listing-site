@@ -221,6 +221,19 @@ const policies = {
     requiredSnippets: ["CRON_SECRET", "x-cron-secret"],
     notes: "Cron-only follow-up job; browser callers must be rejected.",
   },
+  "process-storage-cleanup": {
+    status: "ready",
+    caller: "cron",
+    classification: "private_mutation_cron",
+    mechanisms: ["cron_secret", "service_role", "exact_object_path", "lease_token"],
+    requiredSnippets: [
+      "CRON_SECRET",
+      "x-cron-secret",
+      "claim_storage_cleanup_jobs",
+      "prepare_storage_cleanup_delete",
+    ],
+    notes: "Cron-only exact-object compensating cleanup. Database leases and a final commitment check prevent stale workers from deleting committed listing or project media.",
+  },
   "reconcile-role-switch-billing": {
     status: "ready",
     caller: "cron",

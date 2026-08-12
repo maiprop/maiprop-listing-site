@@ -50,12 +50,12 @@ Required target policy remains source-controlled in
 private repository without the required GitHub plan or repository visibility
 change.
 
-## Environment Approvals
+## Production Approval Boundary
 
-Environment approvals: pending repository admin.
-
-The environment object exists, but the reviewer gate is still pending
-repository admin.
+Protected-environment approvals are not an active control for this private
+repository on GitHub Free. The `production` and `staging` environment objects
+may still exist for organization, but workflows must not claim that their
+secrets or reviewer settings provide isolation.
 
 GitHub API recheck on 2026-06-23 returned two environments:
 
@@ -63,10 +63,14 @@ GitHub API recheck on 2026-06-23 returned two environments:
   branch policies; no required-reviewer protection rule was reported.
 - `staging`: configured without protection rules.
 
-The production workflow requires source gates before deployment, but live
-environment reviewer settings require repository administration. Before marking
-ECAS Deployment Readiness as top-grade, configure production environment
-reviewers and wait timers in GitHub repository settings.
+The production workflow instead requires an attempt-one approval artifact from
+an allowlisted GitHub actor who differs from the allowlisted deployer. Exact
+current-`main` SHA/tree checks, GitHub artifact API metadata, a
+repository-secret HMAC binding, Stripe live readiness, and short-lived mutation
+leases are revalidated before each provider mutation. If the repository moves
+to a plan that supports private-repository required reviewers, environment
+reviewers may be added as defense in depth; they are not a current prerequisite
+or substitute for the in-workflow controls.
 
 ## Push Protection
 

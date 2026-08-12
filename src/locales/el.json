@@ -81,6 +81,72 @@
       "auctions": "Πλειστηριασμοί",
       "newBuilds": "Νέες κατασκευές",
       "quickSale": "Quick Sale™"
+    },
+    "catalogue": {
+      "featuredError": "Δεν ήταν δυνατή η φόρτωση των επιλεγμένων ακινήτων.",
+      "auctionsEyebrow": "Πλειστηριασμοί ακινήτων",
+      "auctionsTitle": "Οι πλειστηριασμοί αυτής της εβδομάδας",
+      "allAuctions": "Όλοι οι πλειστηριασμοί",
+      "auctionsError": "Δεν ήταν δυνατή η φόρτωση των πλειστηριασμών.",
+      "auctionsEmpty": "Δεν υπάρχουν προγραμματισμένοι πλειστηριασμοί αυτή τη στιγμή.",
+      "openHousesEyebrow": "Open House",
+      "openHousesTitle": "Προγραμματισμένες επισκέψεις χωρίς ραντεβού",
+      "allOpenHouses": "Όλα τα Open House",
+      "openHousesError": "Δεν ήταν δυνατή η φόρτωση των Open House.",
+      "openHousesEmpty": "Νέα Open House έρχονται σύντομα.",
+      "openHousesEmptyDetail": "Νέες επισκέψεις προστίθενται τακτικά."
+    }
+  },
+  "propertyAIInsights": {
+    "title": "AI ανάλυση αγοράς",
+    "poweredBy": "Powered by mAI Prop OS",
+    "prompt": "Εκτέλεση AI ανάλυσης όταν τη χρειάζεστε",
+    "quota": {
+      "checking": "Έλεγχος διαθέσιμων αιτημάτων AI ανάλυσης...",
+      "pending": "Τα διαθέσιμα αιτήματα AI ανάλυσης θα ελεγχθούν πριν από τη φόρτωση.",
+      "unlimited": "Απεριόριστα αιτήματα AI ανάλυσης αυτόν τον μήνα",
+      "remainingFree": "Απομένουν {{remaining}} από {{limit}} αιτήματα AI ανάλυσης στο δωρεάν πλάνο αυτόν τον μήνα.",
+      "remainingPro": "Απομένουν {{remaining}} από {{limit}} αιτήματα AI ανάλυσης στο πλάνο Pro αυτόν τον μήνα."
+    },
+    "actions": {
+      "upgrade": "Αναβάθμιση σε Pro",
+      "buyAddon": "Αγορά πρόσθετης AI ανάλυσης",
+      "load": "Φόρτωση AI ανάλυσης",
+      "refresh": "Ανανέωση AI ανάλυσης",
+      "loading": "Φόρτωση AI ανάλυσης..."
+    },
+    "analysing": "Ανάλυση δεδομένων αγοράς...",
+    "unavailable": "Μη διαθέσιμο",
+    "analysisUnavailable": "Η ανάλυση αγοράς δεν είναι διαθέσιμη",
+    "labels": {
+      "vsMarket": "έναντι αγοράς",
+      "vsRentalMarket": "έναντι μισθωτικής αγοράς",
+      "rentalYield": "Μισθωτική απόδοση",
+      "rentPerSqmMonth": "Ενοίκιο / m² / μήνα",
+      "rentDensity": "Εκτιμώμενο μηνιαίο ενοίκιο ανά τετραγωνικό μέτρο",
+      "grossYield": "Εκτ. μεικτή ετήσια απόδοση",
+      "estimate": "AI εκτίμηση",
+      "rentEstimate": "AI εκτίμηση ενοικίου",
+      "confidence": "Βεβαιότητα"
+    },
+    "benchmarkMissing": {
+      "market": "Δεν επιστράφηκε σημείο αναφοράς αγοράς",
+      "rent": "Δεν επιστράφηκε σημείο αναφοράς ενοικίου"
+    },
+    "comparison": {
+      "belowMarket": "Κάτω από την αγορά",
+      "atMarket": "Στην αγορά",
+      "aboveMarket": "Πάνω από την αγορά"
+    },
+    "confidence": {
+      "veryLow": "Πολύ χαμηλή",
+      "low": "Χαμηλή",
+      "medium": "Μέτρια",
+      "high": "Υψηλή",
+      "veryHigh": "Πολύ υψηλή"
+    },
+    "units": {
+      "month": "μήνα"
     }
   },
   "listings": {
@@ -161,6 +227,15 @@
     "alarm": "Συναγερμός",
     "airConditioning": "Κλιματισμός",
     "heating": "Θέρμανση",
+    "condition": "Κατάσταση",
+    "notProvided": "Δεν παρέχεται",
+    "listingLabels": {
+      "sale": "Προς πώληση",
+      "rent": "Προς ενοικίαση",
+      "auction": "Προς πλειστηριασμό",
+      "openHouseRental": "Open House προς ενοικίαση",
+      "openHouseSale": "Open House προς πώληση"
+    },
     "askingPrice": "Ζητούμενη τιμή",
     "minimumBid": "Τιμή πρώτης προσφοράς",
     "requestViewing": "Αίτηση επίσκεψης",
@@ -265,6 +340,31 @@
     "syncStatus": "Κατάσταση συγχρονισμού",
     "lastSync": "Τελευταίος συγχρονισμός",
     "noAuctions": "Δεν βρέθηκαν πλειστηριασμοί",
+    "loadingFullCatalogue": "Φόρτωση ολόκληρου του καταλόγου πλειστηριασμών Pro...",
+    "fullCatalogueFailed": "Η δημόσια προεπισκόπηση είναι διαθέσιμη, αλλά δεν φορτώθηκε ολόκληρος ο κατάλογος Pro.",
+    "retryFullCatalogue": "Νέα προσπάθεια πλήρους καταλόγου",
+    "card": {
+      "spotlight": "Προτεινόμενο",
+      "built": "Έτος",
+      "save": "Αποθήκευση",
+      "saved": "Αποθηκεύτηκε",
+      "share": "Κοινοποίηση",
+      "report": "Αναφορά",
+      "eAuction": "Στο eAuction",
+      "linkCopied": "Ο σύνδεσμος αντιγράφηκε",
+      "reportSubmitted": "Η αναφορά υποβλήθηκε. Η ομάδα μας θα την εξετάσει."
+    },
+    "detail": {
+      "verifyingCached": "Προβάλλονται προσωρινά αποθηκευμένα στοιχεία ενώ επαληθεύουμε τις πιο πρόσφατες πληροφορίες.",
+      "refreshFailed": "Δεν ήταν δυνατή η ανανέωση των στοιχείων του πλειστηριασμού. Οι πληροφορίες που εμφανίζονται ενδέχεται να μην είναι ενημερωμένες.",
+      "auction": "Πλειστηριασμός",
+      "timing": "Χρονισμός",
+      "ownership": "Κυριότητα",
+      "share": "Ποσοστό",
+      "today": "Σήμερα",
+      "daysToGo": "Σε {{count}} ημέρα",
+      "daysToGo_other": "Σε {{count}} ημέρες"
+    },
     "filters": {
       "allCourts": "Όλοι οι υπάλληλοι πλειστηριασμού / πλατφόρμες",
       "allTypes": "Όλοι οι τύποι",
@@ -389,6 +489,9 @@
       "mapItemOther": "{{count}} Open House",
       "noMapListings": "Δεν υπάρχουν Open House με δεδομένα τοποθεσίας για προβολή στον χάρτη.",
       "switchToList": "Μετάβαση σε λίστα",
+      "mapWindowIncomplete": "Κάντε μεγέθυνση για να φορτωθούν όλα τα Open House",
+      "loadMoreError": "Δεν ήταν δυνατή η φόρτωση περισσότερων Open House.",
+      "retryLoadMore": "Επανάληψη φόρτωσης περισσότερων Open House",
       "errorTitle": "Δεν ήταν δυνατή η φόρτωση των Open House",
       "retryPrompt": "Δοκιμάστε ξανά.",
       "retryButton": "Επανάληψη",
@@ -1391,6 +1494,15 @@
   "createListing": {
     "title": "Δημιουργία νέας αγγελίας",
     "stepProgress": "Βήμα {{current}} από {{total}} - {{label}}",
+    "owner": {
+      "label": "Λογαριασμός αγγελίας",
+      "personal": "Προσωπικός λογαριασμός",
+      "help": "Επιλέξτε τον λογαριασμό που θα είναι υπεύθυνος για την αγγελία.",
+      "locked": "Ο λογαριασμός της αγγελίας δεν αλλάζει μετά τη δημιουργία."
+    },
+    "edit": {
+      "notAllowedBody": "Μπορείτε να επεξεργαστείτε μόνο αγγελίες που σας ανήκουν ή που διαχειρίζεστε για ενεργό οργανισμό."
+    },
     "steps": {
       "type": "Τύπος",
       "details": "Στοιχεία",
@@ -1969,6 +2081,9 @@
       "backToDashboard": "Πίσω στον πίνακα ελέγχου"
     },
     "building": {
+      "ownerScope": "\u0394\u03b7\u03bc\u03bf\u03c3\u03af\u03b5\u03c5\u03c3\u03b7 \u03c9\u03c2",
+      "personalAccount": "\u03a0\u03c1\u03bf\u03c3\u03c9\u03c0\u03b9\u03ba\u03cc\u03c2 \u03bb\u03bf\u03b3\u03b1\u03c1\u03b9\u03b1\u03c3\u03bc\u03cc\u03c2",
+      "ownerScopeHint": "\u039f \u03b5\u03c0\u03b9\u03bb\u03b5\u03b3\u03bc\u03ad\u03bd\u03bf\u03c2 \u03bb\u03bf\u03b3\u03b1\u03c1\u03b9\u03b1\u03c3\u03bc\u03cc\u03c2 \u03ba\u03b1\u03c4\u03ad\u03c7\u03b5\u03b9 \u03c4\u03bf \u03ad\u03c1\u03b3\u03bf, \u03c4\u03b7\u03bd \u03b1\u03b3\u03b3\u03b5\u03bb\u03af\u03b1, \u03c4\u03b9\u03c2 \u03bc\u03bf\u03bd\u03ac\u03b4\u03b5\u03c2, \u03c4\u03b1 \u03c0\u03bf\u03bb\u03c5\u03bc\u03ad\u03c3\u03b1 \u03ba\u03b1\u03b9 \u03c4\u03b9\u03c2 \u03b5\u03c0\u03b1\u03c6\u03ad\u03c2.",
       "heading": "Στοιχεία κτιρίου & έργου",
       "projectName": "Όνομα έργου",
       "projectNamePlaceholder": "π.χ. Marina Heights",
@@ -2140,7 +2255,9 @@
       "subtitle": "Δημιουργήστε ένα έργο για να ομαδοποιήσετε και να παρουσιάσετε τις αγγελίες σας",
       "cta": "Δημιουργία πρώτου έργου",
       "noUnlinked": "Δεν υπάρχουν ασύνδετες αγγελίες.",
-      "createOne": "Δημιουργία αγγελίας"
+      "createOne": "Δημιουργία αγγελίας",
+      "noUnlinkedNewBuilds": "Δεν υπάρχουν παλαιότερες αγγελίες νεόδμητων για σύνδεση.",
+      "createNewBuilding": "Δημιουργία αγγελίας νεόδμητου"
     },
     "labels": {
       "permit": "Άδεια",
@@ -2163,7 +2280,8 @@
         "media": "Υλικό προβολής",
         "units": "Μονάδες (απόθεμα & τιμές)",
         "leads": "Διαχείριση ενδιαφερομένων",
-        "linkedListings": "Συνδεδεμένες αγγελίες"
+        "linkedListings": "Δημόσια αγγελία νεόδμητου",
+        "publicAd": "Δημόσια αγγελία νεόδμητου"
       },
       "stats": {
         "available": "Διαθέσιμα",
@@ -2233,7 +2351,8 @@
         "deleteUnit": "Διαγραφή μονάδας",
         "addUnit": "Προσθήκη μονάδας",
         "addLead": "Προσθήκη επαφής",
-        "deleteLeadNamed": "Διαγραφή επαφής {{name}}"
+        "deleteLeadNamed": "Διαγραφή επαφής {{name}}",
+        "viewPublicAd": "Προβολή αγγελίας"
       },
       "leads": {
         "caption": "Παρακολουθήστε και διαχειριστείτε ενδιαφερόμενους για αυτό το έργο.",
@@ -2254,8 +2373,13 @@
         "lost": "Χαμένο"
       },
       "linkedListings": {
-        "caption": "Συνδέστε υπάρχουσες αγγελίες με αυτό το έργο. Θα εμφανίζονται στην παρουσίαση του έργου.",
-        "newBuilding": "Νέα κατασκευή"
+        "caption": "Οι αγγελίες που δημιουργούνται από τη ροή Δημιουργία Νεόδμητου εμφανίζονται στην παρουσίαση του έργου.",
+        "newBuilding": "Νεόδμητο",
+        "empty": "Δεν έχει συνδεθεί ακόμη αγγελία έργου."
+      },
+      "publicAd": {
+        "caption": "Η δημόσια αγγελία του έργου χρησιμοποιεί τα στοιχεία, τις μονάδες, τις τιμές, τις φάσεις και το υλικό που διαχειρίζεστε εδώ.",
+        "empty": "Δεν έχει δημοσιευτεί ακόμη δημόσια αγγελία για αυτό το έργο."
       },
       "dialogs": {
         "bulkPrice": {
@@ -2321,8 +2445,10 @@
   "newBuildDetail": {
     "backToNewBuilds": "Επιστροφή στις νέες κατασκευές",
     "fallbackInterestedBuyer": "Ενδιαφερόμενος αγοραστής",
+    "fromPrice": "Από {{price}}",
     "pricePerSqm": "{{price}} / τ.μ.",
     "badges": {
+      "newBuild": "Νεόδμητο",
       "preSale": "Προπώληση"
     },
     "stats": {

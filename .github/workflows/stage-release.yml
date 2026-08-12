@@ -1,0 +1,3397 @@
+name: Stage Release Candidate
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: maiprop-staging-release
+  cancel-in-progress: false
+
+jobs:
+  validate-source:
+    name: Validate trusted main candidate
+    if: >-
+      vars.STAGING_RELEASE_ENABLED == 'true' &&
+      vars.STAGING_TRUSTED_CONTROL_SHA == github.workflow_sha &&
+      github.workflow_sha == github.event.workflow_run.head_sha &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.run_attempt == 1 &&
+      github.actor == github.triggering_actor &&
+      github.event.workflow_run.run_attempt == 1 &&
+      github.event.workflow_run.actor.login == github.event.workflow_run.triggering_actor.login
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_sha: ${{ steps.manifest.outputs.release_sha }}
+      source_tree: ${{ steps.manifest.outputs.source_tree }}
+      source_run_id: ${{ steps.manifest.outputs.source_run_id }}
+      source_run_attempt: ${{ steps.manifest.outputs.source_run_attempt }}
+      artifact_sha256: ${{ steps.manifest.outputs.artifact_sha256 }}
+      manifest_sha256: ${{ steps.manifest.outputs.manifest_sha256 }}
+      payload_sha256: ${{ steps.manifest.outputs.payload_sha256 }}
+      provenance_artifact: ${{ steps.provenance.outputs.artifact_name }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate workflow_run provenance
+        env:
+          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+          SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SOURCE_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          SOURCE_ACTOR: ${{ github.event.workflow_run.actor.login }}
+          SOURCE_TRIGGERING_ACTOR: ${{ github.event.workflow_run.triggering_actor.login }}
+          TRUSTED_CONTROL_SHA: ${{ vars.STAGING_TRUSTED_CONTROL_SHA }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$TRUSTED_CONTROL_SHA" != "$WORKFLOW_SHA" ] ||
+             [ "$WORKFLOW_SHA" != "$SOURCE_SHA" ]; then
+            echo "::error::Staging requires a manually pinned workflow SHA equal to the exact release SHA."
+            exit 1
+          fi
+          if [ "$SOURCE_EVENT" != "push" ] ||
+             [ "$SOURCE_BRANCH" != "main" ] ||
+             [ "$SOURCE_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::Staging accepts only successful CI runs from a push to this repository's main branch."
+            exit 1
+          fi
+          if [ "$SOURCE_RUN_ATTEMPT" != "1" ] ||
+             [ "$SOURCE_ACTOR" != "$SOURCE_TRIGGERING_ACTOR" ]; then
+            echo "::error::Staging accepts only original CI runs with identical actor and triggering actor."
+            exit 1
+          fi
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$SOURCE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+
+      - name: Download signed source CI artifact binding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-release-candidate-binding-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.run_attempt }}
+          path: source-binding
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Resolve signed source artifact metadata
+        id: source_binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          binding="source-binding/release-artifact-binding.json"
+          artifact_id="$(jq -er '.artifact.id' "$binding")"
+          if ! [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Signed source binding does not contain a valid artifact ID."
+            exit 1
+          fi
+          mkdir -p source-binding-metadata
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id" \
+            > source-binding-metadata/artifact.json
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" \
+            > source-binding-metadata/run.json
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download source CI artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ steps.source_binding.outputs.artifact_id }}
+          path: release-candidate
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify source CI artifact
+        id: manifest
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          set -euo pipefail
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          export SOURCE_TREE="$source_tree"
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import {
+            lstatSync,
+            readFileSync,
+            readdirSync,
+          } from "node:fs";
+          import { join, relative } from "node:path";
+
+          const root = "release-candidate";
+          const manifestPath = join(root, "release-manifest.json");
+          const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+          const sha256 = (value) =>
+            createHash("sha256").update(value).digest("hex");
+          const normalize = (value) => value.replaceAll("\\", "/");
+          const walk = (directory, output = []) => {
+            for (const entry of readdirSync(directory, { withFileTypes: true })) {
+              const absolute = join(directory, entry.name);
+              const stat = lstatSync(absolute);
+              if (stat.isSymbolicLink()) {
+                throw new Error(`Release candidate contains a symbolic link: ${absolute}`);
+              }
+              if (stat.isDirectory()) {
+                walk(absolute, output);
+              } else if (stat.isFile()) {
+                output.push(normalize(relative(root, absolute)));
+              } else {
+                throw new Error(`Release candidate contains an unsupported entry: ${absolute}`);
+              }
+            }
+            return output;
+          };
+          const records = (paths) =>
+            paths.map((path) => {
+              const bytes = readFileSync(join(root, ...path.split("/")));
+              return { path, size: bytes.byteLength, sha256: sha256(bytes) };
+            });
+          const recordsDigest = (items) => sha256(JSON.stringify(items));
+          const sameRecords = (expected, actual) =>
+            Array.isArray(expected) &&
+            expected.length === actual.length &&
+            expected.every(
+              (record, index) =>
+                record.path === actual[index].path &&
+                record.size === actual[index].size &&
+                record.sha256 === actual[index].sha256,
+            );
+
+          const expectedIdentity = {
+            release_sha: process.env.RELEASE_SHA,
+            source_tree: process.env.SOURCE_TREE,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
+          };
+          for (const [key, expected] of Object.entries(expectedIdentity)) {
+            if (String(manifest[key] ?? "") !== String(expected)) {
+              throw new Error(`Release manifest ${key} does not match trusted workflow context.`);
+            }
+          }
+
+          const artifactPaths = walk(root)
+            .filter((path) => path !== "release-manifest.json")
+            .sort((left, right) => left.localeCompare(right));
+          const artifactRecords = records(artifactPaths);
+          if (
+            !sameRecords(manifest.files, artifactRecords) ||
+            recordsDigest(artifactRecords) !== manifest.artifact_sha256
+          ) {
+            throw new Error("Release candidate file set or artifact digest mismatch.");
+          }
+
+          const payloadPaths = walk(join(root, "dist"))
+            .map((path) => path.replace(/^dist\//, ""))
+            .filter((path) => path !== "deploy-version.json")
+            .map((path) => `dist/${path}`)
+            .sort((left, right) => left.localeCompare(right));
+          const payloadRecords = records(payloadPaths);
+          if (
+            !sameRecords(manifest.payload_files, payloadRecords) ||
+            recordsDigest(payloadRecords) !== manifest.payload_sha256
+          ) {
+            throw new Error("Release candidate payload digest mismatch.");
+          }
+
+          const marker = JSON.parse(
+            readFileSync(join(root, "dist", "deploy-version.json"), "utf8"),
+          );
+          for (const key of [
+            "release_sha",
+            "source_tree",
+            "source_run_id",
+            "source_run_attempt",
+            "payload_sha256",
+          ]) {
+            if (String(marker[key] ?? "") !== String(manifest[key] ?? "")) {
+              throw new Error(`Release marker ${key} does not match the signed manifest.`);
+            }
+          }
+          NODE
+          manifest="release-candidate/release-manifest.json"
+          {
+            echo "release_sha=$(jq -r '.release_sha' "$manifest")"
+            echo "source_tree=$(jq -r '.source_tree' "$manifest")"
+            echo "source_run_id=$(jq -r '.source_run_id' "$manifest")"
+            echo "source_run_attempt=$(jq -r '.source_run_attempt' "$manifest")"
+            echo "artifact_sha256=$(jq -r '.artifact_sha256' "$manifest")"
+            echo "manifest_sha256=$(sha256sum "$manifest" | awk '{print $1}')"
+            echo "payload_sha256=$(jq -r '.payload_sha256' "$manifest")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify cryptographic build provenance
+        id: provenance
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          SOURCE_ACTOR: ${{ github.event.workflow_run.actor.login }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_TRIGGERING_ACTOR: ${{ github.event.workflow_run.triggering_actor.login }}
+        run: |
+          set -euo pipefail
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding source-binding/release-artifact-binding.json \
+            --payload-root release-candidate \
+            --artifact-metadata source-binding-metadata/artifact.json \
+            --producer-run source-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$source_tree" \
+            --workflow-path .github/workflows/ci.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event push \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --actor "$SOURCE_ACTOR" \
+            --triggering-actor "$SOURCE_TRIGGERING_ACTOR" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > release-candidate/provenance-verification.json
+          jq -e '.ok == true and .run_attempt == "1" and .actor == .triggering_actor' \
+            release-candidate/provenance-verification.json > /dev/null
+          artifact_name="source-provenance-verification-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload provenance verification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.provenance.outputs.artifact_name }}
+          path: release-candidate/provenance-verification.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Require fixed production identity and staging acknowledgement
+        env:
+          PRODUCTION_SUPABASE_PROJECT_ID: ${{ vars.PRODUCTION_SUPABASE_PROJECT_ID }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+        run: |
+          set -euo pipefail
+          if [ "$PRODUCTION_SUPABASE_PROJECT_ID" != "qvvicunqcrwpioqnvzxf" ]; then
+            echo "::error::PRODUCTION_SUPABASE_PROJECT_ID must match the fixed MaiProp production project."
+            exit 1
+          fi
+          if [ "$STAGING_MUTATION_ACKNOWLEDGEMENT" != "MUTATE_STAGING_xsiehskfgeoqyazcgauv" ]; then
+            echo "::error::The exact staging-only mutation acknowledgement is required."
+            exit 1
+          fi
+
+  capture-production-n-minus-one:
+    name: Capture production N-1 artifact before staging mutation
+    needs: [validate-source]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      artifact_name: ${{ steps.capture.outputs.artifact_name }}
+      previous_sha: ${{ steps.capture.outputs.previous_sha }}
+      previous_source_run_id: ${{ steps.capture.outputs.previous_source_run_id }}
+      previous_source_run_attempt: ${{ steps.capture.outputs.previous_source_run_attempt }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate-source.outputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install pinned release tooling
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Capture canonical production identity and immutable artifact
+        id: capture
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          CLOUDFLARE_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+        run: |
+          set -euo pipefail
+          for value in \
+            "$CF_API_TOKEN" \
+            "$CF_ACCOUNT_ID" \
+            "$PRODUCTION_PROJECT" \
+            "$CLOUDFLARE_PAGES_PROJECT_ID"; do
+            if [ -z "$value" ]; then
+              echo "::error::Production N-1 capture requires explicit read-only Cloudflare identity."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+          done
+
+          mkdir -p n-minus-one/release-candidate
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > n-minus-one/cloudflare-production-project.json
+          jq -e '.success == true and (.result.canonical_deployment | type == "object")' \
+            n-minus-one/cloudflare-production-project.json >/dev/null
+          jq '.result.canonical_deployment' \
+            n-minus-one/cloudflare-production-project.json \
+            > n-minus-one/cloudflare-production-canonical.json
+          previous_sha="$(jq -er '.deployment_trigger.metadata.commit_hash' n-minus-one/cloudflare-production-canonical.json)"
+          if ! [[ "$previous_sha" =~ ^[0-9a-fA-F]{40}$ ]] ||
+             [ "$previous_sha" = "$RELEASE_SHA" ]; then
+            echo "::error::Canonical production must identify a distinct full-SHA N-1 deployment."
+            exit 1
+          fi
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file n-minus-one/cloudflare-production-canonical.json \
+            --project "$PRODUCTION_PROJECT" \
+            --project-id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$previous_sha"
+
+          gh api --method GET \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f head_sha="$previous_sha" \
+            -f branch=main \
+            -f event=push \
+            -f status=success \
+            -f per_page=100 \
+            > n-minus-one/ci-runs.json
+
+          selected_run_id=""
+          selected_run_attempt=""
+          selected_artifact_id=""
+          selected_artifact_name=""
+          selected_binding_artifact_id=""
+          selected_actor=""
+          selected_triggering_actor=""
+          while IFS=$'\t' read -r run_id run_attempt actor triggering_actor; do
+            [ -n "$run_id" ] || continue
+            [ "$run_attempt" = "1" ] || continue
+            [ "$actor" = "$triggering_actor" ] || continue
+            gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" \
+              > n-minus-one/run-artifacts.json
+            artifact_name="production-release-candidate-${previous_sha}-1"
+            binding_name="production-release-candidate-binding-${previous_sha}-1"
+            mapfile -t artifact_ids < <(
+              jq -r --arg name "$artifact_name" \
+                '.artifacts[] | select(.expired == false and .name == $name) | .id' \
+                n-minus-one/run-artifacts.json
+            )
+            mapfile -t binding_ids < <(
+              jq -r --arg name "$binding_name" \
+                '.artifacts[] | select(.expired == false and .name == $name) | .id' \
+                n-minus-one/run-artifacts.json
+            )
+            if [ "${#artifact_ids[@]}" -eq 1 ] && [ "${#binding_ids[@]}" -eq 1 ]; then
+              selected_run_id="$run_id"
+              selected_run_attempt="$run_attempt"
+              selected_artifact_id="${artifact_ids[0]}"
+              selected_artifact_name="$artifact_name"
+              selected_binding_artifact_id="${binding_ids[0]}"
+              selected_actor="$actor"
+              selected_triggering_actor="$triggering_actor"
+              break
+            fi
+          done < <(
+            jq -r --arg repo "$GITHUB_REPOSITORY" '
+              .workflow_runs
+              | map(select(
+                  .conclusion == "success" and
+                  .event == "push" and
+                  .head_branch == "main" and
+                  .head_repository.full_name == $repo and
+                  .run_attempt == 1 and
+                  .actor.login == .triggering_actor.login
+                ))
+              | sort_by(.run_number, .run_attempt)
+              | reverse[]
+              | [.id, .run_attempt, .actor.login, .triggering_actor.login]
+              | @tsv
+            ' n-minus-one/ci-runs.json
+          )
+          if [ -z "$selected_artifact_id" ] || [ -z "$selected_binding_artifact_id" ]; then
+            echo "::error::No uniquely bound attempt-1 CI artifact exists for canonical production SHA $previous_sha."
+            exit 1
+          fi
+
+          mkdir -p n-minus-one/release-binding n-minus-one/binding-metadata
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_binding_artifact_id/zip" \
+            > n-minus-one/release-binding.zip
+          unzip -q n-minus-one/release-binding.zip \
+            -d n-minus-one/release-binding
+          rm n-minus-one/release-binding.zip
+          bound_artifact_id="$(jq -er '.artifact.id' n-minus-one/release-binding/release-artifact-binding.json)"
+          if [ "$bound_artifact_id" != "$selected_artifact_id" ]; then
+            echo "::error::The N-1 binding does not identify the selected payload artifact."
+            exit 1
+          fi
+          gh api \
+            "/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_artifact_id" \
+            > n-minus-one/binding-metadata/artifact.json
+          gh api \
+            "/repos/$GITHUB_REPOSITORY/actions/runs/$selected_run_id" \
+            > n-minus-one/binding-metadata/run.json
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_artifact_id/zip" \
+            > n-minus-one/release-candidate.zip
+          unzip -q n-minus-one/release-candidate.zip \
+            -d n-minus-one/release-candidate
+          rm n-minus-one/release-candidate.zip
+          git fetch --no-tags origin "$previous_sha"
+          previous_tree="$(git rev-parse "${previous_sha}^{tree}")"
+          npm run release:artifact:verify -- \
+            --dir n-minus-one/release-candidate \
+            --sha "$previous_sha" \
+            --tree "$previous_tree" \
+            --run-id "$selected_run_id" \
+            --run-attempt "$selected_run_attempt"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding n-minus-one/release-binding/release-artifact-binding.json \
+            --payload-root n-minus-one/release-candidate \
+            --artifact-metadata n-minus-one/binding-metadata/artifact.json \
+            --producer-run n-minus-one/binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$previous_sha" \
+            --source-tree "$previous_tree" \
+            --workflow-path .github/workflows/ci.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
+            --workflow-sha "$previous_sha" \
+            --event push \
+            --run-id "$selected_run_id" \
+            --run-attempt "$selected_run_attempt" \
+            --actor "$selected_actor" \
+            --triggering-actor "$selected_triggering_actor" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > n-minus-one/provenance-verification.json
+          jq -e '.ok == true and .verification_mode == "prior-run"' \
+            n-minus-one/provenance-verification.json >/dev/null
+          jq -n \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg previous_sha "$previous_sha" \
+            --arg previous_tree "$previous_tree" \
+            --arg production_project "$PRODUCTION_PROJECT" \
+            --arg production_project_id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            --arg deployment_id "$(jq -er '.id' n-minus-one/cloudflare-production-canonical.json)" \
+            --arg deployment_url "$(jq -er '.url' n-minus-one/cloudflare-production-canonical.json)" \
+            --arg source_run_id "$selected_run_id" \
+            --arg source_run_attempt "$selected_run_attempt" \
+            --arg source_artifact_name "$selected_artifact_name" '{
+              schema_version: 1,
+              evidence_type: "maiprop-production-n-minus-one-source",
+              release_sha: $release_sha,
+              previous_sha: $previous_sha,
+              previous_tree: $previous_tree,
+              production_project: $production_project,
+              production_project_id: $production_project_id,
+              deployment_id: $deployment_id,
+              deployment_url: $deployment_url,
+              source_run_id: $source_run_id,
+              source_run_attempt: $source_run_attempt,
+              source_artifact_name: $source_artifact_name
+            }' > n-minus-one/source-evidence.json
+          artifact_name="production-n-minus-one-source-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
+          {
+            echo "artifact_name=$artifact_name"
+            echo "previous_sha=$previous_sha"
+            echo "previous_source_run_id=$selected_run_id"
+            echo "previous_source_run_attempt=$selected_run_attempt"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable production N-1 source
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-n-minus-one-source-${{ needs.validate-source.outputs.release_sha }}-${{ github.run_attempt }}
+          path: n-minus-one/
+          if-no-files-found: error
+          retention-days: 30
+
+  supabase-staging:
+    name: Stage Supabase exact SHA
+    needs: [validate-source, capture-production-n-minus-one]
+    uses: ./.github/workflows/reusable-supabase-staging.yml
+    with:
+      release_sha: ${{ needs.validate-source.outputs.release_sha }}
+      source_run_id: ${{ needs.validate-source.outputs.source_run_id }}
+      source_run_attempt: ${{ needs.validate-source.outputs.source_run_attempt }}
+      artifact_sha256: ${{ needs.validate-source.outputs.artifact_sha256 }}
+      manifest_sha256: ${{ needs.validate-source.outputs.manifest_sha256 }}
+      production_supabase_project_id: ${{ vars.PRODUCTION_SUPABASE_PROJECT_ID }}
+      staging_mutation_acknowledgement: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+      trusted_control_sha: ${{ github.workflow_sha }}
+    secrets:
+      STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+
+  staging-n-minus-one-compatibility:
+    name: Prove N-1 frontend against staged backend
+    needs:
+      - validate-source
+      - capture-production-n-minus-one
+      - supabase-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      artifact_name: ${{ steps.evidence.outputs.artifact_name }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate-source.outputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install pinned compatibility tooling
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Download captured production N-1 source
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.capture-production-n-minus-one.outputs.artifact_name }}
+          path: n-minus-one
+
+      - name: Verify captured N-1 source again
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          PREVIOUS_SHA: ${{ needs.capture-production-n-minus-one.outputs.previous_sha }}
+          PREVIOUS_SOURCE_RUN_ID: ${{ needs.capture-production-n-minus-one.outputs.previous_source_run_id }}
+          PREVIOUS_SOURCE_RUN_ATTEMPT: ${{ needs.capture-production-n-minus-one.outputs.previous_source_run_attempt }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$PREVIOUS_SHA"
+          previous_tree="$(git rev-parse "${PREVIOUS_SHA}^{tree}")"
+          jq -e \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg previous_sha "$PREVIOUS_SHA" \
+            --arg source_run_id "$PREVIOUS_SOURCE_RUN_ID" \
+            --arg source_run_attempt "$PREVIOUS_SOURCE_RUN_ATTEMPT" '
+              .schema_version == 1 and
+              .evidence_type == "maiprop-production-n-minus-one-source" and
+              .release_sha == $release_sha and
+              .previous_sha == $previous_sha and
+              .source_run_id == $source_run_id and
+              .source_run_attempt == $source_run_attempt
+            ' n-minus-one/source-evidence.json >/dev/null
+          npm run release:artifact:verify -- \
+            --dir n-minus-one/release-candidate \
+            --sha "$PREVIOUS_SHA" \
+            --tree "$previous_tree" \
+            --run-id "$PREVIOUS_SOURCE_RUN_ID" \
+            --run-attempt "$PREVIOUS_SOURCE_RUN_ATTEMPT"
+
+      - name: Install Chromium for N-1 compatibility proof
+        run: npx playwright install --with-deps chromium
+
+      - name: Run N-1 Pages runtime against staged Supabase and Edge
+        id: evidence
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          ARTIFACT_SHA256: ${{ needs.validate-source.outputs.artifact_sha256 }}
+          PREVIOUS_SHA: ${{ needs.capture-production-n-minus-one.outputs.previous_sha }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_TURN_PROOF_EMAIL: ${{ vars.STAGING_TURN_PROOF_EMAIL }}
+          STAGING_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for value in \
+            "$STAGING_SUPABASE_PROJECT_ID" \
+            "$STAGING_SUPABASE_URL" \
+            "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            "$STAGING_TURN_PROOF_EMAIL" \
+            "$STAGING_DEMO_PASSWORD"; do
+            if [ -z "$value" ]; then
+              echo "::error::N-1 compatibility requires the isolated staging runtime and proof identity."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+          done
+          local_origin="http://127.0.0.1:8788"
+          npx --no-install wrangler pages dev \
+            n-minus-one/release-candidate/dist \
+            --ip 127.0.0.1 \
+            --port 8788 \
+            --compatibility-date 2026-05-19 \
+            --binding "VITE_SUPABASE_PROJECT_ID=$STAGING_SUPABASE_PROJECT_ID" \
+            --binding "VITE_SUPABASE_URL=$STAGING_SUPABASE_URL" \
+            --binding "VITE_SUPABASE_PUBLISHABLE_KEY=$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            --binding "VITE_PUBLIC_API_ORIGIN=$local_origin" \
+            --binding "VITE_APP_URL=$local_origin" \
+            --binding "SUPABASE_PROJECT_ID=$STAGING_SUPABASE_PROJECT_ID" \
+            --binding "SUPABASE_URL=$STAGING_SUPABASE_URL" \
+            --binding "SUPABASE_ANON_KEY=$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            --log-level warn \
+            > n-minus-one/wrangler-pages-dev.log 2>&1 &
+          wrangler_pid=$!
+          trap 'kill "$wrangler_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl -fsS "$local_origin/runtime-config.js" >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "true" ]; then
+            cat n-minus-one/wrangler-pages-dev.log
+            echo "::error::N-1 local Pages runtime did not become ready."
+            exit 1
+          fi
+
+          auth_response="$({
+            jq -n \
+              --arg email "$STAGING_TURN_PROOF_EMAIL" \
+              --arg password "$STAGING_DEMO_PASSWORD" \
+              '{email: $email, password: $password}' \
+              | curl -fsS --retry 3 \
+                  -H "apikey: $STAGING_SUPABASE_PUBLISHABLE_KEY" \
+                  -H "Content-Type: application/json" \
+                  --data-binary @- \
+                  "$STAGING_SUPABASE_URL/auth/v1/token?grant_type=password"
+          })"
+          turn_access_token="$(jq -er '.access_token' <<<"$auth_response")"
+          turn_user_id="$(jq -er '.user.id' <<<"$auth_response")"
+          echo "::add-mask::$turn_access_token"
+          professional_id="$({
+            curl -fsS --retry 3 \
+              -H "apikey: $STAGING_SUPABASE_PUBLISHABLE_KEY" \
+              -H "Authorization: Bearer $turn_access_token" \
+              -H "Accept-Profile: public" \
+              "$STAGING_SUPABASE_URL/rest/v1/professionals?select=id&user_id=eq.$turn_user_id&limit=1" \
+              | jq -er '.[0].id'
+          })"
+
+          PRODUCTION_DEPLOY_EXPECTED_SHA="$PREVIOUS_SHA" \
+          PRODUCTION_DEPLOY_CHECK_ATTEMPTS=3 \
+          PRODUCTION_DEPLOY_CHECK_DELAY_MS=1000 \
+          PRODUCTION_DEPLOY_TURN_ACCESS_TOKEN="$turn_access_token" \
+          PRODUCTION_DEPLOY_TURN_ROOM_ID="video:professional:$professional_id" \
+          PRODUCTION_DEPLOY_TURN_EXPECTED_TTL_SECONDS=21600 \
+            npm run --silent check:production-deploy -- \
+              "$local_origin" \
+              "$local_origin" \
+              --browser \
+              --public-api \
+              > n-minus-one/deploy-verification.json
+
+          CI=true \
+          MAIPROP_RUN_STAGING_CATALOGUE_GATES=1 \
+          MAIPROP_STAGING_RELEASE_SHA="$PREVIOUS_SHA" \
+          MAIPROP_ALLOW_LOOPBACK_STAGING_CATALOGUE_GATE=1 \
+          PLAYWRIGHT_BASE_URL="$local_origin" \
+          PLAYWRIGHT_JSON_OUTPUT_FILE=n-minus-one/playwright-report.json \
+            npx playwright test \
+              e2e/staging-catalogue-gates.spec.ts \
+              --project=chromium \
+              --reporter=json
+
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync, writeFileSync } from "node:fs";
+          const read = (path) => {
+            const bytes = readFileSync(path);
+            return {
+              value: JSON.parse(bytes.toString("utf8")),
+              sha256: createHash("sha256").update(bytes).digest("hex"),
+            };
+          };
+          const source = read("n-minus-one/source-evidence.json");
+          const deployment = read("n-minus-one/deploy-verification.json");
+          const playwright = read("n-minus-one/playwright-report.json");
+          const stats = playwright.value.stats ?? {};
+          if (
+            source.value.release_sha !== process.env.RELEASE_SHA ||
+            source.value.previous_sha !== process.env.PREVIOUS_SHA ||
+            deployment.value.status !== "passed" ||
+            !(stats.expected > 0) ||
+            stats.skipped !== 0 ||
+            stats.unexpected !== 0 ||
+            stats.flaky !== 0
+          ) {
+            throw new Error("N-1 compatibility proof is incomplete.");
+          }
+          const evidence = {
+            schema_version: 1,
+            evidence_type: "maiprop-staging-n-minus-one-compatibility",
+            release_sha: process.env.RELEASE_SHA,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            previous_sha: process.env.PREVIOUS_SHA,
+            staged_backend_project_ref:
+              process.env.STAGING_SUPABASE_PROJECT_ID,
+            ok: true,
+            source: source.value,
+            playwright: {
+              expected: stats.expected,
+              skipped: stats.skipped,
+              unexpected: stats.unexpected,
+              flaky: stats.flaky,
+              report_sha256: playwright.sha256,
+            },
+            deploy_verification_sha256: deployment.sha256,
+          };
+          writeFileSync(
+            "n-minus-one/compatibility-evidence.json",
+            `${JSON.stringify(evidence, null, 2)}\n`,
+          );
+          NODE
+          artifact_name="staging-n-minus-one-compatibility-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload N-1 compatibility evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.evidence.outputs.artifact_name }}
+          path: |
+            n-minus-one/compatibility-evidence.json
+            n-minus-one/deploy-verification.json
+            n-minus-one/playwright-report.json
+            n-minus-one/source-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  cloudflare-staging:
+    name: Stage Cloudflare exact artifact
+    needs: [validate-source, supabase-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      attestation_artifact: ${{ steps.attestation.outputs.artifact_name }}
+      deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+      deployment_url: ${{ steps.deployment.outputs.deployment_url }}
+      canonical_deployment_id: ${{ steps.deployment.outputs.canonical_deployment_id }}
+      stable_url: ${{ steps.deployment.outputs.stable_url }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate-source.outputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Download immutable candidate binding from source CI
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-release-candidate-binding-${{ needs.validate-source.outputs.release_sha }}-${{ needs.validate-source.outputs.source_run_attempt }}
+          path: source-binding
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.validate-source.outputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Resolve immutable candidate metadata
+        id: cloudflare_source_binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ needs.validate-source.outputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          artifact_id="$(jq -er '.artifact.id' source-binding/release-artifact-binding.json)"
+          if ! [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::The candidate binding does not contain a valid artifact ID."
+            exit 1
+          fi
+          mkdir -p source-binding-metadata
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id" \
+            > source-binding-metadata/artifact.json
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" \
+            > source-binding-metadata/run.json
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download immutable candidate from source CI
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ steps.cloudflare_source_binding.outputs.artifact_id }}
+          path: release-candidate
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.validate-source.outputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify immutable candidate again
+        env:
+          EXPECTED_MANIFEST_SHA256: ${{ needs.validate-source.outputs.manifest_sha256 }}
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.validate-source.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ needs.validate-source.outputs.source_run_id }}
+          SOURCE_TREE: ${{ needs.validate-source.outputs.source_tree }}
+        run: |
+          set -euo pipefail
+          actual_manifest_sha256="$(
+            sha256sum release-candidate/release-manifest.json | awk '{print $1}'
+          )"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::The downloaded manifest differs from the candidate verified by the source job."
+            exit 1
+          fi
+          source_actor="$(jq -er '.actor.login' source-binding-metadata/run.json)"
+          source_triggering_actor="$(jq -er '.triggering_actor.login' source-binding-metadata/run.json)"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding source-binding/release-artifact-binding.json \
+            --payload-root release-candidate \
+            --artifact-metadata source-binding-metadata/artifact.json \
+            --producer-run source-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/ci.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event push \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --actor "$source_actor" \
+            --triggering-actor "$source_triggering_actor" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > source-binding-verification.json
+
+      - name: Verify pre-provisioned dedicated Pages project
+        env:
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          PRODUCTION_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          PRODUCTION_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$STAGING_CF_READ_TOKEN" ] ||
+             [ -z "$STAGING_CF_ACCOUNT_ID" ] ||
+             [ -z "$PRODUCTION_CF_READ_TOKEN" ] ||
+             [ -z "$PRODUCTION_CF_ACCOUNT_ID" ]; then
+            echo "::error::Dedicated staging and production read credentials are required."
+            exit 1
+          fi
+          if [ "$STAGING_CF_ACCOUNT_ID" = "$PRODUCTION_CF_ACCOUNT_ID" ]; then
+            echo "::error::Staging and production Cloudflare account IDs must be distinct."
+            exit 1
+          fi
+          if ! [[ "$STAGING_PROJECT" =~ ^[a-z0-9-]+$ ]] ||
+             ! [[ "$PRODUCTION_PROJECT" =~ ^[a-z0-9-]+$ ]] ||
+             [ "$STAGING_PROJECT" = "$PRODUCTION_PROJECT" ]; then
+            echo "::error::Dedicated staging and production Pages project variables must be configured and different."
+            exit 1
+          fi
+          if ! [[ "$STAGING_APP_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] ||
+             [ "$STAGING_APP_URL" = "https://portal.maiprop.co" ]; then
+            echo "::error::STAGING_APP_URL must be a dedicated HTTPS staging origin without a path."
+            exit 1
+          fi
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > cloudflare-staging-project.json
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $PRODUCTION_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$PRODUCTION_CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > cloudflare-production-project.json
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode staging \
+            --staging-project-file cloudflare-staging-project.json \
+            --production-project-file cloudflare-production-project.json \
+            --out cloudflare-pages-git-auto-deploy-posture.json
+          jq '.result.canonical_deployment' \
+            cloudflare-staging-project.json \
+            > cloudflare-staging-previous-canonical-deployment.json
+          jq '{
+              schema_version: 1,
+              evidence_type: "maiprop-pages-previous-canonical",
+              project_name: .project_name,
+              deployment_id: .id,
+              environment: .environment,
+              branch: .deployment_trigger.metadata.branch,
+              commit_hash: .deployment_trigger.metadata.commit_hash,
+              status: .latest_stage.status
+            }' cloudflare-staging-previous-canonical-deployment.json \
+            > cloudflare-staging-previous-canonical-evidence.json
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/domains" \
+            > cloudflare-staging-domains.json
+          staging_hostname="$(
+            STAGING_APP_URL="$STAGING_APP_URL" node -e \
+              'process.stdout.write(new URL(process.env.STAGING_APP_URL).hostname)'
+          )"
+          jq -e \
+            --arg hostname "$staging_hostname" \
+            --slurpfile domains cloudflare-staging-domains.json '
+              .success == true and
+              (
+                .result.subdomain == $hostname or
+                (
+                  ($domains[0].success == true) and
+                  any(
+                    $domains[0].result[];
+                    .name == $hostname and .status == "active"
+                  )
+                )
+              )
+            ' cloudflare-staging-project.json >/dev/null || {
+              echo "::error::STAGING_APP_URL is not the project subdomain or an active custom domain of the dedicated staging project."
+              exit 1
+            }
+          jq -e \
+            --arg project "$STAGING_PROJECT" '
+              (.id | type == "string" and length > 0) and
+              .project_name == $project and
+              .environment == "production" and
+              .is_skipped == false and
+              .latest_stage.name == "deploy" and
+              .latest_stage.status == "success" and
+              (.deployment_trigger.metadata.commit_hash |
+                type == "string" and
+                test("^[0-9a-fA-F]{40}$"))
+            ' cloudflare-staging-previous-canonical-deployment.json \
+            >/dev/null || {
+              echo "::error::The dedicated staging project needs a successful canonical rollback target before mutation."
+              exit 1
+            }
+
+      - name: Require authenticated TURN proof identity
+        env:
+          TURN_PROOF_EMAIL: ${{ vars.STAGING_TURN_PROOF_EMAIL }}
+          TURN_PROOF_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TURN_PROOF_EMAIL" ] || [ -z "$TURN_PROOF_PASSWORD" ]; then
+            echo "::error::Authenticated staging TURN proof credentials must be configured before Pages mutation."
+            exit 1
+          fi
+
+      - name: Revalidate staging lease before Pages mutation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ needs.validate-source.outputs.release_sha }}" \
+            --source-run-id "${{ needs.validate-source.outputs.source_run_id }}" \
+            --source-run-attempt "${{ needs.validate-source.outputs.source_run_attempt }}"
+
+      - name: Assert dedicated staging Pages mutation target
+        env:
+          CLOUDFLARE_STAGING_PAGES_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+        run: |
+          set -euo pipefail
+          if [ "$CLOUDFLARE_STAGING_PAGES_PROJECT" != "maiprop-listing-site-staging" ]; then
+            echo "::error::Cloudflare mutation target is not the dedicated MaiProp staging project."
+            exit 1
+          fi
+          if [ "$STAGING_MUTATION_ACKNOWLEDGEMENT" != "MUTATE_STAGING_xsiehskfgeoqyazcgauv" ]; then
+            echo "::error::The exact staging-only mutation acknowledgement is required."
+             exit 1
+           fi
+
+      - name: Prepare isolated Wrangler deployment directory
+        id: isolated-pages-deploy
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate-source.outputs.source_tree }}
+          SOURCE_RUN_ID: ${{ needs.validate-source.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.validate-source.outputs.source_run_attempt }}
+        run: |
+          set -euo pipefail
+          isolated_directory="$RUNNER_TEMP/maiprop-pages-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -rf "$isolated_directory"
+          mkdir -p "$isolated_directory"
+          cp -a release-candidate/. "$isolated_directory/"
+          node scripts/production-release-artifact.mjs verify \
+            --dir "$isolated_directory" \
+            --sha "$RELEASE_SHA" \
+            --tree "$SOURCE_TREE" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT" \
+            > /dev/null
+
+          workspace_real="$(realpath "$GITHUB_WORKSPACE")"
+          isolated_real="$(realpath "$isolated_directory")"
+          case "$isolated_real" in
+            "$workspace_real"|"$workspace_real"/*)
+              echo "::error::Wrangler deployment directory must be outside the repository."
+              exit 1
+              ;;
+          esac
+          ancestor="$isolated_real"
+          while true; do
+            for config_name in wrangler.toml wrangler.json wrangler.jsonc; do
+              if [ -e "$ancestor/$config_name" ]; then
+                echo "::error::Wrangler config discovery is possible from $isolated_real via $ancestor/$config_name."
+                exit 1
+              fi
+            done
+            parent="$(dirname "$ancestor")"
+            if [ "$parent" = "$ancestor" ]; then
+              break
+            fi
+            ancestor="$parent"
+          done
+          echo "directory=$isolated_real" >> "$GITHUB_OUTPUT"
+
+      - name: Capture staging Pages deployment set before mutation
+        id: deployment-baseline
+        env:
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+        run: |
+          set -euo pipefail
+          project_file="$RUNNER_TEMP/cloudflare-staging-project-immediately-before-mutation.json"
+          deployments_file="$RUNNER_TEMP/cloudflare-staging-deployments-before.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$project_file"
+          previous_id="$(jq -er '.id' cloudflare-staging-previous-canonical-deployment.json)"
+          previous_sha="$(jq -er '.deployment_trigger.metadata.commit_hash | ascii_downcase' cloudflare-staging-previous-canonical-deployment.json)"
+          jq -e --arg id "$previous_id" --arg sha "$previous_sha" '
+              .success == true and
+              .result.canonical_deployment.id == $id and
+              (
+                .result.canonical_deployment.deployment_trigger.metadata.commit_hash
+                | ascii_downcase
+              ) == $sha
+            ' "$project_file" > /dev/null || {
+              echo "::error::Staging canonical changed before the Pages mutation attempt."
+              exit 1
+            }
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/deployments?env=production&per_page=100" \
+            > "$deployments_file"
+          jq -e '.success == true and (.result | type == "array")' \
+            "$deployments_file" > /dev/null
+          echo "deployments_before=$deployments_file" >> "$GITHUB_OUTPUT"
+
+      - name: Record staging Pages mutation attempt
+        id: mutation-intent
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          STAGING_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          mutation_attempt_file="$GITHUB_WORKSPACE/cloudflare-staging-mutation-attempt.json"
+          jq -n \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg project "$STAGING_PROJECT" \
+            --arg project_id "$STAGING_PROJECT_ID" \
+            --arg attempted_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
+              schema_version: 1,
+              evidence_type: "maiprop-pages-mutation-attempt",
+              mutation_attempted: true,
+              release_sha: $release_sha,
+              project_name: $project,
+              project_id: $project_id,
+              attempted_at: $attempted_at
+            }' > "$mutation_attempt_file"
+          echo "mutation_attempted=true" >> "$GITHUB_OUTPUT"
+          echo "mutation_attempt_file=$mutation_attempt_file" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy exact artifact to dedicated staging project
+        id: deploy
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          workingDirectory: ${{ steps.isolated-pages-deploy.outputs.directory }}
+          wranglerVersion: "4.86.0"
+          command: >-
+            pages deploy dist
+            --project-name=${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+            --branch=main
+            --commit-hash=${{ needs.validate-source.outputs.release_sha }}
+            --commit-dirty=false
+
+      - name: Fetch and validate exact Pages deployment
+        id: deployment
+        if: ${{ always() && steps.mutation-intent.outputs.mutation_attempted == 'true' }}
+        env:
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          PRODUCTION_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          PRODUCTION_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          DEPLOYMENTS_BEFORE: ${{ steps.deployment-baseline.outputs.deployments_before }}
+          MUTATION_ATTEMPT_FILE: ${{ steps.mutation-intent.outputs.mutation_attempt_file }}
+          REPORTED_DEPLOYMENT_ID: ${{ steps.deploy.outputs['pages-deployment-id'] }}
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          deployments_after="$RUNNER_TEMP/cloudflare-staging-deployments-after.json"
+          candidate_receipt="$GITHUB_WORKSPACE/cloudflare-staging-candidate-receipt.json"
+          reconciliation_error="$RUNNER_TEMP/cloudflare-staging-candidate-reconciliation.err"
+          rm -f "$candidate_receipt" "$reconciliation_error"
+          for attempt in $(seq 1 18); do
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/deployments?env=production&per_page=100" \
+              > "$deployments_after"
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+              > cloudflare-staging-project-after.json
+            if node scripts/cloudflare-pages-candidate-guard.mjs resolve-candidate \
+              --mutation-attempt-file "$MUTATION_ATTEMPT_FILE" \
+              --before-deployments-file "$DEPLOYMENTS_BEFORE" \
+              --after-deployments-file "$deployments_after" \
+              --current-project-file cloudflare-staging-project-after.json \
+              --project "$STAGING_PROJECT" \
+              --project-id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" \
+              --release-sha "$RELEASE_SHA" \
+              --reported-deployment-id "$REPORTED_DEPLOYMENT_ID" \
+              --out "$candidate_receipt" \
+              2> "$reconciliation_error"; then
+              break
+            fi
+            if grep -Eq \
+              'Multiple new exact-SHA|reported deployment ID|malformed|immutable project identity' \
+              "$reconciliation_error"; then
+              cat "$reconciliation_error" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          if [ ! -s "$candidate_receipt" ]; then
+            cat "$reconciliation_error" >&2
+            echo "::error::Staging Pages mutation could not be reconciled to one exact canonical candidate."
+            exit 1
+          fi
+          DEPLOYMENT_ID="$(jq -er '.deployment_id' "$candidate_receipt")"
+          echo "deployment_id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
+          echo "candidate_receipt=$candidate_receipt" >> "$GITHUB_OUTPUT"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/deployments/$DEPLOYMENT_ID" \
+            | jq '.result' > cloudflare-staging-deployment.json
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file cloudflare-staging-deployment.json \
+            --project "$STAGING_PROJECT" \
+            --project-id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$RELEASE_SHA"
+          jq '{
+              schema_version: 1,
+              evidence_type: "maiprop-pages-deployment",
+              project_name: .project_name,
+              deployment_id: .id,
+              url: .url,
+              environment: .environment,
+              branch: .deployment_trigger.metadata.branch,
+              commit_hash: .deployment_trigger.metadata.commit_hash,
+              commit_dirty: .deployment_trigger.metadata.commit_dirty,
+              uses_functions: .uses_functions,
+              status: .latest_stage.status
+            }' cloudflare-staging-deployment.json \
+            > cloudflare-staging-deployment-evidence.json
+          jq '.result.canonical_deployment' \
+            cloudflare-staging-project-after.json \
+            > cloudflare-staging-canonical-deployment.json
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file cloudflare-staging-canonical-deployment.json \
+            --project "$STAGING_PROJECT" \
+            --project-id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$RELEASE_SHA"
+          jq '{
+              schema_version: 1,
+              evidence_type: "maiprop-pages-canonical-deployment",
+              project_name: .project_name,
+              deployment_id: .id,
+              url: .url,
+              environment: .environment,
+              branch: .deployment_trigger.metadata.branch,
+              commit_hash: .deployment_trigger.metadata.commit_hash,
+              commit_dirty: .deployment_trigger.metadata.commit_dirty,
+              uses_functions: .uses_functions,
+              status: .latest_stage.status
+            }' cloudflare-staging-canonical-deployment.json \
+            > cloudflare-staging-canonical-evidence.json
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $PRODUCTION_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$PRODUCTION_CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > cloudflare-production-project-after.json
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode staging \
+            --staging-project-file cloudflare-staging-project-after.json \
+            --production-project-file cloudflare-production-project-after.json \
+            --out cloudflare-pages-postdeploy-posture.json
+          deployment_url="$(jq -r '.url' cloudflare-staging-deployment.json)"
+          canonical_deployment_id="$(jq -r '.id' cloudflare-staging-canonical-deployment.json)"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "canonical_deployment_id=$canonical_deployment_id" >> "$GITHUB_OUTPUT"
+          echo "stable_url=$STAGING_APP_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Verify immutable and canonical staging runtimes
+        env:
+          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          PRODUCTION_DEPLOY_EXPECTED_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          PRODUCTION_DEPLOY_CHECK_ATTEMPTS: "12"
+          PRODUCTION_DEPLOY_CHECK_DELAY_MS: "10000"
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_TURN_PROOF_EMAIL: ${{ vars.STAGING_TURN_PROOF_EMAIL }}
+          STAGING_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$STAGING_TURN_PROOF_EMAIL" ] ||
+             [ -z "$STAGING_DEMO_PASSWORD" ]; then
+            echo "::error::Authenticated TURN proof requires STAGING_TURN_PROOF_EMAIL and E2E_DEMO_PASSWORD."
+            exit 1
+          fi
+          auth_payload="$(
+            jq -cn \
+              --arg email "$STAGING_TURN_PROOF_EMAIL" \
+              --arg password "$STAGING_DEMO_PASSWORD" \
+              '{email: $email, password: $password}'
+          )"
+          auth_response="$(
+            printf '%s' "$auth_payload" |
+              curl -fsS --retry 3 \
+                -H "apikey: $STAGING_SUPABASE_PUBLISHABLE_KEY" \
+                -H "Content-Type: application/json" \
+                --data-binary @- \
+                "$STAGING_SUPABASE_URL/auth/v1/token?grant_type=password"
+          )"
+          unset auth_payload
+          turn_access_token="$(jq -er '.access_token' <<<"$auth_response")"
+          turn_user_id="$(jq -er '.user.id' <<<"$auth_response")"
+          unset auth_response
+          echo "::add-mask::$turn_access_token"
+          if ! [[ "$turn_user_id" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+            echo "::error::The TURN proof account returned an invalid user id."
+            exit 1
+          fi
+          professional_response="$(
+            curl -fsS --retry 3 \
+              -H "apikey: $STAGING_SUPABASE_PUBLISHABLE_KEY" \
+              -H "Authorization: Bearer $turn_access_token" \
+              -H "Accept-Profile: public" \
+              "$STAGING_SUPABASE_URL/rest/v1/professionals?select=id&user_id=eq.$turn_user_id&limit=1"
+          )"
+          professional_id="$(jq -er '.[0].id' <<<"$professional_response")"
+          unset professional_response
+          if ! [[ "$professional_id" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+            echo "::error::STAGING_TURN_PROOF_EMAIL must identify a seeded professional authorized for its video room."
+            exit 1
+          fi
+          export PRODUCTION_DEPLOY_TURN_ACCESS_TOKEN="$turn_access_token"
+          export PRODUCTION_DEPLOY_TURN_ROOM_ID="video:professional:$professional_id"
+          export PRODUCTION_DEPLOY_TURN_EXPECTED_TTL_SECONDS="21600"
+          echo "::add-mask::$PRODUCTION_DEPLOY_TURN_ROOM_ID"
+          npx playwright install chromium
+          npm run --silent release:verify-live-marker -- \
+            "${{ steps.deployment.outputs.deployment_url }}" \
+            release-candidate/release-manifest.json \
+            > live-release-marker.json
+          npm run --silent release:verify-runtime-config -- \
+            "${{ steps.deployment.outputs.deployment_url }}" \
+            "$STAGING_SUPABASE_URL" \
+            "$STAGING_SUPABASE_PROJECT_ID" \
+            "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            "$STAGING_APP_URL" \
+            --staging-project-file cloudflare-staging-project-after.json \
+            --production-project-file cloudflare-production-project-after.json \
+            > live-runtime-config.json
+          npm run --silent release:verify-live-marker -- \
+            "$STAGING_APP_URL" \
+            release-candidate/release-manifest.json \
+            > stable-release-marker.json
+          npm run --silent release:verify-runtime-config -- \
+            "$STAGING_APP_URL" \
+            "$STAGING_SUPABASE_URL" \
+            "$STAGING_SUPABASE_PROJECT_ID" \
+            "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            "$STAGING_APP_URL" \
+            --staging-project-file cloudflare-staging-project-after.json \
+            --production-project-file cloudflare-production-project-after.json \
+            > stable-runtime-config.json
+          npm run --silent check:production-deploy -- \
+            "${{ steps.deployment.outputs.deployment_url }}" \
+            "$STAGING_APP_URL" \
+            --browser \
+            --public-api \
+            > staging-deploy-verification.json
+
+      - name: Re-attest both Pages projects immediately before final attestation
+        env:
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          PRODUCTION_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          PRODUCTION_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > cloudflare-staging-project-final.json
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $PRODUCTION_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$PRODUCTION_CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > cloudflare-production-project-final.json
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode staging \
+            --staging-project-file cloudflare-staging-project-final.json \
+            --production-project-file cloudflare-production-project-final.json \
+            --out cloudflare-pages-final-posture.json
+          jq -e --arg deployment_id "$DEPLOYMENT_ID" '
+              .success == true and
+              .result.canonical_deployment.id == $deployment_id
+            ' cloudflare-staging-project-final.json >/dev/null || {
+              echo "::error::The exact immutable deployment stopped being canonical before attestation."
+              exit 1
+            }
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/domains" \
+            > cloudflare-staging-domains-final.json
+          staging_hostname="$(
+            STAGING_APP_URL="$STAGING_APP_URL" node -e \
+              'process.stdout.write(new URL(process.env.STAGING_APP_URL).hostname)'
+          )"
+          jq -e \
+            --arg hostname "$staging_hostname" \
+            --slurpfile domains cloudflare-staging-domains-final.json '
+              .success == true and
+              (
+                .result.subdomain == $hostname or
+                (
+                  ($domains[0].success == true) and
+                  any(
+                    $domains[0].result[];
+                    .name == $hostname and .status == "active"
+                  )
+                )
+              )
+            ' cloudflare-staging-project-final.json >/dev/null || {
+              echo "::error::The stable staging origin is no longer attached to the dedicated project."
+              exit 1
+            }
+          jq -n \
+            --arg project_name "$STAGING_PROJECT" \
+            --arg subdomain "$(
+              jq -er '.result.subdomain' cloudflare-staging-project-final.json
+            )" \
+            --slurpfile domains cloudflare-staging-domains-final.json '{
+              schema_version: 1,
+              evidence_type: "maiprop-pages-project-identity",
+              project_name: $project_name,
+              subdomain: $subdomain,
+              active_domains: [
+                $domains[0].result[]?
+                | select(.status == "active")
+                | {name, status}
+              ]
+            }' > cloudflare-staging-project-identity-evidence.json
+          npm run --silent release:verify-runtime-config -- \
+            "${{ steps.deployment.outputs.deployment_url }}" \
+            "$STAGING_SUPABASE_URL" \
+            "$STAGING_SUPABASE_PROJECT_ID" \
+            "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            "$STAGING_APP_URL" \
+            --staging-project-file cloudflare-staging-project-final.json \
+            --production-project-file cloudflare-production-project-final.json \
+            > live-runtime-config.json
+          npm run --silent release:verify-runtime-config -- \
+            "$STAGING_APP_URL" \
+            "$STAGING_SUPABASE_URL" \
+            "$STAGING_SUPABASE_PROJECT_ID" \
+            "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            "$STAGING_APP_URL" \
+            --staging-project-file cloudflare-staging-project-final.json \
+            --production-project-file cloudflare-production-project-final.json \
+            > stable-runtime-config.json
+
+      - name: Create Cloudflare staging attestation
+        id: attestation
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          ARTIFACT_SHA256: ${{ needs.validate-source.outputs.artifact_sha256 }}
+          PAYLOAD_SHA256: ${{ needs.validate-source.outputs.payload_sha256 }}
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
+        run: |
+          node --input-type=module <<'NODE'
+           import { createHash } from "node:crypto";
+           import { readFileSync, writeFileSync } from "node:fs";
+           const deployment = JSON.parse(
+             readFileSync(
+               "cloudflare-staging-deployment-evidence.json",
+               "utf8",
+             ),
+           );
+           const canonical = JSON.parse(
+             readFileSync(
+               "cloudflare-staging-canonical-evidence.json",
+               "utf8",
+             ),
+           );
+           const projectIdentity = JSON.parse(
+             readFileSync(
+               "cloudflare-staging-project-identity-evidence.json",
+               "utf8",
+             ),
+           );
+           const gitAutoDeployPostureBytes = readFileSync(
+             "cloudflare-pages-final-posture.json",
+           );
+          const gitAutoDeployPosture = JSON.parse(
+            gitAutoDeployPostureBytes.toString("utf8"),
+          );
+           const marker = JSON.parse(readFileSync("live-release-marker.json", "utf8"));
+          const stableMarker = JSON.parse(
+            readFileSync("stable-release-marker.json", "utf8"),
+          );
+          const runtimeConfig = JSON.parse(
+            readFileSync("live-runtime-config.json", "utf8"),
+          );
+          const stableRuntimeConfig = JSON.parse(
+            readFileSync("stable-runtime-config.json", "utf8"),
+          );
+          const deployVerificationBytes = readFileSync(
+            "staging-deploy-verification.json",
+          );
+          const deployVerification = JSON.parse(
+            deployVerificationBytes.toString("utf8"),
+          );
+          const candidateReceiptBytes = readFileSync(
+            "cloudflare-staging-candidate-receipt.json",
+          );
+          const candidateReceipt = JSON.parse(
+            candidateReceiptBytes.toString("utf8"),
+          );
+          const mutationAttemptBytes = readFileSync(
+            "cloudflare-staging-mutation-attempt.json",
+          );
+          const mutationAttempt = JSON.parse(
+            mutationAttemptBytes.toString("utf8"),
+          );
+           const previousCanonical = JSON.parse(
+             readFileSync(
+               "cloudflare-staging-previous-canonical-evidence.json",
+               "utf8",
+             ),
+           );
+           if (
+             deployment.schema_version !== 1 ||
+             deployment.evidence_type !== "maiprop-pages-deployment" ||
+             deployment.project_name !== process.env.STAGING_PROJECT ||
+             deployment.deployment_id !== canonical.deployment_id ||
+             deployment.commit_hash !== process.env.RELEASE_SHA ||
+             deployment.environment !== "production" ||
+             deployment.branch !== "main" ||
+             deployment.commit_dirty !== false ||
+             deployment.uses_functions !== true ||
+             deployment.status !== "success" ||
+             canonical.schema_version !== 1 ||
+             canonical.evidence_type !==
+               "maiprop-pages-canonical-deployment" ||
+             canonical.project_name !== process.env.STAGING_PROJECT ||
+             canonical.commit_hash !== process.env.RELEASE_SHA ||
+             canonical.environment !== "production" ||
+             canonical.branch !== "main" ||
+             canonical.commit_dirty !== false ||
+             canonical.uses_functions !== true ||
+             canonical.status !== "success"
+           ) {
+             throw new Error("The attested staging deployment is not canonical.");
+           }
+           if (
+             candidateReceipt.schema_version !== 1 ||
+             candidateReceipt.evidence_type !==
+               "maiprop-pages-candidate-receipt" ||
+             candidateReceipt.status !== "reconciled" ||
+             candidateReceipt.mutation_attempted !== true ||
+             candidateReceipt.project_name !== process.env.STAGING_PROJECT ||
+             candidateReceipt.deployment_id !== deployment.deployment_id ||
+             candidateReceipt.release_sha !== process.env.RELEASE_SHA ||
+             mutationAttempt.schema_version !== 1 ||
+             mutationAttempt.evidence_type !==
+               "maiprop-pages-mutation-attempt" ||
+             mutationAttempt.mutation_attempted !== true ||
+             mutationAttempt.project_name !== process.env.STAGING_PROJECT ||
+             mutationAttempt.release_sha !== process.env.RELEASE_SHA
+           ) {
+             throw new Error("Staging Pages mutation evidence is incomplete.");
+           }
+           if (
+             projectIdentity.schema_version !== 1 ||
+             projectIdentity.evidence_type !==
+               "maiprop-pages-project-identity" ||
+             projectIdentity.project_name !== process.env.STAGING_PROJECT ||
+             typeof projectIdentity.subdomain !== "string" ||
+             !Array.isArray(projectIdentity.active_domains) ||
+             previousCanonical.schema_version !== 1 ||
+             previousCanonical.evidence_type !==
+               "maiprop-pages-previous-canonical" ||
+             previousCanonical.project_name !== process.env.STAGING_PROJECT ||
+             typeof previousCanonical.deployment_id !== "string" ||
+             previousCanonical.deployment_id.length === 0
+           ) {
+             throw new Error("Minimized Pages identity evidence is incomplete.");
+           }
+           if (
+             gitAutoDeployPosture.schema_version !== 2 ||
+             gitAutoDeployPosture.status !== "passed" ||
+             gitAutoDeployPosture.stripe_runtime?.status !==
+               "test-or-disabled" ||
+             gitAutoDeployPosture.stripe_runtime?.production_price_reuse !==
+               false ||
+             !Array.isArray(gitAutoDeployPosture.projects) ||
+            gitAutoDeployPosture.projects.length !== 2 ||
+            JSON.stringify(
+              gitAutoDeployPosture.projects
+                .map((entry) => entry?.role)
+                .sort(),
+            ) !== JSON.stringify(["production", "staging"]) ||
+            gitAutoDeployPosture.projects.some(
+              (entry) =>
+                entry?.project_name !==
+                  (
+                    entry?.role === "staging"
+                      ? process.env.STAGING_PROJECT
+                      : process.env.PRODUCTION_PROJECT
+                  ) ||
+                entry?.production_deployments_enabled !== false ||
+                entry?.preview_deployment_setting !== "none" ||
+                entry?.all_automatic_deployments_disabled !== true ||
+                entry?.status !== "disabled",
+            )
+          ) {
+             throw new Error("Pages Git automatic deployment posture is incomplete.");
+           }
+           for (const runtime of [runtimeConfig, stableRuntimeConfig]) {
+             if (
+               runtime?.stripe_runtime?.status !== "test-or-disabled" ||
+               runtime?.stripe_runtime?.production_price_reuse !== false ||
+               runtime?.stripe_runtime?.api_binding_match !== true
+             ) {
+               throw new Error(
+                 "Live staging Stripe runtime evidence is incomplete.",
+               );
+             }
+           }
+          if (
+            deployVerification.schemaVersion !== 1 ||
+            deployVerification.status !== "passed" ||
+            !Array.isArray(deployVerification.targets) ||
+            deployVerification.targets.length !== 2 ||
+            deployVerification.targets.some(
+              (target) =>
+                target?.status !== "passed" ||
+                target?.publicApi?.schemaVersion !== 3 ||
+                target?.publicApi?.status !== "passed" ||
+                target?.publicApi?.operational?.auctionConsistency?.status !==
+                  "passed" ||
+                target?.publicApi?.operational?.listingsCursor?.status !==
+                  "passed" ||
+                target?.publicApi?.operational?.openHousesCursor?.status !==
+                  "passed" ||
+                target?.publicApi?.operational?.publicationPinning?.status !==
+                  "passed" ||
+                target?.publicApi?.operational?.cacheTransition?.status !==
+                  "passed" ||
+                target?.publicApi?.operational?.turnCredentialBoundary?.status !==
+                  "passed" ||
+                target?.publicApi?.operational?.turnCredentialIssuance?.status !==
+                  "passed" ||
+                target?.publicApi?.operational?.turnCredentialIssuance?.httpStatus !==
+                  200 ||
+                target?.publicApi?.operational?.turnCredentialIssuance?.authentication !==
+                  "passed" ||
+                target?.publicApi?.operational?.turnCredentialIssuance?.authorizedRoom !==
+                  "passed" ||
+                target?.publicApi?.operational?.turnCredentialIssuance?.expiresIn !==
+                  21600 ||
+                target?.publicApi?.operational?.turnCredentialIssuance?.credentialsPresent !==
+                  true ||
+                target?.publicApi?.operational?.turnCredentialIssuance?.credentialsRedacted !==
+                  true ||
+                !(
+                  target?.publicApi?.operational?.turnCredentialIssuance?.iceServerCount >
+                  0
+                ) ||
+                !(
+                  target?.publicApi?.operational?.turnCredentialIssuance?.turnUrlCount >
+                  0
+                ),
+            )
+          ) {
+            throw new Error("The staging Pages live proof is incomplete.");
+          }
+           const attestation = {
+             schema_version: 4,
+            evidence_type: "maiprop-staging-pages-deployment",
+            release_sha: process.env.RELEASE_SHA,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+             payload_sha256: process.env.PAYLOAD_SHA256,
+             project_name: process.env.STAGING_PROJECT,
+             project_subdomain: projectIdentity.subdomain,
+             project_domains: projectIdentity.active_domains,
+             deployment_id: deployment.deployment_id,
+             canonical_deployment_id: canonical.deployment_id,
+             deployment_url: deployment.url,
+             stable_url: process.env.STAGING_APP_URL,
+             environment: deployment.environment,
+             branch: deployment.branch,
+             commit_dirty: deployment.commit_dirty,
+             uses_functions: deployment.uses_functions,
+             mutation_attempted: true,
+             candidate_receipt_sha256: createHash("sha256")
+               .update(candidateReceiptBytes)
+               .digest("hex"),
+             mutation_attempt_sha256: createHash("sha256")
+               .update(mutationAttemptBytes)
+               .digest("hex"),
+             secret_binding_verification: "allowlisted-name-and-type",
+             authenticated_live_functional_proof: "passed",
+             marker,
+            stable_marker: stableMarker,
+            runtime_config: runtimeConfig,
+            stable_runtime_config: stableRuntimeConfig,
+             previous_canonical_deployment_id:
+               previousCanonical.deployment_id,
+            git_auto_deploy_posture_sha256: createHash("sha256")
+              .update(gitAutoDeployPostureBytes)
+              .digest("hex"),
+            git_auto_deploy_posture: gitAutoDeployPosture,
+            deploy_verification_sha256: createHash("sha256")
+              .update(deployVerificationBytes)
+              .digest("hex"),
+            deploy_verification: deployVerification,
+            attested_at: new Date().toISOString(),
+          };
+          writeFileSync(
+            "cloudflare-staging-attestation.json",
+            `${JSON.stringify(attestation, null, 2)}\n`,
+          );
+          NODE
+          artifact_name="cloudflare-staging-attestation-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact Cloudflare staging evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.attestation.outputs.artifact_name }}
+          path: |
+            cloudflare-staging-attestation.json
+            cloudflare-staging-candidate-receipt.json
+            cloudflare-staging-mutation-attempt.json
+            cloudflare-staging-canonical-evidence.json
+            cloudflare-staging-deployment-evidence.json
+            cloudflare-pages-final-posture.json
+            cloudflare-staging-previous-canonical-evidence.json
+            cloudflare-staging-project-identity-evidence.json
+            live-release-marker.json
+            live-runtime-config.json
+            stable-release-marker.json
+            stable-runtime-config.json
+            staging-deploy-verification.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Roll back failed staging candidate
+        if: ${{ always() && steps.mutation-intent.outputs.mutation_attempted == 'true' && failure() }}
+        env:
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          PRODUCTION_DEPLOY_CHECK_ATTEMPTS: "12"
+          PRODUCTION_DEPLOY_CHECK_DELAY_MS: "10000"
+          CANDIDATE_RECEIPT: ${{ steps.deployment.outputs.candidate_receipt }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CANDIDATE_RECEIPT" ] || [ ! -s "$CANDIDATE_RECEIPT" ]; then
+            echo "::error::Rollback refused because this run has no durable exact-candidate receipt."
+            exit 1
+          fi
+          failed_deployment_id="$(jq -er '.deployment_id' "$CANDIDATE_RECEIPT")"
+          if [ -z "$failed_deployment_id" ]; then
+            echo "::error::Rollback refused because the exact-candidate receipt has no deployment ID."
+            exit 1
+          fi
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/deployments/$failed_deployment_id" \
+            > cloudflare-staging-rollback-failed-deployment-response.json
+          jq -e '.success == true' \
+            cloudflare-staging-rollback-failed-deployment-response.json \
+            >/dev/null
+          jq '.result' \
+            cloudflare-staging-rollback-failed-deployment-response.json \
+            > cloudflare-staging-rollback-failed-deployment.json
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > cloudflare-staging-rollback-current-project.json
+          node scripts/validate-staging-rollback.mjs \
+            --current-project-file cloudflare-staging-rollback-current-project.json \
+            --prior-project-file cloudflare-staging-project.json \
+            --failed-deployment-file cloudflare-staging-rollback-failed-deployment.json \
+            --previous-deployment-file cloudflare-staging-previous-canonical-deployment.json \
+            --staging-project "$STAGING_PROJECT" \
+            --production-project "$PRODUCTION_PROJECT" \
+            --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT" \
+            --failed-deployment-id "$failed_deployment_id" \
+            --failed-release-sha "${{ needs.validate-source.outputs.release_sha }}"
+          rollback_id="$(
+            jq -r '.id' \
+              cloudflare-staging-previous-canonical-deployment.json
+          )"
+          rollback_sha="$(
+            jq -r '.deployment_trigger.metadata.commit_hash' \
+              cloudflare-staging-previous-canonical-deployment.json
+          )"
+          rollback_ready=false
+          rollback_project_final="$RUNNER_TEMP/cloudflare-staging-rollback-current-project-final.json"
+          rollback_authorization="$RUNNER_TEMP/cloudflare-staging-rollback-authorization.json"
+          # Cloudflare Pages rollback has no provider-side compare-and-swap precondition.
+          # GitHub concurrency serializes repository workflows; this final read narrows
+          # the residual race from Dashboard or external API mutation principals.
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$rollback_project_final"
+          node scripts/cloudflare-pages-candidate-guard.mjs authorize-rollback \
+            --current-project-file "$rollback_project_final" \
+            --candidate-receipt-file "$CANDIDATE_RECEIPT" \
+            --rollback-target-file cloudflare-staging-previous-canonical-deployment.json \
+            --project "$STAGING_PROJECT" \
+            --project-id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" \
+            --release-sha "${{ needs.validate-source.outputs.release_sha }}" \
+            --out "$rollback_authorization"
+          rollback_decision="$(jq -er '.decision' "$rollback_authorization")"
+          if [ "$rollback_decision" = "already-rollback-target" ]; then
+            rollback_ready=true
+          elif [ "$rollback_decision" = "rollback-exact-candidate" ]; then
+            rollback_post_status=0
+            curl -fsS \
+              --request POST \
+              -H "Authorization: Bearer $STAGING_CF_EDIT_TOKEN" \
+              -H "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/deployments/$rollback_id/rollback" \
+              > cloudflare-staging-rollback.json || rollback_post_status=$?
+            if [ "$rollback_post_status" -eq 0 ]; then
+              jq -e '.success == true' \
+                cloudflare-staging-rollback.json >/dev/null || \
+                rollback_post_status=1
+            fi
+            for attempt in $(seq 1 18); do
+              curl -fsS --retry 3 \
+                -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+                > cloudflare-staging-project-rollback.json
+              if jq -e --arg rollback_id "$rollback_id" \
+                '.result.canonical_deployment.id == $rollback_id' \
+                cloudflare-staging-project-rollback.json >/dev/null; then
+                rollback_ready=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "$rollback_ready" != "true" ] && [ "$rollback_post_status" -ne 0 ]; then
+              echo "::error::Cloudflare rollback response was ambiguous and canonical state did not prove recovery."
+            fi
+          else
+            echo "::error::Rollback authorization returned an unsupported decision."
+            exit 1
+          fi
+          if [ "$rollback_ready" != "true" ]; then
+            echo "::error::The failed staging candidate could not be rolled back."
+            exit 1
+          fi
+          PRODUCTION_DEPLOY_EXPECTED_SHA="$rollback_sha" \
+            npm run --silent check:production-deploy -- "$STAGING_APP_URL"
+
+      - name: Upload staging Pages mutation reconciliation evidence
+        if: ${{ always() && steps.mutation-intent.outputs.mutation_attempted == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cloudflare-staging-mutation-${{ needs.validate-source.outputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            cloudflare-staging-mutation-attempt.json
+            cloudflare-staging-candidate-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  staging-business-proofs:
+    name: Prove staged tenant and cleanup invariants
+    needs: [validate-source, supabase-staging, cloudflare-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      artifact_name: ${{ steps.evidence.outputs.artifact_name }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate-source.outputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Revalidate lease before listing tenant proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ needs.validate-source.outputs.release_sha }}" \
+            --source-run-id "${{ needs.validate-source.outputs.source_run_id }}" \
+            --source-run-attempt "${{ needs.validate-source.outputs.source_run_attempt }}"
+
+      - name: Run staged listing tenant proof
+        env:
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+        run: |
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs
+          node scripts/staging-listing-tenant-matrix.mjs \
+            > staging-listing-tenant-proof.json
+          jq -e '.ok == true' staging-listing-tenant-proof.json >/dev/null
+
+      - name: Revalidate lease before project tenant proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ needs.validate-source.outputs.release_sha }}" \
+            --source-run-id "${{ needs.validate-source.outputs.source_run_id }}" \
+            --source-run-attempt "${{ needs.validate-source.outputs.source_run_attempt }}"
+
+      - name: Run staged project tenant proof
+        env:
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+        run: |
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs
+          node scripts/staging-project-tenant-matrix.mjs \
+            > staging-project-tenant-proof.json
+          jq -e '.ok == true' staging-project-tenant-proof.json >/dev/null
+
+      - name: Revalidate lease before promotion entitlement proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ needs.validate-source.outputs.release_sha }}" \
+            --source-run-id "${{ needs.validate-source.outputs.source_run_id }}" \
+            --source-run-attempt "${{ needs.validate-source.outputs.source_run_attempt }}"
+
+      - name: Run staged promotion entitlement proof
+        env:
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+        run: |
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs
+          node scripts/staging-promotion-entitlement-matrix.mjs \
+            > staging-promotion-proof.json
+          jq -e '.ok == true' staging-promotion-proof.json >/dev/null
+
+      - name: Revalidate lease before storage cleanup proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ needs.validate-source.outputs.release_sha }}" \
+            --source-run-id "${{ needs.validate-source.outputs.source_run_id }}" \
+            --source-run-attempt "${{ needs.validate-source.outputs.source_run_attempt }}"
+
+      - name: Run staged storage cleanup proof
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_STORAGE_PROOF_ACK: staging-only
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+        run: |
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID/api-keys" \
+            > /tmp/staging-api-keys.json
+          service_role_key="$(jq -r '
+            (if type == "array" then . else (.keys // .result // []) end)
+            | map(select((.name // .role // .id // "") == "service_role"))
+            | .[0]
+            | (.api_key // .key // .value // empty)
+          ' /tmp/staging-api-keys.json)"
+          if [ -z "$service_role_key" ]; then
+            echo "::error::Could not resolve the staging service-role key."
+            exit 1
+          fi
+          echo "::add-mask::$service_role_key"
+          STAGING_SUPABASE_SERVICE_ROLE_KEY="$service_role_key" \
+            npm run --silent staging:prove-storage-cleanup \
+            > staging-storage-cleanup-proof.json
+          jq -e '.ok == true' staging-storage-cleanup-proof.json >/dev/null
+
+      - name: Create staged business proof envelope
+        id: evidence
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          ARTIFACT_SHA256: ${{ needs.validate-source.outputs.artifact_sha256 }}
+        run: |
+          jq -n \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg artifact_sha256 "$ARTIFACT_SHA256" \
+            --slurpfile listings staging-listing-tenant-proof.json \
+            --slurpfile projects staging-project-tenant-proof.json \
+            --slurpfile promotions staging-promotion-proof.json \
+            --slurpfile storage staging-storage-cleanup-proof.json \
+            '{
+              schema_version: 1,
+              evidence_type: "maiprop-staging-business-proofs",
+              release_sha: $release_sha,
+              artifact_sha256: $artifact_sha256,
+              proofs: {
+                listings: $listings[0],
+                projects: $projects[0],
+                promotions: $promotions[0],
+                storage: $storage[0]
+              }
+            }' > staging-business-proof.json
+          artifact_name="staging-business-proofs-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload staged business proofs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.evidence.outputs.artifact_name }}
+          path: staging-*-proof.json
+          if-no-files-found: error
+          retention-days: 30
+
+  staging-stripe-payment:
+    name: Prove staged Stripe test payment
+    needs: [validate-source, supabase-staging, cloudflare-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      artifact_name: ${{ steps.evidence.outputs.artifact_name }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate-source.outputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Install Chromium for Stripe payment proof
+        run: npx playwright install --with-deps chromium
+
+      - name: Revalidate lease before Stripe test payment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ needs.validate-source.outputs.release_sha }}" \
+            --source-run-id "${{ needs.validate-source.outputs.source_run_id }}" \
+            --source-run-attempt "${{ needs.validate-source.outputs.source_run_attempt }}"
+
+      - name: Complete one Stripe test-mode subscription and cleanup
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+          STAGING_APP_URL: ${{ needs.cloudflare-staging.outputs.stable_url }}
+        run: |
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID/api-keys" \
+            > /tmp/staging-api-keys.json
+          service_role_key="$(jq -r '
+            (if type == "array" then . else (.keys // .result // []) end)
+            | map(select((.name // .role // .id // "") == "service_role"))
+            | .[0]
+            | (.api_key // .key // .value // empty)
+          ' /tmp/staging-api-keys.json)"
+          if [ -z "$service_role_key" ]; then
+            echo "::error::Could not resolve the staging service-role key."
+            exit 1
+          fi
+          echo "::add-mask::$service_role_key"
+          CI=true \
+          E2E_COMPLETE_STRIPE_PAYMENT=true \
+          PLAYWRIGHT_BASE_URL="$STAGING_APP_URL" \
+          PLAYWRIGHT_JSON_OUTPUT_FILE=staging-stripe-payment-playwright.json \
+          SUPABASE_SERVICE_ROLE_KEY="$service_role_key" \
+          VITE_SUPABASE_URL="$STAGING_SUPABASE_URL" \
+          VITE_SUPABASE_PUBLISHABLE_KEY="$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            npx playwright test e2e/stripe-payment-complete.spec.ts \
+              --project=chromium \
+              --grep '^completes test-card subscription checkout and observes synced entitlement$' \
+              --reporter=json
+
+      - name: Create exact-SHA Stripe payment evidence
+        id: evidence
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          ARTIFACT_SHA256: ${{ needs.validate-source.outputs.artifact_sha256 }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_APP_URL: ${{ needs.cloudflare-staging.outputs.stable_url }}
+        run: |
+          set -euo pipefail
+          node scripts/staging-stripe-payment-evidence.mjs \
+            --report staging-stripe-payment-playwright.json \
+            --out staging-stripe-payment-proof.json \
+            --release-sha "$RELEASE_SHA" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --supabase-project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+            --app-origin "$STAGING_APP_URL"
+          jq -e '.ok == true and .playwright.expected == 1 and .playwright.skipped == 0 and .playwright.unexpected == 0 and .playwright.flaky == 0' \
+            staging-stripe-payment-proof.json >/dev/null
+          artifact_name="staging-stripe-payment-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload staged Stripe payment proof
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.evidence.outputs.artifact_name }}
+          path: |
+            staging-stripe-payment-proof.json
+            staging-stripe-payment-playwright.json
+          if-no-files-found: error
+          retention-days: 30
+
+  staging-live-security:
+    name: Prove staged live security boundaries
+    needs: [validate-source, supabase-staging, cloudflare-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      artifact_name: ${{ steps.evidence.outputs.artifact_name }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate-source.outputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Install Chromium for staging security proof
+        run: npx playwright install --with-deps chromium
+
+      - name: Require staging security identities
+        env:
+          DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEMO_PASSWORD" ] ||
+             [ -z "$ADMIN_EMAIL" ] ||
+             [ -z "$ADMIN_PASSWORD" ]; then
+            echo "::error::Staging live security requires demo and platform-admin credentials."
+            exit 1
+          fi
+
+      - name: Revalidate lease before security fixture preparation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ needs.validate-source.outputs.release_sha }}" \
+            --source-run-id "${{ needs.validate-source.outputs.source_run_id }}" \
+            --source-run-attempt "${{ needs.validate-source.outputs.source_run_attempt }}"
+
+      - name: Prepare isolated staging security fixtures
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+          VITE_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          E2E_SECURITY_USE_ISOLATED_STAGING: "true"
+          E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: "true"
+          E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          RLS_USER_A_EMAIL: buyer.free@maiprop.demo
+          RLS_USER_B_EMAIL: seller.pro@maiprop.demo
+          RLS_USER_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+          ONBOARDING_TEST_EMAIL: onboarding.security@maiprop.demo
+          ONBOARDING_TEST_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+        run: |
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs
+          service_role_key="$(
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID/api-keys?reveal=true" \
+              | jq -er '
+                  (if type == "array" then . else (.keys // .result // []) end)
+                  | map(select(
+                      (.type // "") == "secret" or
+                      (.name // .role // .id // "") == "service_role"
+                    ))
+                  | sort_by(if (.type // "") == "secret" then 0 else 1 end)
+                  | .[0]
+                  | (.api_key // .key // .value // empty)
+                '
+          )"
+          if [ "$service_role_key" = "$STAGING_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Resolved staging service credential equals the publishable key."
+            exit 1
+          fi
+          echo "::add-mask::$service_role_key"
+          SUPABASE_SERVICE_ROLE_KEY="$service_role_key" \
+            node scripts/prepare-isolated-security-fixtures.mjs
+          unset service_role_key
+
+      - name: Revalidate lease before destructive live security proof
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ needs.validate-source.outputs.release_sha }}" \
+            --source-run-id "${{ needs.validate-source.outputs.source_run_id }}" \
+            --source-run-attempt "${{ needs.validate-source.outputs.source_run_attempt }}"
+
+      - name: Run exact-SHA staging live security proof
+        env:
+          CI: "true"
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+          VITE_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          PLAYWRIGHT_BASE_URL: ${{ needs.cloudflare-staging.outputs.stable_url }}
+          PLAYWRIGHT_OUTPUT_DIR: ${{ runner.temp }}/maiprop-staging-live-security-results
+          PLAYWRIGHT_JSON_OUTPUT_FILE: staging-live-security-playwright.json
+          E2E_SECURITY_USE_ISOLATED_STAGING: "true"
+          E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: "true"
+          E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          RLS_USER_A_EMAIL: buyer.free@maiprop.demo
+          RLS_USER_B_EMAIL: seller.pro@maiprop.demo
+          RLS_USER_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+          RLS_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          RLS_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          ONBOARDING_TEST_EMAIL: onboarding.security@maiprop.demo
+          ONBOARDING_TEST_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+        run: |
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs
+          service_role_key="$(
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID/api-keys?reveal=true" \
+              | jq -er '
+                  (if type == "array" then . else (.keys // .result // []) end)
+                  | map(select(
+                      (.type // "") == "secret" or
+                      (.name // .role // .id // "") == "service_role"
+                    ))
+                  | sort_by(if (.type // "") == "secret" then 0 else 1 end)
+                  | .[0]
+                  | (.api_key // .key // .value // empty)
+                '
+          )"
+          if [ "$service_role_key" = "$STAGING_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Resolved staging service credential equals the publishable key."
+            exit 1
+          fi
+          echo "::add-mask::$service_role_key"
+          SUPABASE_SERVICE_ROLE_KEY="$service_role_key" \
+            npx playwright test \
+              e2e/rls-security.spec.ts \
+              e2e/gdpr-delete-account.spec.ts \
+              e2e/onboarding-role-selection.spec.ts \
+              --project=chromium \
+              --reporter=json
+          unset service_role_key
+
+      - name: Create minimized staging live security evidence
+        id: evidence
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          ARTIFACT_SHA256: ${{ needs.validate-source.outputs.artifact_sha256 }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_APP_URL: ${{ needs.cloudflare-staging.outputs.stable_url }}
+          PLAYWRIGHT_JSON_REPORT: staging-live-security-playwright.json
+          STAGING_LIVE_SECURITY_EVIDENCE: staging-live-security-proof.json
+        run: |
+          set -euo pipefail
+          node scripts/staging-live-security-evidence.mjs
+          jq -e '.ok == true' staging-live-security-proof.json >/dev/null
+          artifact_name="staging-live-security-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload staging live security evidence and raw report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.evidence.outputs.artifact_name }}
+          path: |
+            staging-live-security-proof.json
+            staging-live-security-playwright.json
+          if-no-files-found: error
+          retention-days: 30
+
+  staging-catalogue-performance:
+    name: Prove exact-SHA staging catalogues and performance
+    needs: [validate-source, supabase-staging, cloudflare-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      artifact_name: ${{ steps.proof.outputs.artifact_name }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate-source.outputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install pinned catalogue proof tooling
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Install Chromium for catalogue proof
+        run: npx playwright install --with-deps chromium
+
+      - name: Run endpoint, route, CWV, and query proofs
+        id: proof
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          ARTIFACT_SHA256: ${{ needs.validate-source.outputs.artifact_sha256 }}
+          DEPLOYMENT_URL: ${{ needs.cloudflare-staging.outputs.deployment_url }}
+          STABLE_URL: ${{ needs.cloudflare-staging.outputs.stable_url }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+          STAGING_SITE_LOCK_PASSWORD: ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          for value in \
+            "$RELEASE_SHA" \
+            "$ARTIFACT_SHA256" \
+            "$DEPLOYMENT_URL" \
+            "$STABLE_URL" \
+            "$STAGING_SUPABASE_PROJECT_ID"; do
+            if [ -z "$value" ]; then
+              echo "::error::Exact-SHA catalogue proof requires immutable staging identity."
+              exit 1
+            fi
+          done
+          if { [ -z "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; } ||
+             { [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -z "$CF_ACCESS_CLIENT_SECRET" ]; }; then
+            echo "::error::Cloudflare Access service-token credentials must be configured together."
+            exit 1
+          fi
+          for secret in \
+            "$PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD" \
+            "$CF_ACCESS_CLIENT_ID" \
+            "$CF_ACCESS_CLIENT_SECRET"; do
+            if [ -n "$secret" ]; then
+              echo "::add-mask::$secret"
+            fi
+          done
+          mkdir -p staging-catalogue-performance
+
+          PRODUCTION_DEPLOY_EXPECTED_SHA="$RELEASE_SHA" \
+          PRODUCTION_DEPLOY_CHECK_ATTEMPTS=4 \
+          PRODUCTION_DEPLOY_CHECK_DELAY_MS=2000 \
+            npm run --silent check:production-deploy -- \
+              "$DEPLOYMENT_URL" \
+              "$STABLE_URL" \
+              --browser \
+              --public-api \
+              > staging-catalogue-performance/endpoint-budget-report.json
+
+          CI=true \
+          MAIPROP_RUN_STAGING_CATALOGUE_GATES=1 \
+          MAIPROP_STAGING_RELEASE_SHA="$RELEASE_SHA" \
+          PLAYWRIGHT_BASE_URL="$DEPLOYMENT_URL" \
+          PLAYWRIGHT_JSON_OUTPUT_FILE=staging-catalogue-performance/route-e2e-report.json \
+            npx playwright test \
+              e2e/staging-catalogue-gates.spec.ts \
+              --project=chromium \
+              --workers=1 \
+              --reporter=json
+
+          CI=true \
+          MAIPROP_RUNNING_PERF_GATE=1 \
+          MAIPROP_STAGING_RELEASE_SHA="$RELEASE_SHA" \
+          MAIPROP_CWV_EVIDENCE_PATH=staging-catalogue-performance/cwv-measurements.json \
+          MAIPROP_QUERY_EVIDENCE_PATH=staging-catalogue-performance/query-measurements.json \
+          PLAYWRIGHT_BASE_URL="$DEPLOYMENT_URL" \
+          PLAYWRIGHT_JSON_OUTPUT_FILE=staging-catalogue-performance/cwv-query-report.json \
+            npx playwright test \
+              e2e/performance-gates.spec.ts \
+              e2e/query-budget-gates.spec.ts \
+              --project=chromium \
+              --workers=1 \
+              --reporter=json
+
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync, writeFileSync } from "node:fs";
+          const root = "staging-catalogue-performance";
+          const read = (name) => {
+            const bytes = readFileSync(`${root}/${name}`);
+            return {
+              value: JSON.parse(bytes.toString("utf8")),
+              sha256: createHash("sha256").update(bytes).digest("hex"),
+            };
+          };
+          const completeStats = (report, minimum = 1) => {
+            const stats = report.value.stats ?? {};
+            return Number.isSafeInteger(stats.expected) &&
+              stats.expected >= minimum &&
+              stats.skipped === 0 &&
+              stats.unexpected === 0 &&
+              stats.flaky === 0;
+          };
+          const endpoint = read("endpoint-budget-report.json");
+          const routeReport = read("route-e2e-report.json");
+          const perfReport = read("cwv-query-report.json");
+          const cwv = read("cwv-measurements.json");
+          const query = read("query-measurements.json");
+          const releaseSha = process.env.RELEASE_SHA;
+          const deploymentOrigin = new URL(process.env.DEPLOYMENT_URL).origin;
+          const stableOrigin = new URL(process.env.STABLE_URL).origin;
+          const endpointTargets = new Map(
+            (endpoint.value.targets ?? []).map((target) => [
+              new URL(target.baseUrl).origin,
+              target,
+            ]),
+          );
+          const deploymentTarget = endpointTargets.get(deploymentOrigin);
+          const stableTarget = endpointTargets.get(stableOrigin);
+          const endpointsPass = (target) =>
+            target?.status === "passed" &&
+            target?.publicApi?.status === "passed" &&
+            Array.isArray(target.publicApi.endpoints) &&
+            target.publicApi.endpoints.length > 0 &&
+            target.publicApi.endpoints.every((entry) => entry?.status === "passed");
+          if (
+            endpoint.value.status !== "passed" ||
+            !endpointsPass(deploymentTarget) ||
+            !endpointsPass(stableTarget) ||
+            !completeStats(routeReport) ||
+            !completeStats(perfReport, 4) ||
+            cwv.value.schema_version !== 1 ||
+            cwv.value.evidence_type !== "maiprop-cwv-route-measurements" ||
+            cwv.value.release_sha !== releaseSha ||
+            cwv.value.complete !== true ||
+            query.value.schema_version !== 1 ||
+            query.value.evidence_type !== "maiprop-query-route-measurements" ||
+            query.value.release_sha !== releaseSha ||
+            query.value.complete !== true
+          ) {
+            throw new Error("Exact-SHA catalogue proof reports are incomplete.");
+          }
+          const requiredRoutes = ["/", "/listings", "/auctions", "/open-houses"];
+          const cwvByRoute = new Map(
+            (cwv.value.routes ?? []).map((entry) => [entry.path, entry]),
+          );
+          const queryByRoute = new Map(
+            (query.value.routes ?? []).map((entry) => [entry.path, entry]),
+          );
+          const routes = {};
+          for (const route of requiredRoutes) {
+            const cwvEntry = cwvByRoute.get(route);
+            const queryEntry = queryByRoute.get(route);
+            if (!cwvEntry?.passed || !queryEntry?.passed) {
+              throw new Error(`Catalogue route ${route} did not satisfy its performance budget.`);
+            }
+            routes[route] = {
+              lcp_ms: cwvEntry.measurements.lcp_ms,
+              cls: cwvEntry.measurements.cls,
+              inp_ms: cwvEntry.measurements.inp_ms,
+              forbidden_authority_requests:
+                queryEntry.measurements.forbidden_authority_fallbacks,
+              query: {
+                auth: queryEntry.measurements.auth,
+                rest: queryEntry.measurements.rest,
+                functions: queryEntry.measurements.functions,
+                total: queryEntry.measurements.total,
+                budget: queryEntry.budgets,
+              },
+            };
+          }
+          const measurements = {
+            schema_version: 1,
+            evidence_type: "maiprop-staging-catalogue-route-measurements",
+            release_sha: releaseSha,
+            routes,
+            source_sha256: {
+              cwv: cwv.sha256,
+              query: query.sha256,
+            },
+          };
+          const measurementBytes = Buffer.from(
+            `${JSON.stringify(measurements, null, 2)}\n`,
+          );
+          writeFileSync(`${root}/catalogue-route-measurements.json`, measurementBytes);
+          const stats = (report) => report.value.stats ?? {};
+          const routeStats = stats(routeReport);
+          const perfStats = stats(perfReport);
+          const budget = cwvByRoute.get("/").budgets;
+          const evidence = {
+            schema_version: 1,
+            evidence_type: "maiprop-staging-catalogue-performance",
+            release_sha: releaseSha,
+            artifact_sha256: process.env.ARTIFACT_SHA256,
+            ok: true,
+            target: {
+              supabase_project_ref: process.env.STAGING_SUPABASE_PROJECT_ID,
+              deployment_origin: deploymentOrigin,
+              stable_origin: stableOrigin,
+            },
+            endpoint_budget: {
+              deployment_status: deploymentTarget.status,
+              stable_status: stableTarget.status,
+              deployment_report_sha256: endpoint.sha256,
+              stable_report_sha256: endpoint.sha256,
+            },
+            route_e2e: {
+              expected: routeStats.expected,
+              skipped: routeStats.skipped,
+              unexpected: routeStats.unexpected,
+              flaky: routeStats.flaky,
+              report_sha256: routeReport.sha256,
+              forbidden_authority_requests: 0,
+            },
+            cwv_query: {
+              expected: perfStats.expected,
+              skipped: perfStats.skipped,
+              unexpected: perfStats.unexpected,
+              flaky: perfStats.flaky,
+              report_sha256: perfReport.sha256,
+              measurements_sha256: createHash("sha256")
+                .update(measurementBytes)
+                .digest("hex"),
+              budgets: {
+                lcp_ms: budget.lcp_ms,
+                cls: budget.cls,
+                inp_ms: budget.inp_ms,
+              },
+              routes,
+            },
+          };
+          writeFileSync(
+            `${root}/catalogue-performance-evidence.json`,
+            `${JSON.stringify(evidence, null, 2)}\n`,
+          );
+          NODE
+          artifact_name="staging-catalogue-performance-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact-SHA catalogue performance evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.proof.outputs.artifact_name }}
+          path: staging-catalogue-performance/
+          if-no-files-found: error
+          retention-days: 30
+
+  release-candidate-attested:
+    name: Release candidate attested
+    if: github.run_attempt == 1 && github.actor == github.triggering_actor
+    needs:
+      - validate-source
+      - supabase-staging
+      - cloudflare-staging
+      - staging-business-proofs
+      - staging-stripe-payment
+      - staging-live-security
+      - staging-n-minus-one-compatibility
+      - staging-catalogue-performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate-source.outputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download source provenance verification
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.validate-source.outputs.provenance_artifact }}
+          path: evidence/provenance
+
+      - name: Download Supabase staging attestation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.supabase-staging.outputs.edge_attestation_artifact_id }}
+          path: evidence/supabase
+
+      - name: Download Cloudflare staging attestation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.cloudflare-staging.outputs.attestation_artifact }}
+          path: evidence/cloudflare
+
+      - name: Download staged business proofs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.staging-business-proofs.outputs.artifact_name }}
+          path: evidence/business
+
+      - name: Download staged Stripe payment proof
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.staging-stripe-payment.outputs.artifact_name }}
+          path: evidence/stripe-payment
+
+      - name: Download staging live security evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.staging-live-security.outputs.artifact_name }}
+          path: evidence/security
+
+      - name: Download staging N-1 compatibility evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.staging-n-minus-one-compatibility.outputs.artifact_name }}
+          path: evidence/n-minus-one
+
+      - name: Download exact-SHA catalogue performance evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.staging-catalogue-performance.outputs.artifact_name }}
+          path: evidence/catalogue-performance
+
+      - name: Revalidate main lease before final attestation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/production-release-validation.mjs github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ needs.validate-source.outputs.release_sha }}" \
+            --source-run-id "${{ needs.validate-source.outputs.source_run_id }}" \
+            --source-run-attempt "${{ needs.validate-source.outputs.source_run_attempt }}"
+
+      - name: Require exact signer workflow digest
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_SHA" != "$RELEASE_SHA" ]; then
+            echo "::error::The staging signer workflow SHA $GITHUB_SHA does not match release SHA $RELEASE_SHA."
+            exit 1
+          fi
+
+      - name: Create final exact-SHA staging attestation
+        env:
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate-source.outputs.source_tree }}
+          SOURCE_RUN_ID: ${{ needs.validate-source.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.validate-source.outputs.source_run_attempt }}
+          ARTIFACT_SHA256: ${{ needs.validate-source.outputs.artifact_sha256 }}
+          MANIFEST_SHA256: ${{ needs.validate-source.outputs.manifest_sha256 }}
+          PAYLOAD_SHA256: ${{ needs.validate-source.outputs.payload_sha256 }}
+          STAGING_RUN_ID: ${{ github.run_id }}
+          STAGING_RUN_ATTEMPT: ${{ github.run_attempt }}
+          SUPABASE_ARTIFACT_NAME: ${{ needs.supabase-staging.outputs.edge_attestation_artifact }}
+          SUPABASE_ARTIFACT_ID: ${{ needs.supabase-staging.outputs.edge_attestation_artifact_id }}
+          SUPABASE_ARTIFACT_DIGEST: ${{ needs.supabase-staging.outputs.edge_attestation_artifact_digest }}
+          SUPABASE_ARTIFACT_RUN_ID: ${{ needs.supabase-staging.outputs.edge_attestation_run_id }}
+          SUPABASE_ARTIFACT_RUN_ATTEMPT: ${{ needs.supabase-staging.outputs.edge_attestation_run_attempt }}
+          SUPABASE_ARTIFACT_RELEASE_SHA: ${{ needs.supabase-staging.outputs.edge_attestation_release_sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync, writeFileSync } from "node:fs";
+          const read = (path) => {
+            const bytes = readFileSync(path);
+            return {
+              value: JSON.parse(bytes.toString("utf8")),
+              sha256: createHash("sha256").update(bytes).digest("hex"),
+            };
+          };
+          const provenanceEvidence = read("evidence/provenance/provenance-verification.json");
+          const supabaseEvidence = read("evidence/supabase/supabase-staging-edge-attestation.json");
+          const cloudflareEvidence = read("evidence/cloudflare/cloudflare-staging-attestation.json");
+          const businessEvidence = read("evidence/business/staging-business-proof.json");
+          const stripePaymentEvidence = read(
+            "evidence/stripe-payment/staging-stripe-payment-proof.json",
+          );
+          const stripePaymentPlaywright = read(
+            "evidence/stripe-payment/staging-stripe-payment-playwright.json",
+          );
+          const securityEvidence = read("evidence/security/staging-live-security-proof.json");
+          const nMinusOneEvidence = read("evidence/n-minus-one/compatibility-evidence.json");
+          const cataloguePerformanceEvidence = read(
+            "evidence/catalogue-performance/catalogue-performance-evidence.json",
+          );
+          const securityPlaywright = read(
+            "evidence/security/staging-live-security-playwright.json",
+          );
+          const nMinusOnePlaywright = read(
+            "evidence/n-minus-one/playwright-report.json",
+          );
+          const nMinusOneDeployment = read(
+            "evidence/n-minus-one/deploy-verification.json",
+          );
+          const catalogueEndpoint = read(
+            "evidence/catalogue-performance/endpoint-budget-report.json",
+          );
+          const catalogueRouteReport = read(
+            "evidence/catalogue-performance/route-e2e-report.json",
+          );
+          const catalogueCwvQueryReport = read(
+            "evidence/catalogue-performance/cwv-query-report.json",
+          );
+          const catalogueRouteMeasurements = read(
+            "evidence/catalogue-performance/catalogue-route-measurements.json",
+          );
+          const provenance = provenanceEvidence.value;
+          const supabase = supabaseEvidence.value;
+          const cloudflare = cloudflareEvidence.value;
+          const business = businessEvidence.value;
+          const stripePayment = stripePaymentEvidence.value;
+          const security = securityEvidence.value;
+          const nMinusOne = nMinusOneEvidence.value;
+          const cataloguePerformance = cataloguePerformanceEvidence.value;
+          const database = supabase.database;
+          const expectedSha = process.env.RELEASE_SHA;
+          const expectedArtifact = process.env.ARTIFACT_SHA256;
+          const expectedManifest = process.env.MANIFEST_SHA256;
+          const supabaseArtifactBinding = {
+            name: process.env.SUPABASE_ARTIFACT_NAME,
+            id: process.env.SUPABASE_ARTIFACT_ID,
+            digest: process.env.SUPABASE_ARTIFACT_DIGEST?.toLowerCase(),
+            run_id: process.env.SUPABASE_ARTIFACT_RUN_ID,
+            run_attempt: process.env.SUPABASE_ARTIFACT_RUN_ATTEMPT,
+            release_sha: process.env.SUPABASE_ARTIFACT_RELEASE_SHA?.toLowerCase(),
+          };
+          const expectedSupabaseArtifactName =
+            `supabase-staging-edge-attestation-${expectedSha}-${process.env.STAGING_RUN_ATTEMPT}`;
+          if (
+            supabaseArtifactBinding.name !== expectedSupabaseArtifactName ||
+            !/^[1-9][0-9]*$/.test(supabaseArtifactBinding.id ?? "") ||
+            !/^[0-9a-f]{64}$/.test(supabaseArtifactBinding.digest ?? "") ||
+            supabaseArtifactBinding.run_id !== process.env.STAGING_RUN_ID ||
+            supabaseArtifactBinding.run_attempt !==
+              process.env.STAGING_RUN_ATTEMPT ||
+            supabaseArtifactBinding.release_sha !== expectedSha
+          ) {
+            throw new Error(
+              "Supabase staging artifact binding does not match the exact staging run and release SHA.",
+            );
+          }
+          const provenanceManifest = Array.isArray(provenance.files)
+            ? provenance.files.find(
+                (entry) => entry?.path === "release-manifest.json",
+              )
+            : null;
+          const expectedProofNames = [
+            "listings",
+            "projects",
+            "promotions",
+            "storage",
+          ];
+           const proofNames = Object.keys(business.proofs ?? {}).sort();
+           const stableHostname = new URL(cloudflare.stable_url).hostname;
+           const stableOriginBound =
+             cloudflare.project_subdomain === stableHostname ||
+             (cloudflare.project_domains ?? []).some(
+               (domain) =>
+                 domain?.name === stableHostname && domain?.status === "active",
+             );
+          const requiredCatalogueRoutes = [
+            "/",
+            "/listings",
+            "/auctions",
+            "/open-houses",
+          ];
+          const catalogueRoutes = cataloguePerformance.cwv_query?.routes;
+          const catalogueRouteEvidenceComplete = requiredCatalogueRoutes.every(
+            (route) => {
+              const measurement = catalogueRoutes?.[route];
+              const query = measurement?.query;
+              const budget = query?.budget;
+              return Number.isFinite(measurement?.lcp_ms) &&
+                measurement.lcp_ms > 0 &&
+                measurement.lcp_ms <= 3000 &&
+                Number.isFinite(measurement?.cls) &&
+                measurement.cls >= 0 &&
+                measurement.cls <= 0.1 &&
+                Number.isFinite(measurement?.inp_ms) &&
+                measurement.inp_ms >= 0 &&
+                measurement.inp_ms <= 200 &&
+                measurement.forbidden_authority_requests === 0 &&
+                ["auth", "rest", "functions", "total"].every(
+                  (key) =>
+                    Number.isSafeInteger(query?.[key]) &&
+                    query[key] >= 0 &&
+                    Number.isSafeInteger(budget?.[key]) &&
+                    budget[key] >= 0 &&
+                    query[key] <= budget[key],
+                );
+            },
+          );
+          for (const [label, evidence] of Object.entries({
+            supabase,
+            cloudflare,
+            business,
+            stripe_payment: stripePayment,
+            security,
+            n_minus_one: nMinusOne,
+            catalogue_performance: cataloguePerformance,
+          })) {
+            if (
+              evidence.release_sha !== expectedSha ||
+              evidence.artifact_sha256 !== expectedArtifact
+            ) {
+              throw new Error(`${label} staging evidence does not match the exact candidate.`);
+            }
+          }
+          if (
+             !database ||
+             provenance.schema_version !== 1 ||
+             provenance.evidence_type !==
+               "maiprop-release-artifact-binding-verification" ||
+             provenance.ok !== true ||
+             provenance.verification_mode !== "prior-run" ||
+             provenance.repository !== process.env.GITHUB_REPOSITORY.toLowerCase() ||
+             provenance.release_sha !== expectedSha ||
+             provenance.source_tree !== process.env.SOURCE_TREE ||
+             provenance.workflow_path !== ".github/workflows/ci.yml" ||
+             provenance.workflow_ref !==
+               `${process.env.GITHUB_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main` ||
+             provenance.workflow_sha !== expectedSha ||
+             provenance.event !== "push" ||
+             provenance.run_id !== process.env.SOURCE_RUN_ID ||
+             provenance.run_attempt !== "1" ||
+             provenance.actor !== provenance.triggering_actor ||
+             provenanceManifest?.sha256 !== expectedManifest ||
+             database.release_sha !== expectedSha ||
+             database.artifact_sha256 !== expectedArtifact ||
+             database.manifest_sha256 !== expectedManifest ||
+             supabase.manifest_sha256 !== expectedManifest ||
+             database.supabase_sha256 !== supabase.supabase_sha256 ||
+             !/^[0-9a-f]{64}$/.test(supabase.supabase_sha256 ?? "") ||
+             supabase.edge_source_manifest?.release_sha !== expectedSha ||
+             !/^[0-9a-f]{64}$/.test(
+               supabase.edge_source_manifest?.manifest_sha256 ?? "",
+             ) ||
+             database.schema_version !== 2 ||
+             !Number.isSafeInteger(database.pgtap_plan) ||
+             database.pgtap_plan < 1 ||
+             database.pgtap_ok_count !== database.pgtap_plan ||
+             !/^[0-9a-f]{64}$/.test(database.pgtap_sha256 ?? "") ||
+             !Number.isSafeInteger(database.scale_pgtap_plan) ||
+             database.scale_pgtap_plan < 1 ||
+             database.scale_pgtap_ok_count !== database.scale_pgtap_plan ||
+             !/^[0-9a-f]{64}$/.test(
+               database.scale_pgtap_sha256 ?? "",
+             ) ||
+             database.rpc?.rpc?.publication?.signature !==
+               "get_public_catalogue_publication(bigint)" ||
+             database.rpc?.rpc?.publication?.provolatile !== "s" ||
+             database.rpc?.rpc?.publication?.security_definer !== true ||
+             database.rpc?.rpc?.publication?.owner !== "postgres" ||
+             JSON.stringify(database.rpc?.rpc?.publication?.proconfig) !==
+               JSON.stringify(['search_path=""']) ||
+             database.rpc?.rpc?.publication?.public_execute !== false ||
+             database.rpc?.rpc?.publication?.anon_execute !== true ||
+             database.rpc?.rpc?.publication?.authenticated_execute !== true ||
+             !database.rpc?.rpc?.query?.signature?.startsWith(
+               "query_public_catalogue(",
+             ) ||
+             !database.rpc?.rpc?.query?.signature?.endsWith(
+               ",integer,integer,jsonb)",
+             ) ||
+             database.rpc?.rpc?.query?.provolatile !== "s" ||
+             database.rpc?.rpc?.query?.security_definer !== true ||
+             database.rpc?.rpc?.query?.owner !== "postgres" ||
+             JSON.stringify(database.rpc?.rpc?.query?.proconfig) !==
+               JSON.stringify(['search_path=""']) ||
+             database.rpc?.rpc?.query?.public_execute !== false ||
+             database.rpc?.rpc?.query?.anon_execute !== true ||
+             database.rpc?.rpc?.query?.authenticated_execute !== true ||
+             database.rpc?.rpc?.homepage?.signature !==
+               "get_public_catalogue_homepage(bigint)" ||
+             database.rpc?.rpc?.homepage?.provolatile !== "s" ||
+             database.rpc?.rpc?.homepage?.security_definer !== true ||
+             database.rpc?.rpc?.homepage?.owner !== "postgres" ||
+             JSON.stringify(database.rpc?.rpc?.homepage?.proconfig) !==
+               JSON.stringify(['search_path=""']) ||
+             database.rpc?.rpc?.homepage?.public_execute !== false ||
+             database.rpc?.rpc?.homepage?.anon_execute !== true ||
+             database.rpc?.rpc?.homepage?.authenticated_execute !== true ||
+             database.rpc?.rpc?.detail?.signature !==
+               "get_public_catalogue_listing(bigint,uuid,text)" ||
+             database.rpc?.rpc?.detail?.provolatile !== "s" ||
+             database.rpc?.rpc?.detail?.security_definer !== true ||
+             database.rpc?.rpc?.detail?.owner !== "postgres" ||
+             JSON.stringify(database.rpc?.rpc?.detail?.proconfig) !==
+               JSON.stringify(['search_path=""']) ||
+             database.rpc?.rpc?.detail?.public_execute !== false ||
+             database.rpc?.rpc?.detail?.anon_execute !== true ||
+             database.rpc?.rpc?.detail?.authenticated_execute !== true ||
+             database.rpc?.rpc?.detail?.service_execute !== true ||
+             database.rpc?.rpc?.publish?.signature !==
+               "publish_public_catalogue()" ||
+             database.rpc?.rpc?.publish?.provolatile !== "v" ||
+             database.rpc?.rpc?.publish?.security_definer !== false ||
+             database.rpc?.rpc?.publish?.owner !== "postgres" ||
+             JSON.stringify(database.rpc?.rpc?.publish?.proconfig) !==
+               JSON.stringify(['search_path=""']) ||
+             database.rpc?.rpc?.publish?.public_execute !== false ||
+             database.rpc?.rpc?.publish?.anon_execute !== false ||
+             database.rpc?.rpc?.publish?.authenticated_execute !== false ||
+             database.rpc?.rpc?.publish?.service_execute !== true ||
+             database.rpc?.rpc?.guard?.signature !==
+               "private.guard_public_catalogue_version_update()" ||
+             database.rpc?.rpc?.guard?.provolatile !== "v" ||
+             database.rpc?.rpc?.guard?.security_definer !== false ||
+             database.rpc?.rpc?.guard?.owner !== "postgres" ||
+             JSON.stringify(database.rpc?.rpc?.guard?.proconfig) !==
+               JSON.stringify(['search_path=""']) ||
+             database.rpc?.rpc?.guard?.public_execute !== false ||
+             database.rpc?.rpc?.guard?.anon_execute !== false ||
+             database.rpc?.rpc?.guard?.authenticated_execute !== false ||
+             database.rpc?.rpc?.guard?.service_execute !== false ||
+             database.rpc?.rpc?.resolver?.signature !==
+               "private.resolve_public_catalogue_publication(bigint)" ||
+             database.rpc?.rpc?.resolver?.provolatile !== "s" ||
+             database.rpc?.rpc?.resolver?.security_definer !== true ||
+             database.rpc?.rpc?.resolver?.owner !== "postgres" ||
+             JSON.stringify(database.rpc?.rpc?.resolver?.proconfig) !==
+               JSON.stringify(['search_path=""']) ||
+             database.rpc?.rpc?.resolver?.public_execute !== false ||
+             database.rpc?.rpc?.resolver?.anon_execute !== false ||
+             database.rpc?.rpc?.resolver?.authenticated_execute !== false ||
+             database.rpc?.rpc?.resolver?.service_execute !== true ||
+             database.rpc?.rpc?.private_publish?.signature !==
+               "private.publish_public_catalogue()" ||
+             database.rpc?.rpc?.private_publish?.provolatile !== "v" ||
+             database.rpc?.rpc?.private_publish?.security_definer !== true ||
+             database.rpc?.rpc?.private_publish?.owner !== "postgres" ||
+             JSON.stringify(database.rpc?.rpc?.private_publish?.proconfig) !==
+               JSON.stringify(['search_path=""']) ||
+             database.rpc?.rpc?.private_publish?.public_execute !== false ||
+             database.rpc?.rpc?.private_publish?.anon_execute !== false ||
+             database.rpc?.rpc?.private_publish?.authenticated_execute !== false ||
+             database.rpc?.rpc?.private_publish?.service_execute !== true ||
+             database.rpc?.anon_private_publications_select !== false ||
+             database.rpc?.anon_private_current_select !== false ||
+             database.rpc?.anon_private_versions_select !== false ||
+             database.rpc?.authenticated_private_publications_select !== false ||
+             database.rpc?.authenticated_private_current_select !== false ||
+             database.rpc?.authenticated_private_versions_select !== false ||
+             database.postgrest?.target !== "staging" ||
+             database.postgrest?.concurrent_publish_calls !== 16 ||
+             !(database.postgrest?.publication_id > 0) ||
+             !(database.postgrest?.row_count >= 0) ||
+             database.postgrest?.anonymous_metadata_status !== 200 ||
+             database.postgrest?.anonymous_query_status !== 200 ||
+             ![200, 206].includes(
+               database.postgrest?.anonymous_head_status,
+             ) ||
+             database.postgrest?.anonymous_homepage_status !== 200 ||
+             !(database.postgrest?.anonymous_writer_status >= 401) ||
+             database.postgrest?.missing_publication_status !== 400 ||
+             database.cron?.job_count !== 1 ||
+             database.cron?.jobname !== "publish-public-catalogue" ||
+             database.cron?.schedule !== "* * * * *" ||
+             database.cron?.command !==
+               "SELECT private.publish_public_catalogue();" ||
+             database.cron?.active !== true ||
+             !(database.cron?.latest_success_run_id >
+               database.cron_baseline?.cron_run_id) ||
+             !(database.cron?.publication_id >
+               database.cron_baseline?.publication_id) ||
+             !/^[0-9a-f]{64}$/.test(
+               database.index_stats_sha256 ?? "",
+             ) ||
+             !/^[0-9a-f]{64}$/.test(database.advisor_sha256 ?? "") ||
+            !Array.isArray(supabase.edge_bundles) ||
+            supabase.edge_bundles.length === 0 ||
+              cloudflare.uses_functions !== true ||
+              cloudflare.commit_dirty !== false ||
+              cloudflare.schema_version !== 4 ||
+              stableOriginBound !== true ||
+              cloudflare.canonical_deployment_id !== cloudflare.deployment_id ||
+              !/^[0-9a-f]{64}$/.test(
+                cloudflare.git_auto_deploy_posture_sha256 ?? "",
+              ) ||
+              cloudflare.git_auto_deploy_posture?.schema_version !== 2 ||
+              cloudflare.git_auto_deploy_posture?.status !== "passed" ||
+              cloudflare.git_auto_deploy_posture?.stripe_runtime?.status !==
+                "test-or-disabled" ||
+              cloudflare.git_auto_deploy_posture?.stripe_runtime
+                ?.production_price_reuse !== false ||
+              !Array.isArray(
+                cloudflare.git_auto_deploy_posture?.projects,
+              ) ||
+              cloudflare.git_auto_deploy_posture.projects.length !== 2 ||
+              JSON.stringify(
+                cloudflare.git_auto_deploy_posture.projects
+                  .map((entry) => entry?.role)
+                  .sort(),
+              ) !== JSON.stringify(["production", "staging"]) ||
+              new Set(
+                cloudflare.git_auto_deploy_posture.projects.map(
+                  (entry) => entry?.project_name,
+                ),
+              ).size !== 2 ||
+              cloudflare.git_auto_deploy_posture.projects.some(
+                (entry) =>
+                  typeof entry?.project_name !== "string" ||
+                  entry.project_name.length === 0 ||
+                  entry?.production_deployments_enabled !== false ||
+                  entry?.preview_deployment_setting !== "none" ||
+                  entry?.all_automatic_deployments_disabled !== true ||
+                  entry?.status !== "disabled",
+              ) ||
+              cloudflare.git_auto_deploy_posture.projects.find(
+                (entry) => entry?.role === "staging",
+              )?.project_name !== cloudflare.project_name ||
+             !/^[0-9a-f]{64}$/.test(
+               cloudflare.deploy_verification_sha256 ?? "",
+             ) ||
+             cloudflare.deploy_verification?.schemaVersion !== 1 ||
+             cloudflare.deploy_verification?.status !== "passed" ||
+             !Array.isArray(cloudflare.deploy_verification?.targets) ||
+             cloudflare.deploy_verification.targets.length !== 2 ||
+             cloudflare.deploy_verification.targets.some(
+                (target) =>
+                  target?.status !== "passed" ||
+                  target?.publicApi?.schemaVersion !== 3 ||
+                  target?.publicApi?.status !== "passed" ||
+                 target?.publicApi?.operational?.auctionConsistency?.status !==
+                   "passed" ||
+                 target?.publicApi?.operational?.listingsCursor?.status !==
+                   "passed" ||
+                 target?.publicApi?.operational?.openHousesCursor?.status !==
+                   "passed" ||
+                 target?.publicApi?.operational?.publicationPinning?.status !==
+                   "passed" ||
+                  target?.publicApi?.operational?.cacheTransition?.status !==
+                    "passed" ||
+                  target?.publicApi?.operational?.turnCredentialBoundary?.status !==
+                    "passed" ||
+                  target?.publicApi?.operational?.turnCredentialIssuance?.status !==
+                    "passed" ||
+                  target?.publicApi?.operational?.turnCredentialIssuance?.httpStatus !==
+                    200 ||
+                  target?.publicApi?.operational?.turnCredentialIssuance?.authentication !==
+                    "passed" ||
+                  target?.publicApi?.operational?.turnCredentialIssuance?.authorizedRoom !==
+                    "passed" ||
+                  target?.publicApi?.operational?.turnCredentialIssuance?.expiresIn !==
+                    21600 ||
+                  target?.publicApi?.operational?.turnCredentialIssuance?.credentialsPresent !==
+                    true ||
+                  target?.publicApi?.operational?.turnCredentialIssuance?.credentialsRedacted !==
+                    true ||
+                  !(
+                    target?.publicApi?.operational?.turnCredentialIssuance?.iceServerCount >
+                    0
+                  ) ||
+                  !(
+                    target?.publicApi?.operational?.turnCredentialIssuance?.turnUrlCount >
+                    0
+                  ),
+              ) ||
+             cloudflare.stable_marker?.release_sha !== expectedSha ||
+              cloudflare.runtime_config?.supabase_project_id !==
+                database.project_ref ||
+              cloudflare.runtime_config?.stripe_runtime?.status !==
+                "test-or-disabled" ||
+              cloudflare.runtime_config?.stripe_runtime
+                ?.production_price_reuse !== false ||
+              cloudflare.runtime_config?.stripe_runtime?.api_binding_match !==
+                true ||
+              cloudflare.stable_runtime_config?.supabase_project_id !==
+                database.project_ref ||
+              cloudflare.stable_runtime_config?.stripe_runtime?.status !==
+                "test-or-disabled" ||
+              cloudflare.stable_runtime_config?.stripe_runtime
+                ?.production_price_reuse !== false ||
+              cloudflare.stable_runtime_config?.stripe_runtime
+                ?.api_binding_match !== true ||
+              JSON.stringify(proofNames) !==
+                JSON.stringify([...expectedProofNames].sort()) ||
+              expectedProofNames.some(
+                 (name) => business.proofs?.[name]?.ok !== true,
+               ) ||
+              stripePayment.schema_version !== 1 ||
+              stripePayment.evidence_type !==
+                "maiprop-staging-stripe-payment" ||
+              stripePayment.ok !== true ||
+              stripePayment.target?.supabase_project_ref !==
+                database.project_ref ||
+              stripePayment.target?.app_origin !==
+                new URL(cloudflare.stable_url).origin ||
+              stripePayment.target?.stripe_mode !== "test" ||
+              stripePayment.playwright?.spec !==
+                "stripe-payment-complete.spec.ts" ||
+              stripePayment.playwright?.test_title !==
+                "completes test-card subscription checkout and observes synced entitlement" ||
+              stripePayment.playwright?.expected !== 1 ||
+              stripePayment.playwright?.skipped !== 0 ||
+              stripePayment.playwright?.unexpected !== 0 ||
+              stripePayment.playwright?.flaky !== 0 ||
+              stripePayment.playwright?.report_sha256 !==
+                stripePaymentPlaywright.sha256 ||
+              security.schema_version !== 1 ||
+              security.evidence_type !== "maiprop-staging-live-security" ||
+              security.ok !== true ||
+              security.target?.supabase_project_ref !== database.project_ref ||
+              security.target?.app_origin !==
+                new URL(cloudflare.stable_url).origin ||
+              JSON.stringify(security.playwright?.specs) !==
+                JSON.stringify([
+                  "gdpr-delete-account.spec.ts",
+                  "onboarding-role-selection.spec.ts",
+                  "rls-security.spec.ts",
+                ]) ||
+              !(security.playwright?.expected >= 3) ||
+              security.playwright?.skipped !== 0 ||
+              security.playwright?.unexpected !== 0 ||
+              security.playwright?.flaky !== 0 ||
+              security.playwright?.report_sha256 !==
+                securityPlaywright.sha256 ||
+              nMinusOne.schema_version !== 1 ||
+              nMinusOne.evidence_type !==
+                "maiprop-staging-n-minus-one-compatibility" ||
+              nMinusOne.ok !== true ||
+              nMinusOne.release_sha !== expectedSha ||
+              nMinusOne.artifact_sha256 !== expectedArtifact ||
+              nMinusOne.staged_backend_project_ref !== database.project_ref ||
+              !/^[0-9a-f]{40}$/.test(nMinusOne.previous_sha ?? "") ||
+              nMinusOne.previous_sha === expectedSha ||
+              nMinusOne.source?.previous_sha !== nMinusOne.previous_sha ||
+              !(nMinusOne.playwright?.expected > 0) ||
+              nMinusOne.playwright?.skipped !== 0 ||
+              nMinusOne.playwright?.unexpected !== 0 ||
+              nMinusOne.playwright?.flaky !== 0 ||
+              nMinusOne.playwright?.report_sha256 !==
+                nMinusOnePlaywright.sha256 ||
+              nMinusOne.deploy_verification_sha256 !==
+                nMinusOneDeployment.sha256 ||
+              cataloguePerformance.schema_version !== 1 ||
+              cataloguePerformance.evidence_type !==
+                "maiprop-staging-catalogue-performance" ||
+              cataloguePerformance.ok !== true ||
+              cataloguePerformance.release_sha !== expectedSha ||
+              cataloguePerformance.artifact_sha256 !== expectedArtifact ||
+              cataloguePerformance.target?.supabase_project_ref !==
+                database.project_ref ||
+              cataloguePerformance.target?.deployment_origin !==
+                new URL(cloudflare.deployment_url).origin ||
+              cataloguePerformance.target?.stable_origin !==
+                new URL(cloudflare.stable_url).origin ||
+              cataloguePerformance.endpoint_budget?.deployment_status !==
+                "passed" ||
+              cataloguePerformance.endpoint_budget?.stable_status !==
+                "passed" ||
+              cataloguePerformance.endpoint_budget
+                ?.deployment_report_sha256 !== catalogueEndpoint.sha256 ||
+              cataloguePerformance.endpoint_budget
+                ?.stable_report_sha256 !== catalogueEndpoint.sha256 ||
+              !(cataloguePerformance.route_e2e?.expected > 0) ||
+              cataloguePerformance.route_e2e?.skipped !== 0 ||
+              cataloguePerformance.route_e2e?.unexpected !== 0 ||
+              cataloguePerformance.route_e2e?.flaky !== 0 ||
+              cataloguePerformance.route_e2e
+                ?.forbidden_authority_requests !== 0 ||
+              cataloguePerformance.route_e2e?.report_sha256 !==
+                catalogueRouteReport.sha256 ||
+              !(cataloguePerformance.cwv_query?.expected >= 4) ||
+              cataloguePerformance.cwv_query?.skipped !== 0 ||
+              cataloguePerformance.cwv_query?.unexpected !== 0 ||
+              cataloguePerformance.cwv_query?.flaky !== 0 ||
+              cataloguePerformance.cwv_query?.report_sha256 !==
+                catalogueCwvQueryReport.sha256 ||
+              cataloguePerformance.cwv_query?.measurements_sha256 !==
+                catalogueRouteMeasurements.sha256 ||
+              cataloguePerformance.cwv_query?.budgets?.lcp_ms !== 3000 ||
+              cataloguePerformance.cwv_query?.budgets?.cls !== 0.1 ||
+              cataloguePerformance.cwv_query?.budgets?.inp_ms !== 200 ||
+              catalogueRouteEvidenceComplete !== true
+          ) {
+            throw new Error("Staging evidence is incomplete.");
+          }
+          const attestation = {
+            schema_version: 5,
+            evidence_type: "maiprop-release-candidate-attestation",
+            release_sha: expectedSha,
+            source_tree: process.env.SOURCE_TREE,
+            source_run_id: process.env.SOURCE_RUN_ID,
+            source_run_attempt: process.env.SOURCE_RUN_ATTEMPT,
+            artifact_sha256: expectedArtifact,
+            manifest_sha256: expectedManifest,
+            payload_sha256: process.env.PAYLOAD_SHA256,
+            staging_run_id: process.env.STAGING_RUN_ID,
+            staging_run_attempt: process.env.STAGING_RUN_ATTEMPT,
+            artifact_bindings: {
+              supabase: supabaseArtifactBinding,
+            },
+            evidence_sha256: {
+              provenance: provenanceEvidence.sha256,
+              supabase: supabaseEvidence.sha256,
+              cloudflare: cloudflareEvidence.sha256,
+              business: businessEvidence.sha256,
+              stripe_payment: stripePaymentEvidence.sha256,
+              security: securityEvidence.sha256,
+              n_minus_one: nMinusOneEvidence.sha256,
+              catalogue_performance: cataloguePerformanceEvidence.sha256,
+            },
+            provenance,
+            supabase,
+            cloudflare,
+            business,
+            stripe_payment: stripePayment,
+            security,
+            n_minus_one: nMinusOne,
+            catalogue_performance: cataloguePerformance,
+            attested_at: new Date().toISOString(),
+          };
+          writeFileSync(
+            "release-candidate-attestation.json",
+            `${JSON.stringify(attestation, null, 2)}\n`,
+          );
+          NODE
+
+      - name: Upload final release candidate attestation
+        id: final_attestation_upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-candidate-attestation-${{ needs.validate-source.outputs.release_sha }}-${{ github.run_attempt }}
+          path: release-candidate-attestation.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create and verify final release candidate binding
+        env:
+          FINAL_ARTIFACT_DIGEST: ${{ steps.final_attestation_upload.outputs.artifact-digest }}
+          FINAL_ARTIFACT_ID: ${{ steps.final_attestation_upload.outputs.artifact-id }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate-source.outputs.source_tree }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$FINAL_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::The staging evidence upload did not return an immutable artifact ID."
+            exit 1
+          fi
+          mkdir -p final-release-binding final-release-binding-metadata
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/artifacts/$FINAL_ARTIFACT_ID" \
+            > final-release-binding-metadata/artifact.json
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            > final-release-binding-metadata/run.json
+          artifact_name="release-candidate-attestation-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root release-candidate-attestation.json \
+            --out final-release-binding/release-artifact-binding.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/stage-release.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$GITHUB_WORKFLOW_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$FINAL_ARTIFACT_ID" \
+            --artifact-name "$artifact_name" \
+            --artifact-digest "$FINAL_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding final-release-binding/release-artifact-binding.json \
+            --payload-root release-candidate-attestation.json \
+            --artifact-metadata final-release-binding-metadata/artifact.json \
+            --producer-run final-release-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/stage-release.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --workflow-sha "$GITHUB_WORKFLOW_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$FINAL_ARTIFACT_ID" \
+            --artifact-name "$artifact_name" \
+            --artifact-digest "$FINAL_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > final-release-binding/verification.json
+
+      - name: Upload final release candidate binding
+        id: final_binding_upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-candidate-attestation-${{ needs.validate-source.outputs.release_sha }}-${{ github.run_attempt }}-binding
+          path: final-release-binding/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record attested staging release
+        run: |
+          {
+            echo "### Release candidate attested"
+            echo
+            echo "Exact SHA: \`${{ needs.validate-source.outputs.release_sha }}\`"
+            echo "Artifact digest: \`${{ needs.validate-source.outputs.artifact_sha256 }}\`"
+            echo "Staging Pages deployment: \`${{ needs.cloudflare-staging.outputs.deployment_id }}\`"
+            echo "Signed staging binding artifact ID: ${{ steps.final_binding_upload.outputs.artifact-id }}"
+            echo
+            echo "Production remains disabled until an independent approval artifact and protected production gate are available."
+          } >> "$GITHUB_STEP_SUMMARY"

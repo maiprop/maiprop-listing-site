@@ -1,0 +1,1 @@
+delete window.__MAIPROP_RUNTIME_CONFIG__;

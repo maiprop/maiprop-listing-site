@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.4"
-  }
   public: {
     Tables: {
       account_deletion_jobs: {
@@ -1473,42 +1468,42 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "leads_listing_id_fkey1"
+            foreignKeyName: "leads_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listing_management_catalogue"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_listing_id_fkey1"
+            foreignKeyName: "leads_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listing_reference_catalogue"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_listing_id_fkey1"
+            foreignKeyName: "leads_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_listing_id_fkey1"
+            foreignKeyName: "leads_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "public_listing_catalogue"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_professional_id_fkey1"
+            foreignKeyName: "leads_professional_id_fkey"
             columns: ["professional_id"]
             isOneToOne: false
             referencedRelation: "professionals"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_project_id_fkey1"
+            foreignKeyName: "leads_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -2160,116 +2155,49 @@ export type Database = {
         Row: {
           created_at: string
           email: string
-          follow_up_at: string | null
           followup_step: number
           full_name: string
           id: string
           investment_budget: number
           investment_timeline: string
-          listing_id: string | null
-          message: string | null
           nationality: string
-          notes: string | null
           owner_id: string | null
           phone: string
           preferred_location: string
-          professional_id: string | null
-          project_id: string | null
           property_type: string
-          source: string
           status: string
-          updated_at: string
         }
         Insert: {
           created_at?: string
           email: string
-          follow_up_at?: string | null
           followup_step?: number
           full_name: string
           id?: string
           investment_budget: number
           investment_timeline?: string
-          listing_id?: string | null
-          message?: string | null
           nationality: string
-          notes?: string | null
           owner_id?: string | null
           phone: string
           preferred_location?: string
-          professional_id?: string | null
-          project_id?: string | null
           property_type?: string
-          source?: string
           status?: string
-          updated_at?: string
         }
         Update: {
           created_at?: string
           email?: string
-          follow_up_at?: string | null
           followup_step?: number
           full_name?: string
           id?: string
           investment_budget?: number
           investment_timeline?: string
-          listing_id?: string | null
-          message?: string | null
           nationality?: string
-          notes?: string | null
           owner_id?: string | null
           phone?: string
           preferred_location?: string
-          professional_id?: string | null
-          project_id?: string | null
           property_type?: string
-          source?: string
           status?: string
-          updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "leads_listing_id_fkey"
-            columns: ["listing_id"]
-            isOneToOne: false
-            referencedRelation: "listing_management_catalogue"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_listing_id_fkey"
-            columns: ["listing_id"]
-            isOneToOne: false
-            referencedRelation: "listing_reference_catalogue"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_listing_id_fkey"
-            columns: ["listing_id"]
-            isOneToOne: false
-            referencedRelation: "listings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_listing_id_fkey"
-            columns: ["listing_id"]
-            isOneToOne: false
-            referencedRelation: "public_listing_catalogue"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "professionals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       message_attachments: {
         Row: {
@@ -4306,6 +4234,96 @@ export type Database = {
         }
         Relationships: []
       }
+      storage_cleanup_invocations: {
+        Row: {
+          completed_at: string | null
+          error_message: string | null
+          id: string
+          request_id: number
+          requested_at: string
+          response_status: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          request_id: number
+          requested_at?: string
+          response_status?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          request_id?: number
+          requested_at?: string
+          response_status?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      storage_cleanup_jobs: {
+        Row: {
+          attempts: number
+          bucket: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          lease_expires_at: string | null
+          lease_token: string | null
+          next_attempt_at: string
+          object_path: string
+          object_url: string
+          owner_id: string
+          project_id: string
+          reason: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          bucket: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          next_attempt_at?: string
+          object_path: string
+          object_url: string
+          owner_id: string
+          project_id: string
+          reason: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          bucket?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          next_attempt_at?: string
+          object_path?: string
+          object_url?: string
+          owner_id?: string
+          project_id?: string
+          reason?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       stripe_webhook_events: {
         Row: {
           api_version: string | null
@@ -4666,17 +4684,17 @@ export type Database = {
       user_roles: {
         Row: {
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: Database["public"]["Enums"]["user_role"]
           user_id: string
         }
         Insert: {
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: Database["public"]["Enums"]["user_role"]
           user_id: string
         }
         Update: {
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: Database["public"]["Enums"]["user_role"]
           user_id?: string
         }
         Relationships: []
@@ -5643,6 +5661,36 @@ export type Database = {
           },
         ]
       }
+      public_professionals: {
+        Row: {
+          avatar_url: string | null
+          average_deal_size: string | null
+          average_portfolio_asset_size: string | null
+          bio: string | null
+          category: Database["public"]["Enums"]["professional_category"] | null
+          city: string | null
+          created_at: string | null
+          display_name: string | null
+          experience_years: number | null
+          hourly_rate: number | null
+          id: string | null
+          languages: string[] | null
+          license_number: string | null
+          projects_count: number | null
+          rating: number | null
+          reviews_count: number | null
+          specialties: string[] | null
+          subscription_tier: string | null
+          title: string | null
+          updated_at: string | null
+          user_id: string | null
+          verified: boolean | null
+          verified_at: string | null
+          video_link: string | null
+          website_url: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       accept_open_house_offer: {
@@ -6060,6 +6108,10 @@ export type Database = {
         Args: { p_role: string; p_user_id: string }
         Returns: undefined
       }
+      attach_project_media_for_service: {
+        Args: { p_actor_user_id: string; p_media: Json; p_project_id: string }
+        Returns: Json
+      }
       authoritative_role:
         | { Args: never; Returns: Database["public"]["Enums"]["user_role"] }
         | {
@@ -6079,23 +6131,15 @@ export type Database = {
         Args: { _audit_id: string; _user_id: string }
         Returns: undefined
       }
-      claim_role_switch_reconciliation_batch: {
-        Args: {
-          _batch_size?: number
-          _max_attempts?: number
-          _worker_id: string
-        }
-        Returns: {
-          attempt_count: number
-          audit_id: string
-          lock_token: string
-          user_id: string
-        }[]
+      bulk_update_project_unit_prices: {
+        Args: { p_percentage: number; p_project_id: string }
+        Returns: number
       }
       bulk_update_project_unit_prices_for_user: {
         Args: { _user_id: string; p_percentage: number; p_project_id: string }
         Returns: number
       }
+      can_access_video_room: { Args: { p_topic: string }; Returns: boolean }
       can_review_professional: {
         Args: { p_professional_id: string; p_reviewer_id: string }
         Returns: boolean
@@ -6131,6 +6175,46 @@ export type Database = {
         }
         Returns: boolean
       }
+      claim_role_switch_reconciliation_batch: {
+        Args: {
+          _batch_size?: number
+          _max_attempts?: number
+          _worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          audit_id: string
+          lock_token: string
+          user_id: string
+        }[]
+      }
+      claim_storage_cleanup_jobs: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          bucket: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          lease_expires_at: string | null
+          lease_token: string | null
+          next_attempt_at: string
+          object_path: string
+          object_url: string
+          owner_id: string
+          project_id: string
+          reason: string
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "storage_cleanup_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       complete_onboarding_role: {
         Args: {
           p_city?: string
@@ -6155,13 +6239,13 @@ export type Database = {
       complete_role_switch_reconciliation_attempt: {
         Args: {
           _audit_id: string
-          _billing_error: string | null
+          _billing_error: string
           _billing_outcome: string
-          _cancelled_count: number | null
-          _had_active_sub: boolean | null
+          _cancelled_count: number
+          _had_active_sub: boolean
           _lock_token: string
           _max_attempts?: number
-          _subscription_count: number | null
+          _subscription_count: number
           _user_id: string
         }
         Returns: undefined
@@ -6170,7 +6254,37 @@ export type Database = {
         Args: { p_bucket: string; p_user_id: string }
         Returns: boolean
       }
-      create_listing_for_user: { Args: { p_payload: Json }; Returns: Json }
+      create_listing_for_user: {
+        Args: { p_organization_id?: string; p_payload: Json }
+        Returns: Json
+      }
+      create_new_building_listing_for_service: {
+        Args: {
+          p_actor_user_id: string
+          p_additional_image_urls: Json
+          p_listing: Json
+          p_organization_id: string
+          p_project: Json
+          p_project_kind: string
+          p_project_media: Json
+          p_units: Json
+        }
+        Returns: Json
+      }
+      create_new_building_listing_with_storage_for_service: {
+        Args: {
+          p_actor_user_id: string
+          p_additional_image_urls: Json
+          p_listing: Json
+          p_organization_id: string
+          p_project: Json
+          p_project_kind: string
+          p_project_media: Json
+          p_storage_objects: Json
+          p_units: Json
+        }
+        Returns: Json
+      }
       create_open_house_registration: {
         Args: {
           p_contact_email?: string
@@ -6298,6 +6412,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: undefined
       }
+      delete_project_for_service: {
+        Args: { p_actor_user_id: string; p_project_id: string }
+        Returns: boolean
+      }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
@@ -6309,6 +6427,18 @@ export type Database = {
       expire_featured_listings: { Args: never; Returns: undefined }
       expire_listing_promotions: { Args: never; Returns: number }
       expire_past_auctions: { Args: never; Returns: number }
+      finalize_role_switch_audit_for_user: {
+        Args: {
+          _audit_id: string
+          _billing_error: string
+          _billing_outcome: string
+          _cancelled_count: number
+          _had_active_sub: boolean
+          _subscription_count: number
+          _user_id: string
+        }
+        Returns: undefined
+      }
       get_account_deletion_storage_objects: {
         Args: { p_user_id: string }
         Returns: {
@@ -6551,6 +6681,154 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_manageable_listing_catalogue: {
+        Args: never
+        Returns: {
+          address: string | null
+          agent_fee_included: boolean | null
+          ai_score: number | null
+          auction_court: string | null
+          auction_date: string | null
+          auction_starting_bid: number | null
+          available_from: string | null
+          bathrooms: number | null
+          bedrooms: number | null
+          building_allowance: number | null
+          cadastre_number: string | null
+          city: string | null
+          commercial_subtype: string | null
+          construction_status: string | null
+          cover_image_url: string | null
+          coverage_ratio: number | null
+          created_at: string | null
+          deposit_months: number | null
+          description: string | null
+          distance_from_city: number | null
+          distance_from_sea: number | null
+          energy_class: string | null
+          enfia_zone: string | null
+          facade_length: number | null
+          featured_until: string | null
+          floor: number | null
+          floor_height: number | null
+          has_ac: boolean | null
+          has_alarm: boolean | null
+          has_attic: boolean | null
+          has_awning: boolean | null
+          has_balcony: boolean | null
+          has_cctv: boolean | null
+          has_disability_access: boolean | null
+          has_double_glazing: boolean | null
+          has_electricity_supply: boolean | null
+          has_elevator: boolean | null
+          has_equipped: boolean | null
+          has_facade: boolean | null
+          has_fireplace: boolean | null
+          has_furnished: boolean | null
+          has_garden: boolean | null
+          has_internal_staircase: boolean | null
+          has_land_concession: boolean | null
+          has_loading_dock: boolean | null
+          has_night_power: boolean | null
+          has_painted: boolean | null
+          has_parking: boolean | null
+          has_pool: boolean | null
+          has_satellite: boolean | null
+          has_secure_door: boolean | null
+          has_security: boolean | null
+          has_smart_home: boolean | null
+          has_solar_water: boolean | null
+          has_storage: boolean | null
+          has_structured_cabling: boolean | null
+          has_three_phase_power: boolean | null
+          has_underfloor_heating: boolean | null
+          has_video_tour: boolean | null
+          has_view: boolean | null
+          has_virtual_tour: boolean | null
+          has_water_supply: boolean | null
+          has_window_screens: boolean | null
+          heating_system: string | null
+          id: string | null
+          is_buildable: boolean | null
+          is_corner: boolean | null
+          is_featured: boolean | null
+          is_neoclassical: boolean | null
+          is_off_market: boolean | null
+          is_penthouse: boolean | null
+          is_pre_sale: boolean | null
+          is_preserved: boolean | null
+          kitchens: number | null
+          land_use: string | null
+          latitude: number | null
+          levels: number | null
+          listing_images: Json | null
+          listing_type: Database["public"]["Enums"]["listing_type"] | null
+          living_rooms: number | null
+          location_search_text: string | null
+          longitude: number | null
+          min_rental_months: number | null
+          monthly_expenses: number | null
+          noise_score: number | null
+          open_house_date: string | null
+          open_house_settings: Json | null
+          open_house_transaction_type: string | null
+          organization_id: string | null
+          owner_id: string | null
+          pets_allowed: boolean | null
+          plot_depth: number | null
+          plot_surface: number | null
+          postal_code: string | null
+          price: number | null
+          price_per_sqm: number | null
+          priority_placement: number | null
+          priority_until: string | null
+          project_id: string | null
+          property_type: Database["public"]["Enums"]["property_type"] | null
+          region: string | null
+          road_type: string | null
+          safety_score: number | null
+          short_term_rental: boolean | null
+          slope: string | null
+          sqm: number | null
+          status: Database["public"]["Enums"]["listing_status"] | null
+          suitable_commercial_use: boolean | null
+          suitable_holiday: boolean | null
+          suitable_investment: boolean | null
+          suitable_student: boolean | null
+          tags: string[] | null
+          title: string | null
+          total_floors: number | null
+          updated_at: string | null
+          views_count: number | null
+          walkability_score: number | null
+          wc_count: number | null
+          website_url: string | null
+          within_city_plan: boolean | null
+          within_settlement: boolean | null
+          year_built: number | null
+          zone_type: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "listing_management_catalogue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_manageable_listing_catalogue_page: {
+        Args: {
+          p_before_created_at?: string
+          p_before_id?: string
+          p_limit?: number
+        }
+        Returns: {
+          data: Json
+          next_created_at: string
+          next_id: string
+          total_count: number
+        }[]
+      }
+      get_manageable_listing_summary: { Args: never; Returns: Json }
       get_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
@@ -6625,8 +6903,103 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_project_management_context_for_service: {
+        Args: { p_actor_user_id: string; p_project_id: string }
+        Returns: {
+          id: string
+          organization_id: string
+          owner_id: string
+        }[]
+      }
+      get_public_auction_candidates: {
+        Args: {
+          p_limit?: number
+          p_now?: string
+          p_pool_tag?: string
+          p_stream?: string
+          p_today?: string
+        }
+        Returns: {
+          address: string
+          ai_score: number
+          auction_court: string
+          auction_date: string
+          auction_starting_bid: number
+          bathrooms: number
+          bedrooms: number
+          city: string
+          construction_status: string
+          cover_image_url: string
+          energy_class: string
+          featured_until: string
+          floor: number
+          id: string
+          is_featured: boolean
+          latitude: number
+          listing_images: Json
+          listing_type: string
+          longitude: number
+          price: number
+          price_per_sqm: number
+          priority_placement: number
+          priority_until: string
+          property_type: string
+          region: string
+          sqm: number
+          tags: string[]
+          title: string
+          total_floors: number
+          views_count: number
+          website_url: string
+          year_built: number
+        }[]
+      }
+      get_public_catalogue_auctions: {
+        Args: {
+          p_listing_ids?: string[]
+          p_os_tag?: string
+          p_publication_id?: number
+        }
+        Returns: {
+          detail_payload: Json
+          listing_id: string
+          publication_id: number
+          published_at: string
+        }[]
+      }
+      get_public_catalogue_homepage: {
+        Args: { p_publication_id?: number }
+        Returns: {
+          payload: Json
+          publication_id: number
+          published_at: string
+          retain_until: string
+        }[]
+      }
+      get_public_catalogue_listing: {
+        Args: {
+          p_listing_id?: string
+          p_os_tag?: string
+          p_publication_id?: number
+        }
+        Returns: {
+          detail_payload: Json
+          publication_id: number
+          published_at: string
+        }[]
+      }
+      get_public_catalogue_publication: {
+        Args: { p_publication_id?: number }
+        Returns: {
+          publication_id: number
+          published_at: string
+          retain_until: string
+          row_count: number
+          snapshot_minute: string
+        }[]
+      }
       get_public_listing_catalogue: {
-        Args: never
+        Args: { p_as_of?: string }
         Returns: {
           address: string | null
           agent_fee_included: boolean | null
@@ -6758,6 +7131,36 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_public_professionals: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          average_deal_size: string
+          average_portfolio_asset_size: string
+          bio: string
+          category: Database["public"]["Enums"]["professional_category"]
+          city: string
+          created_at: string
+          display_name: string
+          experience_years: number
+          hourly_rate: number
+          id: string
+          languages: string[]
+          license_number: string
+          projects_count: number
+          rating: number
+          reviews_count: number
+          specialties: string[]
+          subscription_tier: string
+          title: string
+          updated_at: string
+          user_id: string
+          verified: boolean
+          verified_at: string
+          video_link: string
+          website_url: string
+        }[]
+      }
       get_public_profile_summaries: {
         Args: { p_user_ids: string[] }
         Returns: {
@@ -6824,11 +7227,16 @@ export type Database = {
         Returns: undefined
       }
       invoke_send_saved_search_alerts_cron: { Args: never; Returns: undefined }
+      invoke_storage_cleanup_cron: { Args: never; Returns: number }
       is_account_deletion_active: {
         Args: { p_user_id: string }
         Returns: boolean
       }
       is_pro: { Args: { p_user_id: string }; Returns: boolean }
+      is_storage_object_committed: {
+        Args: { p_bucket: string; p_object_path: string; p_object_url: string }
+        Returns: boolean
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -6839,12 +7247,81 @@ export type Database = {
         Returns: number
       }
       normalize_location_text: { Args: { input: string }; Returns: string }
+      prepare_storage_cleanup_delete: {
+        Args: { p_job_id: string; p_lease_token: string }
+        Returns: string
+      }
       profile_pricing_audience: {
         Args: {
           p_participant_type?: string
           p_role: Database["public"]["Enums"]["user_role"]
         }
         Returns: string
+      }
+      publish_public_catalogue: {
+        Args: never
+        Returns: {
+          changed_count: number
+          publication_id: number
+          published_at: string
+          row_count: number
+          snapshot_minute: string
+        }[]
+      }
+      query_public_catalogue: {
+        Args: {
+          p_ai_score_min?: number
+          p_bathrooms_max?: number
+          p_bathrooms_min?: number
+          p_bedrooms_max?: number
+          p_bedrooms_min?: number
+          p_bounds_east?: number
+          p_bounds_north?: number
+          p_bounds_south?: number
+          p_bounds_west?: number
+          p_city?: string
+          p_commercial_subtype?: string
+          p_construction_status?: string
+          p_cursor_is_null?: boolean
+          p_cursor_listing_id?: string
+          p_cursor_numeric?: number
+          p_cursor_timestamp?: string
+          p_energy_classes?: string[]
+          p_features?: string[]
+          p_floor_max?: number
+          p_floor_min?: number
+          p_heating_system?: string
+          p_limit?: number
+          p_listing_type?: string
+          p_location?: string
+          p_location_groups?: Json
+          p_offset?: number
+          p_open_house_mode?: string
+          p_price_max?: number
+          p_price_min?: number
+          p_priority_mode?: string
+          p_property_type?: string
+          p_publication_id?: number
+          p_sort?: string
+          p_sqm_max?: number
+          p_sqm_min?: number
+          p_transaction_type?: string
+          p_walkability_min?: number
+          p_year_max?: number
+          p_year_min?: number
+        }
+        Returns: {
+          ai_score: number
+          card_payload: Json
+          created_at: string
+          listing_id: string
+          open_house_date: string
+          price: number
+          priority_rank: number
+          publication_id: number
+          published_at: string
+          views_count: number
+        }[]
       }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
@@ -6896,37 +7373,38 @@ export type Database = {
         }
         Returns: string
       }
-      finalize_role_switch_audit_for_user: {
-        Args: {
-          _audit_id: string
-          _billing_error: string | null
-          _billing_outcome: string
-          _cancelled_count: number | null
-          _had_active_sub: boolean | null
-          _subscription_count: number | null
-          _user_id: string
-        }
-        Returns: undefined
-      }
       record_user_auth_activity: {
         Args: { p_event_type: string; p_metadata?: Json; p_route?: string }
+        Returns: string
+      }
+      register_new_building_storage_upload: {
+        Args: {
+          p_bucket: string
+          p_object_path: string
+          p_object_url: string
+          p_project_id: string
+        }
         Returns: string
       }
       release_expired_firesale_reservations: {
         Args: { p_deal_id?: string }
         Returns: number
       }
-      release_role_switch_reconciliation_claims: {
-        Args: { _audit_ids: string[]; _worker_id: string }
-        Returns: number
-      }
       release_property_report_generation: {
         Args: { p_holder: string; p_lang: string; p_listing_id: string }
         Returns: boolean
       }
+      release_role_switch_reconciliation_claims: {
+        Args: { _audit_ids: string[]; _worker_id: string }
+        Returns: number
+      }
       reopen_open_house_offer_selection: {
         Args: { p_listing_id: string }
         Returns: undefined
+      }
+      requeue_storage_cleanup_job: {
+        Args: { p_job_id: string }
+        Returns: boolean
       }
       reserve_ai_quota: { Args: { p_bucket: string }; Returns: Json }
       reserve_ai_quota_for_user: {
@@ -6980,6 +7458,26 @@ export type Database = {
         }
         Returns: undefined
       }
+      settle_storage_cleanup_jobs_for_service: {
+        Args: {
+          p_objects: Json
+          p_outcome: string
+          p_owner_id: string
+          p_project_id: string
+        }
+        Returns: number
+      }
+      stage_storage_cleanup_jobs_for_service: {
+        Args: {
+          p_last_error?: string
+          p_mode?: string
+          p_objects: Json
+          p_owner_id: string
+          p_project_id: string
+          p_reason: string
+        }
+        Returns: number
+      }
       store_property_report_cache_generation: {
         Args: {
           p_ai: Json
@@ -7013,40 +7511,23 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      submit_agent_data_input:
-        | {
-            Args: {
-              p_buyer_name?: string
-              p_closed_at: string
-              p_closing_price: number
-              p_kaek?: string
-              p_notes?: string
-              p_property_address: string
-              p_property_city: string
-              p_property_postal_code?: string
-              p_property_type?: string
-              p_seller_name?: string
-              p_transaction_type: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_agent_side?: string
-              p_buyer_name?: string
-              p_closed_at: string
-              p_closing_price: number
-              p_kaek?: string
-              p_notes?: string
-              p_property_address: string
-              p_property_city: string
-              p_property_postal_code?: string
-              p_property_type?: string
-              p_seller_name?: string
-              p_transaction_type: string
-            }
-            Returns: string
-          }
+      submit_agent_data_input: {
+        Args: {
+          p_agent_side?: string
+          p_buyer_name?: string
+          p_closed_at: string
+          p_closing_price: number
+          p_kaek?: string
+          p_notes?: string
+          p_property_address: string
+          p_property_city: string
+          p_property_postal_code?: string
+          p_property_type?: string
+          p_seller_name?: string
+          p_transaction_type: string
+        }
+        Returns: string
+      }
       submit_firesale_interest: {
         Args: {
           p_deal_id: string
@@ -7154,6 +7635,15 @@ export type Database = {
         Args: { p_role: string; p_user_id: string }
         Returns: undefined
       }
+      update_listing_cover_with_storage_for_service: {
+        Args: {
+          p_actor_user_id: string
+          p_cover_image_url: string
+          p_listing_id: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
       update_listing_for_user: {
         Args: { p_id: string; p_updates: Json }
         Returns: Json
@@ -7257,10 +7747,10 @@ export type Database = {
         | "agent"
         | "professional"
         | "seller"
-        | "admin"
         | "investor"
         | "institutional"
         | "developer"
+        | "admin"
       viewing_status: "pending" | "confirmed" | "cancelled" | "completed"
       viewing_type: "in_person" | "video"
     }
@@ -7485,10 +7975,10 @@ export const Constants = {
         "agent",
         "professional",
         "seller",
-        "admin",
         "investor",
         "institutional",
         "developer",
+        "admin",
       ],
       viewing_status: ["pending", "confirmed", "cancelled", "completed"],
       viewing_type: ["in_person", "video"],

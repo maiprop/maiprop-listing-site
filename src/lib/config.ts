@@ -5,11 +5,23 @@
 // ENV VALIDATION — canonical check point. All env var format checks live here.
 // The localStorage key for locale persistence is "maiprop_lang" (see src/i18n.ts).
 
-const env = import.meta.env;
+import {
+  assertRuntimeConfigLoaded,
+  getRuntimeValue,
+} from "@/lib/runtimeConfig";
 
-const _url = env.VITE_SUPABASE_URL ?? env.VITE_SUPABASE_PROJECT_URL;
-const _anonKey = env.VITE_SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_ANON_KEY;
-const _mapbox = env.VITE_MAPBOX_TOKEN;
+assertRuntimeConfigLoaded({
+  productionBuild: import.meta.env.PROD,
+  hostname: typeof window === "undefined" ? "" : window.location.hostname,
+});
+
+const _url =
+  getRuntimeValue("VITE_SUPABASE_URL") ??
+  getRuntimeValue("VITE_SUPABASE_PROJECT_URL");
+const _anonKey =
+  getRuntimeValue("VITE_SUPABASE_PUBLISHABLE_KEY") ??
+  getRuntimeValue("VITE_SUPABASE_ANON_KEY");
+const _mapbox = getRuntimeValue("VITE_MAPBOX_TOKEN");
 
 if (!_url || !_anonKey) {
   throw new Error(
@@ -75,7 +87,7 @@ if (!_mapbox && !import.meta.env.SSR && import.meta.env.DEV) {
 
 // Google Street View / Maps optional — auction cards and POI lookups degrade
 // gracefully when missing. Warn once in the console so ops notice.
-if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.PROD) {
+if (!getRuntimeValue("VITE_GOOGLE_MAPS_API_KEY") && import.meta.env.PROD) {
   console.info(
     "[maiProp] VITE_GOOGLE_MAPS_API_KEY not set — auction cards will use " +
       "Mapbox/Unsplash fallbacks and Places autocomplete is disabled."
@@ -88,9 +100,11 @@ if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.PROD) {
 // project-specific Cloudflare Pages previews, with APIs limited to Maps
 // JavaScript API and Places API. Do NOT use it for Street View client URLs; use
 // getStreetViewProxyUrl() so the Street View key stays server-side.
-export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "";
+export const GOOGLE_MAPS_API_KEY =
+  getRuntimeValue("VITE_GOOGLE_MAPS_API_KEY") ?? "";
 export const GOOGLE_PLACES_AUTOCOMPLETE_ENABLED =
-  Boolean(GOOGLE_MAPS_API_KEY) && import.meta.env.VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE === "true";
+  Boolean(GOOGLE_MAPS_API_KEY) &&
+  getRuntimeValue("VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE") === "true";
 
 /**
  * Safe app origin for OAuth redirects — never derived from window.location
@@ -103,7 +117,8 @@ export const GOOGLE_PLACES_AUTOCOMPLETE_ENABLED =
  * When DNS is re-pointed, update this fallback and the VITE_APP_URL secret
  * together so OAuth/Stripe redirect-URI allowlists only need rotating once.
  */
-export const APP_ORIGIN = import.meta.env.VITE_APP_URL ?? "https://portal.maiprop.co";
+export const APP_ORIGIN =
+  getRuntimeValue("VITE_APP_URL") ?? "https://portal.maiprop.co";
 
 /** Street View image via edge function proxy so the API key is never in client URLs. */
 export function getStreetViewProxyUrl(

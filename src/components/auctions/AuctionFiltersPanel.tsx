@@ -266,7 +266,7 @@ export const AuctionFiltersPanel = ({ // skipcq: JS-W1044
   return (
   <>
     {showFilters && (
-      <div className="mt-4 p-5 bg-card/95 border border-border rounded-2xl space-y-5 backdrop-blur-sm">
+      <div id="desktop-auction-filters" className="mt-4 p-5 bg-card/95 border border-border rounded-2xl space-y-5 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold flex items-center gap-2">
             <SlidersHorizontal className="w-4 h-4 text-primary" /> {isGreek ? "Φίλτρα πλειστηριασμών" : "Auction Filters"}

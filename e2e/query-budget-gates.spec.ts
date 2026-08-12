@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 const RUNNING_QUERY_BUDGET_GATE =
@@ -5,26 +8,48 @@ const RUNNING_QUERY_BUDGET_GATE =
   process.env.CI ||
   process.env.npm_lifecycle_event === "test:perf" ||
   process.argv.some((arg) => arg.includes("query-budget-gates.spec.ts"));
+const QUERY_EVIDENCE_PATH = process.env.MAIPROP_QUERY_EVIDENCE_PATH?.trim() ?? "";
+const EVIDENCE_RELEASE_SHA = process.env.MAIPROP_STAGING_RELEASE_SHA?.trim().toLowerCase() ?? "";
 
 const AUTH_STORAGE_KEY = "sb-abcdefghijklmnop-auth-token";
 const PERF_USER_ID = "00000000-0000-4000-8000-000000000001";
 const PERF_LISTING_ID = "00000000-0000-4000-8000-000000000101";
 const PERF_NEW_BUILD_ID = "00000000-0000-4000-8000-000000000201";
 const PERF_OPEN_HOUSE_ID = "00000000-0000-4000-8000-000000000301";
+const PERF_AUCTION_ID = "00000000-0000-4000-8000-000000000401";
+
+const CATALOGUE_AUTHORITY_ROUTES = new Set(["/", "/listings", "/auctions", "/open-houses"]);
 
 type RequestCounts = {
   auth: number;
   rest: number;
   functions: number;
+  functionRequests: string[];
+  forbiddenAuthorityRequests: string[];
 };
 
-type QueryBudget = RequestCounts & {
+type QueryBudget = Pick<RequestCounts, "auth" | "rest" | "functions"> & {
   total: number;
+};
+
+type QueryRouteMeasurement = {
+  path: string;
+  measurements: {
+    auth: number;
+    rest: number;
+    functions: number;
+    total: number;
+    forbidden_authority_fallbacks: number;
+  };
+  budgets: QueryBudget;
+  passed: boolean;
 };
 
 const QUERY_BUDGETS: Record<string, QueryBudget> = {
   "/": { auth: 2, rest: 8, functions: 2, total: 12 },
   "/listings": { auth: 2, rest: 10, functions: 2, total: 14 },
+  "/auctions": { auth: 2, rest: 5, functions: 2, total: 8 },
+  "/open-houses": { auth: 2, rest: 6, functions: 2, total: 10 },
   "/pricing": { auth: 2, rest: 8, functions: 3, total: 13 },
   [`/property/${PERF_LISTING_ID}`]: { auth: 2, rest: 14, functions: 6, total: 20 },
   [`/new-build/${PERF_NEW_BUILD_ID}`]: { auth: 3, rest: 14, functions: 6, total: 22 },
@@ -32,6 +57,52 @@ const QUERY_BUDGETS: Record<string, QueryBudget> = {
   "/dashboard": { auth: 3, rest: 22, functions: 8, total: 30 },
   "/admin": { auth: 3, rest: 26, functions: 8, total: 34 },
 };
+
+const queryRouteMeasurements = new Map<string, QueryRouteMeasurement>();
+
+function getAppOrigin(baseURL: string | undefined): string {
+  return new URL(baseURL ?? (process.env.CI ? "http://localhost:4173" : "http://localhost:8080")).origin;
+}
+
+function cloudflareAccessHeaders(): Record<string, string> {
+  const clientId = process.env.CF_ACCESS_CLIENT_ID?.trim() ?? "";
+  const clientSecret = process.env.CF_ACCESS_CLIENT_SECRET?.trim() ?? "";
+  if (Boolean(clientId) !== Boolean(clientSecret)) {
+    throw new Error("CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be configured together.");
+  }
+  return clientId && clientSecret
+    ? {
+        "CF-Access-Client-Id": clientId,
+        "CF-Access-Client-Secret": clientSecret,
+      }
+    : {};
+}
+
+async function configureProtectedPagesContext(page: Page, baseURL: string | undefined): Promise<void> {
+  const appOrigin = getAppOrigin(baseURL);
+  const accessHeaders = cloudflareAccessHeaders();
+  if (Object.keys(accessHeaders).length > 0) {
+    await page.context().route(`${appOrigin}/**`, async (route) => {
+      const response = await route.fetch({
+        headers: { ...route.request().headers(), ...accessHeaders },
+        maxRedirects: 0,
+      });
+      await route.fulfill({ response });
+    });
+  }
+
+  const siteLockPassword = process.env.STAGING_SITE_LOCK_PASSWORD?.trim() ?? "";
+  if (siteLockPassword) {
+    await page.context().addCookies([{
+      name: "maiprop_unlock",
+      value: createHash("sha256").update(siteLockPassword).digest("hex"),
+      url: appOrigin,
+      httpOnly: true,
+      secure: new URL(appOrigin).protocol === "https:",
+      sameSite: "Lax",
+    }]);
+  }
+}
 
 const perfProfile = {
   id: "perf-profile",
@@ -145,12 +216,70 @@ const perfOpenHouseListing = {
   cover_image_url: "https://images.example.test/open-house.jpg",
 };
 
+const perfAuctionListing = {
+  ...perfListing,
+  id: PERF_AUCTION_ID,
+  title: "Performance Gate Auction",
+  listing_type: "auction",
+  auction_date: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+  auction_starting_bid: 180000,
+  price: 180000,
+  sqm: 88,
+  bedrooms: 2,
+  bathrooms: 1,
+  cover_image_url: "https://images.example.test/auction.jpg",
+};
+
 function emptyCounts(): RequestCounts {
-  return { auth: 0, rest: 0, functions: 0 };
+  return {
+    auth: 0,
+    rest: 0,
+    functions: 0,
+    functionRequests: [],
+    forbiddenAuthorityRequests: [],
+  };
 }
 
 function totalCounts(counts: RequestCounts): number {
   return counts.auth + counts.rest + counts.functions;
+}
+
+function writeQueryEvidence(): void {
+  if (!QUERY_EVIDENCE_PATH) return;
+  const routes = Object.keys(QUERY_BUDGETS)
+    .map((path) => queryRouteMeasurements.get(path))
+    .filter((route): route is QueryRouteMeasurement => Boolean(route));
+  const outputPath = resolve(process.cwd(), QUERY_EVIDENCE_PATH);
+  mkdirSync(dirname(outputPath), { recursive: true });
+  writeFileSync(outputPath, `${JSON.stringify({
+    schema_version: 1,
+    evidence_type: "maiprop-query-route-measurements",
+    release_sha: EVIDENCE_RELEASE_SHA,
+    complete: routes.length === Object.keys(QUERY_BUDGETS).length,
+    routes,
+  }, null, 2)}\n`, "utf8");
+}
+
+function recordQueryMeasurement(path: string, budget: QueryBudget, counts: RequestCounts): void {
+  const measurements = {
+    auth: counts.auth,
+    rest: counts.rest,
+    functions: counts.functions,
+    total: totalCounts(counts),
+    forbidden_authority_fallbacks: counts.forbiddenAuthorityRequests.length,
+  };
+  queryRouteMeasurements.set(path, {
+    path,
+    measurements,
+    budgets: budget,
+    passed:
+      measurements.auth <= budget.auth &&
+      measurements.rest <= budget.rest &&
+      measurements.functions <= budget.functions &&
+      measurements.total <= budget.total &&
+      (!CATALOGUE_AUTHORITY_ROUTES.has(path) || measurements.forbidden_authority_fallbacks === 0),
+  });
+  writeQueryEvidence();
 }
 
 function json(route: Route, data: unknown) {
@@ -227,10 +356,21 @@ async function installAuthenticatedSupabaseMocks(page: Page, counts: RequestCoun
       return json(route, { data: perfListing });
     }
     if (url.pathname.endsWith("/auctions")) {
-      return json(route, { data: [] });
+      return json(route, {
+        data: [perfAuctionListing],
+        total: 1,
+        page: 1,
+        pageSize: 60,
+        hasMore: false,
+      });
     }
     if (url.pathname.endsWith("/open-houses")) {
-      return json(route, []);
+      return json(route, {
+        data: [perfOpenHouseListing],
+        hasMore: false,
+        limit: 60,
+        nextCursor: null,
+      });
     }
     if (url.pathname.endsWith("/similar-listings")) {
       return json(route, { data: [] });
@@ -242,6 +382,10 @@ async function installAuthenticatedSupabaseMocks(page: Page, counts: RequestCoun
   await page.route("**/functions/v1/**", async (route) => {
     counts.functions += 1;
     const path = new URL(route.request().url()).pathname;
+    counts.functionRequests.push(path.slice(path.lastIndexOf("/") + 1));
+    if (path.endsWith("/functions/v1/fetch-os-auctions")) {
+      counts.forbiddenAuthorityRequests.push(route.request().url());
+    }
     if (path.endsWith("/owner-pro-status")) return json(route, { isPro: true });
     if (path.endsWith("/check-subscription")) return json(route, { subscribed: false, product_id: null, subscription_end: null });
     if (path.endsWith("/ai-quota-status")) return json(route, { used: 0, limit: 10, remaining: 10 });
@@ -268,6 +412,10 @@ async function installAuthenticatedSupabaseMocks(page: Page, counts: RequestCoun
     const url = new URL(request.url());
     const wantsObject = request.headers().accept?.includes("vnd.pgrst.object+json") ?? false;
 
+    if (url.pathname.endsWith("/rest/v1/listings")) {
+      counts.forbiddenAuthorityRequests.push(request.url());
+    }
+
     if (url.pathname.includes("/profiles_public")) return json(route, wantsObject ? perfProfile : [perfProfile]);
     if (url.pathname.includes("/profiles")) return json(route, wantsObject ? perfProfile : [perfProfile]);
     if (url.pathname.includes("/listings")) {
@@ -290,6 +438,16 @@ async function installAuthenticatedSupabaseMocks(page: Page, counts: RequestCoun
 
 test.describe("authenticated query budget gates @perf", () => {
   test.skip(!RUNNING_QUERY_BUDGET_GATE, "Run npm run test:perf or set MAIPROP_RUNNING_PERF_GATE=1 to measure query budgets.");
+  test.describe.configure({ mode: "serial" });
+
+  test.beforeAll(() => {
+    queryRouteMeasurements.clear();
+    writeQueryEvidence();
+  });
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    await configureProtectedPagesContext(page, testInfo.project.use.baseURL);
+  });
 
   for (const [path, budget] of Object.entries(QUERY_BUDGETS)) {
     test(`${path} stays within Supabase request budget`, async ({ page }) => {
@@ -299,11 +457,21 @@ test.describe("authenticated query budget gates @perf", () => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
       await expect(page.locator("body")).toBeVisible();
+      recordQueryMeasurement(path, budget, counts);
 
       expect(counts.auth, `${path} auth requests`).toBeLessThanOrEqual(budget.auth);
       expect(counts.rest, `${path} REST queries`).toBeLessThanOrEqual(budget.rest);
-      expect(counts.functions, `${path} function calls`).toBeLessThanOrEqual(budget.functions);
+      expect(
+        counts.functions,
+        `${path} function calls (${counts.functionRequests.join(", ") || "none"})`,
+      ).toBeLessThanOrEqual(budget.functions);
       expect(totalCounts(counts), `${path} total Supabase requests`).toBeLessThanOrEqual(budget.total);
+      if (CATALOGUE_AUTHORITY_ROUTES.has(path)) {
+        expect(
+          counts.forbiddenAuthorityRequests,
+          `${path} bypassed the cached public catalogue authority`,
+        ).toEqual([]);
+      }
     });
   }
 });

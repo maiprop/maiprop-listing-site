@@ -1,6 +1,5 @@
 ﻿import { lazy, Suspense, useState, useEffect, type ElementType } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,14 +35,12 @@ import { ProjectOverview } from "@/components/new-build/ProjectOverview";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { getAiErrorMessage, isAiMonthlyLimitError } from "@/lib/aiErrorUtils";
-import { fetchPublicApi, shouldLogPublicApiFallback } from "@/lib/publicApi";
-import { logger } from "@/lib/logger";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 import { newBuildLeadSchema, parseMutationInput } from "@/lib/mutationSchemas";
-import { fetchNewBuildListingFallback } from "@/lib/newBuildListingFallback";
 import { buildNewBuildValuationContext } from "@/lib/newBuildValuationContext";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
+import { useListing } from "@/hooks/useListings";
 import {
   ACTIVE_UNIT_STATUSES,
   buildProjectValuationMetrics,
@@ -112,10 +109,6 @@ const getInterestPhone = (form: RegisterInterestForm, profile: Profile | null) =
   return cleanOptionalText(form.phone) ?? cleanOptionalText(profile?.phone) ?? null;
 };
 
-type PublicListingResponse = {
-  data: NewBuildListing | null;
-};
-
 const insertNewBuildLead = async ({
   listingId,
   user,
@@ -141,6 +134,9 @@ const insertNewBuildLead = async ({
 export default function NewBuildDetail() { // skipcq: JS-R1005
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { state } = useLocation() as {
+    state?: { listing?: NewBuildListing };
+  };
   const { t } = useTranslation();
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
   const trv = (key: string, fallback: string, values: Record<string, string | number>) =>
@@ -179,25 +175,11 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
     refreshQuota: refreshAiInsightsQuota,
   } = useAiQuota("property-valuation", user, { enabled: Boolean(user) });
 
-  const { data: listing, isLoading, error } = useQuery({
-    queryKey: ["new-build-listing", id],
-    queryFn: async ({ signal }) => {
-      if (!id) return null;
-      try {
-        const response = await fetchPublicApi<PublicListingResponse>(
-          `/api/public/listing?id=${encodeURIComponent(id)}`,
-          { throwOnError: true, signal },
-        );
-        if (response) return response.data ?? null;
-        throw new Error("Public new-build listing API returned no data");
-      } catch (apiError) {
-        if (shouldLogPublicApiFallback(apiError)) {
-          logger.warn("Public new-build detail API failed; falling back to constrained Supabase read:", apiError);
-        }
-        return fetchNewBuildListingFallback(id, signal);
-      }
-    },
-    enabled: !!id,
+  const routeListing = state?.listing?.id === id ? state?.listing : undefined;
+  const { data: listing, isLoading, error } = useListing(id ?? "", {
+    initialData: routeListing,
+    publicScope: true,
+    publicationId: routeListing?.publicationId,
   });
   const canonicalDetailPath = listing ? getListingDetailPath(listing) : null;
   const isCanonicalNewBuild = listing ? shouldUseNewBuildRoute(listing) : false;
@@ -402,7 +384,13 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
 
   useEffect(() => {
     if (!listing || isCanonicalNewBuild || !canonicalDetailPath) return;
-    navigate(canonicalDetailPath, { replace: true });
+    const detailState = listing.listing_type === "auction"
+      ? { auction: listing, listing }
+      : { listing };
+    navigate(canonicalDetailPath, {
+      replace: true,
+      state: detailState,
+    });
   }, [canonicalDetailPath, isCanonicalNewBuild, listing, navigate]);
 
   if (isLoading) return (

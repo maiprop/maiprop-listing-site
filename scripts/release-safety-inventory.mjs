@@ -1,46 +1,71 @@
-#!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { extname, join, relative, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+import yaml from "js-yaml";
+import { checkSlsaReadiness } from "./check-slsa-readiness.mjs";
 import {
+  cloudflareHttpMutationViolation as cloudflarePolicyViolation,
+  findCloudflareHttpMutations as findPolicyCloudflareHttpMutations,
+} from "./cloudflare-http-mutation-policy.mjs";
+export {
   cloudflareHttpMutationViolation,
   findCloudflareHttpMutations,
+  isAuthorizedCloudflareHttpMutationWorkflow,
 } from "./cloudflare-http-mutation-policy.mjs";
 
 const root = process.cwd();
 const checkMode = process.argv.includes("--check");
-const liveFunctionsMode = process.argv.includes("--live-functions") ||
+const liveFunctionsMode =
+  process.argv.includes("--live-functions") ||
   process.env.RELEASE_SAFETY_LIVE_FUNCTIONS === "true";
+const requireLiveSourceEvidence = process.argv.includes(
+  "--require-live-source-evidence",
+);
 const outArgIndex = process.argv.indexOf("--out");
 const outPath = outArgIndex >= 0 ? process.argv[outArgIndex + 1] : "";
+const supabaseWorkdirArgIndex = process.argv.indexOf("--supabase-workdir");
+const supabaseWorkdir = resolve(
+  root,
+  supabaseWorkdirArgIndex >= 0
+    ? process.argv[supabaseWorkdirArgIndex + 1] ?? ""
+    : ".",
+);
 
-const functionDir = join(root, "supabase", "functions");
-const configPath = join(root, "supabase", "config.toml");
+const functionDir = join(supabaseWorkdir, "supabase", "functions");
+const configPath = join(supabaseWorkdir, "supabase", "config.toml");
 const workflowDir = join(root, ".github", "workflows");
 const envDocs = [
   ".env.example",
   ".env.staging.example",
   "docs/ENV_SETUP.md",
+  "docs/PRODUCTION_RELEASE_RUNBOOK.md",
   "docs/SECRETS_ROTATION.md",
   "docs/OS_INTEGRATION.md",
 ];
 
 const ignoredFunctionDirs = new Set(["_shared", "node_modules"]);
-const productionDeployNeeds = [
-  "quality",
-  "release-safety",
-  "e2e",
-  "e2e-security-staging",
-  "migrations-validate",
-  "lighthouse",
-];
+const productionReleaseWorkflow =
+  ".github/workflows/deploy-production-release.yml";
 const documentedEnvAllowlist = new Set([
   "CI",
   "DEV",
+  "GITHUB_ACTOR",
+  "GITHUB_EVENT_NAME",
+  "GITHUB_REPOSITORY",
+  "GITHUB_RUN_ATTEMPT",
+  "GITHUB_RUN_ID",
   "GITHUB_STEP_SUMMARY",
+  "GITHUB_TRIGGERING_ACTOR",
+  "GITHUB_WORKFLOW_REF",
+  "GITHUB_WORKFLOW_SHA",
   "MODE",
   "NODE_ENV",
   "PROD",
+  "PRODUCTION_APP_URL",
+  "PRODUCTION_SUPABASE_PUBLISHABLE_KEY",
+  "PRODUCTION_SUPABASE_URL",
   "SSR",
 ]);
 
@@ -48,18 +73,93 @@ function read(path) {
   return readFileSync(path, "utf8");
 }
 
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function normalizedRelativePath(path) {
+  return relative(root, path).replace(/\\/g, "/");
+}
+
+function normalizedSupabaseSourcePath(path) {
+  return relative(supabaseWorkdir, path).replace(/\\/g, "/");
+}
+
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "node_modules" || entry.name === "dist" || entry.name === ".git") continue;
+      if (
+        entry.name === "node_modules" ||
+        entry.name === "dist" ||
+        entry.name === ".git"
+      )
+        continue;
       walk(full, out);
     } else {
       out.push(full);
     }
   }
   return out;
+}
+
+function sourceGroup(files) {
+  const records = [...new Set(files)]
+    .filter((file) => existsSync(file))
+    .sort((a, b) =>
+      normalizedSupabaseSourcePath(a).localeCompare(
+        normalizedSupabaseSourcePath(b),
+      ),
+    )
+    .map((file) => ({
+      path: normalizedSupabaseSourcePath(file),
+      sha256: sha256(readFileSync(file)),
+    }));
+  return {
+    source_sha256: sha256(JSON.stringify(records)),
+    files: records,
+  };
+}
+
+function buildEdgeSourceManifest(configured, sourceFunctions) {
+  const runtimeFiles = [
+    ...walk(join(functionDir, "_shared")),
+    join(functionDir, "deno.json"),
+    join(functionDir, "deno.lock"),
+  ];
+  const shared = sourceGroup(runtimeFiles);
+  const configSha256 = sha256(read(configPath));
+  const functions = sourceFunctions.map((name) => {
+    const local = sourceGroup(walk(join(functionDir, name)));
+    const verifyJwt = configured.get(name)?.verify_jwt ?? null;
+    return {
+      name,
+      verify_jwt: verifyJwt,
+      source_sha256: local.source_sha256,
+      effective_source_sha256: sha256(
+        JSON.stringify({
+          function_source_sha256: local.source_sha256,
+          shared_source_sha256: shared.source_sha256,
+          config_sha256: configSha256,
+          verify_jwt: verifyJwt,
+        }),
+      ),
+      files: local.files,
+    };
+  });
+  const manifest = {
+    schema_version: 1,
+    algorithm: "sha256",
+    release_sha: process.env.RELEASE_SAFETY_RELEASE_SHA || "",
+    config_sha256: configSha256,
+    shared,
+    functions,
+  };
+  return {
+    ...manifest,
+    manifest_sha256: sha256(JSON.stringify(manifest)),
+  };
 }
 
 function parseFunctionConfig(toml) {
@@ -87,12 +187,36 @@ function parseProjectRefFromConfig(toml) {
 function scanEnvNames() {
   const files = walk(root).filter((file) => {
     const rel = file.slice(root.length + 1).replace(/\\/g, "/");
-    if (!/^(src|supabase\/functions|functions|scripts|e2e)\//.test(rel)) return false;
-    if (rel.startsWith("coverage/") || rel.startsWith("playwright-report/")) return false;
-    if (rel.endsWith(".lock") || rel.endsWith(".png") || rel.endsWith(".jpg") || rel.endsWith(".jpeg")) return false;
-    return [".ts", ".tsx", ".js", ".mjs", ".md", ".example", ".yml", ".yaml"].includes(extname(file)) ||
+    if (!/^(src|supabase\/functions|functions|scripts|e2e)\//.test(rel))
+      return false;
+    if (rel.startsWith("coverage/") || rel.startsWith("playwright-report/"))
+      return false;
+    if (
+      /(?:^|\/)(?:__tests__|test|tests)\//.test(rel) ||
+      /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(rel)
+    )
+      return false;
+    if (
+      rel.endsWith(".lock") ||
+      rel.endsWith(".png") ||
+      rel.endsWith(".jpg") ||
+      rel.endsWith(".jpeg")
+    )
+      return false;
+    return (
+      [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".mjs",
+        ".md",
+        ".example",
+        ".yml",
+        ".yaml",
+      ].includes(extname(file)) ||
       rel.endsWith(".env.example") ||
-      rel.endsWith(".env.staging.example");
+      rel.endsWith(".env.staging.example")
+    );
   });
 
   const used = new Set();
@@ -113,7 +237,8 @@ function scanEnvNames() {
     const full = join(root, doc);
     if (!existsSync(full)) continue;
     const text = read(full);
-    for (const match of text.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)) documented.add(match[1]);
+    for (const match of text.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g))
+      documented.add(match[1]);
   }
 
   return {
@@ -121,12 +246,14 @@ function scanEnvNames() {
     documented: [...documented].sort(),
     undocumented: [...used].filter((name) => !documented.has(name)).sort(),
     undocumented_enforced: [...used]
-      .filter((name) => !documented.has(name) && !documentedEnvAllowlist.has(name))
+      .filter(
+        (name) => !documented.has(name) && !documentedEnvAllowlist.has(name),
+      )
       .sort(),
   };
 }
 
-function scanWorkflows() {
+export function scanWorkflows() {
   const files = readdirSync(workflowDir)
     .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
     .map((name) => join(workflowDir, name));
@@ -135,14 +262,26 @@ function scanWorkflows() {
   const providerHttpMutations = [];
   const secrets = new Set();
   const workflowText = {};
+  const workflowYaml = {};
   for (const file of files) {
     const rel = file.slice(root.length + 1).replace(/\\/g, "/");
     const text = read(file);
     workflowText[rel] = text;
-    for (const match of text.matchAll(/secrets\.([A-Z0-9_]+)/g)) secrets.add(match[1]);
+    try {
+      workflowYaml[rel] = yaml.load(text);
+    } catch (error) {
+      violations.push(
+        `${rel} is invalid YAML: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    for (const match of text.matchAll(/secrets\.([A-Z0-9_]+)/g))
+      secrets.add(match[1]);
     const lines = text.split(/\r?\n/);
     lines.forEach((line, index) => {
-      if (/\blatest\b/.test(line) && !/^\s*runs-on:\s+ubuntu-latest\s*$/.test(line)) {
+      if (
+        /\blatest\b/.test(line) &&
+        !/^\s*runs-on:\s+ubuntu-latest\s*$/.test(line)
+      ) {
         violations.push(`${rel}:${index + 1} uses 'latest'`);
       }
       if (line.includes("--no-verify-jwt")) {
@@ -151,32 +290,634 @@ function scanWorkflows() {
       if (/gitleaks-action/.test(line)) {
         const nextLines = lines.slice(index + 1, index + 8).join("\n");
         if (/continue-on-error:\s*true/.test(nextLines)) {
-          violations.push(`${rel}:${index + 1} makes secret scanning advisory with continue-on-error`);
+          violations.push(
+            `${rel}:${index + 1} makes secret scanning advisory with continue-on-error`,
+          );
         }
+      }
+      if (/printf\s+['"]SITE_LOCK_PASSWORD\s*=/.test(line)) {
+        violations.push(
+          `${rel}:${index + 1} writes SITE_LOCK_PASSWORD into plaintext Wrangler vars`,
+        );
       }
     });
   }
 
+  const authorizedMutationWorkflows = new Set([
+    ".github/workflows/deploy-edge-functions.yml",
+    ".github/workflows/deploy-supabase-production-db.yml",
+    ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
+    ".github/workflows/reusable-cloudflare-production-deploy.yml",
+    ".github/workflows/stage-release.yml",
+    ".github/workflows/reusable-supabase-staging.yml",
+  ]);
+  const forbiddenMutationWiring =
+    /\bI_KNOW_THIS_IS_PROD\b|\bSUPABASE_SERVICE_ROLE_KEY\b|\bSUPABASE_STAGING_DB_URL\b|\bstaging-load-dataset\.mjs\b|\bsupabase\s+(?:db\s+push|functions\s+deploy|migration\s+repair)\b|\bpages\s+deploy\b/;
   for (const [workflowPath, text] of Object.entries(workflowText)) {
-    for (const method of findCloudflareHttpMutations(text)) {
+    const cloudflareMethods = findPolicyCloudflareHttpMutations(text);
+    for (const method of cloudflareMethods) {
       providerHttpMutations.push({
         provider: "cloudflare",
         workflow: workflowPath,
         method,
       });
     }
-    const violation = cloudflareHttpMutationViolation({
+    const cloudflareViolation = cloudflarePolicyViolation({
       workflowPath,
       text,
     });
-    if (violation) violations.push(violation);
+    if (cloudflareViolation) violations.push(cloudflareViolation);
+    if (authorizedMutationWorkflows.has(workflowPath)) continue;
+    if (forbiddenMutationWiring.test(text)) {
+      violations.push(
+        `${workflowPath} contains release mutation wiring outside the exact-SHA staging workflows`,
+      );
+    }
+  }
+
+  const liveOperationalPath =
+    ".github/workflows/live-operational-smoke.yml";
+  const liveOperational = workflowText[liveOperationalPath] ?? "";
+  const forbiddenLiveOperationalWiring =
+    /\bsecrets\.|\b(?:VITE_)?SUPABASE_|\bE2E_|\/auth\/|ai-quota-status|\b(?:POST|PUT|PATCH|DELETE)\b|npm\s+(?:run|exec)|\bnpx\b|playwright|actions\/checkout/i;
+  if (!liveOperational) {
+    violations.push(`${liveOperationalPath} is missing`);
+  } else {
+    if (forbiddenLiveOperationalWiring.test(liveOperational)) {
+      violations.push(
+        `${liveOperationalPath} must remain unauthenticated, read-only, and independent of repository scripts`,
+      );
+    }
+
+    const methods = [
+      ...liveOperational.matchAll(/method:\s*"([A-Z]+)"/g),
+    ].map((match) => match[1]);
+    if (
+      !methods.includes("GET") ||
+      !methods.includes("HEAD") ||
+      methods.some((method) => !["GET", "HEAD"].includes(method))
+    ) {
+      violations.push(
+        `${liveOperationalPath} may use only explicit GET and HEAD probes`,
+      );
+    }
   }
 
   const ci = workflowText[".github/workflows/ci.yml"] ?? "";
-  const deployBlock = yamlJobBlock(ci, "deploy");
-  for (const need of productionDeployNeeds) {
-    if (!deployBlock.includes("needs:") || !deployBlock.includes(need)) {
-      violations.push(`.github/workflows/ci.yml deploy job does not require '${need}'`);
+  const ciSecretReferences = [...ci.matchAll(/secrets\.([A-Z0-9_]+)/g)]
+    .map((match) => match[1]);
+  if (
+    ciSecretReferences.some(
+      (name) => name !== "RELEASE_EVIDENCE_SIGNING_KEY",
+    ) ||
+    /\bsupabase\s+(?:db\s+push|functions\s+deploy)\b/.test(ci) ||
+    /\bpages\s+deploy\b/.test(ci) ||
+    /uses:\s*\.\/\.github\/workflows\/reusable-(?:supabase-staging|cloudflare-production-deploy)\.yml/.test(
+      ci,
+    )
+  ) {
+    violations.push(
+      ".github/workflows/ci.yml may use only RELEASE_EVIDENCE_SIGNING_KEY and must remain mutation-free",
+    );
+  }
+
+  const release = workflowText[productionReleaseWorkflow] ?? "";
+  if (!release) {
+    violations.push(`${productionReleaseWorkflow} is missing`);
+  } else {
+    const requiredReleaseMarkers = [
+      ["workflow_dispatch:", "manual workflow_dispatch trigger"],
+      [
+        "group: maiprop-production-release",
+        "global production concurrency lease",
+      ],
+      ["cancel-in-progress: false", "non-cancelling production lease"],
+      [
+        "inputs.confirm == 'DEPLOY_PRODUCTION_RELEASE'",
+        "typed production confirmation",
+      ],
+      ["release_sha:", "explicit release SHA input"],
+      [
+        "github-release-evidence",
+        "final exact-SHA CI readiness validation",
+      ],
+      [
+        "PRODUCTION_RELEASE_ENABLED",
+        "explicit production release feature gate",
+      ],
+      [
+        "github-release-approval",
+        "independent production approval selection",
+      ],
+      [
+        "production-mutation-lease.json",
+        "run-scoped production mutation lease",
+      ],
+    ];
+    for (const [marker, label] of requiredReleaseMarkers) {
+      if (!release.includes(marker)) {
+        violations.push(`${productionReleaseWorkflow} is missing ${label}`);
+      }
+    }
+
+    const parsedRelease = workflowYaml[productionReleaseWorkflow];
+    const releaseJobs = parsedRelease?.jobs ?? {};
+    const validateJob = releaseJobs.validate;
+    const databaseJob = releaseJobs["deploy-production-database"];
+    const renewEdgeLeaseJob = releaseJobs["renew-edge-mutation-lease"];
+    const edgeJob = releaseJobs["deploy-production-edge"];
+    const renewCloudflareLeaseJob =
+      releaseJobs["renew-cloudflare-mutation-lease"];
+    const cloudflareJob = releaseJobs["deploy-production-cloudflare"];
+    const aggregateJob = releaseJobs["attest-production-release"];
+    if (
+      validateJob?.environment !== undefined ||
+      !validateJob?.outputs?.artifact_sha256 ||
+      !validateJob?.outputs?.manifest_sha256 ||
+      !validateJob?.outputs?.approval_nonce ||
+      !validateJob?.outputs?.mutation_lease_artifact
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} validation must emit the exact approved release and lease tuple`,
+      );
+    }
+    if (
+      databaseJob?.needs !== "validate" ||
+      databaseJob?.uses !==
+        "./.github/workflows/deploy-supabase-production-db.yml" ||
+      databaseJob?.with?.release_sha !== "${{ inputs.release_sha }}" ||
+      databaseJob?.with?.mutation_lease_artifact !==
+        "${{ needs.validate.outputs.mutation_lease_artifact }}"
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} database deploy must require the exact validated tuple`,
+      );
+    }
+    const renewNeeds = Array.isArray(renewEdgeLeaseJob?.needs)
+      ? renewEdgeLeaseJob.needs
+      : [renewEdgeLeaseJob?.needs].filter(Boolean);
+    if (
+      !renewNeeds.includes("validate") ||
+      !renewNeeds.includes("deploy-production-database") ||
+      renewEdgeLeaseJob?.environment !== undefined ||
+      !renewEdgeLeaseJob?.outputs?.mutation_lease_artifact
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} must renew the Edge lease only after database promotion`,
+      );
+    }
+    const edgeNeeds = Array.isArray(edgeJob?.needs)
+      ? edgeJob.needs
+      : [edgeJob?.needs].filter(Boolean);
+    if (
+      edgeJob?.uses !== "./.github/workflows/deploy-edge-functions.yml" ||
+      !edgeNeeds.includes("validate") ||
+      !edgeNeeds.includes("deploy-production-database") ||
+      !edgeNeeds.includes("renew-edge-mutation-lease") ||
+      edgeJob?.with?.mutation_lease_artifact !==
+        "${{ needs.renew-edge-mutation-lease.outputs.mutation_lease_artifact }}" ||
+      edgeJob?.with?.database_attestation_artifact !==
+        "${{ needs.deploy-production-database.outputs.database_attestation_artifact }}" ||
+      edgeJob?.with?.database_attestation_sha256 !==
+        "${{ needs.deploy-production-database.outputs.database_attestation_sha256 }}"
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} Edge deploy must consume the database attestation and renewed lease`,
+      );
+    }
+    const renewCloudflareNeeds = Array.isArray(renewCloudflareLeaseJob?.needs)
+      ? renewCloudflareLeaseJob.needs
+      : [renewCloudflareLeaseJob?.needs].filter(Boolean);
+    const cloudflareNeeds = Array.isArray(cloudflareJob?.needs)
+      ? cloudflareJob.needs
+      : [cloudflareJob?.needs].filter(Boolean);
+    const aggregateNeeds = Array.isArray(aggregateJob?.needs)
+      ? aggregateJob.needs
+      : [aggregateJob?.needs].filter(Boolean);
+    if (
+      !renewCloudflareNeeds.includes("validate") ||
+      !renewCloudflareNeeds.includes("deploy-production-database") ||
+      !renewCloudflareNeeds.includes("deploy-production-edge") ||
+      renewCloudflareLeaseJob?.environment !== undefined ||
+      !renewCloudflareLeaseJob?.outputs?.mutation_lease_artifact ||
+      cloudflareJob?.uses !==
+        "./.github/workflows/reusable-cloudflare-production-deploy.yml" ||
+      !cloudflareNeeds.includes("renew-cloudflare-mutation-lease") ||
+      cloudflareJob?.with?.backend_run_id !== "${{ github.run_id }}" ||
+      cloudflareJob?.with?.backend_run_attempt !==
+        "${{ github.run_attempt }}" ||
+      cloudflareJob?.with?.backend_approval_run_id !==
+        "${{ needs.validate.outputs.approval_run_id }}" ||
+      cloudflareJob?.with?.backend_approval_run_attempt !==
+        "${{ needs.validate.outputs.approval_run_attempt }}" ||
+      !aggregateNeeds.includes("deploy-production-cloudflare") ||
+      aggregateJob?.environment !== undefined ||
+      aggregateJob?.permissions?.actions !== "read" ||
+      aggregateJob?.permissions?.contents !== "read" ||
+      Object.keys(aggregateJob?.permissions ?? {}).sort().join("\n") !==
+        ["actions", "contents"].join("\n") ||
+      !release.includes("production-release-attestation.json") ||
+      !release.includes("scripts/create-release-artifact-binding.mjs") ||
+      !release.includes("scripts/verify-release-artifact-binding.mjs") ||
+      release.includes("secrets: inherit")
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} must serialize database, Edge, Cloudflare, and signed aggregate evidence with fresh leases and explicit secrets`,
+      );
+    }
+  }
+
+  for (const failure of checkSlsaReadiness(root).failures) {
+    violations.push(`GitHub Free release binding: ${failure}`);
+  }
+
+  const releaseSafetyWorkflow =
+    workflowText[".github/workflows/reusable-release-safety.yml"] ?? "";
+  if (/\bsecrets\./.test(releaseSafetyWorkflow)) {
+    violations.push(
+      ".github/workflows/reusable-release-safety.yml must remain secretless",
+    );
+  }
+
+  const stageRelease =
+    workflowText[".github/workflows/stage-release.yml"] ?? "";
+  for (const marker of [
+    "workflow_run:",
+    'workflows: ["CI"]',
+    "vars.STAGING_RELEASE_ENABLED == 'true'",
+    "github-staging-lease",
+    "uses: ./.github/workflows/reusable-supabase-staging.yml",
+    "production-release-candidate-binding-${{ github.event.workflow_run.head_sha }}",
+    "CLOUDFLARE_STAGING_PAGES_PROJECT",
+    "--commit-dirty=false",
+    "pages-deployment-id",
+    "release:verify-live-marker",
+    "name: Release candidate attested",
+    "release-candidate-attestation-",
+    "provenance-verification.json",
+    "source-provenance-verification-",
+    "manifest_sha256",
+    "/domains",
+    "project_domains",
+  ]) {
+    if (!stageRelease.includes(marker)) {
+      violations.push(
+        `.github/workflows/stage-release.yml is missing ${marker}`,
+      );
+    }
+  }
+  if (
+    /build:homepage-initial/.test(stageRelease) ||
+    /npm run build(?:\s|$)/m.test(stageRelease)
+  ) {
+    violations.push(
+      ".github/workflows/stage-release.yml must deploy the source CI artifact without rebuilding it",
+    );
+  }
+
+  const supabaseStaging =
+    workflowText[".github/workflows/reusable-supabase-staging.yml"] ?? "";
+  for (const marker of [
+    "public_catalogue_postgrest_contract.mjs",
+    "supabase-staging-db-attestation.json",
+    'artifact_name="supabase-staging-edge-attestation-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"',
+    "production-release-candidate-binding-",
+    "node scripts/verify-release-artifact-binding.mjs",
+    "RELEASE_EVIDENCE_SIGNING_KEY",
+  ]) {
+    if (!supabaseStaging.includes(marker)) {
+      violations.push(
+        `.github/workflows/reusable-supabase-staging.yml is missing ${marker}`,
+      );
+    }
+  }
+
+  const direct =
+    workflowText[".github/workflows/direct-cloudflare-production-deploy.yml"] ??
+    "";
+  const directParsed =
+    workflowYaml[".github/workflows/direct-cloudflare-production-deploy.yml"];
+  const directJobs = directParsed?.jobs ?? {};
+  for (const marker of [
+    "release_sha:",
+    "required: true",
+    "RECOVER_CLOUDFLARE_PRODUCTION",
+    "github-recovery",
+    "PRODUCTION_RELEASE_ENABLED",
+    "backend_run_id",
+    "backend_run_attempt",
+    "backend_approval_run_id",
+    "backend_approval_run_attempt",
+    "production-mutation-lease",
+    "production-recovery-attestation.json",
+    "scripts/create-release-artifact-binding.mjs",
+    "scripts/verify-release-artifact-binding.mjs",
+  ]) {
+    if (!direct.includes(marker)) {
+      violations.push(
+        `.github/workflows/direct-cloudflare-production-deploy.yml is missing ${marker}`,
+      );
+    }
+  }
+  if (
+    Object.keys(directJobs).join("\n") !==
+      [
+        "validate",
+        "deploy-production-cloudflare",
+        "attest-production-recovery",
+      ].join("\n") ||
+    directJobs.validate?.environment !== undefined ||
+    directJobs["deploy-production-cloudflare"]?.uses !==
+      "./.github/workflows/reusable-cloudflare-production-deploy.yml" ||
+    directJobs["attest-production-recovery"]?.permissions?.actions !==
+      "read" ||
+    directJobs["attest-production-recovery"]?.permissions?.contents !==
+      "read" ||
+    Object.keys(
+      directJobs["attest-production-recovery"]?.permissions ?? {},
+    ).sort().join("\n") !== ["actions", "contents"].join("\n") ||
+    direct.includes("secrets: inherit") ||
+    /npm run build|vite build/.test(direct)
+  ) {
+    violations.push(
+      ".github/workflows/direct-cloudflare-production-deploy.yml must recover only through the protected exact-artifact Cloudflare boundary and sign terminal evidence",
+    );
+  }
+
+  const cloudflareProductionWorkflow =
+    ".github/workflows/reusable-cloudflare-production-deploy.yml";
+  {
+    const text = workflowText[cloudflareProductionWorkflow] ?? "";
+    const parsed = workflowYaml[cloudflareProductionWorkflow];
+    const triggerNames = Object.keys(parsed?.on ?? {});
+    const workflowCall = parsed?.on?.workflow_call;
+    const deploy = parsed?.jobs?.deploy;
+    if (
+      triggerNames.length !== 1 ||
+      triggerNames[0] !== "workflow_call" ||
+      !deploy ||
+      deploy.environment !== undefined
+    ) {
+      violations.push(
+        `${cloudflareProductionWorkflow} must remain workflow-call-only with repository-scoped exact-release controls`,
+      );
+    }
+
+    const requiredInputs = [
+      "release_sha",
+      "source_tree",
+      "source_run_id",
+      "source_run_attempt",
+      "staging_run_id",
+      "staging_run_attempt",
+      "approval_run_id",
+      "approval_run_attempt",
+      "production_run_id",
+      "production_run_attempt",
+      "backend_run_id",
+      "backend_run_attempt",
+      "backend_approval_run_id",
+      "backend_approval_run_attempt",
+      "stripe_readiness_run_id",
+      "stripe_readiness_run_attempt",
+      "stripe_readiness_sha256",
+      "stripe_readiness_artifact_id",
+      "stripe_readiness_artifact_digest",
+      "artifact_sha256",
+      "manifest_sha256",
+      "approval_nonce",
+      "allowed_approvers",
+      "allowed_deployers",
+      "deploy_actor",
+      "release_evidence_signing_key_id",
+      "mutation_lease_artifact",
+      "production_project_id",
+      "staging_project_id",
+      "database_attestation_artifact",
+      "database_attestation_sha256",
+      "database_binding_artifact",
+      "edge_attestation_artifact",
+      "edge_attestation_sha256",
+      "edge_binding_artifact",
+    ];
+    const inputs = workflowCall?.inputs ?? {};
+    if (
+      requiredInputs.some((name) => inputs[name]?.required !== true) ||
+      Object.keys(inputs).sort().join("\n") !== requiredInputs.sort().join("\n")
+    ) {
+      violations.push(
+        `${cloudflareProductionWorkflow} must require only the exact release tuple, digests, lease, and upstream attestation inputs`,
+      );
+    }
+
+    const requiredSecrets = [
+      "CLOUDFLARE_ACCOUNT_ID",
+      "CLOUDFLARE_PAGES_READ_TOKEN",
+      "CLOUDFLARE_PAGES_EDIT_TOKEN",
+      "CLOUDFLARE_STAGING_ACCOUNT_ID",
+      "CLOUDFLARE_STAGING_PAGES_READ_TOKEN",
+      "VITE_SUPABASE_PROJECT_ID",
+      "VITE_SUPABASE_URL",
+      "VITE_SUPABASE_PUBLISHABLE_KEY",
+      "CLOUDFLARE_TURN_KEY_ID",
+      "CLOUDFLARE_TURN_API_TOKEN",
+      "RELEASE_EVIDENCE_SIGNING_KEY",
+    ];
+    const optionalSecrets = [
+      "CF_ACCESS_CLIENT_ID",
+      "CF_ACCESS_CLIENT_SECRET",
+    ];
+    const callSecrets = workflowCall?.secrets ?? {};
+    const exactSecrets = [...requiredSecrets, ...optionalSecrets].sort();
+    if (
+      requiredSecrets.some((name) => callSecrets[name]?.required !== true) ||
+      optionalSecrets.some((name) => callSecrets[name]?.required !== false) ||
+      Object.keys(callSecrets).sort().join("\n") !== exactSecrets.join("\n")
+    ) {
+      violations.push(
+        `${cloudflareProductionWorkflow} must expose only explicit least-privilege production secrets`,
+      );
+    }
+
+    const permissions = parsed?.permissions ?? {};
+    if (
+      permissions.actions !== "read" ||
+      permissions.contents !== "read" ||
+      Object.keys(permissions).sort().join("\n") !==
+        ["actions", "contents"].join("\n")
+    ) {
+      violations.push(
+        `${cloudflareProductionWorkflow} must grant only actions, attestations, and contents read access`,
+      );
+    }
+
+    const requiredMarkers = [
+      'PRODUCTION_PROJECT: "maiprop-listing-site"',
+      'STAGING_PROJECT: "maiprop-listing-site-staging"',
+      'PRODUCTION_APP_URL: "https://portal.maiprop.co"',
+      'PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"',
+      'WRANGLER_VERSION: "4.86.0"',
+      "persist-credentials: false",
+      "production-release-candidate-${{ inputs.release_sha }}",
+      ".github/workflows/ci.yml",
+      ".github/workflows/stage-release.yml",
+      ".github/workflows/approve-production-release.yml",
+      "database_binding_artifact",
+      "edge_binding_artifact",
+      ".github/workflows/verify-stripe-live-readiness.yml",
+      "scripts/verify-release-artifact-binding.mjs",
+      "production-upstream-attestations",
+      "--mode git-lock",
+      "canonical_deployment",
+      "cloudflare-production-rollback-target.json",
+      "Verify pre-provisioned production Pages runtime bindings",
+      "preprovisioned-verified-runtime",
+      "runtime_mutation_attempted: false",
+      "runtime_restore_required: false",
+      "Rollback target must differ from the candidate release SHA",
+      "Production canonical changed after rollback capture; candidate deploy refused",
+      "Rollback refused because production canonical is neither the captured rollback target nor the exact candidate deployed by this run",
+      "--mode production",
+      "$RUNNER_TEMP/maiprop-cloudflare-production-",
+      "npx --no-install wrangler pages deploy dist",
+      "--project-name=maiprop-listing-site",
+      "--branch=main",
+      '--commit-hash="$RELEASE_SHA"',
+      "--commit-dirty=false",
+      "release:verify-live-marker",
+      "release:verify-runtime-config",
+      "check:production-deploy",
+      "auctionConsistency",
+      "listingsCursor",
+      "openHousesCursor",
+      "publicationPinning",
+      "/rollback",
+      "Create minimized rollback evidence",
+      "steps.rollback.outcome != 'skipped'",
+      "rollback_outcome",
+      "cloudflare-production-evidence.json",
+      "cloudflare-production-rollback-evidence.json",
+      "Any successful rollback is evidence of recovery, not release success",
+    ];
+    for (const marker of requiredMarkers) {
+      if (!text.includes(marker)) {
+        violations.push(
+          `${cloudflareProductionWorkflow} is missing immutable production promotion control ${marker}`,
+        );
+      }
+    }
+
+    const forbiddenMarkers = [
+      "secrets: inherit",
+      "npm run build",
+      "vite build",
+      "cloudflare/wrangler-action",
+      "SITE_LOCK_PASSWORD",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "--request PATCH",
+      "deployment-only-forward-runtime",
+    ];
+    for (const marker of forbiddenMarkers) {
+      if (text.includes(marker)) {
+        violations.push(
+          `${cloudflareProductionWorkflow} contains forbidden production promotion wiring ${marker}`,
+        );
+      }
+    }
+    if ((text.match(/\bpages deploy dist\b/g) ?? []).length !== 1) {
+      violations.push(
+        `${cloudflareProductionWorkflow} must contain exactly one immutable Pages deploy command`,
+      );
+    }
+
+    const mutationSteps = [
+      ["Deploy exact immutable production artifact", "pages deploy dist"],
+      ["Roll back failed production candidate", "/rollback"],
+    ];
+    const steps = Array.isArray(deploy?.steps) ? deploy.steps : [];
+    for (const [stepName, mutation] of mutationSteps) {
+      const step = steps.find((candidate) => candidate?.name === stepName);
+      const run = String(step?.run ?? "");
+      const providerMutation = run.indexOf(mutation);
+      const projectLock = run.lastIndexOf(
+        "validate-cloudflare-pages-staging-posture.mjs",
+        providerMutation,
+      );
+      const currentMain = run.lastIndexOf(
+        "github-staging-lease",
+        providerMutation,
+      );
+      const lease = run.lastIndexOf("mutation-lease", providerMutation);
+      if (
+        !step ||
+        projectLock < 0 ||
+        currentMain <= projectLock ||
+        lease <= currentMain ||
+        providerMutation <= lease
+      ) {
+        violations.push(
+          `${cloudflareProductionWorkflow} must revalidate current main and the mutation lease in the same shell immediately before ${stepName}`,
+        );
+      }
+    }
+    const expectedHttpMutations = new Map([
+      ["Roll back failed production candidate", ["POST"]],
+    ]);
+    for (const step of steps) {
+      const actual = findPolicyCloudflareHttpMutations(
+        String(step?.run ?? ""),
+      );
+      const expected = expectedHttpMutations.get(step?.name) ?? [];
+      if (actual.join("\n") !== expected.join("\n")) {
+        violations.push(
+          `${cloudflareProductionWorkflow} has unexpected Cloudflare HTTP mutation wiring in ${step?.name ?? "an unnamed step"}`,
+        );
+      }
+    }
+  }
+
+  for (const workflowPath of [
+    ".github/workflows/deploy-supabase-production-db.yml",
+    ".github/workflows/deploy-edge-functions.yml",
+  ]) {
+    const text = workflowText[workflowPath] ?? "";
+    const parsed = workflowYaml[workflowPath];
+    const triggerNames = Object.keys(parsed?.on ?? {});
+    const deploy = parsed?.jobs?.deploy;
+    if (
+      triggerNames.length !== 1 ||
+      triggerNames[0] !== "workflow_call" ||
+      !deploy ||
+      deploy.environment !== undefined
+    ) {
+      violations.push(
+        `${workflowPath} must remain workflow-call-only with repository-scoped exact-release controls`,
+      );
+    }
+    if (
+      !text.includes('PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"') ||
+      !text.includes("persist-credentials: false") ||
+      !text.includes("npm ci --ignore-scripts") ||
+      !text.includes("--workdir release-candidate") ||
+      !text.includes("mutation-lease") ||
+      text.includes("SUPABASE_SERVICE_ROLE_KEY") ||
+      text.includes("secrets: inherit")
+    ) {
+      violations.push(
+        `${workflowPath} is missing exact-artifact production promotion controls`,
+      );
+    }
+    const mutationLines = text.split(/\r?\n/).filter((line) =>
+      /\bsupabase\b.*\b(?:migration repair|db push|functions deploy)\b/.test(
+        line,
+      ));
+    if (
+      mutationLines.some((line) =>
+        !line.includes("--workdir release-candidate"))
+    ) {
+      violations.push(
+        `${workflowPath} contains a Supabase mutation outside the verified artifact workdir`,
+      );
     }
   }
 
@@ -185,9 +926,12 @@ function scanWorkflows() {
     const full = join(root, doc);
     if (!existsSync(full)) continue;
     const text = read(full);
-    for (const match of text.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)) documented.add(match[1]);
+    for (const match of text.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g))
+      documented.add(match[1]);
   }
-  const undocumentedSecrets = [...secrets].filter((name) => !documented.has(name)).sort();
+  const undocumentedSecrets = [...secrets]
+    .filter((name) => !documented.has(name))
+    .sort();
   for (const secret of undocumentedSecrets) {
     violations.push(`Workflow secret is undocumented: ${secret}`);
   }
@@ -198,20 +942,6 @@ function scanWorkflows() {
     secrets: [...secrets].sort(),
     undocumented_secrets: undocumentedSecrets,
   };
-}
-
-function yamlJobBlock(text, jobName) {
-  const lines = text.split(/\r?\n/);
-  const start = lines.findIndex((line) => line === `  ${jobName}:`);
-  if (start === -1) return "";
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^  [A-Za-z0-9_-]+:\s*$/.test(lines[i])) {
-      end = i;
-      break;
-    }
-  }
-  return lines.slice(start, end).join("\n");
 }
 
 function packageVersion(packageName) {
@@ -225,17 +955,33 @@ function packageVersion(packageName) {
 }
 
 function supabaseCliInvocation(args) {
-  const supabaseShim = join(root, "node_modules", "supabase", "dist", "supabase.js");
+  const supabaseShim = join(
+    root,
+    "node_modules",
+    "supabase",
+    "dist",
+    "supabase.js",
+  );
   if (existsSync(supabaseShim)) {
     return { command: process.execPath, args: [supabaseShim, ...args] };
   }
 
-  const localBin = join(root, "node_modules", ".bin", process.platform === "win32" ? "supabase.cmd" : "supabase");
+  const localBin = join(
+    root,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "supabase.cmd" : "supabase",
+  );
   if (existsSync(localBin)) {
     if (process.platform === "win32") {
       return {
         command: "cmd.exe",
-        args: ["/d", "/s", "/c", [quoteCmdArg(localBin), ...args.map(quoteCmdArg)].join(" ")],
+        args: [
+          "/d",
+          "/s",
+          "/c",
+          [quoteCmdArg(localBin), ...args.map(quoteCmdArg)].join(" "),
+        ],
       };
     }
     return { command: localBin, args };
@@ -244,7 +990,12 @@ function supabaseCliInvocation(args) {
   if (process.platform === "win32") {
     return {
       command: "cmd.exe",
-      args: ["/d", "/s", "/c", ["npx", "supabase", ...args].map(quoteCmdArg).join(" ")],
+      args: [
+        "/d",
+        "/s",
+        "/c",
+        ["npx", "supabase", ...args].map(quoteCmdArg).join(" "),
+      ],
     };
   }
   return { command: "npx", args: ["supabase", ...args] };
@@ -254,16 +1005,18 @@ function quoteCmdArg(value) {
   return `"${String(value).replace(/"/g, '\\"')}"`;
 }
 
-function collectLiveFunctionInventory(sourceFunctions) {
+function collectLiveFunctionInventory(sourceManifest) {
   if (!liveFunctionsMode) {
     return {
       checked: false,
-      reason: "disabled; pass --live-functions or RELEASE_SAFETY_LIVE_FUNCTIONS=true",
+      reason:
+        "disabled; pass --live-functions or RELEASE_SAFETY_LIVE_FUNCTIONS=true",
     };
   }
 
   const configToml = existsSync(configPath) ? read(configPath) : "";
-  const projectRef = process.env.RELEASE_SAFETY_SUPABASE_PROJECT_REF ||
+  const projectRef =
+    process.env.RELEASE_SAFETY_SUPABASE_PROJECT_REF ||
     process.env.SUPABASE_PROJECT_REF ||
     process.env.VITE_SUPABASE_PROJECT_ID ||
     parseProjectRefFromConfig(configToml) ||
@@ -271,7 +1024,8 @@ function collectLiveFunctionInventory(sourceFunctions) {
   if (!projectRef) {
     return {
       checked: true,
-      error: "Missing RELEASE_SAFETY_SUPABASE_PROJECT_REF, SUPABASE_PROJECT_REF, VITE_SUPABASE_PROJECT_ID, and supabase/config.toml project_id",
+      error:
+        "Missing RELEASE_SAFETY_SUPABASE_PROJECT_REF, SUPABASE_PROJECT_REF, VITE_SUPABASE_PROJECT_ID, and supabase/config.toml project_id",
       deployed: [],
       live_missing_repo: [],
       repo_missing_live: [],
@@ -279,19 +1033,42 @@ function collectLiveFunctionInventory(sourceFunctions) {
   }
 
   try {
-    const { command, args } = supabaseCliInvocation(["functions", "list", "--project-ref", projectRef]);
-    const output = execFileSync(
-      command,
-      args,
-      { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-    );
+    const { command, args } = supabaseCliInvocation([
+      "functions",
+      "list",
+      "--project-ref",
+      projectRef,
+      "--output-format",
+      "json",
+    ]);
+    const output = execFileSync(command, args, {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     const deployed = parseSupabaseFunctionsList(output);
+    const sourceByName = new Map(
+      sourceManifest.functions.map((item) => [item.name, item]),
+    );
+    const linkedDeployments = deployed.map((item) => ({
+      ...item,
+      expected_source_sha256:
+        sourceByName.get(item.name)?.effective_source_sha256 ?? null,
+    }));
+    const deployedNames = deployed.map((item) => item.name);
+    const sourceNames = sourceManifest.functions.map((item) => item.name);
     return {
       checked: true,
       project_ref: projectRef,
-      deployed,
-      live_missing_repo: deployed.filter((name) => !sourceFunctions.includes(name)).sort(),
-      repo_missing_live: sourceFunctions.filter((name) => !deployed.includes(name)).sort(),
+      release_sha: process.env.RELEASE_SAFETY_RELEASE_SHA || "",
+      source_manifest_sha256: sourceManifest.manifest_sha256,
+      deployed: linkedDeployments,
+      live_missing_repo: deployedNames
+        .filter((name) => !sourceNames.includes(name))
+        .sort(),
+      repo_missing_live: sourceNames
+        .filter((name) => !deployedNames.includes(name))
+        .sort(),
     };
   } catch (error) {
     return {
@@ -306,11 +1083,35 @@ function collectLiveFunctionInventory(sourceFunctions) {
 }
 
 function parseSupabaseFunctionsList(output) {
+  try {
+    const parsed = JSON.parse(output);
+    const records = Array.isArray(parsed) ? parsed : parsed.functions;
+    if (Array.isArray(records)) {
+      return records
+        .map((record) => ({
+          name: String(record.slug || record.name || ""),
+          version: record.version ?? null,
+          status: record.status ?? null,
+          verify_jwt: record.verify_jwt ?? null,
+          updated_at: record.updated_at ?? null,
+          ezbr_sha256: record.ezbr_sha256 ?? null,
+        }))
+        .filter((record) => /^[A-Za-z0-9_-]+$/.test(record.name))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    }
+  } catch {
+    // Older CLIs can only emit a text table; retain a names-only fallback.
+  }
+
   const names = new Set();
   for (const line of output.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || /^ID\s+/.test(trimmed) || /^[|\-\s]+$/.test(trimmed)) continue;
-    const pipeCells = trimmed.split("|").map((cell) => cell.trim()).filter(Boolean);
+    if (!trimmed || /^ID\s+/.test(trimmed) || /^[|\-\s]+$/.test(trimmed))
+      continue;
+    const pipeCells = trimmed
+      .split("|")
+      .map((cell) => cell.trim())
+      .filter(Boolean);
     if (
       pipeCells.length >= 2 &&
       /^[A-Za-z0-9_-]+$/.test(pipeCells[1]) &&
@@ -319,12 +1120,26 @@ function parseSupabaseFunctionsList(output) {
       names.add(pipeCells[1]);
       continue;
     }
-    const columns = trimmed.split(/\s{2,}/).map((cell) => cell.trim()).filter(Boolean);
-    if (columns.length >= 2 && /^[A-Za-z0-9_-]+$/.test(columns[1]) && !/^-+$/.test(columns[1])) {
+    const columns = trimmed
+      .split(/\s{2,}/)
+      .map((cell) => cell.trim())
+      .filter(Boolean);
+    if (
+      columns.length >= 2 &&
+      /^[A-Za-z0-9_-]+$/.test(columns[1]) &&
+      !/^-+$/.test(columns[1])
+    ) {
       names.add(columns[1]);
     }
   }
-  return [...names].sort();
+  return [...names].sort().map((name) => ({
+    name,
+    version: null,
+    status: null,
+    verify_jwt: null,
+    updated_at: null,
+    ezbr_sha256: null,
+  }));
 }
 
 function collectInventory() {
@@ -335,14 +1150,24 @@ function collectInventory() {
     .filter((name) => !ignoredFunctionDirs.has(name))
     .filter((name) => existsSync(join(functionDir, name, "index.ts")))
     .sort();
+  const edgeSourceManifest = buildEdgeSourceManifest(
+    configured,
+    sourceFunctions,
+  );
+  const sourceByName = new Map(
+    edgeSourceManifest.functions.map((item) => [item.name, item]),
+  );
 
   const configuredFunctions = [...configured.keys()].sort();
   const missingConfig = sourceFunctions.filter((name) => !configured.has(name));
-  const missingSource = configuredFunctions.filter((name) => !sourceFunctions.includes(name));
+  const missingSource = configuredFunctions.filter(
+    (name) => !sourceFunctions.includes(name),
+  );
   const functions = configuredFunctions.map((name) => ({
     name,
     verify_jwt: configured.get(name).verify_jwt,
     has_source: sourceFunctions.includes(name),
+    source_sha256: sourceByName.get(name)?.effective_source_sha256 ?? null,
   }));
 
   return {
@@ -354,45 +1179,104 @@ function collectInventory() {
       supabase_cli: packageVersion("supabase"),
     },
     functions,
+    edge_source_manifest: edgeSourceManifest,
     function_inventory_gaps: {
       source_without_config: missingConfig,
       config_without_source: missingSource,
     },
-    live_function_inventory: collectLiveFunctionInventory(sourceFunctions),
+    live_function_inventory: collectLiveFunctionInventory(edgeSourceManifest),
     env: scanEnvNames(),
     workflow: scanWorkflows(),
   };
 }
 
-const inventory = collectInventory();
-if (outPath) {
-  writeFileSync(join(root, outPath), `${JSON.stringify(inventory, null, 2)}\n`);
-}
-console.log(JSON.stringify(inventory, null, 2));
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  const inventory = collectInventory();
+  if (outPath) {
+    writeFileSync(
+      join(root, outPath),
+      `${JSON.stringify(inventory, null, 2)}\n`,
+    );
+  }
+  console.log(JSON.stringify(inventory, null, 2));
 
-if (checkMode) {
+  if (checkMode) {
   const failures = [
-    ...inventory.function_inventory_gaps.source_without_config.map((name) => `Function source without config: ${name}`),
-    ...inventory.function_inventory_gaps.config_without_source.map((name) => `Function config without source: ${name}`),
-    ...inventory.env.undocumented_enforced.map((name) => `Env var is used but undocumented: ${name}`),
+    ...inventory.function_inventory_gaps.source_without_config.map(
+      (name) => `Function source without config: ${name}`,
+    ),
+    ...inventory.function_inventory_gaps.config_without_source.map(
+      (name) => `Function config without source: ${name}`,
+    ),
+    ...inventory.env.undocumented_enforced.map(
+      (name) => `Env var is used but undocumented: ${name}`,
+    ),
     ...inventory.workflow.violations,
   ];
   if (inventory.live_function_inventory.checked) {
     if (inventory.live_function_inventory.error) {
-      failures.push(`Live Supabase function inventory failed: ${inventory.live_function_inventory.error}`);
+      failures.push(
+        `Live Supabase function inventory failed: ${inventory.live_function_inventory.error}`,
+      );
     }
-    for (const name of inventory.live_function_inventory.live_missing_repo ?? []) {
+    for (const name of inventory.live_function_inventory.live_missing_repo ??
+      []) {
       failures.push(`Live Supabase function absent from repo: ${name}`);
     }
-    for (const name of inventory.live_function_inventory.repo_missing_live ?? []) {
+    for (const name of inventory.live_function_inventory.repo_missing_live ??
+      []) {
       failures.push(`Repo function absent from live Supabase project: ${name}`);
     }
   }
-
-  if (failures.length) {
-    console.error("\n[release-safety] FAIL");
-    for (const failure of failures) console.error(`- ${failure}`);
-    process.exit(1);
+  if (requireLiveSourceEvidence) {
+    if (!/^[0-9a-f]{40}$/i.test(inventory.edge_source_manifest.release_sha)) {
+      failures.push(
+        "Exact Edge source evidence requires RELEASE_SAFETY_RELEASE_SHA as a full 40-character SHA",
+      );
+    }
+    if (!inventory.live_function_inventory.checked) {
+      failures.push("Exact Edge source evidence requires --live-functions");
+    } else {
+      if (
+        inventory.live_function_inventory.source_manifest_sha256 !==
+        inventory.edge_source_manifest.manifest_sha256
+      ) {
+        failures.push(
+          "Live Edge inventory is not linked to the exact source manifest",
+        );
+      }
+      for (const deployed of inventory.live_function_inventory.deployed ?? []) {
+        if (!/^[0-9a-f]{64}$/i.test(String(deployed.ezbr_sha256 ?? ""))) {
+          failures.push(
+            `Live Edge function lacks a bundle hash: ${deployed.name}`,
+          );
+        }
+        if (
+          !/^[0-9a-f]{64}$/i.test(
+            String(deployed.expected_source_sha256 ?? ""),
+          )
+        ) {
+          failures.push(
+            `Live Edge function lacks the expected source hash: ${deployed.name}`,
+          );
+        }
+        if (deployed.version == null || !deployed.updated_at) {
+          failures.push(
+            `Live Edge function lacks version/update evidence: ${deployed.name}`,
+          );
+        }
+      }
+    }
   }
-  console.error("\n[release-safety] OK");
+
+    if (failures.length) {
+      console.error("\n[release-safety] FAIL");
+      for (const failure of failures) console.error(`- ${failure}`);
+      process.exit(1);
+    }
+    console.error("\n[release-safety] OK");
+  }
 }

@@ -5,6 +5,12 @@ const KEY_NAMES = [
   "SUPABASE_ANON_KEY",
 ];
 
+const FORBIDDEN_PRIVILEGED_KEY_NAMES = [
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "SUPABASE_SECRET_KEY",
+  "SB_SERVICE_ROLE_KEY",
+];
+
 function decodeJwtRole(value) {
   const parts = value.split(".");
   if (parts.length !== 3) return "";
@@ -25,6 +31,14 @@ function isReadOnlyKey(value) {
 }
 
 export function getSupabaseReadOnlyKey(env = process.env) {
+  const configuredPrivilegedKeys = FORBIDDEN_PRIVILEGED_KEY_NAMES.filter(
+    (name) => String(env[name] ?? "").trim().length > 0,
+  );
+  if (configuredPrivilegedKeys.length > 0) {
+    throw new Error(
+      `Privileged Supabase keys are forbidden for read-only verification: ${configuredPrivilegedKeys.join(", ")}.`,
+    );
+  }
   for (const name of KEY_NAMES) {
     const value = env[name]?.trim();
     if (value && isReadOnlyKey(value)) return value;

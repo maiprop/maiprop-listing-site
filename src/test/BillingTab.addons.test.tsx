@@ -1,9 +1,14 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import BillingTab from "@/pages/dashboard/BillingTab";
 import { createTestQueryClient, renderWithProviders } from "@/test/utils";
 import { toast } from "sonner";
 import { useLocation } from "react-router-dom";
+import {
+  accountQueryKey,
+  resetIdentityQueryStateForTests,
+  transitionQueryIdentity,
+} from "@/lib/identityQueryBoundary";
 
 const mocks = vi.hoisted(() => ({
   supabase: null as ReturnType<typeof import("@/test/utils").makeMockSupabase> | null,
@@ -74,6 +79,8 @@ const LocationProbe = () => {
 describe("BillingTab add-on checkout", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetIdentityQueryStateForTests();
+    authState.user.id = "user-1";
     authState.profile.role = "seller";
     authState.profile.participant_type = "seller";
     Object.assign(mocks.subscription, {
@@ -196,6 +203,21 @@ describe("BillingTab add-on checkout", () => {
         });
       }
       return Promise.resolve({ data: null, error: null });
+    });
+  });
+
+  it("scopes invoice data to the current account", async () => {
+    const queryClient = createTestQueryClient();
+
+    renderWithProviders(<BillingTab />, {
+      queryClient,
+    });
+
+    await waitFor(() => {
+      expect(queryClient.getQueryCache().find({
+        queryKey: accountQueryKey("user-1", "billing-info"),
+        exact: true,
+      })).toBeDefined();
     });
   });
 
@@ -326,10 +348,15 @@ describe("BillingTab add-on checkout", () => {
 
     renderWithProviders(<BillingTab />);
 
-    expect(await screen.findByRole("button", { name: /175[.,]00\s*€\/mo/i }))
-      .toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /1[.,]650[.,]00\s*€\/yr/i }))
-      .toBeInTheDocument();
+    const monthly = await screen.findByRole("button", { name: /175[.,]00\s*€\/mo/i });
+    const annual = screen.getByRole("button", { name: /1[.,]650[.,]00\s*€\/yr/i });
+    expect(monthly).toHaveAttribute("aria-pressed", "true");
+    expect(annual).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(annual);
+
+    expect(monthly).toHaveAttribute("aria-pressed", "false");
+    expect(annual).toHaveAttribute("aria-pressed", "true");
   });
 
   it("does not sell redundant report credits or unfulfilled priority ads to B2B Pro users", async () => {
@@ -723,7 +750,9 @@ describe("BillingTab add-on checkout", () => {
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ["listing_promotion_allocations", "priority-plan-usage"],
       });
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["listing-promotion-balance"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: accountQueryKey("user-1", "listing-promotion-balance"),
+      });
     });
   });
 
@@ -769,6 +798,106 @@ describe("BillingTab add-on checkout", () => {
     await waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["addon_purchases"] });
     });
+  });
+
+  it("does not apply checkout reconciliation after the signed-in account changes", async () => {
+    let finishReconciliation!: () => void;
+    mocks.subscription.refreshSubscription = vi.fn(() => new Promise<void>((resolve) => {
+      finishReconciliation = resolve;
+    }));
+    const queryClient = createTestQueryClient();
+    transitionQueryIdentity(queryClient, "user-1");
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const view = renderWithProviders(<BillingTab />, {
+      initialPath: "/dashboard/billing?checkout=success&session_id=cs_test_old_account",
+      queryClient,
+    });
+    await waitFor(() => {
+      expect(mocks.subscription.refreshSubscription).toHaveBeenCalledWith(
+        "cs_test_old_account",
+      );
+    });
+
+    authState.user.id = "user-2";
+    transitionQueryIdentity(queryClient, "user-2");
+    view.rerender(<BillingTab />);
+    invalidateSpy.mockClear();
+
+    await act(async () => finishReconciliation());
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it("ignores a completed portal request from the previous signed-in account", async () => {
+    let finishPortal!: (
+      value: { data: { error: string }; error: null },
+    ) => void;
+    const portalResponse = new Promise<{ data: { error: string }; error: null }>(
+      (resolve) => {
+        finishPortal = resolve;
+      },
+    );
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+      if (fn === "get-invoices") {
+        return Promise.resolve({
+          data: {
+            invoices: [],
+            billing_configured: true,
+            customer_found: true,
+            portal_eligible: true,
+            subscription: {
+              id: "sub_old_account",
+              status: "active",
+              current_period_end: null,
+              cancel_at_period_end: false,
+              plan_name: "Pro Plan",
+              amount: 29,
+              currency: "EUR",
+              interval: "month",
+            },
+          },
+          error: null,
+        });
+      }
+      if (fn === "customer-portal") return portalResponse;
+      if (fn === "ai-quota-status") {
+        return Promise.resolve({ data: { quotas: {} }, error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+    const queryClient = createTestQueryClient();
+    transitionQueryIdentity(queryClient, "user-1");
+
+    const view = renderWithProviders(<BillingTab />, { queryClient });
+    await screen.findByText(/No invoices yet/i);
+    const currentPlanCard = (await screen.findByText("Current plan")).closest(
+      ".glass-card",
+    );
+    fireEvent.click(
+      within(currentPlanCard as HTMLElement).getByRole("button", {
+        name: /Manage billing/i,
+      }),
+    );
+    await waitFor(() => {
+      expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith(
+        "customer-portal",
+        expect.anything(),
+      );
+    });
+
+    authState.user.id = "user-2";
+    transitionQueryIdentity(queryClient, "user-2");
+    view.rerender(<BillingTab />);
+
+    await act(async () => {
+      finishPortal({
+        data: { error: "Old account portal failed" },
+        error: null,
+      });
+    });
+
+    expect(toast.error).not.toHaveBeenCalledWith("Old account portal failed");
   });
 
   it("shows VAT amount and VAT ID from Stripe invoice tax details", async () => {
@@ -891,6 +1020,24 @@ describe("BillingTab add-on checkout", () => {
         timeout: 20_000,
       });
     });
+  });
+
+  it("does not present unresolved entitlement as Free or offer Upgrade", async () => {
+    Object.assign(mocks.subscription, {
+      isPro: false,
+      loading: true,
+      hasStripeBilling: false,
+      accessSource: "unknown",
+    });
+
+    renderWithProviders(<BillingTab />);
+
+    await screen.findByText("Current plan");
+    expect(screen.queryByText("Free plan")).not.toBeInTheDocument();
+    expect(screen.queryByText(/You're on the free plan/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Upgrade$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Checking access/i })).toBeDisabled();
+    expect(screen.getByText(/Confirming your plan access/i)).toBeInTheDocument();
   });
 
   it.each([

@@ -233,4 +233,31 @@ describe("pricing and entitlement contract", () => {
       );
     }
   });
+
+  it("attributes plan promotion allocations to the exact canonical subscription", () => {
+    const migration = read(
+      "supabase/migrations/20260726180252_canonicalize_listing_promotion_subscription_source.sql",
+    );
+
+    expect(migration).toContain(
+      "CREATE OR REPLACE FUNCTION private.current_listing_promotion_plan_subscription",
+    );
+    expect(migration).toContain(
+      "FROM private.current_billing_subscription_for_user(p_user_id, NULL)",
+    );
+    expect(migration).toContain("subscription.status = 'active'");
+    expect(migration).toContain("subscription.plan_key = 'developer_pro'");
+    expect(migration).toContain(
+      "CREATE OR REPLACE FUNCTION private.guard_listing_promotion_subscription_source",
+    );
+    expect(migration).toContain(
+      "NEW.billing_subscription_id := v_canonical_subscription_id",
+    );
+    expect(migration).toContain(
+      "BEFORE INSERT OR UPDATE OF source_type, billing_subscription_id, addon_purchase_id, owner_id",
+    );
+    expect(migration).toContain(
+      "Developer Pro receives exactly one Spotlight and one Priority plan allocation per UTC month",
+    );
+  });
 });

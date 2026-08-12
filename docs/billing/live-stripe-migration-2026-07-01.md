@@ -4,15 +4,17 @@
 - Target live Stripe account: `acct_1TnuLTGfOEgBOxtl` (`mAI prop`).
 - Production Supabase project: `qvvicunqcrwpioqnvzxf`.
 - Sandbox/test account remains `acct_1TnuLbGfkWWBWEyh` (`mAI prop sandbox`).
-- Live migration is blocked unless Stripe objects are `livemode=true`; the installed connector currently writes `livemode=false`, so production live setup requires an `sk_live_...` key or equivalent live-mode Stripe API session.
+- Live migration is blocked unless Stripe objects are `livemode=true`. Catalogue bootstrap uses a dedicated, temporary, least-privilege `rk_live_...` key; standard `sk_live_...` keys are refused.
 
 ## Implementation Plan
 1. Create the live Stripe catalogue with the existing catalogue script:
-   `STRIPE_SECRET_KEY=sk_live_... npm run stripe:setup-catalog -- --live --write-env .stripe.live.env --write-sql .tmp/stripe-live-pricing-metadata.sql`
+   `STRIPE_CATALOG_BOOTSTRAP_KEY=rk_live_... npm run stripe:setup-catalog -- --live --confirm-live-account acct_1TnuLTGfOEgBOxtl --write-env .stripe.live.env --write-sql .tmp/stripe-live-pricing-metadata.sql`
+   Revoke that restricted bootstrap key immediately after the catalogue and generated metadata have been verified.
 2. Configure live Stripe account-level items:
    - Greek account tax/VAT ID `EL802708301`.
    - Active Stripe Tax registration for Greece/EU.
    - Billing Customer Portal in live mode.
+   - Exactly one live direct Payment Method Configuration marked as default, with card enabled. Checkout intentionally omits `payment_method_types` and `payment_method_configuration`, so Stripe applies this verified default configuration.
    - Live webhook endpoint: `https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/stripe-webhook`.
 3. Apply every pending migration and the generated pricing metadata to the
    isolated staging Supabase project. Verify migration versions, grants,
@@ -23,8 +25,8 @@
    must be live-mode and tied to the expected account.
 5. Set production Supabase Edge secrets from `.stripe.live.env` plus:
    - `STRIPE_SECRET_KEY=sk_live_...`
-    - `STRIPE_WEBHOOK_SECRET=whsec_...` from the live webhook endpoint.
-    - `STRIPE_EXPECTED_ACCOUNT_ID=acct_1TnuLTGfOEgBOxtl`.
+   - `STRIPE_WEBHOOK_SECRET=whsec_...` from the live webhook endpoint.
+   - `STRIPE_EXPECTED_ACCOUNT_ID=acct_1TnuLTGfOEgBOxtl` as a runtime defense; the release verifier and live bootstrap also pin this ID in source.
    - `STRIPE_RUNTIME_MODE=live`
    - `STRIPE_LIVE_MODE=true`
    - `STRIPE_COMPANY_VAT_ID=EL802708301`
@@ -63,9 +65,9 @@
 - targeted Playwright billing tests after live cutover, using only controlled low-value/refunded live transactions.
 
 ## Current Evidence
-- Stripe connector account info reports `acct_1TnuLTGfOEgBOxtl` / `mAI prop`.
-- Connector write probe created `prod_Uno9cbuycL654d` with `livemode=false`; it was immediately archived. This proves the connector is not sufficient for live-mode object creation.
-- Connector catalogue inspection showed no active Products or Prices in the connector session, and the write probe returned `livemode=false`; therefore this connector session must not be used as proof of live-mode catalogue readiness.
+- Historical connector observations are not current release evidence. The Stripe connector presently requires reauthentication, so no connector result may be used to authorize this release.
+- GitHub run `31572311971` failed closed before provider access because `PRODUCTION_RELEASE_APPROVERS` is unset; it produced no readiness artifact.
+- Repository and organization scopes currently lack the restricted readiness key and release-evidence signing key required by the verifier.
 - Production Supabase currently has Stripe-related Edge secrets set by name, including `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_RUNTIME_MODE`, `STRIPE_LIVE_MODE`, public price fallback secrets, and company VAT secrets.
 - Production Supabase pricing metadata still points at the existing sandbox/test Stripe IDs until the live catalogue SQL is applied.
 

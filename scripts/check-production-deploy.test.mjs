@@ -1,3 +1,4 @@
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -45,9 +46,22 @@ function publicApiPayloadForUrl(href, { featured = featuredHomepagePayload() } =
   const path = url.pathname + url.search;
   if (path.startsWith("/api/public/listings?")) return publicListingsPayloadFromUrl(href);
   if (path.startsWith("/api/public/auctions?")) return { data: [] };
+  if (path.includes("section=auctions")) return { data: [] };
   if (path.includes("section=type-counts")) return { apartment: 1, land: 1 };
   if (path.includes("section=auction-count")) return 1;
   if (path.includes("section=featured")) return featured;
+  if (
+    path.startsWith("/api/public/open-houses?") &&
+    url.searchParams.get("includeMeta") === "1"
+  ) {
+    return {
+      data: [],
+      hasMore: false,
+      nextCursor: null,
+      limit: Number(url.searchParams.get("limit") ?? "1"),
+      publicationId: 1,
+    };
+  }
   return [];
 }
 
@@ -57,6 +71,92 @@ describe("production deploy site-lock smoke helpers", () => {
 
     expect(source).toContain("timeoutMs = FETCH_TIMEOUT_MS");
     expect(source).toContain("signal: AbortSignal.timeout(timeoutMs)");
+  });
+
+  it("requires an access token and room id together for live TURN proof", () => {
+    const result = spawnSync(
+      process.execPath,
+      ["scripts/check-production-deploy.mjs"],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PRODUCTION_DEPLOY_TURN_ACCESS_TOKEN: "redacted-token",
+          PRODUCTION_DEPLOY_TURN_ROOM_ID: "",
+        },
+      },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "Authenticated TURN proof requires both PRODUCTION_DEPLOY_TURN_ACCESS_TOKEN and PRODUCTION_DEPLOY_TURN_ROOM_ID",
+    );
+    expect(result.stderr).not.toContain("redacted-token");
+  });
+
+  it("requires the documented Cloudflare TURN key and token together", () => {
+    const result = spawnSync(
+      process.execPath,
+      ["scripts/check-production-deploy.mjs"],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          CLOUDFLARE_TURN_KEY_ID: "redacted-key-id",
+          CLOUDFLARE_TURN_API_TOKEN: "",
+        },
+      },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "Cloudflare TURN service proof requires both CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN",
+    );
+    expect(result.stderr).not.toContain("redacted-key-id");
+  });
+
+  it("functionally proves Cloudflare TURN credentials without exposing them", () => {
+    const program = [
+      'import { verifyCloudflareTurnCredentials } from "./scripts/check-production-deploy.mjs";',
+      'const proof = await verifyCloudflareTurnCredentials({',
+      '  keyId: "turn-key-id-secret",',
+      '  apiToken: "turn-api-token-secret",',
+      '  ttlSeconds: 600,',
+      '  fetchImpl: async (url, options) => {',
+      '    if (url !== "https://rtc.live.cloudflare.com/v1/turn/keys/turn-key-id-secret/credentials/generate-ice-servers") throw new Error(`unexpected URL ${url}`);',
+      '    if (options.headers.Authorization !== "Bearer turn-api-token-secret") throw new Error("missing bearer token");',
+      '    if (options.method !== "POST" || JSON.parse(options.body).ttl !== 600) throw new Error("invalid request");',
+      '    return new Response(JSON.stringify({ iceServers: [',
+      '      { urls: ["stun:stun.cloudflare.com:3478"] },',
+      '      { urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:5349?transport=tcp"], username: "ephemeral-user", credential: "ephemeral-credential" },',
+      '    ] }), { status: 201, headers: { "content-type": "application/json" } });',
+      '  },',
+      '});',
+      'process.stdout.write(JSON.stringify(proof));',
+    ].join("\n");
+    const proof = JSON.parse(execFileSync(
+      process.execPath,
+      ["--input-type=module", "--eval", program],
+      { cwd: process.cwd(), encoding: "utf8" },
+    ));
+
+    expect(proof).toEqual({
+      status: "passed",
+      httpStatus: 201,
+      authentication: "bearer",
+      ttlSeconds: 600,
+      iceServerCount: 2,
+      turnUrlCount: 2,
+      credentialsPresent: true,
+      credentialsRedacted: true,
+    });
+    const serialized = JSON.stringify(proof);
+    expect(serialized).not.toContain("turn-key-id-secret");
+    expect(serialized).not.toContain("turn-api-token-secret");
+    expect(serialized).not.toContain("ephemeral-user");
+    expect(serialized).not.toContain("ephemeral-credential");
   });
 
   it("prefers the dedicated smoke-check passcode secret over the runtime site-lock secret", () => {
@@ -153,7 +253,7 @@ describe("production deploy public API fixture guard", () => {
     })).toBeNull();
   });
 
-  it("follows public listing feed rows into the public detail API", async () => {
+  it("follows public listing feed rows into the public detail API and records every checked route", async () => {
     const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
     const calls = [];
     const originalFetch = globalThis.fetch;
@@ -170,8 +270,17 @@ describe("production deploy public API fixture guard", () => {
       if (href.includes("/api/public/listings?")) {
         return Response.json(publicListingsPayloadFromUrl(href));
       }
-      if (href.endsWith("/api/public/auctions?limit=60")) {
-        return Response.json({ data: [{ id: "auction-1", title: "Clean auction" }] });
+      if (href.includes("/api/public/auctions?")) {
+        return Response.json({
+          data: href.endsWith("limit=60")
+            ? [{ id: "auction-1", title: "Clean auction" }]
+            : [],
+        });
+      }
+      if (href.includes("/api/public/homepage?section=auctions")) {
+        return Response.json({
+          data: [{ id: "auction-1", title: "Clean auction" }],
+        });
       }
       if (href.includes("/api/public/homepage?section=type-counts")) {
         return Response.json({ apartment: 1, land: 1 });
@@ -186,6 +295,16 @@ describe("production deploy public API fixture guard", () => {
         return Response.json([]);
       }
       if (href.includes("/api/public/open-houses?")) {
+        const url = new URL(href);
+        if (url.searchParams.get("includeMeta") === "1") {
+          return Response.json({
+            data: [],
+            hasMore: false,
+            nextCursor: null,
+            limit: 1,
+            publicationId: 1,
+          });
+        }
         return Response.json([]);
       }
       if (href.endsWith("/api/public/listing?id=listing-1")) {
@@ -201,7 +320,41 @@ describe("production deploy public API fixture guard", () => {
     };
 
     try {
-      await validatePublicApiEndpoints("https://portal.maiprop.co");
+       const evidence = await validatePublicApiEndpoints("https://portal.maiprop.co");
+
+       expect(evidence).toMatchObject({
+         schemaVersion: 3,
+         kind: "maiprop-public-api-deploy-verification",
+         baseUrl: "https://portal.maiprop.co/",
+         status: "passed",
+      });
+      expect(evidence.endpoints).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          path: "/api/public/listings?limit=1",
+          url: "https://portal.maiprop.co/api/public/listings?limit=1",
+          status: "passed",
+          httpStatus: 200,
+          contentType: expect.stringMatching(/application\/json/i),
+          responseBytes: expect.any(Number),
+          elapsedMs: expect.any(Number),
+          payloadShape: "passed",
+          fixtureGuard: "passed",
+        }),
+        expect.objectContaining({
+          path: "/api/public/listing?id=listing-1",
+          status: "passed",
+        }),
+        expect.objectContaining({
+          path: "/api/public/listing?id=new-build-1",
+          status: "passed",
+        }),
+        expect.objectContaining({
+          path: "/api/public/listing?id=auction-1",
+          status: "passed",
+        }),
+      ]));
+      expect(evidence.endpoints).toHaveLength(calls.length);
+      expect(evidence.endpoints.every((endpoint) => endpoint.status === "passed")).toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -209,7 +362,270 @@ describe("production deploy public API fixture guard", () => {
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=listing-1");
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=new-build-1");
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=auction-1");
+    expect(calls).toContain("https://portal.maiprop.co/api/public/auctions?limit=600");
   });
+
+  it("attests auction consistency, cursors, publication pinning, and cache warm-up", async () => {
+     const { validatePublicApiEndpoints } = await import(
+       "./check-production-deploy-public-api.mjs"
+     );
+     const publicationId = 17;
+     const turnRequestOptions = [];
+     const accessToken = "jwt-secret-that-must-not-be-attested";
+     const roomId =
+       "video:professional:11111111-1111-4111-8111-111111111111";
+     const auctionRows = Array.from({ length: 6 }, (_, index) => ({
+       id: `auction-${index + 1}`,
+       title: `Clean auction ${index + 1}`,
+    }));
+    const response = (payload, cacheStatus = "MISS") => {
+      const text = JSON.stringify(payload);
+      return {
+        res: new Response(text, {
+          headers: {
+            "Content-Type": "application/json",
+            "X-Maiprop-Cache": cacheStatus,
+          },
+        }),
+        text,
+      };
+    };
+
+    const evidence = await validatePublicApiEndpoints(
+      "https://portal.maiprop.co",
+       {
+         operationalProof: true,
+         turnCredentialProof: {
+           accessToken,
+           roomId,
+           expectedTtlSeconds: 21_600,
+         },
+         fetchText: async (href, options = {}) => {
+           const url = new URL(href);
+           const path = url.pathname;
+           if (path === "/api/turn-credentials") {
+             turnRequestOptions.push(options);
+             const authorization =
+               options.headers?.Authorization ??
+               options.headers?.authorization;
+             const authenticated = authorization === `Bearer ${accessToken}`;
+             const payload = authenticated
+               ? {
+                   iceServers: [
+                     { urls: "stun:stun.cloudflare.com:3478" },
+                     {
+                       urls: [
+                         "turn:turn.cloudflare.com:3478?transport=udp",
+                         "turns:turn.cloudflare.com:5349?transport=tcp",
+                       ],
+                       username: "ephemeral-turn-user",
+                       credential: "ephemeral-turn-credential",
+                     },
+                   ],
+                   expiresIn: 21_600,
+                 }
+               : { error: "Authentication required" };
+             const text = JSON.stringify(payload);
+             return {
+               res: new Response(text, {
+                 status: authenticated ? 200 : 401,
+                 headers: {
+                   "Cache-Control": "no-store",
+                   "CDN-Cache-Control": "no-store",
+                   "Content-Type": "application/json",
+                   Vary: "Authorization",
+                 },
+              }),
+              text,
+            };
+          }
+          if (path === "/api/public/listing") {
+            const id = url.searchParams.get("id");
+            return response({
+              data: { id, title: `Detail ${id}` },
+              publicationId,
+            }, "HIT");
+          }
+          if (path === "/api/public/listings") {
+            const cursor = url.searchParams.get("cursor");
+            const isSingle = url.searchParams.get("limit") === "1";
+            if (isSingle && cursor) {
+              return response({
+                data: [{ id: "listing-2", title: "Clean listing 2" }],
+                hasMore: false,
+                nextCursor: null,
+                page: 1,
+                pageSize: 1,
+                offset: 1,
+                publicationId,
+              }, "HIT");
+            }
+            if (isSingle) {
+              return response({
+                data: [{ id: "listing-1", title: "Clean listing 1" }],
+                hasMore: true,
+                nextCursor: "listing-cursor",
+                page: 1,
+                pageSize: 1,
+                offset: 0,
+                publicationId,
+              });
+            }
+            const payload = publicListingsPayloadFromUrl(href);
+            payload.publicationId = publicationId;
+            const cacheStatus =
+              options.headers?.["cache-control"] === "no-cache"
+                ? "HIT"
+                : "MISS";
+            return response(payload, cacheStatus);
+          }
+          if (path === "/api/public/open-houses") {
+            if (url.searchParams.get("includeMeta") !== "1") {
+              return response([]);
+            }
+            const cursor = url.searchParams.get("cursor");
+            return response({
+              data: [{
+                id: cursor ? "open-house-2" : "open-house-1",
+                title: cursor ? "Clean open house 2" : "Clean open house 1",
+              }],
+              hasMore: !cursor,
+              nextCursor: cursor ? null : "open-house-cursor",
+              limit: 1,
+              publicationId,
+            }, cursor ? "HIT" : "MISS");
+          }
+          if (path === "/api/public/auctions") {
+            return response({ data: auctionRows });
+          }
+          if (url.searchParams.get("section") === "auctions") {
+            return response({ data: auctionRows });
+          }
+          return response(publicApiPayloadForUrl(href));
+        },
+      },
+    );
+
+     expect(evidence).toMatchObject({
+       schemaVersion: 3,
+       operational: {
+         auctionConsistency: { status: "passed" },
+        listingsCursor: {
+          publicationId,
+          firstIds: ["listing-1"],
+          secondIds: ["listing-2"],
+          status: "passed",
+        },
+        openHousesCursor: {
+          publicationId,
+          firstIds: ["open-house-1"],
+          secondIds: ["open-house-2"],
+          status: "passed",
+        },
+        publicationPinning: {
+          listingId: "listing-1",
+          publicationId,
+          status: "passed",
+        },
+        cacheTransition: {
+          initial: "MISS",
+          warmed: "HIT",
+          status: "passed",
+        },
+        turnCredentialBoundary: {
+          requestMethod: "POST",
+          expectedHttpStatus: 401,
+          httpStatus: 401,
+          authenticationBoundary: "passed",
+          cacheControl: "passed",
+          varyAuthorization: "passed",
+           status: "passed",
+         },
+         turnCredentialIssuance: {
+           requestMethod: "POST",
+           httpStatus: 200,
+           authentication: "passed",
+           authorizedRoom: "passed",
+           expiresIn: 21_600,
+           iceServerCount: 2,
+           turnUrlCount: 2,
+           credentialsPresent: true,
+           credentialsRedacted: true,
+           cacheControl: "passed",
+           varyAuthorization: "passed",
+           status: "passed",
+         },
+       },
+     });
+     expect(turnRequestOptions).toHaveLength(2);
+     expect(turnRequestOptions[0]).toMatchObject({
+       method: "POST",
+       headers: {
+         accept: "application/json",
+         "content-type": "application/json",
+       },
+     });
+     expect(JSON.parse(turnRequestOptions[0].body)).toEqual({
+       roomId: "video:viewing:11111111-1111-4111-8111-111111111111",
+     });
+     expect(turnRequestOptions[1]).toMatchObject({
+       method: "POST",
+       headers: {
+         accept: "application/json",
+         "content-type": "application/json",
+         Authorization: `Bearer ${accessToken}`,
+       },
+     });
+     expect(JSON.parse(turnRequestOptions[1].body)).toEqual({ roomId });
+     const serializedEvidence = JSON.stringify(evidence);
+     expect(serializedEvidence).not.toContain(accessToken);
+     expect(serializedEvidence).not.toContain(roomId);
+     expect(serializedEvidence).not.toContain("ephemeral-turn-user");
+     expect(serializedEvidence).not.toContain("ephemeral-turn-credential");
+   });
+
+   it("rejects authenticated TURN proof with a mismatched credential TTL", async () => {
+     const { validateAuthenticatedTurnCredentialIssuance } = await import(
+       "./check-production-deploy-public-api.mjs"
+     );
+     const accessToken = "jwt-secret";
+     const roomId =
+       "video:professional:11111111-1111-4111-8111-111111111111";
+     const payload = {
+       iceServers: [
+         { urls: "stun:stun.cloudflare.com:3478" },
+         {
+           urls: "turn:turn.cloudflare.com:3478?transport=udp",
+           username: "turn-user",
+           credential: "turn-credential",
+         },
+       ],
+       expiresIn: 86_400,
+     };
+
+     await expect(
+       validateAuthenticatedTurnCredentialIssuance(
+         "https://staging.maiprop.co",
+         {
+           accessToken,
+           roomId,
+           expectedTtlSeconds: 21_600,
+           fetchText: async () => ({
+             res: new Response(JSON.stringify(payload), {
+               status: 200,
+               headers: {
+                 "Cache-Control": "no-store",
+                 "CDN-Cache-Control": "no-store",
+                 "Content-Type": "application/json",
+                 Vary: "Authorization",
+               },
+             }),
+             text: JSON.stringify(payload),
+           }),
+         },
+       ),
+     ).rejects.toThrow("unexpected credential TTL");
+   });
 
   it("accepts a valid empty Spotlight response when no paid placement is active", async () => {
     const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
@@ -222,7 +638,11 @@ describe("production deploy public API fixture guard", () => {
           text: JSON.stringify(payload),
         };
       },
-    })).resolves.toBeUndefined();
+     })).resolves.toMatchObject({
+       schemaVersion: 3,
+       status: "passed",
+       endpoints: expect.any(Array),
+     });
   });
 
   it("fails the live Spotlight probe quickly instead of waiting on the global API timeout", async () => {
@@ -243,6 +663,31 @@ describe("production deploy public API fixture guard", () => {
     expect(requestOptions.get(
       "https://portal.maiprop.co/api/public/homepage?section=featured",
     )?.timeoutMs).toBe(3_500);
+  });
+
+  it("enforces exact staging budgets for open-house and homepage catalogue endpoints", async () => {
+    const { PUBLIC_API_BUDGETS } = await import(
+      "./check-production-deploy-public-api.mjs"
+    );
+
+    expect(Object.fromEntries(PUBLIC_API_BUDGETS)).toMatchObject({
+      "/api/public/open-houses?limit=1": {
+        maxMs: 1_800,
+        maxBytes: 180_000,
+      },
+      "/api/public/open-houses?limit=1&includeMeta=1": {
+        maxMs: 1_800,
+        maxBytes: 180_000,
+      },
+      "/api/public/homepage?section=auctions": {
+        maxMs: 2_500,
+        maxBytes: 120_000,
+      },
+      "/api/public/homepage?section=open-houses": {
+        maxMs: 2_500,
+        maxBytes: 100_000,
+      },
+    });
   });
 
   it("rejects inactive or expired rows returned by the Spotlight endpoint", async () => {
@@ -285,10 +730,9 @@ describe("production deploy public API fixture guard", () => {
     );
   });
 
-  it("can tolerate Cloudflare Pages fail-open HTML when app fallbacks are explicitly enabled", async () => {
+  it("does not let the removed fail-open environment setting tolerate SPA HTML", async () => {
     const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
     const previous = process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
-    const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = "true";
 
     try {
@@ -299,76 +743,111 @@ describe("production deploy public API fixture guard", () => {
           }),
           text: "<!doctype html><div id=\"root\"></div>",
         }),
-      })).resolves.toBeUndefined();
+      })).rejects.toThrow("returned HTML instead of JSON");
     } finally {
-      stderrWrite.mockRestore();
       if (previous === undefined) delete process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
       else process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = previous;
     }
   });
 
-  it("rejects Supabase upstream outages unless fail-open dependency mode is explicit", async () => {
+  it("rejects wrong content types even when the body happens to contain JSON", async () => {
     const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
-    const previous = process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
-    delete process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
+
+    await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+      fetchText: async () => ({
+        res: new Response('{"data":[]}', {
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        }),
+        text: '{"data":[]}',
+      }),
+    })).rejects.toThrow("returned text/plain; charset=utf-8 instead of JSON");
+  });
+
+  it("rejects JSON with the wrong endpoint payload shape", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const text = JSON.stringify({ data: "not-an-array" });
+
+    await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+      fetchText: async () => ({
+        res: new Response(text, {
+          headers: { "Content-Type": "application/json" },
+        }),
+        text,
+      }),
+    })).rejects.toThrow("invalid listings payload");
+  });
+
+  it("fails when an endpoint request times out", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const timeout = Object.assign(new Error("request timed out"), { name: "TimeoutError" });
+
+    await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+      fetchText: async () => {
+        throw timeout;
+      },
+    })).rejects.toMatchObject({
+      name: "TimeoutError",
+      message: "request timed out",
+    });
+  });
+
+  it("fails redirects through the shared release HTTP trust boundary", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      new Response(null, {
+        status: 302,
+        headers: { Location: "https://attacker.example/collect" },
+      }));
 
     try {
-      await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
-        fetchText: async () => ({
-          res: Response.json({ error: "Supabase upstream unavailable" }, { status: 503 }),
-          text: JSON.stringify({ error: "Supabase upstream unavailable" }),
-        }),
-      })).rejects.toThrow(
-        'https://portal.maiprop.co/api/public/listings?limit=1 returned HTTP 503: {"error":"Supabase upstream unavailable"}',
-      );
+      await expect(validatePublicApiEndpoints("https://portal.maiprop.co"))
+        .rejects.toThrow(/refused redirect.*attacker\.example/i);
     } finally {
-      if (previous === undefined) delete process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
-      else process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = previous;
+      globalThis.fetch = originalFetch;
     }
   });
 
-  it("retries transient Supabase upstream outages before failing the deploy check", async () => {
+  it.each([
+    [500, { error: "Unexpected upstream failure" }],
+    [502, { error: "Bad gateway" }],
+    [503, { error: "Supabase upstream unavailable" }],
+  ])("rejects HTTP %i API and upstream failures", async (status, payload) => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const text = JSON.stringify(payload);
+
+    await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+      fetchText: async () => ({
+        res: new Response(text, {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+        text,
+      }),
+    })).rejects.toThrow(`returned HTTP ${status}`);
+  });
+
+  it("does not hide a first-request Supabase outage behind a successful retry", async () => {
     const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
     const calls = [];
 
     await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
       fetchText: async (url) => {
         calls.push(url);
-        if (calls.length === 1) {
-          return {
-            res: Response.json({ error: "Supabase upstream unavailable" }, { status: 503 }),
-            text: JSON.stringify({ error: "Supabase upstream unavailable" }),
-          };
-        }
-        const parsed = new URL(url);
-        const href = parsed.pathname + parsed.search;
-        const payload = href.includes("/api/public/listings?")
-          ? publicListingsPayloadFromUrl(url)
-          : href.includes("section=type-counts")
-            ? { apartment: 1, land: 1 }
-            : href.includes("section=auction-count")
-              ? 1
-              : href.includes("/api/public/auctions?")
-                ? { data: [] }
-                : href.includes("section=featured")
-                  ? featuredHomepagePayload()
-                  : [];
-        const text = JSON.stringify(payload);
         return {
-          res: new Response(text, { headers: { "Content-Type": "application/json" } }),
-          text,
+          res: Response.json({ error: "Supabase upstream unavailable" }, { status: 503 }),
+          text: JSON.stringify({ error: "Supabase upstream unavailable" }),
         };
       },
-    })).resolves.toBeUndefined();
+    })).rejects.toThrow("returned HTTP 503");
 
     expect(calls[0]).toBe("https://portal.maiprop.co/api/public/listings?limit=1");
-    expect(calls[1]).toBe("https://portal.maiprop.co/api/public/listings?limit=1");
+    expect(calls).toHaveLength(1);
   });
 
-  it("can tolerate explicit Supabase upstream outages when production deploy fallbacks are enabled", async () => {
+  it("does not let the removed fail-open environment setting tolerate an upstream outage", async () => {
     const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
     const previous = process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
-    const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = "true";
 
     try {
@@ -377,11 +856,61 @@ describe("production deploy public API fixture guard", () => {
           res: Response.json({ error: "Supabase upstream unavailable" }, { status: 503 }),
           text: JSON.stringify({ error: "Supabase upstream unavailable" }),
         }),
-      })).resolves.toBeUndefined();
+      })).rejects.toThrow("returned HTTP 503");
     } finally {
-      stderrWrite.mockRestore();
       if (previous === undefined) delete process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
       else process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = previous;
+    }
+  });
+
+  it("does not allow an assertion override to suppress an API failure", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const text = JSON.stringify(publicListingsPayloadFromUrl(
+      "https://portal.maiprop.co/api/public/listings?limit=1",
+    ));
+
+    await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+      assertOk: () => {},
+      fetchText: async () => ({
+        res: new Response(text, {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        }),
+        text,
+      }),
+    })).rejects.toThrow("returned HTTP 503");
+  });
+
+  it("rejects the retired fail-open CLI option instead of silently ignoring it", () => {
+    const result = spawnSync(
+      process.execPath,
+      ["scripts/check-production-deploy.mjs", "--public-api-allow-fail-open"],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PRODUCTION_DEPLOY_CHECK_ATTEMPTS: "1",
+          PRODUCTION_DEPLOY_CHECK_DELAY_MS: "0",
+        },
+      },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      "Unsupported production deploy check option: --public-api-allow-fail-open",
+    );
+  });
+
+  it("contains no compatibility escape for public API failures", () => {
+    for (const path of [
+      "scripts/check-production-deploy-public-api.mjs",
+      "scripts/check-production-deploy.mjs",
+      "docs/ENV_SETUP.md",
+    ]) {
+      const source = readFileSync(path, "utf8");
+      expect(source).not.toContain("PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN");
+      expect(source).not.toContain("--public-api-allow-fail-open");
     }
   });
 
@@ -408,6 +937,52 @@ describe("production deploy public API fixture guard", () => {
   });
 });
 
+describe("production deploy structured evidence", () => {
+  it("builds a serializable attestation envelope from target-level endpoint evidence", () => {
+    const target = {
+      baseUrl: "https://staging.maiprop.co/",
+      status: "passed",
+      builtAssets: "passed",
+      browser: "passed",
+      publicApi: {
+        schemaVersion: 1,
+        kind: "maiprop-public-api-deploy-verification",
+        baseUrl: "https://staging.maiprop.co/",
+        status: "passed",
+        endpoints: [
+          {
+            path: "/api/public/listings?limit=1",
+            url: "https://staging.maiprop.co/api/public/listings?limit=1",
+            status: "passed",
+            httpStatus: 200,
+          },
+        ],
+      },
+    };
+
+    const program = [
+      'import { createDeployVerificationEvidence } from "./scripts/check-production-deploy.mjs";',
+      `const target = ${JSON.stringify(target)};`,
+      "const evidence = createDeployVerificationEvidence([target], { generatedAt: \"2026-07-28T12:00:00.000Z\" });",
+      "process.stdout.write(JSON.stringify(evidence));",
+    ].join("\n");
+    const evidence = JSON.parse(execFileSync(
+      process.execPath,
+      ["--input-type=module", "--eval", program],
+      { cwd: process.cwd(), encoding: "utf8" },
+    ));
+
+    expect(evidence).toEqual({
+      schemaVersion: 1,
+      kind: "maiprop-deploy-verification",
+      generatedAt: "2026-07-28T12:00:00.000Z",
+      status: "passed",
+      targets: [target],
+    });
+    expect(JSON.parse(JSON.stringify(evidence))).toEqual(evidence);
+  });
+});
+
 describe("production deploy version marker", () => {
   it("accepts the expected deployment sha before smoke checks continue", async () => {
     const { validateDeploymentVersion } = await import("./check-production-deploy-version.mjs");
@@ -418,10 +993,10 @@ describe("production deploy version marker", () => {
       fetchText: async (url) => {
         calls.push(url);
         return {
-          res: new Response(JSON.stringify({ sha: "abc123" }), {
+          res: new Response(JSON.stringify({ release_sha: "abc123" }), {
             headers: { "Content-Type": "application/json; charset=utf-8" },
           }),
-          text: JSON.stringify({ sha: "abc123" }),
+          text: JSON.stringify({ release_sha: "abc123" }),
         };
       },
     });
@@ -435,10 +1010,10 @@ describe("production deploy version marker", () => {
     await expect(validateDeploymentVersion("https://portal.maiprop.co", {
       expectedSha: "new-sha",
       fetchText: async () => ({
-        res: new Response(JSON.stringify({ sha: "old-sha" }), {
+        res: new Response(JSON.stringify({ release_sha: "old-sha" }), {
           headers: { "Content-Type": "application/json" },
         }),
-        text: JSON.stringify({ sha: "old-sha" }),
+        text: JSON.stringify({ release_sha: "old-sha" }),
       }),
     })).rejects.toThrow(
       "https://portal.maiprop.co/deploy-version.json is serving deployment old-sha instead of new-sha",

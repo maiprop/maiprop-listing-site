@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -24,7 +24,7 @@ import { useCreateListingConnections } from "@/hooks/useCreateListingConnections
 import { useSubscription } from "@/hooks/useSubscription";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { getPlanLimits } from "@/hooks/usePlanLimits";
-import { useListing, useMyListings } from "@/hooks/useListings";
+import { useActorOwnedListings, useListing } from "@/hooks/useListings";
 import { Link } from "react-router-dom";
 import { isPlatformAdmin, isSellSideRole } from "@/lib/authUtils";
 import { StepType } from "@/components/listings/StepType";
@@ -34,6 +34,7 @@ import { StepLocation } from "@/components/listings/StepLocation";
 import { StepPricing } from "@/components/listings/StepPricing";
 import { StepPhotos } from "@/components/listings/StepPhotos";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
+import { useManageableOrganizations } from "@/hooks/useManageableOrganizations";
 
 // ─── Wizard config ────────────────────────────────────────────────────────────
 
@@ -69,6 +70,11 @@ export default function CreateListing() {
   const { user, profile } = useAuth();
   const isEditMode = Boolean(listingId);
   const { data: editListing, isLoading: editListingLoading } = useListing(listingId ?? "");
+  const {
+    data: manageableOrganizations = [],
+    isLoading: manageableOrganizationsLoading,
+  } = useManageableOrganizations();
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const participantType = getParticipantTypeFromProfile(profile);
   const tr = useCallback((key: string, fallback: string) => tFallback(t, key, fallback), [t]);
   const trv = useCallback((key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values), [t]);
@@ -88,13 +94,30 @@ export default function CreateListing() {
     useFormWizard({ steps: WIZARD_STEPS });
   const connections = useCreateListingConnections();
   const { isPro } = useSubscription();
-  const { data: myListings = [] } = useMyListings();
+  const { data: myListings = [] } = useActorOwnedListings();
   const activeListingCount = myListings.filter((listing) => listing.status === "active").length;
   const listingLimit = getPlanLimits(
     participantType,
     isPro ? "pro" : "free",
   ).listings;
   const stepLabel = (id: WizardStep, fallback: string) => tr(`createListing.steps.${id}`, fallback);
+
+  useEffect(() => {
+    if (!isEditMode || !editListing) return;
+    setOrganizationId(editListing.organization_id ?? null);
+  }, [editListing, isEditMode]);
+
+  const canManageEditedListing = Boolean(
+    !isEditMode
+    || !editListing
+    || editListing.owner_id === user?.id
+    || (
+      editListing.organization_id
+      && manageableOrganizations.some(
+        (organization) => organization.id === editListing.organization_id,
+      )
+    ),
+  );
 
   const {
     form,
@@ -129,6 +152,7 @@ export default function CreateListing() {
     mode: isEditMode ? "edit" : "create",
     listingId,
     initialListing: editListing,
+    organizationId,
   });
 
   const formListingType = (form as { listing_type?: unknown }).listing_type;
@@ -239,7 +263,10 @@ export default function CreateListing() {
     );
   }
 
-  if (isEditMode && editListingLoading) {
+  if (
+    isEditMode
+    && (editListingLoading || (Boolean(user) && manageableOrganizationsLoading))
+  ) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -261,12 +288,17 @@ export default function CreateListing() {
     );
   }
 
-  if (isEditMode && user && editListing && editListing.owner_id !== user.id) {
+  if (isEditMode && user && editListing && !canManageEditedListing) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-4">
           <h1 className="font-display text-2xl font-bold">{tr("createListing.edit.notAllowedTitle", "Listing unavailable")}</h1>
-          <p className="text-sm text-muted-foreground">{tr("createListing.edit.notAllowedBody", "You can only edit listings you own.")}</p>
+          <p className="text-sm text-muted-foreground">
+            {tr(
+              "createListing.edit.notAllowedBody",
+              "You can only edit listings you own or manage for an active organization.",
+            )}
+          </p>
           <Button asChild variant="outline">
             <Link to="/dashboard/listings">{tr("createListing.edit.backToListings", "Back to Listings")}</Link>
           </Button>
@@ -388,11 +420,51 @@ export default function CreateListing() {
 
           <div className="glass-card rounded-2xl p-6 md:p-8">
             {step === "type" && (
-              <StepType
-                form={form}
-                set={set}
-                toggle={toggle}
-              />
+              <div className="space-y-6">
+                {(manageableOrganizations.length > 0 || organizationId) && (
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="listing-owner"
+                      className="block text-sm font-medium text-foreground"
+                    >
+                      {tr("createListing.owner.label", "Listing owner")}
+                    </label>
+                    <select
+                      id="listing-owner"
+                      value={organizationId ?? ""}
+                      onChange={(event) =>
+                        setOrganizationId(event.target.value || null)}
+                      disabled={isEditMode}
+                      className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="">
+                        {tr("createListing.owner.personal", "My personal account")}
+                      </option>
+                      {manageableOrganizations.map((organization) => (
+                        <option key={organization.id} value={organization.id}>
+                          {organization.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      {isEditMode
+                        ? tr(
+                            "createListing.owner.locked",
+                            "Listing ownership cannot be changed after creation.",
+                          )
+                        : tr(
+                            "createListing.owner.help",
+                            "Choose the account responsible for this listing.",
+                          )}
+                    </p>
+                  </div>
+                )}
+                <StepType
+                  form={form}
+                  set={set}
+                  toggle={toggle}
+                />
+              </div>
             )}
             {step === "details" && (
               <StepDetails

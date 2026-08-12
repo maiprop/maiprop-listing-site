@@ -15,12 +15,15 @@ const distWorkerPath = resolve(distDir, "_worker.js");
 const distRoutesPath = resolve(distDir, "_routes.json");
 
 const requiredFunctionPaths = [
+  "/runtime-config.js",
+  "/api/release",
   "/api/public/listings",
   "/api/public/listing",
   "/api/public/homepage",
   "/api/public/open-houses",
   "/api/public/auctions",
   "/api/public/similar-listings",
+  "/api/turn-credentials",
   "/sitemap-dynamic.xml",
   "/__unlock",
   "/listings",
@@ -136,7 +139,7 @@ const windowsQuote = (value) => {
   return `"${value.replace(/"/g, '\\"')}"`;
 };
 
-const npxArgs = ["--yes", "wrangler", ...wranglerArgs];
+const npxArgs = ["--no-install", "wrangler", ...wranglerArgs];
 const result =
   process.platform === "win32"
     ? spawnSync("cmd.exe", ["/d", "/s", "/c", `npx ${npxArgs.map(windowsQuote).join(" ")}`], {

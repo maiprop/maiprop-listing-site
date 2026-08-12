@@ -33,6 +33,9 @@ verify_jwt = true
 [functions.create-new-building-listing]
 verify_jwt = true
 
+[functions.process-storage-cleanup]
+verify_jwt = false
+
 [functions.open-house-capacity]
 verify_jwt = true
 

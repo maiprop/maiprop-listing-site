@@ -353,6 +353,56 @@ describe("middleware POST /__unlock", () => {
 // ─── locked navigation (no/invalid cookie) ──────────────────────────────────
 
 describe("middleware locked navigation", () => {
+  it.each([
+    "/",
+    "/open-houses",
+    "/dashboard",
+    "/dashboard/listings",
+    "/a/future/spa/route",
+  ])("intercepts protected HTML navigation %s before static SPA fallback", async (pathname) => {
+    const next = vi.fn(() => new Response("STATIC-SPA", { status: 200 }));
+    const res = await onRequest(
+      makeCtx({
+        url: `https://portal.maiprop.co${pathname}`,
+        password: PWD,
+        accept: "text/html",
+        next,
+      }),
+    );
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toMatch(/text\/html/);
+    expect(await res.text()).toContain(
+      `value="${pathname}"`,
+    );
+  });
+
+  it.each([
+    "/api/release",
+    "/api/public/listings",
+    "/api/private/unknown",
+    "/api/anything/nested",
+  ])("fails closed for protected API request %s before a handler or SPA fallback", async (pathname) => {
+    const next = vi.fn(() => new Response("<!doctype html>SPA", {
+      status: 200,
+      headers: { "Content-Type": "text/html" },
+    }));
+    const res = await onRequest(
+      makeCtx({
+        url: `https://portal.maiprop.co${pathname}`,
+        password: PWD,
+        accept: "application/json",
+        next,
+      }),
+    );
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toBe(401);
+    expect(res.headers.get("Content-Type")).toMatch(/text\/plain/);
+    expect(await res.text()).toBe("Locked");
+  });
+
   it("serves the HTML splash for a GET to a normal HTML route", async () => {
     const res = await onRequest(
       makeCtx({

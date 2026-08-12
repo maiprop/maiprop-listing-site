@@ -1,6 +1,6 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(26);
+SELECT plan(27);
 
 SET LOCAL session_replication_role = replica;
 INSERT INTO auth.users (id)
@@ -157,6 +157,11 @@ SELECT is(
   (SELECT command FROM cron.job WHERE jobname = 'reconcile-role-switch-billing'),
   'SELECT private.invoke_role_switch_billing_reconciliation();',
   'reconciliation cron invokes the private boundary'
+);
+SELECT is(
+  (SELECT active FROM cron.job WHERE jobname = 'reconcile-role-switch-billing'),
+  false,
+  'reconciliation cron remains dormant until the Edge worker is deployed'
 );
 
 INSERT INTO public.role_switch_history (

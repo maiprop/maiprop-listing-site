@@ -27,6 +27,7 @@ const makeListing = (overrides: Partial<ListingCardWithRaw> = {}): ListingCardWi
     has_virtual_tour: false,
     ai_score: 82,
     walkability_score: 77,
+    publicationId: 732,
   },
   ...overrides,
 });
@@ -86,6 +87,7 @@ describe("Listings performance helpers", () => {
     });
     expect(mapListing.images).toEqual(["https://example.com/1.jpg"]);
     expect(mapListing._raw).toMatchObject({
+      publicationId: 732,
       price_per_sqm: 3684,
       property_type: "apartment",
       tags: ["featured", "ownership:full"],

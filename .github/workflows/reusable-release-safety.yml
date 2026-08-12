@@ -59,51 +59,11 @@ jobs:
       - name: Check release safety inventory
         run: npm run check:release-safety -- --out release-safety-inventory.json
 
-      - name: Check live Supabase function inventory
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm run check:release-safety -- --live-functions --out release-safety-inventory-live.json
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-
-      - name: Capture live Supabase index stats
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm run capture:supabase-index-stats -- --out supabase-index-stats.json --allow-empty-when-unconfigured
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-
-      - name: Check live Supabase advisors
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --allow-transient-unavailable --index-stats supabase-index-stats.json --out supabase-advisor-summary.json
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-
-      - name: Check live Supabase generated types
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm run check:supabase-types -- -- --strict --allow-transient-unavailable
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-
-      - name: Check live Supabase security posture
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm run check:live-security-posture -- --allow-transient-unavailable
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-
       - name: Upload release safety inventory
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-safety-inventory
-          path: |
-            release-safety-inventory*.json
-            supabase-index-stats.json
-            supabase-advisor-summary.json
+          path: release-safety-inventory.json
           if-no-files-found: ignore
           retention-days: 3

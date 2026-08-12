@@ -34,7 +34,10 @@ import {
   PDF_MIME_TYPES,
   assertAllowedUpload,
 } from "@/lib/uploadValidation";
-import { uploadListingImage } from "@/lib/buildingListingUploads";
+import {
+  registerProjectStorageUpload,
+  uploadNewBuildingListingImage,
+} from "@/lib/buildingListingUploads";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getListingDetailPath } from "@/lib/listingRoutes";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
@@ -172,10 +175,16 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
       maxBytes: PROJECT_MEDIA_UPLOAD_MAX_BYTES,
     });
     const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/${id}/${mediaType}-${crypto.randomUUID()}.${ext}`;
+    const path = `${user.id}/${id}/media/${mediaType}-${crypto.randomUUID()}.${ext}`;
+    const { data } = supabase.storage.from("project-media").getPublicUrl(path);
+    await registerProjectStorageUpload(
+      id,
+      "project-media",
+      path,
+      data.publicUrl,
+    );
     const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: false });
     if (error) throw error;
-    const { data } = supabase.storage.from("project-media").getPublicUrl(path);
     return data.publicUrl;
   }, [user, id, tr]);
 
@@ -196,7 +205,11 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
     if (!file || !user || !id) return;
     setCoverUploadingListingId(listingId);
     try {
-      const uploaded = await uploadListingImage(file, user.id);
+      const uploaded = await uploadNewBuildingListingImage(
+        file,
+        user.id,
+        id,
+      );
       updateProjectListingCover.mutate(
         { projectId: id, listingId, coverImageUrl: uploaded.url },
         { onSettled: () => setCoverUploadingListingId(null) },

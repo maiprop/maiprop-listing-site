@@ -24,6 +24,7 @@ export function mapListingFromCard(property: ListingCardWithRaw): MapListing {
     listingType: property.listingType,
     city: property.city,
     _raw: {
+      publicationId: property._raw?.publicationId,
       price_per_sqm: property.pricePerSqm,
       property_type: property.type,
       tags: property.tags,

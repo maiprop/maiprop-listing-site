@@ -89,6 +89,7 @@ const canRun = COMPLETE_PAYMENT &&
   Boolean(SUPABASE_ANON_KEY) &&
   Boolean(TEST_EMAIL || SUPABASE_SERVICE_ROLE_KEY);
 const SUPABASE_AUTH_ATTEMPTS = 3;
+let disposablePaymentToken = "";
 
 type SupabasePasswordSession = {
   access_token: string;
@@ -397,10 +398,12 @@ async function createPaymentAccount(
   ).toBeNull();
   await expectPaymentProfile(admin, userId!, `created ${label}`);
 
+  const session = await requestSupabaseSession(request, email, password);
+  disposablePaymentToken = session.access_token;
   return {
     email,
     password,
-    session: await requestSupabaseSession(request, email, password),
+    session,
   };
 }
 
@@ -749,6 +752,27 @@ test.describe("Stripe test payment completion", () => {
     !canRun,
     "Set E2E_COMPLETE_STRIPE_PAYMENT=true, Supabase URL/key, and E2E_STRIPE_PAYMENT_EMAIL to create a Stripe test subscription",
   );
+
+  test.afterEach(async ({ request }) => {
+    const token = disposablePaymentToken;
+    disposablePaymentToken = "";
+    if (!token || USE_EXISTING_PAYMENT_ACCOUNT) return;
+
+    const response = await request.post(
+      `${SUPABASE_URL}/functions/v1/delete-account`,
+      {
+        headers: authedHeaders(token),
+        data: {},
+        failOnStatusCode: false,
+        timeout: 90_000,
+      },
+    );
+    const body = await response.text();
+    expect(
+      response.ok(),
+      `Stripe payment fixture cleanup failed with HTTP ${response.status()}: ${body.slice(0, 240)}`,
+    ).toBe(true);
+  });
 
   test("completes test-card subscription checkout and observes synced entitlement", async ({ page, context, request }) => {
     test.setTimeout(240_000);

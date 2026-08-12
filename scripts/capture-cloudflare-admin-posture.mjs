@@ -20,11 +20,60 @@ export const validateCloudflareEnv = (env = process.env) => {
 
 const allowedDnsModes = new Set(["registrar", "cloudflare-authoritative"]);
 
+export const normalizePagesGitAutoDeploy = (project) => {
+  const sourceFieldPresent = Object.prototype.hasOwnProperty.call(
+    project ?? {},
+    "source",
+  );
+  if (!sourceFieldPresent) {
+    return {
+      sourceConnected: false,
+      productionDeploymentsEnabled: null,
+      previewDeploymentSetting: null,
+      allAutomaticDeploymentsDisabled: false,
+      status: "unknown",
+    };
+  }
+
+  if (project.source == null) {
+    return {
+      sourceConnected: false,
+      productionDeploymentsEnabled: false,
+      previewDeploymentSetting: "none",
+      allAutomaticDeploymentsDisabled: true,
+      status: "disabled",
+    };
+  }
+
+  const config = project.source?.config ?? {};
+  const productionDeploymentsEnabled =
+    typeof config.production_deployments_enabled === "boolean"
+      ? config.production_deployments_enabled
+      : null;
+  const previewDeploymentSetting =
+    typeof config.preview_deployment_setting === "string"
+      ? config.preview_deployment_setting
+      : null;
+  const allAutomaticDeploymentsDisabled =
+    productionDeploymentsEnabled === false &&
+    previewDeploymentSetting === "none" &&
+    config.deployments_enabled !== true;
+
+  return {
+    sourceConnected: true,
+    productionDeploymentsEnabled,
+    previewDeploymentSetting,
+    allAutomaticDeploymentsDisabled,
+    status: allAutomaticDeploymentsDisabled ? "disabled" : "enabled-or-unknown",
+  };
+};
+
 const normalizePagesProject = (project) => ({
   idPresent: Boolean(project?.id),
   name: project?.name ?? null,
   productionBranch: project?.production_branch ?? null,
   domains: Array.isArray(project?.domains) ? project.domains : [],
+  gitAutoDeploy: normalizePagesGitAutoDeploy(project),
   latestDeployment: project?.latest_deployment
     ? {
         idPresent: Boolean(project.latest_deployment.id),
@@ -52,6 +101,14 @@ const validatePagesProject = (project) => {
   const errors = [];
   if (!project?.id) errors.push("Pages project record is missing a project id or production branch");
   else if (!project?.production_branch) errors.push("Pages project record is missing a project id or production branch");
+  if (
+    errors.length === 0 &&
+    !normalizePagesGitAutoDeploy(project).allAutomaticDeploymentsDisabled
+  ) {
+    errors.push(
+      "Pages Git integration must disable production and preview automatic deployments",
+    );
+  }
   return errors;
 };
 
@@ -139,6 +196,7 @@ export async function buildCloudflarePostureEvidence({
       status: "failed",
       queriedAt,
       errors,
+      pagesProject: normalizePagesProject(body.result ?? {}),
     };
   }
 

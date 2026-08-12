@@ -18,6 +18,34 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 import { useProfessionals, useProfessional, useProfessionalByUserId } from "@/hooks/useProfessionals";
 
+const publicProfessional = {
+  id: "p1",
+  user_id: "u1",
+  title: "Architect",
+  display_name: "Alice",
+  category: "architect" as const,
+  city: "Athens",
+  bio: null,
+  avatar_url: null,
+  rating: 5,
+  reviews_count: 2,
+  verified: true,
+  verified_at: "2026-01-01T00:00:00Z",
+  hourly_rate: 100,
+  experience_years: 10,
+  specialties: ["residential"],
+  languages: ["el", "en"],
+  license_number: "TEE-1",
+  website_url: null,
+  video_link: null,
+  projects_count: 3,
+  average_deal_size: null,
+  average_portfolio_asset_size: null,
+  subscription_tier: "pro",
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
+
 function wrap(children: React.ReactNode) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
@@ -43,19 +71,19 @@ describe("useProfessionals", () => {
       eq: vi.fn().mockReturnThis(),
       is: vi.fn().mockReturnThis(),
       then(resolve: (v: { data: unknown[]; error: null }) => unknown) {
-        resolve({ data: [{ id: "p1", display_name: "Alice" }], error: null });
+        resolve({ data: [publicProfessional], error: null });
         return this;
       },
     };
     fromMock.mockReturnValue(query);
     const { result } = renderHookWithQuery(() => useProfessionals("legal"));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(fromMock).toHaveBeenCalledWith("professionals");
-    expect(query.is).toHaveBeenCalledWith("archived_at", null);
+    expect(fromMock).toHaveBeenCalledWith("public_professionals");
+    expect(query.is).not.toHaveBeenCalled();
     expect(query.order).toHaveBeenCalledWith("subscription_tier", { ascending: false, nullsFirst: false });
     expect(query.order).toHaveBeenCalledWith("rating", { ascending: false, nullsFirst: false });
     expect(query.eq).toHaveBeenCalledWith("category", "legal");
-    expect(result.current.data).toEqual([{ id: "p1", display_name: "Alice" }]);
+    expect(result.current.data).toEqual([publicProfessional]);
   });
 
   it("re-throws if the table query errors", async () => {
@@ -90,7 +118,12 @@ describe("useProfessional(id)", () => {
 
   it("fetches a single professional row by id", async () => {
     const single = vi.fn().mockResolvedValue({
-      data: { id: "p2", display_name: "Bob" },
+      data: {
+        ...publicProfessional,
+        id: "p2",
+        user_id: "u2",
+        display_name: "Bob",
+      },
       error: null,
     });
     fromMock.mockReturnValue({
@@ -101,7 +134,13 @@ describe("useProfessional(id)", () => {
     });
     const { result } = renderHookWithQuery(() => useProfessional("p2"));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ id: "p2", display_name: "Bob" });
+    expect(fromMock).toHaveBeenCalledWith("public_professionals");
+    expect(result.current.data).toEqual({
+      ...publicProfessional,
+      id: "p2",
+      user_id: "u2",
+      display_name: "Bob",
+    });
     expect(single).toHaveBeenCalled();
   });
 });

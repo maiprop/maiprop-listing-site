@@ -74,6 +74,8 @@ vi.mock("@/hooks/useEligibleForQuickSale", () => ({
 vi.mock("@/hooks/useListings", () => ({
   useListings: (...args: unknown[]) => mocks.useListingsMock(...args),
   useMyListings: () => ({ data: [], isLoading: false }),
+  useActorOwnedListings: () => ({ data: [], isLoading: false }),
+  useManageableListingSummary: () => ({ data: null, isLoading: false }),
 }));
 vi.mock("@/hooks/useFavorites", () => ({
   useFavorites: () => ({ data: [], isLoading: false }),
@@ -950,6 +952,35 @@ describe("ProfessionalProfile focused page behavior", () => {
 });
 
 describe("Auctions focused page behavior", () => {
+  it("renders the canonical server page without a separate hydration state", async () => {
+    mocks.useAuctionsPipelineMock.mockReturnValue({
+      isPro: true,
+      isMaiPropOsUser: false,
+      isLoading: false,
+      error: null,
+      cityOptions: ["All Cities", "Athens"],
+      roundOptions: [{ value: "", label: "All Rounds" }],
+      visibleFiltered: [auction()],
+      visibleCount: 1,
+      polygonFilteredCount: 1,
+      paginated: [auction()],
+      totalPages: 1,
+      thisWeek: 1,
+      avgBid: 150000,
+      activeFilterCount: 0,
+      totalRaw: 1,
+      mapListings: [auction()],
+      mappableCount: 1,
+    });
+    const { default: Auctions } = await import("@/pages/Auctions");
+
+    renderWithProviders(<Auctions />, { initialPath: "/auctions" });
+
+    expect(await screen.findByTestId("auction-card")).toBeInTheDocument();
+    expect(screen.queryByText(/public preview is available/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry full catalogue/i })).not.toBeInTheDocument();
+  });
+
   it("toggles filters, map mode, polygon filters, alerts, and anonymous favorite redirects", async () => {
     mocks.useAuctionsPipelineMock.mockReturnValue({
       isPro: false,

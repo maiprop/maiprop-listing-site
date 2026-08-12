@@ -140,7 +140,6 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
   it("keeps the mutation workflow manual, main-only, isolated, and pinned", () => {
     const parsed = parsedWorkflow("lock-cloudflare-pages-git-deploys.yml");
     const source = workflow("lock-cloudflare-pages-git-deploys.yml");
-    const preflight = parsed.jobs["verify-lock-environment"];
     const lock = parsed.jobs.lock;
     const control = lock.steps.find(
       (step) => step.name === "Lock both Cloudflare Pages Git integrations",
@@ -155,12 +154,14 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
       actions: "read",
       contents: "read",
     });
-    expect(preflight.if).toContain("github.ref == 'refs/heads/main'");
-    expect(source).toContain('.branch_policies[0].name == "main"');
-    expect(source).toContain('.branch_policies[0].type == "branch"');
+    expect(parsed.jobs["verify-lock-environment"]).toBeUndefined();
     expect(lock.if).toContain("github.ref == 'refs/heads/main'");
     expect(lock.if).toContain("DISABLE_CLOUDFLARE_GIT_DEPLOYS");
-    expect(lock.environment).toBe("cloudflare-git-deploy-lock");
+    expect(lock.environment).toBeUndefined();
+    expect(lock.if).toContain("github.run_attempt == 1");
+    expect(lock.if).toContain("github.actor == github.triggering_actor");
+    expect(source).toContain("PRODUCTION_RELEASE_APPROVERS");
+    expect(source).toContain("GITHUB_WORKFLOW_SHA");
     expect(lock.concurrency["cancel-in-progress"]).toBe(false);
     expect(
       lock.steps.some(
@@ -187,25 +188,25 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
 
   it("proves current main before credentials and immediately before every PATCH", () => {
     const parsed = parsedWorkflow("lock-cloudflare-pages-git-deploys.yml");
-    const preflight = parsed.jobs["verify-lock-environment"];
     const lock = parsed.jobs.lock;
-    const identity = preflight.steps[0];
-    const environmentPolicy = preflight.steps[1];
+    const identity = lock.steps[0];
     const control = lock.steps.find(
       (step) => step.name === "Lock both Cloudflare Pages Git integrations",
     );
 
-    expect(lock.needs).toBe("verify-lock-environment");
-    expect(identity.name).toBe("Verify current main workflow identity");
-    expect(identity.env).toEqual({ GH_TOKEN: "${{ github.token }}" });
-    expect(identity.run).toContain(
-      'CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq \'.commit.sha\')"',
+    expect(lock.needs).toBeUndefined();
+    expect(identity.name).toBe("Verify exact current-main control identity");
+    expect(identity.env.GH_TOKEN).toBe("${{ github.token }}");
+    expect(identity.env.ALLOWED_ACTORS).toBe(
+      "${{ vars.PRODUCTION_RELEASE_APPROVERS }}",
     );
     expect(identity.run).toContain(
-      'if [ "$CURRENT_MAIN" != "$GITHUB_WORKFLOW_SHA" ]; then',
+      'current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq \'.commit.sha\')"',
+    );
+    expect(identity.run).toContain(
+      '[ "$current_main" != "$GITHUB_WORKFLOW_SHA" ]',
     );
     expect(JSON.stringify(identity)).not.toContain("CLOUDFLARE_");
-    expect(environmentPolicy.name).toBe("Verify main-only lock namespace");
 
     expect(control.env.GH_TOKEN).toBe("${{ github.token }}");
     const patchFunction = control.run.slice(
@@ -213,13 +214,13 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
       control.run.indexOf("PRODUCTION_PRE="),
     );
     expect(patchFunction).toContain(
-      'CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq \'.commit.sha\')"',
+      'current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq \'.commit.sha\')"',
     );
-    expect(patchFunction.indexOf('CURRENT_MAIN="$(gh api')).toBeLessThan(
+    expect(patchFunction.indexOf('current_main="$(gh api')).toBeLessThan(
       patchFunction.indexOf("--request PATCH"),
     );
     expect(patchFunction).toContain(
-      'if [ "$CURRENT_MAIN" != "$GITHUB_WORKFLOW_SHA" ]; then',
+      'if [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ]; then',
     );
     expect(
       control.run.match(/if ! patch_project \\/g),

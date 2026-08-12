@@ -36,7 +36,11 @@ import {
   ensureSubscriptionCompanyInvoiceSettings,
   verifyStripeAccountIdentity,
 } from "../_shared/stripeClient.ts";
-import { pricingConfigMatchesStripeItem } from "../_shared/entitlements.ts";
+import {
+  getProfilePricingAudience,
+  pricingConfigMatchesStripeItem,
+  type ProfileAudienceRow,
+} from "../_shared/entitlements.ts";
 import { fulfillAddonCheckoutSession } from "../_shared/addonFulfillment.ts";
 import { shouldSkipProfileEntitlementSync } from "./addonGuard.ts";
 import {
@@ -103,6 +107,17 @@ type SubscriptionEntitlement = {
   role: string;
   productId: string;
 } | null;
+
+type DurableSubscriptionEntitlementRow = {
+  plan_key?: string | null;
+  audience?: string | null;
+  stripe_product_id?: string | null;
+  livemode?: boolean | null;
+};
+
+type ProfileEntitlementContext = ProfileAudienceRow & {
+  role_switch_in_progress_at?: string | null;
+};
 
 // Share a narrow database port with the billing-state helpers so webhook queries
 // stay type-checked without coupling Edge Function tests to the generated schema.
@@ -1134,7 +1149,7 @@ async function expireAbandonedTrialCheckoutSession(
   const { error } = await supabase
     .from("subscription_trial_claims")
     .update({
-      status: "expired",
+      status: "checkout_abandoned",
       runtime_mode: stripeRuntimeModeFromLivemode(Boolean(session.livemode)),
       livemode: Boolean(session.livemode),
       updated_at: new Date().toISOString(),
@@ -1212,6 +1227,95 @@ export async function resolveSubscriptionEntitlement(
   sub: Stripe.Subscription,
 ): Promise<SubscriptionEntitlement> {
   if (shouldSkipProfileEntitlementSync(sub)) return null;
+  const rows = await loadSubscriptionPricingConfigs(supabase, true);
+  return resolveSubscriptionEntitlementFromRows(sub, rows);
+}
+
+async function loadSubscriptionPricingConfigs(
+  supabase: SupabaseAdminClient,
+  isActive = true,
+): Promise<PricingConfigRow[]> {
+  const { data, error } = await supabase
+    .from("pricing_configs")
+    .select("key, audience, module, metadata")
+    .eq("is_active", isActive);
+  if (error) throw error;
+  return (data ?? []) as PricingConfigRow[];
+}
+
+async function loadDurableSubscriptionEntitlement(
+  supabase: SupabaseAdminClient,
+  sub: Stripe.Subscription,
+): Promise<SubscriptionEntitlement> {
+  const { data, error } = await supabase
+    .from("billing_subscriptions")
+    .select("plan_key, audience, stripe_product_id, livemode")
+    .eq("stripe_subscription_id", sub.id)
+    .maybeSingle();
+  if (error) throw error;
+
+  const row = data as DurableSubscriptionEntitlementRow | null;
+  if (!row || Boolean(row.livemode) !== Boolean(sub.livemode)) return null;
+
+  const planKey = row.plan_key?.trim() ?? "";
+  const audience = normalizeAudience(row.audience);
+  const productId = row.stripe_product_id?.trim() ?? "";
+  if (!planKey || !audience || !productId) return null;
+
+  const itemProduct = firstSubscriptionItem(sub)?.price?.product;
+  const eventProductId = typeof itemProduct === "string"
+    ? itemProduct
+    : itemProduct?.id ?? null;
+  if (eventProductId && eventProductId !== productId) {
+    log.warn("durable subscription product does not match Stripe event", {
+      sub_id: sub.id,
+      durable_product_id: productId,
+      event_product_id: eventProductId,
+    });
+    return null;
+  }
+
+  return {
+    planKey,
+    audience,
+    role: audience,
+    productId,
+  };
+}
+
+/**
+ * Terminal events must still identify entitlements after a plan is retired.
+ * Activation stays restricted to active pricing rows; revocation may use an
+ * inactive historical row or the exact previously verified subscription ledger.
+ */
+export async function resolveHistoricalSubscriptionEntitlement(
+  supabase: SupabaseAdminClient,
+  sub: Stripe.Subscription,
+): Promise<SubscriptionEntitlement> {
+  if (shouldSkipProfileEntitlementSync(sub)) return null;
+
+  const activeRows = await loadSubscriptionPricingConfigs(supabase, true);
+  const activeEntitlement = resolveSubscriptionEntitlementFromRows(
+    sub,
+    activeRows,
+  );
+  if (activeEntitlement) return activeEntitlement;
+
+  const inactiveRows = await loadSubscriptionPricingConfigs(supabase, false);
+  const inactiveEntitlement = resolveSubscriptionEntitlementFromRows(
+    sub,
+    inactiveRows,
+  );
+  if (inactiveEntitlement) return inactiveEntitlement;
+
+  return loadDurableSubscriptionEntitlement(supabase, sub);
+}
+
+function resolveSubscriptionEntitlementFromRows(
+  sub: Stripe.Subscription,
+  rows: PricingConfigRow[],
+): SubscriptionEntitlement {
+  if (shouldSkipProfileEntitlementSync(sub)) return null;
   const item = firstSubscriptionItem(sub);
   const priceId = item?.price?.id ?? null;
   const product = item?.price?.product;
@@ -1227,13 +1331,6 @@ export async function resolveSubscriptionEntitlement(
 
   const metadataPlan =
     (sub.metadata?.plan_key ?? sub.metadata?.plan ?? "") as string;
-  const { data, error } = await supabase
-    .from("pricing_configs")
-    .select("key, audience, module, metadata")
-    .eq("is_active", true);
-  if (error) throw error;
-
-  const rows = (data ?? []) as PricingConfigRow[];
   const row = rows.find((candidate) => {
     if (
       ![
@@ -1276,6 +1373,56 @@ export async function resolveSubscriptionEntitlement(
   };
 }
 
+function subscriptionCurrentPeriodEndSeconds(
+  sub: Stripe.Subscription,
+): number | null {
+  const rootPeriodEnd = (sub as unknown as {
+    current_period_end?: number | null;
+  }).current_period_end;
+  return rootPeriodEnd ?? firstSubscriptionItem(sub)?.current_period_end ?? null;
+}
+
+function isCurrentProvisionedSubscription(
+  sub: Stripe.Subscription,
+  nowMs = Date.now(),
+): boolean {
+  if (!hasProvisionedSubscriptionAccess(sub.status)) return false;
+  const nowSeconds = Math.floor(nowMs / 1_000);
+  const accessEnd = sub.status === "trialing"
+    ? sub.trial_end ?? subscriptionCurrentPeriodEndSeconds(sub)
+    : subscriptionCurrentPeriodEndSeconds(sub);
+  return typeof accessEnd === "number" && Number.isFinite(accessEnd) &&
+    accessEnd > nowSeconds;
+}
+
+async function loadProfileEntitlementContext(
+  supabase: SupabaseAdminClient,
+  userId: string,
+): Promise<{
+  audience: string | null;
+  roleSwitchInProgress: boolean;
+}> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role, participant_type, role_switch_in_progress_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  const profile = data as ProfileEntitlementContext | null;
+  return {
+    audience: getProfilePricingAudience(profile),
+    roleSwitchInProgress: Boolean(profile?.role_switch_in_progress_at),
+  };
+}
+
+function entitlementMatchesProfile(
+  entitlement: SubscriptionEntitlement,
+  profile: { audience: string | null; roleSwitchInProgress: boolean },
+): boolean {
+  return !profile.roleSwitchInProgress &&
+    Boolean(entitlement?.audience && profile.audience === entitlement.audience);
+}
+
 function canonicalBillingSubscription(
   sub: Stripe.Subscription,
   entitlement: SubscriptionEntitlement,
@@ -1297,20 +1444,46 @@ function canonicalBillingSubscription(
 }
 
 export async function findProvisionedReplacementSubscription(
+  supabase: SupabaseAdminClient,
   stripe: Stripe,
   customerId: string,
   deletedSubscriptionId: string,
+  requiredAudience: string,
+  nowMs = Date.now(),
 ): Promise<Stripe.Subscription | null> {
-  const subscriptions = await stripe.subscriptions.list({
-    customer: customerId,
-    status: "all",
-    limit: 100,
+  const [subscriptions, pricingRows] = await Promise.all([
+    stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 100,
+    }),
+    loadSubscriptionPricingConfigs(supabase),
+  ]);
+  const candidates = [...subscriptions.data].sort((left, right) => {
+    const createdDifference = (right.created ?? 0) - (left.created ?? 0);
+    return createdDifference || right.id.localeCompare(left.id);
   });
-  return subscriptions.data.find((candidate) =>
-    candidate.id !== deletedSubscriptionId &&
-    !shouldSkipProfileEntitlementSync(candidate) &&
-    hasProvisionedSubscriptionAccess(candidate.status)
-  ) ?? null;
+
+  for (const candidate of candidates) {
+    if (
+      candidate.id === deletedSubscriptionId ||
+      shouldSkipProfileEntitlementSync(candidate) ||
+      !isCurrentProvisionedSubscription(candidate, nowMs)
+    ) continue;
+    try {
+      const entitlement = resolveSubscriptionEntitlementFromRows(
+        candidate,
+        pricingRows,
+      );
+      if (entitlement?.audience === requiredAudience) return candidate;
+    } catch (err: unknown) {
+      log.warn("ignored malformed replacement subscription candidate", {
+        sub_id: candidate.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return null;
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -1348,27 +1521,51 @@ async function syncSubscription(
     return;
   }
 
-  const hasAccess = hasProvisionedSubscriptionAccess(sub.status);
-  const shouldRevoke = shouldRevokeSubscriptionAccess(sub.status);
-  const entitlement = await resolveSubscriptionEntitlement(supabase, sub);
   const userId = customer.metadata?.user_id as string | undefined;
-  if (userId) {
-    await upsertBillingCustomer(supabase, {
-      userId,
-      stripeCustomerId: customerId,
-      email: customer.email ?? null,
-      livemode: sub.livemode,
-      metadata: customer.metadata ?? {},
+  if (!userId) {
+    log.warn("Stripe customer is missing trusted user_id metadata", {
+      customer_id: customerId,
     });
-    await upsertBillingSubscription(supabase, {
-      userId,
-      stripeCustomerId: customerId,
-      subscription: sub,
-      canonical: canonicalBillingSubscription(sub, entitlement),
-      observation,
-    });
+    return;
   }
-  const hasManualAccess = shouldRevoke && userId
+
+  const [entitlement, profileContext] = await Promise.all([
+    resolveSubscriptionEntitlement(supabase, sub),
+    loadProfileEntitlementContext(supabase, userId),
+  ]);
+  const hasAccess = isCurrentProvisionedSubscription(sub);
+  const shouldRevoke = shouldRevokeSubscriptionAccess(sub.status);
+
+  await upsertBillingCustomer(supabase, {
+    userId,
+    stripeCustomerId: customerId,
+    email: customer.email ?? null,
+    livemode: sub.livemode,
+    metadata: customer.metadata ?? {},
+  });
+  await upsertBillingSubscription(supabase, {
+    userId,
+    stripeCustomerId: customerId,
+    subscription: sub,
+    canonical: canonicalBillingSubscription(sub, entitlement),
+    observation,
+  });
+
+  if (!entitlementMatchesProfile(entitlement, profileContext)) {
+    log.info(
+      "persisted subscription history without changing current profile audience",
+      {
+        user_id: userId,
+        sub_id: sub.id,
+        subscription_audience: entitlement?.audience ?? null,
+        profile_audience: profileContext.audience,
+        role_switch_in_progress: profileContext.roleSwitchInProgress,
+      },
+    );
+    return;
+  }
+
+  const hasManualAccess = shouldRevoke
     ? await hasManualProAccess(supabase, userId)
     : false;
   const productId = hasAccess ? entitlement?.productId ?? null : null;
@@ -1445,6 +1642,11 @@ async function clearSubscription(
 
   if (!userId) return;
 
+  const [entitlement, profileContext] = await Promise.all([
+    resolveHistoricalSubscriptionEntitlement(supabase, sub),
+    loadProfileEntitlementContext(supabase, userId),
+  ]);
+
   await upsertBillingCustomer(supabase, {
     userId,
     stripeCustomerId: customerId,
@@ -1452,7 +1654,6 @@ async function clearSubscription(
     livemode: sub.livemode,
     metadata: customer.metadata ?? {},
   });
-  const entitlement = await resolveSubscriptionEntitlement(supabase, sub);
   await upsertBillingSubscription(supabase, {
     userId,
     stripeCustomerId: customerId,
@@ -1461,10 +1662,26 @@ async function clearSubscription(
     observation,
   });
 
+  if (!entitlementMatchesProfile(entitlement, profileContext)) {
+    log.info(
+      "deleted subscription does not own the current profile audience",
+      {
+        user_id: userId,
+        deleted_sub_id: sub.id,
+        subscription_audience: entitlement?.audience ?? null,
+        profile_audience: profileContext.audience,
+        role_switch_in_progress: profileContext.roleSwitchInProgress,
+      },
+    );
+    return;
+  }
+
   const replacement = await findProvisionedReplacementSubscription(
+    supabase,
     stripe,
     customerId,
     sub.id,
+    profileContext.audience as string,
   );
   if (replacement) {
     log.info(

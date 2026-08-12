@@ -42,7 +42,14 @@ Deno.test("create-investor-payment creates an admin-only custom annual investor 
     source.includes('.select("id, status, stripe_session_id")'),
     true,
   );
-  assertEquals(source.includes('payment_method_types: ["card"]'), true);
+  assertEquals(source.includes("payment_method_types:"), false);
+  assertEquals(source.includes("payment_method_configuration:"), false);
+  assertEquals(
+    source.includes(
+      "integration_identifier: STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER",
+    ),
+    true,
+  );
   assertEquals(source.includes("CHECKOUT_TAX_COLLECTION_PARAMS"), true);
   assertEquals(
     source.includes("buildPaymentModeInvoiceCreationParams(metadata)"),

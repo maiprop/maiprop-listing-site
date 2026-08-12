@@ -8,7 +8,7 @@ import {
   ChevronRight,
   ExternalLink,
   Loader2,
-  Info, LayoutGrid, Scale,
+  AlertCircle, Info, LayoutGrid, Scale,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -59,16 +59,25 @@ const safeExternalUrl = (url: string | null | undefined): string | null =>
 const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates listing data, media, modals, and gated owner actions in one page shell.
   const { id } = useParams<{id: string;}>();
   const navigate = useNavigate();
-  const { state } = useLocation() as { state?: { listing?: ListingWithJoins } };
+  const { state } = useLocation() as {
+    state?: { listing?: ListingWithJoins; auction?: ListingWithJoins };
+  };
   const { t } = useTranslation();
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
 
-  const routeListing = state?.listing;
+  const routeListing = state?.listing ?? state?.auction;
   const listingFromState = routeListing?.id === id ? routeListing : undefined;
-  const { data: dbListing, isLoading, isError } = useListing(id || "", {
+  const {
+    data: dbListing,
+    isLoading,
+    isFetching,
+    isPlaceholderData,
+    isError,
+  } = useListing(id || "", {
     initialData: listingFromState,
     publicScope: true,
+    publicationId: listingFromState?.publicationId,
   });
   const { mutate: trackViewMutate } = useTrackListingView();
   const ownerId = (dbListing as ListingWithJoins | null)?.owner_id;
@@ -87,7 +96,8 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     propertyType: dbListing?.property_type,
     listingType: dbListing?.listing_type,
     price: dbListing ? Number(dbListing.price) : undefined,
-    limit: 8
+    limit: 8,
+    publicationId: dbListing?.publicationId,
   });
 
   // Track view once per session; sessionStorage in useTrackListingView prevents double-counting on refetch
@@ -103,11 +113,17 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     if (!dbListing) return;
     const _db = dbListing as ListingWithJoins;
     if (shouldUseNewBuildRoute(_db)) {
-      navigate(`/new-build/${id}`, { replace: true });
+      navigate(`/new-build/${id}`, {
+        replace: true,
+        state: { listing: _db },
+      });
       return;
     }
     if (_db.listing_type === "auction" && window.location.pathname.startsWith("/property/")) {
-      navigate(`/auction/${id}`, { replace: true });
+      navigate(`/auction/${id}`, {
+        replace: true,
+        state: { auction: _db, listing: _db },
+      });
     }
   }, [dbListing, id, navigate]);
 
@@ -155,7 +171,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !dbListing) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -166,7 +182,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
 
   }
 
-  if (!isLoading && (isError || !dbListing)) {
+  if (!dbListing) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -210,6 +226,11 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   const energyClass = db.energy_class;
   const isLandType = propertyType === "land";
   const isAuction = listingType === "auction";
+  const hasRouteAuctionFallback = isAuction && Boolean(listingFromState);
+  const verificationFailed = hasRouteAuctionFallback && isError;
+  const verificationPending = hasRouteAuctionFallback && !verificationFailed && Boolean(
+    isPlaceholderData || isFetching,
+  );
   const auctionWebsiteUrl = isAuction ? safeExternalUrl(db.website_url) : null;
 
   // Extract ownership info from tags (for auction listings)
@@ -348,6 +369,30 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
         </nav>
 
         <div className="container pb-10">
+          {verificationPending && (
+            <div
+              role="status"
+              data-testid="auction-verification-status"
+              className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2.5 text-sm text-foreground"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+              <p>{t("auctions.detail.verifyingCached", {
+                defaultValue: "Showing cached auction details while we verify the latest information.",
+              })}</p>
+            </div>
+          )}
+          {verificationFailed && (
+            <div
+              role="alert"
+              data-testid="auction-verification-status"
+              className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2.5 text-sm text-foreground"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <p>{t("auctions.detail.refreshFailed", {
+                defaultValue: "Live auction details could not be refreshed. The information shown may be outdated.",
+              })}</p>
+            </div>
+          )}
           <div className="grid lg:grid-cols-[1fr_340px] gap-6 lg:gap-8">
 
             {/* ──── LEFT COLUMN ──── */}

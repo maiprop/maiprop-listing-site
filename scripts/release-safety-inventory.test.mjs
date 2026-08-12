@@ -1,7 +1,125 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  cloudflareHttpMutationViolation,
+  findCloudflareHttpMutations,
+  isAuthorizedCloudflareHttpMutationWorkflow,
+  scanWorkflows,
+} from "./release-safety-inventory.mjs";
 
 describe("release safety inventory", () => {
+  it("inventories generic Cloudflare API HTTP mutations", () => {
+    const workflow = `
+      curl --request PATCH https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p
+      curl -XPOST https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p
+      curl -X PUT https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p
+      curl --request=DELETE https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p
+    `;
+
+    expect(findCloudflareHttpMutations(workflow)).toEqual([
+      "DELETE",
+      "PATCH",
+      "POST",
+      "PUT",
+    ]);
+    expect(findCloudflareHttpMutations(
+      "curl -fsS https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p",
+    )).toEqual([]);
+    expect(findCloudflareHttpMutations(`
+      CLOUDFLARE_ACCOUNT_ID=account
+      curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/p"
+    `)).toEqual(["PATCH"]);
+  });
+
+  it("never authorizes Cloudflare HTTP mutations in evidence workflows", () => {
+    const patch = `
+      curl --request PATCH https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p
+    `;
+    const bootstrapPath =
+      ".github/workflows/lock-cloudflare-pages-git-deploys.yml";
+    const bootstrap = readFileSync(resolve(process.cwd(), bootstrapPath), "utf8");
+
+    expect(cloudflareHttpMutationViolation({
+      workflowPath: ".github/workflows/compliance-evidence.yml",
+      text: patch,
+    })).toMatch(/evidence workflow/i);
+    expect(cloudflareHttpMutationViolation({
+      workflowPath: bootstrapPath,
+      text: patch,
+    })).toMatch(/unauthorized/i);
+    expect(cloudflareHttpMutationViolation({
+      workflowPath: bootstrapPath,
+      text: bootstrap,
+    })).toBeNull();
+  });
+
+  it("detects non-curl Cloudflare API mutation clients", () => {
+    const mutations = [
+      {
+        source: `await fetch("https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p", {
+          method: "PATCH",
+        });`,
+        method: "PATCH",
+      },
+      {
+        source:
+          'Invoke-RestMethod -Uri "https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p" -Method Delete',
+        method: "DELETE",
+      },
+      {
+        source:
+          'Invoke-WebRequest -Method PUT -Uri "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/p"',
+        method: "PUT",
+      },
+      {
+        source:
+          'wget --method=POST "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/p"',
+        method: "POST",
+      },
+      {
+        source:
+          'gh api --method PATCH "https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p"',
+        method: "PATCH",
+      },
+    ];
+
+    for (const { source, method } of mutations) {
+      expect(findCloudflareHttpMutations(source)).toEqual([method]);
+    }
+
+    expect(cloudflareHttpMutationViolation({
+      workflowPath: ".github/workflows/untrusted-provider-control.yml",
+      text: mutations.map(({ source }) => source).join("\n"),
+      authorized: false,
+    })).toMatch(/unauthorized/i);
+  });
+
+  it("keeps the Cloudflare HTTP mutation allowlist narrowly dedicated", () => {
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(
+      ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
+    )).toBe(true);
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(
+      ".github/workflows/stage-release.yml",
+    )).toBe(true);
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(
+      ".github/workflows/reusable-cloudflare-production-deploy.yml",
+    )).toBe(true);
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(
+      ".github/workflows/reusable-supabase-staging.yml",
+    )).toBe(false);
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(
+      ".github/workflows/compliance-evidence.yml",
+    )).toBe(false);
+  });
+
+  it("enforces the GitHub Free HMAC artifact binding contract", () => {
+    const scopedViolations = scanWorkflows().violations.filter((violation) =>
+      violation.startsWith("GitHub Free release binding:"));
+    expect(scopedViolations).toEqual([]);
+  });
+
   it("passes the checked inventory for documented environment variables", () => {
     const result = spawnSync(
       process.execPath,

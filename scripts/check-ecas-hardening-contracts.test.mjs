@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkEcasHardeningContracts,
   checkFunctionInvocationBoundaryEvidence,
+  checkLiveGithubAdminEvidence,
   checkModuleSizeBudget,
   checkSensitiveMutationBoundaries,
 } from "./check-ecas-hardening-contracts.mjs";
@@ -77,7 +78,15 @@ const makeFixture = () => {
       "patterns_allowed",
       "Branch protection API result: blocked",
       "Upgrade to GitHub Pro or make this repository public",
-      "Environment approvals: pending repository admin",
+      "Protected-environment approvals are not an active control for this private repository on GitHub Free.",
+      "workflows must not claim that their secrets or reviewer settings provide isolation.",
+      "attempt-one approval artifact",
+      "allowlisted GitHub actor who differs from the allowlisted deployer",
+      "Exact current-`main` SHA/tree checks",
+      "GitHub artifact API metadata",
+      "repository-secret HMAC binding",
+      "short-lived mutation leases",
+      "leases are revalidated before each provider mutation.",
       "Push protection: pending repository admin",
     ].join("\n"),
   );
@@ -97,7 +106,9 @@ const makeFixture = () => {
 
 describe("ECAS hardening contracts", () => {
   it("accepts a fixture with module budgets, mutation inventory, and live-admin evidence", () => {
-    const result = checkEcasHardeningContracts(makeFixture());
+    const result = checkEcasHardeningContracts(makeFixture(), {
+      now: new Date("2026-07-29T12:00:00.000Z"),
+    });
 
     expect(result.ok).toBe(true);
     expect(result.failures).toEqual([]);
@@ -110,7 +121,9 @@ describe("ECAS hardening contracts", () => {
       JSON.stringify({ version: 1, defaultMaxBytes: 35000, generatedExemptions: [], legacyExceptions: [] }),
     );
 
-    const result = checkModuleSizeBudget(root);
+    const result = checkModuleSizeBudget(root, {
+      now: new Date("2026-07-29T12:00:00.000Z"),
+    });
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("src/pages/LargePage.tsx");
@@ -123,10 +136,58 @@ describe("ECAS hardening contracts", () => {
       "x\r\n".repeat(12_000),
     );
 
-    const result = checkModuleSizeBudget(root);
+    const result = checkModuleSizeBudget(root, {
+      now: new Date("2026-07-29T12:00:00.000Z"),
+    });
 
     expect(result.ok).toBe(true);
     expect(result.failures).toEqual([]);
+  });
+
+  it("rejects Enterprise environment approval claims in GitHub Free admin evidence", () => {
+    const root = makeFixture();
+    const evidencePath = join(root, "docs", "governance", "LIVE_GITHUB_ADMIN_SETTINGS.md");
+    writeFileSync(
+      evidencePath,
+      readFileSync(evidencePath, "utf8").replace(
+        "Protected-environment approvals are not an active control for this private repository on GitHub Free.",
+        "Environment approvals: pending repository admin",
+      ),
+    );
+
+    const result = checkLiveGithubAdminEvidence(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toMatch(/GitHub Free|environment approval/i);
+  });
+
+  it("rejects malformed and expired module-size exception review dates", () => {
+    const malformedRoot = makeFixture();
+    const malformedBudgetPath = join(
+      malformedRoot,
+      "docs",
+      "governance",
+      "module-size-budget.json",
+    );
+    const malformedBudget = JSON.parse(readFileSync(malformedBudgetPath, "utf8"));
+    malformedBudget.legacyExceptions[0].reviewBy = "2026-02-30";
+    writeFileSync(malformedBudgetPath, JSON.stringify(malformedBudget));
+
+    const malformed = checkModuleSizeBudget(malformedRoot, {
+      now: new Date("2026-07-29T12:00:00.000Z"),
+    });
+
+    expect(malformed.ok).toBe(false);
+    expect(malformed.failures.join("\n")).toContain("reviewBy must be a real ISO date");
+
+    const expiredRoot = makeFixture();
+    writeFileSync(join(expiredRoot, "src", "pages", "LargePage.tsx"), "export const nowSmall = true;\n");
+    const expired = checkModuleSizeBudget(expiredRoot, {
+      now: new Date("2026-08-01T00:00:00.000Z"),
+    });
+
+    expect(expired.ok).toBe(false);
+    expect(expired.failures.join("\n")).toContain("reviewBy 2026-07-31 has expired");
   });
 
   it("fails when a browser mutation touches a blocked table", () => {

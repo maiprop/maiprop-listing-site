@@ -39,6 +39,11 @@ import {
   useMarkMessagesRead,
   useStartConversation,
 } from "@/hooks/useMessages";
+import {
+  accountQueryKey,
+  resetIdentityQueryStateForTests,
+  transitionQueryIdentity,
+} from "@/lib/identityQueryBoundary";
 
 const wrapper = () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -90,6 +95,10 @@ const serverMessage = {
   status: "sent",
 };
 
+const messageQueryKey = (conversationId: string) =>
+  accountQueryKey("u-1", "messages", conversationId);
+const conversationsQueryKey = accountQueryKey("u-1", "conversations");
+
 const buildChannel = () => {
   const chain: Record<string, unknown> = {};
   // .on(...) returns the same chain for further `.on` chains
@@ -109,6 +118,7 @@ const conversationQuery = (result: { data: unknown; error: Error | null }) => {
 };
 
 beforeEach(() => {
+  resetIdentityQueryStateForTests();
   useAuthMock.mockReset();
   fromMock.mockReset();
   rpcMock.mockReset();
@@ -188,6 +198,60 @@ describe("useConversations", () => {
 });
 
 describe("useMessages", () => {
+  it("scopes message data to the authenticated account", async () => {
+    const client = createQueryClient();
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          order: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      }),
+    });
+
+    const { result } = renderHook(() => useMessages("conv-1"), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(client.getQueryState(
+      accountQueryKey("u-1", "messages", "conv-1"),
+    )).toBeDefined();
+    expect(client.getQueryState(["messages", "conv-1"])).toBeUndefined();
+  });
+
+  it("ignores a realtime callback captured before an account transition", async () => {
+    const client = createQueryClient();
+    transitionQueryIdentity(client, "u-1");
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          order: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      }),
+    });
+
+    const { result } = renderHook(() => useMessages("c-1"), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const insertSubscription = onMock.mock.calls.find(
+      ([kind, filter]) => kind === "postgres_changes" && filter?.event === "INSERT",
+    );
+
+    transitionQueryIdentity(client, "u-2");
+    const accountBKey = accountQueryKey("u-2", "messages", "c-1");
+    client.setQueryData(accountBKey, [{ id: "account-b-message" }]);
+    act(() => {
+      (insertSubscription?.[2] as (payload: { new: typeof serverMessage }) => void)({
+        new: serverMessage,
+      });
+    });
+
+    expect(client.getQueryData(accountBKey)).toEqual([{ id: "account-b-message" }]);
+    expect(client.getQueryState(accountQueryKey("u-1", "messages", "c-1")))
+      .toBeUndefined();
+  });
+
   it("subscribes to the conversation channel and unsubscribes on unmount", async () => {
     fromMock.mockReturnValue({ select: () => ({ eq: () => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) }) }) });
     const { unmount } = renderHook(() => useMessages("conv-1"), { wrapper: wrapper() });
@@ -248,8 +312,10 @@ describe("useMessages", () => {
       });
     });
 
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["messages", "c-1"] });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["conversations"] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: messageQueryKey("c-1") });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: conversationsQueryKey,
+    });
   });
 
   it("refetches once when realtime becomes subscribed to close the initial-query gap", async () => {
@@ -272,7 +338,7 @@ describe("useMessages", () => {
     act(() => onStatus?.("SUBSCRIBED"));
 
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["messages", "c-1"],
+      queryKey: messageQueryKey("c-1"),
     });
   });
 
@@ -322,7 +388,7 @@ describe("useMessages", () => {
       });
     });
 
-    expect(client.getQueryData<Array<{ id: string }>>(["messages", "c-1"]))
+    expect(client.getQueryData<Array<{ id: string }>>(messageQueryKey("c-1")))
       .toEqual(expect.arrayContaining([expect.objectContaining({ id: "m-server" })]));
   });
 
@@ -334,7 +400,7 @@ describe("useMessages", () => {
         eq: () => ({ order: vi.fn().mockReturnValue(queryResult.promise) }),
       }),
     });
-    client.setQueryData(["messages", "c-1"], [
+    client.setQueryData(messageQueryKey("c-1"), [
       existingMessage,
       {
         ...serverMessage,
@@ -366,7 +432,7 @@ describe("useMessages", () => {
     const cached = client.getQueryData<Array<{
       id: string;
       message_attachments: Array<{ filename: string }>;
-    }>>(["messages", "c-1"]);
+    }>>(messageQueryKey("c-1"));
     expect(cached?.filter((message) => message.id === "m-server")).toHaveLength(1);
     expect(cached?.some((message) => message.id.startsWith("optimistic:"))).toBe(false);
     expect(cached?.find((message) => message.id === "m-server")?.message_attachments)
@@ -386,7 +452,7 @@ describe("useMessages", () => {
     });
     const firstDeliveryId = "00000000-0000-4000-8000-000000000011";
     const secondDeliveryId = "00000000-0000-4000-8000-000000000012";
-    client.setQueryData(["messages", "c-1"], [
+    client.setQueryData(messageQueryKey("c-1"), [
       {
         ...serverMessage,
         id: "optimistic:first",
@@ -422,7 +488,7 @@ describe("useMessages", () => {
     const cached = client.getQueryData<Array<{
       id: string;
       client_delivery_id: string | null;
-    }>>(["messages", "c-1"]);
+    }>>(messageQueryKey("c-1"));
     expect(cached).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "optimistic:first", client_delivery_id: firstDeliveryId }),
       expect.objectContaining({ id: "m-server", client_delivery_id: secondDeliveryId }),
@@ -443,7 +509,7 @@ describe("useMessages", () => {
       message_attachments: [],
       profiles: null,
     };
-    client.setQueryData(["messages", "c-1"], [existingMessage, optimisticMessage]);
+    client.setQueryData(messageQueryKey("c-1"), [existingMessage, optimisticMessage]);
     fromMock.mockImplementation((table: string) => {
       if (table === "messages") {
         return {
@@ -469,7 +535,7 @@ describe("useMessages", () => {
       await result.current.refetch();
     });
 
-    expect(client.getQueryData<Array<{ id: string }>>(["messages", "c-1"]))
+    expect(client.getQueryData<Array<{ id: string }>>(messageQueryKey("c-1")))
       .toEqual(expect.arrayContaining([
         expect.objectContaining({ id: "m-existing" }),
         expect.objectContaining({ id: "optimistic:still-pending" }),
@@ -482,7 +548,7 @@ describe("useSendMessage", () => {
     const client = createQueryClient();
     const delivery = deferred<{ data: typeof serverMessage; error: null }>();
     rpcMock.mockReturnValue({ single: vi.fn().mockReturnValue(delivery.promise) });
-    client.setQueryData(["messages", "c-1"], [existingMessage]);
+    client.setQueryData(messageQueryKey("c-1"), [existingMessage]);
 
     const { result } = renderHook(() => useSendMessage(), {
       wrapper: wrapperWithClient(client),
@@ -500,7 +566,7 @@ describe("useSendMessage", () => {
         id: string;
         content: string;
         client_delivery_id: string | null;
-      }>>(["messages", "c-1"]);
+      }>>(messageQueryKey("c-1"));
       expect(cached).toHaveLength(2);
       expect(cached?.[1]).toMatchObject({
         id: expect.stringMatching(/^optimistic:/),
@@ -536,7 +602,7 @@ describe("useSendMessage", () => {
     const client = createQueryClient();
     const delivery = deferred<{ data: typeof serverMessage; error: null }>();
     rpcMock.mockReturnValue({ single: vi.fn().mockReturnValue(delivery.promise) });
-    client.setQueryData(["messages", "c-1"], [existingMessage]);
+    client.setQueryData(messageQueryKey("c-1"), [existingMessage]);
 
     const { result } = renderHook(() => useSendMessage(), {
       wrapper: wrapperWithClient(client),
@@ -549,11 +615,11 @@ describe("useSendMessage", () => {
       });
     });
     await waitFor(() => {
-      const cached = client.getQueryData<Array<{ id: string }>>(["messages", "c-1"]);
+      const cached = client.getQueryData<Array<{ id: string }>>(messageQueryKey("c-1"));
       expect(cached?.some((message) => message.id.startsWith("optimistic:"))).toBe(true);
     });
 
-    client.setQueryData<Array<Record<string, unknown>>>(["messages", "c-1"], (cached = []) => [
+    client.setQueryData<Array<Record<string, unknown>>>(messageQueryKey("c-1"), (cached = []) => [
       ...cached,
       { ...serverMessage, message_attachments: [], profiles: null },
     ]);
@@ -562,7 +628,7 @@ describe("useSendMessage", () => {
       await mutation;
     });
 
-    const reconciled = client.getQueryData<Array<{ id: string }>>(["messages", "c-1"]);
+    const reconciled = client.getQueryData<Array<{ id: string }>>(messageQueryKey("c-1"));
     expect(reconciled?.filter((message) => message.id === "m-server")).toHaveLength(1);
     expect(reconciled?.some((message) => message.id.startsWith("optimistic:"))).toBe(false);
   });
@@ -571,7 +637,7 @@ describe("useSendMessage", () => {
     const client = createQueryClient();
     const delivery = deferred<{ data: null; error: Error }>();
     rpcMock.mockReturnValue({ single: vi.fn().mockReturnValue(delivery.promise) });
-    client.setQueryData(["messages", "c-1"], [existingMessage]);
+    client.setQueryData(messageQueryKey("c-1"), [existingMessage]);
 
     const { result } = renderHook(() => useSendMessage(), {
       wrapper: wrapperWithClient(client),
@@ -584,7 +650,7 @@ describe("useSendMessage", () => {
       });
     });
     await waitFor(() => {
-      const cached = client.getQueryData<Array<{ id: string }>>(["messages", "c-1"]);
+      const cached = client.getQueryData<Array<{ id: string }>>(messageQueryKey("c-1"));
       expect(cached?.some((message) => message.id.startsWith("optimistic:"))).toBe(true);
     });
 
@@ -593,7 +659,7 @@ describe("useSendMessage", () => {
       await mutation.catch(() => undefined);
     });
 
-    expect(client.getQueryData(["messages", "c-1"])).toEqual([existingMessage]);
+    expect(client.getQueryData(messageQueryKey("c-1"))).toEqual([existingMessage]);
     expect(toastMock.error).toHaveBeenCalledWith("delivery denied");
   });
 
@@ -608,7 +674,7 @@ describe("useSendMessage", () => {
         return deliveryCall === 1 ? firstInsert.promise : secondInsert.promise;
       }),
     }));
-    client.setQueryData(["messages", "c-1"], [existingMessage]);
+    client.setQueryData(messageQueryKey("c-1"), [existingMessage]);
 
     const { result } = renderHook(() => useSendMessage(), {
       wrapper: wrapperWithClient(client),
@@ -627,7 +693,7 @@ describe("useSendMessage", () => {
     });
 
     await waitFor(() => {
-      const cached = client.getQueryData<Array<{ id: string; content: string }>>(["messages", "c-1"]);
+      const cached = client.getQueryData<Array<{ id: string; content: string }>>(messageQueryKey("c-1"));
       expect(cached?.filter((message) => message.id.startsWith("optimistic:"))).toHaveLength(2);
     });
 
@@ -636,7 +702,7 @@ describe("useSendMessage", () => {
       await failedMutation.catch(() => undefined);
     });
 
-    const afterFailure = client.getQueryData<Array<{ id: string; content: string }>>(["messages", "c-1"]);
+    const afterFailure = client.getQueryData<Array<{ id: string; content: string }>>(messageQueryKey("c-1"));
     expect(afterFailure?.some((message) => message.content === "Second survives")).toBe(true);
 
     secondInsert.resolve({

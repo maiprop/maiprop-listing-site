@@ -14,6 +14,12 @@ const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   setAuth: vi.fn(),
   removeChannel: vi.fn(),
+  fetchPublicApi: vi.fn(),
+  peerConfigs: [] as RTCConfiguration[],
+}));
+
+vi.mock("@/lib/publicApi", () => ({
+  fetchPublicApi: mocks.fetchPublicApi,
 }));
 
 vi.mock("@/integrations/supabase/client", () => {
@@ -113,6 +119,10 @@ class MockPeerConnection {
   onconnectionstatechange: (() => void) | null = null;
   ontrack: ((event: { streams: MediaStream[] }) => void) | null = null;
 
+  constructor(config: RTCConfiguration) {
+    mocks.peerConfigs.push(config);
+  }
+
   addTrack() {}
 
   async createOffer() {
@@ -155,8 +165,16 @@ describe("useMaiPropVideoRoom signaling", () => {
     vi.clearAllMocks();
     mocks.channels.length = 0;
     mocks.sentSignals.length = 0;
+    mocks.peerConfigs.length = 0;
     mocks.getSession.mockResolvedValue({ data: { session: { access_token: "token" } } });
     mocks.setAuth.mockResolvedValue(undefined);
+    mocks.fetchPublicApi.mockResolvedValue({
+      iceServers: [{
+        urls: "turns:turn.cloudflare.com:5349",
+        username: "short-lived-user",
+        credential: "short-lived-credential",
+      }],
+    });
 
     let peerIdIndex = 0;
     Object.defineProperty(globalThis, "crypto", {
@@ -184,8 +202,10 @@ describe("useMaiPropVideoRoom signaling", () => {
   });
 
   it("connects two participants through offer, answer, and ICE candidate signaling", async () => {
-    const buyer = renderHook(() => useMaiPropVideoRoom({ roomId: "video:consultation:consult-1", displayName: "Buyer" }));
-    const professional = renderHook(() => useMaiPropVideoRoom({ roomId: "video:consultation:consult-1", displayName: "Professional" }));
+    const roomId =
+      "video:consultation:11111111-1111-4111-8111-111111111111";
+    const buyer = renderHook(() => useMaiPropVideoRoom({ roomId, displayName: "Buyer" }));
+    const professional = renderHook(() => useMaiPropVideoRoom({ roomId, displayName: "Professional" }));
 
     await act(async () => {
       await buyer.result.current.joinRoom();
@@ -198,6 +218,21 @@ describe("useMaiPropVideoRoom signaling", () => {
     expect(buyer.result.current.participantCount).toBe(2);
     expect(professional.result.current.participantCount).toBe(2);
     expect(mocks.setAuth).toHaveBeenCalledWith("token");
+    expect(mocks.fetchPublicApi).toHaveBeenCalledWith(
+      "/api/turn-credentials",
+      expect.objectContaining({
+        method: "POST",
+        body: { roomId },
+        headers: { Authorization: "Bearer token" },
+      }),
+    );
+    expect(mocks.peerConfigs).toContainEqual({
+      iceServers: [{
+        urls: "turns:turn.cloudflare.com:5349",
+        username: "short-lived-user",
+        credential: "short-lived-credential",
+      }],
+    });
     expect(mocks.channels[0].config).toMatchObject({ config: { private: true } });
     expect(mocks.sentSignals.map((signal) => signal.type)).toEqual(expect.arrayContaining(["offer", "answer", "candidate"]));
   });

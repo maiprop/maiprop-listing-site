@@ -479,6 +479,24 @@ describe("ResetPassword", () => {
 });
 
 describe("AIAssistantWidget", () => {
+  it("defers the floating assistant quota request until the user opens it", async () => {
+    authMock.user = { id: "user-1" };
+
+    renderWithProviders(<AIAssistantWidget />);
+
+    await act(async () => Promise.resolve());
+    expect(mockSupabase.functions.invoke).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText("Open mAI prop AI"));
+
+    await waitFor(() => {
+      expect(mockSupabase.functions.invoke).toHaveBeenCalledWith("ai-quota-status", {
+        body: { bucket: "property-chat" },
+        timeout: 4_000,
+      });
+    });
+  });
+
   it("opens, minimizes, closes with Escape, and renders property suggestions", () => {
     renderWithProviders(<AIAssistantWidget propertyContext={{ title: "Sea view flat", price: 420000 }} />);
 

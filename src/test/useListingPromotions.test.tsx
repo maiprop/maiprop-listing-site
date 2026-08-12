@@ -3,10 +3,16 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const rpcMock = vi.hoisted(() => vi.fn());
+const { rpcMock, useAuthMock } = vi.hoisted(() => ({
+  rpcMock: vi.fn(),
+  useAuthMock: vi.fn(),
+}));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { rpc: (...args: unknown[]) => rpcMock(...args) },
+}));
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => useAuthMock(),
 }));
 
 import {
@@ -14,17 +20,51 @@ import {
   useDeactivateListingPromotion,
   useListingPromotionBalance,
 } from "@/hooks/useListingPromotions";
+import { accountQueryKey } from "@/lib/identityQueryBoundary";
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+const wrapperWithClient = (client: QueryClient) =>
+  ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={client}>
     {children}
   </QueryClientProvider>
 );
 
+const wrapper = wrapperWithClient(
+  new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+);
+
 describe("listing promotion hooks", () => {
-  beforeEach(() => rpcMock.mockReset());
+  beforeEach(() => {
+    rpcMock.mockReset();
+    useAuthMock.mockReset();
+    useAuthMock.mockReturnValue({ user: { id: "user-1" } });
+  });
 
   const listingId = "00000000-0000-4000-8000-000000000101";
+
+  it("scopes the promotion balance to the current account", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    rpcMock.mockResolvedValueOnce({
+      data: {
+        cycle_start: "2026-07-01",
+        spotlight: { included: 1, used: 0, remaining: 1, addons: 0 },
+        priority: { included: 1, used: 0, remaining: 1, addons: 0 },
+        bundles: { addons: 0 },
+      },
+      error: null,
+    });
+
+    const { result } = renderHook(() => useListingPromotionBalance(), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(client.getQueryState(
+      accountQueryKey("user-1", "listing-promotion-balance"),
+    )).toBeDefined();
+  });
 
   it("reads the server-owned monthly and add-on balance", async () => {
     rpcMock.mockResolvedValueOnce({

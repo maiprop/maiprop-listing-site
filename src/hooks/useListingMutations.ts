@@ -12,11 +12,13 @@ import {
   parseMutationInput,
 } from "@/lib/mutationSchemas";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
+import { invalidatePublicCatalogueQueries } from "@/lib/publicCatalogueQueryInvalidation";
 import {
   createListingForUser,
   deleteListingForUser,
   updateListingForUser,
 } from "@/hooks/listingManagementBoundary";
+import { getRuntimeValue } from "@/lib/runtimeConfig";
 
 export const useTrackListingView = () => {
   return useMutation({
@@ -28,7 +30,9 @@ export const useTrackListingView = () => {
       const lastTracked = Number(localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey) ?? "0");
       if (Number.isFinite(lastTracked) && now - lastTracked < viewTtlMs) return;
 
-      const sampleRate = Number(import.meta.env.VITE_VIEW_TRACKING_SAMPLE_RATE ?? "1");
+      const sampleRate = Number(
+        getRuntimeValue("VITE_VIEW_TRACKING_SAMPLE_RATE") ?? "1",
+      );
       if (Number.isFinite(sampleRate) && sampleRate >= 0 && sampleRate < 1 && Math.random() > sampleRate) return;
 
       try {
@@ -75,9 +79,8 @@ export const useCreateListing = () => {
       }, "listing") as TablesInsert<"listings">;
       return createListingForUser(payload);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      queryClient.invalidateQueries({ queryKey: ["listings-paginated"] });
+    onSuccess: (data) => {
+      void invalidatePublicCatalogueQueries(queryClient, data?.id);
       toast.success("Listing published successfully!");
     },
     onError: (error: Error) => {
@@ -100,9 +103,7 @@ export const useUpdateListing = () => {
       );
     },
     onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      queryClient.invalidateQueries({ queryKey: ["listings-paginated"] });
-      queryClient.invalidateQueries({ queryKey: ["listing", id] });
+      void invalidatePublicCatalogueQueries(queryClient, id);
       toast.success("Listing updated!");
     },
     onError: (error: Error) => toast.error(error.message),
@@ -118,9 +119,8 @@ export const useDeleteListing = () => {
       const listingId = parseMutationInput(listingIdSchema, id, "listing id");
       await deleteListingForUser(listingId);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      queryClient.invalidateQueries({ queryKey: ["listings-paginated"] });
+    onSuccess: (_, id) => {
+      void invalidatePublicCatalogueQueries(queryClient, id);
       toast.success("Listing deleted.");
     },
     onError: (error: Error) => toast.error(error.message),

@@ -135,7 +135,9 @@ See `commitlint.config.js` for the full config.
 
 ## Deployment
 
-- **Frontend:** Cloudflare Pages (auto-deploys on push to `main`)
+- **Frontend:** Cloudflare Pages. Git automatic deployments are disabled;
+  reviewed immutable candidates use the default-off staging release train.
+  Production mutation remains hard-disabled.
 - **Edge Functions:** Supabase Functions (deployed via CI or `supabase functions deploy`)
 - **Database:** Supabase PostgreSQL (migrations via `supabase db push`)
 

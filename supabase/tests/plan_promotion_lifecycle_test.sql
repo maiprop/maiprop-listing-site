@@ -120,8 +120,6 @@ VALUES
   ('d3000000-0000-4000-8000-000000000004', 'd1000000-0000-4000-8000-000000000001', 'Lapsed cron', 'Athens', 130000, 95, 'apartment', 'sale', 'active'),
   ('d3000000-0000-4000-8000-000000000005', 'd1000000-0000-4000-8000-000000000001', 'Refunded subscription', 'Athens', 140000, 100, 'apartment', 'sale', 'active');
 
-SET LOCAL session_replication_role = origin;
-
 INSERT INTO public.listing_promotion_allocations (
   listing_id,
   owner_id,
@@ -141,6 +139,8 @@ VALUES
   ('d3000000-0000-4000-8000-000000000003', 'd1000000-0000-4000-8000-000000000001', 'spotlight', 'plan', 'd2000000-0000-4000-8000-000000000003', NULL, 'lapsed-update-plan', date_trunc('month', now() AT TIME ZONE 'UTC')::date, now(), now() + interval '30 days'),
   ('d3000000-0000-4000-8000-000000000004', 'd1000000-0000-4000-8000-000000000001', 'spotlight', 'plan', 'd2000000-0000-4000-8000-000000000004', NULL, 'lapsed-cron-plan', date_trunc('month', now() AT TIME ZONE 'UTC')::date, now(), now() + interval '30 days'),
   ('d3000000-0000-4000-8000-000000000005', 'd1000000-0000-4000-8000-000000000001', 'spotlight', 'plan', 'd2000000-0000-4000-8000-000000000005', NULL, 'refunded-plan', date_trunc('month', now() AT TIME ZONE 'UTC')::date, now(), now() + interval '30 days');
+
+SET LOCAL session_replication_role = origin;
 
 UPDATE public.billing_subscriptions
 SET status = 'canceled'

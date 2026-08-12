@@ -39,26 +39,31 @@ describe("onboardingHelpers", () => {
     window.sessionStorage.setItem("role_switch_ctx", JSON.stringify({
       userId: firstUserId,
       fromType: "buyer",
+      toType: "seller",
       hadActiveSub: true,
       auditId: "11111111-1111-4111-8111-111111111111",
+      status: "prepared",
     }));
     expect(readRoleSwitchCtx(firstUserId)).toEqual({
       userId: firstUserId,
       fromType: "buyer",
+      toType: "seller",
       hadActiveSub: true,
       auditId: "11111111-1111-4111-8111-111111111111",
+      status: "prepared",
     });
 
     window.sessionStorage.setItem("role_switch_ctx", "{bad");
     expect(readRoleSwitchCtx(firstUserId)).toBeNull();
   });
 
-  it("durably persists one operation UUID, recovers it after reload, and exposes only begun switches", () => {
+  it("durably persists one operation UUID and exposes its prepared and begun states", () => {
     const operationId = "11111111-1111-4111-8111-111111111111";
     const now = Date.now();
     const first = prepareRoleSwitchOperation({
       userId: firstUserId,
       fromType: "agent",
+      toType: "seller",
       hadActiveSub: true,
       now,
       createId: () => operationId,
@@ -66,11 +71,19 @@ describe("onboardingHelpers", () => {
 
     expect(first.operationId).toBe(operationId);
     expect(window.localStorage.getItem(ROLE_SWITCH_OPERATION_STORAGE_KEY)).toContain(operationId);
-    expect(readRoleSwitchCtx(firstUserId)).toBeNull();
+    expect(readRoleSwitchCtx(firstUserId)).toEqual({
+      userId: firstUserId,
+      fromType: "agent",
+      toType: "seller",
+      hadActiveSub: true,
+      auditId: operationId,
+      status: "prepared",
+    });
 
     const recovered = prepareRoleSwitchOperation({
       userId: firstUserId,
       fromType: "agent",
+      toType: "seller",
       hadActiveSub: true,
       now: now + 1_000,
       createId: () => "22222222-2222-4222-8222-222222222222",
@@ -81,8 +94,10 @@ describe("onboardingHelpers", () => {
     expect(readRoleSwitchCtx(firstUserId)).toEqual({
       userId: firstUserId,
       fromType: "agent",
+      toType: "seller",
       hadActiveSub: true,
       auditId: operationId,
+      status: "begun",
     });
 
     clearRoleSwitchOperation(operationId, firstUserId);
@@ -97,6 +112,7 @@ describe("onboardingHelpers", () => {
     prepareRoleSwitchOperation({
       userId: firstUserId,
       fromType: "buyer",
+      toType: "seller",
       hadActiveSub: true,
       now,
       createId: () => firstOperationId,
@@ -105,8 +121,10 @@ describe("onboardingHelpers", () => {
     window.sessionStorage.setItem("role_switch_ctx", JSON.stringify({
       userId: firstUserId,
       fromType: "buyer",
+      toType: "seller",
       hadActiveSub: true,
       auditId: firstOperationId,
+      status: "begun",
     }));
 
     expect(readRoleSwitchCtx(secondUserId)).toBeNull();
@@ -114,6 +132,7 @@ describe("onboardingHelpers", () => {
     const second = prepareRoleSwitchOperation({
       userId: secondUserId,
       fromType: "buyer",
+      toType: "agent",
       hadActiveSub: false,
       now: now + 1_000,
       createId: () => secondOperationId,
@@ -121,6 +140,15 @@ describe("onboardingHelpers", () => {
     expect(second.operationId).toBe(secondOperationId);
     expect(second.userId).toBe(secondUserId);
     expect(window.localStorage.getItem(ROLE_SWITCH_OPERATION_STORAGE_KEY)).not.toContain(firstOperationId);
+  });
+
+  it("returns null instead of throwing when browser storage is denied", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("Access denied", "SecurityError");
+    });
+
+    expect(() => readRoleSwitchCtx(firstUserId)).not.toThrow();
+    expect(readRoleSwitchCtx(firstUserId)).toBeNull();
   });
 
   it("resolves first-onboarding state from paired role and participant fields", () => {

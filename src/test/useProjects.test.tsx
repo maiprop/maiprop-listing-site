@@ -34,6 +34,7 @@ import {
   useUpdateProjectListingCover,
   useDeleteProject,
 } from "@/hooks/useProjects";
+import { accountQueryKey } from "@/lib/identityQueryBoundary";
 
 function createQueryClient() {
   return new QueryClient({
@@ -66,6 +67,19 @@ beforeEach(() => {
 });
 
 describe("useProjects()", () => {
+  it("scopes project collections to the authenticated account", async () => {
+    const queryClient = createQueryClient();
+    const order = vi.fn().mockResolvedValue({ data: [], error: null });
+    fromMock.mockReturnValue({ select: () => ({ order }) });
+
+    const { result } = renderHookWithQuery(() => useProjects(), queryClient);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(queryClient.getQueryState(
+      accountQueryKey("u-1", "projects", null),
+    )).toBeDefined();
+  });
+
   it("waits for an authenticated user before firing", () => {
     useAuthMock.mockReturnValue({ user: null });
     const { result } = renderHookWithQuery(() => useProjects());
@@ -144,6 +158,37 @@ describe("useProjects()", () => {
 });
 
 describe("useProject(id)", () => {
+  it("scopes project details to the authenticated account", async () => {
+    const queryClient = createQueryClient();
+    fromMock.mockImplementation((table: string) => {
+      if (table === "projects") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { id: "pr1", name: "Solo" },
+            error: null,
+          }),
+        };
+      }
+      if (table === "listing_reference_catalogue") {
+        return {
+          select: () => ({
+            in: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const { result } = renderHookWithQuery(() => useProject("pr1"), queryClient);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(queryClient.getQueryState(
+      accountQueryKey("u-1", "project", "pr1"),
+    )).toBeDefined();
+  });
+
   it("returns null when id is falsy and skips queries", () => {
     const { result } = renderHookWithQuery(() => useProject(undefined));
     expect(result.current.isPending).toBe(true);

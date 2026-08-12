@@ -2,10 +2,19 @@ import { createClient } from "@supabase/supabase-js";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import WebSocket from "ws";
+import {
+  PRODUCTION_PROJECT_REF,
+  STAGING_PROJECT_REF,
+} from "./staging-load-dataset.mjs";
+
+const STAGING_MUTATION_ACKNOWLEDGEMENT =
+  `MUTATE_STAGING_${STAGING_PROJECT_REF}`;
+const DISPOSABLE_FIXTURE_MARKER = "isolated-security";
 
 const REQUIRED_ENV = [
   "VITE_SUPABASE_URL",
   "VITE_SUPABASE_PROJECT_ID",
+  "VITE_SUPABASE_PUBLISHABLE_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
   "RLS_USER_A_EMAIL",
   "RLS_USER_B_EMAIL",
@@ -14,42 +23,70 @@ const REQUIRED_ENV = [
   "ONBOARDING_TEST_PASSWORD",
 ];
 
-function requireEnv(name) {
-  const value = process.env[name]?.trim();
+function requireEnv(name, env = process.env) {
+  const value = env[name]?.trim();
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 }
 
-export function assertIsolatedStagingTarget() {
-  if (process.env.E2E_SECURITY_USE_ISOLATED_STAGING !== "true") {
+export function assertIsolatedStagingTarget(env = process.env) {
+  if (env.E2E_SECURITY_USE_ISOLATED_STAGING !== "true") {
     throw new Error("Security fixture preparation is restricted to isolated staging.");
   }
-  if (process.env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS !== "true") {
+  if (env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS !== "true") {
     throw new Error("Destructive E2E safety acknowledgement is required.");
   }
 
-  const projectId = requireEnv("VITE_SUPABASE_PROJECT_ID");
-  const allowedRefs = new Set(
-    requireEnv("E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean),
-  );
-  if (!allowedRefs.has(projectId)) {
-    throw new Error(`Project ${projectId} is not approved for destructive E2E fixtures.`);
+  const projectRef = requireEnv("VITE_SUPABASE_PROJECT_ID", env);
+  if (projectRef === PRODUCTION_PROJECT_REF) {
+    throw new Error("Refusing to mutate the MaiProp production Supabase project.");
+  }
+  if (projectRef !== STAGING_PROJECT_REF) {
+    throw new Error(`Staging mutation target must be ${STAGING_PROJECT_REF}.`);
+  }
+  if (
+    requireEnv("STAGING_MUTATION_ACKNOWLEDGEMENT", env) !==
+      STAGING_MUTATION_ACKNOWLEDGEMENT
+  ) {
+    throw new Error(
+      `Staging mutation acknowledgement must be ${STAGING_MUTATION_ACKNOWLEDGEMENT}.`,
+    );
   }
 
-  const host = new URL(requireEnv("VITE_SUPABASE_URL")).hostname;
-  if (!host.startsWith(`${projectId}.`)) {
-    throw new Error(`Supabase URL host ${host} does not match approved project ${projectId}.`);
+  const apiUrl = new URL(requireEnv("VITE_SUPABASE_URL", env));
+  const expectedHost = `${STAGING_PROJECT_REF}.supabase.co`;
+  if (
+    apiUrl.protocol !== "https:" ||
+    apiUrl.hostname !== expectedHost ||
+    apiUrl.port ||
+    apiUrl.username ||
+    apiUrl.password
+  ) {
+    throw new Error(
+      `Security fixtures require the exact MaiProp staging API host ${expectedHost} over HTTPS.`,
+    );
   }
+
+  return {
+    projectRef,
+    apiUrl: apiUrl.origin,
+  };
 }
 
 async function listUsersByEmail(admin, expectedEmails) {
   const usersByEmail = new Map();
   for (let page = 1; page <= 20 && usersByEmail.size < expectedEmails.size; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw new Error(`Could not list staging Auth users: ${error.message}`);
+    if (error) {
+      throw new Error(
+        `Could not validate staging Auth admin privilege: ${error.message}`,
+      );
+    }
+    if (!Array.isArray(data?.users)) {
+      throw new Error(
+        "Could not validate staging Auth admin privilege: missing users result.",
+      );
+    }
 
     for (const user of data.users) {
       const email = user.email?.toLowerCase();
@@ -58,6 +95,62 @@ async function listUsersByEmail(admin, expectedEmails) {
     if (data.users.length < 1000) break;
   }
   return usersByEmail;
+}
+
+async function assertExistingFixtureUsersAreSafe(admin, existingByEmail) {
+  const existingUsers = [...existingByEmail.values()];
+  if (existingUsers.length === 0) return;
+
+  const userIds = existingUsers.map((user) => user.id);
+  const [profilesResult, rolesResult] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("user_id, role, is_platform_admin")
+      .in("user_id", userIds),
+    admin
+      .from("user_roles")
+      .select("user_id, role")
+      .in("user_id", userIds),
+  ]);
+
+  if (profilesResult.error || !Array.isArray(profilesResult.data)) {
+    throw new Error(
+      `Could not preflight staging fixture profiles: ${
+        profilesResult.error?.message ?? "missing profiles result"
+      }`,
+    );
+  }
+  if (rolesResult.error || !Array.isArray(rolesResult.data)) {
+    throw new Error(
+      `Could not preflight staging fixture roles: ${
+        rolesResult.error?.message ?? "missing roles result"
+      }`,
+    );
+  }
+
+  const protectedUserIds = new Set(
+    profilesResult.data
+      .filter((profile) =>
+        profile.role === "admin" || profile.is_platform_admin === true
+      )
+      .map((profile) => profile.user_id),
+  );
+  for (const role of rolesResult.data) {
+    if (role.role === "admin") protectedUserIds.add(role.user_id);
+  }
+
+  for (const user of existingUsers) {
+    if (protectedUserIds.has(user.id)) {
+      throw new Error(
+        `Refusing to use protected admin identity ${user.email} as an RLS fixture.`,
+      );
+    }
+    if (user.app_metadata?.e2e_fixture !== DISPOSABLE_FIXTURE_MARKER) {
+      throw new Error(
+        `Existing user ${user.email} is not a server-owned disposable staging fixture.`,
+      );
+    }
+  }
 }
 
 async function ensureAuthUser(admin, existingUser, email, password, { replace = false } = {}) {
@@ -72,9 +165,9 @@ async function ensureAuthUser(admin, existingUser, email, password, { replace = 
   const attributes = {
     password,
     email_confirm: true,
-    user_metadata: {
-      ...(existingUser?.user_metadata ?? {}),
-      e2e_fixture: "isolated-security",
+    app_metadata: {
+      ...(existingUser?.app_metadata ?? {}),
+      e2e_fixture: DISPOSABLE_FIXTURE_MARKER,
     },
   };
 
@@ -136,28 +229,39 @@ async function normalizeNonAdminIdentity(admin, user, { requireIncompleteOnboard
   }
 }
 
-export async function prepareIsolatedSecurityFixtures() {
-  for (const name of REQUIRED_ENV) requireEnv(name);
-  assertIsolatedStagingTarget();
+export async function prepareIsolatedSecurityFixtures({
+  env = process.env,
+  createAdminClient = createClient,
+} = {}) {
+  for (const name of REQUIRED_ENV) requireEnv(name, env);
+  const target = assertIsolatedStagingTarget(env);
 
-  const url = requireEnv("VITE_SUPABASE_URL");
-  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-  const userAEmail = requireEnv("RLS_USER_A_EMAIL").toLowerCase();
-  const userBEmail = requireEnv("RLS_USER_B_EMAIL").toLowerCase();
-  const onboardingEmail = requireEnv("ONBOARDING_TEST_EMAIL").toLowerCase();
-  const rlsPassword = requireEnv("RLS_USER_PASSWORD");
-  const onboardingPassword = requireEnv("ONBOARDING_TEST_PASSWORD");
+  const url = requireEnv("VITE_SUPABASE_URL", env);
+  const publishableKey = requireEnv("VITE_SUPABASE_PUBLISHABLE_KEY", env);
+  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY", env);
+  if (serviceRoleKey === publishableKey) {
+    throw new Error(
+      "Staging Auth admin credential must differ from the publishable key.",
+    );
+  }
+
+  const userAEmail = requireEnv("RLS_USER_A_EMAIL", env).toLowerCase();
+  const userBEmail = requireEnv("RLS_USER_B_EMAIL", env).toLowerCase();
+  const onboardingEmail = requireEnv("ONBOARDING_TEST_EMAIL", env).toLowerCase();
+  const rlsPassword = requireEnv("RLS_USER_PASSWORD", env);
+  const onboardingPassword = requireEnv("ONBOARDING_TEST_PASSWORD", env);
   const emails = [userAEmail, userBEmail, onboardingEmail];
 
   if (new Set(emails).size !== emails.length) {
     throw new Error("RLS and onboarding staging fixture emails must be distinct.");
   }
 
-  const admin = createClient(url, serviceRoleKey, {
+  const admin = createAdminClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     realtime: { transport: WebSocket },
   });
   const existingByEmail = await listUsersByEmail(admin, new Set(emails));
+  await assertExistingFixtureUsersAreSafe(admin, existingByEmail);
 
   const userA = await ensureAuthUser(admin, existingByEmail.get(userAEmail), userAEmail, rlsPassword);
   const userB = await ensureAuthUser(admin, existingByEmail.get(userBEmail), userBEmail, rlsPassword);
@@ -173,7 +277,9 @@ export async function prepareIsolatedSecurityFixtures() {
   await normalizeNonAdminIdentity(admin, userB);
   await normalizeNonAdminIdentity(admin, onboardingUser, { requireIncompleteOnboarding: true });
 
-  console.log(`Prepared three isolated staging security identities for project ${requireEnv("VITE_SUPABASE_PROJECT_ID")}.`);
+  console.log(
+    `Prepared three isolated staging security identities for project ${target.projectRef}.`,
+  );
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;

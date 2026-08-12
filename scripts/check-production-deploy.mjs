@@ -13,6 +13,7 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { validatePublicApiEndpoints } from "./check-production-deploy-public-api.mjs";
 import { validateDeploymentVersion } from "./check-production-deploy-version.mjs";
+import { fetchReleaseResource } from "./release-http.mjs";
 import {
   getSiteLockCookieHeader,
   getSiteLockErrorMessage,
@@ -31,6 +32,13 @@ const FETCH_TIMEOUT_MS = 30_000;
 const USER_AGENT = "maiprop-production-deploy-check/1.0";
 
 const args = process.argv.slice(2);
+const supportedOptions = new Set(["--browser", "--public-api"]);
+const unsupportedOption = args.find(
+  (arg) => arg.startsWith("--") && !supportedOptions.has(arg),
+);
+if (unsupportedOption) {
+  throw new Error(`Unsupported production deploy check option: ${unsupportedOption}`);
+}
 const browserCheck =
   args.includes("--browser") ||
   ["1", "true", "yes"].includes(
@@ -41,14 +49,6 @@ const publicApiCheck =
   ["1", "true", "yes"].includes(
     String(process.env.PRODUCTION_DEPLOY_PUBLIC_API_CHECK ?? "").toLowerCase(),
   );
-const publicApiAllowFailOpen =
-  args.includes("--public-api-allow-fail-open") ||
-  ["1", "true", "yes"].includes(
-    String(process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN ?? "").toLowerCase(),
-  );
-if (publicApiAllowFailOpen) {
-  process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = "true";
-}
 
 const urlsFromArgs = args.filter((arg) => !arg.startsWith("--"));
 const urls = urlsFromArgs.length
@@ -57,6 +57,56 @@ const urls = urlsFromArgs.length
     DEFAULT_URLS;
 const expectedDeploySha = process.env.PRODUCTION_DEPLOY_EXPECTED_SHA?.trim() ?? "";
 const deployVersionPath = process.env.PRODUCTION_DEPLOY_VERSION_PATH?.trim() || "/deploy-version.json";
+const turnAccessToken =
+  process.env.PRODUCTION_DEPLOY_TURN_ACCESS_TOKEN?.trim() ?? "";
+const turnRoomId =
+  process.env.PRODUCTION_DEPLOY_TURN_ROOM_ID?.trim() ?? "";
+if (Boolean(turnAccessToken) !== Boolean(turnRoomId)) {
+  throw new Error(
+    "Authenticated TURN proof requires both PRODUCTION_DEPLOY_TURN_ACCESS_TOKEN and PRODUCTION_DEPLOY_TURN_ROOM_ID",
+  );
+}
+const turnExpectedTtlSeconds = Number.parseInt(
+  process.env.PRODUCTION_DEPLOY_TURN_EXPECTED_TTL_SECONDS ?? "21600",
+  10,
+);
+if (
+  turnAccessToken &&
+  (
+    !Number.isSafeInteger(turnExpectedTtlSeconds) ||
+    turnExpectedTtlSeconds < 300 ||
+    turnExpectedTtlSeconds > 86_400
+  )
+) {
+  throw new Error(
+    "PRODUCTION_DEPLOY_TURN_EXPECTED_TTL_SECONDS must be an integer from 300 through 86400",
+  );
+}
+const turnKeyId =
+  process.env.CLOUDFLARE_TURN_KEY_ID?.trim() ?? "";
+const turnApiToken =
+  process.env.CLOUDFLARE_TURN_API_TOKEN?.trim() ?? "";
+if (Boolean(turnKeyId) !== Boolean(turnApiToken)) {
+  throw new Error(
+    "Cloudflare TURN service proof requires both CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN",
+  );
+}
+const turnServiceTtlSeconds = Number.parseInt(
+  process.env.MAIPROP_TURN_TTL_SECONDS ?? "600",
+  10,
+);
+if (
+  turnKeyId &&
+  (
+    !Number.isSafeInteger(turnServiceTtlSeconds) ||
+    turnServiceTtlSeconds < 300 ||
+    turnServiceTtlSeconds > 172_800
+  )
+) {
+  throw new Error(
+    "MAIPROP_TURN_TTL_SECONDS must be an integer from 300 through 172800",
+  );
+}
 
 const attempts = Number.parseInt(
   process.env.PRODUCTION_DEPLOY_CHECK_ATTEMPTS ?? "",
@@ -74,6 +124,123 @@ const sleep = (ms) => {
 const assertOk = (condition, message) => {
   if (!condition) throw new Error(message);
 };
+
+export function createDeployVerificationEvidence(
+  targets,
+  { generatedAt = new Date().toISOString(), turnService = null } = {},
+) {
+  assertOk(Array.isArray(targets) && targets.length > 0, "Deploy verification produced no target evidence");
+  for (const target of targets) {
+    assertOk(target?.status === "passed", "Deploy verification cannot attest a failed target");
+    if (target.publicApi) {
+      assertOk(
+        target.publicApi.status === "passed" &&
+          Array.isArray(target.publicApi.endpoints) &&
+          target.publicApi.endpoints.length > 0 &&
+          target.publicApi.endpoints.every((endpoint) => endpoint?.status === "passed"),
+        `Deploy verification cannot attest incomplete public API evidence for ${target.baseUrl}`,
+      );
+    }
+  }
+  if (turnService) {
+    assertOk(
+      turnService.status === "passed" &&
+        turnService.httpStatus === 201 &&
+        turnService.credentialsPresent === true &&
+        turnService.credentialsRedacted === true &&
+        turnService.turnUrlCount > 0,
+      "Deploy verification cannot attest incomplete Cloudflare TURN service evidence",
+    );
+  }
+
+  return {
+    schemaVersion: 1,
+    kind: "maiprop-deploy-verification",
+    generatedAt,
+    status: "passed",
+    targets,
+    ...(turnService ? { turnService } : {}),
+  };
+}
+
+export async function verifyCloudflareTurnCredentials({
+  keyId,
+  apiToken,
+  ttlSeconds = 600,
+  fetchImpl = fetchReleaseResource,
+}) {
+  assertOk(
+    typeof keyId === "string" && keyId.trim().length > 0 &&
+      typeof apiToken === "string" && apiToken.trim().length > 0,
+    "Cloudflare TURN key id and API token are required",
+  );
+  assertOk(
+    Number.isSafeInteger(ttlSeconds) &&
+      ttlSeconds >= 300 &&
+      ttlSeconds <= 172_800,
+    "Cloudflare TURN credential TTL must be an integer from 300 through 172800",
+  );
+
+  let response;
+  try {
+    response = await fetchImpl(
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId.trim())}/credentials/generate-ice-servers`,
+      {
+        method: "POST",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        headers: {
+          Authorization: `Bearer ${apiToken.trim()}`,
+          "Content-Type": "application/json",
+          "user-agent": USER_AGENT,
+        },
+        body: JSON.stringify({ ttl: ttlSeconds }),
+      },
+    );
+  } catch {
+    throw new Error("Cloudflare TURN credential generation request failed");
+  }
+  assertOk(
+    response?.status === 201,
+    `Cloudflare TURN credential generation returned HTTP ${response?.status ?? "unknown"}`,
+  );
+
+  let payload;
+  try {
+    payload = JSON.parse(await response.text());
+  } catch {
+    throw new Error("Cloudflare TURN credential generation returned invalid JSON");
+  }
+  const iceServers = Array.isArray(payload?.iceServers)
+    ? payload.iceServers
+    : [];
+  const urls = iceServers.flatMap((server) =>
+    Array.isArray(server?.urls)
+      ? server.urls
+      : typeof server?.urls === "string"
+        ? [server.urls]
+        : []
+  );
+  const turnUrls = urls.filter((url) => /^turns?:/i.test(url));
+  const credentialServer = iceServers.find((server) =>
+    typeof server?.username === "string" && server.username.length > 0 &&
+      typeof server?.credential === "string" && server.credential.length > 0
+  );
+  assertOk(
+    iceServers.length > 0 && turnUrls.length > 0 && credentialServer,
+    "Cloudflare TURN credential generation returned incomplete ICE credentials",
+  );
+
+  return {
+    status: "passed",
+    httpStatus: response.status,
+    authentication: "bearer",
+    ttlSeconds,
+    iceServerCount: iceServers.length,
+    turnUrlCount: turnUrls.length,
+    credentialsPresent: true,
+    credentialsRedacted: true,
+  };
+}
 
 let cachedSiteLockHeaders;
 const getSiteLockHeaders = async () => {
@@ -94,8 +261,7 @@ const fetchText = async (url, options = {}) => {
   } = options;
   const siteLockHeaders = await getSiteLockHeaders();
   const cloudflareAccessHeaders = getCloudflareAccessHeaders();
-  const res = await fetch(url, {
-    redirect: "follow",
+  const res = await fetchReleaseResource(url, {
     signal: AbortSignal.timeout(timeoutMs),
     headers: mergeHeaders(
       { "user-agent": USER_AGENT },
@@ -231,23 +397,40 @@ const checkUrl = async (url) => {
   });
   const assetPath = validateHtml(url, html);
   await validateEntrypointAsset(url, assetPath);
-  if (publicApiCheck) await validatePublicApiEndpoints(url, { fetchText });
+  const publicApi = publicApiCheck
+     ? await validatePublicApiEndpoints(url, {
+         fetchText,
+         operationalProof: true,
+         turnCredentialProof: turnAccessToken
+           ? {
+               accessToken: turnAccessToken,
+               roomId: turnRoomId,
+               expectedTtlSeconds: turnExpectedTtlSeconds,
+             }
+           : undefined,
+       })
+    : null;
   if (browserCheck) await runBrowserCheck(url);
   const browserSuffix = browserCheck ? " and mounts the app" : "";
-  const apiSuffix = publicApiCheck
-    ? publicApiAllowFailOpen
-      ? " with public APIs checked or fail-open fallbacks tolerated"
-      : " with public APIs online"
-    : "";
-  process.stdout.write(`[ok] ${url} serves built assets${browserSuffix}${apiSuffix}\n`);
+  const apiSuffix = publicApiCheck ? " with public APIs online" : "";
+  process.stderr.write(`[ok] ${url} serves built assets${browserSuffix}${apiSuffix}\n`);
+
+  return {
+    baseUrl: new URL(url).toString(),
+    status: "passed",
+    deploymentVersion: "passed",
+    builtAssets: "passed",
+    entrypointAsset: new URL(assetPath, url).toString(),
+    browser: browserCheck ? "passed" : "not-requested",
+    publicApi,
+  };
 };
 
 const checkWithRetries = async (url) => {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      await checkUrl(url);
-      return;
+      return await checkUrl(url);
     } catch (error) {
       lastError = error;
       process.stderr.write(
@@ -260,11 +443,20 @@ const checkWithRetries = async (url) => {
 };
 
 const main = async () => {
+  const turnService = turnKeyId
+    ? await verifyCloudflareTurnCredentials({
+        keyId: turnKeyId,
+        apiToken: turnApiToken,
+        ttlSeconds: turnServiceTtlSeconds,
+      })
+    : null;
+  const targets = [];
   for (const url of urls) {
-    await checkWithRetries(url);
+    targets.push(await checkWithRetries(url));
   }
 
-  process.stdout.write("All production deploy checks passed\n");
+  const evidence = createDeployVerificationEvidence(targets, { turnService });
+  process.stdout.write(`${JSON.stringify(evidence)}\n`);
 };
 
 if (

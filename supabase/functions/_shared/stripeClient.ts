@@ -1,6 +1,8 @@
 import Stripe from "npm:stripe@22.3.0";
 
 export const STRIPE_API_VERSION = "2026-06-24.dahlia" as const;
+export const STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER =
+  "maiprop_jpylcxme" as const;
 
 export type StripeRuntimeMode = "test" | "live";
 
