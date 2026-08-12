@@ -150,8 +150,26 @@ jobs:
           GITLEAKS_VERSION=8.30.1
           GITLEAKS_ARCHIVE="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           EXPECTED_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
-          curl -sSLo "$GITLEAKS_ARCHIVE" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${GITLEAKS_ARCHIVE}"
-          echo "${EXPECTED_SHA256}  ${GITLEAKS_ARCHIVE}" | sha256sum -c -
+          DOWNLOAD_VERIFIED=false
+          for ATTEMPT in 1 2 3; do
+            rm -f "$GITLEAKS_ARCHIVE"
+            if curl --fail --location --silent --show-error \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --output "$GITLEAKS_ARCHIVE" \
+              "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${GITLEAKS_ARCHIVE}" && \
+              echo "${EXPECTED_SHA256}  ${GITLEAKS_ARCHIVE}" | sha256sum -c -; then
+              DOWNLOAD_VERIFIED=true
+              break
+            fi
+
+            echo "::warning::Gitleaks archive failed verification (attempt ${ATTEMPT}/3)."
+            sleep $((ATTEMPT * 2))
+          done
+
+          if [ "$DOWNLOAD_VERIFIED" != "true" ]; then
+            echo "::error::Gitleaks archive failed pinned SHA-256 verification after 3 attempts."
+            exit 1
+          fi
           tar -xzf "$GITLEAKS_ARCHIVE" gitleaks
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
           gitleaks version
