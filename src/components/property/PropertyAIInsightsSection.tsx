@@ -70,11 +70,16 @@ function formatQuotaText(
   if (quota.limit >= UNLIMITED_AI_LIMIT) {
     return t("propertyAIInsights.quota.unlimited", "Unlimited AI insight requests this month");
   }
+  const remaining = Math.max(quota.limit - quota.used, 0);
+  const defaultValue = isPro
+    ? `${remaining} of ${quota.limit} Pro AI insight requests remaining this month`
+    : `${remaining} of ${quota.limit} Free AI insight requests remaining this month`;
   return t(
     isPro ? "propertyAIInsights.quota.remainingPro" : "propertyAIInsights.quota.remainingFree",
     {
-      remaining: Math.max(quota.limit - quota.used, 0),
+      remaining,
       limit: quota.limit,
+      defaultValue,
     },
   );
 }

@@ -1,262 +1,500 @@
 /**
- * log-role-switch — authenticated edge function
+ * Authenticated role-switch billing and audit boundary.
  *
- * Called by the frontend when a user confirms a role switch via the RoleSwitchModal.
- *
- * Responsibilities:
- *   1. Authenticate the caller (Bearer token → Supabase user)
- *   2. If cancel_subscription=true, cancel active Stripe subscription at period end
- *   3. Record an audit row in role_switch_history via the service-role-only
- *      SECURITY DEFINER RPC `record_role_switch_audit_for_user`
- *
- * We deliberately do NOT do a direct INSERT into role_switch_history. The table's
- * INSERT policy is `WITH CHECK (false)` so any client without a verified service-role
- * JWT is rejected, and Supabase projects can be migrated to the new sb_secret_*
- * key format under the same `SUPABASE_SERVICE_ROLE_KEY` env name — in which case
- * supabase-js does not produce a service_role JWT for PostgREST and the insert
- * silently fails. Going through a service-role RPC with an explicitly verified
- * user id removes that dependency entirely.
+ * The request is validated before rate-limit persistence or network work. The
+ * authenticated profile supplies the source role, Stripe supplies billing
+ * truth, and a durable audit intent is written before any Stripe mutation.
  */
 
-import Stripe from "npm:stripe@22.3.0";
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
-import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
-import { createStripeClient } from "../_shared/stripeClient.ts";
-import { shouldSkipProfileEntitlementSync } from "../stripe-webhook/addonGuard.ts";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { createLogger } from "../_shared/logger.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
+import { SchemaValidationError } from "../_shared/schema.ts";
+import { createVerifiedStripeClient } from "../_shared/stripeClient.ts";
+import type { Database } from "../../../src/integrations/supabase/types.ts";
+import {
+  BillingResolutionError,
+  reconcileRoleSwitchBilling,
+  stripeRuntimeFromKey,
+  unknownRoleSwitchBillingResult,
+} from "./billing.ts";
+import {
+  parseRoleSwitchRequest,
+  resolveAuthoritativeRoleSwitch,
+  type RolePrices,
+} from "./request.ts";
 
 const log = createLogger("log-role-switch");
-const limiter = makeRateLimiter({ bucket: "log-role-switch", maxRequests: 5, windowMs: 60_000 });
+export const ROLE_SWITCH_BILLING_DEADLINE_MS = 20_000;
+const limiter = makeRateLimiter({
+  bucket: "log-role-switch",
+  maxRequests: 5,
+  windowMs: 60_000,
+});
 
-// Redirect the legacy logStep helper through the structured logger.
-const logStep = (step: string, details?: unknown) => {
-  log.info(step, details && typeof details === "object" ? details as Record<string, unknown> : details !== undefined ? { details } : undefined);
-};
+type BillingOutcome =
+  | "not_required"
+  | "pending"
+  | "succeeded"
+  | "already_pending"
+  | "unknown";
 
-async function findOwnedStripeCustomerForRoleSwitch(
-  stripe: Stripe,
-  supabase: { from: (table: string) => unknown },
-  user: { id: string; email: string },
-): Promise<Stripe.Customer | null> {
-  try {
-    const search = await stripe.customers.search({
-      query: `metadata['user_id']:'${user.id}'`,
-      limit: 1,
-    });
-    if (search.data[0]) return search.data[0];
-  } catch (err: unknown) {
-    logStep("Stripe customer metadata search failed; falling back to durable billing state", {
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-
-  const { data, error } = await (supabase.from("billing_customers") as {
-    select: (columns: string) => {
-      eq: (column: string, value: string) => {
-        order: (
-          column: string,
-          opts: { ascending: boolean },
-        ) => {
-          limit: (count: number) => PromiseLike<{
-            data?: Array<{ stripe_customer_id?: string | null }> | null;
-            error?: { message?: string } | null;
-          }>;
+type FunctionDatabase = Omit<Database, "public"> & {
+  public: Omit<Database["public"], "Functions"> & {
+    Functions:
+      & Omit<
+        Database["public"]["Functions"],
+        | "finalize_role_switch_audit_for_user"
+        | "record_role_switch_audit_for_user"
+      >
+      & {
+      finalize_role_switch_audit_for_user: {
+        Args: {
+          _audit_id: string;
+          _user_id: string;
+          _had_active_sub: boolean | null;
+          _billing_outcome: BillingOutcome;
+          _billing_error: string | null;
+          _subscription_count: number | null;
+          _cancelled_count: number | null;
         };
+        Returns: undefined;
+      };
+      record_role_switch_audit_for_user: {
+        Args: {
+          _operation_id: string;
+          _user_id: string;
+          _from_type: string;
+          _to_type: string;
+          _switch_kind: string;
+        };
+        Returns: string;
       };
     };
-  }).select("stripe_customer_id")
-    .eq("user_id", user.id)
+  };
+};
+
+type ServiceClient = ReturnType<typeof createClient<FunctionDatabase>>;
+
+const jsonResponse = (
+  body: Record<string, unknown>,
+  status: number,
+  corsHeaders: Record<string, string>,
+) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+async function lookupDurableStripeCustomerId(
+  supabase: ServiceClient,
+  userId: string,
+  runtimeMode: "test" | "live",
+  livemode: boolean,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("billing_customers")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .eq("runtime_mode", runtimeMode)
+    .eq("livemode", livemode)
     .order("updated_at", { ascending: false })
-    .limit(1);
-  if (error) throw new Error(error.message ?? "billing customer lookup failed");
-  const customerId = data?.[0]?.stripe_customer_id ?? null;
-  if (!customerId) return null;
-  const customer = await stripe.customers.retrieve(customerId);
-  if ("deleted" in customer && customer.deleted) return null;
-  return customer as Stripe.Customer;
+    .limit(1)
+    .abortSignal(signal);
+  if (error) {
+    throw new BillingResolutionError(
+      error.message || "Durable billing customer lookup failed",
+    );
+  }
+  return data?.[0]?.stripe_customer_id ?? null;
+}
+
+async function loadRoleSwitchProfile(
+  supabase: ServiceClient,
+  userId: string,
+) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(
+      "role, participant_type, role_switch_in_progress_at, role_switch_audit_id",
+    )
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) {
+    throw new SchemaValidationError("Role-switch state unavailable", {
+      code: "role_switch_state_unavailable",
+    });
+  }
+  return data;
+}
+
+const planKeyByRole = {
+  buyer: "pro",
+  seller: "pro",
+  agent: "agent_basic",
+  developer: "developer_pro",
+  professional: "professional_basic",
+} as const;
+
+async function loadAuthoritativeRolePrices(
+  supabase: ServiceClient,
+  fromType: keyof typeof planKeyByRole | "investor" | "institutional",
+  toType:
+    | keyof typeof planKeyByRole
+    | "investor"
+    | "institutional",
+): Promise<RolePrices> {
+  const roles = [fromType, toType].filter(
+    (role): role is keyof typeof planKeyByRole => role in planKeyByRole,
+  );
+  const keys = [...new Set(roles.map((role) => planKeyByRole[role]))];
+  if (keys.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from("pricing_configs")
+    .select("key, amount")
+    .eq("is_active", true)
+    .in("key", keys);
+  if (error) {
+    throw new SchemaValidationError(
+      "Authoritative role pricing is unavailable",
+      {
+        code: "role_switch_pricing_unavailable",
+      },
+    );
+  }
+
+  const amountByKey = new Map(
+    (data ?? []).map((row) => [row.key, Number(row.amount)]),
+  );
+  return Object.fromEntries(
+    roles.map((role) => [role, amountByKey.get(planKeyByRole[role])]),
+  ) as RolePrices;
+}
+
+type AuditState = {
+  billing_outcome: BillingOutcome | "legacy" | "failed";
+  billing_reconciliation_required: boolean;
+  billing_subscription_count: number | null;
+  billing_cancelled_count: number | null;
+  had_active_sub: boolean | null;
+  sub_cancelled: boolean;
+};
+
+async function loadAuditState(
+  supabase: ServiceClient,
+  auditId: string,
+  userId: string,
+): Promise<AuditState> {
+  const { data, error } = await supabase
+    .from("role_switch_history")
+    .select(
+      "billing_outcome, billing_reconciliation_required, billing_subscription_count, billing_cancelled_count, had_active_sub, sub_cancelled",
+    )
+    .eq("id", auditId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) {
+    throw new SchemaValidationError("Role-switch audit is unavailable", {
+      code: "role_switch_audit_unavailable",
+    });
+  }
+  return data as AuditState;
+}
+
+async function finalizeAudit(
+  supabase: ServiceClient,
+  args: {
+    auditId: string;
+    userId: string;
+    hadActiveSub: boolean | null;
+    billingOutcome: BillingOutcome;
+    billingError: string | null;
+    subscriptionCount: number | null;
+    cancelledCount: number | null;
+  },
+): Promise<{ message: string } | null> {
+  let lastError: { message: string } | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const { error } = await supabase.rpc(
+      "finalize_role_switch_audit_for_user",
+      {
+        _audit_id: args.auditId,
+        _user_id: args.userId,
+        _had_active_sub: args.hadActiveSub,
+        _billing_outcome: args.billingOutcome,
+        _billing_error: args.billingError,
+        _subscription_count: args.subscriptionCount,
+        _cancelled_count: args.cancelledCount,
+      },
+    );
+    if (!error) return null;
+    lastError = { message: error.message };
+  }
+  return lastError;
 }
 
 Deno.serve(async (req) => {
-  const corsPreflightResponse = handleCors(req);
-  if (corsPreflightResponse) return corsPreflightResponse;
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed" }, 405, corsHeaders);
+  }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceRoleKey) {
-    return new Response(JSON.stringify({ error: "Service unavailable" }), {
-      status: 503,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Service unavailable" }, 503, corsHeaders);
   }
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  // Authentication errors return 401 directly (rather than being caught by
-  // the generic 500 handler below) so callers can reliably distinguish "you
-  // weren't logged in" from "the server crashed". Tests assert this contract.
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+  const supabase = createClient<FunctionDatabase>(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
 
-  // Verify the caller JWT, then pass only the verified user id to PostgREST.
   let user: { id: string; email: string };
   try {
-    user = await verifyBearerToken(req, supabaseAdmin);
-  } catch (err: unknown) {
-    const message = err instanceof AuthError ? err.message : "Unauthenticated";
-    log.warn("auth failed", { err: message });
-    return new Response(JSON.stringify({ error: "Unauthenticated" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    user = await verifyBearerToken(req, supabase);
+  } catch (error: unknown) {
+    const message = error instanceof AuthError
+      ? error.message
+      : "Unauthenticated";
+    log.warn("role-switch authentication failed", { error: message });
+    return jsonResponse({ error: "Unauthenticated" }, 401, corsHeaders);
   }
 
+  let requestBody: Awaited<ReturnType<typeof parseRoleSwitchRequest>>;
   try {
-    logStep("Authenticated", { userId: user.id });
-
-    // ── Parse body ────────────────────────────────────────────────────────────
-    const body = req.method === "POST" && req.body
-      ? await req.json().catch(() => ({}))
-      : {};
-
-    const fromType: string = body.from_type ?? "";
-    const toType: string = body.to_type ?? "";
-    const switchKind: string = body.switch_kind ?? "same-tier";
-    const hadActiveSub: boolean = body.had_active_sub === true;
-    const cancelSubscription: boolean = body.cancel_subscription === true;
-
-    // ── Stripe: cancel subscription at period end ─────────────────────────────
-    // Idempotent: skip the update if the active sub is already pending
-    // cancellation. Stripe failures are non-fatal so the audit insert below
-    // still runs (preserves the trail), but the error is surfaced in the
-    // response body so the UI can warn the user their billing state may not
-    // have changed.
-    let subCancelled = false;
-    let subAlreadyCancelling = false;
-    let subCancelledCount = 0;
-    let subAlreadyCancellingCount = 0;
-    let stripeError: string | null = null;
-    if (cancelSubscription) {
-      const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-      if (stripeKey) {
-        try {
-          const stripe = createStripeClient(stripeKey);
-          const customer = await findOwnedStripeCustomerForRoleSwitch(stripe, supabaseAdmin, user);
-          if (customer) {
-            // Stripe's `status` filter only accepts a single value per call. To
-            // cancel the user's subscription regardless of which billable state
-            // it's in, fetch with status="all" and filter client-side.
-            //
-            // Billable states (the user is being / will be charged):
-            //   - active     : current period paid, will renew
-            //   - trialing   : in trial period, will renew at end
-            //   - past_due   : payment failed but sub not yet canceled
-            //
-            // Non-billable states are intentionally skipped:
-            //   - canceled / ended / incomplete / incomplete_expired
-            //   - paused / unpaid (Stripe stops billing on these)
-            const billableStatuses: ReadonlySet<string> = new Set([
-              "active",
-              "trialing",
-              "past_due",
-            ]);
-            const allSubs = await stripe.subscriptions.list({
-              customer: customer.id,
-              status: "all",
-              limit: 100,
-            });
-            const billableSubs = allSubs.data.filter(
-              (s: Stripe.Subscription) =>
-                billableStatuses.has(s.status) &&
-                !shouldSkipProfileEntitlementSync(s),
-            );
-            for (const sub of billableSubs) {
-              if (sub.cancel_at_period_end === true) {
-                subAlreadyCancelling = true;
-                subAlreadyCancellingCount += 1;
-                logStep("Subscription already pending cancellation — skipping update", {
-                  subId: sub.id,
-                });
-              } else {
-                await stripe.subscriptions.update(sub.id, { cancel_at_period_end: true });
-                subCancelled = true;
-                subCancelledCount += 1;
-                logStep("Subscription set to cancel at period end", { subId: sub.id });
-              }
-            }
-          }
-        } catch (stripeErr: unknown) {
-          stripeError = stripeErr instanceof Error ? stripeErr.message : String(stripeErr);
-          logStep("Stripe cancellation failed", { error: stripeError });
-        }
-      } else {
-        stripeError = "STRIPE_SECRET_KEY is not set";
-        logStep("Stripe cancellation unavailable", { error: stripeError });
-      }
+    requestBody = await parseRoleSwitchRequest(req);
+  } catch (error: unknown) {
+    if (error instanceof SchemaValidationError) {
+      return jsonResponse(
+        {
+          error: error.message,
+          code: error.code,
+          issues: error.issues,
+        },
+        error.status,
+        corsHeaders,
+      );
     }
+    return jsonResponse({ error: "Invalid request body" }, 400, corsHeaders);
+  }
 
-    // ── Audit log insert (via SECURITY DEFINER RPC) ──────────────────────────
-    // sub_cancelled in the audit row = "the subscription is configured to cancel
-    // at period end after this call". True when we just made the change AND when
-    // a previous call already did. False only when Stripe failed or we found no
-    // active sub. This preserves the pre-PR semantic (which always re-issued the
-    // update and recorded true) while keeping the Stripe call idempotent.
-    const subPendingCancellation = subCancelled || subAlreadyCancelling;
-    if (toType) {
-      const { error: insertError } = await supabaseAdmin.rpc("record_role_switch_audit_for_user", {
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "anonymous";
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
+
+  try {
+    const profile = await loadRoleSwitchProfile(supabase, user.id);
+    const prices = await loadAuthoritativeRolePrices(
+      supabase,
+      requestBody.from_type,
+      requestBody.to_type,
+    );
+    const { operationId, fromType, toType, switchKind } =
+      resolveAuthoritativeRoleSwitch(
+        requestBody,
+        profile,
+        prices,
+      );
+
+    const { data: auditId, error: auditError } = await supabase.rpc(
+      "record_role_switch_audit_for_user",
+      {
+        _operation_id: operationId,
         _user_id: user.id,
         _from_type: fromType,
         _to_type: toType,
         _switch_kind: switchKind,
-        _had_active_sub: hadActiveSub,
-        _sub_cancelled: subPendingCancellation,
+      },
+    );
+    if (
+      auditError || typeof auditId !== "string" || auditId !== operationId
+    ) {
+      log.warn("role-switch audit intent failed", {
+        error: auditError?.message || "missing audit id",
       });
-
-      if (insertError) {
-        logStep("Audit insert failed", { error: insertError.message });
-        // Non-fatal — return success to avoid blocking the UX
-      }
-    } else {
-      logStep("Audit insert skipped until destination role is selected");
+      return jsonResponse(
+        { error: "Role switch audit unavailable" },
+        503,
+        corsHeaders,
+      );
     }
 
-    logStep("Done", {
-      fromType,
-      toType,
-      subCancelled,
-      subAlreadyCancelling,
-      subCancelledCount,
-      subAlreadyCancellingCount,
-      stripeError,
-    });
+    const existingAudit = await loadAuditState(supabase, auditId, user.id);
+    if (
+      !existingAudit.billing_reconciliation_required &&
+      ["not_required", "succeeded", "already_pending"].includes(
+        existingAudit.billing_outcome,
+      )
+    ) {
+      return jsonResponse(
+        {
+          success: true,
+          audit_id: auditId,
+          sub_cancelled: existingAudit.sub_cancelled,
+          sub_cancelled_count: existingAudit.billing_cancelled_count ?? 0,
+          billing_outcome: existingAudit.billing_outcome,
+          billing_subscription_count: existingAudit.billing_subscription_count,
+          had_active_sub: existingAudit.had_active_sub,
+          reconciliation_required: false,
+          stripe_error: null,
+        },
+        200,
+        corsHeaders,
+      );
+    }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        sub_cancelled: subCancelled,
-        sub_already_cancelling: subAlreadyCancelling,
-        sub_cancelled_count: subCancelledCount,
-        sub_already_cancelling_count: subAlreadyCancellingCount,
-        stripe_error: stripeError,
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    let billingResult;
+    const billingController = new AbortController();
+    const billingTimer = setTimeout(
+      () =>
+        billingController.abort(
+          new DOMException(
+            "Role-switch billing deadline exceeded",
+            "AbortError",
+          ),
+        ),
+      ROLE_SWITCH_BILLING_DEADLINE_MS,
     );
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    logStep("ERROR", { message: msg });
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    try {
+      const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+      if (!stripeKey) {
+        throw new BillingResolutionError("STRIPE_SECRET_KEY is not set");
+      }
+      const { runtimeMode, livemode } = stripeRuntimeFromKey(stripeKey);
+      const stripe = await createVerifiedStripeClient(stripeKey);
+      billingResult = await reconcileRoleSwitchBilling({
+        stripe,
+        user,
+        auditId,
+        signal: billingController.signal,
+        lookupDurableCustomerId: (signal) =>
+          lookupDurableStripeCustomerId(
+            supabase,
+            user.id,
+            runtimeMode,
+            livemode,
+            signal ?? billingController.signal,
+          ),
+        onMetadataSearchError: (error) => {
+          log.warn("Stripe metadata search failed; using durable ownership", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        },
+      });
+    } catch (error: unknown) {
+      billingResult = unknownRoleSwitchBillingResult(error);
+    } finally {
+      clearTimeout(billingTimer);
+    }
+
+    const {
+      billingOutcome,
+      billingError,
+      errorDetail: stripeErrorDetail,
+      hadActiveSub,
+      subscriptionCount,
+      cancelledCount,
+      newlyCancelledCount,
+      alreadyPendingCount,
+    } = billingResult;
+    if (billingOutcome === "unknown") {
+      log.error("Stripe cancellation could not be verified", {
+        auditId,
+        error: stripeErrorDetail,
+      });
+    }
+
+    const finalizationError = await finalizeAudit(supabase, {
+      auditId,
+      userId: user.id,
+      hadActiveSub,
+      billingOutcome,
+      billingError,
+      subscriptionCount,
+      cancelledCount,
     });
+    if (finalizationError) {
+      log.error("role-switch audit finalization failed", {
+        auditId,
+        error: finalizationError.message,
+      });
+      return jsonResponse(
+        {
+          error: "Role switch audit finalization failed",
+          audit_id: auditId,
+          billing_outcome: billingOutcome,
+          reconciliation_required: true,
+        },
+        500,
+        corsHeaders,
+      );
+    }
+
+    if (billingOutcome === "unknown") {
+      return jsonResponse(
+        {
+          error: "Billing cancellation could not be verified",
+          audit_id: auditId,
+          billing_outcome: billingOutcome,
+          reconciliation_required: true,
+          stripe_error: "billing_verification_failed",
+        },
+        502,
+        corsHeaders,
+      );
+    }
+
+    log.info("role switch billing verified", {
+      auditId,
+      userId: user.id,
+      billingOutcome,
+      subscriptionCount,
+      newlyCancelledCount,
+      alreadyPendingCount,
+      stripeErrorDetail,
+    });
+    return jsonResponse(
+      {
+        success: true,
+        audit_id: auditId,
+        sub_cancelled: newlyCancelledCount > 0,
+        sub_already_cancelling: alreadyPendingCount > 0,
+        sub_cancelled_count: newlyCancelledCount,
+        sub_already_cancelling_count: alreadyPendingCount,
+        billing_outcome: billingOutcome,
+        billing_subscription_count: subscriptionCount,
+        had_active_sub: hadActiveSub,
+        reconciliation_required: false,
+        stripe_error: null,
+      },
+      200,
+      corsHeaders,
+    );
+  } catch (error: unknown) {
+    if (error instanceof SchemaValidationError) {
+      return jsonResponse(
+        {
+          error: error.message,
+          code: error.code,
+          issues: error.issues,
+        },
+        error.status,
+        corsHeaders,
+      );
+    }
+    log.error("role switch failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return jsonResponse({ error: "Role switch failed" }, 500, corsHeaders);
   }
 });

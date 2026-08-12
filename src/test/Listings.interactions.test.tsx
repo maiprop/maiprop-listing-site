@@ -12,6 +12,7 @@ const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipeline
   const getParam = vi.fn((_key: string, fallback = "") => fallback);
   const loadGoogleMapsPlaces = vi.fn().mockResolvedValue(undefined);
   const trackUserSearch = vi.fn().mockResolvedValue(undefined);
+  const refetch = vi.fn().mockResolvedValue(undefined);
   const filterState = {
     searchQuery: "",
     selectedListingType: "sale",
@@ -52,6 +53,7 @@ const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipeline
     hasNextPage: false,
     isFetchingNextPage: false,
     sentinelRef: { current: null },
+    refetch,
   };
   const pipelineCalls: unknown[] = [];
   const authState = { user: null as null | { id: string } };
@@ -268,6 +270,8 @@ describe("Listings page interactions", () => {
     pipelineState.isError = false;
     pipelineState.hasNextPage = false;
     pipelineState.isFetchingNextPage = false;
+    pipelineState.refetch.mockReset();
+    pipelineState.refetch.mockResolvedValue(undefined);
     pipelineCalls.length = 0;
     isMobileState.value = false;
     trackUserSearch.mockReset();
@@ -561,12 +565,6 @@ describe("Listings page interactions", () => {
       activeFilterCount: 9,
     });
 
-    const reload = vi.fn();
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: { ...window.location, reload },
-    });
-
     const { default: Listings } = await import("@/pages/Listings");
     const { rerender } = renderWithProviders(<Listings />);
 
@@ -626,7 +624,7 @@ describe("Listings page interactions", () => {
     pipelineState.filtered = [];
     rerender(<Listings />);
     fireEvent.click(screen.getAllByRole("button", { name: /retry/i })[0]);
-    expect(reload).toHaveBeenCalled();
+    expect(pipelineState.refetch).toHaveBeenCalledTimes(1);
   }, 15000);
 
   it("preserves polygon geometry and membership across map remounts", async () => {

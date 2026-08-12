@@ -376,10 +376,34 @@ describe("production release validation", () => {
     expect(selected.id).toBe(80);
   });
 
+  it("rejects an older successful Stripe readiness run after a newer failure", () => {
+    const successfulJob = [{
+      name: "Verify exact-SHA Stripe live catalogue",
+      status: "completed",
+      conclusion: "success",
+    }];
+    const runs = [79, 80].map((id) => ({
+      id,
+      run_attempt: 1,
+      actor: { login: "release-operator" },
+      triggering_actor: { login: "release-operator" },
+      head_sha: sha,
+      event: "workflow_dispatch",
+      status: "completed",
+      conclusion: id === 79 ? "success" : "failure",
+    }));
+
+    expect(() => selectStripeReadinessRun({
+      sha,
+      runs,
+      jobsByRun: new Map([[79, successfulJob], [80, []]]),
+    })).toThrow(/newest exact-SHA attempt-1 Stripe readiness run/);
+  });
+
   it("rejects unsigned aggregate content that does not match the selected staging run", () => {
     const digest = "a".repeat(64);
     const attestation = {
-      schema_version: 4,
+      schema_version: 5,
       evidence_type: "maiprop-release-candidate-attestation",
       release_sha: sha,
       source_tree: "b".repeat(40),
@@ -405,6 +429,7 @@ describe("production release validation", () => {
         supabase: "e".repeat(64),
         cloudflare: "f".repeat(64),
         business: "0".repeat(64),
+        stripe_payment: "4".repeat(64),
         security: "1".repeat(64),
         n_minus_one: "2".repeat(64),
         catalogue_performance: "3".repeat(64),
@@ -422,6 +447,28 @@ describe("production release validation", () => {
         stable_url: "https://maiprop-listing-site-staging.pages.dev",
       },
       business: { release_sha: sha, artifact_sha256: digest },
+      stripe_payment: {
+        schema_version: 1,
+        evidence_type: "maiprop-staging-stripe-payment",
+        ok: true,
+        release_sha: sha,
+        artifact_sha256: digest,
+        target: {
+          supabase_project_ref: "xsiehskfgeoqyazcgauv",
+          app_origin: "https://maiprop-listing-site-staging.pages.dev",
+          stripe_mode: "test",
+        },
+        playwright: {
+          spec: "stripe-payment-complete.spec.ts",
+          test_title:
+            "completes test-card subscription checkout and observes synced entitlement",
+          expected: 1,
+          skipped: 0,
+          unexpected: 0,
+          flaky: 0,
+          report_sha256: "b".repeat(64),
+        },
+      },
       security: {
         schema_version: 1,
         evidence_type: "maiprop-staging-live-security",
@@ -619,6 +666,21 @@ describe("production release validation", () => {
       stagingRunId: "61",
       stagingRunAttempt: "1",
     })).toThrow(/Security evidence/i);
+    expect(() => validateReleaseCandidateAttestation({
+      attestation: {
+        ...attestation,
+        stripe_payment: {
+          ...attestation.stripe_payment,
+          playwright: { ...attestation.stripe_payment.playwright, skipped: 1 },
+        },
+      },
+      sha,
+      sourceTree: "b".repeat(40),
+      sourceRunId: "60",
+      sourceRunAttempt: "2",
+      stagingRunId: "61",
+      stagingRunAttempt: "1",
+    })).toThrow(/Stripe payment evidence/i);
     expect(() => validateReleaseCandidateAttestation({
       attestation: {
         ...attestation,
@@ -1230,7 +1292,7 @@ describe("production release validation", () => {
 
   it("revalidates the exact mutation lease before every production boundary", () => {
     const lease = {
-      schema_version: 1,
+      schema_version: 2,
       repository: "maiprop/maiprop-listing-site",
       release_sha: sha,
       source_tree: "b".repeat(40),
@@ -1250,8 +1312,9 @@ describe("production release validation", () => {
       stripe_readiness_sha256: "e".repeat(64),
       stripe_readiness_artifact_id: "90",
       stripe_readiness_artifact_digest: "f".repeat(64),
+      stripe_readiness_checked_at: "2026-07-28T11:59:00.000Z",
       issued_at: "2026-07-28T12:00:00.000Z",
-      expires_at: "2026-07-28T12:15:00.000Z",
+      expires_at: "2026-07-28T12:14:00.000Z",
     };
     const expectedIdentity = {
       repository: "maiprop/maiprop-listing-site",
@@ -1309,6 +1372,26 @@ describe("production release validation", () => {
       productionRunAttempt: "3",
       now: new Date("2026-07-28T12:05:00.000Z"),
     })).toEqual(rollbackLease);
+    const staleReadinessRollbackLease = {
+      ...rollbackLease,
+      stripe_readiness_checked_at: "2026-07-28T10:00:00.000Z",
+    };
+    expect(validateMutationLease({
+      lease: staleReadinessRollbackLease,
+      ...expectedIdentity,
+      ...rollbackIdentity,
+      sha,
+      artifactSha256: "b".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      productionRunId: "70",
+      productionRunAttempt: "3",
+      now: new Date("2026-07-28T12:05:00.000Z"),
+    })).toEqual(staleReadinessRollbackLease);
     expect(() => validateMutationLease({
       lease: rollbackLease,
       ...expectedIdentity,
@@ -1406,6 +1489,61 @@ describe("production release validation", () => {
       productionRunAttempt: "3",
       now: new Date("2026-07-28T12:05:00.000Z"),
     })).toThrow(/Stripe readiness.*attempt 1/i);
+
+    expect(() => validateMutationLease({
+      lease: { ...lease, stripe_readiness_checked_at: undefined },
+      ...expectedIdentity,
+      sha,
+      artifactSha256: "b".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      productionRunId: "70",
+      productionRunAttempt: "3",
+      now: new Date("2026-07-28T12:05:00.000Z"),
+    })).toThrow(/Stripe readiness check time.*ISO date/i);
+
+    expect(() => validateMutationLease({
+      lease: {
+        ...lease,
+        stripe_readiness_checked_at: "2026-07-28T11:58:59.999Z",
+        expires_at: "2026-07-28T12:14:00.000Z",
+      },
+      ...expectedIdentity,
+      sha,
+      artifactSha256: "b".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      productionRunId: "70",
+      productionRunAttempt: "3",
+      now: new Date("2026-07-28T12:05:00.000Z"),
+    })).toThrow(/Stripe readiness.*15 minutes/i);
+
+    expect(() => validateMutationLease({
+      lease: {
+        ...lease,
+        stripe_readiness_checked_at: "2026-07-28T12:01:01.000Z",
+      },
+      ...expectedIdentity,
+      sha,
+      artifactSha256: "b".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      productionRunId: "70",
+      productionRunAttempt: "3",
+      now: new Date("2026-07-28T12:00:00.000Z"),
+    })).toThrow(/Stripe readiness.*future/i);
 
     const { stripe_readiness_sha256: _removed, ...strippedLease } = lease;
     expect(() => validateMutationLease({
@@ -1644,7 +1782,7 @@ describe("production release validation", () => {
       revoked: false,
     }));
     writeFileSync(leasePath, JSON.stringify({
-      schema_version: 1,
+      schema_version: 2,
       repository: "maiprop/maiprop-listing-site",
       release_sha: sha,
       source_tree: "b".repeat(40),
@@ -1659,8 +1797,14 @@ describe("production release validation", () => {
       approval_run_attempt: "1",
       production_run_id: "70",
       production_run_attempt: "3",
+      stripe_readiness_run_id: "80",
+      stripe_readiness_run_attempt: "1",
+      stripe_readiness_sha256: "e".repeat(64),
+      stripe_readiness_artifact_id: "90",
+      stripe_readiness_artifact_digest: "f".repeat(64),
+      stripe_readiness_checked_at: "2026-07-28T11:59:00.000Z",
       issued_at: "2026-07-28T12:00:00.000Z",
-      expires_at: "2026-07-28T12:15:00.000Z",
+      expires_at: "2026-07-28T12:14:00.000Z",
     }));
 
     try {
@@ -1730,6 +1874,16 @@ describe("production release validation", () => {
         "70",
         "--production-run-attempt",
         "3",
+        "--stripe-readiness-run-id",
+        "80",
+        "--stripe-readiness-run-attempt",
+        "1",
+        "--stripe-readiness-sha256",
+        "e".repeat(64),
+        "--stripe-readiness-artifact-id",
+        "90",
+        "--stripe-readiness-artifact-digest",
+        "f".repeat(64),
         "--now",
         "2026-07-28T12:05:00.000Z",
       ], { cwd: root, encoding: "utf8" });

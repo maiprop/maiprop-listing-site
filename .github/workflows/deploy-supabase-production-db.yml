@@ -87,7 +87,7 @@ jobs:
   deploy:
     name: Production database migration gate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       PRODUCTION_CALLER_WORKFLOW_PATH: ".github/workflows/deploy-production-release.yml"
       PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"
@@ -978,6 +978,32 @@ jobs:
           );
           NODE
 
+      - name: Check production role-switch index safety
+        env:
+          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+        run: |
+          set -euo pipefail
+          raw_state="$(mktemp)"
+          psql "$SUPABASE_PRODUCTION_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --quiet \
+            --file release-candidate/supabase/reconciliation/role-switch-index-preflight.sql \
+            | sed '/^[[:space:]]*$/d' > "$raw_state"
+          if [ "$(wc -l < "$raw_state" | tr -d '[:space:]')" != "1" ]; then
+            echo "::error::Production role-switch index state must contain exactly one JSON object."
+            exit 1
+          fi
+          jq -cS . "$raw_state" \
+            > production-role-switch-index-state-before.json
+          node scripts/check-role-switch-index-preflight.mjs \
+            --state production-role-switch-index-state-before.json \
+            --plan production-migration-plan.json \
+            --out production-role-switch-index-preflight-before.json \
+            --release-sha "$RELEASE_SHA"
+
       - name: Dry-run exact staged production migrations
         env:
           SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
@@ -1058,6 +1084,12 @@ jobs:
             migration_plan_sha256: digest("production-migration-plan.json"),
             migration_dry_run_sha256: digest(
               "production-migration-dry-run.txt",
+            ),
+            role_switch_index_state_sha256: digest(
+              "production-role-switch-index-state-before.json",
+            ),
+            role_switch_index_preflight_sha256: digest(
+              "production-role-switch-index-preflight-before.json",
             ),
             captured_at: new Date().toISOString(),
           };
@@ -1172,17 +1204,13 @@ jobs:
       - name: Apply exact staged production migrations
         env:
           GH_TOKEN: ${{ github.token }}
+          MUTATION_LEASE_ARTIFACT: ${{ inputs.mutation_lease_artifact }}
           RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
           SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
-          pending_count="$(node -e "const p=require('./production-migration-plan.json'); process.stdout.write(String(p.pending.length))")"
-          if [ "$pending_count" = "0" ]; then
-            echo "Production migration history already matches staging."
-            exit 0
-          fi
           current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
           if [ "$current_main" != "$RELEASE_SHA" ]; then
             echo "::error::Release SHA is no longer current main."
@@ -1278,6 +1306,27 @@ jobs:
             );
           }
           NODE
+          raw_index_state="$(mktemp)"
+          psql "$SUPABASE_PRODUCTION_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --quiet \
+            --file release-candidate/supabase/reconciliation/role-switch-index-preflight.sql \
+            | sed '/^[[:space:]]*$/d' > "$raw_index_state"
+          if [ "$(wc -l < "$raw_index_state" | tr -d '[:space:]')" != "1" ]; then
+            echo "::error::Production role-switch index state must contain exactly one JSON object at the mutation boundary."
+            exit 1
+          fi
+          jq -cS . "$raw_index_state" \
+            > production-role-switch-index-state-mutation-boundary.json
+          node scripts/check-role-switch-index-preflight.mjs \
+            --state production-role-switch-index-state-mutation-boundary.json \
+            --plan production-migration-plan.json \
+            --out production-role-switch-index-preflight-mutation-boundary.json \
+            --release-sha "$RELEASE_SHA"
+          pending_count="$(node -e "const p=require('./production-migration-plan.json'); process.stdout.write(String(p.pending.length))")"
           actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
           if [ "$actual_manifest_sha256" != "$MANIFEST_SHA256" ]; then
             echo "::error::Release manifest changed at the production database mutation boundary."
@@ -1295,9 +1344,66 @@ jobs:
             exit 1
           fi
           "$RUNNER_TEMP/verify-production-provider-bindings.sh"
-          npx --no-install supabase --workdir release-candidate db push \
-            --db-url "$SUPABASE_PRODUCTION_DB_URL" \
-            --yes
+          if [ "$pending_count" != "0" ]; then
+            npx --no-install supabase --workdir release-candidate db push \
+              --db-url "$SUPABASE_PRODUCTION_DB_URL" \
+              --yes
+          else
+            echo "Production migration history already matches staging; continuing with idempotent online finalization."
+          fi
+
+          online_sql="release-candidate/supabase/reconciliation/role-switch-online-finalization.sql"
+          grep -F "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_profiles_role_switch_audit_id" "$online_sql"
+          grep -F "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_role_switch_history_reconciliation_due" "$online_sql"
+          grep -F "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_agent_data_inputs_user_discount_invoice" "$online_sql"
+          grep -F "VALIDATE CONSTRAINT profiles_role_switch_audit_id_fkey" "$online_sql"
+          psql "$SUPABASE_PRODUCTION_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file "$online_sql"
+
+          export ROLE_SWITCH_MIGRATION_PENDING_COUNT="$pending_count"
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const sqlPath =
+            "release-candidate/supabase/reconciliation/role-switch-online-finalization.sql";
+          const artifact = JSON.parse(readFileSync(
+            "evidence/api/mutation-lease-artifact.json",
+            "utf8",
+          ));
+          const leasePath =
+            "evidence/mutation-lease/production-mutation-lease.json";
+          const digest = (path) => createHash("sha256")
+            .update(readFileSync(path))
+            .digest("hex");
+          const evidence = {
+            schema_version: 1,
+            evidence_type: "maiprop-role-switch-online-finalization",
+            repository: process.env.GITHUB_REPOSITORY,
+            release_sha: process.env.RELEASE_SHA,
+            source_tree: process.env.SOURCE_TREE,
+            production_run_id: process.env.PRODUCTION_RUN_ID,
+            production_run_attempt: process.env.PRODUCTION_RUN_ATTEMPT,
+            mutation_lease: {
+              artifact_name: process.env.MUTATION_LEASE_ARTIFACT,
+              artifact_id: String(artifact.id),
+              artifact_digest: String(artifact.digest),
+              payload_sha256: digest(leasePath),
+            },
+            migration_pending_count: Number(
+              process.env.ROLE_SWITCH_MIGRATION_PENDING_COUNT,
+            ),
+            sql_path: sqlPath.replace(/^release-candidate\//, ""),
+            sql_sha256: digest(sqlPath),
+            completed_at: new Date().toISOString(),
+          };
+          writeFileSync(
+            "production-role-switch-online-finalization.json",
+            `${JSON.stringify(evidence, null, 2)}\n`,
+          );
+          NODE
 
       - name: Require exact production migration parity
         env:
@@ -1363,6 +1469,53 @@ jobs:
             );
           }
           NODE
+
+      - name: Require exact role-switch post-apply integrity
+        env:
+          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+        run: |
+          set -euo pipefail
+          raw_index_state="$(mktemp)"
+          psql "$SUPABASE_PRODUCTION_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --quiet \
+            --file release-candidate/supabase/reconciliation/role-switch-index-preflight.sql \
+            | sed '/^[[:space:]]*$/d' > "$raw_index_state"
+          if [ "$(wc -l < "$raw_index_state" | tr -d '[:space:]')" != "1" ]; then
+            echo "::error::Production post-apply role-switch index state must contain exactly one JSON object."
+            exit 1
+          fi
+          jq -cS . "$raw_index_state" \
+            > production-role-switch-index-state-after.json
+          node scripts/check-role-switch-index-preflight.mjs \
+            --state production-role-switch-index-state-after.json \
+            --plan production-migration-plan.json \
+            --out production-role-switch-index-preflight-after.json \
+            --release-sha "$RELEASE_SHA" \
+            --require-finalized
+
+          raw_fk_state="$(mktemp)"
+          psql "$SUPABASE_PRODUCTION_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --quiet \
+            --file release-candidate/supabase/reconciliation/role-switch-fk-state.sql \
+            | sed '/^[[:space:]]*$/d' > "$raw_fk_state"
+          if [ "$(wc -l < "$raw_fk_state" | tr -d '[:space:]')" != "1" ]; then
+            echo "::error::Production post-apply role-switch foreign-key state must contain exactly one JSON object."
+            exit 1
+          fi
+          jq -cS . "$raw_fk_state" \
+            > production-role-switch-fk-state-after.json
+          node scripts/check-role-switch-fk-post-apply.mjs \
+            --state production-role-switch-fk-state-after.json \
+            --out production-role-switch-fk-post-apply.json \
+            --release-sha "$RELEASE_SHA"
 
       - name: Require exact legacy schema convergence with staging
         env:
@@ -1486,6 +1639,33 @@ jobs:
           const reconciliation = read(
             "production-migration-history-reconciliation.json",
           );
+          const roleSwitchIndexStateBefore = read(
+            "production-role-switch-index-state-before.json",
+          );
+          const roleSwitchIndexPreflightBefore = read(
+            "production-role-switch-index-preflight-before.json",
+          );
+          const roleSwitchIndexStateMutationBoundary = read(
+            "production-role-switch-index-state-mutation-boundary.json",
+          );
+          const roleSwitchIndexPreflightMutationBoundary = read(
+            "production-role-switch-index-preflight-mutation-boundary.json",
+          );
+          const roleSwitchOnlineFinalization = read(
+            "production-role-switch-online-finalization.json",
+          );
+          const roleSwitchIndexStateAfter = read(
+            "production-role-switch-index-state-after.json",
+          );
+          const roleSwitchIndexPreflightAfter = read(
+            "production-role-switch-index-preflight-after.json",
+          );
+          const roleSwitchForeignKeyStateAfter = read(
+            "production-role-switch-fk-state-after.json",
+          );
+          const roleSwitchForeignKeyPostApply = read(
+            "production-role-switch-fk-post-apply.json",
+          );
           const indexStats = read("supabase-index-stats-production.json");
           const advisor = read("supabase-advisor-production-summary.json");
           const securitySha256 = digest(
@@ -1498,6 +1678,26 @@ jobs:
             reconciliation.value.ok !== true ||
             reconciliation.value.staging_is_exact_candidate !== true ||
             reconciliation.value.production_is_canonical_prefix !== true ||
+            roleSwitchIndexPreflightBefore.value.ok !== true ||
+            roleSwitchIndexPreflightBefore.value.release_sha !==
+              process.env.RELEASE_SHA ||
+            roleSwitchIndexPreflightMutationBoundary.value.ok !== true ||
+            roleSwitchIndexPreflightMutationBoundary.value.release_sha !==
+              process.env.RELEASE_SHA ||
+            roleSwitchOnlineFinalization.value.release_sha !==
+              process.env.RELEASE_SHA ||
+            roleSwitchOnlineFinalization.value.source_tree !==
+              process.env.SOURCE_TREE ||
+            roleSwitchOnlineFinalization.value.evidence_type !==
+              "maiprop-role-switch-online-finalization" ||
+            roleSwitchIndexPreflightAfter.value.ok !== true ||
+            roleSwitchIndexPreflightAfter.value.verification_phase !==
+              "post_apply" ||
+            roleSwitchIndexPreflightAfter.value.release_sha !==
+              process.env.RELEASE_SHA ||
+            roleSwitchForeignKeyPostApply.value.ok !== true ||
+            roleSwitchForeignKeyPostApply.value.release_sha !==
+              process.env.RELEASE_SHA ||
             legacySchemaAfter.value.ok !== true ||
             legacySchemaAfter.sha256 !==
               staging.value.legacy_migration_schema_evidence_sha256
@@ -1548,6 +1748,24 @@ jobs:
                 reconciliation.value.production_is_canonical_prefix,
             },
             canonical_history_reconciliation_sha256: reconciliation.sha256,
+            role_switch_index_state_before_sha256:
+              roleSwitchIndexStateBefore.sha256,
+            role_switch_index_preflight_before_sha256:
+              roleSwitchIndexPreflightBefore.sha256,
+            role_switch_index_state_mutation_boundary_sha256:
+              roleSwitchIndexStateMutationBoundary.sha256,
+            role_switch_index_preflight_mutation_boundary_sha256:
+              roleSwitchIndexPreflightMutationBoundary.sha256,
+            role_switch_online_finalization_sha256:
+              roleSwitchOnlineFinalization.sha256,
+            role_switch_index_state_after_sha256:
+              roleSwitchIndexStateAfter.sha256,
+            role_switch_index_preflight_after_sha256:
+              roleSwitchIndexPreflightAfter.sha256,
+            role_switch_foreign_key_state_after_sha256:
+              roleSwitchForeignKeyStateAfter.sha256,
+            role_switch_foreign_key_post_apply_sha256:
+              roleSwitchForeignKeyPostApply.sha256,
             migration_count: after.value.length,
             pending_migration_count: plan.value.pending.length,
             index_stats_sha256: indexStats.sha256,
@@ -1580,6 +1798,15 @@ jobs:
             staging-legacy-migration-schema-evidence.json \
             production-migration-plan.json \
             production-migration-history-reconciliation.json \
+            production-role-switch-index-state-before.json \
+            production-role-switch-index-preflight-before.json \
+            production-role-switch-index-state-mutation-boundary.json \
+            production-role-switch-index-preflight-mutation-boundary.json \
+            production-role-switch-online-finalization.json \
+            production-role-switch-index-state-after.json \
+            production-role-switch-index-preflight-after.json \
+            production-role-switch-fk-state-after.json \
+            production-role-switch-fk-post-apply.json \
             production-migration-dry-run.txt \
             production-supabase-db-pre-mutation-evidence.json \
             production-expected-pending-migrations.txt \
@@ -1624,6 +1851,15 @@ jobs:
              --file production-migration-history-reconciliation.json \
              --file production-legacy-migration-schema-evidence-after.json \
              --file production-migrations-after.json \
+             --file production-role-switch-index-state-before.json \
+             --file production-role-switch-index-preflight-before.json \
+              --file production-role-switch-index-state-mutation-boundary.json \
+              --file production-role-switch-index-preflight-mutation-boundary.json \
+              --file production-role-switch-online-finalization.json \
+              --file production-role-switch-index-state-after.json \
+             --file production-role-switch-index-preflight-after.json \
+             --file production-role-switch-fk-state-after.json \
+             --file production-role-switch-fk-post-apply.json \
             --out "$binding_root/release-artifact-binding.json" \
             --repository "$GITHUB_REPOSITORY" \
             --release-sha "$RELEASE_SHA" \
@@ -1649,6 +1885,15 @@ jobs:
              --file production-migration-history-reconciliation.json \
              --file production-legacy-migration-schema-evidence-after.json \
              --file production-migrations-after.json \
+             --file production-role-switch-index-state-before.json \
+             --file production-role-switch-index-preflight-before.json \
+              --file production-role-switch-index-state-mutation-boundary.json \
+              --file production-role-switch-index-preflight-mutation-boundary.json \
+              --file production-role-switch-online-finalization.json \
+              --file production-role-switch-index-state-after.json \
+             --file production-role-switch-index-preflight-after.json \
+             --file production-role-switch-fk-state-after.json \
+             --file production-role-switch-fk-post-apply.json \
             --artifact-metadata production-database-evidence-metadata/artifact.json \
             --producer-run production-database-evidence-metadata/run.json \
             --repository "$GITHUB_REPOSITORY" \
@@ -1806,8 +2051,17 @@ jobs:
                record("production-legacy-migration-schema-evidence-after.json"),
               record("production-migrations-terminal.json"),
               record("production-migration-plan.json"),
-              record("production-migration-history-reconciliation.json"),
-              record("production-migration-dry-run.txt"),
+               record("production-migration-history-reconciliation.json"),
+               record("production-role-switch-index-state-before.json"),
+               record("production-role-switch-index-preflight-before.json"),
+                record("production-role-switch-index-state-mutation-boundary.json"),
+                record("production-role-switch-index-preflight-mutation-boundary.json"),
+                record("production-role-switch-online-finalization.json"),
+                record("production-role-switch-index-state-after.json"),
+                record("production-role-switch-index-preflight-after.json"),
+                record("production-role-switch-fk-state-after.json"),
+                record("production-role-switch-fk-post-apply.json"),
+               record("production-migration-dry-run.txt"),
               record("production-supabase-db-pre-mutation-evidence.json"),
               record("production-supabase-db-attestation.json"),
             ],
@@ -1830,8 +2084,11 @@ jobs:
             'production-supabase-target*.json' \
              'production-migrations-*.json' \
              'production-legacy-migration-schema-evidence-*.json' \
-             production-migration-history-reconciliation.json \
-            'production-migration-*.txt' \
+              production-migration-history-reconciliation.json \
+              'production-role-switch-index-*.json' \
+              production-role-switch-online-finalization.json \
+              'production-role-switch-fk-*.json' \
+             'production-migration-*.txt' \
             production-supabase-db-pre-mutation-evidence.json \
             production-supabase-db-attestation.json; do
             for file in $pattern; do

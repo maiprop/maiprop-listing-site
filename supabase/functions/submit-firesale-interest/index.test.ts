@@ -10,16 +10,18 @@ type MockScenario = {
 };
 
 declare global {
-  // deno-lint-ignore no-var
   var __submitFiresaleInterestScenario: MockScenario;
 }
 
 const functionSource = await Deno.readTextFile(
   new URL("./index.ts", import.meta.url),
 );
-const tempDir = await Deno.makeTempDir({ prefix: "submit-firesale-interest-test-" });
+const tempDir = await Deno.makeTempDir({
+  prefix: "submit-firesale-interest-test-",
+});
 const mockClientPath = `${tempDir}/mockSupabase.ts`;
 const transformedPath = `${tempDir}/index.ts`;
+const dbLimiterTransformedPath = `${tempDir}/index-db-limiter.ts`;
 
 function fileUrl(path: string) {
   return `file:///${path.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1:")}`;
@@ -68,12 +70,18 @@ const transformedSource = functionSource
   .replace('from "../_shared/auth.ts"', `from "${shared("auth.ts")}"`)
   .replace('from "../_shared/cors.ts"', `from "${shared("cors.ts")}"`)
   .replace('from "../_shared/logger.ts"', `from "${shared("logger.ts")}"`)
+  .replace('from "../_shared/schema.ts"', `from "${shared("schema.ts")}"`)
   .replace(
     'from "../_shared/rateLimit.ts"',
     `from "${shared("rateLimit.ts")}"`,
+  )
+  .replace(
+    'from "./request.ts"',
+    `from "${new URL("./request.ts", import.meta.url).href}"`,
   );
 
 await Deno.writeTextFile(transformedPath, transformedSource);
+await Deno.writeTextFile(dbLimiterTransformedPath, transformedSource);
 
 const { handler, restore } = await captureHandler(
   import.meta.url,
@@ -81,6 +89,14 @@ const { handler, restore } = await captureHandler(
   { RATE_LIMIT_FORCE_MEMORY: "true" },
 );
 restore();
+
+const { handler: dbLimiterHandler, restore: restoreDbLimiter } =
+  await captureHandler(
+    import.meta.url,
+    fileUrl(dbLimiterTransformedPath),
+    { RATE_LIMIT_FORCE_MEMORY: "false" },
+  );
+restoreDbLimiter();
 
 const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__submitFiresaleInterestScenario = {
@@ -127,9 +143,109 @@ Deno.test("invalid deal id is rejected before auth or interest submission", asyn
   assertEquals(globalThis.__submitFiresaleInterestScenario.calls.length, 0);
 });
 
+Deno.test("invalid firesale interest bodies return structured 400 before auth or RPC work", async () => {
+  const dealId = crypto.randomUUID();
+  const malformed = new Request(
+    "https://functions.test/submit-firesale-interest",
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${crypto.randomUUID()}`,
+        "content-type": "application/json",
+        "x-forwarded-for": crypto.randomUUID(),
+      },
+      body: "{",
+    },
+  );
+  const requests = [
+    malformed,
+    authedJson(bodyFor(dealId, { proofAmount: 1_000_000_001 })),
+    authedJson(bodyFor(dealId, { proofAmount: "1500000" })),
+    authedJson(bodyFor(dealId, { invented: true })),
+  ];
+
+  for (const request of requests) {
+    resetScenario();
+    const res = await handler(request);
+    const body = await res.json() as {
+      code?: string;
+      issues?: unknown[];
+    };
+
+    assertEquals(res.status, 400);
+    assertEquals(
+      ["invalid_json", "validation_error"].includes(body.code ?? ""),
+      true,
+    );
+    assertEquals(Array.isArray(body.issues), true);
+    assertEquals(globalThis.__submitFiresaleInterestScenario.calls.length, 0);
+  }
+});
+
+Deno.test("invalid bodies do not call the production database rate limiter", async () => {
+  resetScenario();
+  const originalFetch = globalThis.fetch;
+  let transportCalls = 0;
+  globalThis.fetch = (_input, _init) => {
+    transportCalls += 1;
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          allowed: true,
+          count: 1,
+          limit: 60,
+          window_start: new Date().toISOString(),
+          reset_in_seconds: 60,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+  };
+
+  try {
+    const res = await dbLimiterHandler(authedJson(bodyFor("not-a-uuid")));
+    assertEquals(res.status, 400);
+    assertEquals(transportCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("oversized request bodies are rejected before database work", async () => {
+  resetScenario();
+  const originalFetch = globalThis.fetch;
+  let transportCalls = 0;
+  globalThis.fetch = (_input, _init) => {
+    transportCalls += 1;
+    return Promise.resolve(
+      new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
+
+  try {
+    const res = await dbLimiterHandler(authedJson(bodyFor(crypto.randomUUID(), {
+      message: "x".repeat(20_000),
+    })));
+    const body = await res.json();
+    assertEquals(res.status, 413);
+    assertEquals(body.code, "payload_too_large");
+    assertEquals(transportCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("proof paths must belong to the verified caller and deal", async () => {
   const dealId = crypto.randomUUID();
-  resetScenario({ user: { id: "verified-user", email: "verified@test.local" } });
+  resetScenario({
+    user: { id: "verified-user", email: "verified@test.local" },
+  });
   const res = await handler(authedJson(bodyFor(dealId, {
     proofOfFundsUrl: `other-user/firesale/${dealId}/proof_uuid.pdf`,
   })));
@@ -164,15 +280,16 @@ Deno.test("interest submission is created for the verified caller only", async (
     globalThis.__submitFiresaleInterestScenario.calls.some((call) =>
       call.name === "rpc" &&
       JSON.stringify(call.args) === JSON.stringify({
-        name: "submit_firesale_interest_for_user",
-        args: {
-          _user_id: "verified-user",
-          p_deal_id: dealId,
-          p_message: "Ready to move",
-          p_proof_amount: 1500000,
-          p_proof_of_funds_url: `verified-user/firesale/${dealId}/proof_uuid.pdf`,
-        },
-      })
+          name: "submit_firesale_interest_for_user",
+          args: {
+            _user_id: "verified-user",
+            p_deal_id: dealId,
+            p_message: "Ready to move",
+            p_proof_amount: 1500000,
+            p_proof_of_funds_url:
+              `verified-user/firesale/${dealId}/proof_uuid.pdf`,
+          },
+        })
     ),
     true,
   );

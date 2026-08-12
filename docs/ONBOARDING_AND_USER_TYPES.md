@@ -1,217 +1,157 @@
-# Onboarding process & user types
-
-This document describes how new users sign up, how they choose their role, and what each user type can do.
-
----
-
-## 1. User types (database roles)
-
-The app has **four** values stored in the database for `profiles.role` (enum `user_role`):
-
-| Role | Description | Set when |
-|------|-------------|----------|
-| **buyer** | Private consumer: buyer, renter, or investor. | Chosen in onboarding (buyer, investor) or default at signup. |
-| **seller_landlord** | Private seller or landlord listing their own property. **Eligible for Pro selling addons** (listing visibility, in-app messaging with buyers, etc.). | Chosen in onboarding (Private Seller / Landlord). |
-| **agent** | **Real estate agents** (one category by themselves), plus institutional/fund and developer. Licensed or business-side listing for clients. | Chosen in onboarding (Real Estate Agent / Agency, Institutional / Fund, Developer / Builder). |
-| **professional** | Service professional: architect, lawyer, notary, contractor, etc. Listed in the Professionals directory. | Chosen in onboarding (Service Professional) and after completing pro verification. |
-
-So there are **4 DB roles** (`buyer`, `seller_landlord`, `agent`, `professional`) and **7 participant types** in the onboarding UI, grouped into sections: **Private** (buyer, seller, investor), **Real estate agents** (agent only), **Institutional & development** (institutional, developer), **Services** (professional).
-
-> **Note:** Role `individual` was renamed to `buyer` in migration 20260331120000.
-
----
-
-## 2. When onboarding runs
-
-- **Sign up (email):** User signs up → redirect to `/onboarding`. Profile is created with `role: "buyer"` by default; onboarding can change it.
-- **Sign up (Google):** OAuth redirect is set to `/onboarding`; after Google auth they land there.
-- **Protected routes:** If the user is logged in but their profile has **not** completed onboarding, `ProtectedRoute` redirects them to `/onboarding` (except when they are already on `/onboarding`).
-
-**“Completed onboarding”** is defined in `AuthContext`:  
-`profile.bio` must exist and start with `__type:`.  
-So any user whose `profiles.bio` is null or doesn’t start with `__type:` is considered “needs onboarding” and is sent to `/onboarding` when they hit a protected route.
-
----
-
-## 3. Onboarding flow (step by step)
-
-### Step 1: Pick type (“How do you use the market?”)
-
-User sees **7 participant cards** grouped by **section**:
-
-- **Private** — Home Buyer / Renter, Private Seller / Landlord, Private Investor
-- **Real estate agents** — Real Estate Agent / Agency (this category is by itself)
-- **Institutional & development** — Institutional / Fund, Developer / Builder
-- **Services** — Service Professional
-
-Each card has a **participant id**, a **role** written to `profiles.role`, label, tagline, and features.
-
-**Participant list (id → role):**
-
-| Participant id   | Label                         | DB role          | Section                  |
-|------------------|-------------------------------|------------------|--------------------------|
-| buyer            | Home Buyer / Renter           | buyer            | Private                  |
-| seller           | Private Seller / Landlord     | **seller_landlord** | Private               |
-| investor         | Private Investor              | buyer            | Private                  |
-| agent            | Real Estate Agent / Agency    | agent            | Real estate agents       |
-| institutional    | Institutional / Fund          | agent            | Institutional & development |
-| professional     | Service Professional          | professional     | Services                 |
-| developer        | Developer / Builder           | agent            | Institutional & development |
-
-- **Non–Service Professional:**  
-  User clicks a card that is **not** “Service Professional” → we call `updateProfile({ role })` and set `profiles.bio` to `__type:{id}` (e.g. `__type:buyer`). Then we go to **Done** (step “done”). No further steps.
-- **Service Professional:**  
-  User clicks “Service Professional” (the one with “Verify” badge) → we go to **Pro category** (multi-step pro flow).
-
-So for non‑pros, onboarding is: **Pick type → Done**.  
-For Service Professionals it is: **Pick type → Pro category → Pro verify → Pro services → Pro availability → Pro video → Done**.
-
----
-
-### Step 2 (Pro only): Pro category (“What’s your discipline?”)
-
-User selects one category, e.g.:
-
-- Architect, Civil Engineer, Lawyer, Notary  
-- Electrician, Plumber, Contractor, Property Manager  
-- Valuer, Interior Designer, Financial Advisor  
-
-Stored in state only; used in the next step when creating the `professionals` row.
-
----
-
-### Step 3 (Pro only): Pro verify (Business verification)
-
-User fills:
-
-- Business / Company name (required)
-- Tax ID – ΑΦΜ, 9 digits (required)
-- Phone (required)
-- License / Registration number (optional)
-
-On submit:
-
-- `profiles.role` is set to `"professional"` and `profiles.phone` is updated.
-- A row is inserted into `professionals` (user_id, title = business name, category, display_name, city, license_number, bio with `__type:professional` and AFM).
-- `profiles.bio` is set to `__type:professional`.
-- User proceeds to **Pro services**.
-
----
-
-### Step 4 (Pro only): Pro services
-
-User selects which **services** they offer (from a catalog per category). For each service they can set:
-
-- Pricing model (e.g. fixed, hourly)
-- Rate (e.g. EUR amount)
-- Whether the service is available via video consultation
-
-At least one service must be selected. On save, rows are inserted into `professional_services` and we go to **Pro availability**.
-
----
-
-### Step 5 (Pro only): Pro availability
-
-User sets **weekly availability** (per day: on/off, start time, end time). Default is Mon–Fri 09:00–18:00.  
-Saved to `professional_availability`. Then **Pro video**.
-
----
-
-### Step 6 (Pro only): Pro video
-
-User can optionally add:
-
-- **Meeting link** (e.g. Google Meet, Zoom) for video consultations.
-- **Booking notes** (e.g. “Consultations in Greek or English”).
-
-These are stored on the `professionals` row (`video_link`, `calendar_notes`).  
-There is also a “Pro Plan” upsell (Coming Soon). On “Finish” or “Skip”, we go to **Done**.
-
----
-
-### Step 7: Done
-
-- Summary of what’s unlocked for their type (and for pros: “Profile created”, “We’ll review within 24–48h”).
-- Buttons: **Go to Dashboard** or **Explore the platform first**.
-
-Onboarding is complete: `bio` starts with `__type:`, so `needsOnboarding` is false and they no longer get redirected to `/onboarding`.
-
----
-
-## 4. Summary table: participant type → role → flow
-
-| Participant (onboarding label) | profiles.role    | profiles.bio (example) | Steps |
-|--------------------------------|------------------|------------------------|--------|
-| Home Buyer / Renter             | buyer            | __type:buyer           | pick-type → done |
-| Private Seller / Landlord       | seller_landlord  | __type:seller          | pick-type → done (eligible for Pro selling addons) |
-| Private Investor                | investor         | __type:investor        | pick-type → done |
-| Real Estate Agent / Agency      | agent            | __type:agent           | pick-type → done |
-| Institutional / Fund            | institutional    | __type:institutional   | pick-type → done |
-| Developer / Builder             | developer        | __type:developer       | pick-type → done |
-| Service Professional            | professional     | __type:professional    | pick-type → pro-category → … → done |
-
----
-
-## 5. Dashboard (role-specific)
-
-The **Dashboard** (`/dashboard`) shows different sidebar items and overview content by role:
-
-| Role | Sidebar sections | Overview focus |
-|------|------------------|----------------|
-| **buyer** | Overview, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Saved properties & auction alerts; CTA: Browse Listings |
-| **seller_landlord** | Overview, My Listings, Saved, Messages, Viewings, Profile, Settings | My listings, views, viewings; CTA: New Listing; Pro upsell card |
-| **agent** | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Contacts, Projects, Portfolios, Profile, Settings | Listings and leads; CTA: New Listing |
-| **investor** | Overview, Deal Flow, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Deal pipeline, saved deals; CTA: Investor Dashboard |
-| **institutional** | Overview, Deal Flow, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Contacts, Projects, Portfolios, Profile, Settings | Buy-side + sell-side; listings and deal flow |
-| **developer** | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Contacts, Projects, Portfolios, Profile, Settings | Listings and project showcases |
-| **admin** | Admin nav (firesale, subscribers, pricing, OS sync) when `role='admin'` | Single admin; only admin can grant admin |
-| **professional** | Overview, My Services, Messages, Viewings, Profile, Settings | Services count and upcoming viewings; CTA: My Services |
-
----
-
-## 6. Where roles are used in the app
-
-- **buyer**  
-  - Treated as "retailer" for video viewing (free video access in some flows).  
-  - Dashboard, listings, favourites, messages (can message Pro professionals).  
-  - No professional directory entry.
-
-- **seller_landlord**  
-  - **Segmented from buyers** so they can be **eligible for Pro selling addons** (listing visibility, in-app messaging with buyers, etc.).  
-  - Displayed in the UI as “Seller / Landlord”.  
-  - Can create and manage their own listings (same as agents for own listings).  
-  - Pro page shows a note that Pro unlocks listing visibility and selling addons for them.
-
-- **agent**  
-  - **Real estate agents are one category by themselves** in onboarding (section “Real estate agents”).  
-  - Can create and manage listings (e.g. Create Listing).  
-  - **Platform admin** is separate: only one user has `role='admin'`; only admin can grant admin. See `docs/PARTICIPANT_RIGHTS.md`.  
-  - No multi-step “pro” onboarding; no row in `professionals` unless added by another path.
-
-- **investor**  
-  - **Buy-side:** Private investors. Deal flow, Investor Dashboard, saved searches, auction alerts.
-
-- **institutional**  
-  - **Buy-side + sell-side:** Institutions/funds. Can list properties and access deal flow (Investor Dashboard).
-
-- **developer**  
-  - **Sell-side:** Developers/builders. Can create listings and manage project showcases.
-
-- **professional**  
-  - Has a row in `professionals` and appears in the **Professionals** directory.  
-  - Can have `professional_services` and `professional_availability`.  
-  - **Pro subscription** (`subscription_tier === 'pro'` on their profile/subscription) gates: receiving in-app messages, calendar booking, and “Send message” / “Book” on their profile.  
-  - Non‑Pro professionals are still listed but with a note that messaging/booking are for Pro professionals.
-
----
-
-## 7. Signup defaults
-
-- **Email signup** (`Signup.tsx`): `signUp(..., { role: "buyer" })`. So new users start as `buyer`; onboarding can change them to `seller_landlord`, `agent`, `investor`, `institutional`, `developer`, or `professional` and set `bio` to `__type:<id>`.
-- **Google signup:** Redirect to `/onboarding`; no role is set until they complete step 1 (and for pros, step 3 sets `professional`).
-
----
-
-## 8. Changing type later
-
-The UI says “You can always update it in settings.” In code, the only way to be a **professional** with a directory entry and services/availability is to go through the **Pro** onboarding path (pro-verify creates the `professionals` row). Changing `profiles.role` in settings alone does not create or fill `professionals` / `professional_services` / `professional_availability`.
+# Onboarding and participant types
+
+This document describes the current onboarding and account-type switching contracts.
+It is an implementation reference, not a substitute for the database policies and
+Edge Functions that enforce the rules.
+
+## Source of truth
+
+The `profiles.role` enum contains these values:
+
+- `buyer`
+- `seller`
+- `agent`
+- `developer`
+- `professional`
+- `investor`
+- `institutional`
+- `admin`
+
+The public self-service onboarding UI currently offers five destination types:
+`buyer`, `seller`, `agent`, `developer`, and `professional`.
+`investor` and `institutional` remain database roles but are not selectable in
+the current self-service onboarding flow. `admin` is platform-controlled and can
+never be obtained through onboarding or account-type switching.
+
+For a non-admin profile, onboarding is complete only when:
+
+1. `profiles.role` is explicitly set.
+2. `profiles.participant_type` is explicitly set to the same value.
+3. `profiles.role_switch_in_progress_at` is null.
+
+`profileNeedsOnboarding` in `src/contexts/AuthContext.tsx` implements that rule.
+Legacy markers in `profiles.bio` may still be read for old display fallbacks, but
+they are not authoritative evidence that onboarding completed.
+
+## Initial onboarding
+
+Email and OAuth sign-up routes send the user to `/onboarding`. A default role on a
+new profile does not complete onboarding because `profiles.participant_type` is
+still missing.
+
+The first screen presents:
+
+| UI choice | Stored role and participant type | Next step |
+| --- | --- | --- |
+| Home Buyer / Renter | `buyer` | Done |
+| Private Seller / Landlord | `seller` | Done |
+| Real Estate Agent / Agency | `agent` | Done |
+| Developer / Builder | `developer` | Developer company setup, then Done |
+| Service Professional | `professional` | Category, verification, services, availability, video, then Done |
+
+The application does not write role fields directly from the browser. It invokes
+the authenticated `complete-onboarding-role` Edge Function, which validates the
+role/participant pair and calls the database completion RPC. The database owns the
+aligned role update and rejects unsupported or mismatched pairs.
+
+### Buyer, seller, and agent
+
+After the user confirms the type, `complete-onboarding-role` writes the aligned
+`profiles.role` and `profiles.participant_type` pair. The UI refreshes the
+profile only after the server confirms the mutation, then displays Done.
+
+### Developer
+
+Developer setup requires company name, city, and development type. The same
+`complete-onboarding-role` boundary writes the aligned developer identity and
+the supported profile fields. The browser does not gain a direct role-write path.
+
+### Service professional
+
+The professional flow collects:
+
+1. Professional category.
+2. Business name, phone, AFM, and optional license/registration number.
+3. At least one service and its pricing model.
+4. Weekly availability.
+5. Optional video meeting link and booking notes.
+
+`complete-onboarding-role` creates or returns the owned professional profile as
+part of the authoritative role completion. Later steps use
+`save-professional-onboarding` for owned services, availability, and video
+settings. Client-provided user ownership is not trusted.
+
+## Changing participant type
+
+Settings does not update `profiles.role` directly. The switch is a durable,
+audited transaction:
+
+1. The browser creates and persists a unique role-switch operation ID.
+2. `begin-role-switch` runs in validate-only mode to check business blockers
+   before any billing or profile mutation.
+3. `log-role-switch` establishes the audit record and reconciles the current
+   Stripe subscription state.
+4. `begin-role-switch` runs with that audit ID, clears the participant identity,
+   sets `profiles.role_switch_in_progress_at`, and pauses or archives workflows
+   that cannot remain active during the switch.
+5. The user returns to `/onboarding` and selects the destination type.
+6. Where billing confirmation is required, `log-role-switch` records and
+   reconciles the destination before completion.
+7. `complete-onboarding-role` finalizes the aligned role and participant type,
+   clears the role-switch sentinel, and restores destination-owned rows
+   idempotently.
+
+If any required audit or billing step fails, the switch remains incomplete and the
+UI must not pretend that the new role is active. Active Quick Sale commitments,
+accepted Open House offers, and other server-defined blockers are enforced before
+the destructive phase.
+
+## Dashboard and entitlement behavior
+
+The dashboard derives its navigation from the explicit participant type. Access to
+paid or sensitive capabilities is still enforced server-side; changing a visible
+dashboard layout is not an entitlement grant.
+
+| Type | Primary dashboard focus |
+| --- | --- |
+| `buyer` | Saved properties, searches, viewings, messages, and auction alerts |
+| `seller` | Owned listings, viewing requests, messages, and listing performance |
+| `agent` | Client listings, contacts, leads, analytics, projects, and portfolios |
+| `developer` | Projects, new-build inventory, inquiries, and analytics |
+| `professional` | Service catalog, consultations, messages, availability, and profile |
+| `investor` | Deal flow, portfolio activity, searches, and auction alerts |
+| `institutional` | Institutional deal flow, portfolio, listings, contacts, and analytics |
+| `admin` | Platform administration routes guarded by server-side admin authority |
+
+Plan access comes from the authoritative subscription and entitlement contracts,
+not from a client role string. A professional directory row, Stripe subscription,
+or admin grant is never created merely by changing local UI state.
+
+## Failure and recovery rules
+
+- Do not clear the role-switch operation until the authoritative completion call
+  succeeds.
+- Do not treat a default signup role as user intent.
+- Do not accept a role/participant mismatch.
+- Do not let a failed Stripe reconciliation advance the switch.
+- Do not let client code write role, participant type, switch sentinel, or audit
+  identifiers directly.
+- Repeated requests must remain idempotent for the same operation ID.
+
+## Verification
+
+The minimum regression surface is:
+
+- `src/test/authContext.onboarding.test.ts`
+- `src/test/AuthContext.test.tsx`
+- `src/test/OnboardingPage.test.tsx`
+- `src/test/onboardingHelpers.test.ts`
+- `src/test/DashboardUtilityTabs.behavior.test.tsx`
+- `supabase/functions/complete-onboarding-role/index.test.ts`
+- `supabase/functions/begin-role-switch/index.test.ts`
+- `supabase/functions/log-role-switch/index.test.ts`
+- `src/test/onboardingDocumentation.test.ts`
+
+Any change to the role enum, self-service destinations, completion RPC, Stripe
+reconciliation, or role-switch lifecycle must update this document and those
+contract tests together.

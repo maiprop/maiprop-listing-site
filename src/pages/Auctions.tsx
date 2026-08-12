@@ -324,6 +324,11 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               </div>
               <button
+                type="button"
+                aria-label={isGreek ? "Φίλτρα" : "Filters"}
+                aria-controls="mobile-auction-filters"
+                aria-expanded={showFilters}
+                aria-pressed={showFilters}
                 onClick={() => setShowFilters((v) => !v)}
                 className={`shrink-0 h-9 flex items-center gap-1.5 px-3 rounded-xl border text-sm font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
                 <SlidersHorizontal className="w-4 h-4" />
@@ -344,11 +349,11 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
 
             {/* Mobile filter dropdown panel */}
             {showFilters && (
-              <div className="border border-border rounded-xl bg-card/95 p-4 space-y-4">
+              <div id="mobile-auction-filters" className="border border-border rounded-xl bg-card/95 p-4 space-y-4">
                 {/* Property type */}
                 <div className="space-y-1.5">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Τύπος ακινήτου" : "Property Type"}</span>
-                  <div className="flex gap-1.5 flex-wrap">
+                  <div className="flex gap-1.5 flex-wrap" role="group" aria-label={isGreek ? "Τύπος ακινήτου" : "Property type"}>
                     {[
                       { value: "", label: isGreek ? "Όλοι οι τύποι" : "All Types" },
                       { value: "apartment", label: isGreek ? "Διαμέρισμα" : "Apartment" },
@@ -358,7 +363,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                       { value: "commercial", label: isGreek ? "Επαγγελματικό ακίνητο" : "Commercial" },
                       { value: "office", label: isGreek ? "Γραφείο" : "Office" },
                     ].map(t => (
-                      <button key={t.value} onClick={() => setFilterType(t.value)}
+                      <button key={t.value} type="button" aria-pressed={filterType === t.value} onClick={() => setFilterType(t.value)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterType === t.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
                         {t.label}
                       </button>
@@ -368,9 +373,9 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 {/* First offer price */}
                 <div className="space-y-1.5">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Τιμή πρώτης προσφοράς" : "First Offer Price"}</span>
-                  <div className="flex gap-1.5 flex-wrap">
+                  <div className="flex gap-1.5 flex-wrap" role="group" aria-label={isGreek ? "Τιμή πρώτης προσφοράς" : "First offer price"}>
                     {BID_RANGES.map(r => (
-                      <button key={r.value} onClick={() => setFilterBidRange(filterBidRange === r.value ? "" : r.value)}
+                      <button key={r.value} type="button" aria-pressed={filterBidRange === r.value} onClick={() => setFilterBidRange(filterBidRange === r.value ? "" : r.value)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterBidRange === r.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
                         {r.label}
                       </button>
@@ -380,9 +385,9 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 {/* Construction year */}
                 <div className="space-y-1.5">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Έτος κατασκευής" : "Construction Year"}</span>
-                  <div className="flex gap-1.5 flex-wrap">
+                  <div className="flex gap-1.5 flex-wrap" role="group" aria-label={isGreek ? "Έτος κατασκευής" : "Construction year"}>
                     {YEAR_RANGES.map(r => (
-                      <button key={r.value} onClick={() => setFilterYearRange(filterYearRange === r.value ? "" : r.value)}
+                      <button key={r.value} type="button" aria-pressed={filterYearRange === r.value} onClick={() => setFilterYearRange(filterYearRange === r.value ? "" : r.value)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterYearRange === r.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
                         {r.label}
                       </button>
@@ -414,6 +419,10 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
             <Button
               variant="outline"
               size="sm"
+              aria-label={isGreek ? "Φίλτρα" : "Filters"}
+              aria-controls="desktop-auction-filters"
+              aria-expanded={showFilters}
+              aria-pressed={showFilters}
               className={`border-border gap-1.5 ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : ""}`}
               onClick={() => setShowFilters((v) => !v)}>
               <SlidersHorizontal className="w-3.5 h-3.5" />

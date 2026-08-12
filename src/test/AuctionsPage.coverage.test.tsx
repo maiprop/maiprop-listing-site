@@ -224,6 +224,27 @@ describe("Auctions page coverage", () => {
     expect(mocks.trackUserSearch).not.toHaveBeenCalled();
   });
 
+  it("exposes expanded and selected mobile filter state", () => {
+    renderWithProviders(<Auctions />);
+
+    const filterButtons = screen.getAllByRole("button", { name: /^Filters$/i });
+    for (const button of filterButtons) {
+      expect(button).toHaveAttribute("aria-expanded", "false");
+      expect(button).toHaveAttribute("aria-pressed", "false");
+    }
+
+    fireEvent.click(filterButtons[0]);
+
+    for (const button of filterButtons) {
+      expect(button).toHaveAttribute("aria-expanded", "true");
+      expect(button).toHaveAttribute("aria-pressed", "true");
+    }
+    const apartment = screen.getByRole("button", { name: "Apartment" });
+    const house = screen.getByRole("button", { name: "House" });
+    expect(apartment).toHaveAttribute("aria-pressed", "true");
+    expect(house).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("covers loading skeletons, alert modal close, filters, view toggles, map polygon, pagination, and favorites", async () => {
     const normalPipeline = setPipeline();
     mocks.pipeline

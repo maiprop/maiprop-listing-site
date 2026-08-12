@@ -578,7 +578,7 @@ BEGIN
     'public.has_buy_side_role(uuid)',
     'public.has_sell_side_role(uuid)',
     'public.record_role_switch_audit(text,text,text,boolean,boolean)',
-    'public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean)',
+    'public.record_role_switch_audit_for_user(uuid,uuid,text,text,text)',
     'public.reserve_ai_quota(text)',
     'public.reserve_ai_quota_for_user(uuid,text)',
     'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)'
@@ -611,7 +611,6 @@ BEGIN
   -- These mutating canonical RPCs have an exact hardened execution posture.
   FOREACH signature IN ARRAY ARRAY[
     'public.record_role_switch_audit(text,text,text,boolean,boolean)',
-    'public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean)',
     'public.reserve_ai_quota(text)',
     'public.reserve_ai_quota_for_user(uuid,text)',
     'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)'
@@ -722,7 +721,7 @@ BEGIN
     'public.has_buy_side_role(uuid)',
     'public.has_sell_side_role(uuid)',
     'public.record_role_switch_audit(text,text,text,boolean,boolean)',
-    'public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean)',
+    'public.record_role_switch_audit_for_user(uuid,uuid,text,text,text)',
     'public.reserve_ai_quota(text)',
     'public.reserve_ai_quota_for_user(uuid,text)',
     'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)'
@@ -769,7 +768,6 @@ DECLARE
 BEGIN
   FOREACH signature IN ARRAY ARRAY[
     'public.record_role_switch_audit(text,text,text,boolean,boolean)',
-    'public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean)',
     'public.reserve_ai_quota(text)',
     'public.reserve_ai_quota_for_user(uuid,text)',
     'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)'
@@ -788,6 +786,28 @@ BEGIN
       RAISE EXCEPTION 'Canonical mutating RPC configuration drifted: %', signature;
     END IF;
   END LOOP;
+END
+$$;
+
+DO $$
+DECLARE
+  target_function REGPROCEDURE := to_regprocedure(
+    'public.record_role_switch_audit_for_user(uuid,uuid,text,text,text)'
+  );
+  function_is_canonical BOOLEAN;
+BEGIN
+  SELECT
+    procedure_state.provolatile = 'v'
+    AND COALESCE(procedure_state.proconfig, ARRAY[]::TEXT[])
+      @> ARRAY['search_path=pg_catalog, public']::TEXT[]
+  INTO function_is_canonical
+  FROM pg_proc AS procedure_state
+  WHERE procedure_state.oid = target_function::oid;
+
+  IF function_is_canonical IS DISTINCT FROM TRUE THEN
+    RAISE EXCEPTION
+      'Operation-bound role-switch audit RPC configuration drifted';
+  END IF;
 END
 $$;
 

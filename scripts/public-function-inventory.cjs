@@ -234,6 +234,20 @@ const policies = {
     ],
     notes: "Cron-only exact-object compensating cleanup. Database leases and a final commitment check prevent stale workers from deleting committed listing or project media.",
   },
+  "reconcile-role-switch-billing": {
+    status: "ready",
+    caller: "cron",
+    classification: "private_mutation_cron",
+    mechanisms: ["cron_secret", "service_role", "leased_rows", "bounded_retries"],
+    requiredSnippets: [
+      "CRON_SECRET",
+      "x-cron-secret",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "RECONCILIATION_CLAIM_RPC",
+      "MAX_RECONCILIATION_ATTEMPTS",
+    ],
+    notes: "Cron-only billing recovery worker with exact row leases and a bounded retry ceiling.",
+  },
 };
 
 const read = (path) => {

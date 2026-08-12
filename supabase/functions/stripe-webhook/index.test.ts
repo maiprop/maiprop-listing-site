@@ -12,7 +12,7 @@ const { handler, restore } = await captureHandler(
   "./index.ts",
   {
     STRIPE_RUNTIME_MODE: "test",
-    STRIPE_EXPECTED_ACCOUNT_ID: "acct_test_maiprop",
+    STRIPE_EXPECTED_ACCOUNT_ID: "acct_testmaiprop",
   },
 );
 const webhookModule = await import("./index.ts");
@@ -1513,30 +1513,90 @@ Deno.test("add-on, investor, and trial webhook writes persist Stripe runtime mod
   );
 });
 
-Deno.test("agent data-input discount rollback clears legacy and Stripe credit markers", async () => {
+Deno.test("agent data-input discount is provider-idempotent and durably records the Stripe credit", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
   );
-  const rollbackStart = source.indexOf(
-    "stripe invoiceItem create failed, rolling back DB",
+  const discountStart = source.indexOf(
+    "async function applyAgentDataInputDiscount",
   );
-  const rollbackEnd = source.indexOf(
-    '.eq("discount_invoice_id", invoice.id)',
-    rollbackStart,
+  const discountBlock = source.slice(discountStart);
+  const invoiceCreatedStart = source.indexOf('case "invoice.created"');
+  const invoiceCreatedEnd = source.indexOf(
+    'case "checkout.session.completed"',
+    invoiceCreatedStart,
   );
-  const rollbackBlock = source.slice(rollbackStart, rollbackEnd);
+  const invoiceCreatedBlock = source.slice(
+    invoiceCreatedStart,
+    invoiceCreatedEnd,
+  );
 
-  assertEquals(rollbackStart >= 0, true);
-  assertEquals(rollbackBlock.includes("discount_applied: false"), true);
-  assertEquals(rollbackBlock.includes("discount_applied_at: null"), true);
-  assertEquals(rollbackBlock.includes("discount_invoice_id: null"), true);
-  assertEquals(rollbackBlock.includes("applied_to_invoice_at: null"), true);
-  assertEquals(rollbackBlock.includes("stripe_credit_id: null"), true);
+  assertEquals(discountStart >= 0, true);
   assertEquals(
-    rollbackBlock.includes("stripe_credit_amount_cents: null"),
+    discountBlock.includes("agentDataInputCreditIdempotencyKey"),
     true,
   );
-  assertEquals(rollbackBlock.includes("stripe_credit_currency: null"), true);
+  assertEquals(discountBlock.includes("idempotencyKey"), true);
+  assertEquals(
+    discountBlock.indexOf("findAgentDataInputInvoiceCredit") <
+      discountBlock.indexOf("stripe.invoiceItems.create"),
+    true,
+  );
+  assertEquals(discountBlock.includes("operation_key: idempotencyKey"), true);
+  assertEquals(source.includes("stripe_credit_id: credit.id"), true);
+  assertEquals(
+    source.includes("stripe_credit_amount_cents: amountMinor"),
+    true,
+  );
+  assertEquals(
+    source.includes("stripe_credit_currency: credit.currency"),
+    true,
+  );
+  assertEquals(
+    discountBlock.includes("Ambiguous Stripe credit outcome remains reserved"),
+    true,
+  );
+  assertEquals(
+    invoiceCreatedBlock.includes(
+      "await applyAgentDataInputDiscount(supabase, stripe, invoice);",
+    ),
+    true,
+  );
+  assertEquals(invoiceCreatedBlock.includes("best-effort"), false);
+  assertEquals(source.includes('case "invoice.finalized"'), true);
+  assertEquals(
+    source.includes("await reconcileFinalizedAgentDataInputDiscount("),
+    true,
+  );
+  assertEquals(
+    discountBlock.indexOf("const subtotalMinor = invoice.subtotal ?? 0;") <
+      discountBlock.indexOf('"apply_verified_data_input_discount"'),
+    true,
+  );
+  assertEquals(
+    discountBlock.indexOf("const idempotencyKey = await agentDataInputCreditIdempotencyKey") <
+      discountBlock.indexOf('"apply_verified_data_input_discount"'),
+    true,
+  );
+  assertEquals(discountBlock.includes("p_subtotal_minor: subtotalMinor"), true);
+  assertEquals(discountBlock.includes("p_operation_key: idempotencyKey"), true);
+  assertEquals(
+    discountBlock.includes("persistAgentDataInputCreditExpectation"),
+    false,
+  );
+  assertEquals(
+    discountBlock.includes("releaseAgentDataInputCreditReservation"),
+    true,
+  );
+  assertEquals(source.includes('.select<{ id: string }[]>("id")'), true);
+  assertEquals(
+    source.includes("persistedRows.length !== expectedCount"),
+    true,
+  );
+  assertEquals(
+    discountBlock.includes("stripe invoiceItem create failed, rolling back DB"),
+    false,
+  );
 });
 
 Deno.test("one-time checkout fulfillment requires paid status and metadata-owned customers", async () => {

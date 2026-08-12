@@ -24,6 +24,16 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Supabase user session JWT
+    CronBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: CRON_SECRET supplied as an Authorization Bearer credential
+    CronSecretHeader:
+      type: apiKey
+      in: header
+      name: x-cron-secret
+      description: CRON_SECRET supplied by the internal scheduler
     HMACSignature:
       type: apiKey
       in: header
@@ -34,11 +44,6 @@ components:
       in: header
       name: Stripe-Signature
       description: Stripe webhook signature
-    CronSecret:
-      type: apiKey
-      in: header
-      name: x-cron-secret
-      description: Internal scheduler secret; never sent by browser clients
 
   schemas:
     Error:
@@ -67,6 +72,147 @@ components:
                     - type: integer
               message:
                 type: string
+
+    FullSyncFromOsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        pageSize: { type: integer, minimum: 1, maximum: 500 }
+        size: { type: integer, minimum: 1, maximum: 500 }
+        maxPages: { type: integer, minimum: 1, maximum: 500 }
+        startPage: { type: integer, minimum: 0, maximum: 100000 }
+        replaceAll: { type: boolean }
+        replace_all: { type: boolean }
+        auctionDateFrom: { type: string, format: date }
+        auctionDateTo: { type: string, format: date }
+        propertyCategories:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+            enum: [RESIDENCE, OTHER_BUSINESS_SPACE, STORE, OFFICE, PARKING, STOREROOM, INDUSTRIAL, LAND, LAND_WITH_BUILDING, PLOT, PLOT_WITH_BUILDING, HOTEL]
+        prefectureId:
+          { type: integer, format: int64, minimum: -9007199254740991, maximum: 9007199254740991 }
+        propertyMunicipalityId:
+          { type: integer, format: int64, minimum: -9007199254740991, maximum: 9007199254740991 }
+        auctionStatuses:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+            enum: [POSTED, OPEN, READY_TO_CONDUCT, CANCELED, COMPLETED, COMPLETED_NO_BIDDERS, FINALIZED_PARTICIPANT_LIST, SUSPENDED]
+
+    PollOsAuctionsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        page: { type: integer, minimum: 0, maximum: 100000 }
+        pageSize: { type: integer, minimum: 1, maximum: 600 }
+        size: { type: integer, minimum: 1, maximum: 600 }
+        sampleAcrossGreece: { type: boolean }
+        source: { type: string, enum: [daily-canonical-pool] }
+        auctionDateFrom: { type: string, format: date }
+        auctionDateTo: { type: string, format: date }
+        propertyCategories:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+            enum: [RESIDENCE, OTHER_BUSINESS_SPACE, STORE, OFFICE, PARKING, STOREROOM, INDUSTRIAL, LAND, LAND_WITH_BUILDING, PLOT, PLOT_WITH_BUILDING, HOTEL]
+        prefectureId:
+          { type: integer, format: int64, minimum: -9007199254740991, maximum: 9007199254740991 }
+        propertyMunicipalityId:
+          { type: integer, format: int64, minimum: -9007199254740991, maximum: 9007199254740991 }
+        auctionStatuses:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+            enum: [POSTED, OPEN, READY_TO_CONDUCT, CANCELED, COMPLETED, COMPLETED_NO_BIDDERS, FINALIZED_PARTICIPANT_LIST, SUSPENDED]
+        auctionAmountFrom: { type: number, minimum: 0, maximum: 1000000000000 }
+        auctionAmountTo: { type: number, minimum: 0, maximum: 1000000000000 }
+        boundingBox:
+          type: object
+          additionalProperties: false
+          required: [north, south, east, west]
+          properties:
+            north: { type: number, minimum: -90, maximum: 90 }
+            south: { type: number, minimum: -90, maximum: 90 }
+            east: { type: number, minimum: -180, maximum: 180 }
+            west: { type: number, minimum: -180, maximum: 180 }
+        sortBy:
+          type: string
+          enum: [AUCTION_ID, AUCTION_DATE, AUCTION_FIRST_PRICE_OFFER, AUCTION_REGISTRATION_AMOUNT, AUCTION_DATE_QUARTER]
+        order: { type: string, enum: [ASC, DESC] }
+
+    FetchReportFromOsRequest:
+      type: object
+      additionalProperties: false
+      required: [listing_id, report_type]
+      properties:
+        listing_id: { type: string, format: uuid }
+        report_type: { type: string, enum: [valuation, neighbourhood] }
+        lang: { type: string, enum: [en, el], default: en }
+        since: { type: string, format: date }
+        to: { type: string, format: date }
+        listing:
+          type: object
+          additionalProperties: false
+          required: [id]
+          properties:
+            id: { type: string, format: uuid }
+            address: { type: [string, 'null'], maxLength: 500 }
+            city: { type: [string, 'null'], maxLength: 200 }
+            latitude: { type: [number, 'null'], minimum: -90, maximum: 90 }
+            longitude: { type: [number, 'null'], minimum: -180, maximum: 180 }
+            sqm: { type: [number, 'null'], minimum: 0, maximum: 10000000 }
+            property_type: { type: [string, 'null'], maxLength: 100 }
+            floor: { type: [integer, 'null'], minimum: -20, maximum: 300 }
+            year_built: { type: [integer, 'null'], minimum: 1000, maximum: 2200 }
+
+    LogRoleSwitchRequest:
+      type: object
+      additionalProperties: false
+      required: [operation_id, from_type, cancel_subscription]
+      properties:
+        operation_id: { type: string, format: uuid }
+        from_type:
+          { type: string, enum: [buyer, seller, agent, developer, professional, investor, institutional] }
+        to_type:
+          { type: string, enum: ['', buyer, seller, agent, developer, professional, investor, institutional], default: '' }
+        cancel_subscription: { type: boolean, enum: [true] }
+
+    BeginRoleSwitchRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [audit_id]
+          properties:
+            audit_id: { type: string, format: uuid }
+        - type: object
+          additionalProperties: false
+          required: [validate_only]
+          properties:
+            validate_only: { type: boolean, enum: [true] }
+        - type: object
+          additionalProperties: false
+          required: [validateOnly]
+          properties:
+            validateOnly: { type: boolean, enum: [true] }
+        - type: object
+          additionalProperties: false
+          required: [dry_run]
+          properties:
+            dry_run: { type: boolean, enum: [true] }
+        - type: object
+          additionalProperties: false
+          required: [dryRun]
+          properties:
+            dryRun: { type: boolean, enum: [true] }
 
     HealthzResponse:
       type: object
@@ -628,17 +774,46 @@ paths:
     post:
       operationId: fullSyncFromOs
       summary: Trigger a full re-sync of entities from MaiProp-OS
-      security: [{ HMACSignature: [] }]
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FullSyncFromOsRequest' }
       responses:
         '200': { description: Sync started }
+        '400': { description: Invalid request body }
+        '401': { description: Missing or invalid authorization }
+        '403': { description: Platform admin required }
+        '405': { description: Method not allowed }
+        '408': { description: Request body read deadline exceeded }
+        '413': { description: Request body exceeds the configured limit }
+        '429': { description: Rate limit exceeded }
+        '500': { description: Sync or upstream provider failure }
+        '502': { description: MaiProp-OS rejected the sync request }
 
   /poll-os-auctions:
-    get:
+    post:
       operationId: pollOsAuctions
       summary: Scheduled function — polls MaiProp-OS for new auctions
-      security: []
+      security:
+        - CronBearer: []
+        - SupabaseJWT: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PollOsAuctionsRequest' }
       responses:
         '200': { description: Polling result }
+        '400': { description: Invalid request body }
+        '401': { description: Missing or invalid cron/admin authorization }
+        '403': { description: Platform admin required }
+        '405': { description: Method not allowed }
+        '408': { description: Request body read deadline exceeded }
+        '413': { description: Request body exceeds the configured limit }
+        '429': { description: Rate limit exceeded }
+        '500': { description: Poll or upstream provider failure }
 
   /fetch-os-auctions:
     post:
@@ -674,17 +849,28 @@ paths:
         '200': { description: Deals }
 
   /fetch-report-from-os:
-    get:
+    post:
       operationId: fetchReportFromOs
-      summary: Fetch report data from MaiProp-OS for a given entity
-      security: [{ HMACSignature: [] }]
-      parameters:
-        - in: query
-          name: entity_id
-          required: true
-          schema: { type: string }
+      summary: Fetch a valuation or neighbourhood report for an accessible listing
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FetchReportFromOsRequest' }
       responses:
         '200': { description: Report }
+        '202': { description: Report generation is already in progress }
+        '400': { description: Invalid request body }
+        '401': { description: Missing or invalid authorization }
+        '402': { description: Report entitlement or billing denied }
+        '404': { description: Listing is not accessible }
+        '405': { description: Method not allowed }
+        '408': { description: Request body read deadline exceeded }
+        '413': { description: Request body exceeds the configured limit }
+        '429': { description: Rate limit exceeded }
+        '500': { description: Report generation failed }
+        '503': { description: Service configuration or listing access unavailable }
 
   /os-diagnose:
     get:
@@ -733,11 +919,24 @@ paths:
         '200': { description: Follow-up processing summary }
         '401': { description: Missing or invalid cron secret }
 
+  /reconcile-role-switch-billing:
+    post:
+      operationId: reconcileRoleSwitchBilling
+      summary: Cron-only recovery for incomplete role-switch billing audits
+      security: [{ CronSecretHeader: [] }]
+      responses:
+        '200': { description: Bounded billing reconciliation summary }
+        '401': { description: Missing or invalid cron secret }
+        '500': { description: Reconciliation or provider failure }
+        '504': { description: Reconciliation deadline exceeded }
+        '405': { description: Method not allowed }
+        '503': { description: Required billing service configuration unavailable }
+
   /process-storage-cleanup:
     post:
       operationId: processStorageCleanup
       summary: Cron-only compensating cleanup for abandoned public Storage objects
-      security: [{ CronSecret: [] }]
+      security: [{ CronSecretHeader: [] }]
       responses:
         '200':
           description: Claimed jobs were completed, preserved, or queued for retry
@@ -809,9 +1008,40 @@ paths:
       security: [{ SupabaseJWT: [] }]
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LogRoleSwitchRequest' }
       responses:
         '200': { description: Logged }
+        '400': { description: Invalid role-switch state or request body }
+        '401': { description: Missing or invalid authorization }
+        '405': { description: Method not allowed }
+        '408': { description: Request body read deadline exceeded }
+        '413': { description: Request body exceeds the configured limit }
+        '429': { description: Rate limit exceeded }
+        '500': { description: Role-switch billing or audit failure }
+        '502': { description: Billing cancellation could not be verified }
+        '503': { description: Service configuration or audit persistence unavailable }
+
+  /begin-role-switch:
+    post:
+      operationId: beginRoleSwitch
+      summary: Validate or begin an authenticated role-switch operation
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BeginRoleSwitchRequest' }
+      responses:
+        '200': { description: Role-switch validation or initialization succeeded }
+        '400': { description: Invalid role-switch state or request body }
+        '401': { description: Missing or invalid authorization }
+        '405': { description: Method not allowed }
+        '408': { description: Request body read deadline exceeded }
+        '413': { description: Request body exceeds the configured limit }
+        '429': { description: Rate limit exceeded }
+        '503': { description: Service configuration unavailable }
 
   /streetview-proxy:
     get:

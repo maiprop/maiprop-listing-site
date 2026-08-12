@@ -88,7 +88,9 @@ describe("release-train live security workflow", () => {
     expect(ciWorkflow).toContain("RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}");
     expect(ciWorkflow).toContain("--trusted-current-run-id \"$GITHUB_RUN_ID\"");
     expect(stagingWorkflow).toContain("github.event.workflow_run.run_attempt == 1");
-    expect(stagingWorkflow).toContain("release-candidate-attestation-binding-");
+    expect(stagingWorkflow).toContain(
+      "release-candidate-attestation-${{ needs.validate-source.outputs.release_sha }}-${{ github.run_attempt }}-binding",
+    );
     expect(stagingWorkflow).toContain("--workflow-path .github/workflows/stage-release.yml");
     expect(supabaseStagingWorkflow).toContain("production-release-candidate-binding-");
     expect(supabaseStagingWorkflow).toContain("node scripts/verify-release-artifact-binding.mjs");

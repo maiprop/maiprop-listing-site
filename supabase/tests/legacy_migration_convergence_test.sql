@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(12);
+SELECT plan(13);
 
 CREATE TEMP TABLE legacy_reconciliation_function_targets (
   signature TEXT PRIMARY KEY,
@@ -31,7 +31,7 @@ VALUES
   ('public.has_buy_side_role(uuid)', FALSE),
   ('public.has_sell_side_role(uuid)', FALSE),
   ('public.record_role_switch_audit(text,text,text,boolean,boolean)', TRUE),
-  ('public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean)', TRUE),
+  ('public.record_role_switch_audit_for_user(uuid,uuid,text,text,text)', FALSE),
   ('public.reserve_ai_quota(text)', TRUE),
   ('public.reserve_ai_quota_for_user(uuid,text)', TRUE),
   ('public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)', TRUE);
@@ -160,12 +160,26 @@ SELECT is(
         'public.record_role_switch_audit(text,text,text,boolean,boolean)'
       ),
       to_regprocedure(
-        'public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean)'
+        'public.record_role_switch_audit_for_user(uuid,uuid,text,text,text)'
       )
     )
   ),
   2,
   'both canonical role-switch audit signatures exist'
+);
+
+SELECT ok(
+  (
+    SELECT
+      procedure_state.provolatile = 'v'
+      AND COALESCE(procedure_state.proconfig, ARRAY[]::TEXT[])
+        @> ARRAY['search_path=pg_catalog, public']::TEXT[]
+    FROM pg_proc AS procedure_state
+    WHERE procedure_state.oid = to_regprocedure(
+      'public.record_role_switch_audit_for_user(uuid,uuid,text,text,text)'
+    )
+  ),
+  'operation-bound role-switch audit RPC keeps the hardened search path'
 );
 
 SELECT is(

@@ -42,6 +42,7 @@ jobs:
       stripe_readiness_sha256: ${{ steps.release_contract.outputs.stripe_readiness_sha256 }}
       stripe_readiness_artifact_id: ${{ steps.release_contract.outputs.stripe_readiness_artifact_id }}
       stripe_readiness_artifact_digest: ${{ steps.release_contract.outputs.stripe_readiness_artifact_digest }}
+      stripe_readiness_checked_at: ${{ steps.release_contract.outputs.stripe_readiness_checked_at }}
       artifact_sha256: ${{ steps.release_contract.outputs.artifact_sha256 }}
       manifest_sha256: ${{ steps.release_contract.outputs.manifest_sha256 }}
       approval_nonce: ${{ steps.release_contract.outputs.approval_nonce }}
@@ -260,6 +261,7 @@ jobs:
               --workflow-run-attempt "1" \
               --evidence-nonce "${STRIPE_READINESS_RUN_ID}:1:${RELEASE_SHA}"
           STRIPE_READINESS_SHA256="$(sha256sum stripe-readiness-evidence/stripe-live-migration-evidence.json | awk '{print $1}')"
+          STRIPE_READINESS_CHECKED_AT="$(jq -er '.checked_at' stripe-readiness-evidence/stripe-live-migration-evidence.json)"
           if ! [[ "$STRIPE_READINESS_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
             echo "::error::Stripe live readiness evidence digest is invalid."
             exit 1
@@ -337,13 +339,18 @@ jobs:
           export STRIPE_READINESS_RUN_ID STRIPE_READINESS_RUN_ATTEMPT
           export STRIPE_READINESS_SHA256
           export STRIPE_READINESS_ARTIFACT_ID STRIPE_READINESS_ARTIFACT_DIGEST
+          export STRIPE_READINESS_CHECKED_AT
           node --input-type=module <<'NODE'
           import { randomBytes } from "node:crypto";
           import { writeFileSync } from "node:fs";
 
           const issuedAt = new Date();
+          const readinessExpiresAt = new Date(
+            new Date(process.env.STRIPE_READINESS_CHECKED_AT).getTime() +
+              15 * 60 * 1000,
+          );
           const lease = {
-            schema_version: 1,
+            schema_version: 2,
             repository: process.env.GITHUB_REPOSITORY,
             release_sha: process.env.RELEASE_SHA,
             source_tree: process.env.SOURCE_TREE,
@@ -361,15 +368,18 @@ jobs:
               process.env.STRIPE_READINESS_ARTIFACT_ID,
             stripe_readiness_artifact_digest:
               process.env.STRIPE_READINESS_ARTIFACT_DIGEST,
+            stripe_readiness_checked_at:
+              process.env.STRIPE_READINESS_CHECKED_AT,
             production_run_id: process.env.GITHUB_RUN_ID,
             production_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
             artifact_sha256: process.env.ARTIFACT_SHA256,
             approval_nonce: process.env.APPROVAL_NONCE,
             nonce: randomBytes(32).toString("hex"),
             issued_at: issuedAt.toISOString(),
-            expires_at: new Date(
+            expires_at: new Date(Math.min(
               issuedAt.getTime() + 15 * 60 * 1000,
-            ).toISOString(),
+              readinessExpiresAt.getTime(),
+            )).toISOString(),
           };
           writeFileSync(
             "production-mutation-lease.json",
@@ -410,6 +420,7 @@ jobs:
           echo "stripe_readiness_sha256=$STRIPE_READINESS_SHA256" >> "$GITHUB_OUTPUT"
           echo "stripe_readiness_artifact_id=$STRIPE_READINESS_ARTIFACT_ID" >> "$GITHUB_OUTPUT"
           echo "stripe_readiness_artifact_digest=$STRIPE_READINESS_ARTIFACT_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "stripe_readiness_checked_at=$STRIPE_READINESS_CHECKED_AT" >> "$GITHUB_OUTPUT"
           echo "artifact_sha256=$ARTIFACT_SHA256" >> "$GITHUB_OUTPUT"
           echo "manifest_sha256=$MANIFEST_SHA256" >> "$GITHUB_OUTPUT"
           echo "approval_nonce=$APPROVAL_NONCE" >> "$GITHUB_OUTPUT"
@@ -576,6 +587,7 @@ jobs:
           STRIPE_READINESS_SHA256: ${{ needs.validate.outputs.stripe_readiness_sha256 }}
           STRIPE_READINESS_ARTIFACT_ID: ${{ needs.validate.outputs.stripe_readiness_artifact_id }}
           STRIPE_READINESS_ARTIFACT_DIGEST: ${{ needs.validate.outputs.stripe_readiness_artifact_digest }}
+          STRIPE_READINESS_CHECKED_AT: ${{ needs.validate.outputs.stripe_readiness_checked_at }}
           ARTIFACT_SHA256: ${{ needs.validate.outputs.artifact_sha256 }}
           APPROVAL_NONCE: ${{ needs.validate.outputs.approval_nonce }}
           PRODUCTION_RELEASE_APPROVERS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
@@ -655,8 +667,12 @@ jobs:
           import { writeFileSync } from "node:fs";
 
           const issuedAt = new Date();
+          const readinessExpiresAt = new Date(
+            new Date(process.env.STRIPE_READINESS_CHECKED_AT).getTime() +
+              15 * 60 * 1000,
+          );
           const lease = {
-            schema_version: 1,
+            schema_version: 2,
             repository: process.env.GITHUB_REPOSITORY,
             release_sha: process.env.RELEASE_SHA,
             source_tree: process.env.SOURCE_TREE,
@@ -674,15 +690,18 @@ jobs:
               process.env.STRIPE_READINESS_ARTIFACT_ID,
             stripe_readiness_artifact_digest:
               process.env.STRIPE_READINESS_ARTIFACT_DIGEST,
+            stripe_readiness_checked_at:
+              process.env.STRIPE_READINESS_CHECKED_AT,
             production_run_id: process.env.GITHUB_RUN_ID,
             production_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
             artifact_sha256: process.env.ARTIFACT_SHA256,
             approval_nonce: process.env.APPROVAL_NONCE,
             nonce: randomBytes(32).toString("hex"),
             issued_at: issuedAt.toISOString(),
-            expires_at: new Date(
+            expires_at: new Date(Math.min(
               issuedAt.getTime() + 15 * 60 * 1000,
-            ).toISOString(),
+              readinessExpiresAt.getTime(),
+            )).toISOString(),
           };
           writeFileSync(
             "production-mutation-lease.json",
@@ -822,6 +841,7 @@ jobs:
     secrets:
       RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
       VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
 
@@ -865,6 +885,7 @@ jobs:
           STRIPE_READINESS_SHA256: ${{ needs.validate.outputs.stripe_readiness_sha256 }}
           STRIPE_READINESS_ARTIFACT_ID: ${{ needs.validate.outputs.stripe_readiness_artifact_id }}
           STRIPE_READINESS_ARTIFACT_DIGEST: ${{ needs.validate.outputs.stripe_readiness_artifact_digest }}
+          STRIPE_READINESS_CHECKED_AT: ${{ needs.validate.outputs.stripe_readiness_checked_at }}
           ARTIFACT_SHA256: ${{ needs.validate.outputs.artifact_sha256 }}
           APPROVAL_NONCE: ${{ needs.validate.outputs.approval_nonce }}
           PRODUCTION_RELEASE_APPROVERS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
@@ -944,8 +965,12 @@ jobs:
           import { writeFileSync } from "node:fs";
 
           const issuedAt = new Date();
+          const readinessExpiresAt = new Date(
+            new Date(process.env.STRIPE_READINESS_CHECKED_AT).getTime() +
+              15 * 60 * 1000,
+          );
           const lease = {
-            schema_version: 1,
+            schema_version: 2,
             repository: process.env.GITHUB_REPOSITORY,
             release_sha: process.env.RELEASE_SHA,
             source_tree: process.env.SOURCE_TREE,
@@ -963,13 +988,18 @@ jobs:
               process.env.STRIPE_READINESS_ARTIFACT_ID,
             stripe_readiness_artifact_digest:
               process.env.STRIPE_READINESS_ARTIFACT_DIGEST,
+            stripe_readiness_checked_at:
+              process.env.STRIPE_READINESS_CHECKED_AT,
             production_run_id: process.env.GITHUB_RUN_ID,
             production_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
             artifact_sha256: process.env.ARTIFACT_SHA256,
             approval_nonce: process.env.APPROVAL_NONCE,
             nonce: randomBytes(32).toString("hex"),
             issued_at: issuedAt.toISOString(),
-            expires_at: new Date(issuedAt.getTime() + 15 * 60 * 1000).toISOString(),
+            expires_at: new Date(Math.min(
+              issuedAt.getTime() + 15 * 60 * 1000,
+              readinessExpiresAt.getTime(),
+            )).toISOString(),
           };
           writeFileSync(
             "production-mutation-lease.json",

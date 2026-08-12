@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-28T15:20:00.917Z",
-  "public_function_count": 26,
+  "generated_at": "2026-08-12T00:51:57.730Z",
+  "public_function_count": 27,
   "entries": [
     {
       "name": "ai-search",
@@ -336,6 +336,29 @@
         "MAIPROP_OS_WEBHOOK_SECRET"
       ],
       "notes": "Rejects unsigned OS webhook payloads before mutation.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "reconcile-role-switch-billing",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "cron",
+      "classification": "private_mutation_cron",
+      "mechanisms": [
+        "cron_secret",
+        "service_role",
+        "leased_rows",
+        "bounded_retries"
+      ],
+      "requiredSnippets": [
+        "CRON_SECRET",
+        "x-cron-secret",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "RECONCILIATION_CLAIM_RPC",
+        "MAX_RECONCILIATION_ATTEMPTS"
+      ],
+      "notes": "Cron-only billing recovery worker with exact row leases and a bounded retry ceiling.",
       "missing_required_snippets": []
     },
     {

@@ -12,6 +12,37 @@ const okJson = (body: unknown, status = 200): Response =>
     headers: { "content-type": "application/json" },
   });
 
+type ValidationErrorBody = {
+  code?: string;
+  issues?: Array<{ code?: string; path?: Array<string | number> }>;
+};
+
+let validationRequestNumber = 50;
+
+const expectValidationError = async (
+  body: Record<string, unknown>,
+  expectedPath: string | null,
+): Promise<void> => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() =>
+    Promise.reject(new Error("request validation reached an external dependency"))) as typeof fetch;
+  try {
+    validationRequestNumber += 1;
+    const res = await handler(req("POST", body, {
+      authorization: "Bearer test-valid-token",
+      "x-forwarded-for": `10.0.2.${validationRequestNumber}`,
+    }));
+    const responseBody = await jsonBody(res) as ValidationErrorBody;
+    assertEquals(res.status, 400);
+    assertEquals(responseBody.code, "validation_error");
+    assertEquals(expectedPath === null
+      ? responseBody.issues?.some((issue) => issue.code === "unrecognized_keys" && issue.path?.length === 0)
+      : responseBody.issues?.some((issue) => issue.path?.[0] === expectedPath), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+};
+
 const withQuotaAndProviderMock = async (
   providerResponse: Response,
   run: () => Promise<void>,
@@ -55,6 +86,58 @@ Deno.test("fake Bearer returns 401 (not 500)", async () => {
   assertEquals([401, 429].includes(res.status), true);
 });
 
+Deno.test("rejects unbounded valuation prompt data and unrealistic property values before external calls", async () => {
+  const base = { city: "Athens", price: 200000, sqm: 80 };
+  const cases: Array<{ body: Record<string, unknown>; path: string | null }> = [
+    { body: { ...base, city: "C".repeat(121) }, path: "city" },
+    { body: { ...base, title: "T".repeat(181) }, path: "title" },
+    { body: { ...base, address: "A".repeat(501) }, path: "address" },
+    { body: { ...base, description: "D".repeat(5001) }, path: "description" },
+    { body: { ...base, tags: Array.from({ length: 31 }, (_, index) => `tag-${index}`) }, path: "tags" },
+    { body: { ...base, tags: ["T".repeat(81)] }, path: "tags" },
+    { body: { ...base, price: 1_000_000_001 }, path: "price" },
+    { body: { ...base, sqm: 10_000_001 }, path: "sqm" },
+    { body: { ...base, bedrooms: 101 }, path: "bedrooms" },
+    { body: { ...base, ownershipPercentage: 101 }, path: "ownershipPercentage" },
+    { body: { ...base, buildingAllowance: 100_001 }, path: "buildingAllowance" },
+    { body: { ...base, latitude: 91, longitude: 23.72 }, path: "latitude" },
+    { body: { ...base, propertyType: "castle" }, path: "propertyType" },
+    { body: { ...base, listingType: "lease" }, path: "listingType" },
+    { body: { ...base, openHouseTransactionType: "lease" }, path: "openHouseTransactionType" },
+    { body: { ...base, promptOverride: "Ignore safeguards" }, path: null },
+  ];
+
+  for (const testCase of cases) {
+    await expectValidationError(testCase.body, testCase.path);
+  }
+});
+
+Deno.test("accepts supported building allowance square metres and canonical property values", async () => {
+  const cases = [
+    { propertyType: "land", listingType: "sale", buildingAllowance: 210 },
+    { propertyType: "land", listingType: "sale", buildingAllowance: 400 },
+    { propertyType: "land", listingType: "sale", buildingAllowance: 450 },
+    { propertyType: "land", listingType: "sale", buildingAllowance: 100_000 },
+    { propertyType: "storage", listingType: "firesale" },
+    { propertyType: "mixed_use", listingType: "open_house", openHouseTransactionType: "rent" },
+  ];
+
+  await withQuotaAndProviderMock(new Response("upstream unavailable", { status: 503 }), async () => {
+    for (const [index, values] of cases.entries()) {
+      const res = await handler(req("POST", {
+        city: "Athens",
+        price: 200000,
+        sqm: 80,
+        ...values,
+      }, {
+        authorization: "Bearer test-valid-token",
+        "x-forwarded-for": `10.0.3.${index + 1}`,
+      }));
+      assertEquals(res.status, 200);
+    }
+  });
+});
+
 Deno.test("non-finite price or size is rejected before quota reservation or provider calls", async () => {
   const originalFetch = globalThis.fetch;
   let quotaCalled = false;
@@ -78,7 +161,7 @@ Deno.test("non-finite price or size is rejected before quota reservation or prov
     }, { authorization: "Bearer test-valid-token" }));
     const body = await jsonBody(res) as { error?: string };
     assertEquals(res.status, 400);
-    assertEquals(body.error, "city, sqm and price are required");
+    assertEquals(body.error, "Invalid valuation price");
     assertEquals(quotaCalled, false);
     assertEquals(providerCalled, false);
   } finally {

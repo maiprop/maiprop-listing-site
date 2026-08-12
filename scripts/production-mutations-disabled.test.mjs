@@ -27,13 +27,13 @@ describe("production mutation boundaries", () => {
     );
   });
 
-  it("allows Cloudflare production mutation only through the protected reusable boundary", () => {
+  it("allows Cloudflare production mutation only through the exact-release reusable boundary", () => {
     const name = "reusable-cloudflare-production-deploy.yml";
     const source = workflow(name);
     const parsed = parsedWorkflow(name);
 
     expect(Object.keys(parsed.on)).toEqual(["workflow_call"]);
-    expect(parsed.jobs.deploy.environment).toBe("production");
+    expect(parsed.jobs.deploy.environment).toBeUndefined();
     expect(source).toContain("npx --no-install wrangler pages deploy dist");
     expect(source).toContain("--commit-dirty=false");
     expect(source).toContain("production-mutation-lease");
@@ -44,12 +44,12 @@ describe("production mutation boundaries", () => {
   it.each([
     "deploy-edge-functions.yml",
     "deploy-supabase-production-db.yml",
-  ])("allows %s only as a protected workflow-call promotion boundary", (name) => {
+  ])("allows %s only as an exact-release workflow-call promotion boundary", (name) => {
     const source = workflow(name);
     const parsed = parsedWorkflow(name);
 
     expect(Object.keys(parsed.on)).toEqual(["workflow_call"]);
-    expect(parsed.jobs.deploy.environment).toBe("production");
+    expect(parsed.jobs.deploy.environment).toBeUndefined();
     expect(parsed.concurrency).toBeUndefined();
     expect(source).toContain("qvvicunqcrwpioqnvzxf");
     expect(source).toContain("persist-credentials: false");
@@ -87,7 +87,8 @@ describe("production mutation boundaries", () => {
     expect(source).toContain("backend_approval_run_id");
     expect(source).toContain("backend_approval_run_attempt");
     expect(source).toContain("production-mutation-lease");
-    expect(source).toContain("actions/attest-build-provenance@");
+    expect(source).toContain("scripts/create-release-artifact-binding.mjs");
+    expect(source).toContain("scripts/verify-release-artifact-binding.mjs");
     expect(source).not.toContain("secrets: inherit");
     expect(source).not.toMatch(/npm run build|vite build/);
     expect(runScripts).not.toMatch(
@@ -123,13 +124,12 @@ describe("production mutation boundaries", () => {
     expect(jobs["deploy-production-cloudflare"].uses).toBe(
       "./.github/workflows/reusable-cloudflare-production-deploy.yml",
     );
-    expect(jobs["attest-production-release"].permissions).toMatchObject({
+    expect(jobs["attest-production-release"].permissions).toEqual({
       actions: "read",
-      attestations: "write",
-      "artifact-metadata": "write",
       contents: "read",
-      "id-token": "write",
     });
+    expect(source).toContain("scripts/create-release-artifact-binding.mjs");
+    expect(source).toContain("scripts/verify-release-artifact-binding.mjs");
     expect(source).not.toContain("secrets: inherit");
     expect(source).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
     expect(runScripts).not.toMatch(
@@ -220,5 +220,43 @@ describe("production mutation boundaries", () => {
     expect(inventory).toContain("forbiddenLiveOperationalWiring");
     expect(inventory).toContain("npm\\s+(?:run|exec)");
     expect(inventory).toContain("ai-quota-status");
+  });
+
+  it("keeps legacy credentialed CI jobs disabled until the exact-SHA train owns them", () => {
+    const ci = parsedWorkflow("ci.yml");
+
+    for (const jobName of [
+      "e2e-security-staging",
+      "deploy-supabase-staging",
+      "deploy-staging",
+    ]) {
+      expect(ci.jobs[jobName], jobName).toBeUndefined();
+    }
+
+    expect(ci.jobs.lighthouse).toBeDefined();
+    expect(workflow("ci.yml")).not.toContain(
+      "E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}",
+    );
+    expect(workflow("ci.yml")).not.toContain(
+      "E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}",
+    );
+  });
+
+  it("rejects standalone manual Supabase staging mutation requests", () => {
+    const staging = parsedWorkflow("reusable-supabase-staging.yml");
+    const steps = staging.jobs["deploy-supabase-staging"].steps;
+    const detector = steps.find((step) => step.id === "supabase_changes");
+    const target = steps.find(
+      (step) => step.name === "Resolve Supabase staging target",
+    );
+
+    expect(Object.keys(staging.on)).toEqual(["workflow_call"]);
+    expect(detector.run).toContain(
+      '[ "$TRUSTED_CONTROL_SHA" != "$CONTROL_WORKFLOW_SHA" ]',
+    );
+    expect(detector.run).toContain(
+      '[ "$CONTROL_WORKFLOW_SHA" != "$RELEASE_SHA" ]',
+    );
+    expect(target.if).toBeUndefined();
   });
 });

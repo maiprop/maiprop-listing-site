@@ -12,16 +12,22 @@ import {
   withMockBillingParams,
 } from "../_shared/stripeMode.ts";
 import {
-  createStripeClient,
+  createVerifiedStripeClient,
   getStripeRuntimeMode,
 } from "../_shared/stripeClient.ts";
 import {
   buildPortalSessionParams,
   parsePortalActionRequest,
+  portalActionRequestSchema,
   PortalActionValidationError,
   type CustomerPortalAction,
 } from "./portalActions.ts";
+import { resumeSubscriptionSafely } from "./resumeSubscription.ts";
 import { resolveCheckoutOrigin } from "../create-checkout/origins.ts";
+import {
+  parseJsonBody,
+  SchemaValidationError,
+} from "../_shared/schema.ts";
 
 const log = createLogger("customer-portal");
 
@@ -147,26 +153,33 @@ Deno.serve(async (req) => {
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "anonymous";
-  if (await portalLimiter.isLimited(_ip)) {
-    return tooManyRequestsResponse(corsHeaders);
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 405,
+    });
   }
 
-  const supabaseClient = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    { auth: { persistSession: false } },
-  );
-
   try {
+    const portalAction = req.body
+      ? await parseJsonBody(req, portalActionRequestSchema)
+      : parsePortalActionRequest({});
+
+    const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "anonymous";
+    if (await portalLimiter.isLimited(_ip)) {
+      return tooManyRequestsResponse(corsHeaders);
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } },
+    );
+
     logStep("Function started");
     const user = await verifyBearerToken(req, supabaseClient);
     logStep("User authenticated", { userId: user.id, email: user.email });
-    const body = req.method === "POST" && req.body
-      ? await req.json().catch(() => ({}))
-      : {};
-    const portalAction = parsePortalActionRequest(body);
 
     const origin = resolveCheckoutOrigin(req.headers.get("origin"));
     const returnUrl = `${origin}/dashboard/billing`;
@@ -205,7 +218,7 @@ Deno.serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const stripe = createStripeClient(stripeKey);
+    const stripe = await createVerifiedStripeClient(stripeKey);
     const customerId = await resolveCustomer(stripe, supabaseClient, user);
     if (!customerId) {
       return new Response(
@@ -225,11 +238,28 @@ Deno.serve(async (req) => {
       portalAction.subscriptionId,
     );
     if (portalAction.action === "resume_subscription") {
-      await stripe.subscriptions.update(subscriptionId as string, {
-        cancel_at_period_end: false,
+      const resumeResult = await resumeSubscriptionSafely(
+        {
+          subscriptions: {
+            update: (id, params, options) =>
+              stripe.subscriptions.update(id, params, options),
+            retrieve: (id, options) =>
+              stripe.subscriptions.retrieve(id, undefined, options),
+          },
+        },
+        subscriptionId as string,
+        portalAction.operationId as string,
+      );
+      logStep("Subscription resumed", {
+        subscriptionId,
+        reconciled: resumeResult.reconciled,
       });
       return new Response(
-        JSON.stringify({ resumed: true, subscription_id: subscriptionId }),
+        JSON.stringify({
+          resumed: true,
+          subscription_id: subscriptionId,
+          reconciled: resumeResult.reconciled,
+        }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
@@ -254,6 +284,16 @@ Deno.serve(async (req) => {
       status: 200,
     });
   } catch (error: unknown) {
+    if (error instanceof SchemaValidationError) {
+      return new Response(JSON.stringify({
+        error: error.message,
+        code: error.code,
+        issues: error.issues,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
     const status = error instanceof AuthError
       ? error.status
       : error instanceof PortalActionValidationError

@@ -31,6 +31,7 @@ const REQUIRED_WEBHOOK_EVENTS = [
   "customer.subscription.resumed",
   "customer.subscription.deleted",
   "invoice.created",
+  "invoice.finalized",
   "invoice.payment_failed",
   "invoice.payment_succeeded",
   "subscription_schedule.aborted",

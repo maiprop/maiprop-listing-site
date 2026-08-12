@@ -2,6 +2,8 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { MAIPROP_PRODUCTION_STRIPE_ACCOUNT_ID } from "./stripe-live-readiness-contract.mjs";
 
 const STRIPE_API_BASE = "https://api.stripe.com";
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION ?? "2026-06-24.dahlia";
@@ -594,6 +596,7 @@ function parseArgs(argv) {
   const parsed = {
     dryRun: false,
     live: false,
+    confirmLiveAccount: null,
     writeEnv: null,
     writeSql: null,
   };
@@ -602,6 +605,9 @@ function parseArgs(argv) {
     const arg = argv[index];
     if (arg === "--dry-run") parsed.dryRun = true;
     else if (arg === "--live") parsed.live = true;
+    else if (arg === "--confirm-live-account") {
+      parsed.confirmLiveAccount = argv[++index] ?? null;
+    }
     else if (arg === "--write-env") parsed.writeEnv = argv[++index] ?? null;
     else if (arg === "--write-sql") parsed.writeSql = argv[++index] ?? null;
     else if (arg === "--help" || arg === "-h") {
@@ -624,7 +630,41 @@ Options:
   --dry-run          Print the planned catalog without calling Stripe.
   --write-env PATH   Write generated Supabase Stripe price env vars.
   --write-sql PATH   Write SQL that upserts pricing_configs Stripe metadata.
-  --live             Allow sk_live keys. Omit for test-mode setup.`);
+  --live             Enable the guarded live-catalog bootstrap path.
+  --confirm-live-account acct_...
+                     Required with --live and must equal the committed MaiProp live account.
+
+Live bootstrap requires STRIPE_CATALOG_BOOTSTRAP_KEY=rk_live_... with only the
+catalog permissions needed by this script. Standard live secret keys are refused.`);
+}
+
+export function validateCatalogBootstrapCredentials({
+  args,
+  env = process.env,
+}) {
+  if (!args?.live) {
+    const key = String(env.STRIPE_SECRET_KEY ?? "").trim();
+    if (!/^sk_test_[A-Za-z0-9]+$/.test(key)) {
+      throw new Error(
+        "STRIPE_SECRET_KEY=sk_test_... is required for test-mode catalog setup.",
+      );
+    }
+    return { key, live: false, expectedAccountId: null };
+  }
+
+  const key = String(env.STRIPE_CATALOG_BOOTSTRAP_KEY ?? "").trim();
+  if (!/^rk_live_[A-Za-z0-9]+$/.test(key)) {
+    throw new Error(
+      "Live catalog bootstrap requires a dedicated restricted STRIPE_CATALOG_BOOTSTRAP_KEY=rk_live_....",
+    );
+  }
+  const expectedAccountId = MAIPROP_PRODUCTION_STRIPE_ACCOUNT_ID;
+  if (args.confirmLiveAccount !== expectedAccountId) {
+    throw new Error(
+      `--confirm-live-account must exactly match ${expectedAccountId}.`,
+    );
+  }
+  return { key, live: true, expectedAccountId };
 }
 
 function isRecurringUnit(unit) {
@@ -1182,12 +1222,18 @@ async function main() {
     return;
   }
 
-  stripeSecretKey = process.env.STRIPE_SECRET_KEY ?? "";
-  if (!stripeSecretKey) {
-    throw new Error("STRIPE_SECRET_KEY is required. Use an sk_test_ key for test mode.");
-  }
-  if (!args.live && !stripeSecretKey.startsWith("sk_test_")) {
-    throw new Error("Refusing to use a non-test Stripe key without --live.");
+  const credentials = validateCatalogBootstrapCredentials({
+    args,
+    env: process.env,
+  });
+  stripeSecretKey = credentials.key;
+  if (credentials.live) {
+    const account = await stripeRequest("GET", "/v1/account");
+    if (account?.id !== credentials.expectedAccountId) {
+      throw new Error(
+        `Live catalog bootstrap account ${account?.id ?? "missing"} does not match ${credentials.expectedAccountId}.`,
+      );
+    }
   }
 
   for (const key of RETIRED_CATALOG_KEYS) {
@@ -1258,7 +1304,12 @@ async function main() {
   console.log(`Done. Products: ${results.length}. Prices: ${createdPriceCount}. Features: ${featureCount}. Public plans: ${publicPlanCount}.`);
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+const invokedPath = process.argv[1]
+  ? pathToFileURL(resolve(process.argv[1])).href
+  : "";
+if (invokedPath === import.meta.url) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}

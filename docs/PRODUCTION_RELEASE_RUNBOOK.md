@@ -21,24 +21,18 @@ That job proves the signed static candidate only; it is not production approval.
 All production entry points share the `maiprop-production-release` concurrency
 lease. A release is never cancelled after it starts.
 
-## Required GitHub Environments
+## GitHub Free Release Controls
 
 The repository is private on a GitHub Free organization plan. Native
-environment required reviewers and prevent-self-review are unavailable and
-must not be claimed as release controls. Before either control workflow is
-dispatched, create these namespaces manually:
+environment required reviewers, protected environment secrets, and
+prevent-self-review are unavailable and must not be claimed as release
+controls. Release jobs therefore use repository-scoped secrets and fail closed
+unless the workflow, event, checkout, and requested release all identify the
+exact current `main` SHA; the run is attempt one; and the actor equals the
+triggering actor and belongs to the relevant repository allowlist. No release
+job declares a GitHub `environment`.
 
-- `production-approval`
-- `cloudflare-git-deploy-lock`
-
-Both namespaces must disable administrator bypass, use custom deployment branch
-policies, and contain exactly one branch policy named `main`. Their preflight
-jobs query the GitHub API and fail closed when a namespace is absent or any of
-those controls differs. Do not dispatch either workflow until this posture has
-been independently verified.
-
-`production-approval` is a main-only namespace, not a native reviewer gate. Its
-compensating control is a signed exact-SHA approval created by an allowlisted
+Production approval is a signed exact-SHA artifact created by an allowlisted
 dispatcher whose login must differ from the later deployment actor. Downstream
 validation binds the repository, release SHA, source tree, source CI run ID and
 attempt, staging run ID and attempt, approval run ID and attempt, immutable
@@ -86,10 +80,9 @@ invoking the reusable provider boundaries:
 - `CLOUDFLARE_TURN_KEY_ID`
 - `CLOUDFLARE_TURN_API_TOKEN`
 
-The protected `production` environment contains
-`SUPABASE_PRODUCTION_DB_URL`. The reusable database job resolves that value
-inside its own `environment: production` job because GitHub callers cannot
-forward environment-only secrets through `workflow_call`.
+`SUPABASE_PRODUCTION_DB_URL` is a repository secret exposed only through the
+explicit reusable database workflow secret contract. The caller forwards it by
+name; `secrets: inherit` is forbidden.
 
 The Supabase project ref in `VITE_SUPABASE_PROJECT_ID`, the API host in
 `VITE_SUPABASE_URL`, and the direct host or pooler username in
@@ -121,8 +114,9 @@ Optional frontend/runtime secrets used when configured are:
 - `VITE_GOOGLE_MAPS_API_KEY`
 - `VITE_PLAUSIBLE_DOMAIN`
 
-The Supabase project must also keep `CRON_SECRET` synchronized between Vault
-and the `process-storage-cleanup` Edge Function. This secret is runtime
+The staging and production Supabase projects must keep `CRON_SECRET`
+synchronized between Vault and the `process-storage-cleanup` and
+`reconcile-role-switch-billing` Edge Functions. This secret is runtime
 infrastructure, not a frontend build variable.
 
 `SITE_LOCK_PASSWORD` is synchronized to Cloudflare as a `secret_text` binding.
@@ -166,7 +160,7 @@ running `supabase/reconciliation/production-history-v1.sql` read-only and the
 pgTap contract in `supabase/tests/legacy_migration_convergence_test.sql`. The
 signed staging database attestation binds the canonical schema evidence object,
 its SHA-256 digest, and the forward cutover migration
-`20260811231659_reconcile_legacy_migration_effects.sql`.
+`20260812102342_reconcile_legacy_migration_effects.sql`.
 
 Production may start only when its pre-mutation history matches that signed
 manifest exactly. It applies the forward cutover through the ordinary

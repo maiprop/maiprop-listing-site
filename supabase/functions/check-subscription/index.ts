@@ -15,7 +15,7 @@ import {
 } from "../_shared/entitlements.ts";
 import { hasProvisionedSubscriptionAccess } from "../_shared/subscriptionStatus.ts";
 import {
-  createStripeClient,
+  createVerifiedStripeClient,
   getStripeRuntimeMode,
 } from "../_shared/stripeClient.ts";
 import {
@@ -435,7 +435,7 @@ async function resolveSubscriptionCheckWithinDeadline(
   }
 
   const stripe = options.createStripe?.(stripeKey) ??
-    createStripeClient(stripeKey);
+    await createVerifiedStripeClient(stripeKey);
   const reconciliationTimeoutMs = options.reconciliationTimeoutMs ??
     CHECKOUT_RECONCILIATION_TIMEOUT_MS;
   let session: Stripe.Checkout.Session;

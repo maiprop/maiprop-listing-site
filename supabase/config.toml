@@ -198,3 +198,6 @@ verify_jwt = true
 
 [functions.scheduled-followups]
 verify_jwt = false
+
+[functions.reconcile-role-switch-billing]
+verify_jwt = false

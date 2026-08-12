@@ -125,7 +125,7 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(workflow).toContain(
       "Promote immutable candidate to Cloudflare production",
     );
-    expect(workflow).toContain("environment: production");
+    expect(workflow).not.toContain("environment: production");
     expect(workflow).toContain("secrets.CLOUDFLARE_PAGES_READ_TOKEN");
     expect(workflow).toContain("secrets.CLOUDFLARE_PAGES_EDIT_TOKEN");
     expect(workflow).toContain("pages deploy dist");

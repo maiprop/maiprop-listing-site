@@ -10,16 +10,33 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { fetchBufferedProviderResponse } from "../_shared/providerFetch.ts";
 import { getAuctionSamplePageNumbers } from "../fetch-os-auctions/auctionSampling.ts";
+import { SchemaValidationError } from "../_shared/schema.ts";
+import {
+  parsePollOsAuctionsRequest,
+  type PollOsAuctionsRequest,
+} from "./request.ts";
 
 const log = createLogger("poll-os-auctions");
-const limiter = makeRateLimiter({ bucket: "poll-os-auctions", maxRequests: 3, windowMs: 60_000 });
+const limiter = makeRateLimiter({
+  bucket: "poll-os-auctions",
+  maxRequests: 3,
+  windowMs: 60_000,
+});
+export const OS_TOKEN_RESPONSE_MAX_BYTES = 64 * 1_024;
+export const OS_AUCTION_PAGE_RESPONSE_MAX_BYTES = 8 * 1_024 * 1_024;
 
 // Edge Functions use the service-role Supabase client with generated DB types
 // unavailable in Deno. Keep helper signatures aligned with the inferred client.
-type SupabaseAdminClient = ReturnType<typeof createClient<Record<string, unknown>>>;
+type SupabaseAdminClient = ReturnType<
+  typeof createClient<Record<string, unknown>>
+>;
 type SupabaseError = { message?: string } | null;
 type SupabaseQueryResult<T> = {
   data?: T[] | null;
@@ -27,13 +44,19 @@ type SupabaseQueryResult<T> = {
   error: SupabaseError;
 };
 type SupabaseQueryBuilder<T = unknown> = PromiseLike<SupabaseQueryResult<T>> & {
-  select: (columns: string, options?: { count?: "exact"; head?: boolean }) => SupabaseQueryBuilder<T>;
+  select: (
+    columns: string,
+    options?: { count?: "exact"; head?: boolean },
+  ) => SupabaseQueryBuilder<T>;
   insert: (values: Record<string, unknown>) => Promise<SupabaseQueryResult<T>>;
   update: (values: Record<string, unknown>) => SupabaseQueryBuilder<T>;
   eq: (column: string, value: unknown) => SupabaseQueryBuilder<T>;
   contains: (column: string, value: unknown[]) => SupabaseQueryBuilder<T>;
   or: (filters: string) => SupabaseQueryBuilder<T>;
-  order: (column: string, options?: Record<string, unknown>) => SupabaseQueryBuilder<T>;
+  order: (
+    column: string,
+    options?: Record<string, unknown>,
+  ) => SupabaseQueryBuilder<T>;
   range: (from: number, to: number) => SupabaseQueryBuilder<T>;
 };
 type UntypedSupabaseClient = {
@@ -56,7 +79,6 @@ const DAILY_AUCTION_LIMIT = 600;
  * in rotation over 10 days, giving broad variety without hammering OS.
  */
 const NATIONAL_SYNC_PAGE_COUNT = 4;
-
 
 // OS propertyCategory → Hub property_type (and optional land_type / commercial_type for filters)
 const CATEGORY_MAP: Record<string, string> = {
@@ -119,19 +141,32 @@ function getSubtypeTag(cat?: string): string | null {
   if (!cat) return null;
   const u = cat.toUpperCase();
   if (LAND_TYPE_TAG[u]) return `land_type:${LAND_TYPE_TAG[u]}`;
-  if (COMMERCIAL_TYPE_TAG[u]) return `commercial_type:${COMMERCIAL_TYPE_TAG[u]}`;
+  if (COMMERCIAL_TYPE_TAG[u]) {
+    return `commercial_type:${COMMERCIAL_TYPE_TAG[u]}`;
+  }
   return null;
 }
 
 function mapOwnershipStatusToTag(rawOwnership?: string | null): string | null {
   if (!rawOwnership) return null;
   const occ = rawOwnership.toUpperCase().trim();
-  if (occ === "FULL" || occ === "COMPLETE" || occ === "FULL_OWNERSHIP") return "ownership:full";
+  if (occ === "FULL" || occ === "COMPLETE" || occ === "FULL_OWNERSHIP") {
+    return "ownership:full";
+  }
   if (occ === "BARE" || occ === "BARE_OWNERSHIP") return "ownership:bare";
-  if (occ === "COMMON" || occ === "JOINT" || occ === "SHARED" || occ === "CO_OWNERSHIP") return "ownership:common";
-  if (occ === "USUFRUCT" || occ === "PSILI_KYPHIOTITA") return "ownership:usufruct";
-  if (occ === "VERTICAL" || occ === "VERTICAL_OWNERSHIP") return "ownership:vertical";
-  if (occ === "HORIZONTAL" || occ === "HORIZONTAL_OWNERSHIP") return "ownership:horizontal";
+  if (
+    occ === "COMMON" || occ === "JOINT" || occ === "SHARED" ||
+    occ === "CO_OWNERSHIP"
+  ) return "ownership:common";
+  if (occ === "USUFRUCT" || occ === "PSILI_KYPHIOTITA") {
+    return "ownership:usufruct";
+  }
+  if (occ === "VERTICAL" || occ === "VERTICAL_OWNERSHIP") {
+    return "ownership:vertical";
+  }
+  if (occ === "HORIZONTAL" || occ === "HORIZONTAL_OWNERSHIP") {
+    return "ownership:horizontal";
+  }
   return `ownership:${occ.toLowerCase()}`;
 }
 
@@ -182,25 +217,24 @@ function buildTitle(a: OsAuction): string {
   return `Πλειστηριασμός ${catGr} | ${city}${priceStr}`;
 }
 
-/** Fetch with an AbortController timeout. */
-async function fetchWithTimeout(
+/** Fetch and buffer the response under one absolute provider deadline. */
+export async function fetchWithTimeout(
   url: string,
   options: RequestInit,
-  timeoutMs: number
+  timeoutMs: number,
+  maxResponseBytes = OS_AUCTION_PAGE_RESPONSE_MAX_BYTES,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  return await fetchBufferedProviderResponse(url, options, {
+    timeoutMs,
+    maxResponseBytes,
+    timeoutMessage: "OS provider request timed out",
+  });
 }
 
 async function getOsToken(
   baseUrl: string,
   email: string,
-  password: string
+  password: string,
 ): Promise<string> {
   const res = await fetchWithTimeout(
     `${baseUrl}/auth/login`,
@@ -209,14 +243,16 @@ async function getOsToken(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     },
-    45_000
+    45_000,
+    OS_TOKEN_RESPONSE_MAX_BYTES,
   );
   const json = await res.json();
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
-  if (!token)
+  if (!token) {
     throw new Error(
-      `OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`
+      `OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`,
     );
+  }
   return token;
 }
 
@@ -238,7 +274,9 @@ async function logSync(
       records_affected,
     });
   } catch (e) {
-    log.warn("logSync failed", { err: e instanceof Error ? e.message : String(e) });
+    log.warn("logSync failed", {
+      err: e instanceof Error ? e.message : String(e),
+    });
   }
 }
 
@@ -279,29 +317,33 @@ type PoolTagRow = { id: string; tags?: string[] | null };
 /**
  * Map an AuctionOutputDto from the OS API to a Hub listing row.
  */
-function mapAuctionToListing(a: OsAuction, poolDate = getUtcPoolDate()): MappedAuction {
+function mapAuctionToListing(
+  a: OsAuction,
+  poolDate = getUtcPoolDate(),
+): MappedAuction {
   const osId = String(a.auctionListingId ?? "unknown");
   const tagKey = `os_auction:${osId}`;
   const catKey = mapCategory(a.propertyCategory);
   const price = Number(a.firstPriceOffer ?? 0);
 
   // Extract the auction URL — OS may return it as `url`, `auctionUrl`, or `listingUrl`
-  const auctionUrl: string | null =
-    a.url ?? a.auctionUrl ?? a.listingUrl ?? a.eAuctionUrl ?? null;
+  const auctionUrl: string | null = a.url ?? a.auctionUrl ?? a.listingUrl ??
+    a.eAuctionUrl ?? null;
 
   // Build Street View via proxy (key never in DB or client URLs)
   const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
   const lat = a.propertyLatitude != null ? Number(a.propertyLatitude) : null;
   const lng = a.propertyLongitude != null ? Number(a.propertyLongitude) : null;
-  const streetViewUrl =
-    supabaseUrl && lat != null && lng != null
-      ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
-      : null;
+  const streetViewUrl = supabaseUrl && lat != null && lng != null
+    ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
+    : null;
 
   // Map ownershipStatus from OS API to normalized tags used by frontend filters
   // Canonical values: full, bare, common, usufruct, vertical, horizontal
   const rawOwnership: string | undefined = a.ownershipStatus;
-  const ownershipPct: number | undefined = a.ownershipPercentage != null ? Number(a.ownershipPercentage) : undefined;
+  const ownershipPct: number | undefined = a.ownershipPercentage != null
+    ? Number(a.ownershipPercentage)
+    : undefined;
   let ownershipTag: string | null = mapOwnershipStatusToTag(rawOwnership);
   if (!ownershipTag && ownershipPct != null) {
     // Fallback: best-effort derivation when status is absent
@@ -317,7 +359,9 @@ function mapAuctionToListing(a: OsAuction, poolDate = getUtcPoolDate()): MappedA
       website_url: auctionUrl,
       cover_image_url: streetViewUrl,
       price,
-      price_per_sqm: a.pricePerSquareMeter != null ? Number(a.pricePerSquareMeter) : null,
+      price_per_sqm: a.pricePerSquareMeter != null
+        ? Number(a.pricePerSquareMeter)
+        : null,
       auction_starting_bid: price,
       auction_date: a.auctionDate ?? null,
       auction_court: a.auctionStatus ?? null,
@@ -329,11 +373,19 @@ function mapAuctionToListing(a: OsAuction, poolDate = getUtcPoolDate()): MappedA
       address: a.propertyAddress ?? null,
       postal_code: a.propertyPostalCode ?? null,
       latitude: a.propertyLatitude != null ? Number(a.propertyLatitude) : null,
-      longitude: a.propertyLongitude != null ? Number(a.propertyLongitude) : null,
+      longitude: a.propertyLongitude != null
+        ? Number(a.propertyLongitude)
+        : null,
       sqm: a.propertySquareMeters != null ? Number(a.propertySquareMeters) : 1,
-      floor: a.propertyFloor != null ? Math.round(Number(a.propertyFloor)) : null,
-      total_floors: a.numberOfFloors != null ? Math.round(Number(a.numberOfFloors)) : null,
-      year_built: a.constructionYear != null ? Number(a.constructionYear) : null,
+      floor: a.propertyFloor != null
+        ? Math.round(Number(a.propertyFloor))
+        : null,
+      total_floors: a.numberOfFloors != null
+        ? Math.round(Number(a.numberOfFloors))
+        : null,
+      year_built: a.constructionYear != null
+        ? Number(a.constructionYear)
+        : null,
       cadastre_number: a.propertyFullKaek ?? null,
       owner_id: null,
       ai_score: 80,
@@ -345,7 +397,9 @@ function mapAuctionToListing(a: OsAuction, poolDate = getUtcPoolDate()): MappedA
         ...(a.currentRound != null ? [`round:${a.currentRound}`] : []),
         ...(ownershipTag ? [ownershipTag] : []),
         ...(ownershipPct != null ? [`ownership_pct:${ownershipPct}`] : []),
-        ...(getSubtypeTag(a.propertyCategory) ? [getSubtypeTag(a.propertyCategory)!] : []),
+        ...(getSubtypeTag(a.propertyCategory)
+          ? [getSubtypeTag(a.propertyCategory)!]
+          : []),
       ],
     },
   };
@@ -366,8 +420,9 @@ async function sha256Bytes(value: string): Promise<Uint8Array> {
 }
 
 async function sha256Hex(value: string): Promise<string> {
-  return Array.from(await sha256Bytes(value), (byte) =>
-    byte.toString(16).padStart(2, "0")
+  return Array.from(
+    await sha256Bytes(value),
+    (byte) => byte.toString(16).padStart(2, "0"),
   ).join("");
 }
 
@@ -379,7 +434,11 @@ async function constantTimeSecretMatch(
   const suppliedHash = await sha256Bytes(supplied);
   const expectedHash = await sha256Bytes(expected);
   let diff = suppliedHash.length ^ expectedHash.length;
-  for (let i = 0; i < Math.max(suppliedHash.length, expectedHash.length); i += 1) {
+  for (
+    let i = 0;
+    i < Math.max(suppliedHash.length, expectedHash.length);
+    i += 1
+  ) {
     diff |= (suppliedHash[i] ?? 0) ^ (expectedHash[i] ?? 0);
   }
   return diff === 0;
@@ -403,29 +462,40 @@ export async function authorizeSyncRequest(
 
   const token = getBearerToken(req);
   if (!token) {
-    return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: "Missing or invalid Authorization header" }),
+      {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 
   const { data: { user }, error } = await sb.auth.getUser(token);
   if (error || !user) {
     return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const { data: profileRow } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  const { data: profileRow } = await sb.from("profiles").select("role").eq(
+    "user_id",
+    user.id,
+  ).single();
   const profile = profileRow as { role?: string } | null;
   if (profile?.role !== "admin") {
     return new Response(JSON.stringify({ error: "Platform admin required" }), {
-      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
   return { kind: "admin", userId: user.id };
 }
 
 async function getAuthorizedRateLimitKey(auth: SyncAuth): Promise<string> {
-  return auth.kind === "cron" ? "cron" : `admin:${await sha256Hex(auth.userId)}`;
+  return auth.kind === "cron"
+    ? "cron"
+    : `admin:${await sha256Hex(auth.userId)}`;
 }
 
 type OsAuctionListResponse = {
@@ -434,7 +504,9 @@ type OsAuctionListResponse = {
   pagination?: { totalElements?: number };
 };
 
-function parseAuctionListResponse(auctJson: OsAuctionListResponse | OsAuction[]): {
+function parseAuctionListResponse(
+  auctJson: OsAuctionListResponse | OsAuction[],
+): {
   auctions: OsAuction[];
   totalAvailable: number;
 } {
@@ -443,9 +515,10 @@ function parseAuctionListResponse(auctJson: OsAuctionListResponse | OsAuction[])
     : Array.isArray(auctJson.data)
     ? auctJson.data
     : [];
-  const pagination = (Array.isArray(auctJson)
-    ? undefined
-    : auctJson.responseMetadata?.pagination ?? auctJson.pagination) ?? {};
+  const pagination =
+    (Array.isArray(auctJson)
+      ? undefined
+      : auctJson.responseMetadata?.pagination ?? auctJson.pagination) ?? {};
   return {
     auctions,
     totalAvailable: pagination.totalElements ?? auctions.length,
@@ -458,8 +531,11 @@ async function fetchOsAuctionPage(
   page: number,
   size: number,
   filterRequest: Record<string, unknown>,
-): Promise<{ auctions: OsAuction[]; totalAvailable: number; endpoint: string }> {
-  const endpoint = `/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
+): Promise<
+  { auctions: OsAuction[]; totalAvailable: number; endpoint: string }
+> {
+  const endpoint =
+    `/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
   log.info("requesting auctions page", { endpoint, filter: filterRequest });
 
   const auctRes = await fetchWithTimeout(
@@ -473,15 +549,20 @@ async function fetchOsAuctionPage(
       body: JSON.stringify(filterRequest),
     },
     25_000,
+    OS_AUCTION_PAGE_RESPONSE_MAX_BYTES,
   );
 
   if (!auctRes.ok) {
     const errText = await auctRes.text();
-    throw new Error(`OS auction fetch failed (${auctRes.status}): ${errText.slice(0, 500)}`);
+    throw new Error(
+      `OS auction fetch failed (${auctRes.status}): ${errText.slice(0, 500)}`,
+    );
   }
 
   return {
-    ...parseAuctionListResponse(await auctRes.json() as OsAuctionListResponse | OsAuction[]),
+    ...parseAuctionListResponse(
+      await auctRes.json() as OsAuctionListResponse | OsAuction[],
+    ),
     endpoint,
   };
 }
@@ -490,7 +571,10 @@ function getAuctionGroupKey(row: MappedAuction): string {
   return row.row.region || row.row.city || "Greece";
 }
 
-function selectDiverseMappedAuctions(rows: MappedAuction[], limit: number): MappedAuction[] {
+function selectDiverseMappedAuctions(
+  rows: MappedAuction[],
+  limit: number,
+): MappedAuction[] {
   const uniqueRows = new Map<string, MappedAuction>();
   for (const row of rows) uniqueRows.set(row.tagKey, row);
 
@@ -500,7 +584,9 @@ function selectDiverseMappedAuctions(rows: MappedAuction[], limit: number): Mapp
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
 
-  const orderedGroups = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const orderedGroups = [...groups.entries()].sort(([a], [b]) =>
+    a.localeCompare(b)
+  );
   const selected: MappedAuction[] = [];
   let cursor = 0;
   while (
@@ -615,8 +701,9 @@ async function pruneUnselectedDailyPoolRows(
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
-  if (req.method === "OPTIONS")
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
@@ -626,11 +713,31 @@ Deno.serve(async (req) => {
 
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
   const auth = await authorizeSyncRequest(req, sb, corsHeaders);
   if (auth instanceof Response) return auth;
+
+  let body: PollOsAuctionsRequest;
+  try {
+    body = await parsePollOsAuctionsRequest(req);
+  } catch (err: unknown) {
+    if (err instanceof SchemaValidationError) {
+      return new Response(
+        JSON.stringify({
+          error: err.message,
+          code: err.code,
+          issues: err.issues,
+        }),
+        {
+          status: err.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    throw err;
+  }
 
   if (await limiter.isLimited(await getAuthorizedRateLimitKey(auth))) {
     return tooManyRequestsResponse(corsHeaders);
@@ -657,7 +764,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         ok: true,
         status: "skipped",
-        reason: `Daily pool of ${DAILY_AUCTION_LIMIT} auctions already populated`,
+        reason:
+          `Daily pool of ${DAILY_AUCTION_LIMIT} auctions already populated`,
         poolDate,
         pool_count_before: existingDailyPoolCount,
         pool_count_after: finalDailyPoolCount,
@@ -679,16 +787,12 @@ Deno.serve(async (req) => {
         status: "skipped",
         reason: "OS credentials not configured",
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
-
-    // Build AuctionFilterRequest from caller params. Fields are passed through
-    // verbatim to the OS API, which doesn't publish a typed schema, so we
-    // accept arbitrary JSON-serialisable values.
+    // Build the provider filter only from the validated allowlist.
     const filterRequest: Record<string, unknown> = {};
 
     // Only fetch future auctions by default
@@ -697,12 +801,24 @@ Deno.serve(async (req) => {
     if (body.auctionDateTo) filterRequest.auctionDateTo = body.auctionDateTo;
 
     // Optional filters from caller
-    if (body.propertyCategories) filterRequest.propertyCategories = body.propertyCategories;
-    if (body.prefectureId) filterRequest.prefectureId = body.prefectureId;
-    if (body.propertyMunicipalityId) filterRequest.propertyMunicipalityId = body.propertyMunicipalityId;
-    if (body.auctionStatuses) filterRequest.auctionStatuses = body.auctionStatuses;
-    if (body.auctionAmountFrom != null) filterRequest.auctionAmountFrom = body.auctionAmountFrom;
-    if (body.auctionAmountTo != null) filterRequest.auctionAmountTo = body.auctionAmountTo;
+    if (body.propertyCategories) {
+      filterRequest.propertyCategories = body.propertyCategories;
+    }
+    if (body.prefectureId !== undefined) {
+      filterRequest.prefectureId = body.prefectureId;
+    }
+    if (body.propertyMunicipalityId !== undefined) {
+      filterRequest.propertyMunicipalityId = body.propertyMunicipalityId;
+    }
+    if (body.auctionStatuses) {
+      filterRequest.auctionStatuses = body.auctionStatuses;
+    }
+    if (body.auctionAmountFrom != null) {
+      filterRequest.auctionAmountFrom = body.auctionAmountFrom;
+    }
+    if (body.auctionAmountTo != null) {
+      filterRequest.auctionAmountTo = body.auctionAmountTo;
+    }
     if (body.boundingBox) filterRequest.boundingBox = body.boundingBox;
 
     // Sorting: newest auctions first — use sortField object format
@@ -714,24 +830,39 @@ Deno.serve(async (req) => {
     // ── Canonical daily national pool ───────────────────────────────────────
     // When no explicit page is supplied, sample multiple pages once and write
     // a canonical national auction pool for the portal to serve locally.
-    const page = body.page == null ? 0 : Number(body.page);
+    const page = body.page ?? 0;
 
     // Hard cap: never exceed what's left of today's daily quota, and never
     // exceed DAILY_AUCTION_LIMIT in a single call regardless of the caller.
-    const size = Math.min(Number(body.size ?? body.pageSize ?? DAILY_AUCTION_LIMIT), DAILY_AUCTION_LIMIT);
-    const sampleAcrossGreece = body.sampleAcrossGreece !== false && body.page == null;
+    const size = body.size ?? body.pageSize ?? DAILY_AUCTION_LIMIT;
+    const sampleAcrossGreece = body.sampleAcrossGreece !== false &&
+      body.page == null;
 
     log.info("authenticating against OS", { os_url: OS_URL });
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
-    const firstPage = await fetchOsAuctionPage(OS_URL, token, page, size, filterRequest);
+    const firstPage = await fetchOsAuctionPage(
+      OS_URL,
+      token,
+      page,
+      size,
+      filterRequest,
+    );
 
     const samplePages = sampleAcrossGreece
-      ? getAuctionSamplePageNumbers(firstPage.totalAvailable, size, NATIONAL_SYNC_PAGE_COUNT)
+      ? getAuctionSamplePageNumbers(
+        firstPage.totalAvailable,
+        size,
+        NATIONAL_SYNC_PAGE_COUNT,
+      )
       : [page];
-    const remainingPages = samplePages.filter((samplePage) => samplePage !== page);
+    const remainingPages = samplePages.filter((samplePage) =>
+      samplePage !== page
+    );
     const extraPageResults = await Promise.allSettled(
-      remainingPages.map((samplePage) => fetchOsAuctionPage(OS_URL, token, samplePage, size, filterRequest)),
+      remainingPages.map((samplePage) =>
+        fetchOsAuctionPage(OS_URL, token, samplePage, size, filterRequest)
+      ),
     );
     const extraAuctions = extraPageResults.flatMap((result) =>
       result.status === "fulfilled" ? result.value.auctions : []
@@ -754,8 +885,16 @@ Deno.serve(async (req) => {
     if (auctions.length === 0) {
       await logSync(sb, "success", null, { endpoint, total: 0, page }, 0);
       return new Response(
-        JSON.stringify({ ok: true, total: 0, imported: 0, updated: 0, page, daily_limit: DAILY_AUCTION_LIMIT, pool_count_before: existingDailyPoolCount }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          ok: true,
+          total: 0,
+          imported: 0,
+          updated: 0,
+          page,
+          daily_limit: DAILY_AUCTION_LIMIT,
+          pool_count_before: existingDailyPoolCount,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -806,7 +945,9 @@ Deno.serve(async (req) => {
             tags: row.tags,
             website_url: row.website_url,
             // Only set cover_image_url if we have a Street View URL to avoid overwriting existing photos
-            ...(row.cover_image_url ? { cover_image_url: row.cover_image_url } : {}),
+            ...(row.cover_image_url
+              ? { cover_image_url: row.cover_image_url }
+              : {}),
             status: "active",
             updated_at: new Date().toISOString(),
           },
@@ -826,7 +967,10 @@ Deno.serve(async (req) => {
       const chunk = toInsert.slice(i, i + CHUNK);
       const { error } = await sb.from("listings").insert(chunk);
       if (error) {
-        log.error("insert failed", { err: error.message, chunk_size: chunk.length });
+        log.error("insert failed", {
+          err: error.message,
+          chunk_size: chunk.length,
+        });
         errors += chunk.length;
       } else {
         imported += chunk.length;
@@ -878,7 +1022,7 @@ Deno.serve(async (req) => {
       errors > 0 && imported + updated === 0 ? "error" : "success",
       errors > 0 ? `${errors} item(s) failed` : null,
       summary,
-      imported + updated
+      imported + updated,
     );
 
     log.info("poll done", { summary });

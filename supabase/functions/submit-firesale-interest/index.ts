@@ -11,10 +11,12 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { SchemaValidationError } from "../_shared/schema.ts";
 import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
+import { parseSubmitFiresaleInterestRequest } from "./request.ts";
 
 const log = createLogger("submit-firesale-interest");
 const limiter = makeRateLimiter({
@@ -22,15 +24,6 @@ const limiter = makeRateLimiter({
   maxRequests: 60,
   windowMs: 60_000,
 });
-
-type SubmitFiresaleInterestRequest = {
-  dealId?: unknown;
-  message?: unknown;
-  proofAmount?: unknown;
-  proofOfFundsUrl?: unknown;
-};
-
-const UUID_RE = /^[0-9a-f-]{36}$/i;
 
 const jsonResponse = (
   body: unknown,
@@ -42,33 +35,16 @@ const jsonResponse = (
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-function parseUuid(value: unknown, field: string): string {
-  if (typeof value !== "string" || !UUID_RE.test(value)) {
-    throw new Error(`Invalid ${field}`);
-  }
-  return value;
-}
-
-function optionalText(value: unknown, field: string, maxLength: number): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "string") throw new Error(`Invalid ${field}`);
-  const trimmed = value.trim();
-  if (trimmed.length > maxLength) throw new Error(`Invalid ${field}`);
-  return trimmed.length === 0 ? null : trimmed;
-}
-
-function optionalNumber(value: unknown, field: string): number | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    throw new Error(`Invalid ${field}`);
-  }
-  return value;
-}
-
-function validateProofPath(path: string | null, userId: string, dealId: string): void {
+function validateProofPath(
+  path: string | null,
+  userId: string,
+  dealId: string,
+): void {
   if (!path) return;
   const expectedPrefix = `${userId}/firesale/${dealId}/`;
-  if (!path.startsWith(expectedPrefix) || path.includes("..") || path.length > 512) {
+  if (
+    !path.startsWith(expectedPrefix) || path.includes("..") || path.length > 512
+  ) {
     throw new Error("Invalid proofOfFundsUrl");
   }
 }
@@ -99,24 +75,26 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405, corsHeaders);
   }
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
-
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  if (!serviceRoleKey || !supabaseUrl) {
-    return jsonResponse({ error: "Service unavailable" }, 503, corsHeaders);
-  }
-
   try {
-    const body = await req.json().catch(() => ({})) as SubmitFiresaleInterestRequest;
+    const body = await parseSubmitFiresaleInterestRequest(req);
     const payload = {
-      dealId: parseUuid(body.dealId, "dealId"),
-      message: optionalText(body.message, "message", 1000),
-      proofAmount: optionalNumber(body.proofAmount, "proofAmount"),
-      proofOfFundsUrl: optionalText(body.proofOfFundsUrl, "proofOfFundsUrl", 512),
+      dealId: body.dealId,
+      message: body.message || null,
+      proofAmount: body.proofAmount ?? null,
+      proofOfFundsUrl: body.proofOfFundsUrl || null,
     };
+
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "anonymous";
+    if (await limiter.isLimited(ip)) {
+      return tooManyRequestsResponse(corsHeaders);
+    }
+
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    if (!serviceRoleKey || !supabaseUrl) {
+      return jsonResponse({ error: "Service unavailable" }, 503, corsHeaders);
+    }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
@@ -137,17 +115,36 @@ Deno.serve(async (req) => {
 
     if (error) {
       const message = errorMessage(error);
-      log.warn("firesale interest rpc rejected", { userId: caller.id, err: message });
-      return jsonResponse({
-        data: null,
-        error: { message, code: errorCode(error) ?? null },
-      }, 200, corsHeaders);
+      log.warn("firesale interest rpc rejected", {
+        userId: caller.id,
+        err: message,
+      });
+      return jsonResponse(
+        {
+          data: null,
+          error: { message, code: errorCode(error) ?? null },
+        },
+        200,
+        corsHeaders,
+      );
     }
 
     return jsonResponse({ data, error: null }, 200, corsHeaders);
   } catch (err: unknown) {
     if (err instanceof AuthError) {
       return jsonResponse({ error: err.message }, err.status, corsHeaders);
+    }
+
+    if (err instanceof SchemaValidationError) {
+      return jsonResponse(
+        {
+          error: err.message,
+          code: err.code,
+          issues: err.issues,
+        },
+        err.code === "payload_too_large" ? 413 : 400,
+        corsHeaders,
+      );
     }
 
     const message = errorMessage(err);

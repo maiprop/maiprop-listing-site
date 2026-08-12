@@ -30,6 +30,10 @@ const agentCreditCompatMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260707170000_align_agent_data_input_stripe_credit_columns.sql"),
   "utf8",
 );
+const agentCreditReconciliationMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260812102340_reconcile_agent_data_input_invoice_credits.sql"),
+  "utf8",
+);
 
 describe("business logic role/review/agent hardening migration", () => {
   it("cleans up role-switch dependencies and blocks live commitments", () => {
@@ -70,5 +74,41 @@ describe("business logic role/review/agent hardening migration", () => {
     );
     expect(agentCreditCompatMigration).toContain("GRANT EXECUTE ON FUNCTION public.get_agent_data_input_status(UUID) TO service_role");
     expect(agentCreditCompatMigration).toContain("GRANT EXECUTE ON FUNCTION public.apply_verified_data_input_discount(UUID, TEXT) TO service_role");
+    expect(agentCreditReconciliationMigration).toContain(
+      "pg_advisory_xact_lock",
+    );
+    expect(agentCreditReconciliationMigration).toContain(
+      "discount_invoice_id = p_invoice_id",
+    );
+    expect(agentCreditReconciliationMigration).toContain(
+      "idx_agent_data_inputs_user_discount_invoice",
+    );
+    expect(agentCreditReconciliationMigration).toContain(
+      "pg_relation_size('public.agent_data_inputs'::regclass)",
+    );
+    expect(agentCreditReconciliationMigration).toContain(
+      "v_online_finalization_required",
+    );
+    expect(agentCreditReconciliationMigration).not.toMatch(
+      /CREATE INDEX IF NOT EXISTS idx_agent_data_inputs_user_discount_invoice\s+ON public\.agent_data_inputs \(user_id, discount_invoice_id\)/,
+    );
+    expect(agentCreditReconciliationMigration).toContain(
+      "p_subtotal_minor INTEGER",
+    );
+    expect(agentCreditReconciliationMigration).toContain(
+      "p_operation_key TEXT",
+    );
+    expect(agentCreditReconciliationMigration).toContain(
+      "stripe_credit_expected_amount_cents = stats.expected_amount_cents",
+    );
+    expect(agentCreditReconciliationMigration).toContain(
+      "stripe_credit_operation_key = p_operation_key",
+    );
+    expect(agentCreditReconciliationMigration).not.toMatch(
+      /pg_catalog\.(?:coalesce|least)\s*\(/i,
+    );
+    expect(agentCreditReconciliationMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION public.apply_verified_data_input_discount(UUID, TEXT, INTEGER, TEXT)",
+    );
   });
 });

@@ -514,6 +514,10 @@ jobs:
             --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
             --yes \
             --include-all
+          psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file release-candidate/supabase/reconciliation/role-switch-online-finalization.sql
         env:
           GITHUB_TOKEN: ${{ github.token }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}

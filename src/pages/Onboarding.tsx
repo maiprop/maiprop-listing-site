@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Home } from "lucide-react";
+import { AlertTriangle, CreditCard, Home, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import { logger } from "@/lib/logger";
 import { trackAnalyticsEvent } from "@/lib/analytics";
 import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricingConfigs";
 import { RoleSwitchModal } from "@/components/RoleSwitchModal";
+import { Button } from "@/components/ui/button";
 import { classifySwitch, getPlanForParticipant } from "@/lib/rolePlanMap";
 import type { ParticipantId } from "@/lib/participantConfig";
 import {
@@ -28,12 +29,15 @@ import { ProAvailabilityStep } from "@/components/onboarding/ProAvailabilityStep
 import { ProVideoStep } from "@/components/onboarding/ProVideoStep";
 import {
   BACK_STEP_BY_STEP,
+  clearRoleSwitchOperation,
   extractStripeError,
   isFirstOnboardingFor,
   isProfessionalCategory,
+  markRoleSwitchOperationBegun,
   parseServiceRate,
   readRoleSwitchCtx,
   resolvePresetType,
+  type RoleSwitchContext,
 } from "./onboarding/onboardingHelpers";
 import {
   parseMutationInput,
@@ -44,6 +48,7 @@ import {
 
 type RoleSelectionValues = { role: RoleKey; participant_type: ParticipantId } & Record<string, unknown>;
 type RoleSelectionResult = { ok: boolean; professionalId?: string };
+type RoleSwitchBillingVerification = { hadActiveSub: boolean };
 type ProfessionalOnboardingSetupBody =
   | { action: "services"; professionalId: string; services: unknown[] }
   | { action: "availability"; professionalId: string; availability: unknown[] }
@@ -51,6 +56,14 @@ type ProfessionalOnboardingSetupBody =
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 const ONBOARDING_CHECKOUT_TIMEOUT_MS = 20_000;
+const ROLE_SWITCH_BEGIN_ERROR_MESSAGES: Record<string, string> = {
+  active_firesale_commitment_blocks_role_switch:
+    "Resolve your active Quick Sale reservation or commitment before switching.",
+  accepted_open_house_offer_blocks_role_switch:
+    "Resolve your accepted Open House offer before switching.",
+  role_switch_audit_not_ready:
+    "The billing audit is not ready. Open Billing or contact support.",
+};
 
 export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a multi-step account setup workflow in one route shell.
   const navigate = useNavigate();
@@ -65,6 +78,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
 
   // Auto-advance past pick-type when type already set from Signup
   useEffect(() => { // skipcq: JS-R1005 - Auto-advance maps participant type to several onboarding branches.
+    if (profile?.role_switch_in_progress_at || readRoleSwitchCtx(user?.id)) return;
     if (!presetType) return;
     const p = participants.find(x => x.id === presetType);
     if (!p) return;
@@ -78,7 +92,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
     } else {
       setStep("done");
     }
-  }, [presetType]);
+  }, [presetType, profile?.role_switch_in_progress_at, user?.id]);
 
 
   const [proCategory, setProCategory] = useState("");
@@ -152,12 +166,13 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
       participant_type: values.participant_type,
     });
     await refreshProfile();
+    if (user?.id) clearRoleSwitchOperation(undefined, user.id);
     const professionalId = data && typeof data === "object" &&
       typeof (data as { professionalId?: unknown }).professionalId === "string"
       ? (data as { professionalId: string }).professionalId
       : undefined;
     return { ok: true, professionalId };
-  }, [refreshProfile]);
+  }, [refreshProfile, user?.id]);
 
   const saveRoleSelection = useCallback(async (
     values: RoleSelectionValues,
@@ -173,52 +188,133 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
     return false;
   }, []);
 
-  // ── Role-switch billing context ───────────────────────────────────────────────
-  // Set by Dashboard SettingsSection before navigating here for a role switch.
-  // Cleared after first use so it doesn't re-appear on subsequent visits.
-  //
-  // Lazy-initialised from sessionStorage so the value is available during the
-  // first render. Without this, the on-mount `onboarding_started` analytics
-  // effect (below) would always emit `source: "signup"` because effects fire
-  // in declaration order — the analytics effect would run before the cleanup
-  // effect that previously did the sessionStorage read. The cleanup of the
-  // sessionStorage key and the stale onboarding_draft happens in a separate
-  // mount effect below.
-  const [switchCtx, setSwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(() => readRoleSwitchCtx());
-  // Mirrors switchCtx but is NOT cleared when the billing modal is confirmed.
-  // switchCtx must be nulled in handleBillingModalConfirm to prevent the modal
-  // from re-firing on subsequent step navigations, but the done screen and
-  // analytics still need the original context to render the upgrade subtitle
-  // and emit source: "role_switch". Use displaySwitchCtx for read-only
-  // downstream consumers; use switchCtx for billing-modal gating.
-  // No setter destructured: the value is initialised once from sessionStorage
-  // and intentionally never overwritten so downstream readers (DoneScreen,
-  // onboarding_completed analytics) keep the original context after
-  // handleBillingModalConfirm clears `switchCtx`.
-  const [displaySwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(() => readRoleSwitchCtx());
+  // Load the role-switch context before analytics effects run.
+  const [switchCtx, setSwitchCtx] = useState<RoleSwitchContext | null>(
+    () => readRoleSwitchCtx(user?.id),
+  );
+  // Preserve the original transition after destructive work begins.
+  const [displaySwitchCtx, setDisplaySwitchCtx] = useState<RoleSwitchContext | null>(
+    () => readRoleSwitchCtx(user?.id),
+  );
+  const [roleSwitchContextReady, setRoleSwitchContextReady] = useState(
+    () => !authLoading,
+  );
+  useEffect(() => {
+    if (authLoading) return;
+    const authenticatedContext = readRoleSwitchCtx(user?.id);
+    if (authenticatedContext) {
+      setSwitchCtx((current) => current ?? authenticatedContext);
+      setDisplaySwitchCtx((current) => current ?? authenticatedContext);
+    }
+    setRoleSwitchContextReady(true);
+  }, [authLoading, user?.id]);
   const [billingModalProceed, setBillingModalProceed] = useState<(() => void) | null>(null);
   const [billingModalToType, setBillingModalToType] = useState<ParticipantId | null>(null);
   const [billingConfirming, setBillingConfirming] = useState(false);
+  const [roleSwitchFailure, setRoleSwitchFailure] = useState<string | null>(null);
+  const [verifiedRoleSwitchAuditId, setVerifiedRoleSwitchAuditId] = useState<string | null>(null);
+  const [serverSwitchCtx, setServerSwitchCtx] = useState<RoleSwitchContext | null>(null);
+  const [serverSwitchContextLoading, setServerSwitchContextLoading] = useState(false);
+  const [serverSwitchContextError, setServerSwitchContextError] = useState<string | null>(null);
+  const effectiveSwitchCtx = switchCtx ?? serverSwitchCtx;
+
+  useEffect(() => {
+    if (
+      authLoading || switchCtx || !user?.id ||
+      !profile?.role_switch_in_progress_at || !profile.role_switch_audit_id
+    ) {
+      setServerSwitchContextLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const auditId = profile.role_switch_audit_id;
+    setServerSwitchContextLoading(true);
+    setServerSwitchContextError(null);
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("role_switch_history")
+          .select(
+            "from_type, to_type, had_active_sub, billing_outcome, billing_reconciliation_required",
+          )
+          .eq("id", auditId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        const participantIds: ParticipantId[] = [
+          "buyer", "seller", "agent", "developer", "professional",
+          "investor", "institutional",
+        ];
+        const fromType = data?.from_type as ParticipantId | undefined;
+        const toType = data?.to_type as ParticipantId | undefined;
+        if (
+          error || !data || !fromType || !toType ||
+          !participantIds.includes(fromType) || !participantIds.includes(toType) ||
+          data.billing_reconciliation_required === true ||
+          !["not_required", "succeeded", "already_pending"].includes(
+            String(data.billing_outcome),
+          )
+        ) {
+          setServerSwitchContextError(
+            "This account switch could not be recovered safely. Open Billing or contact support.",
+          );
+          return;
+        }
+        const recovered: RoleSwitchContext = {
+          userId: user.id,
+          fromType,
+          toType,
+          hadActiveSub: data.had_active_sub === true,
+          auditId,
+          status: "begun",
+        };
+        setServerSwitchCtx(recovered);
+        setDisplaySwitchCtx((current) => current ?? recovered);
+        setVerifiedRoleSwitchAuditId(recovered.auditId);
+      } catch {
+        if (!cancelled) {
+          setServerSwitchContextError(
+            "This account switch could not be recovered safely. Open Billing or contact support.",
+          );
+        }
+      } finally {
+        if (!cancelled) setServerSwitchContextLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authLoading,
+    profile?.role_switch_audit_id,
+    profile?.role_switch_in_progress_at,
+    switchCtx,
+    user?.id,
+  ]);
   const isFirstOnboarding = isFirstOnboardingFor(profile);
   const startedTrackedRef = useRef(false);
   const completedTrackedRef = useRef(false);
 
   useEffect(() => { // skipcq: JS-R1005 - Started analytics guards duplicate tracking and role-switch context.
-    if (!isFirstOnboarding || startedTrackedRef.current) return;
+    if (!roleSwitchContextReady || !isFirstOnboarding || startedTrackedRef.current) return;
     startedTrackedRef.current = true;
     trackAnalyticsEvent("onboarding_started", {
-      source: switchCtx ? "role_switch" : "signup",
+      source: effectiveSwitchCtx || profile?.role_switch_in_progress_at
+        ? "role_switch"
+        : "signup",
     });
-  }, [isFirstOnboarding, switchCtx]);
+  }, [effectiveSwitchCtx, isFirstOnboarding, profile?.role_switch_in_progress_at, roleSwitchContextReady]);
 
   useEffect(() => { // skipcq: JS-R1005 - Completion analytics guards duplicate tracking and role-switch context.
-    if (step !== "done" || !selected || completedTrackedRef.current) return;
+    if (!roleSwitchContextReady || step !== "done" || !selected || completedTrackedRef.current) return;
     completedTrackedRef.current = true;
     trackAnalyticsEvent("onboarding_completed", {
       participant_type: selected.id,
-      source: (displaySwitchCtx ?? switchCtx) ? "role_switch" : "signup",
+      source: (displaySwitchCtx ?? effectiveSwitchCtx) ? "role_switch" : "signup",
     });
-  }, [step, selected, switchCtx, displaySwitchCtx]);
+  }, [step, selected, effectiveSwitchCtx, displaySwitchCtx, roleSwitchContextReady]);
 
   useEffect(() => { // skipcq: JS-R1005 - Role switch cleanup handles session and local draft state together.
     // Cleanup-only effect: switchCtx + displaySwitchCtx were already populated
@@ -226,6 +322,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
     // role-switch context on first render. Here we only consume the
     // sessionStorage key (so subsequent visits don't keep firing the modal)
     // and drop any stale onboarding_draft from the previous role's flow.
+    if (authLoading) return;
     try {
       if (sessionStorage.getItem("role_switch_ctx") === null) return;
       sessionStorage.removeItem("role_switch_ctx");
@@ -242,7 +339,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
     } catch (err: unknown) {
       logger.warn("[Onboarding] role_switch_ctx cleanup failed:", err instanceof Error ? err.message : err);
     }
-  }, []);
+  }, [authLoading, user?.id]);
 
   const steps: OnboardingStep[] = resolveStepsFor(selected);
   const stepIndex = steps.indexOf(step);
@@ -306,7 +403,10 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
   // ── Restore participant type from Signup (Google OAuth) ──────────────────────
   const restoredRef = useRef(false);
   useEffect(() => {
-    if (!user || restoredRef.current) return;
+    if (
+      !user || restoredRef.current || effectiveSwitchCtx ||
+      profile?.role_switch_in_progress_at
+    ) return;
     (async () => { // skipcq: JS-R1005 - Signup participant restore handles storage, validation, and cleanup paths.
       try {
         const stored = sessionStorage.getItem("signup_participant_type") || localStorage.getItem("signup_participant_type");
@@ -352,7 +452,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
         logger.warn("[Onboarding] auto-upgrade failed:", err instanceof Error ? err.message : err);
       }
     })();
-  }, [user, saveRoleSelection]);
+  }, [effectiveSwitchCtx, profile?.role_switch_in_progress_at, saveRoleSelection, user]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -372,88 +472,171 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
    * For fresh signups (no switchCtx), calls proceed() directly.
    */
   const maybeBillingGate = (toType: ParticipantId, proceed: () => void) => {
-    // switchCtx (set by SettingsSection before begin_role_switch nulls participant_type)
-    // is the authoritative signal for a role switch. Don't gate on isFirstOnboarding —
-    // begin_role_switch makes participant_type null, so isFirstOnboarding is true even
-    // for a real switch. Gating on it here would skip the Stripe cancel + audit insert.
-    if (!switchCtx) { proceed(); return; }
-    const kind = classifySwitch(switchCtx.fromType, toType);
-    if (kind === "same-tier") { proceed(); return; }
+    const ctx = effectiveSwitchCtx;
+    if (!ctx) {
+      if (profile?.role_switch_in_progress_at) {
+        toast.error("This account switch is missing its billing audit. Please contact support.");
+        return;
+      }
+      proceed();
+      return;
+    }
+    if (toType !== ctx.toType) {
+      toast.error(`This switch is approved only for ${ctx.toType}. Cancel it to choose another type.`);
+      return;
+    }
+    if (ctx.status === "begun" || verifiedRoleSwitchAuditId === ctx.auditId) {
+      proceed();
+      return;
+    }
     // Show modal — store the proceed callback and target type
+    setSwitchCtx(ctx);
     setBillingModalToType(toType);
     setBillingModalProceed(() => proceed);
+  };
+
+  const invokeBeginRoleSwitch = async (
+    validateOnly: boolean,
+    auditId?: string,
+  ): Promise<boolean> => {
+    const { error } = await supabase.functions.invoke("begin-role-switch", {
+      body: validateOnly ? { validate_only: true } : { audit_id: auditId },
+    });
+    if (!error) return true;
+    const message = ROLE_SWITCH_BEGIN_ERROR_MESSAGES[error.message] ??
+      "The account switch could not start safely. Nothing else was changed.";
+    setRoleSwitchFailure(message);
+    toast.error(message);
+    return false;
   };
 
   // Extracted to keep handleBillingModalConfirm's cyclomatic complexity low.
   // supabase.functions.invoke does NOT throw on non-2xx — surface failures via
   // the { error } property and the body's stripe_error field.
   const invokeLogRoleSwitch = async (
-    ctx: { fromType: ParticipantId; hadActiveSub: boolean },
+    ctx: RoleSwitchContext,
     toType: ParticipantId,
-  ): Promise<boolean> => {
+  ): Promise<RoleSwitchBillingVerification | null> => {
     try {
       const { data, error } = await supabase.functions.invoke("log-role-switch", {
         body: {
+          operation_id: ctx.auditId,
           from_type: ctx.fromType,
           to_type: toType,
-          switch_kind: classifySwitch(ctx.fromType, toType),
-          had_active_sub: ctx.hadActiveSub,
-          cancel_subscription: ctx.hadActiveSub,
+          cancel_subscription: true,
         },
       });
       if (error) {
         logger.warn("[Onboarding] log-role-switch invoke error:", error.message);
-        toast.error("We couldn't update your active Stripe subscription. Please manage it from Billing before completing this switch.");
-        return false;
+        const message = "Stripe billing could not be verified. Open Billing before retrying this switch.";
+        setRoleSwitchFailure(message);
+        toast.error(message);
+        return null;
       }
       const stripeError = extractStripeError(data);
       if (stripeError) {
-        toast.error("We couldn't update your active Stripe subscription. Please manage it from Billing before completing this switch.");
-        return false;
+        const message = "Stripe billing could not be verified. Open Billing before retrying this switch.";
+        setRoleSwitchFailure(message);
+        toast.error(message);
+        return null;
       }
-      return true;
+      const responseAuditId = data && typeof data === "object"
+        ? (data as { audit_id?: unknown }).audit_id
+        : null;
+      if (responseAuditId !== ctx.auditId) {
+        logger.warn("[Onboarding] log-role-switch returned an unexpected audit id");
+        toast.error("We couldn't verify the account-switch audit. Please try again.");
+        setRoleSwitchFailure("The destination-bound account-switch audit could not be verified.");
+        return null;
+      }
+      const billing = data as {
+        had_active_sub?: unknown;
+        billing_subscription_count?: unknown;
+      };
+      return {
+        hadActiveSub: billing.had_active_sub === true ||
+          (typeof billing.billing_subscription_count === "number" &&
+            billing.billing_subscription_count > 0),
+      };
     } catch (err: unknown) {
       logger.warn("[Onboarding] log-role-switch threw:", err instanceof Error ? err.message : err);
-      toast.error("We couldn't update your active Stripe subscription. Please manage it from Billing before completing this switch.");
-      return false;
+      const message = "Stripe billing could not be verified. Open Billing before retrying this switch.";
+      setRoleSwitchFailure(message);
+      toast.error(message);
+      return null;
     }
   };
 
   // Inner body of handleBillingModalConfirm extracted into a helper so the
   // outer handler stays under DeepSource's cyclomatic-complexity threshold.
-  // Audit-row failure is non-blocking; Stripe-cancellation failure surfaces
-  // as a toast warning so the user can manage the sub manually.
+  // Audit intent must persist before Stripe mutation. Stripe-cancellation or
+  // audit-finalization failures surface so the user can resolve the switch.
   // Note: displaySwitchCtx is intentionally NOT cleared here. The done
   // screen + onboarding_completed analytics need to read the original
   // switch context after switchCtx has been consumed.
   const performBillingConfirm = async (
-    ctx: { fromType: ParticipantId; hadActiveSub: boolean },
+    ctx: RoleSwitchContext,
     toType: ParticipantId,
     proceed: (() => void) | null,
   ): Promise<void> => {
     setBillingConfirming(true);
-    let canProceed = false;
+    setRoleSwitchFailure(null);
+    let billingVerification: RoleSwitchBillingVerification | null = null;
     try {
-      canProceed = await invokeLogRoleSwitch(ctx, toType);
+      if (!(await invokeBeginRoleSwitch(true))) return;
+      billingVerification = await invokeLogRoleSwitch(ctx, toType);
+      if (!billingVerification) return;
+      if (!(await invokeBeginRoleSwitch(false, ctx.auditId))) return;
+      const begunContext: RoleSwitchContext = {
+        ...ctx,
+        hadActiveSub: billingVerification.hadActiveSub,
+        status: "begun",
+      };
+      try {
+        markRoleSwitchOperationBegun(ctx.auditId, ctx.userId);
+        sessionStorage.setItem("role_switch_ctx", JSON.stringify(begunContext));
+      } catch (error: unknown) {
+        logger.warn("[Onboarding] role-switch browser context persistence failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      await refreshProfile();
+      setSwitchCtx(begunContext);
+      setDisplaySwitchCtx(begunContext);
+      setVerifiedRoleSwitchAuditId(ctx.auditId);
+      setBillingModalProceed(null);
+      setBillingModalToType(null);
+      if (proceed) proceed();
     } finally {
       setBillingConfirming(false);
     }
-    if (!canProceed) return;
-    setBillingModalProceed(null);
-    setBillingModalToType(null);
-    setSwitchCtx(null);
-    if (proceed) proceed();
   };
 
   const handleBillingModalConfirm = async () => {
-    if (!switchCtx || !billingModalToType || billingConfirming) return;
-    await performBillingConfirm(switchCtx, billingModalToType, billingModalProceed);
+    if (!effectiveSwitchCtx || !billingModalToType || billingConfirming) return;
+    await performBillingConfirm(
+      effectiveSwitchCtx,
+      billingModalToType,
+      billingModalProceed,
+    );
   };
 
   const handleBillingModalCancel = () => {
     setBillingModalProceed(null);
     setBillingModalToType(null);
     setPendingCardId(null);
+    setRoleSwitchFailure(null);
+    if (effectiveSwitchCtx?.status === "prepared") {
+      clearRoleSwitchOperation(effectiveSwitchCtx.auditId, effectiveSwitchCtx.userId);
+      try {
+        sessionStorage.removeItem("role_switch_ctx");
+      } catch {
+        // Durable operation cleanup above is authoritative.
+      }
+      setSwitchCtx(null);
+      setDisplaySwitchCtx(null);
+      navigate("/dashboard/settings", { replace: true });
+    }
   };
 
   /** Handler for participant goal selection (buy/rent vs sell/let) */
@@ -693,6 +876,39 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
 
   const stepContent = (() => { // skipcq: JS-R1005 - Onboarding route renders several intentionally stateful step panels.
 
+    if (step === "pick-type" && profile?.role_switch_in_progress_at && !effectiveSwitchCtx) {
+      return (
+        <div className="mx-auto max-w-lg rounded-lg border border-border bg-secondary/40 p-6 text-center">
+          {serverSwitchContextLoading ? (
+            <>
+              <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" aria-hidden="true" />
+              <h1 className="mt-4 text-lg font-bold text-foreground">Recovering account switch</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Verifying the destination and billing audit before continuing.
+              </p>
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="mx-auto h-6 w-6 text-amber-500" aria-hidden="true" />
+              <h1 className="mt-4 text-lg font-bold text-foreground">Account switch needs attention</h1>
+              <p role="alert" className="mt-2 text-sm text-muted-foreground">
+                {serverSwitchContextError ??
+                  "The destination-bound audit could not be recovered safely. No new account type can be selected here."}
+              </p>
+              <Button
+                type="button"
+                className="mt-5 min-h-11 gap-2"
+                onClick={() => navigate("/dashboard/billing")}
+              >
+                <CreditCard className="h-4 w-4" aria-hidden="true" />
+                Open Billing
+              </Button>
+            </>
+          )}
+        </div>
+      );
+    }
+
     // ── Pick type (top-level — flat selection across all role types) ──
     if (step === "pick-type") {
       const devParticipant = participants.find(x => x.id === "developer");
@@ -704,6 +920,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
           onPendingChange={setPendingCardId}
           loading={loading}
           authLoading={authLoading}
+          allowedParticipantIds={effectiveSwitchCtx ? [effectiveSwitchCtx.toType] : undefined}
           onDeveloperImmediate={() =>
             maybeBillingGate("developer", () => { setSelected(devParticipant); setStep("developer-setup"); })
           }
@@ -908,12 +1125,12 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
         {stepContent}
       </Shell>
 
-      {/* Role-switch billing modal — only visible when switching from a paid role */}
-      {billingModalProceed && billingModalToType && switchCtx && (
+      {/* Destination-bound confirmation; no provider or profile mutation occurs before this modal. */}
+      {billingModalProceed && billingModalToType && effectiveSwitchCtx && (
         <RoleSwitchModal
-          fromType={switchCtx.fromType}
+          fromType={effectiveSwitchCtx.fromType}
           toType={billingModalToType}
-          hasActiveSub={switchCtx.hadActiveSub}
+          hasActiveSub={effectiveSwitchCtx.hadActiveSub}
           onConfirm={() => {
             handleBillingModalConfirm().catch(() => {
               toast.error("Could not continue. Please try again.");
@@ -921,6 +1138,9 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
           }}
           onCancel={handleBillingModalCancel}
           confirming={billingConfirming}
+          pricingConfigs={pricingConfigs}
+          errorMessage={roleSwitchFailure}
+          onManageBilling={() => navigate("/dashboard/billing")}
         />
       )}
     </>

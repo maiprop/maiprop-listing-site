@@ -348,10 +348,15 @@ describe("BillingTab add-on checkout", () => {
 
     renderWithProviders(<BillingTab />);
 
-    expect(await screen.findByRole("button", { name: /175[.,]00\s*€\/mo/i }))
-      .toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /1[.,]650[.,]00\s*€\/yr/i }))
-      .toBeInTheDocument();
+    const monthly = await screen.findByRole("button", { name: /175[.,]00\s*€\/mo/i });
+    const annual = screen.getByRole("button", { name: /1[.,]650[.,]00\s*€\/yr/i });
+    expect(monthly).toHaveAttribute("aria-pressed", "true");
+    expect(annual).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(annual);
+
+    expect(monthly).toHaveAttribute("aria-pressed", "false");
+    expect(annual).toHaveAttribute("aria-pressed", "true");
   });
 
   it("does not sell redundant report credits or unfulfilled priority ads to B2B Pro users", async () => {
@@ -1095,7 +1100,13 @@ describe("BillingTab add-on checkout", () => {
 
     await waitFor(() => {
       expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("customer-portal", {
-        body: { action: "resume_subscription", subscription_id: "sub_resume" },
+        body: {
+          action: "resume_subscription",
+          subscription_id: "sub_resume",
+          operation_id: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          ),
+        },
         timeout: 20_000,
       });
       expect(toast.success).toHaveBeenCalledWith("Your subscription renewal has been resumed.");

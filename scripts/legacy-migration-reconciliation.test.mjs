@@ -351,7 +351,7 @@ describe("legacy migration schema evidence", () => {
 
   it("reapplies every canonical function body that differs before cutover", () => {
     const migration = readFileSync(
-      "supabase/migrations/20260811231659_reconcile_legacy_migration_effects.sql",
+      "supabase/migrations/20260812102342_reconcile_legacy_migration_effects.sql",
       "utf8",
     );
     const canonicalFunctions = [

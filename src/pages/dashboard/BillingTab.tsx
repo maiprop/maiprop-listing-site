@@ -181,6 +181,9 @@ export default function BillingTab() { // skipcq: JS-0067
             ...(data.subscription?.id
               ? { subscription_id: data.subscription.id }
               : {}),
+            ...(action === "resume_subscription"
+              ? { operation_id: crypto.randomUUID() }
+              : {}),
           },
         });
       if (!isCurrentAction()) return;
@@ -452,11 +455,16 @@ export default function BillingTab() { // skipcq: JS-0067
             </div>
             {!rolePlan.inviteOnly && (
               <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex rounded-lg border border-border bg-background p-1">
+                <div
+                  className="inline-flex rounded-lg border border-border bg-background p-1"
+                  role="group"
+                  aria-label="Billing cycle"
+                >
                   {(["monthly", "annual"] as const).map((cycle) => (
                     <button
                       key={cycle}
                       type="button"
+                      aria-pressed={subscriptionBillingCycle === cycle}
                       className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
                         subscriptionBillingCycle === cycle
                           ? "bg-primary text-primary-foreground"

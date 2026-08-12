@@ -333,7 +333,7 @@ const proof: readonly FlowProof[] = [
       },
       {
         file: "supabase/functions/create-checkout/index.ts",
-        snippets: ["buildIdempotencyKey", "checkout-v2", "checkout-addon-v2"],
+        snippets: ["buildIdempotencyKey", "checkout-v3", "checkout-addon-v3"],
       },
     ],
   },

@@ -23,11 +23,25 @@ const { handler, restore } = await captureHandler(
   {
     RATE_LIMIT_FORCE_MEMORY: "true",
     STRIPE_RUNTIME_MODE: "test",
+    STRIPE_EXPECTED_ACCOUNT_ID: "acct_testmaiprop",
+  },
+);
+const {
+  handler: productionBoundaryHandler,
+  restore: restoreProductionBoundary,
+} = await captureHandler(
+  import.meta.url,
+  "./index.ts?production-boundary",
+  {
+    RATE_LIMIT_FORCE_MEMORY: "false",
+    STRIPE_RUNTIME_MODE: "test",
+    STRIPE_EXPECTED_ACCOUNT_ID: "acct_testmaiprop",
   },
 );
 
 const adminUserId = "11111111-1111-4111-8111-111111111111";
 const agentUserId = "22222222-2222-4222-8222-222222222222";
+const dataInputId = "33333333-3333-4333-8333-333333333333";
 
 type DataInputRow = {
   id: string;
@@ -50,7 +64,7 @@ type MockScenario = {
 };
 
 const baseRow: DataInputRow = {
-  id: "input-1",
+  id: dataInputId,
   user_id: agentUserId,
   status: "verified",
   discount_pct: 0.5,
@@ -68,6 +82,51 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+function rawPost(body: string, ip: string): Request {
+  return new Request("https://functions.supabase.co/apply-data-input-credit", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer boundary-test-token",
+      "content-type": "application/json",
+      origin: "https://maiprop.co",
+      "x-forwarded-for": ip,
+    },
+    body,
+  });
+}
+
+async function assertBoundaryRejection(
+  request: Request,
+  expectedCode: string,
+  expectedStatus = 400,
+): Promise<void> {
+  const originalFetch = globalThis.fetch;
+  let externalRequests = 0;
+  globalThis.fetch = (() => {
+    externalRequests += 1;
+    return Promise.resolve(json({ message: "unexpected request" }, 500));
+  }) as typeof fetch;
+
+  try {
+    const response = await handler(request);
+    const payload = await response.json() as {
+      code?: string;
+      issues?: unknown[];
+    };
+
+    assertEquals(response.status, expectedStatus);
+    assertEquals(payload.code, expectedCode);
+    assertEquals(Array.isArray(payload.issues), true);
+    assertEquals(
+      response.headers.get("Access-Control-Allow-Origin"),
+      "https://maiprop.co",
+    );
+    assertEquals(externalRequests, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }
 
 function installFetchMock(scenario: MockScenario) {
@@ -116,6 +175,14 @@ function installFetchMock(scenario: MockScenario) {
     }
 
     if (url.hostname === "api.stripe.com") {
+      if (url.pathname === "/v1/account") {
+        return json({ id: "acct_testmaiprop", object: "account" });
+      }
+
+      if (url.pathname === "/v1/balance") {
+        return json({ object: "balance", livemode: false, available: [], pending: [] });
+      }
+
       if (url.pathname === "/v1/customers/search") {
         return json({ object: "search_result", data: [{ id: "cus_agent" }] });
       }
@@ -170,8 +237,25 @@ Deno.test("OPTIONS preflight returns 200 with CORS headers", async () => {
   );
 });
 
+Deno.test("non-POST requests are rejected before external work", async () => {
+  const originalFetch = globalThis.fetch;
+  let externalRequests = 0;
+  globalThis.fetch = (() => {
+    externalRequests += 1;
+    return Promise.resolve(json({ message: "unexpected request" }, 500));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("GET"));
+    assertEquals(res.status, 405);
+    assertEquals(externalRequests, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("POST without auth returns 401 or 503", async () => {
-  const res = await handler(req("POST"));
+  const res = await handler(req("POST", { data_input_id: dataInputId }));
   assertEquals([401, 503].includes(res.status), true);
   const body = await res.json();
   assertEquals(typeof body.error, "string");
@@ -193,8 +277,69 @@ Deno.test("fake Bearer token returns 401 (not 500)", async () => {
   };
 
   try {
-    const res = await handler(authedReq("POST"));
+    const res = await handler(
+      authedReq("POST", { data_input_id: dataInputId }),
+    );
     assertEquals(res.status, 401);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("malformed JSON is rejected before DB, RPC, or Stripe requests", async () => {
+  await assertBoundaryRejection(
+    rawPost('{"data_input_id":', "6.6.6.1"),
+    "invalid_json",
+  );
+});
+
+Deno.test("unknown body fields are rejected before DB, RPC, or Stripe requests", async () => {
+  await assertBoundaryRejection(
+    rawPost(
+      JSON.stringify({ data_input_id: dataInputId, action: "apply" }),
+      "6.6.6.2",
+    ),
+    "validation_error",
+  );
+});
+
+Deno.test("oversized bodies return 413 before auth, limiter, DB, or Stripe", async () => {
+  await assertBoundaryRejection(
+    rawPost("x".repeat(16_385), "6.6.6.3"),
+    "payload_too_large",
+    413,
+  );
+});
+
+Deno.test("invalid bodies bypass the production DB-backed limiter transport", async () => {
+  const originalFetch = globalThis.fetch;
+  let transportCalls = 0;
+  globalThis.fetch = (() => {
+    transportCalls += 1;
+    return Promise.resolve(json({ message: "unexpected request" }, 500));
+  }) as typeof fetch;
+
+  try {
+    for (
+      const [request, expectedCode, expectedStatus] of [
+        [rawPost('{"data_input_id":', "6.6.7.1"), "invalid_json", 400],
+        [
+          rawPost(
+            JSON.stringify({ data_input_id: dataInputId, action: "apply" }),
+            "6.6.7.2",
+          ),
+          "validation_error",
+          400,
+        ],
+        [rawPost("x".repeat(16_385), "6.6.7.3"), "payload_too_large", 413],
+      ] as const
+    ) {
+      const response = await productionBoundaryHandler(request);
+      const payload = await response.json() as { code?: string };
+      assertEquals(response.status, expectedStatus);
+      assertEquals(payload.code, expectedCode);
+    }
+    assertEquals(transportCalls, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -213,7 +358,7 @@ Deno.test("already-applied input returns idempotent response without Stripe cred
 
   try {
     const res = await handler(
-      authedReq("POST", { data_input_id: "input-1" }, {
+      authedReq("POST", { data_input_id: dataInputId }, {
         "x-forwarded-for": "2.2.2.2",
       }),
     );
@@ -245,7 +390,7 @@ Deno.test("legacy applied input is idempotent before Stripe credit", async () =>
 
   try {
     const res = await handler(
-      authedReq("POST", { data_input_id: "input-1" }, {
+      authedReq("POST", { data_input_id: dataInputId }, {
         "x-forwarded-for": "2.2.2.3",
       }),
     );
@@ -273,7 +418,7 @@ Deno.test("credit amount is capped to remaining monthly allowance", async () => 
 
   try {
     const res = await handler(
-      authedReq("POST", { data_input_id: "input-1" }, {
+      authedReq("POST", { data_input_id: dataInputId }, {
         "x-forwarded-for": "3.3.3.3",
       }),
     );
@@ -316,7 +461,7 @@ Deno.test("monthly cap reached returns no-op before Stripe credit", async () => 
 
   try {
     const res = await handler(
-      authedReq("POST", { data_input_id: "input-1" }, {
+      authedReq("POST", { data_input_id: dataInputId }, {
         "x-forwarded-for": "4.4.4.4",
       }),
     );
@@ -345,7 +490,7 @@ Deno.test("lost concurrent update reverses orphan Stripe credit", async () => {
 
   try {
     const res = await handler(
-      authedReq("POST", { data_input_id: "input-1" }, {
+      authedReq("POST", { data_input_id: dataInputId }, {
         "x-forwarded-for": "5.5.5.5",
       }),
     );
@@ -379,3 +524,4 @@ Deno.test("lost concurrent update reverses orphan Stripe credit", async () => {
 });
 
 restore();
+restoreProductionBoundary();

@@ -27,6 +27,10 @@ const generatedTypes = readFileSync(
   ),
   "utf8",
 );
+const publicApiTypes = readFileSync(
+  resolve(process.cwd(), "functions/api/public/_cache.ts"),
+  "utf8",
+);
 
 describe("materialized public catalogue snapshot migration", () => {
   it("publishes immutable temporal card versions with bounded retention", () => {
@@ -149,12 +153,14 @@ describe("materialized public catalogue snapshot migration", () => {
     expect(exactLookupMigration).toContain("retain_until timestamptz");
   });
 
-  it("keeps nullable catalogue fields nullable in the generated RPC contract", () => {
+  it("keeps nullable catalogue fields explicit at the public API boundary", () => {
     const queryTypes = generatedTypes.match(
       /query_public_catalogue:\s*\{[\s\S]*?read_email_batch:/,
     )?.[0] ?? "";
 
-    expect(queryTypes).toContain("ai_score: number | null");
-    expect(queryTypes).toContain("open_house_date: string | null");
+    expect(queryTypes).toContain("ai_score: number");
+    expect(queryTypes).toContain("open_house_date: string");
+    expect(publicApiTypes).toContain("ai_score: number | null");
+    expect(publicApiTypes).toContain("open_house_date: string | null");
   });
 });

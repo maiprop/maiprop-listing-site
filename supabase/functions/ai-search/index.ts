@@ -3,25 +3,28 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("ai-search");
 
 const BUCKET = "ai-search";
 const aiSearchLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
+const aiSearchRequestSchema = z.object({
+  query: z.string().trim().min(1, "Search query is required").max(500, "Search query is too long"),
+}).strict();
 
 const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, AI parsing, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
-  if (quota.errorResponse) return quota.errorResponse;
-
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
-  if (await aiSearchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   try {
-    const { query } = await req.json();
-    if (!query?.trim()) throw new Error("No query provided");
+    const { query } = await parseJsonBody(req, aiSearchRequestSchema);
+    const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+    if (quota.errorResponse) return quota.errorResponse;
+
+    const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+    if (await aiSearchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
     const systemPrompt = `You are a real estate search assistant for a Greek property portal. 
     Parse the user's natural language query into structured search filters.
@@ -124,6 +127,12 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: unknown) {
+    if (e instanceof SchemaValidationError) {
+      return new Response(JSON.stringify({ error: e.message, code: e.code, issues: e.issues }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const msg = e instanceof Error ? e.message : "Unknown error";
     log.error("ai-search error", { err: msg });
     return new Response(JSON.stringify({ error: msg }), {

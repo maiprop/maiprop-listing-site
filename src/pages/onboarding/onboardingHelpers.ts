@@ -43,16 +43,237 @@ export const parseServiceRate = (rate: string): number | null => {
  * Defined as a `const` arrow function so DeepSource's `no-implicit-globals`
  * rule does not flag it as a global scope declaration.
  */
-export const readRoleSwitchCtx = (): { fromType: ParticipantId; hadActiveSub: boolean } | null => {
-  if (typeof window === "undefined") return null;
+export type RoleSwitchContext = {
+  userId: string;
+  fromType: ParticipantId;
+  toType: ParticipantId;
+  hadActiveSub: boolean;
+  auditId: string;
+  status: "prepared" | "begun";
+};
+
+type DurableRoleSwitchOperation = {
+  userId: string;
+  operationId: string;
+  fromType: ParticipantId;
+  toType: ParticipantId;
+  hadActiveSub: boolean;
+  status: "prepared" | "begun";
+  createdAt: number;
+};
+
+export const ROLE_SWITCH_OPERATION_STORAGE_KEY =
+  "maiprop_role_switch_operation_v1";
+
+const ROLE_SWITCH_OPERATION_TTL_MS = 24 * 60 * 60 * 1000;
+const ROLE_SWITCH_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ROLE_SWITCH_PARTICIPANTS = new Set<ParticipantId>([
+  "buyer",
+  "seller",
+  "agent",
+  "developer",
+  "professional",
+  "investor",
+  "institutional",
+]);
+
+const isRoleSwitchUserId = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= 128;
+
+const parseDurableRoleSwitchOperation = (
+  raw: string | null,
+  now: number,
+): DurableRoleSwitchOperation | null => {
+  if (!raw) return null;
   try {
-    const raw = window.sessionStorage.getItem("role_switch_ctx");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { fromType?: unknown; hadActiveSub?: unknown };
-    if (typeof parsed.fromType !== "string") return null;
+    const parsed = JSON.parse(raw) as Partial<DurableRoleSwitchOperation>;
+    if (
+      !isRoleSwitchUserId(parsed.userId) ||
+      typeof parsed.operationId !== "string" ||
+      !ROLE_SWITCH_UUID_PATTERN.test(parsed.operationId) ||
+      typeof parsed.fromType !== "string" ||
+      !ROLE_SWITCH_PARTICIPANTS.has(parsed.fromType as ParticipantId) ||
+      typeof parsed.toType !== "string" ||
+      !ROLE_SWITCH_PARTICIPANTS.has(parsed.toType as ParticipantId) ||
+      parsed.toType === parsed.fromType ||
+      typeof parsed.hadActiveSub !== "boolean" ||
+      (parsed.status !== "prepared" && parsed.status !== "begun") ||
+      typeof parsed.createdAt !== "number" ||
+      !Number.isFinite(parsed.createdAt) ||
+      parsed.createdAt > now + 60_000 ||
+      now - parsed.createdAt > ROLE_SWITCH_OPERATION_TTL_MS
+    ) return null;
+    return parsed as DurableRoleSwitchOperation;
+  } catch {
+    return null;
+  }
+};
+
+const persistDurableRoleSwitchOperation = (
+  operation: DurableRoleSwitchOperation,
+): void => {
+  if (typeof window === "undefined") {
+    throw new Error("role_switch_storage_unavailable");
+  }
+  window.localStorage.setItem(
+    ROLE_SWITCH_OPERATION_STORAGE_KEY,
+    JSON.stringify(operation),
+  );
+  const persisted = parseDurableRoleSwitchOperation(
+    window.localStorage.getItem(ROLE_SWITCH_OPERATION_STORAGE_KEY),
+    Date.now(),
+  );
+  if (
+    !persisted || persisted.operationId !== operation.operationId ||
+    persisted.userId !== operation.userId
+  ) {
+    throw new Error("role_switch_storage_unavailable");
+  }
+};
+
+export const prepareRoleSwitchOperation = ({
+  userId,
+  fromType,
+  toType,
+  hadActiveSub,
+  now = Date.now(),
+  createId = () => crypto.randomUUID(),
+}: {
+  userId: string;
+  fromType: ParticipantId;
+  toType: ParticipantId;
+  hadActiveSub: boolean;
+  now?: number;
+  createId?: () => string;
+}): DurableRoleSwitchOperation => {
+  if (typeof window === "undefined") {
+    throw new Error("role_switch_storage_unavailable");
+  }
+  if (!isRoleSwitchUserId(userId)) {
+    throw new Error("role_switch_user_invalid");
+  }
+  const existing = parseDurableRoleSwitchOperation(
+    window.localStorage.getItem(ROLE_SWITCH_OPERATION_STORAGE_KEY),
+    now,
+  );
+  if (
+    existing?.userId === userId && existing.fromType === fromType &&
+    existing.toType === toType
+  ) {
+    return existing;
+  }
+
+  const operationId = createId();
+  if (!ROLE_SWITCH_UUID_PATTERN.test(operationId)) {
+    throw new Error("role_switch_operation_invalid");
+  }
+  const operation: DurableRoleSwitchOperation = {
+    userId,
+    operationId,
+    fromType,
+    toType,
+    hadActiveSub,
+    status: "prepared",
+    createdAt: now,
+  };
+  persistDurableRoleSwitchOperation(operation);
+  return operation;
+};
+
+export const markRoleSwitchOperationBegun = (
+  operationId: string,
+  userId: string,
+): void => {
+  if (typeof window === "undefined") return;
+  const operation = parseDurableRoleSwitchOperation(
+    window.localStorage.getItem(ROLE_SWITCH_OPERATION_STORAGE_KEY),
+    Date.now(),
+  );
+  if (
+    !operation || operation.operationId !== operationId ||
+    operation.userId !== userId
+  ) {
+    throw new Error("role_switch_operation_missing");
+  }
+  persistDurableRoleSwitchOperation({ ...operation, status: "begun" });
+};
+
+export const clearRoleSwitchOperation = (
+  operationId: string | undefined,
+  userId: string,
+): void => {
+  if (typeof window === "undefined") return;
+  const operation = parseDurableRoleSwitchOperation(
+    window.localStorage.getItem(ROLE_SWITCH_OPERATION_STORAGE_KEY),
+    Date.now(),
+  );
+  if (!operation || operation.userId !== userId) return;
+  if (operationId && operation.operationId !== operationId) return;
+  window.localStorage.removeItem(ROLE_SWITCH_OPERATION_STORAGE_KEY);
+};
+
+const parseRoleSwitchContext = (
+  raw: string | null,
+  userId: string,
+): RoleSwitchContext | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as {
+      userId?: unknown;
+      fromType?: unknown;
+      toType?: unknown;
+      hadActiveSub?: unknown;
+      auditId?: unknown;
+      status?: unknown;
+    };
+    if (
+      parsed.userId !== userId ||
+      typeof parsed.fromType !== "string" ||
+      !ROLE_SWITCH_PARTICIPANTS.has(parsed.fromType as ParticipantId) ||
+      typeof parsed.toType !== "string" ||
+      !ROLE_SWITCH_PARTICIPANTS.has(parsed.toType as ParticipantId) ||
+      parsed.toType === parsed.fromType ||
+      typeof parsed.auditId !== "string" ||
+      !ROLE_SWITCH_UUID_PATTERN.test(parsed.auditId) ||
+      (parsed.status !== "prepared" && parsed.status !== "begun")
+    ) return null;
     return {
+      userId,
       fromType: parsed.fromType as ParticipantId,
+      toType: parsed.toType as ParticipantId,
       hadActiveSub: parsed.hadActiveSub === true,
+      auditId: parsed.auditId,
+      status: parsed.status,
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const readRoleSwitchCtx = (
+  userId: string | null | undefined,
+): RoleSwitchContext | null => {
+  if (typeof window === "undefined" || !isRoleSwitchUserId(userId)) return null;
+  try {
+    const sessionContext = parseRoleSwitchContext(
+      window.sessionStorage.getItem("role_switch_ctx"),
+      userId,
+    );
+    if (sessionContext) return sessionContext;
+
+    const durable = parseDurableRoleSwitchOperation(
+      window.localStorage.getItem(ROLE_SWITCH_OPERATION_STORAGE_KEY),
+      Date.now(),
+    );
+    if (!durable || durable.userId !== userId) return null;
+    return {
+      userId,
+      fromType: durable.fromType,
+      toType: durable.toType,
+      hadActiveSub: durable.hadActiveSub,
+      auditId: durable.operationId,
+      status: durable.status,
     };
   } catch {
     return null;

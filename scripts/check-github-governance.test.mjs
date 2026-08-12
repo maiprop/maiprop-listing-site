@@ -360,4 +360,18 @@ describe("GitHub governance check", () => {
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("Release Please branches");
   });
+
+  it("accepts a literal fail-closed Lighthouse guard during exact-SHA bootstrap", () => {
+    const root = makeFixture();
+    const path = join(root, ".github", "workflows", "ci.yml");
+    writeFileSync(
+      path,
+      readFileSync(path, "utf8").replace(
+        "    if: >\n      github.event_name == 'workflow_dispatch' &&\n      startsWith(github.ref, 'refs/heads/release-please--')",
+        "    if: ${{ false }}",
+      ),
+    );
+
+    expect(checkReleasePrLighthouseDispatch(root).ok).toBe(true);
+  });
 });

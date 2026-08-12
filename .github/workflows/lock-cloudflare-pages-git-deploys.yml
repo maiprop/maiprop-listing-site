@@ -13,53 +13,40 @@ permissions:
   contents: read
 
 jobs:
-  verify-lock-environment:
-    name: Verify Cloudflare lock namespace
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm == 'DISABLE_CLOUDFLARE_GIT_DEPLOYS' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Verify main-only lock namespace
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          ENVIRONMENT_FILE="$RUNNER_TEMP/cloudflare-lock-environment.json"
-          POLICIES_FILE="$RUNNER_TEMP/cloudflare-lock-branch-policies.json"
-          gh api \
-            "repos/${GITHUB_REPOSITORY}/environments/cloudflare-git-deploy-lock" \
-            > "$ENVIRONMENT_FILE"
-          gh api \
-            "repos/${GITHUB_REPOSITORY}/environments/cloudflare-git-deploy-lock/deployment-branch-policies?per_page=100" \
-            > "$POLICIES_FILE"
-          jq -e '
-            .name == "cloudflare-git-deploy-lock" and
-            .can_admins_bypass == false and
-            .deployment_branch_policy.protected_branches == false and
-            .deployment_branch_policy.custom_branch_policies == true
-          ' "$ENVIRONMENT_FILE" > /dev/null
-          jq -e '
-            .total_count == 1 and
-            (.branch_policies | length) == 1 and
-            .branch_policies[0].name == "main" and
-            .branch_policies[0].type == "branch"
-          ' "$POLICIES_FILE" > /dev/null
-
   lock:
     name: Lock Cloudflare Pages Git deployments
-    needs: verify-lock-environment
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm == 'DISABLE_CLOUDFLARE_GIT_DEPLOYS' }}
-    environment: cloudflare-git-deploy-lock
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm == 'DISABLE_CLOUDFLARE_GIT_DEPLOYS' && github.run_attempt == 1 && github.actor == github.triggering_actor }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
       group: maiprop-cloudflare-pages-git-deploy-lock
       cancel-in-progress: false
     steps:
+      - name: Verify exact current-main control identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALLOWED_ACTORS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ] ||
+             [ "$GITHUB_SHA" != "$GITHUB_WORKFLOW_SHA" ]; then
+            echo "::error::The Cloudflare lock workflow must execute from the exact current main SHA."
+            exit 1
+          fi
+          case ",${ALLOWED_ACTORS// /}," in
+            *,"$GITHUB_ACTOR",*) ;;
+            *)
+              echo "::error::Cloudflare lock dispatcher is not allowlisted."
+              exit 1
+              ;;
+          esac
+
       - name: Lock both Cloudflare Pages Git integrations
         env:
-          CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_PAGES_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CLOUDFLARE_PAGES_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           EXPECTED_PRODUCTION_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
           EXPECTED_STAGING_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
@@ -174,6 +161,7 @@ jobs:
             local source_type="$2"
             local out="$3"
             local body="$RAW_DIR/$name-patch-body.json"
+            local current_main
             jq -n --arg source_type "$source_type" '{
               source: {
                 "type": $source_type,
@@ -184,6 +172,11 @@ jobs:
                 }
               }
             }' > "$body"
+            current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+            if [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ]; then
+              echo "::error::main advanced before the Cloudflare mutation; refusing to continue."
+              return 1
+            fi
             curl -fsS --retry 3 \
               --request PATCH \
               -H "Authorization: Bearer $CLOUDFLARE_PAGES_EDIT_TOKEN" \

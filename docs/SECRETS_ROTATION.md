@@ -31,7 +31,7 @@ add a row here in the same PR.
 
 | Secret | Used by | Stored in | Cadence | Owner |
 |---|---|---|---|---|
-| `CRON_SECRET` | `send-saved-search-alerts` (cron auth, `verify_jwt=false`) | Supabase fn secrets, pg_cron config | **180 days** — must be ≥ 32 random chars | Platform lead |
+| `CRON_SECRET` | `send-saved-search-alerts`, `poll-os-auctions`, `scheduled-followups`, `process-storage-cleanup`, and `reconcile-role-switch-billing` | Supabase Edge Function secrets and Supabase Vault in staging and production | **180 days** - must be at least 32 random chars | Platform lead |
 | `MAIPROP_OS_WEBHOOK_SECRET` | `receive-from-os` (signature verification) | Supabase fn secrets, OS config | **180 days** | Platform lead |
 | `MAIPROP_OS_API_URL` / `MAIPROP_OS_URL` / `MAIPROP_OS_EMAIL` / `MAIPROP_OS_PASSWORD` | `property-valuation`, `sync-to-os`, `sync-firesale-to-os`, `poll-os-auctions`, `fetch-*-from-os`, `full-sync-from-os`, `os-diagnose` | Supabase fn secrets | **90 days** | Platform lead |
 
@@ -56,10 +56,12 @@ add a row here in the same PR.
 | `LHCI_GITHUB_APP_TOKEN` | Lighthouse CI workflow | GH repo secrets | **365 days** | CI owner |
 | `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` | Playwright e2e | GH repo secrets | On demo-account password change | CI owner |
 | `CLOUDFLARE_API_TOKEN` | Legacy bootstrap compatibility only; not used by protected release trains | GH repo secrets while legacy bootstrap remains | **90 days** or on compromise | Platform lead |
-| `CLOUDFLARE_PAGES_READ_TOKEN` | Production Pages posture, deployment, and runtime verification | GH repo and `production` environment secrets | **90 days** or on compromise | Platform lead |
-| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Production Pages deploy and compare-and-swap rollback | `production` environment secrets | **90 days** or on compromise | Platform lead |
-| `CLOUDFLARE_STAGING_PAGES_READ_TOKEN` | Read-only staging re-attestation during production promotion | `production` environment secrets | **90 days** or on compromise | Platform lead |
-| `CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN` | Staging-only Pages deploy and rollback | `staging` environment secrets | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_PAGES_READ_TOKEN` | Production Pages posture, deployment, and runtime verification | GH repository secrets; exposed only to exact-main release workflows | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Production Pages deploy and compare-and-swap rollback | GH repository secrets; exposed only to exact-main release workflows | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_STAGING_PAGES_READ_TOKEN` | Read-only staging re-attestation during production promotion | GH repository secrets; exposed only through explicit workflow secret contracts | **90 days** or on compromise | Platform lead |
+| `CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN` | Staging-only Pages deploy and rollback | GH repository secrets; exposed only through explicit workflow secret contracts | **90 days** or on compromise | Platform lead |
+| `RELEASE_EVIDENCE_SIGNING_KEY` / `RELEASE_EVIDENCE_SIGNING_KEY_ID` | HMAC signing and verification for exact-SHA release evidence | GH repository secret plus repository key-ID variable | **90 days** or on compromise; change key ID on every rotation | Platform + finance leads |
+| `STRIPE_RESTRICTED_KEY` | Read-only live catalogue/account verification; must start with `rk_live_` | GH repository secret; exact-main readiness workflow only | **90 days** or on compromise | Finance lead |
 | `CF_ACCESS_CLIENT_ID` / `CLOUDFLARE_ACCESS_CLIENT_ID` | Deploy smoke checks against Cloudflare Access-protected previews | GH repo or environment secrets | **90 days** or on compromise | Platform lead |
 | `CF_ACCESS_CLIENT_SECRET` / `CLOUDFLARE_ACCESS_CLIENT_SECRET` | Deploy smoke checks against Cloudflare Access-protected previews | GH repo or environment secrets | **90 days** or on compromise | Platform lead |
 | `CF_ACCESS_TOKEN` / `CLOUDFLARE_ACCESS_TOKEN` | Optional pre-issued Cloudflare Access JWT for deploy diagnostics | GH repo or environment secrets | On expiry or compromise | Platform lead |
@@ -187,20 +189,96 @@ supabase functions deploy stripe-webhook
 
 ### `CRON_SECRET`
 
+The five consumers and their exact request-header contracts are:
+
+| Edge Function | Header contract |
+|---|---|
+| `send-saved-search-alerts` | `Authorization: Bearer <CRON_SECRET>` |
+| `poll-os-auctions` | `Authorization: Bearer <CRON_SECRET>` |
+| `scheduled-followups` | `x-cron-secret: <CRON_SECRET>` |
+| `process-storage-cleanup` | `x-cron-secret: <CRON_SECRET>` |
+| `reconcile-role-switch-billing` | `x-cron-secret: <CRON_SECRET>` |
+
+Generate independent credentials. Never reuse a staging secret in production:
+
 ```powershell
-# 1. Generate a new secret:
-$new = -join ((48..57) + (97..122) | Get-Random -Count 48 | % { [char]$_ })
+# 1. Generate two different secrets:
+$stagingNew = -join ((48..57) + (97..122) | Get-Random -Count 48 | % { [char]$_ })
+$productionNew = -join ((48..57) + (97..122) | Get-Random -Count 48 | % { [char]$_ })
+if ($stagingNew -eq $productionNew) { throw "Cron credentials must differ" }
 
-# 2. Update the function secret AND the pg_cron job header:
-supabase secrets set CRON_SECRET=$new
-supabase functions deploy send-saved-search-alerts
+# 2. Rotate staging first. Rotate production only after staging verification:
+supabase secrets set --project-ref <staging-ref> CRON_SECRET="$stagingNew"
+supabase secrets set --project-ref <production-ref> CRON_SECRET="$productionNew"
 
-# 3. In SQL editor, re-create the cron job header:
-#    UPDATE cron.job SET command = REGEXP_REPLACE(command,
-#      'Bearer [a-z0-9]+', 'Bearer ' || $new) WHERE jobname = 'saved-search-alerts';
-#    (Or just DROP / re-CREATE the cron job — see
-#     supabase/migrations/20260530000000_cron_saved_search_alerts.sql.)
 ```
+
+For each environment, pause the five jobs before changing either secret copy:
+
+```sql
+SELECT cron.alter_job(job_id := jobid, active := FALSE)
+FROM cron.job
+WHERE jobname = ANY (ARRAY[
+  'send-saved-search-alerts',
+  'poll-os-auctions-daily',
+  'daily-crm-followups',
+  'process-storage-cleanup',
+  'reconcile-role-switch-billing'
+]);
+```
+
+Confirm every expected job is inactive. Stop if a job is missing. Then require
+exactly one Vault row and update it with that environment's new value:
+
+```sql
+DO $rotation$
+DECLARE
+  secret_count integer;
+BEGIN
+  SELECT count(*) INTO secret_count
+  FROM vault.decrypted_secrets
+  WHERE name = 'CRON_SECRET';
+  IF secret_count <> 1 THEN
+    RAISE EXCEPTION 'Expected exactly one CRON_SECRET Vault row, found %',
+      secret_count;
+  END IF;
+END
+$rotation$;
+
+SELECT vault.update_secret(
+  id,
+  '<environment-specific-new-secret>',
+  'CRON_SECRET',
+  'Credential for cron-only Edge Function invocations'
+)
+FROM vault.decrypted_secrets
+WHERE name = 'CRON_SECRET';
+```
+
+Set the matching Edge Function secret with the CLI command above. A secret
+update is runtime configuration and does not require an Edge Function redeploy.
+Manually invoke all five workers with the documented header. Require a
+non-401 response with the new value and `401` with a wrong value, and inspect
+the exact project's Edge Function logs.
+
+Only after every check passes, reactivate the five jobs:
+
+```sql
+SELECT cron.alter_job(job_id := jobid, active := TRUE)
+FROM cron.job
+WHERE jobname = ANY (ARRAY[
+  'send-saved-search-alerts',
+  'poll-os-auctions-daily',
+  'daily-crm-followups',
+  'process-storage-cleanup',
+  'reconcile-role-switch-billing'
+]);
+```
+
+Confirm a successful scheduled run for each job in `cron.job_run_details` and
+the corresponding Edge Function logs. Do not rotate only one copy: Vault and
+Edge Function `CRON_SECRET` values must match within each environment, while
+staging and production values must remain different.
 
 ### `MAIPROP_OS_WEBHOOK_SECRET` / `MAIPROP_OS_PASSWORD`
 
@@ -243,8 +321,10 @@ curl -X POST https://<project>.supabase.co/functions/v1/check-subscription `
 # 4. AI call: log in as a Pro user, request an AI valuation. Expect the
 #    valuation JSON to come back.
 
-# 5. Cron call: trigger send-saved-search-alerts manually with the new
-#    CRON_SECRET. Expect 200 + summary in logs.
+# 5. Cron calls: trigger send-saved-search-alerts and poll-os-auctions with
+#    Authorization: Bearer, then scheduled-followups, process-storage-cleanup,
+#    and reconcile-role-switch-billing with x-cron-secret. Expect authenticated
+#    responses in staging and production logs; every wrong credential must 401.
 ```
 
 ## Incident response (suspected leak)

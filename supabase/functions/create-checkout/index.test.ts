@@ -363,7 +363,7 @@ Deno.test("subscription trial checkout is reserved before Stripe session creatio
   assertEquals(updateIndex > sessionIndex, true);
 });
 
-Deno.test("subscription trial checkout requires a card before trial activation", async () => {
+Deno.test("subscription trial checkout requires a payment method before trial activation", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
   );
@@ -371,8 +371,12 @@ Deno.test("subscription trial checkout requires a card before trial activation",
     source.indexOf("const checkoutPlan = await getCheckoutPlan"),
   );
 
+  assertEquals(subscriptionBranch.includes("payment_method_types:"), false);
+  assertEquals(subscriptionBranch.includes("payment_method_configuration:"), false);
   assertEquals(
-    subscriptionBranch.includes('payment_method_types: ["card"]'),
+    subscriptionBranch.includes(
+      "integration_identifier: STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER",
+    ),
     true,
   );
   assertEquals(
@@ -452,7 +456,7 @@ Deno.test("paid subscription checkout stamps checkout_type metadata on Stripe ob
     "session = await stripe.checkout.sessions.create",
   );
   const idempotencyStart = source.indexOf(
-    'idempotencyKey: await buildIdempotencyKey("checkout-v2"',
+    'idempotencyKey: await buildIdempotencyKey("checkout-v3"',
     subscriptionCreateStart,
   );
   const checkoutCreateArgs = source.slice(
@@ -501,7 +505,7 @@ Deno.test("add-on checkout validates and propagates requested quantity", async (
     addonBranch.includes("quantity: String(checkoutQuantity)"),
     true,
   );
-  assertEquals(addonBranch.includes('"checkout-addon-v2"'), true);
+  assertEquals(addonBranch.includes('"checkout-addon-v3"'), true);
 });
 
 Deno.test("add-on checkout stamps payment intent metadata for refund reconciliation", async () => {
@@ -554,7 +558,7 @@ Deno.test("add-on checkout validates the server price and never accepts client p
   assertEquals(addonBranch.includes("runtime_mode: stripeRuntimeMode"), true);
 });
 
-Deno.test("checkout sessions restrict v1 payment methods to cards", async () => {
+Deno.test("checkout sessions use Dashboard-managed dynamic payment methods", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
   );
@@ -566,9 +570,19 @@ Deno.test("checkout sessions restrict v1 payment methods to cards", async () => 
   const addonBranch = source.slice(addonBranchStart, planBranchStart);
   const subscriptionBranch = source.slice(planBranchStart);
 
-  assertEquals(addonBranch.includes('payment_method_types: ["card"]'), true);
+  assertEquals(addonBranch.includes("payment_method_types:"), false);
+  assertEquals(addonBranch.includes("payment_method_configuration:"), false);
+  assertEquals(subscriptionBranch.includes("payment_method_types:"), false);
   assertEquals(
-    subscriptionBranch.includes('payment_method_types: ["card"]'),
+    addonBranch.includes(
+      "integration_identifier: STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER",
+    ),
+    true,
+  );
+  assertEquals(
+    subscriptionBranch.includes(
+      "integration_identifier: STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER",
+    ),
     true,
   );
 });
@@ -625,10 +639,11 @@ Deno.test("checkout idempotency keys include price and session shape", async () 
   );
 
   assertEquals(source.includes("buildIdempotencyKey"), true);
-  assertEquals(source.includes('"checkout-v2"'), true);
+  assertEquals(source.includes('"checkout-v3"'), true);
+  assertEquals(source.includes('"checkout-addon-v3"'), true);
   assertEquals(source.includes("checkoutPlan.priceId"), true);
   assertEquals(source.includes("checkoutAddon.priceId"), true);
-  assertEquals(source.includes('"card"'), true);
+  assertEquals(source.includes('"dynamic-payment-methods-v1"'), true);
 });
 
 restore();

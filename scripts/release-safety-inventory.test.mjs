@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   cloudflareHttpMutationViolation,
@@ -35,17 +37,21 @@ describe("release safety inventory", () => {
     const patch = `
       curl --request PATCH https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p
     `;
+    const bootstrapPath =
+      ".github/workflows/lock-cloudflare-pages-git-deploys.yml";
+    const bootstrap = readFileSync(resolve(process.cwd(), bootstrapPath), "utf8");
 
     expect(cloudflareHttpMutationViolation({
       workflowPath: ".github/workflows/compliance-evidence.yml",
       text: patch,
-      authorized: false,
     })).toMatch(/evidence workflow/i);
     expect(cloudflareHttpMutationViolation({
-      workflowPath:
-        ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
+      workflowPath: bootstrapPath,
       text: patch,
-      authorized: true,
+    })).toMatch(/unauthorized/i);
+    expect(cloudflareHttpMutationViolation({
+      workflowPath: bootstrapPath,
+      text: bootstrap,
     })).toBeNull();
   });
 
@@ -127,5 +133,16 @@ describe("release safety inventory", () => {
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stderr).toContain("[release-safety] OK");
+    const mutations =
+      JSON.parse(result.stdout).workflow.provider_http_mutations;
+    expect(mutations).toContainEqual({
+      provider: "cloudflare",
+      workflow:
+        ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
+      method: "PATCH",
+    });
+    expect(
+      mutations.filter(({ workflow }) => /evidence/i.test(workflow)),
+    ).toEqual([]);
   });
 });

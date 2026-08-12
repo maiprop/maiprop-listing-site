@@ -74,6 +74,8 @@ on:
         required: true
       SUPABASE_ACCESS_TOKEN:
         required: true
+      SUPABASE_PRODUCTION_DB_URL:
+        required: true
       VITE_SUPABASE_PROJECT_ID:
         required: true
       VITE_SUPABASE_URL:
@@ -956,6 +958,71 @@ jobs:
           );
           NODE
 
+      - name: Activate and verify role-switch reconciliation cron
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+          SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if [ "$current_main" != "$RELEASE_SHA" ]; then
+            echo "::error::Release SHA is no longer current main before cron activation."
+            exit 1
+          fi
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npm run --silent release:validate -- mutation-lease \
+            --file evidence/mutation-lease/production-mutation-lease.json \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$PRODUCTION_RUN_ID" \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+          npm run --silent release:validate -- supabase-target \
+            > production-supabase-cron-target.json
+          "$RUNNER_TEMP/verify-production-provider-bindings.sh"
+
+          raw_state="$(mktemp)"
+          psql "$SUPABASE_PRODUCTION_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --quiet \
+            --file release-candidate/supabase/reconciliation/activate-role-switch-billing-cron.sql \
+            | sed '/^[[:space:]]*$/d' > "$raw_state"
+          if [ "$(wc -l < "$raw_state" | tr -d '[:space:]')" != "1" ]; then
+            echo "::error::Role-switch cron activation must return exactly one evidence object."
+            exit 1
+          fi
+          jq -e '
+            .schema_version == 1 and
+            .evidence_type == "maiprop-role-switch-cron-activation" and
+            .job_name == "reconcile-role-switch-billing" and
+            .schedule == "*/5 * * * *" and
+            .command == "SELECT private.invoke_role_switch_billing_reconciliation();" and
+            .active == true
+          ' "$raw_state" > /dev/null
+          jq -cS . "$raw_state" > production-role-switch-cron-state.json
+
       - name: Create production Edge attestation
         id: edge_attestation
         run: |
@@ -980,6 +1047,10 @@ jobs:
           ));
           const database = JSON.parse(readFileSync(
             "evidence/production-database/production-supabase-db-attestation.json",
+            "utf8",
+          ));
+          const roleSwitchCron = JSON.parse(readFileSync(
+            "production-role-switch-cron-state.json",
             "utf8",
           ));
           if (
@@ -1036,6 +1107,10 @@ jobs:
               staging.edge_source_manifest.manifest_sha256,
             production_source_manifest_sha256:
               live.edge_source_manifest.manifest_sha256,
+            role_switch_cron_sha256: digest(
+              "production-role-switch-cron-state.json",
+            ),
+            role_switch_cron: roleSwitchCron,
             edge_bundles: edgeBundles,
             promoted_at: new Date().toISOString(),
           };
@@ -1067,6 +1142,8 @@ jobs:
               fi
             done
           done
+          cp -- production-role-switch-cron-state.json "$payload_root/production-role-switch-cron-state.json"
+          cp -- production-supabase-cron-target.json "$payload_root/production-supabase-cron-target.json"
 
       - name: Upload production Edge evidence
         id: edge_payload_upload
@@ -1099,6 +1176,7 @@ jobs:
             --file-root "$payload_root" \
             --file production-supabase-edge-attestation.json \
             --file production-edge-forward-plan.json \
+            --file production-role-switch-cron-state.json \
             --file release-safety-production-live-functions.json \
             --out "$binding_root/release-artifact-binding.json" \
             --repository "$GITHUB_REPOSITORY" \
@@ -1122,6 +1200,7 @@ jobs:
             --file-root "$payload_root" \
             --file production-supabase-edge-attestation.json \
             --file production-edge-forward-plan.json \
+            --file production-role-switch-cron-state.json \
             --file release-safety-production-live-functions.json \
             --artifact-metadata production-edge-evidence-metadata/artifact.json \
             --producer-run production-edge-evidence-metadata/run.json \
@@ -1226,6 +1305,8 @@ jobs:
               record("release-safety-production-live-functions-before.json"),
               record("production-edge-forward-plan.json"),
               record("production-edge-deploy-progress.jsonl"),
+              record("production-role-switch-cron-state.json"),
+              record("production-supabase-cron-target.json"),
               record("release-safety-production-live-functions.json"),
               record("production-candidate-release-safety.json"),
               record("production-candidate-release-safety-mutation-boundary.json"),

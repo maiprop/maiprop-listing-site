@@ -11,6 +11,11 @@ import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
 import {
+  parseBoundedJsonBody,
+  SchemaValidationError,
+  z,
+} from "../_shared/schema.ts";
+import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
@@ -21,6 +26,8 @@ const limiter = makeRateLimiter({
   maxRequests: 30,
   windowMs: 60_000,
 });
+export const MAX_BEGIN_ROLE_SWITCH_REQUEST_BODY_BYTES = 8_192;
+export const BEGIN_ROLE_SWITCH_REQUEST_BODY_TIMEOUT_MS = 2_000;
 
 const jsonResponse = (
   body: Record<string, unknown>,
@@ -41,11 +48,25 @@ function errorMessage(err: unknown): string {
   return "Failed to begin role switch";
 }
 
-function isValidateOnlyBody(body: unknown): boolean {
-  if (!body || typeof body !== "object") return false;
-  const payload = body as Record<string, unknown>;
-  return payload.validate_only === true || payload.validateOnly === true ||
-    payload.dry_run === true || payload.dryRun === true;
+const roleSwitchRequestSchema = z.union([
+  z.object({ audit_id: z.string().uuid() }).strict(),
+  z.object({ validate_only: z.literal(true) }).strict(),
+  z.object({ validateOnly: z.literal(true) }).strict(),
+  z.object({ dry_run: z.literal(true) }).strict(),
+  z.object({ dryRun: z.literal(true) }).strict(),
+]).transform((body) => ({
+  validateOnly: !("audit_id" in body),
+  auditId: "audit_id" in body ? body.audit_id : null,
+}));
+
+export function parseBeginRoleSwitchRequest(
+  req: Request,
+  options: { timeoutMs?: number } = {},
+) {
+  return parseBoundedJsonBody(req, roleSwitchRequestSchema, {
+    maxBytes: MAX_BEGIN_ROLE_SWITCH_REQUEST_BODY_BYTES,
+    timeoutMs: options.timeoutMs ?? BEGIN_ROLE_SWITCH_REQUEST_BODY_TIMEOUT_MS,
+  });
 }
 
 Deno.serve(async (req) => {
@@ -57,34 +78,48 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405, corsHeaders);
   }
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
-
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  if (!serviceRoleKey || !supabaseUrl) {
-    return jsonResponse({ error: "Service unavailable" }, 503, corsHeaders);
-  }
-
   try {
-    const body = await req.json().catch(() => ({}));
-    const validateOnly = isValidateOnlyBody(body);
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    if (!serviceRoleKey || !supabaseUrl) {
+      return jsonResponse({ error: "Service unavailable" }, 503, corsHeaders);
+    }
+
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
     const user = await verifyBearerToken(req, supabase);
+    const { validateOnly, auditId } = await parseBeginRoleSwitchRequest(req);
+
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "anonymous";
+    if (await limiter.isLimited(ip)) {
+      return tooManyRequestsResponse(corsHeaders);
+    }
 
     const { error } = await supabase.rpc(
       validateOnly
         ? "validate_role_switch_for_user"
         : "begin_role_switch_for_user",
-      { _user_id: user.id },
+      validateOnly
+        ? { _user_id: user.id }
+        : { _user_id: user.id, _audit_id: auditId },
     );
     if (error) throw error;
 
-    return jsonResponse({ success: true, validate_only: validateOnly }, 200, corsHeaders);
+    return jsonResponse(
+      { success: true, validate_only: validateOnly },
+      200,
+      corsHeaders,
+    );
   } catch (err: unknown) {
+    if (err instanceof SchemaValidationError) {
+      return jsonResponse(
+        { error: err.message, code: err.code, issues: err.issues },
+        err.status,
+        corsHeaders,
+      );
+    }
     if (err instanceof AuthError) {
       return jsonResponse({ error: err.message }, err.status, corsHeaders);
     }

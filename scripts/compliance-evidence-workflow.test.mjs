@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
 const workflow = readFileSync(resolve(process.cwd(), ".github/workflows/compliance-evidence.yml"), "utf8");
+const parsed = yaml.load(workflow);
 
 const step = (name, nextName) => {
   const start = workflow.indexOf(`      - name: ${name}`);
@@ -15,10 +17,10 @@ describe("standards evidence workflow", () => {
     expect(step("Capture Supabase live security evidence", "Capture Sentry live telemetry status")).toContain(
       "continue-on-error: true",
     );
-    expect(step("Capture Sentry live telemetry status", "Check ECAS live evidence rollup")).toContain(
+    expect(step("Capture Sentry live telemetry status", "Materialize minimized Cloudflare Pages posture evidence")).toContain(
       "continue-on-error: true",
     );
-    expect(step("Download minimized Cloudflare Pages posture evidence", "Check ECAS live evidence rollup")).toContain(
+    expect(step("Materialize minimized Cloudflare Pages posture evidence", "Check ECAS live evidence rollup")).toContain(
       "continue-on-error: true",
     );
     expect(step("Check ECAS live evidence rollup", "Upload standards evidence")).toContain("if: always()");
@@ -61,9 +63,59 @@ describe("standards evidence workflow", () => {
     expect(step("Capture Supabase live security evidence", "Capture Sentry live telemetry status")).toContain(
       "SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}",
     );
-    expect(step("Capture Sentry live telemetry status", "Download minimized Cloudflare Pages posture evidence")).toContain(
+    expect(step("Capture Sentry live telemetry status", "Materialize minimized Cloudflare Pages posture evidence")).toContain(
       "SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}",
     );
+  });
+
+  it("passes only minimized Cloudflare evidence through explicit job outputs", () => {
+    const verifyCloudflare = parsed.jobs["cloudflare-pages-verify"];
+    const collect = parsed.jobs.collect;
+    const control = verifyCloudflare.steps.find(
+      (item) => item.name === "Verify Cloudflare Pages Git deployment lockout",
+    );
+    const materialize = collect.steps.find(
+      (item) => item.name === "Materialize minimized Cloudflare Pages posture evidence",
+    );
+
+    expect(workflow).not.toContain("actions/download-artifact");
+    expect(verifyCloudflare.outputs).toEqual({
+      cloudflare_pages_post_state_json:
+        "${{ steps.cloudflare_verify.outputs.cloudflare_pages_post_state_json }}",
+      cloudflare_pages_posture_json:
+        "${{ steps.cloudflare_verify.outputs.cloudflare_pages_posture_json }}",
+      cloudflare_admin_posture_json:
+        "${{ steps.cloudflare_verify.outputs.cloudflare_admin_posture_json }}",
+    });
+    expect(control.run).toContain(
+      'cloudflare_pages_post_state_json=$(jq -c . "$EVIDENCE_DIR/cloudflare-pages-git-auto-deploy-post-state.json")',
+    );
+    expect(control.run).toContain(
+      'cloudflare_pages_posture_json=$(jq -c . "$EVIDENCE_DIR/cloudflare-pages-git-auto-deploy-posture.json")',
+    );
+    expect(control.run).toContain(
+      'cloudflare_admin_posture_json=$(jq -c . "$EVIDENCE_DIR/cloudflare-admin-posture.json")',
+    );
+    expect(materialize.if).toContain("always()");
+    expect(materialize["continue-on-error"]).toBe(true);
+    expect(materialize.env).toEqual({
+      CLOUDFLARE_PAGES_POST_STATE_JSON:
+        "${{ needs.cloudflare-pages-verify.outputs.cloudflare_pages_post_state_json }}",
+      CLOUDFLARE_PAGES_POSTURE_JSON:
+        "${{ needs.cloudflare-pages-verify.outputs.cloudflare_pages_posture_json }}",
+      CLOUDFLARE_ADMIN_POSTURE_JSON:
+        "${{ needs.cloudflare-pages-verify.outputs.cloudflare_admin_posture_json }}",
+    });
+    expect(materialize.run).toContain(
+      "compliance-evidence/cloudflare-pages-git-auto-deploy-post-state.json",
+    );
+    expect(materialize.run).toContain(
+      "compliance-evidence/cloudflare-pages-git-auto-deploy-posture.json",
+    );
+    expect(materialize.run).toContain(
+      "compliance-evidence/cloudflare-admin-posture.json",
+    );
+    expect(JSON.stringify(materialize)).not.toContain("secrets.");
   });
 
   it("never exposes provider secrets or candidate code on a non-main dispatch", () => {

@@ -5,9 +5,9 @@
   "production_project_ref": "qvvicunqcrwpioqnvzxf",
   "staging_project_ref": "xsiehskfgeoqyazcgauv",
   "cutover": {
-    "version": "20260811231659",
+    "version": "20260812102342",
     "name": "reconcile_legacy_migration_effects",
-    "file_sha256": "9ff35989f1162f9f5fd2c0b51b7a0bd4ad1bce4e91568c5a47ae75b02cba9243"
+    "file_sha256": "e6baa11c968b27cbb8f8ee92f05c577e8533d06a8b614aeb8508d55f06030e35"
   },
   "anomalies": [
     {

@@ -229,7 +229,9 @@ export type Database = {
           status: string
           stripe_credit_amount_cents: number | null
           stripe_credit_currency: string | null
+          stripe_credit_expected_amount_cents: number | null
           stripe_credit_id: string | null
+          stripe_credit_operation_key: string | null
           transaction_type: string
           updated_at: string
           user_id: string
@@ -259,7 +261,9 @@ export type Database = {
           status?: string
           stripe_credit_amount_cents?: number | null
           stripe_credit_currency?: string | null
+          stripe_credit_expected_amount_cents?: number | null
           stripe_credit_id?: string | null
+          stripe_credit_operation_key?: string | null
           transaction_type: string
           updated_at?: string
           user_id: string
@@ -289,7 +293,9 @@ export type Database = {
           status?: string
           stripe_credit_amount_cents?: number | null
           stripe_credit_currency?: string | null
+          stripe_credit_expected_amount_cents?: number | null
           stripe_credit_id?: string | null
+          stripe_credit_operation_key?: string | null
           transaction_type?: string
           updated_at?: string
           user_id?: string
@@ -3493,6 +3499,7 @@ export type Database = {
           participant_type: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"] | null
+          role_switch_audit_id: string | null
           role_switch_in_progress_at: string | null
           subscription_product_id: string | null
           updated_at: string
@@ -3521,6 +3528,7 @@ export type Database = {
           participant_type?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
+          role_switch_audit_id?: string | null
           role_switch_in_progress_at?: string | null
           subscription_product_id?: string | null
           updated_at?: string
@@ -3549,6 +3557,7 @@ export type Database = {
           participant_type?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
+          role_switch_audit_id?: string | null
           role_switch_in_progress_at?: string | null
           subscription_product_id?: string | null
           updated_at?: string
@@ -3557,7 +3566,15 @@ export type Database = {
           video_link?: string | null
           website_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_role_switch_audit_id_fkey"
+            columns: ["role_switch_audit_id"]
+            isOneToOne: false
+            referencedRelation: "role_switch_history"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles_public: {
         Row: {
@@ -4105,10 +4122,23 @@ export type Database = {
       }
       role_switch_history: {
         Row: {
+          billing_cancelled_count: number | null
+          billing_error: string | null
+          billing_finalized_at: string | null
+          billing_outcome: string
+          billing_reconciliation_attempt_count: number
+          billing_reconciliation_exhausted_at: string | null
+          billing_reconciliation_last_attempt_at: string | null
+          billing_reconciliation_lock_token: string | null
+          billing_reconciliation_locked_at: string | null
+          billing_reconciliation_next_attempt_at: string | null
+          billing_reconciliation_required: boolean
+          billing_subscription_count: number | null
           from_plan_key: string | null
           from_type: string
-          had_active_sub: boolean
+          had_active_sub: boolean | null
           id: string
+          legacy_invalid_facts: Json | null
           sub_cancelled: boolean
           switch_kind: string | null
           switched_at: string
@@ -4117,10 +4147,23 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          billing_cancelled_count?: number | null
+          billing_error?: string | null
+          billing_finalized_at?: string | null
+          billing_outcome?: string
+          billing_reconciliation_attempt_count?: number
+          billing_reconciliation_exhausted_at?: string | null
+          billing_reconciliation_last_attempt_at?: string | null
+          billing_reconciliation_lock_token?: string | null
+          billing_reconciliation_locked_at?: string | null
+          billing_reconciliation_next_attempt_at?: string | null
+          billing_reconciliation_required?: boolean
+          billing_subscription_count?: number | null
           from_plan_key?: string | null
           from_type: string
-          had_active_sub?: boolean
+          had_active_sub?: boolean | null
           id?: string
+          legacy_invalid_facts?: Json | null
           sub_cancelled?: boolean
           switch_kind?: string | null
           switched_at?: string
@@ -4129,10 +4172,23 @@ export type Database = {
           user_id: string
         }
         Update: {
+          billing_cancelled_count?: number | null
+          billing_error?: string | null
+          billing_finalized_at?: string | null
+          billing_outcome?: string
+          billing_reconciliation_attempt_count?: number
+          billing_reconciliation_exhausted_at?: string | null
+          billing_reconciliation_last_attempt_at?: string | null
+          billing_reconciliation_lock_token?: string | null
+          billing_reconciliation_locked_at?: string | null
+          billing_reconciliation_next_attempt_at?: string | null
+          billing_reconciliation_required?: boolean
+          billing_subscription_count?: number | null
           from_plan_key?: string | null
           from_type?: string
-          had_active_sub?: boolean
+          had_active_sub?: boolean | null
           id?: string
+          legacy_invalid_facts?: Json | null
           sub_cancelled?: boolean
           switch_kind?: string | null
           switched_at?: string
@@ -5763,7 +5819,9 @@ export type Database = {
               status: string
               stripe_credit_amount_cents: number | null
               stripe_credit_currency: string | null
+              stripe_credit_expected_amount_cents: number | null
               stripe_credit_id: string | null
+              stripe_credit_operation_key: string | null
               transaction_type: string
               updated_at: string
               user_id: string
@@ -5808,7 +5866,9 @@ export type Database = {
               status: string
               stripe_credit_amount_cents: number | null
               stripe_credit_currency: string | null
+              stripe_credit_expected_amount_cents: number | null
               stripe_credit_id: string | null
+              stripe_credit_operation_key: string | null
               transaction_type: string
               updated_at: string
               user_id: string
@@ -6031,10 +6091,17 @@ export type Database = {
         Returns: Json
       }
       apply_verified_data_input_discount: {
-        Args: { p_invoice_id: string; p_user_id: string }
+        Args: {
+          p_invoice_id: string
+          p_operation_key: string
+          p_subtotal_minor: number
+          p_user_id: string
+        }
         Returns: {
           applied_count: number
           applied_pct: number
+          expected_amount_cents: number
+          operation_key: string
         }[]
       }
       archive_role_data: {
@@ -6061,7 +6128,7 @@ export type Database = {
       }
       begin_role_switch: { Args: never; Returns: undefined }
       begin_role_switch_for_user: {
-        Args: { _user_id: string }
+        Args: { _audit_id: string; _user_id: string }
         Returns: undefined
       }
       bulk_update_project_unit_prices: {
@@ -6108,6 +6175,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      claim_role_switch_reconciliation_batch: {
+        Args: {
+          _batch_size?: number
+          _max_attempts?: number
+          _worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          audit_id: string
+          lock_token: string
+          user_id: string
+        }[]
+      }
       claim_storage_cleanup_jobs: {
         Args: { p_limit?: number }
         Returns: {
@@ -6153,6 +6233,20 @@ export type Database = {
           p_phone?: string
           p_role: Database["public"]["Enums"]["user_role"]
           p_user_id: string
+        }
+        Returns: undefined
+      }
+      complete_role_switch_reconciliation_attempt: {
+        Args: {
+          _audit_id: string
+          _billing_error: string
+          _billing_outcome: string
+          _cancelled_count: number
+          _had_active_sub: boolean
+          _lock_token: string
+          _max_attempts?: number
+          _subscription_count: number
+          _user_id: string
         }
         Returns: undefined
       }
@@ -6333,6 +6427,18 @@ export type Database = {
       expire_featured_listings: { Args: never; Returns: undefined }
       expire_listing_promotions: { Args: never; Returns: number }
       expire_past_auctions: { Args: never; Returns: number }
+      finalize_role_switch_audit_for_user: {
+        Args: {
+          _audit_id: string
+          _billing_error: string
+          _billing_outcome: string
+          _cancelled_count: number
+          _had_active_sub: boolean
+          _subscription_count: number
+          _user_id: string
+        }
+        Returns: undefined
+      }
       get_account_deletion_storage_objects: {
         Args: { p_user_id: string }
         Returns: {
@@ -7205,11 +7311,11 @@ export type Database = {
           p_year_min?: number
         }
         Returns: {
-          ai_score: number | null
+          ai_score: number
           card_payload: Json
           created_at: string
           listing_id: string
-          open_house_date: string | null
+          open_house_date: string
           price: number
           priority_rank: number
           publication_id: number
@@ -7260,8 +7366,7 @@ export type Database = {
       record_role_switch_audit_for_user: {
         Args: {
           _from_type: string
-          _had_active_sub: boolean
-          _sub_cancelled: boolean
+          _operation_id: string
           _switch_kind: string
           _to_type: string
           _user_id: string
@@ -7288,6 +7393,10 @@ export type Database = {
       release_property_report_generation: {
         Args: { p_holder: string; p_lang: string; p_listing_id: string }
         Returns: boolean
+      }
+      release_role_switch_reconciliation_claims: {
+        Args: { _audit_ids: string[]; _worker_id: string }
+        Returns: number
       }
       reopen_open_house_offer_selection: {
         Args: { p_listing_id: string }

@@ -8,19 +8,22 @@ describe("paid AI quota reservation order", () => {
   it.each([
     {
       path: "supabase/functions/property-valuation/index.ts",
-      validation: "city, sqm and price are required",
+      rateLimit: "await valuationLimiter.isLimited",
+      validation: "await parseJsonBody(req, propertyValuationRequestSchema)",
     },
     {
       path: "supabase/functions/neighbourhood-report/index.ts",
-      validation: "city is required",
+      rateLimit: "await neighbourhoodLimiter.isLimited",
+      validation: "await parseJsonBody(req, neighbourhoodReportRequestSchema)",
     },
     {
       path: "supabase/functions/property-pois/index.ts",
-      validation: "lat/lng required",
+      rateLimit: "await poisLimiter.isLimited",
+      validation: "await parseJsonBody(req, propertyPoisRequestSchema)",
     },
-  ])("reserves quota only after rate limit and validation in $path", ({ path, validation }) => {
+  ])("reserves quota only after rate limit and validation in $path", ({ path, rateLimit, validation }) => {
     const source = read(path);
-    const rateLimitIndex = source.indexOf("return tooManyRequestsResponse");
+    const rateLimitIndex = source.indexOf(rateLimit);
     const validationIndex = source.indexOf(validation);
     const quotaIndex = source.indexOf("await enforceAiQuota", validationIndex);
 

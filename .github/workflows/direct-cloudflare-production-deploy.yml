@@ -42,6 +42,7 @@ jobs:
       stripe_readiness_sha256: ${{ steps.recovery.outputs.stripe_readiness_sha256 }}
       stripe_readiness_artifact_id: ${{ steps.recovery.outputs.stripe_readiness_artifact_id }}
       stripe_readiness_artifact_digest: ${{ steps.recovery.outputs.stripe_readiness_artifact_digest }}
+      stripe_readiness_checked_at: ${{ steps.recovery.outputs.stripe_readiness_checked_at }}
       backend_run_id: ${{ steps.recovery.outputs.backend_run_id }}
       backend_run_attempt: ${{ steps.recovery.outputs.backend_run_attempt }}
       backend_approval_run_id: ${{ steps.recovery.outputs.backend_approval_run_id }}
@@ -230,6 +231,7 @@ jobs:
               --workflow-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
               --evidence-nonce "${STRIPE_READINESS_RUN_ID}:${STRIPE_READINESS_RUN_ATTEMPT}:${RELEASE_SHA}"
           STRIPE_READINESS_SHA256="$(sha256sum evidence/stripe/stripe-live-migration-evidence.json | awk '{print $1}')"
+          STRIPE_READINESS_CHECKED_AT="$(jq -er '.checked_at' evidence/stripe/stripe-live-migration-evidence.json)"
 
           node scripts/production-release-validation.mjs github-release-approval \
             --repository "$GITHUB_REPOSITORY" \
@@ -407,13 +409,18 @@ jobs:
           export STRIPE_READINESS_RUN_ID STRIPE_READINESS_RUN_ATTEMPT
           export STRIPE_READINESS_SHA256 STRIPE_READINESS_ARTIFACT_ID
           export STRIPE_READINESS_ARTIFACT_DIGEST
+          export STRIPE_READINESS_CHECKED_AT
           node --input-type=module <<'NODE'
           import { randomBytes } from "node:crypto";
           import { writeFileSync } from "node:fs";
 
           const issuedAt = new Date();
+          const readinessExpiresAt = new Date(
+            new Date(process.env.STRIPE_READINESS_CHECKED_AT).getTime() +
+              15 * 60 * 1000,
+          );
           const lease = {
-            schema_version: 1,
+            schema_version: 2,
             repository: process.env.GITHUB_REPOSITORY,
             release_sha: process.env.RELEASE_SHA,
             source_tree: process.env.SOURCE_TREE,
@@ -435,9 +442,14 @@ jobs:
               process.env.STRIPE_READINESS_ARTIFACT_ID,
             stripe_readiness_artifact_digest:
               process.env.STRIPE_READINESS_ARTIFACT_DIGEST,
+            stripe_readiness_checked_at:
+              process.env.STRIPE_READINESS_CHECKED_AT,
             nonce: randomBytes(32).toString("hex"),
             issued_at: issuedAt.toISOString(),
-            expires_at: new Date(issuedAt.getTime() + 15 * 60 * 1000).toISOString(),
+            expires_at: new Date(Math.min(
+              issuedAt.getTime() + 15 * 60 * 1000,
+              readinessExpiresAt.getTime(),
+            )).toISOString(),
           };
           writeFileSync(
             "production-mutation-lease.json",
@@ -478,6 +490,7 @@ jobs:
             echo "stripe_readiness_sha256=$STRIPE_READINESS_SHA256"
             echo "stripe_readiness_artifact_id=$STRIPE_READINESS_ARTIFACT_ID"
             echo "stripe_readiness_artifact_digest=$STRIPE_READINESS_ARTIFACT_DIGEST"
+            echo "stripe_readiness_checked_at=$STRIPE_READINESS_CHECKED_AT"
             echo "backend_run_id=$BACKEND_RUN_ID"
             echo "backend_run_attempt=$BACKEND_RUN_ATTEMPT"
             echo "backend_approval_run_id=$BACKEND_APPROVAL_RUN_ID"

@@ -297,9 +297,9 @@ or override it in repository secrets.
 | `CAPACITOR_APP_NAME` | Android app label override; default is `MaiProp Portal` | Android WebView APK workflow |
 | `CAPACITOR_SERVER_URL` | remote web origin for non-bundled Capacitor builds; default is `https://portal.maiprop.co` | Android WebView APK workflow |
 | `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate | repository secret and encrypted Pages binding |
-| `STAGING_SUPABASE_URL` | optional isolated staging Supabase URL for security/E2E jobs; PR preview deploys require it to be a non-production Supabase URL matching `STAGING_SUPABASE_PROJECT_ID` | repo or staging environment |
-| `STAGING_SUPABASE_PUBLISHABLE_KEY` | optional isolated staging anon/publishable key; PR preview deploys are skipped when it matches the production key | repo or staging environment |
-| `STAGING_SUPABASE_PROJECT_ID` | optional isolated staging Supabase project ref; if absent, matching production, or mismatched from `STAGING_SUPABASE_URL`, CI treats the setup as production-only and skips staging/preview deploys | repo or staging environment |
+| `STAGING_SUPABASE_URL` | optional isolated staging Supabase URL for security/E2E jobs; PR preview deploys require it to be a non-production Supabase URL matching `STAGING_SUPABASE_PROJECT_ID` | repository secret |
+| `STAGING_SUPABASE_PUBLISHABLE_KEY` | optional isolated staging anon/publishable key; PR preview deploys are skipped when it matches the production key | repository secret |
+| `STAGING_SUPABASE_PROJECT_ID` | optional isolated staging Supabase project ref; if absent, matching production, or mismatched from `STAGING_SUPABASE_URL`, CI treats the setup as production-only and skips staging/preview deploys | repository secret |
 | `PRODUCTION_SUPABASE_PROJECT_ID` | production Supabase project ref used only as a non-secret comparison guard; staging release workflows reject any target that matches it | repository variable |
 | `RELEASE_EVIDENCE_SIGNING_KEY` | random secret of at least 32 bytes used only to HMAC-sign release artifact bindings; rotate with a new key ID and never expose it to application runtime | repository secret |
 | `RELEASE_EVIDENCE_SIGNING_KEY_ID` | non-secret identifier for the active release-evidence HMAC key; the key ID is covered by the signature and must match at every consumer | repository variable |
@@ -307,22 +307,22 @@ or override it in repository secrets.
 | `PRODUCTION_RELEASE_DEPLOYERS` | comma-separated GitHub logins allowed to dispatch production; each dispatch must be attempt one by the original actor | repository variable |
 | `PRODUCTION_RELEASE_ENABLED` | exact lowercase `true` enables the final production dispatcher only after provider identities, secrets, staging evidence, Stripe live readiness, and an independent approval are valid; otherwise keep unset or `false` | repository variable |
 | `STRIPE_RESTRICTED_KEY` | live restricted key (`rk_live_...`) used only by the manual Stripe live-readiness workflow; test, standard secret, and fallback key forms are rejected | repository secret |
-| `STRIPE_EXPECTED_ACCOUNT_ID` | exact live Stripe account ID expected by the live-readiness workflow | repository variable |
+| `STRIPE_EXPECTED_ACCOUNT_ID` | Runtime account guard for Edge Functions. The live-readiness workflow and catalogue bootstrap pin `acct_1TnuLTGfOEgBOxtl` in source and do not trust a repository variable. | production/staging Edge secret |
 | `STRIPE_COMPANY_VAT_ID` | expected company VAT identifier checked by live readiness when configured | repository variable |
 | `STRIPE_WEBHOOK_EXPECTED_URL` | exact production Stripe webhook endpoint expected by live readiness | repository variable |
 | `STAGING_RELEASE_ENABLED` | exact lowercase `true` enables the automatic staging release train only after every prerequisite is provisioned; any other value keeps staging mutation disabled | repository variable |
 | `STAGING_TRUSTED_CONTROL_SHA` | full manually approved `main` SHA containing the staging workflows; must equal both `github.workflow_sha` and the exact release SHA before any privileged staging job can start | repository variable |
 | `STAGING_MUTATION_ACKNOWLEDGEMENT` | non-secret staging-only mutation acknowledgement; must equal `MUTATE_STAGING_xsiehskfgeoqyazcgauv` and is independently checked before every staging mutation | repository variable |
 | `STAGING_SUPABASE_SERVICE_ROLE_KEY` | runtime-only alias used by staging proof scripts after the workflow resolves and masks an isolated staging service credential through the Management API; never configure it as a GitHub secret | GitHub Actions generated runtime env |
-| `STAGING_APP_URL` | optional explicit Cloudflare Pages PR preview/staging origin; when absent, CI derives `https://<branch>.<project>.pages.dev` and bakes that into the preview bundle as `VITE_APP_URL` | repo or staging environment |
-| `STAGING_SITE_LOCK_PASSWORD` | optional Cloudflare Pages Preview runtime passcode gate; never reuse `SITE_LOCK_PASSWORD` unless preview should intentionally share the production passcode | staging environment only |
+| `STAGING_APP_URL` | optional explicit Cloudflare Pages PR preview/staging origin; when absent, CI derives `https://<branch>.<project>.pages.dev` and bakes that into the preview bundle as `VITE_APP_URL` | repository variable |
+| `STAGING_SITE_LOCK_PASSWORD` | optional Cloudflare Pages Preview runtime passcode gate; never reuse `SITE_LOCK_PASSWORD` unless preview should intentionally share the production passcode | repository secret |
 | `STAGING_TURN_PROOF_EMAIL` | seeded staging professional used to prove authenticated authorized-room TURN issuance on immutable and canonical staging URLs; credentials and room identifiers are redacted from evidence | repository variable |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI deploy/list token | repo or environment scoped to deploy jobs |
 | `SUPABASE_DB_URL` | optional Postgres connection string override for local/CI Supabase diagnostic scripts such as index-stat capture; prefer staging/production-specific vars in workflows | local/CI diagnostics only |
 | `DATABASE_URL` | optional legacy Postgres connection string fallback used by local backup/diagnostic scripts only when `SUPABASE_DB_URL` is unset | local/CI diagnostics only |
 | `MAIPROP_BACKUP_PASSPHRASE` | local operator secret used to encrypt `npm run backup:supabase:logical` output; never expose through `VITE_*` or app runtime environments | local backup operator shell only |
 | `MAIPROP_NODE20_HOME` | optional local path override for `scripts/project-runtime.mjs`; point it at the directory containing the pinned Node 20 `node` and npm binaries when PATH/Volta/Scoop discovery is not enough | local developer shell only |
-| `SUPABASE_STAGING_DB_URL` | optional isolated staging Postgres connection string for CI `supabase db push --db-url`; only required when `STAGING_SUPABASE_PROJECT_ID` points to a real non-production staging project and migrations change | staging environment only |
+| `SUPABASE_STAGING_DB_URL` | optional isolated staging Postgres connection string for CI `supabase db push --db-url`; only required when `STAGING_SUPABASE_PROJECT_ID` points to a real non-production staging project and migrations change | repository secret |
 | `SUPABASE_STAGING_EFFECTIVE_DB_URL` | CI-generated staging Postgres connection string after resolving `SUPABASE_STAGING_DB_URL` or the Supabase Management API pooler URL; do not set manually outside the workflow | GitHub Actions generated runtime env |
 | `SUPABASE_PRODUCTION_DB_URL` | optional percent-encoded production Postgres connection string used only by the manual production DB migration workflow | repository secret; prefer the fixed project ref plus scoped Supabase access token when the workflow supports it |
 | `SUPABASE_PROJECT_REF` | optional project ref alias used by release-safety live inventory | manual release certification |
@@ -331,14 +331,14 @@ or override it in repository secrets.
 | `SENTRY_AUTH_TOKEN` | optional read-only token for local production telemetry checks; never required by app runtime | local operator shell only |
 | `SENTRY_ORG` | Sentry organization slug used by read-only compliance evidence capture | repo variable or local operator shell |
 | `SENTRY_PROJECT` | Sentry project slug used by read-only compliance evidence capture | repo variable or local operator shell |
-| `RLS_USER_A_EMAIL` | live-safe RLS test user A | repo or staging environment |
-| `RLS_USER_B_EMAIL` | live-safe RLS test user B | repo or staging environment |
-| `RLS_USER_PASSWORD` | shared live-safe RLS test password | repo or staging environment |
-| `ONBOARDING_TEST_EMAIL` | live-safe onboarding E2E user | repo or staging environment |
-| `ONBOARDING_TEST_PASSWORD` | live-safe onboarding E2E password | repo or staging environment |
-| `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | pre-provisioned isolated-staging platform admin required by the exact-SHA live RLS proof; the workflow validates but does not elevate this identity | staging environment only |
+| `RLS_USER_A_EMAIL` | live-safe RLS test user A | repository secret |
+| `RLS_USER_B_EMAIL` | live-safe RLS test user B | repository secret |
+| `RLS_USER_PASSWORD` | shared live-safe RLS test password | repository secret |
+| `ONBOARDING_TEST_EMAIL` | live-safe onboarding E2E user | repository secret |
+| `ONBOARDING_TEST_PASSWORD` | live-safe onboarding E2E password | repository secret |
+| `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | pre-provisioned isolated-staging platform admin required by the exact-SHA live RLS proof; the workflow validates but does not elevate this identity | repository secret |
 | `E2E_SECURITY_USE_ISOLATED_STAGING` | CI-generated `true` marker that permits staging-only security fixture preparation after the workflow verifies an isolated Supabase target; do not set for production | GitHub Actions generated runtime env |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase `service_role` JWT API key for Edge Functions and exact-SHA isolated staging security fixtures; production smoke is unauthenticated and must never receive this key; do not use the `sb_secret_*` key for PostgREST/Auth Admin-backed fixtures | staging environment or function runtime only |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase `service_role` JWT API key for Edge Functions and exact-SHA isolated staging security fixtures; production smoke is unauthenticated and must never receive this key; do not use the `sb_secret_*` key for PostgREST/Auth Admin-backed fixtures | workflow-generated staging runtime or function runtime only |
 | `MAIPROP_EDGE_TEST_AUTH_BYPASS` | explicit CI-only bypass marker for edge-function tests that exercise handler internals without live Supabase Auth | CI test environment only |
 | `PRODUCTION_DEPLOY_URLS` | optional space-separated URL override for the post-deploy production smoke check; defaults to `https://portal.maiprop.co` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_BROWSER_CHECK` | optional boolean that enables the Chromium mount check when set instead of passing `--browser` | deploy diagnostics only |
@@ -351,6 +351,8 @@ or override it in repository secrets.
 | `PRODUCTION_DEPLOY_TURN_ROOM_ID` | staging-only room identifier derived from the authenticated proof user's seeded professional record; masked by the workflow and omitted from attestations | GitHub Actions generated runtime env |
 | `PRODUCTION_DEPLOY_TURN_EXPECTED_TTL_SECONDS` | expected TURN credential TTL used by live deploy verification; the staging release train sets the canonical value `21600` | deploy diagnostics only |
 | `RELEASE_SHA` | internal full commit SHA bound to the exact release candidate under validation; generated by release workflows | GitHub Actions generated runtime env |
+| `SOURCE_TREE` | internal full Git tree hash bound to the immutable release payload | GitHub Actions generated runtime env |
+| `RELEASE_EVIDENCE_NONCE` | internal run-scoped nonce tuple used when producing exact-SHA evidence; never configure manually | GitHub Actions generated runtime env |
 | `ARTIFACT_SHA256` | internal digest of the immutable release artifact used while assembling staging attestations | GitHub Actions generated runtime env |
 | `STAGING_PROJECT` | internal Cloudflare Pages project-name alias populated from `CLOUDFLARE_STAGING_PAGES_PROJECT` for staging posture and attestation scripts; do not set independently | GitHub Actions generated runtime env |
 | `PRODUCTION_PROJECT` | internal Cloudflare Pages project-name alias populated from `CLOUDFLARE_PAGES_PROJECT` for cross-project isolation checks; do not set independently | GitHub Actions generated runtime env |

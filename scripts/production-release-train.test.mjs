@@ -100,8 +100,8 @@ describe("production release train", () => {
     );
     const controlSource = JSON.stringify(control);
     const collectSource = JSON.stringify(collect);
-    const evidenceDownload = collect.steps.find(
-      (step) => step.name === "Download minimized Cloudflare Pages posture evidence",
+    const evidenceMaterialize = collect.steps.find(
+      (step) => step.name === "Materialize minimized Cloudflare Pages posture evidence",
     );
     const collectCheckout = collect.steps.find(
       (step) => String(step.uses ?? "").startsWith("actions/checkout@"),
@@ -228,8 +228,16 @@ describe("production release train", () => {
     expect(control.steps.indexOf(controlUpload)).toBeLessThan(
       control.steps.indexOf(controlEnforcement),
     );
-    expect(evidenceDownload.uses).toContain("actions/download-artifact@");
-    expect(evidenceDownload.with.path).toBe("compliance-evidence/");
+    expect(evidenceMaterialize.if).toBe("always()");
+    expect(evidenceMaterialize.env).toEqual({
+      CLOUDFLARE_PAGES_POST_STATE_JSON:
+        "${{ needs.cloudflare-pages-verify.outputs.cloudflare_pages_post_state_json }}",
+      CLOUDFLARE_PAGES_POSTURE_JSON:
+        "${{ needs.cloudflare-pages-verify.outputs.cloudflare_pages_posture_json }}",
+      CLOUDFLARE_ADMIN_POSTURE_JSON:
+        "${{ needs.cloudflare-pages-verify.outputs.cloudflare_admin_posture_json }}",
+    });
+    expect(evidenceMaterialize.run).toContain("compliance-evidence/cloudflare-pages-git-auto-deploy-post-state.json");
     expect(collect.needs).toEqual([
       "verify-current-main",
       "cloudflare-pages-verify",
@@ -304,7 +312,6 @@ describe("production release train", () => {
     const lock = workflow("lock-cloudflare-pages-git-deploys.yml");
     const parsed = yaml.load(lock);
     const triggerNames = Object.keys(parsed.on);
-    const preflight = parsed.jobs["verify-lock-environment"];
     const job = parsed.jobs.lock;
     const controlStep = job.steps.find(
       (step) => step.name === "Lock both Cloudflare Pages Git integrations",
@@ -321,27 +328,18 @@ describe("production release train", () => {
       required: true,
       type: "string",
     });
-    expect(preflight.if).toContain("github.ref == 'refs/heads/main'");
-    expect(preflight).not.toHaveProperty("environment");
-    expect(lock).toContain(
-      "environments/cloudflare-git-deploy-lock",
-    );
-    expect(lock).toContain(".can_admins_bypass == false");
-    expect(lock).toContain(
-      ".deployment_branch_policy.custom_branch_policies == true",
-    );
-    expect(lock).toContain(
-      ".deployment_branch_policy.protected_branches == false",
-    );
-    expect(lock).toContain(".total_count == 1");
-    expect(lock).toContain('.branch_policies[0].name == "main"');
-    expect(lock).toContain('.branch_policies[0].type == "branch"');
+    expect(parsed.jobs["verify-lock-environment"]).toBeUndefined();
     expect(job.if).toContain("github.ref == 'refs/heads/main'");
     expect(job.if).toContain(
       "inputs.confirm == 'DISABLE_CLOUDFLARE_GIT_DEPLOYS'",
     );
-    expect(job.needs).toBe("verify-lock-environment");
-    expect(job.environment).toBe("cloudflare-git-deploy-lock");
+    expect(job.needs).toBeUndefined();
+    expect(job.environment).toBeUndefined();
+    expect(job.if).toContain("github.run_attempt == 1");
+    expect(job.if).toContain("github.actor == github.triggering_actor");
+    expect(lock).toContain("PRODUCTION_RELEASE_APPROVERS");
+    expect(lock).toContain("GITHUB_WORKFLOW_SHA");
+    expect(lock).toContain("repos/${GITHUB_REPOSITORY}/branches/main");
     expect(job.concurrency).toEqual({
       group: "maiprop-cloudflare-pages-git-deploy-lock",
       "cancel-in-progress": false,
@@ -352,10 +350,10 @@ describe("production release train", () => {
     expect(jobSource).not.toContain("node scripts/");
     expect(job.env).toBeUndefined();
     expect(controlStep.env.CLOUDFLARE_PAGES_READ_TOKEN).toBe(
-      "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}",
+      "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}",
     );
     expect(controlStep.env.CLOUDFLARE_PAGES_EDIT_TOKEN).toBe(
-      "${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}",
+      "${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}",
     );
     expect(controlStep.run).toContain(
       'PRODUCTION_PROJECT="maiprop-listing-site"',
@@ -525,6 +523,8 @@ describe("production release train", () => {
         "${{ steps.release_contract.outputs.stripe_readiness_artifact_id }}",
       stripe_readiness_artifact_digest:
         "${{ steps.release_contract.outputs.stripe_readiness_artifact_digest }}",
+      stripe_readiness_checked_at:
+        "${{ steps.release_contract.outputs.stripe_readiness_checked_at }}",
     });
     expect(release).toContain("github-stripe-readiness");
     expect(release).toContain(
@@ -546,6 +546,10 @@ describe("production release train", () => {
     expect(release).toContain('--branch "main"');
     expect(release).toContain("stripe_readiness_artifact_id");
     expect(release).toContain("stripe_readiness_artifact_digest");
+    expect(release).toContain("stripe_readiness_checked_at");
+    expect(release).toContain(
+      "STRIPE_READINESS_CHECKED_AT=\"$(jq -er '.checked_at'",
+    );
     expect(aggregate.needs).toContain("validate");
     expect(release).toContain("stripe_readiness_sha256");
 
@@ -573,6 +577,48 @@ describe("production release train", () => {
     expect(
       release.match(/stripe_readiness_sha256: process\.env\.STRIPE_READINESS_SHA256/g),
     ).toHaveLength(4);
+    expect(
+      release.match(/stripe_readiness_checked_at:\s*process\.env\.STRIPE_READINESS_CHECKED_AT/g),
+    ).toHaveLength(3);
+
+    const directRecovery = workflow("direct-cloudflare-production-deploy.yml");
+    expect(directRecovery).toContain("STRIPE_READINESS_CHECKED_AT");
+    expect(directRecovery).toMatch(
+      /stripe_readiness_checked_at:\s*process\.env\.STRIPE_READINESS_CHECKED_AT/,
+    );
+
+    const cloudflare = workflow("reusable-cloudflare-production-deploy.yml");
+    expect(cloudflare).toMatch(
+      /stripe_readiness_checked_at:\s*sourceLease\.stripe_readiness_checked_at/,
+    );
+  });
+
+  it("activates the role-switch cron only after exact Edge parity", () => {
+    const edge = workflow("deploy-edge-functions.yml");
+    const parsed = yaml.load(edge);
+    const secrets = parsed.on.workflow_call.secrets;
+    expect(secrets.SUPABASE_PRODUCTION_DB_URL.required).toBe(true);
+
+    const steps = parsed.jobs.deploy.steps;
+    const parityIndex = steps.findIndex(
+      (step) => step.name === "Require exact staging-production Edge parity",
+    );
+    const activationIndex = steps.findIndex(
+      (step) => step.name === "Activate and verify role-switch reconciliation cron",
+    );
+    const attestationIndex = steps.findIndex(
+      (step) => step.name === "Create production Edge attestation",
+    );
+    expect(parityIndex).toBeGreaterThanOrEqual(0);
+    expect(activationIndex).toBeGreaterThan(parityIndex);
+    expect(attestationIndex).toBeGreaterThan(activationIndex);
+
+    const activation = steps[activationIndex];
+    expect(activation.run).toContain("mutation-lease");
+    expect(activation.run).toContain(
+      "supabase/reconciliation/activate-role-switch-billing-cron.sql",
+    );
+    expect(activation.run).toContain("production-role-switch-cron-state.json");
   });
 
   it("keeps staging default-off and binds every privileged job to the trusted candidate", () => {
@@ -844,8 +890,9 @@ describe("production release train", () => {
     expect(stage).toContain(
       'const expectedProofNames = [\n            "listings",\n            "projects",\n            "promotions",\n            "storage",',
     );
+    expect(stage).toContain("expectedProofNames.some(");
     expect(stage).toContain(
-      "expectedProofNames.some(\n                (name) => business.proofs?.[name]?.ok !== true,",
+      "(name) => business.proofs?.[name]?.ok !== true,",
     );
   });
 
@@ -1015,6 +1062,7 @@ describe("production release train", () => {
       ["validate-source", "provenance_artifact"],
       ["cloudflare-staging", "attestation_artifact"],
       ["staging-business-proofs", "artifact_name"],
+      ["staging-stripe-payment", "artifact_name"],
       ["staging-live-security", "artifact_name"],
       ["staging-n-minus-one-compatibility", "artifact_name"],
       ["staging-catalogue-performance", "artifact_name"],
@@ -1048,6 +1096,41 @@ describe("production release train", () => {
     );
     expect(supabase).toContain("artifact-id");
     expect(supabase).toContain("artifact-digest");
+  });
+
+  it("requires one zero-skip Stripe test payment in the staging attestation", () => {
+    const stage = yaml.load(workflow("stage-release.yml"));
+    const proof = stage.jobs["staging-stripe-payment"];
+    const aggregate = stage.jobs["release-candidate-attested"];
+    const proofSource = JSON.stringify(proof);
+    const aggregateSource = JSON.stringify(aggregate);
+    const paymentSpec = readFileSync(
+      resolve(root, "e2e", "stripe-payment-complete.spec.ts"),
+      "utf8",
+    );
+
+    expect(proof).toBeDefined();
+    expect(proof.needs).toEqual([
+      "validate-source",
+      "supabase-staging",
+      "cloudflare-staging",
+    ]);
+    expect(proofSource).toContain("E2E_COMPLETE_STRIPE_PAYMENT");
+    expect(proofSource).toContain("stripe-payment-complete.spec.ts");
+    expect(proofSource).toContain(
+      "completes test-card subscription checkout and observes synced entitlement",
+    );
+    expect(proofSource).toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(paymentSpec).toContain("/functions/v1/delete-account");
+    expect(proofSource).toContain("staging-stripe-payment-evidence.mjs");
+    expect(aggregate.needs).toContain("staging-stripe-payment");
+    expect(aggregateSource).toContain(
+      "needs.staging-stripe-payment.outputs.artifact_name",
+    );
+    expect(aggregateSource).toContain("stripePayment.playwright?.expected !== 1");
+    expect(aggregateSource).toContain("stripePayment.playwright?.skipped !== 0");
+    expect(aggregateSource).toContain("stripePaymentPlaywright.sha256");
+    expect(workflow("stage-release.yml")).toContain("schema_version: 5");
   });
 
   it("makes Cloudflare production promotion workflow-call-only and immutable", () => {
@@ -1657,6 +1740,26 @@ describe("production release train", () => {
     expect(content).toContain("migration_inventory_sha256");
     expect(content).toContain("production-migrations-pre-apply.json");
     expect(content).toContain(
+      "supabase/reconciliation/role-switch-index-preflight.sql",
+    );
+    expect(content).toContain("scripts/check-role-switch-index-preflight.mjs");
+    for (const path of [
+      "production-role-switch-index-state-before.json",
+      "production-role-switch-index-preflight-before.json",
+      "production-role-switch-index-state-mutation-boundary.json",
+      "production-role-switch-index-preflight-mutation-boundary.json",
+      "production-role-switch-online-finalization.json",
+      "production-role-switch-index-state-after.json",
+      "production-role-switch-index-preflight-after.json",
+      "production-role-switch-fk-state-after.json",
+      "production-role-switch-fk-post-apply.json",
+    ]) {
+      expect(content, path).toContain(path);
+    }
+    expect(content).toContain("role-switch-fk-state.sql");
+    expect(content).toContain("check-role-switch-fk-post-apply.mjs");
+    expect(content).toContain("--require-finalized");
+    expect(content).toContain(
       "Production migration history changed after the reviewed dry run.",
     );
     expect(content).toContain(
@@ -1668,14 +1771,47 @@ describe("production release train", () => {
     const applyStep = job.steps.find(
       (step) => step.name === "Apply exact staged production migrations",
     );
+    const indexPreflightStep = job.steps.find(
+      (step) => step.name === "Check production role-switch index safety",
+    );
+    const dryRunStep = job.steps.find(
+      (step) => step.name === "Dry-run exact staged production migrations",
+    );
+    expect(indexPreflightStep).toBeDefined();
+    expect(job.steps.indexOf(indexPreflightStep)).toBeLessThan(
+      job.steps.indexOf(dryRunStep),
+    );
     expect(applyStep.run).toContain("npm run release:artifact:verify --");
     expect(applyStep.run).toContain("release-candidate/release-manifest.json");
     expect(applyStep.run).toContain("github-staging-lease");
     expect(applyStep.run).toContain("mutation-lease");
     expect(applyStep.run).toContain("supabase-target");
+    expect(applyStep.run).toContain(
+      "production-role-switch-index-preflight-mutation-boundary.json",
+    );
+    expect(
+      applyStep.run.indexOf(
+        "Production migration history changed at the database mutation boundary.",
+      ),
+    ).toBeLessThan(
+      applyStep.run.indexOf(
+        "production-role-switch-index-preflight-mutation-boundary.json",
+      ),
+    );
+    expect(
+      applyStep.run.indexOf(
+        "production-role-switch-index-preflight-mutation-boundary.json",
+      ),
+    ).toBeLessThan(applyStep.run.indexOf("db push"));
     expect(applyStep.run.indexOf("release:artifact:verify")).toBeLessThan(
       applyStep.run.indexOf("db push"),
     );
+    expect(applyStep.run).toContain("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_profiles_role_switch_audit_id");
+    expect(applyStep.run).toContain("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_role_switch_history_reconciliation_due");
+    expect(applyStep.run).toContain("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_agent_data_inputs_user_discount_invoice");
+    expect(applyStep.run).toContain("VALIDATE CONSTRAINT profiles_role_switch_audit_id_fkey");
+    expect(applyStep.run).toContain("production-role-switch-online-finalization.json");
+    expect(applyStep.run).not.toContain('pending_count" = "0" ]; then\n            echo "Production migration history already matches staging."\n            exit 0');
     const terminalEvidence = job.steps.find(
       (step) => step.name === "Create production database terminal evidence",
     );
@@ -1704,6 +1840,18 @@ describe("production release train", () => {
     expect(terminalEvidence.run).toContain("production-migrations-pre-apply.json");
     expect(terminalEvidence.run).toContain("production-migrations-after.json");
     expect(terminalEvidence.run).toContain("production-migration-dry-run.txt");
+    expect(terminalEvidence.run).toContain(
+      "production-role-switch-index-preflight-mutation-boundary.json",
+    );
+    expect(terminalEvidence.run).toContain(
+      "production-role-switch-index-preflight-after.json",
+    );
+    expect(terminalEvidence.run).toContain(
+      "production-role-switch-online-finalization.json",
+    );
+    expect(terminalEvidence.run).toContain(
+      "production-role-switch-fk-post-apply.json",
+    );
     expect(terminalEvidence.run).toContain("job_status");
     expect(terminalEvidence.run).toContain("readJsonIfValid");
     expect(terminalEvidence.run).toContain("manifest_parse_error");
@@ -1783,6 +1931,7 @@ describe("production release train", () => {
     expect(call.secrets).toEqual({
       RELEASE_EVIDENCE_SIGNING_KEY: { required: true },
       SUPABASE_ACCESS_TOKEN: { required: true },
+      SUPABASE_PRODUCTION_DB_URL: { required: true },
       VITE_SUPABASE_PROJECT_ID: { required: true },
       VITE_SUPABASE_URL: { required: true },
     });

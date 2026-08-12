@@ -159,18 +159,20 @@ export function selectStripeReadinessRun({ sha, runs, jobsByRun }) {
       String(run?.head_sha ?? "").toLowerCase() === expectedSha &&
       run?.event === "workflow_dispatch" &&
       isOriginalManualAttempt(run) &&
-      run?.status === "completed" &&
-      run?.conclusion === "success")
+      run?.status === "completed")
     .sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0));
 
-  const match = candidates.find((run) =>
-    successfulJob(jobsByRun.get(run.id), STRIPE_READINESS_JOB));
-  if (!match) {
+  const latest = candidates[0];
+  if (
+    !latest ||
+    latest.conclusion !== "success" ||
+    !successfulJob(jobsByRun.get(latest.id), STRIPE_READINESS_JOB)
+  ) {
     throw new Error(
-      `No successful exact-SHA attempt-1 Stripe readiness run by the original triggering actor has a successful "${STRIPE_READINESS_JOB}" job for ${expectedSha}.`,
+      `The newest exact-SHA attempt-1 Stripe readiness run by the original triggering actor does not have a successful "${STRIPE_READINESS_JOB}" job for ${expectedSha}.`,
     );
   }
-  return match;
+  return latest;
 }
 
 export function selectReleaseProofs({
@@ -242,7 +244,7 @@ export function validateReleaseCandidateAttestation({
     throw new Error("Release candidate attestation must be a JSON object.");
   }
   if (
-    attestation.schema_version !== 4 ||
+    attestation.schema_version !== 5 ||
     attestation.evidence_type !== "maiprop-release-candidate-attestation"
   ) {
     throw new Error("Release candidate attestation has an unsupported schema or evidence type.");
@@ -315,6 +317,7 @@ export function validateReleaseCandidateAttestation({
     "supabase",
     "cloudflare",
     "business",
+    "stripe_payment",
     "security",
     "n_minus_one",
     "catalogue_performance",
@@ -330,6 +333,7 @@ export function validateReleaseCandidateAttestation({
     ["supabase", "Supabase"],
     ["cloudflare", "Cloudflare"],
     ["business", "business"],
+    ["stripe_payment", "Stripe payment"],
     ["security", "security"],
     ["n_minus_one", "N-1"],
     ["catalogue_performance", "catalogue performance"],
@@ -343,6 +347,40 @@ export function validateReleaseCandidateAttestation({
     ) {
       throw new Error(`${label} evidence does not match the exact release candidate.`);
     }
+  }
+  const stripePayment = attestation.stripe_payment;
+  let stripePaymentOrigin;
+  let stripeCloudflareOrigin;
+  try {
+    stripePaymentOrigin = new URL(String(stripePayment.target?.app_origin ?? ""));
+    stripeCloudflareOrigin = new URL(
+      String(attestation.cloudflare?.stable_url ?? ""),
+    );
+  } catch {
+    throw new Error("Stripe payment evidence has an invalid staging app origin.");
+  }
+  if (
+    stripePayment.schema_version !== 1 ||
+    stripePayment.evidence_type !== "maiprop-staging-stripe-payment" ||
+    stripePayment.ok !== true ||
+    stripePayment.target?.supabase_project_ref !== STAGING_PROJECT_REF ||
+    stripePayment.target.supabase_project_ref !==
+      attestation.supabase?.database?.project_ref ||
+    stripePaymentOrigin.protocol !== "https:" ||
+    stripePaymentOrigin.origin !== stripeCloudflareOrigin.origin ||
+    stripePayment.target?.stripe_mode !== "test" ||
+    stripePayment.playwright?.spec !== "stripe-payment-complete.spec.ts" ||
+    stripePayment.playwright?.test_title !==
+      "completes test-card subscription checkout and observes synced entitlement" ||
+    stripePayment.playwright?.expected !== 1 ||
+    stripePayment.playwright?.skipped !== 0 ||
+    stripePayment.playwright?.unexpected !== 0 ||
+    stripePayment.playwright?.flaky !== 0 ||
+    !SHA256.test(String(stripePayment.playwright?.report_sha256 ?? ""))
+  ) {
+    throw new Error(
+      "Stripe payment evidence is incomplete or does not prove an isolated staging payment.",
+    );
   }
   const security = attestation.security;
   let securityOrigin;
@@ -918,7 +956,7 @@ export function validateMutationLease({
   now = new Date(),
 }) {
   const record = requireRecord(lease, "Mutation lease");
-  if (record.schema_version !== 1) {
+  if (record.schema_version !== 2) {
     throw new Error("Mutation lease schema version is unsupported.");
   }
   if (normalizeReleaseSha(record.release_sha) !== normalizeReleaseSha(sha)) {
@@ -978,6 +1016,7 @@ export function validateMutationLease({
     record.stripe_readiness_sha256,
     record.stripe_readiness_artifact_id,
     record.stripe_readiness_artifact_digest,
+    record.stripe_readiness_checked_at,
   ];
   const stripeReadinessExpectedValues = [
     stripeReadinessRunId,
@@ -990,6 +1029,10 @@ export function validateMutationLease({
     ...stripeReadinessRecordValues,
     ...stripeReadinessExpectedValues,
   ].some((value) => String(value ?? "").trim().length > 0);
+  if (!hasStripeReadinessBinding) {
+    throw new Error("Mutation lease Stripe readiness binding is required.");
+  }
+  let stripeReadinessCheckedAt;
   if (hasStripeReadinessBinding) {
     const actualRunId = requirePositiveIntegerString(
       record.stripe_readiness_run_id,
@@ -1013,6 +1056,10 @@ export function validateMutationLease({
     const actualArtifactDigest = requireSha256(
       record.stripe_readiness_artifact_digest,
       "Mutation lease Stripe readiness artifact digest",
+    );
+    stripeReadinessCheckedAt = requireDate(
+      record.stripe_readiness_checked_at,
+      "Mutation lease Stripe readiness check time",
     );
 
     if (
@@ -1134,6 +1181,25 @@ export function validateMutationLease({
   }
   if (expiresAt.getTime() - issuedAt.getTime() > MAX_MUTATION_LEASE_MS) {
     throw new Error("Mutation lease expiry must be no more than 15 minutes.");
+  }
+  if (
+    stripeReadinessCheckedAt.getTime() >
+      issuedAt.getTime() + MAX_CLOCK_SKEW_MS ||
+    stripeReadinessCheckedAt.getTime() >
+      nowDate.getTime() + MAX_CLOCK_SKEW_MS
+  ) {
+    throw new Error(
+      "Mutation lease Stripe readiness check time is materially in the future.",
+    );
+  }
+  if (
+    !rollbackIdentityRequested &&
+    expiresAt.getTime() - stripeReadinessCheckedAt.getTime() >
+    MAX_MUTATION_LEASE_MS
+  ) {
+    throw new Error(
+      "Mutation lease cannot extend Stripe readiness beyond 15 minutes.",
+    );
   }
   if (nowDate >= expiresAt) {
     throw new Error("Mutation lease has expired.");

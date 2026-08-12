@@ -44,7 +44,7 @@ const requirements: readonly ProofRequirement[] = [
     area: "pricing",
     kind: "race_or_idempotency",
     file: "supabase/functions/create-checkout/index.ts",
-    snippets: ["idempotencyKey", "buildIdempotencyKey(\"checkout-v2\"", "checkoutPlan.planKey"],
+    snippets: ["idempotencyKey", "buildIdempotencyKey(\"checkout-v3\"", "checkoutPlan.planKey"],
   },
   {
     area: "role_tier_transition",
@@ -67,8 +67,11 @@ const requirements: readonly ProofRequirement[] = [
   {
     area: "role_tier_transition",
     kind: "race_or_idempotency",
-    file: "supabase/functions/log-role-switch/index.ts",
-    snippets: ["record_role_switch_audit", "idempotent"],
+    file: "src/test/roleSwitchAuditGrantMigration.test.ts",
+    snippets: [
+      "binds one idempotent audit intent through begin and completion",
+      "_operation_id uuid",
+    ],
   },
   {
     area: "ai_quota",

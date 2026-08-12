@@ -10,13 +10,22 @@
  */
 
 import { formatStripeKeyEvidence, getStripeReadOnlyKey } from "./stripe-readiness-env.mjs";
+import { getSupabaseReadOnlyKey } from "./supabase-readonly-key.mjs";
+import {
+  assessPaymentMethodConfigurations,
+  assertRestrictedKeyWriteDenied,
+  MAIPROP_PRODUCTION_STRIPE_ACCOUNT_ID,
+} from "./stripe-live-readiness-contract.mjs";
 import { createStripeLiveMigrationEvidence } from "./verify-stripe-live-migration-evidence.mjs";
 
 const STRIPE_API_BASE = "https://api.stripe.com";
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION ?? "2026-06-24.dahlia";
-const EXPECTED_ACCOUNT_ID = process.env.STRIPE_EXPECTED_ACCOUNT_ID ?? "acct_1TnuLTGfOEgBOxtl";
+const EXPECTED_ACCOUNT_ID = MAIPROP_PRODUCTION_STRIPE_ACCOUNT_ID;
 const EXPECTED_COUNTRY = (process.env.STRIPE_TAX_EXPECT_COUNTRY ?? "GR").toUpperCase();
 const EXPECTED_CURRENCY = "eur";
+const PRODUCTION_SUPABASE_PROJECT_REF = "qvvicunqcrwpioqnvzxf";
+const PRODUCTION_SUPABASE_URL =
+  `https://${PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co`;
 const EXPECTED_VAT_ID = (process.env.STRIPE_COMPANY_VAT_ID ?? "EL802708301").replace(/\s+/g, "").toUpperCase();
 const EXPECTED_WEBHOOK_URL = process.env.STRIPE_WEBHOOK_EXPECTED_URL ??
   "https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/stripe-webhook";
@@ -28,6 +37,8 @@ const REQUIRED_WEBHOOK_EVENTS = [
   "refund.created",
   "refund.updated",
   "credit_note.created",
+  "credit_note.updated",
+  "credit_note.voided",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.paused",
@@ -36,6 +47,7 @@ const REQUIRED_WEBHOOK_EVENTS = [
   "customer.subscription.resumed",
   "customer.subscription.deleted",
   "invoice.created",
+  "invoice.finalized",
   "invoice.payment_failed",
   "invoice.payment_succeeded",
   "subscription_schedule.aborted",
@@ -139,49 +151,36 @@ async function listAll(path, values = {}) {
   return rows;
 }
 
-function decodeJwtPayload(value) {
-  const payload = value?.split(".")[1];
-  if (!payload) return null;
-  try {
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function keyRole(value) {
-  if (!value) return "";
-  if (value.startsWith("sb_secret_")) return "service_role";
-  return decodeJwtPayload(value)?.role ?? "";
+async function probeRestrictedKeyCannotWrite() {
+  const response = await fetch(`${STRIPE_API_BASE}/v1/products`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${getStripeKey()}`,
+      "content-type": "application/x-www-form-urlencoded",
+      "idempotency-key": `maiprop-readiness-deny-${crypto.randomUUID()}`,
+      "stripe-version": STRIPE_API_VERSION,
+      "user-agent": "maiprop-stripe-live-migration-check/1.0",
+    },
+    body: new URLSearchParams(),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : {};
+  return assertRestrictedKeyWriteDenied({ status: response.status, body });
 }
 
 function getSupabaseUrl() {
-  const url = process.env.VITE_SUPABASE_URL ?? "";
-  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
-    throw new Error("VITE_SUPABASE_URL must be set to the production Supabase URL.");
-  }
-  return url.replace(/\/$/, "");
-}
-
-function getSupabasePublishableKey() {
-  for (const name of ["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY", "SB_SERVICE_ROLE_KEY"]) {
-    if (String(process.env[name] ?? "").trim()) {
-      throw new Error(`${name} is forbidden for the read-only Stripe readiness producer.`);
-    }
-  }
-  const key = String(process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "").trim();
-  const isPublishable = /^sb_publishable_[A-Za-z0-9_-]+$/.test(key);
-  const isLegacyAnon = keyRole(key) === "anon";
-  if (!isPublishable && !isLegacyAnon) {
+  const url = String(process.env.VITE_SUPABASE_URL ?? "").replace(/\/$/, "");
+  if (url !== PRODUCTION_SUPABASE_URL) {
     throw new Error(
-      "VITE_SUPABASE_PUBLISHABLE_KEY must be a Supabase publishable or legacy anon key.",
+      `VITE_SUPABASE_URL must target production Supabase ${PRODUCTION_SUPABASE_PROJECT_REF}.`,
     );
   }
-  return key;
+  return url;
 }
 
 async function supabaseRest(path) {
-  const key = getSupabasePublishableKey();
+  const key = getSupabaseReadOnlyKey(process.env);
   const response = await fetch(`${getSupabaseUrl()}${path}`, {
     headers: {
       apikey: key,
@@ -362,6 +361,24 @@ async function main() {
     issues.push("No active live Billing Customer Portal configuration found.");
   }
 
+  const paymentMethodConfigurations = await listAll(
+    "/v1/payment_method_configurations",
+  );
+  const paymentMethodConfiguration = assessPaymentMethodConfigurations(
+    paymentMethodConfigurations,
+  );
+  if (!paymentMethodConfiguration.ok) {
+    issues.push(paymentMethodConfiguration.issue);
+  }
+
+  let restrictedKeyPermission;
+  try {
+    restrictedKeyPermission = await probeRestrictedKeyCannotWrite();
+  } catch (error) {
+    issues.push(error instanceof Error ? error.message : String(error));
+    restrictedKeyPermission = { denied: false, status: null };
+  }
+
   const report = {
     ok: issues.length === 0,
     account: {
@@ -380,8 +397,11 @@ async function main() {
       account_tax_ids: taxIds.length,
       webhook_endpoints: webhooks.length,
       portal_configurations: portalConfigs.length,
+      payment_method_configurations: paymentMethodConfigurations.length,
     },
     webhook: webhook ? { id: webhook.id, url: webhook.url } : null,
+    payment_method_configuration: paymentMethodConfiguration,
+    restricted_key_permission: restrictedKeyPermission,
     issues,
     warnings,
   };
@@ -397,6 +417,7 @@ async function main() {
       report,
       stripeKey,
       apiVersion: STRIPE_API_VERSION,
+      supabaseProjectRef: PRODUCTION_SUPABASE_PROJECT_REF,
       provenance: {
         repository: process.env.GITHUB_REPOSITORY,
         release_sha: process.env.RELEASE_SHA,

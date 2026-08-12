@@ -364,10 +364,11 @@ export function checkReleasePrLighthouseDispatch(root = process.cwd()) {
 
   const failures = [];
   const condition = typeof lighthouse.if === "string" ? lighthouse.if : "";
-  if (
-    !condition.includes("github.event_name == 'workflow_dispatch'") ||
-    !condition.includes("startsWith(github.ref, 'refs/heads/release-please--')")
-  ) {
+  const failClosed = /^\$\{\{\s*false\s*\}\}$/.test(condition.trim());
+  const hasReleasePleaseDispatch =
+    condition.includes("github.event_name == 'workflow_dispatch'") &&
+    condition.includes("startsWith(github.ref, 'refs/heads/release-please--')");
+  if (!failClosed && !hasReleasePleaseDispatch) {
     failures.push("Lighthouse must run for workflow-dispatched Release Please branches");
   }
   const needs = Array.isArray(lighthouse.needs) ? lighthouse.needs : [lighthouse.needs].filter(Boolean);

@@ -79,6 +79,13 @@ describe("AuctionPagination — navigation", () => {
 // ── page number rendering ─────────────────────────────────────────────────────
 
 describe("AuctionPagination — page numbers (≤7 pages)", () => {
+  it("exposes the current page to assistive technology", () => {
+    renderPagination({ currentPage: 3, totalPages: 5 });
+
+    expect(screen.getByRole("button", { name: "3" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "2" })).not.toHaveAttribute("aria-current");
+  });
+
   it("shows all page buttons for 5-page set", () => {
     renderPagination({ currentPage: 3, totalPages: 5 });
     for (let i = 1; i <= 5; i++) {

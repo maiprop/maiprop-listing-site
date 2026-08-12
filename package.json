@@ -31,7 +31,7 @@
         ".": "13.0.6",
         "minimatch": {
           ".": "10.2.6",
-          "brace-expansion": "5.0.8"
+          "brace-expansion": "5.0.9"
         }
       }
     }
@@ -71,6 +71,7 @@
     "check:stripe-catalog-parity": "node scripts/check-stripe-catalog-parity.mjs",
     "check:stripe-tax-readiness": "node scripts/check-stripe-tax-readiness.mjs",
     "check:stripe-live-migration": "node scripts/check-stripe-live-migration.mjs",
+    "verify:stripe-live-migration-evidence": "node scripts/verify-stripe-live-migration-evidence.mjs",
     "check:production-deploy": "node scripts/check-production-deploy.mjs",
     "release:artifact:create": "node scripts/production-release-artifact.mjs create",
     "release:artifact:verify": "node scripts/production-release-artifact.mjs verify",
@@ -248,7 +249,7 @@
     "i18next-scanner": "^4.6.0",
     "js-yaml": "4.3.0",
     "jsdom": "^29.1.1",
-    "postcss": "^8.5.19",
+    "postcss": "^8.5.26",
     "remotion": "^4.0.482",
     "rollup-plugin-visualizer": "^6.0.11",
     "sharp": "^0.35.3",

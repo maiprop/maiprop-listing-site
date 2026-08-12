@@ -10,6 +10,8 @@ const RELEASE_SHA = "a".repeat(40);
 const SOURCE_TREE = "b".repeat(40);
 const RUN_ID = "77";
 const NONCE = `${RUN_ID}:1:${RELEASE_SHA}`;
+const CHECKED_AT = "2026-08-12T00:00:00.000Z";
+const NOW = new Date("2026-08-12T00:10:00.000Z");
 const verifierPath = resolve(
   "scripts/verify-stripe-live-migration-evidence.mjs",
 );
@@ -33,7 +35,7 @@ function report() {
   return {
     ok: true,
     account: {
-      id: "acct_synthetic",
+      id: "acct_1TnuLTGfOEgBOxtl",
       display_name: "Synthetic account",
       country: "GR",
       default_currency: "eur",
@@ -48,10 +50,22 @@ function report() {
       account_tax_ids: 1,
       webhook_endpoints: 1,
       portal_configurations: 1,
+      payment_method_configurations: 1,
     },
     webhook: {
       id: "we_synthetic",
       url: "https://example.supabase.co/functions/v1/stripe-webhook",
+    },
+    payment_method_configuration: {
+      ok: true,
+      configuration_id: "pmc_synthetic",
+      is_default: true,
+      enabled_payment_methods: ["card", "link"],
+      issue: null,
+    },
+    restricted_key_permission: {
+      denied: true,
+      status: 403,
     },
     issues: [],
     warnings: [],
@@ -87,19 +101,21 @@ describe("Stripe live migration evidence", () => {
       provenance: provenance(),
       stripeKey: "rk_live_synthetic",
       apiVersion: "2026-06-24.dahlia",
-      checkedAt: "2026-08-12T00:00:00.000Z",
+      supabaseProjectRef: "qvvicunqcrwpioqnvzxf",
+      checkedAt: CHECKED_AT,
     });
 
     expect(evidence).toMatchObject({
-      schema_version: 1,
+      schema_version: 2,
       evidence_type: "maiprop-stripe-live-migration-readiness",
       ok: true,
       release_sha: RELEASE_SHA,
       source_tree: SOURCE_TREE,
+      supabase_project_ref: "qvvicunqcrwpioqnvzxf",
       stripe: {
         mode: "live",
         key_prefix: "rk_live_...",
-        account_id: "acct_synthetic",
+        account_id: "acct_1TnuLTGfOEgBOxtl",
       },
       provenance: {
         workflow_run_id: RUN_ID,
@@ -108,12 +124,19 @@ describe("Stripe live migration evidence", () => {
         triggering_actor: "release-verifier",
       },
       issues: [],
+      payment_method_configuration: {
+        ok: true,
+        configuration_id: "pmc_synthetic",
+        is_default: true,
+      },
+      restricted_key_permission: { denied: true, status: 403 },
     });
     expect(verifyStripeLiveMigrationEvidence(evidence, {
       releaseSha: RELEASE_SHA,
       workflowRunId: RUN_ID,
       workflowRunAttempt: "1",
       evidenceNonce: NONCE,
+      now: NOW,
     })).toMatchObject({ ok: true, release_sha: RELEASE_SHA });
   });
 
@@ -122,8 +145,21 @@ describe("Stripe live migration evidence", () => {
     ["rerun", (value) => { value.provenance.workflow_run_attempt = "2"; }],
     ["substituted actor", (value) => { value.provenance.triggering_actor = "other"; }],
     ["standard secret evidence", (value) => { value.stripe.key_prefix = "sk_live_..."; }],
+    ["wrong Stripe account", (value) => {
+      value.stripe.account_id = "acct_wrongbutvalid";
+      value.account.id = "acct_wrongbutvalid";
+    }],
     ["failed readiness", (value) => { value.ok = false; }],
     ["non-empty issues", (value) => { value.issues = ["catalog drift"]; }],
+    ["write-capable readiness key", (value) => {
+      value.restricted_key_permission.denied = false;
+    }],
+    ["missing card configuration", (value) => {
+      value.payment_method_configuration.enabled_payment_methods = ["link"];
+    }],
+    ["non-default configuration", (value) => {
+      value.payment_method_configuration.is_default = false;
+    }],
     ["wrong nonce", (value) => { value.provenance.evidence_nonce = "wrong"; }],
   ])("rejects %s", async (_label, mutate) => {
     const {
@@ -135,7 +171,8 @@ describe("Stripe live migration evidence", () => {
       provenance: provenance(),
       stripeKey: "rk_live_synthetic",
       apiVersion: "2026-06-24.dahlia",
-      checkedAt: "2026-08-12T00:00:00.000Z",
+      supabaseProjectRef: "qvvicunqcrwpioqnvzxf",
+      checkedAt: CHECKED_AT,
     });
     mutate(evidence);
 
@@ -144,7 +181,47 @@ describe("Stripe live migration evidence", () => {
       workflowRunId: RUN_ID,
       workflowRunAttempt: "1",
       evidenceNonce: NONCE,
+      now: NOW,
     })).toThrow();
+  });
+
+  it.each([
+    ["stale evidence", "2026-08-11T23:54:59.000Z"],
+    ["excessive future skew", "2026-08-12T00:11:01.000Z"],
+  ])("rejects %s", async (_label, checkedAt) => {
+    const {
+      createStripeLiveMigrationEvidence,
+      verifyStripeLiveMigrationEvidence,
+    } = await verifier();
+    const evidence = createStripeLiveMigrationEvidence({
+      report: report(),
+      provenance: provenance(),
+      stripeKey: "rk_live_synthetic",
+      apiVersion: "2026-06-24.dahlia",
+      supabaseProjectRef: "qvvicunqcrwpioqnvzxf",
+      checkedAt,
+    });
+
+    expect(() => verifyStripeLiveMigrationEvidence(evidence, {
+      releaseSha: RELEASE_SHA,
+      workflowRunId: RUN_ID,
+      workflowRunAttempt: "1",
+      evidenceNonce: NONCE,
+      now: NOW,
+    })).toThrow();
+  });
+
+  it("rejects evidence built for staging Supabase", async () => {
+    const { createStripeLiveMigrationEvidence } = await verifier();
+
+    expect(() => createStripeLiveMigrationEvidence({
+      report: report(),
+      provenance: provenance(),
+      stripeKey: "rk_live_synthetic",
+      apiVersion: "2026-06-24.dahlia",
+      supabaseProjectRef: "xsiehskfgeoqyazcgauv",
+      checkedAt: CHECKED_AT,
+    })).toThrow(/production Supabase/);
   });
 
   it("verifies the evidence through the CLI contract used by production", async () => {
@@ -157,7 +234,8 @@ describe("Stripe live migration evidence", () => {
       provenance: provenance(),
       stripeKey: "rk_live_synthetic",
       apiVersion: "2026-06-24.dahlia",
-      checkedAt: "2026-08-12T00:00:00.000Z",
+      supabaseProjectRef: "qvvicunqcrwpioqnvzxf",
+      checkedAt: new Date().toISOString(),
     }), null, 2)}\n`);
 
     const result = spawnSync(process.execPath, [

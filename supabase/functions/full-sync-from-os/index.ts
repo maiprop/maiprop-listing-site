@@ -11,14 +11,27 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { fetchBufferedProviderResponse } from "../_shared/providerFetch.ts";
+import { SchemaValidationError } from "../_shared/schema.ts";
+import { type FullSyncRequest, parseFullSyncRequest } from "./request.ts";
 
 const log = createLogger("full-sync-from-os");
-const limiter = makeRateLimiter({ bucket: "full-sync-from-os", maxRequests: 3, windowMs: 60_000 });
+const limiter = makeRateLimiter({
+  bucket: "full-sync-from-os",
+  maxRequests: 3,
+  windowMs: 60_000,
+});
+export const OS_TOKEN_RESPONSE_MAX_BYTES = 64 * 1_024;
+export const OS_AUCTION_PAGE_RESPONSE_MAX_BYTES = 8 * 1_024 * 1_024;
 
-type SupabaseAdminClient = ReturnType<typeof createClient<Record<string, unknown>>>;
-
+type SupabaseAdminClient = ReturnType<
+  typeof createClient<Record<string, unknown>>
+>;
 
 const CATEGORY_MAP: Record<string, string> = {
   RESIDENCE: "apartment",
@@ -77,19 +90,32 @@ function getSubtypeTag(cat?: string): string | null {
   if (!cat) return null;
   const u = cat.toUpperCase();
   if (LAND_TYPE_TAG[u]) return `land_type:${LAND_TYPE_TAG[u]}`;
-  if (COMMERCIAL_TYPE_TAG[u]) return `commercial_type:${COMMERCIAL_TYPE_TAG[u]}`;
+  if (COMMERCIAL_TYPE_TAG[u]) {
+    return `commercial_type:${COMMERCIAL_TYPE_TAG[u]}`;
+  }
   return null;
 }
 
 function mapOwnershipStatusToTag(rawOwnership?: string | null): string | null {
   if (!rawOwnership) return null;
   const occ = rawOwnership.toUpperCase().trim();
-  if (occ === "FULL" || occ === "COMPLETE" || occ === "FULL_OWNERSHIP") return "ownership:full";
+  if (occ === "FULL" || occ === "COMPLETE" || occ === "FULL_OWNERSHIP") {
+    return "ownership:full";
+  }
   if (occ === "BARE" || occ === "BARE_OWNERSHIP") return "ownership:bare";
-  if (occ === "COMMON" || occ === "JOINT" || occ === "SHARED" || occ === "CO_OWNERSHIP") return "ownership:common";
-  if (occ === "USUFRUCT" || occ === "PSILI_KYPHIOTITA") return "ownership:usufruct";
-  if (occ === "VERTICAL" || occ === "VERTICAL_OWNERSHIP") return "ownership:vertical";
-  if (occ === "HORIZONTAL" || occ === "HORIZONTAL_OWNERSHIP") return "ownership:horizontal";
+  if (
+    occ === "COMMON" || occ === "JOINT" || occ === "SHARED" ||
+    occ === "CO_OWNERSHIP"
+  ) return "ownership:common";
+  if (occ === "USUFRUCT" || occ === "PSILI_KYPHIOTITA") {
+    return "ownership:usufruct";
+  }
+  if (occ === "VERTICAL" || occ === "VERTICAL_OWNERSHIP") {
+    return "ownership:vertical";
+  }
+  if (occ === "HORIZONTAL" || occ === "HORIZONTAL_OWNERSHIP") {
+    return "ownership:horizontal";
+  }
   return `ownership:${occ.toLowerCase()}`;
 }
 
@@ -102,24 +128,23 @@ function buildTitle(a: any): string {
   return `Πλειστηριασμός ${catGr} | ${city}${priceStr}`;
 }
 
-async function fetchWithTimeout(
+export async function fetchWithTimeout(
   url: string,
   options: RequestInit,
-  timeoutMs: number
+  timeoutMs: number,
+  maxResponseBytes = OS_AUCTION_PAGE_RESPONSE_MAX_BYTES,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  return await fetchBufferedProviderResponse(url, options, {
+    timeoutMs,
+    maxResponseBytes,
+    timeoutMessage: "OS provider request timed out",
+  });
 }
 
 async function getOsToken(
   baseUrl: string,
   email: string,
-  password: string
+  password: string,
 ): Promise<string> {
   const res = await fetchWithTimeout(
     `${baseUrl}/auth/login`,
@@ -128,14 +153,16 @@ async function getOsToken(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     },
-    45_000
+    45_000,
+    OS_TOKEN_RESPONSE_MAX_BYTES,
   );
   const json = await res.json();
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
-  if (!token)
+  if (!token) {
     throw new Error(
-      `OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`
+      `OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`,
     );
+  }
   return token;
 }
 
@@ -145,7 +172,7 @@ async function logSync(
   status: string,
   error_message?: string | null,
   payload?: any,
-  records_affected = 0
+  records_affected = 0,
 ) {
   try {
     await sb.from("sync_log").insert({
@@ -158,7 +185,9 @@ async function logSync(
       records_affected,
     });
   } catch (e) {
-    log.warn("logSync failed", { err: e instanceof Error ? e.message : String(e) });
+    log.warn("logSync failed", {
+      err: e instanceof Error ? e.message : String(e),
+    });
   }
 }
 
@@ -167,19 +196,19 @@ function mapAuctionToListing(a: any) {
   const tagKey = `os_auction:${osId}`;
   const catKey = mapCategory(a.propertyCategory);
   const price = Number(a.firstPriceOffer ?? 0);
-  const auctionUrl: string | null =
-    a.url ?? a.auctionUrl ?? a.listingUrl ?? a.eAuctionUrl ?? null;
+  const auctionUrl: string | null = a.url ?? a.auctionUrl ?? a.listingUrl ??
+    a.eAuctionUrl ?? null;
   // Street View via proxy so API key is never stored in listings
   const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
   const lat = a.propertyLatitude != null ? Number(a.propertyLatitude) : null;
   const lng = a.propertyLongitude != null ? Number(a.propertyLongitude) : null;
-  const streetViewUrl =
-    supabaseUrl && lat != null && lng != null
-      ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
-      : null;
+  const streetViewUrl = supabaseUrl && lat != null && lng != null
+    ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
+    : null;
   const rawOwnership: string | undefined = a.ownershipStatus;
-  const ownershipPct: number | undefined =
-    a.ownershipPercentage != null ? Number(a.ownershipPercentage) : undefined;
+  const ownershipPct: number | undefined = a.ownershipPercentage != null
+    ? Number(a.ownershipPercentage)
+    : undefined;
   let ownershipTag: string | null = mapOwnershipStatusToTag(rawOwnership);
   if (!ownershipTag && ownershipPct != null) {
     if (ownershipPct >= 100) ownershipTag = "ownership:full";
@@ -193,8 +222,9 @@ function mapAuctionToListing(a: any) {
       website_url: auctionUrl,
       cover_image_url: streetViewUrl,
       price,
-      price_per_sqm:
-        a.pricePerSquareMeter != null ? Number(a.pricePerSquareMeter) : null,
+      price_per_sqm: a.pricePerSquareMeter != null
+        ? Number(a.pricePerSquareMeter)
+        : null,
       auction_starting_bid: price,
       auction_date: a.auctionDate ?? null,
       auction_court: a.auctionStatus ?? null,
@@ -205,16 +235,20 @@ function mapAuctionToListing(a: any) {
       region: a.propertyPrefectureName ?? null,
       address: a.propertyAddress ?? null,
       postal_code: a.propertyPostalCode ?? null,
-      latitude:
-        a.propertyLatitude != null ? Number(a.propertyLatitude) : null,
-      longitude:
-        a.propertyLongitude != null ? Number(a.propertyLongitude) : null,
+      latitude: a.propertyLatitude != null ? Number(a.propertyLatitude) : null,
+      longitude: a.propertyLongitude != null
+        ? Number(a.propertyLongitude)
+        : null,
       sqm: a.propertySquareMeters != null ? Number(a.propertySquareMeters) : 1,
-      floor: a.propertyFloor != null ? Math.round(Number(a.propertyFloor)) : null,
-      total_floors:
-        a.numberOfFloors != null ? Math.round(Number(a.numberOfFloors)) : null,
-      year_built:
-        a.constructionYear != null ? Number(a.constructionYear) : null,
+      floor: a.propertyFloor != null
+        ? Math.round(Number(a.propertyFloor))
+        : null,
+      total_floors: a.numberOfFloors != null
+        ? Math.round(Number(a.numberOfFloors))
+        : null,
+      year_built: a.constructionYear != null
+        ? Number(a.constructionYear)
+        : null,
       cadastre_number: a.propertyFullKaek ?? null,
       owner_id: null,
       ai_score: 80,
@@ -225,7 +259,9 @@ function mapAuctionToListing(a: any) {
         ...(a.currentRound != null ? [`round:${a.currentRound}`] : []),
         ...(ownershipTag ? [ownershipTag] : []),
         ...(ownershipPct != null ? [`ownership_pct:${ownershipPct}`] : []),
-        ...(getSubtypeTag(a.propertyCategory) ? [getSubtypeTag(a.propertyCategory)!] : []),
+        ...(getSubtypeTag(a.propertyCategory)
+          ? [getSubtypeTag(a.propertyCategory)!]
+          : []),
       ],
     },
   };
@@ -241,22 +277,31 @@ async function requireAgent(
 ): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: "Missing or invalid Authorization header" }),
+      {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
   const token = authHeader.slice(7);
   const { data: { user }, error } = await sb.auth.getUser(token);
   if (error || !user) {
     return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const { data: profileRow } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  const { data: profileRow } = await sb.from("profiles").select("role").eq(
+    "user_id",
+    user.id,
+  ).single();
   const profile = profileRow as { role?: string } | null;
   if (profile?.role !== "admin") {
     return new Response(JSON.stringify({ error: "Platform admin required" }), {
-      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
   return null;
@@ -264,19 +309,47 @@ async function requireAgent(
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
-  if (req.method === "OPTIONS")
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
-
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
+  }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
   const authErr = await requireAgent(req, sb, corsHeaders);
   if (authErr) return authErr;
+
+  let body: FullSyncRequest;
+  try {
+    body = await parseFullSyncRequest(req);
+  } catch (err: unknown) {
+    if (err instanceof SchemaValidationError) {
+      return new Response(
+        JSON.stringify({
+          error: err.message,
+          code: err.code,
+          issues: err.issues,
+        }),
+        {
+          status: err.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    throw err;
+  }
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "anonymous";
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
   const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
@@ -291,18 +364,14 @@ Deno.serve(async (req) => {
         reason: "OS credentials not configured",
         sync: { auctions: { imported: 0, updated: 0, pages: 0 } },
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const pageSize = Math.min(
-      Number(body.pageSize ?? body.size ?? DEFAULT_PAGE_SIZE),
-      500
-    );
-    const maxPages = Math.min(Number(body.maxPages ?? MAX_PAGES), 500);
-    const startPage = Math.max(0, Number(body.startPage ?? 0));
+    const pageSize = body.pageSize ?? body.size ?? DEFAULT_PAGE_SIZE;
+    const maxPages = body.maxPages ?? MAX_PAGES;
+    const startPage = body.startPage ?? 0;
     const replaceAll = body.replaceAll === true || body.replace_all === true;
     let replacedCount = 0;
 
@@ -319,16 +388,32 @@ Deno.serve(async (req) => {
           .order("id", { ascending: true })
           .range(offset, offset + pageSizeSelect - 1);
         if (selectErr) {
-          await logSync(sb, "auction", "error", `Replace-all select failed: ${selectErr.message}`);
+          await logSync(
+            sb,
+            "auction",
+            "error",
+            `Replace-all select failed: ${selectErr.message}`,
+          );
           return new Response(
-            JSON.stringify({ ok: false, error: selectErr.message, sync: { auctions: {} } }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({
+              ok: false,
+              error: selectErr.message,
+              sync: { auctions: {} },
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
         if (!rows?.length) break;
         for (const r of rows) {
-          if (Array.isArray(r.tags) && r.tags.some((t: string) => t.startsWith("os_auction:")))
+          if (
+            Array.isArray(r.tags) &&
+            r.tags.some((t: string) => t.startsWith("os_auction:"))
+          ) {
             idsToDelete.push(r.id);
+          }
         }
         if (rows.length < pageSizeSelect) break;
         offset += pageSizeSelect;
@@ -336,17 +421,34 @@ Deno.serve(async (req) => {
       const deleteChunkSize = 100;
       for (let i = 0; i < idsToDelete.length; i += deleteChunkSize) {
         const chunk = idsToDelete.slice(i, i + deleteChunkSize);
-        const { error: delErr } = await sb.from("listings").delete().in("id", chunk);
+        const { error: delErr } = await sb.from("listings").delete().in(
+          "id",
+          chunk,
+        );
         if (delErr) {
-          await logSync(sb, "auction", "error", `Replace-all delete failed: ${delErr.message}`);
+          await logSync(
+            sb,
+            "auction",
+            "error",
+            `Replace-all delete failed: ${delErr.message}`,
+          );
           return new Response(
-            JSON.stringify({ ok: false, error: delErr.message, sync: { auctions: { replaced: replacedCount } } }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({
+              ok: false,
+              error: delErr.message,
+              sync: { auctions: { replaced: replacedCount } },
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
         replacedCount += chunk.length;
       }
-      log.info("replaceAll deleted OS auction listings", { replaced_count: replacedCount });
+      log.info("replaceAll deleted OS auction listings", {
+        replaced_count: replacedCount,
+      });
     }
 
     const today = new Date().toISOString().split("T")[0];
@@ -356,7 +458,12 @@ Deno.serve(async (req) => {
       ...(body.propertyCategories && {
         propertyCategories: body.propertyCategories,
       }),
-      ...(body.prefectureId && { prefectureId: body.prefectureId }),
+      ...(body.prefectureId !== undefined && {
+        prefectureId: body.prefectureId,
+      }),
+      ...(body.propertyMunicipalityId !== undefined && {
+        propertyMunicipalityId: body.propertyMunicipalityId,
+      }),
       ...(body.auctionStatuses && { auctionStatuses: body.auctionStatuses }),
     };
 
@@ -371,7 +478,8 @@ Deno.serve(async (req) => {
 
     for (let page = startPage; page < startPage + maxPages; page++) {
       const filterRequest = { ...baseFilter };
-      const endpoint = `/api/v1/auctions/filter/details?page=${page}&pageSize=${pageSize}`;
+      const endpoint =
+        `/api/v1/auctions/filter/details?page=${page}&pageSize=${pageSize}`;
       const auctRes = await fetchWithTimeout(
         `${OS_URL}${endpoint}`,
         {
@@ -382,7 +490,8 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify(filterRequest),
         },
-        30_000
+        30_000,
+        OS_AUCTION_PAGE_RESPONSE_MAX_BYTES,
       );
 
       if (!auctRes.ok) {
@@ -391,8 +500,10 @@ Deno.serve(async (req) => {
           sb,
           "auction",
           "error",
-          `OS auction fetch failed (${auctRes.status}): ${errText.slice(0, 500)}`,
-          { page, endpoint }
+          `OS auction fetch failed (${auctRes.status}): ${
+            errText.slice(0, 500)
+          }`,
+          { page, endpoint },
         );
         return new Response(
           JSON.stringify({
@@ -411,7 +522,7 @@ Deno.serve(async (req) => {
           {
             status: 502,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
 
@@ -421,7 +532,8 @@ Deno.serve(async (req) => {
         : Array.isArray(auctJson.data)
         ? auctJson.data
         : [];
-      const pagination = auctJson.responseMetadata?.pagination ?? auctJson.pagination ?? {};
+      const pagination = auctJson.responseMetadata?.pagination ??
+        auctJson.pagination ?? {};
       totalAvailableInOS = pagination.totalElements ?? totalAvailableInOS;
 
       if (auctions.length === 0) {
@@ -484,7 +596,10 @@ Deno.serve(async (req) => {
         const chunk = toInsert.slice(i, i + CHUNK);
         const { error } = await sb.from("listings").insert(chunk);
         if (error) {
-          log.error("insert failed", { err: error.message, chunk_size: chunk.length });
+          log.error("insert failed", {
+            err: error.message,
+            chunk_size: chunk.length,
+          });
           totalErrors += chunk.length;
         } else {
           totalImported += chunk.length;
@@ -504,7 +619,11 @@ Deno.serve(async (req) => {
       }
 
       pagesDone++;
-      log.info("page processed", { page, imported: toInsert.length, updated: toUpdate.length });
+      log.info("page processed", {
+        page,
+        imported: toInsert.length,
+        updated: toUpdate.length,
+      });
 
       if (auctions.length < pageSize) break;
     }
@@ -523,10 +642,12 @@ Deno.serve(async (req) => {
     await logSync(
       sb,
       "auction",
-      totalErrors > 0 && totalImported + totalUpdated === 0 ? "error" : "success",
+      totalErrors > 0 && totalImported + totalUpdated === 0
+        ? "error"
+        : "success",
       totalErrors > 0 ? `${totalErrors} item(s) failed` : null,
       summary,
-      totalImported + totalUpdated
+      totalImported + totalUpdated,
     );
 
     log.info("sync done", { summary });
@@ -537,7 +658,7 @@ Deno.serve(async (req) => {
         status: "success",
         sync: summary,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: unknown) {
     const errMessage = err instanceof Error ? err.message : String(err);
@@ -547,7 +668,7 @@ Deno.serve(async (req) => {
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

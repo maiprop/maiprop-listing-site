@@ -1434,11 +1434,15 @@ jobs:
             --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS"
           node --input-type=module <<'NODE'
           import { randomBytes } from "node:crypto";
-          import { writeFileSync } from "node:fs";
+          import { readFileSync, writeFileSync } from "node:fs";
 
           const issuedAt = new Date();
+          const sourceLease = JSON.parse(readFileSync(
+            "evidence/mutation-lease/production-mutation-lease.json",
+            "utf8",
+          ));
           const lease = {
-            schema_version: 1,
+            schema_version: 2,
             repository: process.env.GITHUB_REPOSITORY,
             release_sha: process.env.RELEASE_SHA,
             source_tree: process.env.SOURCE_TREE,
@@ -1463,6 +1467,8 @@ jobs:
               process.env.STRIPE_READINESS_ARTIFACT_ID,
             stripe_readiness_artifact_digest:
               process.env.STRIPE_READINESS_ARTIFACT_DIGEST,
+            stripe_readiness_checked_at:
+              sourceLease.stripe_readiness_checked_at,
             artifact_sha256: process.env.ARTIFACT_SHA256,
             approval_nonce: process.env.APPROVAL_NONCE,
             rollback_deployment_id: process.env.ROLLBACK_ID,

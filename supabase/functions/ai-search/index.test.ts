@@ -33,4 +33,35 @@ Deno.test("valid Bearer token hits auth and returns non-OPTIONS response", async
   assertEquals([401, 429].includes(actual.status), true);
 });
 
+Deno.test("rejects invalid and oversized search requests before calling the AI provider", async () => {
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = ((input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      providerCalls += 1;
+    }
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    for (const body of [
+      { query: "x".repeat(501) },
+      { query: 42 },
+      { query: "Athens apartment", unexpected: true },
+    ]) {
+      const res = await handler(req("POST", body, {
+        authorization: "Bearer test-valid-token",
+      }));
+      assertEquals(res.status, 400);
+      const payload = await res.json();
+      assertEquals(payload.code, "validation_error");
+      assertEquals(Array.isArray(payload.issues), true);
+    }
+    assertEquals(providerCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 restore();

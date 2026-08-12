@@ -17,274 +17,85 @@
       "function": "admin-broadcast-notification",
       "validationStyle": "admin-only-guarded",
       "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Admin broadcast notification payloads are restricted to privileged callers before notification fan-out occurs."
+      "reviewBy": "2026-09-19",
+      "rationale": "Admin authorization is checked before the manually bounded notification payload is fanned out."
     },
     {
       "function": "admin-content-report-action",
       "validationStyle": "admin-only-guarded",
       "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Content report actions are admin-reviewed state transitions and must remain behind server-side role checks."
-    },
-    {
-      "function": "admin-firesale-action",
-      "validationStyle": "admin-only-guarded",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Firesale moderation actions are privileged workflow mutations protected by Edge-side authorization checks."
+      "reviewBy": "2026-09-19",
+      "rationale": "Admin authorization and explicit action guards constrain content-report state transitions."
     },
     {
       "function": "admin-review-invitation",
       "validationStyle": "admin-only-guarded",
       "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Invitation approval and rejection bodies are evaluated only after admin authorization has been checked."
+      "reviewBy": "2026-09-19",
+      "rationale": "Admin authorization and a dedicated body parser constrain invitation approval and rejection actions."
     },
     {
       "function": "agent-data-input",
       "validationStyle": "typed-manual-guards",
       "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "Agent data input actions use manual action guards and are tracked for migration to shared schemas."
-    },
-    {
-      "function": "ai-quota-status",
-      "validationStyle": "typed-manual-guards",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "AI quota status requests are bounded by typed manual checks before usage counters are read."
-    },
-    {
-      "function": "ai-search",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "AI search request text is normalized and bounded before model routing and filter generation."
-    },
-    {
-      "function": "ai-service-match",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Service matching prompts are constrained before provider calls and professional matching logic execute."
-    },
-    {
-      "function": "ai-translate",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Translation bodies are size-limited and normalized before provider requests are constructed."
-    },
-    {
-      "function": "apply-data-input-credit",
-      "validationStyle": "typed-manual-guards",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Data input credit requests are guarded by explicit action checks before credit state is mutated."
+      "reviewBy": "2026-09-19",
+      "rationale": "Typed action-specific guards constrain agent data input before any database mutation executes."
     },
     {
       "function": "auth-email-hook",
       "validationStyle": "provider-contract-guarded",
       "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Supabase Auth hook payloads follow the provider contract and are handled only within the hook boundary."
-    },
-    {
-      "function": "begin-role-switch",
-      "validationStyle": "typed-manual-guards",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Role switch start requests are manually guarded so clients cannot directly grant active privileges."
+      "reviewBy": "2026-09-19",
+      "rationale": "The Supabase Auth hook body follows the signed provider contract and is handled only inside that hook boundary."
     },
     {
       "function": "create-checkout",
       "validationStyle": "provider-contract-guarded",
       "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Checkout request bodies are converted to Stripe session parameters only after server-side product checks."
-    },
-    {
-      "function": "customer-portal",
-      "validationStyle": "typed-manual-guards",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Customer portal action bodies are manually narrowed before Stripe portal sessions or subscription resume calls run."
+      "reviewBy": "2026-09-19",
+      "rationale": "Checkout input is narrowed against server-owned Stripe product and pricing rules before a session is created."
     },
     {
       "function": "csp-report",
       "validationStyle": "provider-contract-guarded",
       "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "Browser CSP report payloads follow the report-only browser contract and are stored as security telemetry."
-    },
-    {
-      "function": "fetch-auction-enrichment",
-      "validationStyle": "typed-manual-guards",
-      "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "Auction enrichment requests are manually constrained before external OS enrichment calls are made."
-    },
-    {
-      "function": "fetch-os-auctions",
-      "validationStyle": "typed-manual-guards",
-      "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "OS auction fetch pagination is manually guarded before any OS request is executed."
-    },
-    {
-      "function": "fetch-past-deals-from-os",
-      "validationStyle": "typed-manual-guards",
-      "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "Past deal imports are limited by manual pagination and source guards before OS access."
-    },
-    {
-      "function": "fetch-report-from-os",
-      "validationStyle": "typed-manual-guards",
-      "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "OS report fetch requests are constrained by manual guards before external report retrieval."
-    },
-    {
-      "function": "flag-auction-on-os",
-      "validationStyle": "typed-manual-guards",
-      "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "Auction flagging bodies are manually validated before OS-side flag actions are submitted."
-    },
-    {
-      "function": "followup-lead",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Lead follow-up payloads are normalized before AI generation or CRM follow-up actions execute."
-    },
-    {
-      "function": "full-sync-from-os",
-      "validationStyle": "admin-only-guarded",
-      "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "Full OS sync request bodies are admin-only and manually guard pagination and replacement options."
-    },
-    {
-      "function": "listing-ai-assist",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Listing AI assistance requests are bounded before provider routing and generated copy handling."
-    },
-    {
-      "function": "log-role-switch",
-      "validationStyle": "typed-manual-guards",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Role-switch audit bodies are manually guarded so audit entries match allowed role transitions."
-    },
-    {
-      "function": "neighbourhood-report",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Neighbourhood report inputs are normalized before AI generation, market heuristics, and quota tracking."
+      "reviewBy": "2026-09-19",
+      "rationale": "Browser CSP report envelopes are byte-bounded and validated within the browser telemetry contract."
     },
     {
       "function": "os-sales-coordinates",
       "validationStyle": "typed-manual-guards",
       "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "OS sales coordinate requests are manually bounded before coordinate enrichment work runs."
+      "reviewBy": "2026-09-19",
+      "rationale": "Typed pagination and coordinate guards bound requests before any external OS enrichment work."
     },
     {
       "function": "owner-pro-status",
       "validationStyle": "typed-manual-guards",
       "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Owner Pro status bodies are manually checked before subscription status is resolved."
-    },
-    {
-      "function": "poll-os-auctions",
-      "validationStyle": "admin-only-guarded",
-      "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "OS auction polling request bodies are admin-scheduled or admin-triggered and manually bounded."
-    },
-    {
-      "function": "pro-ai-tools",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Pro AI tool messages are bounded before model calls and account-level feature checks."
+      "reviewBy": "2026-09-19",
+      "rationale": "Manual identity and listing guards constrain the request before subscription status is resolved."
     },
     {
       "function": "project-unit-prices",
       "validationStyle": "typed-manual-guards",
       "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Project unit price updates are manually guarded before unit pricing rows are changed."
-    },
-    {
-      "function": "property-chat",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Property chat messages and context are normalized before provider calls are built."
-    },
-    {
-      "function": "property-pois",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Property POI request bodies are bounded before map, AI, and location enrichment calls."
-    },
-    {
-      "function": "property-valuation",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Property valuation bodies are normalized before AI valuation, quota checks, and market heuristics."
+      "reviewBy": "2026-09-19",
+      "rationale": "Typed unit identifiers and price bounds are checked before project pricing rows are changed."
     },
     {
       "function": "receive-from-os",
       "validationStyle": "raw-signature-verified",
       "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "Incoming OS webhook envelopes are parsed only inside the webhook boundary and guarded by webhook checks."
-    },
-    {
-      "function": "smart-filters",
-      "validationStyle": "ai-payload-normalized",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Smart filter payloads are normalized before AI extraction and listing filter construction."
-    },
-    {
-      "function": "submit-firesale-interest",
-      "validationStyle": "typed-manual-guards",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Firesale interest submissions are manually guarded before lead records and notifications are created."
-    },
-    {
-      "function": "sync-firesale-to-os",
-      "validationStyle": "admin-only-guarded",
-      "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "Firesale OS sync request bodies are admin-only and guarded before OS-side writes occur."
-    },
-    {
-      "function": "sync-to-os",
-      "validationStyle": "admin-only-guarded",
-      "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "Listing OS sync request bodies are admin-only and guarded before OS-side writes occur."
+      "reviewBy": "2026-09-19",
+      "rationale": "The exact raw OS webhook bytes are retained for signature verification before the envelope is parsed or acted on."
     },
     {
       "function": "transfer-platform-admin",
       "validationStyle": "admin-only-guarded",
       "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Platform admin transfer bodies are privileged and guarded before any admin ownership mutation."
+      "reviewBy": "2026-09-19",
+      "rationale": "Current-admin authorization and explicit target-user guards run before platform ownership is transferred."
     }
   ]
 }

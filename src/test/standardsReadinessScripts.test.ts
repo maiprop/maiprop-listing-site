@@ -31,7 +31,7 @@ describe("standards readiness gates", () => {
     const check = checkSlsaReadiness(process.cwd());
 
     expect(check.failures).toEqual([]);
-    expect(check.summary.attestationWorkflowFiles.length).toBeGreaterThan(0);
+    expect(check.summary.bindingWorkflowFiles.length).toBeGreaterThan(0);
   });
 
   it("keeps WCAG coverage broad enough for public and authenticated critical flows", () => {

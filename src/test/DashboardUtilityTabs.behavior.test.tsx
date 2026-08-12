@@ -117,6 +117,7 @@ describe("dashboard utility tabs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.defineProperty(window, "location", { writable: true, value: { href: "http://localhost/dashboard/billing" } });
+    localStorage.clear();
     sessionStorage.clear();
     mocks.useAuth.mockReturnValue({
       user: { id: "u1" },
@@ -134,10 +135,16 @@ describe("dashboard utility tabs", () => {
       subscriptionEnd: null,
       accessSource: "stripe",
     });
-    mocks.invoke.mockImplementation((fn: string) => {
+    mocks.invoke.mockImplementation((fn: string, options?: { body?: Record<string, unknown> }) => {
       if (fn === "get-invoices") return Promise.resolve({ data: billingInfo, error: null });
       if (fn === "customer-portal") return Promise.resolve({ data: { url: "https://stripe.example/portal" }, error: null });
       if (fn === "create-checkout") return Promise.resolve({ data: { url: "https://stripe.example/addon" }, error: null });
+      if (fn === "log-role-switch") {
+        return Promise.resolve({
+          data: { audit_id: options?.body?.operation_id },
+          error: null,
+        });
+      }
       return Promise.resolve({ data: null, error: null });
     });
     mocks.useAuctionAlerts.mockReturnValue({ data: [], isLoading: false });
@@ -236,56 +243,34 @@ describe("dashboard utility tabs", () => {
     expect(privateMutate).toHaveBeenCalledWith(true);
   });
 
-  it("switches participant type, handles RPC errors, deletes accounts, and shows permission fallbacks", async () => {
+  it("prepares a destination-bound participant switch without provider mutation, deletes accounts, and shows permission fallbacks", async () => {
     const refreshProfile = vi.fn().mockResolvedValue(undefined);
     renderHarness(<SettingsSection roleLabel="Agent" onUpdate={vi.fn()} refreshProfile={refreshProfile} currentType="agent" hasActiveSub />);
 
     expect(screen.getByText("Lead management")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
-    fireEvent.click(screen.getByRole("button", { name: /switch my type/i }));
-    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("begin-role-switch", {
-      body: { validate_only: true },
-    }));
-    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("begin-role-switch", {
-      body: {},
-    }));
-    expect(mocks.invoke).toHaveBeenCalledWith("log-role-switch", {
-      body: expect.objectContaining({
-        from_type: "agent",
-        to_type: "",
-        had_active_sub: true,
-        cancel_subscription: true,
-      }),
+    fireEvent.change(screen.getByLabelText(/New participant type/i), {
+      target: { value: "seller" },
     });
-    const preflightIndex = mocks.invoke.mock.calls.findIndex(([fn, options]) =>
-      fn === "begin-role-switch" &&
-      JSON.stringify(options) === JSON.stringify({ body: { validate_only: true } })
-    );
-    const logIndex = mocks.invoke.mock.calls.findIndex(([fn]) =>
-      fn === "log-role-switch"
-    );
-    const beginIndex = mocks.invoke.mock.calls.findIndex(([fn, options]) =>
-      fn === "begin-role-switch" &&
-      JSON.stringify(options) === JSON.stringify({ body: {} })
-    );
-    expect(preflightIndex).toBeGreaterThanOrEqual(0);
-    expect(logIndex).toBeGreaterThan(preflightIndex);
-    expect(beginIndex).toBeGreaterThan(logIndex);
-    expect(sessionStorage.getItem("role_switch_ctx")).toContain("agent");
-    expect(refreshProfile).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Review switch/i }));
+    expect(localStorage.getItem("maiprop_role_switch_operation_v1")).toContain('"toType":"seller"');
+    expect(sessionStorage.getItem("role_switch_ctx")).toContain('"status":"prepared"');
+    expect(mocks.invoke).not.toHaveBeenCalledWith("begin-role-switch", expect.anything());
+    expect(mocks.invoke).not.toHaveBeenCalledWith("log-role-switch", expect.anything());
+    expect(refreshProfile).not.toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledWith("/onboarding");
     cleanup();
 
-    mocks.invoke.mockImplementationOnce((fn: string) => (
-      fn === "begin-role-switch"
-        ? Promise.resolve({ data: null, error: { message: "not_authenticated" } })
-        : Promise.resolve({ data: null, error: null })
-    ));
     renderHarness(<SettingsSection roleLabel="Unknown" onUpdate={vi.fn()} refreshProfile={refreshProfile} currentType={null} hasActiveSub={false} />);
     expect(screen.getByText(/determined server-side/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
-    fireEvent.click(screen.getByRole("button", { name: /switch my type/i }));
-    await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith("Your session has expired. Please sign in again."));
+    fireEvent.change(screen.getByLabelText(/New participant type/i), {
+      target: { value: "seller" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Review switch/i }));
+    await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith(
+      "Could not identify your current account type. Please refresh and try again.",
+    ));
 
     mocks.getSession.mockResolvedValue({ data: { session: { access_token: "token" } } });
     mocks.invoke.mockResolvedValue({ error: null });
@@ -303,6 +288,30 @@ describe("dashboard utility tabs", () => {
     await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith(
       "Deletion was not completed. Your account is still active. Please try again.",
     ));
+  });
+
+  it("records the cached billing hint without treating it as server verification", async () => {
+    const refreshProfile = vi.fn().mockResolvedValue(undefined);
+    renderHarness(
+      <SettingsSection
+        roleLabel="Buyer"
+        onUpdate={vi.fn()}
+        refreshProfile={refreshProfile}
+        currentType="buyer"
+        hasActiveSub={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
+    fireEvent.change(screen.getByLabelText(/New participant type/i), {
+      target: { value: "agent" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Review switch/i }));
+
+    expect(sessionStorage.getItem("role_switch_ctx")).toContain('"hadActiveSub":false');
+    expect(sessionStorage.getItem("role_switch_ctx")).toContain('"toType":"agent"');
+    expect(mocks.invoke).not.toHaveBeenCalledWith("log-role-switch", expect.anything());
+    expect(mocks.navigate).toHaveBeenCalledWith("/onboarding");
   });
 
   it("exercises signup validation, password visibility, confirmation view, OAuth, and error variants", async () => {

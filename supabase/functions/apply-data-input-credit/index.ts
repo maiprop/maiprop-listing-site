@@ -23,8 +23,10 @@ import {
 } from "../_shared/rateLimit.ts";
 import {
   buildIdempotencyKey,
-  createStripeClient,
+  createVerifiedStripeClient,
 } from "../_shared/stripeClient.ts";
+import { SchemaValidationError } from "../_shared/schema.ts";
+import { parseApplyDataInputCreditRequest } from "./request.ts";
 
 const log = createLogger("apply-data-input-credit");
 const limiter = makeRateLimiter({
@@ -95,6 +97,31 @@ Deno.serve(async (req) => {
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  let dataInputId: string;
+  try {
+    ({ data_input_id: dataInputId } = await parseApplyDataInputCreditRequest(
+      req,
+    ));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const payload = error instanceof SchemaValidationError
+      ? { error: message, code: error.code, issues: error.issues }
+      : { error: message };
+    return new Response(JSON.stringify(payload), {
+      status: error instanceof SchemaValidationError
+        ? error.code === "payload_too_large" ? 413 : 400
+        : 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
@@ -133,24 +160,6 @@ Deno.serve(async (req) => {
     if (!isAdmin) {
       return new Response(JSON.stringify({ error: "Admin access required" }), {
         status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const body = await req.json().catch(() => ({}));
-    const dataInputId = typeof body.data_input_id === "string"
-      ? body.data_input_id
-      : null;
-    if (!dataInputId) {
-      return new Response(JSON.stringify({ error: "data_input_id required" }), {
-        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -226,7 +235,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const stripe = createStripeClient(stripeKey);
+    const stripe = await createVerifiedStripeClient(stripeKey);
     const customerId = await resolveCustomer(stripe, supabase, row.user_id);
     if (!customerId) {
       return new Response(
@@ -472,10 +481,17 @@ Deno.serve(async (req) => {
       },
     );
   } catch (error: unknown) {
-    const status = error instanceof AuthError ? error.status : 500;
+    const status = error instanceof AuthError
+      ? error.status
+      : error instanceof SchemaValidationError
+      ? error.code === "payload_too_large" ? 413 : 400
+      : 500;
     const message = error instanceof Error ? error.message : String(error);
     log.error("ERROR", { message });
-    return new Response(JSON.stringify({ error: message }), {
+    const payload = error instanceof SchemaValidationError
+      ? { error: message, code: error.code, issues: error.issues }
+      : { error: message };
+    return new Response(JSON.stringify(payload), {
       status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

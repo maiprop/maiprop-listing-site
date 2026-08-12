@@ -5,6 +5,7 @@ import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req, authedReq } from "../_shared/testUtils.ts";
 
 const { handler, restore } = await captureHandler(import.meta.url, "./index.ts");
+const FIRESALE_ID = "33333333-3333-4333-8333-333333333333";
 
 Deno.test("OPTIONS preflight returns 200", async () => {
   const res = await handler(req("OPTIONS"));
@@ -12,13 +13,56 @@ Deno.test("OPTIONS preflight returns 200", async () => {
 });
 
 Deno.test("missing Authorization returns 401", async () => {
-  const res = await handler(req("POST", { firesale_id: "abc123" }));
+  const res = await handler(req("POST", { firesale_id: FIRESALE_ID }));
   assertEquals(res.status, 401);
 });
 
 Deno.test("fake Bearer returns 401 (admin check fails)", async () => {
-  const res = await handler(authedReq("POST", { firesale_id: "abc123" }));
+  const res = await handler(authedReq("POST", { firesale_id: FIRESALE_ID }));
   assertEquals([401, 403].includes(res.status), true);
+});
+
+Deno.test("invalid firesale sync bodies return structured 400 before database or OS work", async () => {
+  const originalFetch = globalThis.fetch;
+  let sideEffectCalls = 0;
+  globalThis.fetch = (() => {
+    sideEffectCalls += 1;
+    throw new Error("invalid firesale sync input reached a side effect");
+  }) as typeof fetch;
+
+  const malformed = new Request(
+    "https://functions.test/sync-firesale-to-os",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{",
+    },
+  );
+
+  try {
+    for (const request of [
+      malformed,
+      req("POST", { firesale_id: "x".repeat(1000) }),
+      req("POST", { firesale_id: 42 }),
+      req("POST", { firesale_id: FIRESALE_ID, invented: true }),
+    ]) {
+      const res = await handler(request);
+      const body = await res.json() as {
+        code?: string;
+        issues?: unknown[];
+      };
+
+      assertEquals(res.status, 400);
+      assertEquals(
+        ["invalid_json", "validation_error"].includes(body.code ?? ""),
+        true,
+      );
+      assertEquals(Array.isArray(body.issues), true);
+    }
+    assertEquals(sideEffectCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 restore();

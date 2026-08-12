@@ -13,8 +13,9 @@ import {
   buildIdempotencyKey,
   buildPaymentModeInvoiceCreationParams,
   CHECKOUT_TAX_COLLECTION_PARAMS,
-  createStripeClient,
+  createVerifiedStripeClient,
   getStripeRuntimeMode,
+  STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER,
 } from "../_shared/stripeClient.ts";
 import { upsertBillingCustomer } from "../_shared/billingState.ts";
 import {
@@ -501,7 +502,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         );
       }
 
-      const stripe = createStripeClient();
+      const stripe = await createVerifiedStripeClient();
       const stripePrice = await stripe.prices.retrieve(checkoutAddon.priceId);
       assertStripePriceMatchesCheckoutAddon(
         checkoutAddon,
@@ -562,7 +563,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
             quantity: checkoutQuantity,
           }],
           mode: checkoutAddon.checkoutMode,
-          payment_method_types: ["card"],
+          integration_identifier: STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER,
           success_url: success,
           cancel_url: cancel,
           metadata: addonMetadata,
@@ -585,7 +586,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
             : {}),
         },
         {
-          idempotencyKey: await buildIdempotencyKey("checkout-addon-v2", [
+          idempotencyKey: await buildIdempotencyKey("checkout-addon-v3", [
             user.id,
             checkoutAddon.addonKey,
             checkoutAddon.priceId,
@@ -595,7 +596,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
             checkoutTarget.targetId,
             success,
             cancel,
-            "card",
+            "dynamic-payment-methods-v1",
             "stripe-tax-v2-company-vat",
           ]),
         },
@@ -789,7 +790,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       );
     }
 
-    const stripe = createStripeClient();
+    const stripe = await createVerifiedStripeClient();
 
     if (
       wantsTrial &&
@@ -851,7 +852,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
           customer: customerId,
           line_items: [{ price: checkoutPlan.priceId, quantity: 1 }],
           mode: "subscription",
-          payment_method_types: ["card"],
+          integration_identifier: STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER,
           success_url: success,
           cancel_url: cancel,
           ...(wantsTrial
@@ -898,7 +899,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
           },
         },
         {
-          idempotencyKey: await buildIdempotencyKey("checkout-v2", [
+          idempotencyKey: await buildIdempotencyKey("checkout-v3", [
             user.id,
             checkoutPlan.planKey,
             checkoutPlan.billingCycle,
@@ -910,7 +911,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
             trialClaimId,
             success,
             cancel,
-            "card",
+            "dynamic-payment-methods-v1",
             "stripe-tax-v1",
           ]),
         },

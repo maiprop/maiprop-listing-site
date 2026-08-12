@@ -25,9 +25,11 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   // Redirect to onboarding for new users — but don't loop if already on /onboarding
   const isAccountSettingsRoute = location.pathname === "/dashboard/settings";
+  const isBillingRecoveryRoute = location.pathname === "/dashboard/billing";
+  const isAccountRecoveryRoute = isAccountSettingsRoute || isBillingRecoveryRoute;
 
   const accountStatus = profile?.account_status;
-  if (accountStatus && accountStatus !== "active" && !isAccountSettingsRoute) {
+  if (accountStatus && accountStatus !== "active" && !isAccountRecoveryRoute) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="max-w-md w-full rounded-lg border border-border bg-card p-6 text-center space-y-4">
@@ -51,7 +53,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   // Keep account settings reachable for account-level actions such as GDPR deletion.
-  if (needsOnboarding && location.pathname !== "/onboarding" && !isAccountSettingsRoute) {
+  if (needsOnboarding && location.pathname !== "/onboarding" && !isAccountRecoveryRoute) {
     return <Navigate to="/onboarding" replace />;
   }
 
