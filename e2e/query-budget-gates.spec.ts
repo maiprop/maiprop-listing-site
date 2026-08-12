@@ -24,6 +24,7 @@ type RequestCounts = {
   auth: number;
   rest: number;
   functions: number;
+  functionRequests: string[];
   forbiddenAuthorityRequests: string[];
 };
 
@@ -230,7 +231,13 @@ const perfAuctionListing = {
 };
 
 function emptyCounts(): RequestCounts {
-  return { auth: 0, rest: 0, functions: 0, forbiddenAuthorityRequests: [] };
+  return {
+    auth: 0,
+    rest: 0,
+    functions: 0,
+    functionRequests: [],
+    forbiddenAuthorityRequests: [],
+  };
 }
 
 function totalCounts(counts: RequestCounts): number {
@@ -375,6 +382,7 @@ async function installAuthenticatedSupabaseMocks(page: Page, counts: RequestCoun
   await page.route("**/functions/v1/**", async (route) => {
     counts.functions += 1;
     const path = new URL(route.request().url()).pathname;
+    counts.functionRequests.push(path.slice(path.lastIndexOf("/") + 1));
     if (path.endsWith("/functions/v1/fetch-os-auctions")) {
       counts.forbiddenAuthorityRequests.push(route.request().url());
     }
@@ -453,7 +461,10 @@ test.describe("authenticated query budget gates @perf", () => {
 
       expect(counts.auth, `${path} auth requests`).toBeLessThanOrEqual(budget.auth);
       expect(counts.rest, `${path} REST queries`).toBeLessThanOrEqual(budget.rest);
-      expect(counts.functions, `${path} function calls`).toBeLessThanOrEqual(budget.functions);
+      expect(
+        counts.functions,
+        `${path} function calls (${counts.functionRequests.join(", ") || "none"})`,
+      ).toBeLessThanOrEqual(budget.functions);
       expect(totalCounts(counts), `${path} total Supabase requests`).toBeLessThanOrEqual(budget.total);
       if (CATALOGUE_AUTHORITY_ROUTES.has(path)) {
         expect(

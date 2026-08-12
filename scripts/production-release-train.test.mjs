@@ -56,6 +56,15 @@ describe("production release train", () => {
     }
   });
 
+  it("keeps the bare PostgreSQL migration harness aligned with Supabase-managed helpers", () => {
+    const ci = workflow("ci.yml");
+
+    expect(ci).toContain("CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb");
+    expect(ci).toContain("CREATE OR REPLACE FUNCTION cron.alter_job(");
+    expect(ci).toContain("job_id bigint");
+    expect(ci).toContain("active boolean DEFAULT NULL");
+  });
+
   it("never mutates production directly from the validation workflow", () => {
     const ci = workflow("ci.yml");
 

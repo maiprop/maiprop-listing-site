@@ -6,6 +6,9 @@ import { BUDGETS_KB } from "./check-bundle-size.mjs";
 const lighthouseConfig = JSON.parse(
   readFileSync(resolve(process.cwd(), ".lighthouserc.json"), "utf8"),
 );
+const publicLighthouseConfig = JSON.parse(
+  readFileSync(resolve(process.cwd(), ".lighthouserc.public.json"), "utf8"),
+);
 const performanceGateSpec = readFileSync(
   resolve(process.cwd(), "e2e/performance-gates.spec.ts"),
   "utf8",
@@ -37,6 +40,13 @@ const sourceConstant = (source, name) =>
   source.match(new RegExp(`const ${name}(?::[^=]+)? = ([\\s\\S]*?);`))?.[1] ?? "";
 
 describe("performance budget configuration", () => {
+  it("launches Lighthouse Chrome with the supported Linux sandbox setting", () => {
+    for (const config of [lighthouseConfig, publicLighthouseConfig]) {
+      expect(config.ci.collect.puppeteerLaunchOptions).toBeUndefined();
+      expect(config.ci.collect.settings.chromeFlags).toContain("--no-sandbox");
+    }
+  });
+
   it("keeps Lighthouse budgets closer to Core Web Vitals good thresholds", () => {
     expect(lighthouseAssertion("categories:performance").minScore).toBeGreaterThanOrEqual(0.75);
     expect(lighthouseAssertion("first-contentful-paint").maxNumericValue).toBeLessThanOrEqual(2200);

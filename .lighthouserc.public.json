@@ -14,12 +14,10 @@
         "http://localhost:4173/login",
         "http://localhost:4173/property/lighthouse-smoke-property"
       ],
-      "puppeteerLaunchOptions": {
-        "args": ["--no-sandbox"]
-      },
       "numberOfRuns": 2,
       "settings": {
         "preset": "desktop",
+        "chromeFlags": ["--no-sandbox"],
         "onlyCategories": ["performance", "accessibility", "best-practices", "seo"],
         "skipAudits": ["uses-http2"]
       }

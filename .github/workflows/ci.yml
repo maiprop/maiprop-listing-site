@@ -365,6 +365,7 @@ jobs:
           -- Stub auth.uid() used by RLS policies
           CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
           CREATE OR REPLACE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT 'anon'::text $$;
+          CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT '{}'::jsonb $$;
           -- Stub storage schema — migrations reference storage.buckets / storage.objects
           CREATE SCHEMA IF NOT EXISTS storage;
           CREATE TABLE IF NOT EXISTS storage.buckets (
@@ -431,6 +432,22 @@ jobs:
           $$;
           CREATE OR REPLACE FUNCTION cron.unschedule(jobid bigint) RETURNS boolean LANGUAGE sql AS $$
             DELETE FROM cron.job WHERE jobid = $1 RETURNING true;
+          $$;
+          CREATE OR REPLACE FUNCTION cron.alter_job(
+            job_id bigint,
+            schedule text DEFAULT NULL,
+            command text DEFAULT NULL,
+            database text DEFAULT NULL,
+            username text DEFAULT NULL,
+            active boolean DEFAULT NULL
+          ) RETURNS void LANGUAGE sql AS $$
+            UPDATE cron.job AS existing
+            SET schedule = COALESCE($2, existing.schedule),
+                command = COALESCE($3, existing.command),
+                database = COALESCE($4, existing.database),
+                username = COALESCE($5, existing.username),
+                active = COALESCE($6, existing.active)
+            WHERE existing.jobid = $1;
           $$;
           -- Stub pgmq (message queue) used by email infrastructure
           CREATE SCHEMA IF NOT EXISTS pgmq;

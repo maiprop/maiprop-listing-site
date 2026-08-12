@@ -86,7 +86,7 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
   const abortRef = useRef<AbortController | null>(null);
   const { user } = useAuth();
   const { quota, quotaLoading, refreshQuota } = useAiQuota("property-chat", user, {
-    enabled: !!user,
+    enabled: !!user && (variant === "embedded" || open),
   });
 
   const suggestions = propertyContext
