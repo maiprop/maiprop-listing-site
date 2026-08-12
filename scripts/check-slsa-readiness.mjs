@@ -106,7 +106,7 @@ export function checkSlsaReadiness(root = process.cwd()) {
   ]);
 
   requireMarkers(failures, paths.ci, texts.ci, [
-    "npm sbom --sbom-format cyclonedx",
+    "npm sbom --sbom-format cyclonedx --package-lock-only",
     "RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}",
     "RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}",
     "node scripts/create-release-artifact-binding.mjs",
