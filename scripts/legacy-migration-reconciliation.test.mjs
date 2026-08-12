@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  canonicalSqlFileSha256,
   reconcileMigrationHistories,
   validateLegacyMigrationSchemaEvidence,
 } from "./legacy-migration-reconciliation.mjs";
@@ -130,6 +130,7 @@ function fixture() {
     schema_version: 1,
     evidence_type: "maiprop-legacy-migration-history-reconciliation",
     reconciliation_id: "production-history-v1",
+    file_digest_canonicalization: "utf8-lf",
     production_project_ref: "qvvicunqcrwpioqnvzxf",
     staging_project_ref: "xsiehskfgeoqyazcgauv",
     cutover: {
@@ -158,6 +159,13 @@ function fixture() {
 }
 
 describe("legacy migration history reconciliation", () => {
+  it("uses the same canonical SQL digest for LF and CRLF checkouts", () => {
+    const lf = "SELECT 1;\nSELECT 2;\n";
+    const crlf = lf.replace(/\n/g, "\r\n");
+
+    expect(canonicalSqlFileSha256(crlf)).toBe(canonicalSqlFileSha256(lf));
+  });
+
   it("binds the checked-in manifest to the canonical SQL and forward cutover", () => {
     const manifest = JSON.parse(
       readFileSync(
@@ -166,7 +174,7 @@ describe("legacy migration history reconciliation", () => {
       ),
     );
     const fileDigest = (path) =>
-      createHash("sha256").update(readFileSync(path)).digest("hex");
+      canonicalSqlFileSha256(readFileSync(path, "utf8"));
     const staging = manifest.anomalies.map(({ version, canonical }) => ({
       version,
       ...canonical,

@@ -153,7 +153,8 @@ Historical migration-ledger differences are accepted only when they match the
 fixed, reviewed anomaly manifest at
 `supabase/reconciliation/production-history-v1.json`. The release train must
 reject any additional alias, marker-only entry, version collision, or changed
-canonical migration hash.
+canonical migration hash. Canonical SQL file hashes use UTF-8 text with line
+endings normalized to LF, so evidence is identical on Windows and Linux.
 
 Staging proves convergence by applying the normal migration chain once, then
 running `supabase/reconciliation/production-history-v1.sql` read-only and the

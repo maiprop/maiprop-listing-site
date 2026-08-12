@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 const SHA256 = /^[0-9a-f]{64}$/;
 const VERSION = /^\d{14}$/;
 const NAME = /^[A-Za-z0-9_.-]+$/;
@@ -6,6 +8,7 @@ const PRODUCTION_PROJECT_REF = "qvvicunqcrwpioqnvzxf";
 const STAGING_PROJECT_REF = "xsiehskfgeoqyazcgauv";
 const RECONCILIATION_ID = "production-history-v1";
 const MANIFEST_TYPE = "maiprop-legacy-migration-history-reconciliation";
+const FILE_DIGEST_CANONICALIZATION = "utf8-lf";
 const SCHEMA_EVIDENCE_TYPE = "maiprop-legacy-migration-schema-evidence";
 const CUTOVER_NAME = "reconcile_legacy_migration_effects";
 
@@ -87,6 +90,12 @@ const EXPECTED_LEGACY_ANOMALIES = new Map([
 
 function fail(message) {
   throw new Error(`Legacy migration reconciliation ${message}`);
+}
+
+export function canonicalSqlFileSha256(sql) {
+  return createHash("sha256")
+    .update(String(sql).replace(/\r\n?/g, "\n"), "utf8")
+    .digest("hex");
 }
 
 function record(value, label) {
@@ -183,9 +192,12 @@ function validateManifest(value, candidate, staging) {
   if (
     manifest.schema_version !== 1 ||
     manifest.evidence_type !== MANIFEST_TYPE ||
-    manifest.reconciliation_id !== RECONCILIATION_ID
+    manifest.reconciliation_id !== RECONCILIATION_ID ||
+    manifest.file_digest_canonicalization !== FILE_DIGEST_CANONICALIZATION
   ) {
-    fail("manifest schema, evidence type, or reconciliation ID is invalid.");
+    fail(
+      "manifest schema, evidence type, reconciliation ID, or file digest canonicalization is invalid.",
+    );
   }
   if (
     manifest.production_project_ref !== PRODUCTION_PROJECT_REF ||
