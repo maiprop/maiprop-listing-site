@@ -276,7 +276,7 @@ jobs:
                domains: (.result.domains // []),
                gitAutoDeploy: {
                  sourceConnected: (.result.source != null),
-                 productionDeploymentsEnabled: (.result.source.config.production_deployments_enabled // null),
+                 productionDeploymentsEnabled: .result.source.config.production_deployments_enabled,
                  previewDeploymentSetting: (.result.source.config.preview_deployment_setting // null),
                  allAutomaticDeploymentsDisabled: (
                    .result.source == null or

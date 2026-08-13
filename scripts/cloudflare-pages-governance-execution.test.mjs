@@ -406,4 +406,33 @@ describe("Cloudflare Pages governance workflow execution", () => {
       result.cleanup();
     }
   }, 60_000);
+
+  it("preserves false in minimized Git deployment evidence", () => {
+    const result = runWorkflow(complianceRun, {
+      production: projectResponse({
+        id: "production-id",
+        name: "maiprop-listing-site",
+        source: gitSource(),
+      }),
+      staging: projectResponse({
+        id: "staging-id",
+        name: "maiprop-listing-site-staging",
+        source: gitSource(),
+      }),
+    });
+    try {
+      expect(
+        result.result.status,
+        `${result.result.stderr}\n${result.result.stdout}`,
+      ).toBe(0);
+      const evidence = result.readJson(
+        "cloudflare-pages-posture-evidence/cloudflare-admin-posture.json",
+      );
+      expect(
+        evidence.pagesProject.gitAutoDeploy.productionDeploymentsEnabled,
+      ).toBe(false);
+    } finally {
+      result.cleanup();
+    }
+  }, 60_000);
 });
