@@ -35,17 +35,21 @@ describe("Supabase production provider signed-binding contract", () => {
         jobs: { deploy: { environment?: unknown } };
       };
 
-      expect(parsed.jobs.deploy.environment).toBeUndefined();
+      expect(parsed.jobs.deploy.environment).toBe("production");
       expect(parsed.permissions).toEqual({ actions: "read", contents: "read" });
       expect(parsed.on.workflow_call.secrets?.RELEASE_EVIDENCE_SIGNING_KEY).toEqual({
         required: true,
       });
+      expect(parsed.on.workflow_call.secrets?.SUPABASE_PRODUCTION_DB_URL).toBeUndefined();
+      expect(source).toContain(
+        "SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
+      );
       expect(source).toContain(
         "RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}",
       );
       expect(source).toContain('[ "$GITHUB_RUN_ATTEMPT" != "1" ]');
       expect(source).toContain('[ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ]');
-      expect(source).not.toContain("environment: production");
+      expect(source).toContain("environment: production");
       expect(source).not.toContain("actions/attest-build-provenance@");
       expect(source).not.toContain("gh attestation");
       expect(source).not.toContain("attestations: write");
