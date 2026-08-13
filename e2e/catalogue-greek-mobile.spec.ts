@@ -49,7 +49,9 @@ const makeAuction = (overrides: Record<string, unknown>) => ({
 });
 
 const AUCTIONS = [
-  makeAuction({}),
+  makeAuction({
+    title: "Διαμέρισμα στο ιστορικό κέντρο της Αθήνας με αποκλειστική χρήση δώματος και αποθήκη",
+  }),
   makeAuction({
     id: OS_TAG_AUCTION_ID,
     title: "Μεζονέτα κοντά στο λιμάνι του Πειραιά",

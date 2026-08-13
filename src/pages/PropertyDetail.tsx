@@ -353,18 +353,18 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
 
       <main id="main-content" className="pt-16">
         {/* Breadcrumb */}
-        <nav aria-label="Breadcrumb" className="container py-2 sm:py-3">
-          <ol className="flex items-center gap-1 sm:gap-1.5 text-xs text-muted-foreground overflow-x-auto scrollbar-none list-none p-0 m-0">
-            <li><Link to="/" className="hover:text-foreground transition-colors shrink-0">{t("property.breadcrumbHome")}</Link></li>
-            <li aria-hidden="true"><ChevronRight className="w-3 h-3 shrink-0" /></li>
-            <li>
+        <nav aria-label="Breadcrumb" className="container min-w-0 overflow-hidden py-2 sm:py-3">
+          <ol className="m-0 flex min-w-0 max-w-full list-none items-center gap-1 overflow-hidden p-0 text-xs text-muted-foreground sm:gap-1.5">
+            <li className="shrink-0"><Link to="/" className="transition-colors hover:text-foreground">{t("property.breadcrumbHome")}</Link></li>
+            <li aria-hidden="true" className="shrink-0"><ChevronRight className="h-3 w-3" /></li>
+            <li className="shrink-0">
               {isAuction ?
-              <Link to="/auctions" className="hover:text-foreground transition-colors shrink-0">{t("property.breadcrumbAuctions")}</Link> :
-              <Link to="/listings" className="hover:text-foreground transition-colors shrink-0">{t("property.breadcrumbListings")}</Link>
+              <Link to="/auctions" className="transition-colors hover:text-foreground">{t("property.breadcrumbAuctions")}</Link> :
+              <Link to="/listings" className="transition-colors hover:text-foreground">{t("property.breadcrumbListings")}</Link>
               }
             </li>
-            <li aria-hidden="true"><ChevronRight className="w-3 h-3 shrink-0" /></li>
-            <li><span className="text-foreground truncate font-medium" aria-current="page">{title}</span></li>
+            <li aria-hidden="true" className="shrink-0"><ChevronRight className="h-3 w-3" /></li>
+            <li className="min-w-0 flex-1"><span className="block truncate font-medium text-foreground" aria-current="page">{title}</span></li>
           </ol>
         </nav>
 
