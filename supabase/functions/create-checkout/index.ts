@@ -850,6 +850,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         {
           ...CHECKOUT_TAX_COLLECTION_PARAMS,
           customer: customerId,
+          client_reference_id: user.id,
           line_items: [{ price: checkoutPlan.priceId, quantity: 1 }],
           mode: "subscription",
           integration_identifier: STRIPE_CHECKOUT_INTEGRATION_IDENTIFIER,
