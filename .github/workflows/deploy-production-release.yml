@@ -793,6 +793,7 @@ jobs:
           SOURCE_RUN_ATTEMPT: ${{ needs.validate.outputs.source_run_attempt }}
           RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
           RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          RELEASE_EVIDENCE_VERIFICATION_KEYS: ${{ secrets.RELEASE_EVIDENCE_VERIFICATION_KEYS }}
           ROOT: ${{ steps.source_archive.outputs.root }}
           TAG_NAME: ${{ steps.source_archive.outputs.tag_name }}
           ASSET_NAME: ${{ steps.source_archive.outputs.asset_name }}
@@ -907,12 +908,23 @@ jobs:
               -F prerelease=true \
               > "$release_json"
             release_id="$(jq -er '.id' "$release_json")"
-            cleanup_draft() {
-              github_api --method DELETE \
-                "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
-                >/dev/null 2>&1 || true
+            cleanup_confirmed_draft() {
+              trap - ERR
+              set +e
+              cleanup_release_json="$ROOT/cleanup-release.json"
+              cleanup_status="$(github_get_status "releases/${release_id}" "$cleanup_release_json")"
+              if [ "$cleanup_status" = "200" ] && jq -e \
+                --argjson release_id "$release_id" \
+                '.id == $release_id and .draft == true and .immutable == false' \
+                "$cleanup_release_json" > /dev/null; then
+                github_api --method DELETE \
+                  "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+                  >/dev/null 2>&1 || true
+              else
+                echo "::warning::Release cleanup skipped because the exact release was not confirmed draft and mutable."
+              fi
             }
-            trap cleanup_draft ERR
+            trap cleanup_confirmed_draft ERR
             upload_url="$(jq -er '.upload_url | sub("\\{\\?name,label\\}$"; "")' "$release_json")"
             expected_upload_url="https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets"
             if [ "$upload_url" != "$expected_upload_url" ]; then
@@ -942,6 +954,7 @@ jobs:
             upload_release_asset \
               "$BINDING_PATH" "$BINDING_ASSET_NAME" "application/json" \
               "$ROOT/uploaded-binding.json"
+            trap - ERR
             github_api --method PATCH \
               "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
               -F draft=false \
@@ -950,12 +963,9 @@ jobs:
             github_api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_NAME}" \
               > "$release_json"
             if [ "$(jq -r '.immutable' "$release_json")" != "true" ]; then
-              echo "::error::GitHub did not publish an immutable release; deleting the mutable release before production mutation."
-              cleanup_draft
-              trap - ERR
+              echo "::error::GitHub did not publish an immutable release; preserving the release for operator reconciliation."
               exit 1
             fi
-            trap - ERR
             verify_release
           else
             echo "::error::GitHub immutable release lookup failed with HTTP $release_status."

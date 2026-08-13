@@ -113,6 +113,49 @@ describe("durable production source release binding", () => {
     });
   });
 
+  it("verifies an older immutable archive with its retained rotation key", () => {
+    const paths = fixture();
+    const input = bindingInput(paths);
+    const binding = createProductionSourceReleaseBinding(input);
+
+    expect(
+      verifyProductionSourceReleaseBinding({
+        binding,
+        assetPath: paths.assetPath,
+        manifestPath: paths.manifestPath,
+        signingKey: "the-current-release-key-that-is-longer-than-32-bytes",
+        expectedKeyId: "release-key-v2",
+        verificationKeys: JSON.stringify({
+          "release-key-v1": signingKey,
+        }),
+        expected: input,
+      }),
+    ).toMatchObject({
+      ok: true,
+      keyId: "release-key-v1",
+    });
+  });
+
+  it("rejects a retained rotation key whose ID or value is invalid", () => {
+    const paths = fixture();
+    const input = bindingInput(paths);
+    const binding = createProductionSourceReleaseBinding(input);
+
+    expect(() =>
+      verifyProductionSourceReleaseBinding({
+        binding,
+        assetPath: paths.assetPath,
+        manifestPath: paths.manifestPath,
+        signingKey: "the-current-release-key-that-is-longer-than-32-bytes",
+        expectedKeyId: "release-key-v2",
+        verificationKeys: JSON.stringify({
+          "release-key-v1": "short",
+        }),
+        expected: input,
+      }),
+    ).toThrow(/verification key/i);
+  });
+
   it("rejects asset mutation after signing", () => {
     const paths = fixture();
     const input = bindingInput(paths);

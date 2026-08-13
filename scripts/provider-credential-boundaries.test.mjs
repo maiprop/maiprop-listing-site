@@ -62,6 +62,7 @@ describe("provider credential boundaries", () => {
     expect(classifications).toEqual({
       "validate-source": null,
       "capture-production-n-minus-one": "staging",
+      "cloudflare-staging-preflight": "staging",
       "supabase-staging": null,
       "staging-n-minus-one-compatibility": "staging",
       "cloudflare-staging": "staging",

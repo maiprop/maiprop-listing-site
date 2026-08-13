@@ -303,6 +303,7 @@ or override it in repository secrets.
 | `PRODUCTION_SUPABASE_PROJECT_ID` | production Supabase project ref used only as a non-secret comparison guard; staging release workflows reject any target that matches it | repository variable |
 | `RELEASE_EVIDENCE_SIGNING_KEY` | random secret of at least 32 bytes used only to HMAC-sign release artifact bindings; rotate with a new key ID and never expose it to application runtime | repository secret |
 | `RELEASE_EVIDENCE_SIGNING_KEY_ID` | non-secret identifier for the active release-evidence HMAC key; the key ID is covered by the signature and must match at every consumer | repository variable |
+| `RELEASE_EVIDENCE_VERIFICATION_KEYS` | optional JSON object mapping retired release-evidence key IDs to their prior HMAC secrets; retain each entry while an immutable production-source release signed by that key can be selected as N-1 | repository secret |
 | `PRODUCTION_RELEASE_APPROVERS` | comma-separated GitHub logins allowed to issue an independent short-lived approval; the selected approver must differ from the deployer | repository variable |
 | `PRODUCTION_RELEASE_DEPLOYERS` | comma-separated GitHub logins allowed to dispatch production; each dispatch must be attempt one by the original actor | repository variable |
 | `PRODUCTION_RELEASE_ENABLED` | exact lowercase `true` enables the final production dispatcher only after provider identities, secrets, staging evidence, Stripe live readiness, and an independent approval are valid; otherwise keep unset or `false` | repository variable |

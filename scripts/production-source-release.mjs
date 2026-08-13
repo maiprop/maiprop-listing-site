@@ -73,12 +73,36 @@ function normalizedActor(value) {
   return actor;
 }
 
-function signingKeyBuffer(value) {
+function signingKeyBuffer(value, label = "signing key") {
   const key = Buffer.from(String(value ?? ""), "utf8");
   if (key.byteLength < MINIMUM_KEY_BYTES) {
-    fail(`signing key must be at least ${MINIMUM_KEY_BYTES} bytes.`);
+    fail(`${label} must be at least ${MINIMUM_KEY_BYTES} bytes.`);
   }
   return key;
+}
+
+function verificationKeyBuffer(bindingKeyId, signingKey, expectedKeyId, keyRing) {
+  const currentKeyId = requiredString(expectedKeyId, "expected signing key ID");
+  if (bindingKeyId === currentKeyId) {
+    return signingKeyBuffer(signingKey);
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(String(keyRing ?? ""));
+  } catch {
+    fail("historical verification keys must be a JSON object.");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    fail("historical verification keys must be a JSON object.");
+  }
+  if (!Object.hasOwn(parsed, bindingKeyId)) {
+    fail(`verification key ${bindingKeyId} is unavailable.`);
+  }
+  return signingKeyBuffer(
+    parsed[bindingKeyId],
+    `verification key ${bindingKeyId}`,
+  );
 }
 
 function fileSha256(path) {
@@ -251,7 +275,7 @@ export function createProductionSourceReleaseBinding(input) {
   };
 }
 
-function assertSignature(binding, signingKey, expectedKeyId) {
+function assertSignature(binding, signingKey, expectedKeyId, verificationKeys) {
   if (
     binding?.schema_version !== 1 ||
     binding?.evidence_type !== "maiprop-production-source-release" ||
@@ -261,10 +285,7 @@ function assertSignature(binding, signingKey, expectedKeyId) {
   }
   if (
     binding?.signature?.algorithm !== "hmac-sha256" ||
-    binding?.signature?.key_id !== requiredString(
-      expectedKeyId,
-      "expected signing key ID",
-    ) ||
+    !requiredString(binding?.signature?.key_id, "binding signing key ID") ||
     !SHA256.test(String(binding?.signature?.value ?? ""))
   ) {
     fail("signature metadata is invalid.");
@@ -274,8 +295,14 @@ function assertSignature(binding, signingKey, expectedKeyId) {
   if (digest !== binding.binding_digest_sha256) {
     fail("binding digest is invalid.");
   }
+  const verificationKey = verificationKeyBuffer(
+    binding.signature.key_id,
+    signingKey,
+    expectedKeyId,
+    verificationKeys,
+  );
   const expected = Buffer.from(
-    hmacHex(signingKeyBuffer(signingKey), payload),
+    hmacHex(verificationKey, payload),
     "hex",
   );
   const actual = Buffer.from(binding.signature.value, "hex");
@@ -346,9 +373,10 @@ export function verifyProductionSourceReleaseBinding({
   manifestPath,
   signingKey,
   expectedKeyId,
+  verificationKeys,
   expected,
 }) {
-  assertSignature(binding, signingKey, expectedKeyId);
+  assertSignature(binding, signingKey, expectedKeyId, verificationKeys);
   assertExpected(binding, expected);
   const assetDigest = fileSha256(assetPath);
   if (assetDigest !== normalizedDigest(binding.asset?.sha256, "asset digest")) {
@@ -423,6 +451,7 @@ function cliInput(args) {
     manifestPath: args.manifest,
     keyId: args["key-id"],
     signingKey: process.env.RELEASE_EVIDENCE_SIGNING_KEY,
+    verificationKeys: process.env.RELEASE_EVIDENCE_VERIFICATION_KEYS,
     issuedAt: args["issued-at"],
     nonce: args.nonce,
   };
@@ -451,6 +480,7 @@ function main() {
       manifestPath: input.manifestPath,
       signingKey: input.signingKey,
       expectedKeyId: input.keyId,
+      verificationKeys: input.verificationKeys,
       expected: input,
     });
     if (args["github-output"]) {

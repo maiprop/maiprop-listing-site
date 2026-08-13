@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
 const routesPath = resolve(process.cwd(), "public/_routes.json");
@@ -145,6 +146,9 @@ describe("Cloudflare Pages deploy workflow routing", () => {
   it("packages Pages Functions into advanced worker output before Pages deploys", () => {
     const ciWorkflow = readFileSync(ciWorkflowPath, "utf8");
     const stageWorkflow = readFileSync(stageWorkflowPath, "utf8");
+    const stageDeployJob = JSON.stringify(
+      yaml.load(stageWorkflow).jobs["cloudflare-staging"],
+    );
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
     const buildScript = readFileSync(pagesWorkerBuildScriptPath, "utf8");
 
@@ -181,8 +185,8 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     );
     expect(stageVerifyIndex).toBeGreaterThan(-1);
     expect(stageDeployIndex).toBeGreaterThan(stageVerifyIndex);
-    expect(stageWorkflow).not.toContain("npm run build");
-    expect(stageWorkflow).not.toContain(
+    expect(stageDeployJob).not.toContain("npm run build");
+    expect(stageDeployJob).not.toContain(
       "npm run build:cloudflare-pages-worker",
     );
   });
@@ -253,8 +257,11 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(candidateCreateIndex).toBeGreaterThan(candidatePackageIndex);
 
      const stageWorkflow = readFileSync(stageWorkflowPath, "utf8");
+     const stageDeployJob = JSON.stringify(
+       yaml.load(stageWorkflow).jobs["cloudflare-staging"],
+     );
      expect(stageWorkflow).not.toContain("build:homepage-initial");
-     expect(stageWorkflow).not.toContain("npm run build");
+     expect(stageDeployJob).not.toContain("npm run build");
      expect(stageWorkflow).toContain(
        "workingDirectory: ${{ steps.isolated-pages-deploy.outputs.directory }}",
      );

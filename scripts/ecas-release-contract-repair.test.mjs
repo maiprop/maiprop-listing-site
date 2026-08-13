@@ -181,6 +181,16 @@ describe("ECAS Cloudflare release contract repair", () => {
     expect(publish).not.toContain(
       '"repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets?name=',
     );
+    expect(publish).toContain("cleanup_confirmed_draft");
+    expect(publish).toContain(
+      'github_get_status "releases/${release_id}" "$cleanup_release_json"',
+    );
+    expect(publish).toContain(".draft == true and .immutable == false");
+    expect(publish).not.toContain("trap cleanup_draft ERR");
+    expect(publish).not.toMatch(
+      /GitHub did not publish an immutable release; deleting the mutable release/i,
+    );
+    expect(publish).toMatch(/trap - ERR\n\s+github_api --method PATCH/);
     expect(JSON.stringify(archive)).toContain("2026-03-10");
     expect(production.jobs["deploy-production-database"].needs).toContain(
       "archive-production-source",
@@ -200,6 +210,7 @@ describe("ECAS Cloudflare release contract repair", () => {
       ).run,
     ).toContain('elif [ "$durable_status" = "404" ]; then');
     expect(capture).toContain("GitHub durable source lookup failed");
+    expect(capture).toContain("RELEASE_EVIDENCE_VERIFICATION_KEYS");
 
     for (const name of [
       "ci.yml",
