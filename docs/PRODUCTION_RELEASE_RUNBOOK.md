@@ -44,10 +44,14 @@ the repository, source tree, signed approval nonce, artifact digest, and every
 source/staging/approval/production run ID and attempt. Invalid validation clocks
 fail closed.
 
-The Cloudflare lock workflow additionally requires repository secrets
-`CLOUDFLARE_PAGES_READ_TOKEN` and `CLOUDFLARE_PAGES_EDIT_TOKEN`, plus exact
-repository variables `CLOUDFLARE_PAGES_PROJECT_ID` and
-`CLOUDFLARE_STAGING_PAGES_PROJECT_ID`. Merge the safe bootstrap Task 1
+The Cloudflare compliance and lock workflows require separate repository
+secrets `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_PAGES_READ_TOKEN`,
+`CLOUDFLARE_PAGES_EDIT_TOKEN`, `CLOUDFLARE_STAGING_ACCOUNT_ID`,
+`CLOUDFLARE_STAGING_PAGES_READ_TOKEN`, and
+`CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN`, plus exact repository variables
+`CLOUDFLARE_PAGES_PROJECT_ID` and `CLOUDFLARE_STAGING_PAGES_PROJECT_ID`.
+Equal production/staging account IDs fail before lookup or mutation. Merge the
+safe bootstrap Task 1
 workflows to trusted `main` under `[CF-Pages-Skip]` before publishing the rest
 of the candidate. Run read/lock verification only from that independently
 verified current-main workflow SHA; no candidate branch receives provider

@@ -34,7 +34,19 @@ describe("standards evidence workflow", () => {
       "group: maiprop-cloudflare-pages-git-deploy-verify",
     );
     expect(workflow).toContain(
-      "CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}",
+      "CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}",
+    );
+    expect(workflow).toContain(
+      "CLOUDFLARE_STAGING_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}",
+    );
+    expect(workflow).toContain(
+      "CLOUDFLARE_STAGING_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}",
+    );
+    expect(workflow).not.toContain(
+      "secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN",
+    );
+    expect(workflow).toContain(
+      '[ "$CLOUDFLARE_ACCOUNT_ID" = "$CLOUDFLARE_STAGING_ACCOUNT_ID" ]',
     );
     expect(workflow).toContain("bootstrap_required");
     expect(workflow).toContain(
@@ -51,6 +63,7 @@ describe("standards evidence workflow", () => {
     expect(collectJob).not.toContain("CLOUDFLARE_PAGES_EDIT_TOKEN");
     expect(collectJob).not.toContain("CLOUDFLARE_PAGES_READ_TOKEN");
     expect(collectJob).not.toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(collectJob).not.toContain("CLOUDFLARE_STAGING_ACCOUNT_ID");
     expect(step("Install dependencies", "Run local standards gates")).not.toContain(
       "secrets.",
     );

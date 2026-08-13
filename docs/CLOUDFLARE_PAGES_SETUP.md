@@ -28,20 +28,27 @@ only through the protected, exact-artifact release train after signed approval.
 
 ## 2. GitHub Actions secrets
 
-Protected release trains require these account-scoped secrets:
+This is a private GitHub Free repository, so native environment-secret
+protection is not part of the release control boundary. Store these as
+repository-scoped secrets and rely on the current-main, attempt-one,
+independent-actor, signed-HMAC, and mutation-lease checks documented in the
+production release runbook. Protected release trains require these
+account-scoped secrets:
 
 | Secret | Purpose |
 | --- | --- |
 | `CLOUDFLARE_ACCOUNT_ID` | Production Cloudflare account ID. It must differ from the staging account ID. |
 | `CLOUDFLARE_PAGES_READ_TOKEN` | Read-only production Pages posture and deployment verification. |
-| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Production Pages deploy and compare-and-swap rollback only. Store in the protected `production` environment. |
+| `CLOUDFLARE_PAGES_EDIT_TOKEN` | Production Pages deploy and compare-and-swap rollback only. |
 | `CLOUDFLARE_STAGING_ACCOUNT_ID` | Dedicated staging Cloudflare account ID. It must differ from production. |
 | `CLOUDFLARE_STAGING_PAGES_READ_TOKEN` | Read-only staging token used by production promotion to re-attest the approved staging deployment. |
-| `CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN` | Staging-only Pages deploy and rollback token. Store in the `staging` environment. |
+| `CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN` | Staging-only Pages deploy and rollback token. |
 
 Do not use `CLOUDFLARE_API_TOKEN` in protected release trains. Tokens must be
 scoped to their named account and operation; no candidate-branch job receives
-provider credentials.
+provider credentials. The compliance and Git-deploy lock workflows require
+both account IDs and both account-scoped token sets, and fail before any
+provider call when the account IDs are equal.
 
 The following table is retained only for legacy bootstrap compatibility
 (**Settings → Secrets and variables → Actions**):

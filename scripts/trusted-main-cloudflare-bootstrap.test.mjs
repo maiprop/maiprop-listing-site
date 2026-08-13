@@ -77,13 +77,27 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
 
     expect(control.env).toEqual({
       CLOUDFLARE_PAGES_READ_TOKEN:
-        "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}",
+        "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}",
       CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+      CLOUDFLARE_STAGING_PAGES_READ_TOKEN:
+        "${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}",
+      CLOUDFLARE_STAGING_ACCOUNT_ID:
+        "${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}",
       EXPECTED_PRODUCTION_PROJECT_ID:
         "${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}",
       EXPECTED_STAGING_PROJECT_ID:
         "${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}",
     });
+    expect(verifyCloudflare.environment).toBeUndefined();
+    expect(control.run).toContain(
+      '[ "$CLOUDFLARE_ACCOUNT_ID" = "$CLOUDFLARE_STAGING_ACCOUNT_ID" ]',
+    );
+    expect(control.run).toContain(
+      'get_project "$CLOUDFLARE_PAGES_READ_TOKEN" "$CLOUDFLARE_ACCOUNT_ID" "$PRODUCTION_PROJECT" "$PRODUCTION_RAW"',
+    );
+    expect(control.run).toContain(
+      'get_project "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" "$CLOUDFLARE_STAGING_ACCOUNT_ID" "$STAGING_PROJECT" "$STAGING_RAW"',
+    );
     expect(control.run).toContain("bootstrap_required=1");
     expect(control.run).toContain("validate_identity");
     expect(control.run).toContain("validate_locked");
@@ -174,6 +188,36 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     expect(control.env.EXPECTED_STAGING_PROJECT_ID).toBe(
       "${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}",
     );
+    expect(control.env.CLOUDFLARE_PAGES_READ_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}",
+    );
+    expect(control.env.CLOUDFLARE_PAGES_EDIT_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}",
+    );
+    expect(control.env.CLOUDFLARE_ACCOUNT_ID).toBe(
+      "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+    );
+    expect(control.env.CLOUDFLARE_STAGING_PAGES_READ_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}",
+    );
+    expect(control.env.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}",
+    );
+    expect(control.env.CLOUDFLARE_STAGING_ACCOUNT_ID).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}",
+    );
+    expect(control.run).toContain(
+      '[ "$CLOUDFLARE_ACCOUNT_ID" = "$CLOUDFLARE_STAGING_ACCOUNT_ID" ]',
+    );
+    expect(control.run).toContain(
+      'CLOUDFLARE_PAGES_READ_TOKEN="$CLOUDFLARE_STAGING_PAGES_READ_TOKEN"',
+    );
+    expect(control.run).toContain(
+      'CLOUDFLARE_PAGES_EDIT_TOKEN="$CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN"',
+    );
+    expect(control.run).toContain(
+      'CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_STAGING_ACCOUNT_ID"',
+    );
     expect(control.run.indexOf("EXPECTED_PRODUCTION_PROJECT_ID")).toBeLessThan(
       control.run.indexOf("patch_project"),
     );
@@ -223,7 +267,7 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
       'if [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ]; then',
     );
     expect(
-      control.run.match(/if ! patch_project \\/g),
+      control.run.match(/^\s*(?:if ! )?patch_project \\/gm),
     ).toHaveLength(2);
     expect(lock.steps.some((step) => step.uses?.includes("checkout"))).toBe(
       false,
@@ -241,12 +285,25 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     );
 
     for (const name of [
+      "CLOUDFLARE_ACCOUNT_ID",
+      "CLOUDFLARE_STAGING_ACCOUNT_ID",
       "CLOUDFLARE_PAGES_READ_TOKEN",
       "CLOUDFLARE_PAGES_EDIT_TOKEN",
+      "CLOUDFLARE_STAGING_PAGES_READ_TOKEN",
+      "CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN",
       "CLOUDFLARE_PAGES_PROJECT_ID",
       "CLOUDFLARE_STAGING_PAGES_PROJECT_ID",
     ]) {
       expect(`${envSetup}\n${rotation}`).toContain(name);
     }
+
+    const pagesSetup = readFileSync(
+      resolve(root, "docs", "CLOUDFLARE_PAGES_SETUP.md"),
+      "utf8",
+    );
+    expect(pagesSetup).toContain("private GitHub Free repository");
+    expect(pagesSetup).toContain("repository-scoped secrets");
+    expect(pagesSetup).not.toContain("Store in the protected `production` environment");
+    expect(pagesSetup).not.toContain("Store in the `staging` environment");
   });
 });
