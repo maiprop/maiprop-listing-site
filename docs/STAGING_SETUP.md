@@ -49,9 +49,15 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   again, and fails if any `wrangler.toml`, `wrangler.json`, or `wrangler.jsonc`
   can be discovered in an ancestor. Do not add environment-specific `[vars]`
   to the repository root `wrangler.toml`.
-- Configure the dedicated project's production runtime bindings from
-  `.env.staging.example`. `SUPABASE_URL`, `SUPABASE_PROJECT_ID`, and
-  `SUPABASE_PUBLISHABLE_KEY` must exactly match the isolated staging project.
+- `.env.staging.example` is a cross-provider inventory, not a Pages import file.
+  Do not bulk-copy it into Cloudflare Pages. Configure only the strict runtime
+  allowlist enforced by `validate-cloudflare-pages-staging-posture.mjs`:
+  `SUPABASE_URL`, `SUPABASE_PROJECT_ID`, `SUPABASE_PUBLISHABLE_KEY`, their three
+  `VITE_*` aliases, `VITE_APP_URL`, `VITE_PUBLIC_API_ORIGIN`,
+  `VITE_APP_ENVIRONMENT=staging`, and `MAIPROP_TURN_TTL_SECONDS=21600` as
+  `plain_text`; the documented Stripe browser bindings are optional. All
+  Supabase values must exactly match the isolated staging project. Unexpected
+  Pages bindings fail the release preflight.
 - Pre-provision `SUPABASE_SERVICE_ROLE_KEY` as a `secret_text` binding and,
   when used, `SITE_LOCK_PASSWORD` as a `secret_text` binding. Never write
   either value into Wrangler `[vars]` or build artifacts.

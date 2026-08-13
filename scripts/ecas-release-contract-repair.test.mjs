@@ -273,6 +273,9 @@ describe("ECAS Cloudflare release contract repair", () => {
 
     expect(env).not.toContain("staging.maiprop-listing-site.pages.dev");
     expect(env).toContain("https://maiprop-listing-site-staging.pages.dev");
+    expect(env).not.toContain("Add all variables below to Cloudflare Pages");
+    expect(env).toContain("Do not bulk-copy this file into Cloudflare Pages");
+    expect(docs).toContain("strict runtime allowlist");
     expect(`${env}\n${docs}`).toContain("SITE_LOCK_PASSWORD");
     expect(`${env}\n${docs}`).toMatch(/SITE_LOCK_PASSWORD[^\n]*secret_text/i);
   });
