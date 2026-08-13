@@ -87,6 +87,10 @@ jobs:
             echo "::error::Production and staging Cloudflare account IDs must be distinct."
             exit 1
           fi
+          if [ "$CLOUDFLARE_PAGES_READ_TOKEN" = "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" ]; then
+            echo "::error::Production and staging Cloudflare read credentials must be distinct."
+            exit 1
+          fi
           bootstrap_required=0
           if [ -z "$EXPECTED_PRODUCTION_PROJECT_ID" ] ||
              [ -z "$EXPECTED_STAGING_PROJECT_ID" ]; then

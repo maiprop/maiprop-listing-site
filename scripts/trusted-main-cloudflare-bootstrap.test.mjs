@@ -16,6 +16,25 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     ).toBeTruthy();
   });
 
+  it("requires sensitive Cloudflare bootstrap PRs to squash with the skip marker", () => {
+    const ci = parsedWorkflow("ci.yml");
+    const step = ci.jobs.quality.steps.find(
+      (candidate) =>
+        candidate.name === "Enforce Cloudflare bootstrap squash marker",
+    );
+
+    expect(step.if).toContain("github.event_name == 'pull_request'");
+    expect(step.env.PR_TITLE).toBe("${{ github.event.pull_request.title }}");
+    expect(step.env.GH_TOKEN).toBe("${{ github.token }}");
+    expect(step.run).toContain("squash_merge_commit_title");
+    expect(step.run).toContain('== "PR_TITLE"');
+    expect(step.run).toContain("[CF-Pages-Skip]");
+    expect(step.run).toContain("compliance-evidence.yml");
+    expect(step.run).toContain("lock-cloudflare-pages-git-deploys.yml");
+    expect(step.run).toContain("reusable-cloudflare-production-deploy.yml");
+    expect(step.run).toContain("stage-release.yml");
+  });
+
   it("keeps read-only identity bootstrap on verified current main", () => {
     const parsed = parsedWorkflow("compliance-evidence.yml");
     const source = workflow("compliance-evidence.yml");
@@ -91,6 +110,9 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     expect(verifyCloudflare.environment).toBeUndefined();
     expect(control.run).toContain(
       '[ "$CLOUDFLARE_ACCOUNT_ID" = "$CLOUDFLARE_STAGING_ACCOUNT_ID" ]',
+    );
+    expect(control.run).toContain(
+      '[ "$CLOUDFLARE_PAGES_READ_TOKEN" = "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" ]',
     );
     expect(control.run).toContain(
       'get_project "$CLOUDFLARE_PAGES_READ_TOKEN" "$CLOUDFLARE_ACCOUNT_ID" "$PRODUCTION_PROJECT" "$PRODUCTION_RAW"',
@@ -214,6 +236,12 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     );
     expect(control.run).toContain(
       '[ "$CLOUDFLARE_ACCOUNT_ID" = "$CLOUDFLARE_STAGING_ACCOUNT_ID" ]',
+    );
+    expect(control.run).toContain(
+      '[ "$CLOUDFLARE_PAGES_READ_TOKEN" = "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" ]',
+    );
+    expect(control.run).toContain(
+      '[ "$CLOUDFLARE_PAGES_EDIT_TOKEN" = "$CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN" ]',
     );
     expect(control.run).toContain(
       'CLOUDFLARE_PAGES_READ_TOKEN="$CLOUDFLARE_STAGING_PAGES_READ_TOKEN"',

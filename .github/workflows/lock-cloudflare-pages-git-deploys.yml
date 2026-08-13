@@ -78,6 +78,15 @@ jobs:
             echo "::error::Production and staging Cloudflare account IDs must be distinct."
             exit 1
           fi
+          if [ "$CLOUDFLARE_PAGES_READ_TOKEN" = "$CLOUDFLARE_PAGES_EDIT_TOKEN" ] ||
+             [ "$CLOUDFLARE_PAGES_READ_TOKEN" = "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" ] ||
+             [ "$CLOUDFLARE_PAGES_READ_TOKEN" = "$CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN" ] ||
+             [ "$CLOUDFLARE_PAGES_EDIT_TOKEN" = "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" ] ||
+             [ "$CLOUDFLARE_PAGES_EDIT_TOKEN" = "$CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN" ] ||
+             [ "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" = "$CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN" ]; then
+            echo "::error::Cloudflare production/staging read/edit credentials must be four distinct scoped tokens."
+            exit 1
+          fi
           if [ "$EXPECTED_PRODUCTION_PROJECT_ID" = "$EXPECTED_STAGING_PROJECT_ID" ]; then
             echo "::error::Production and staging Pages project IDs must be distinct."
             exit 1

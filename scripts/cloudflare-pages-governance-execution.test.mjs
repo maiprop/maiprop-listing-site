@@ -334,6 +334,15 @@ describe("Cloudflare Pages governance workflow execution", () => {
         noProviderCall: true,
       },
       {
+        label: "shared read credential",
+        options: {
+          environment: {
+            CLOUDFLARE_STAGING_PAGES_READ_TOKEN: "production-read",
+          },
+        },
+        noProviderCall: true,
+      },
+      {
         label: "invalid Git provider",
         options: {
           production: projectResponse({
@@ -378,6 +387,25 @@ describe("Cloudflare Pages governance workflow execution", () => {
       }
     }
   }, 90_000);
+
+  it("refuses shared production and staging read or edit credentials before mutation", () => {
+    for (const environment of [
+      { CLOUDFLARE_STAGING_PAGES_READ_TOKEN: "production-read" },
+      { CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN: "production-edit" },
+    ]) {
+      const result = runWorkflow(lockRun, { environment });
+      try {
+        expect(
+          result.result.status,
+          `${result.result.stderr}\n${result.result.stdout}`,
+        ).not.toBe(0);
+        expect(result.curlRequests).toEqual([]);
+        expect(result.patches).toEqual([]);
+      } finally {
+        result.cleanup();
+      }
+    }
+  }, 60_000);
 
   it("emits verified evidence for null and omitted Direct Upload sources", () => {
     const result = runWorkflow(complianceRun, {
