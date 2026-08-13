@@ -12,7 +12,10 @@ const { handler, restore } = await captureHandler(
   import.meta.url,
   "./index.ts",
   {
+    BILLING_MODE: "live",
     RATE_LIMIT_FORCE_MEMORY: "true",
+    STRIPE_EXPECTED_ACCOUNT_ID: "acct_testcheckoutcontract",
+    STRIPE_RUNTIME_MODE: "test",
   },
 );
 const moduleUrl = new URL("./index.ts", import.meta.url).href;
@@ -468,6 +471,123 @@ Deno.test("paid subscription checkout stamps checkout_type metadata on Stripe ob
     /checkout_type:\s*wantsTrial\s*\?\s*"subscription_trial"\s*:\s*"subscription"/g,
   )?.length ?? 0;
   assertEquals(checkoutTypeStamps, 2);
+});
+
+Deno.test("subscription Checkout identifies the authenticated user for reconciliation", async () => {
+  const userId = "00000000-0000-4000-8000-000000000041";
+  const originalFetch = globalThis.fetch;
+  const captured: { checkoutParams: URLSearchParams | null } = {
+    checkoutParams: null,
+  };
+
+  globalThis.fetch = async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    const method = request.method;
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { "content-type": "application/json" },
+      });
+
+    if (url.hostname === "test.supabase.co") {
+      if (url.pathname === "/auth/v1/user") {
+        return json({
+          id: userId,
+          email: "checkout-contract@maiprop.test",
+          aud: "authenticated",
+          role: "authenticated",
+        });
+      }
+      if (url.pathname === "/rest/v1/rpc/current_billing_runtime_mode") {
+        return json("test");
+      }
+      if (url.pathname === "/rest/v1/profiles") {
+        return json([{
+          role: "buyer",
+          participant_type: "buyer",
+          subscription_product_id: null,
+          force_pro_access: false,
+          is_platform_admin: false,
+        }]);
+      }
+      if (url.pathname === "/rest/v1/billing_subscriptions") {
+        return json([]);
+      }
+      if (url.pathname === "/rest/v1/pricing_configs") {
+        return json([{
+          key: "pro",
+          audience: "participant",
+          module: "user_subscription",
+          unit: "monthly",
+          label: "Pro",
+          amount: 19,
+          currency: "eur",
+          metadata: {
+            stripe_price_id_monthly: "price_test_pro_monthly",
+            stripe_product_id: "prod_test_pro",
+          },
+        }]);
+      }
+      if (
+        url.pathname === "/rest/v1/billing_customers" && method === "POST"
+      ) {
+        return new Response(null, { status: 201 });
+      }
+    }
+
+    if (url.hostname === "api.stripe.com") {
+      if (url.pathname === "/v1/account") {
+        return json({ id: "acct_testcheckoutcontract" });
+      }
+      if (url.pathname === "/v1/balance") {
+        return json({ livemode: false, available: [], pending: [] });
+      }
+      if (url.pathname === "/v1/customers/search") {
+        return json({
+          object: "search_result",
+          data: [{
+            id: "cus_test_checkout_contract",
+            invoice_settings: {
+              custom_fields: [{ name: "Company VAT", value: "EL802708301" }],
+            },
+          }],
+          has_more: false,
+          url: "/v1/customers/search",
+        });
+      }
+      if (url.pathname === "/v1/checkout/sessions" && method === "POST") {
+        captured.checkoutParams = new URLSearchParams(await request.text());
+        return json({
+          id: "cs_test_checkout_contract",
+          object: "checkout.session",
+          livemode: false,
+          mode: "subscription",
+          status: "open",
+          url: "https://checkout.stripe.test/session",
+        });
+      }
+    }
+
+    throw new Error(`Unexpected ${method} request to ${url}`);
+  };
+
+  try {
+    const response = await handler(authedReq("POST", {
+      plan: "pro",
+      billing_cycle: "monthly",
+    }));
+    const responseBody = await response.json();
+
+    assertEquals(response.status, 200, JSON.stringify(responseBody));
+    assertEquals(captured.checkoutParams?.get("mode"), "subscription");
+    assertEquals(captured.checkoutParams?.get("client_reference_id"), userId);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 Deno.test("add-on checkout propagates optional target metadata", async () => {
