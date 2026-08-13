@@ -160,10 +160,19 @@ describe("production release train", () => {
     expect(controlSource).not.toContain("node scripts/");
     expect(control.env).toBeUndefined();
     expect(controlStep.env.CLOUDFLARE_PAGES_READ_TOKEN).toBe(
-      "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}",
+      "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}",
     );
     expect(controlStep.env.CLOUDFLARE_ACCOUNT_ID).toBe(
       "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+    );
+    expect(controlStep.env.CLOUDFLARE_STAGING_PAGES_READ_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}",
+    );
+    expect(controlStep.env.CLOUDFLARE_STAGING_ACCOUNT_ID).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}",
+    );
+    expect(controlStep.run).toContain(
+      '[ "$CLOUDFLARE_ACCOUNT_ID" = "$CLOUDFLARE_STAGING_ACCOUNT_ID" ]',
     );
     expect(collect.env).toBeUndefined();
     expect(collectSource).not.toContain("secrets.CLOUDFLARE_PAGES_EDIT_TOKEN");
@@ -205,7 +214,7 @@ describe("production release train", () => {
       '($id == "" or .result.id == $id)',
     );
     expect(controlStep.run).toContain(
-      '.result | has("source")',
+      '.result.source == null or',
     );
     expect(controlStep.run).toContain(
       '.result.source.type == "github" or .result.source.type == "gitlab"',
@@ -364,6 +373,21 @@ describe("production release train", () => {
     expect(controlStep.env.CLOUDFLARE_PAGES_EDIT_TOKEN).toBe(
       "${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}",
     );
+    expect(controlStep.env.CLOUDFLARE_ACCOUNT_ID).toBe(
+      "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+    );
+    expect(controlStep.env.CLOUDFLARE_STAGING_PAGES_READ_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}",
+    );
+    expect(controlStep.env.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}",
+    );
+    expect(controlStep.env.CLOUDFLARE_STAGING_ACCOUNT_ID).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}",
+    );
+    expect(controlStep.run).toContain(
+      '[ "$CLOUDFLARE_ACCOUNT_ID" = "$CLOUDFLARE_STAGING_ACCOUNT_ID" ]',
+    );
     expect(controlStep.run).toContain(
       'PRODUCTION_PROJECT="maiprop-listing-site"',
     );
@@ -374,11 +398,12 @@ describe("production release train", () => {
       '.success == true and .result.name == $name and .result.id == $id',
     );
     expect(controlStep.run).toContain(
-      '.result | has("source")',
+      '.result.source == null or',
     );
     expect(controlStep.run).toContain(
       '.result.source.type == "github" or .result.source.type == "gitlab"',
     );
+    expect(controlStep.run).toContain('if [ -z "$source_type" ]; then');
     expect(controlStep.run.indexOf(
       '[ -z "$EXPECTED_PRODUCTION_PROJECT_ID" ]',
     )).toBeLessThan(controlStep.run.indexOf("patch_project()"));

@@ -40,6 +40,62 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Enforce Cloudflare bootstrap squash marker
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          sensitive_change=0
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/compliance-evidence.yml|\
+              .github/workflows/lock-cloudflare-pages-git-deploys.yml|\
+              .github/workflows/reusable-cloudflare-production-deploy.yml|\
+              .github/workflows/stage-release.yml)
+                sensitive_change=1
+                break
+                ;;
+            esac
+          done < <(git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA")
+          if [ "$sensitive_change" -eq 0 ]; then
+            exit 0
+          fi
+
+          repo_owner="${GITHUB_REPOSITORY%%/*}"
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          gh api graphql \
+            -f owner="$repo_owner" \
+            -f name="$repo_name" \
+            -f query='query($owner: String!, $name: String!) {
+              repository(owner: $owner, name: $name) {
+                mergeCommitAllowed
+                rebaseMergeAllowed
+                squashMergeAllowed
+                squashMergeCommitTitle
+              }
+            }' > repository-merge-settings.json
+          if ! jq -e '
+            .data.repository.squashMergeAllowed == true and
+            .data.repository.mergeCommitAllowed == false and
+            .data.repository.rebaseMergeAllowed == false and
+            .data.repository.squashMergeCommitTitle == "PR_TITLE"
+          ' repository-merge-settings.json > /dev/null; then
+            echo "::error::Sensitive Cloudflare bootstrap changes require squash-only PR-title commit settings."
+            jq -c '.data.repository // {}' repository-merge-settings.json
+            exit 1
+          fi
+          case "$PR_TITLE" in
+            '[CF-Pages-Skip]'*) ;;
+            *)
+              echo "::error::Sensitive Cloudflare bootstrap PR titles must begin with [CF-Pages-Skip]."
+              exit 1
+              ;;
+          esac
+
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version

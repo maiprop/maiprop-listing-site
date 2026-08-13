@@ -44,10 +44,14 @@ the repository, source tree, signed approval nonce, artifact digest, and every
 source/staging/approval/production run ID and attempt. Invalid validation clocks
 fail closed.
 
-The Cloudflare lock workflow additionally requires repository secrets
-`CLOUDFLARE_PAGES_READ_TOKEN` and `CLOUDFLARE_PAGES_EDIT_TOKEN`, plus exact
-repository variables `CLOUDFLARE_PAGES_PROJECT_ID` and
-`CLOUDFLARE_STAGING_PAGES_PROJECT_ID`. Merge the safe bootstrap Task 1
+The Cloudflare compliance and lock workflows require separate repository
+secrets `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_PAGES_READ_TOKEN`,
+`CLOUDFLARE_PAGES_EDIT_TOKEN`, `CLOUDFLARE_STAGING_ACCOUNT_ID`,
+`CLOUDFLARE_STAGING_PAGES_READ_TOKEN`, and
+`CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN`, plus exact repository variables
+`CLOUDFLARE_PAGES_PROJECT_ID` and `CLOUDFLARE_STAGING_PAGES_PROJECT_ID`.
+Equal production/staging account IDs fail before lookup or mutation. Merge the
+safe bootstrap Task 1
 workflows to trusted `main` under `[CF-Pages-Skip]` before publishing the rest
 of the candidate. Run read/lock verification only from that independently
 verified current-main workflow SHA; no candidate branch receives provider
@@ -55,13 +59,15 @@ secrets. Candidate-branch execution is rejected. Protected release trains do
 not use the legacy broad `CLOUDFLARE_API_TOKEN`.
 
 When the project-ID variables are absent, the read-only standards workflow
-GETs both fixed project names, validates identity/source type, and uploads
+GETs both fixed project names, validates identity and optional Git source type, and uploads
 minimized evidence containing their distinct IDs even when Git previews remain
 unlocked. It then fails with a bootstrap instruction without treating lock
 posture as an identity prerequisite. Set both variables from that evidence and
 rerun; only the pinned rerun enforces lock posture. The bootstrap lock workflow
 never bootstraps identity: both distinct pinned IDs are mandatory before it can
-change Git integration posture. The production release train performs no
+change Git integration posture. A Direct Upload project has no Git source and
+is therefore already locked; the workflow records `source: null` and performs
+no settings PATCH for that project. The production release train performs no
 project-settings PATCH and accepts only pre-provisioned runtime bindings.
 
 The caller resolves these repository or organization secrets explicitly when
