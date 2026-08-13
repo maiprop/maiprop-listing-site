@@ -128,18 +128,18 @@ const formatAuctionDate = (value: string, isGreek: boolean) => {
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 const AuctionBreadcrumb = ({ title, isGreek }: { title: string; isGreek: boolean }) => {
   return (
-    <nav aria-label="Breadcrumb" className="container py-2 sm:py-3">
-      <ol className="flex items-center gap-1.5 text-xs text-muted-foreground overflow-x-auto scrollbar-none list-none p-0 m-0">
-        <li>
-          <Link to="/" className="hover:text-foreground transition-colors shrink-0">{isGreek ? "Αρχική" : "Home"}</Link>
+    <nav aria-label="Breadcrumb" className="container min-w-0 overflow-hidden py-2 sm:py-3">
+      <ol className="m-0 flex min-w-0 max-w-full list-none items-center gap-1.5 overflow-hidden p-0 text-xs text-muted-foreground">
+        <li className="shrink-0">
+          <Link to="/" className="transition-colors hover:text-foreground">{isGreek ? "Αρχική" : "Home"}</Link>
         </li>
-        <li aria-hidden="true">/</li>
-        <li>
-          <Link to="/auctions" className="hover:text-foreground transition-colors shrink-0">{isGreek ? "Πλειστηριασμοί" : "Auctions"}</Link>
+        <li aria-hidden="true" className="shrink-0">/</li>
+        <li className="shrink-0">
+          <Link to="/auctions" className="transition-colors hover:text-foreground">{isGreek ? "Πλειστηριασμοί" : "Auctions"}</Link>
         </li>
-        <li aria-hidden="true">/</li>
-        <li>
-          <span className="text-foreground truncate font-medium" aria-current="page">{title}</span>
+        <li aria-hidden="true" className="shrink-0">/</li>
+        <li className="min-w-0 flex-1">
+          <span className="block truncate font-medium text-foreground" aria-current="page">{title}</span>
         </li>
       </ol>
     </nav>
