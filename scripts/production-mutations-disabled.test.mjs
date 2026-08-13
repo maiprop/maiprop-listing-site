@@ -49,7 +49,7 @@ describe("production mutation boundaries", () => {
     const parsed = parsedWorkflow(name);
 
     expect(Object.keys(parsed.on)).toEqual(["workflow_call"]);
-    expect(parsed.jobs.deploy.environment).toBeUndefined();
+    expect(parsed.jobs.deploy.environment).toBe("production");
     expect(parsed.concurrency).toBeUndefined();
     expect(source).toContain("qvvicunqcrwpioqnvzxf");
     expect(source).toContain("persist-credentials: false");
@@ -58,6 +58,8 @@ describe("production mutation boundaries", () => {
     expect(source).toContain("mutation-lease");
     expect(source).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
     expect(source).not.toContain("secrets: inherit");
+    expect(parsed.on.workflow_call.secrets.SUPABASE_PRODUCTION_DB_URL).toBeUndefined();
+    expect(source).toContain("secrets.SUPABASE_PRODUCTION_DB_URL");
 
     const runScripts = parsed.jobs.deploy.steps
       .map((step) => step.run ?? "")

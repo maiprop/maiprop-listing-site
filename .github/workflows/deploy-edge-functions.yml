@@ -74,8 +74,6 @@ on:
         required: true
       SUPABASE_ACCESS_TOKEN:
         required: true
-      SUPABASE_PRODUCTION_DB_URL:
-        required: true
       VITE_SUPABASE_PROJECT_ID:
         required: true
       VITE_SUPABASE_URL:
@@ -96,6 +94,7 @@ jobs:
   deploy:
     name: Deploy to Supabase
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 30
     outputs:
       edge_attestation_artifact: ${{ steps.edge_attestation.outputs.artifact_name }}

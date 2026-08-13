@@ -6,10 +6,60 @@ import {
   cloudflareHttpMutationViolation,
   findCloudflareHttpMutations,
   isAuthorizedCloudflareHttpMutationWorkflow,
+  productionDatabaseCredentialScopeViolations,
   scanWorkflows,
 } from "./release-safety-inventory.mjs";
 
 describe("release safety inventory", () => {
+  it("fails closed on production database credential-scope regressions", () => {
+    const calledWorkflow = {
+      text: "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
+      parsed: {
+        on: { workflow_call: { secrets: {} } },
+        jobs: { deploy: { environment: "production" } },
+      },
+    };
+    const release = {
+      jobs: {
+        "deploy-production-database": { secrets: {} },
+        "deploy-production-edge": { secrets: {} },
+      },
+    };
+
+    expect(
+      productionDatabaseCredentialScopeViolations({
+        release,
+        calledWorkflows: [calledWorkflow, calledWorkflow],
+      }),
+    ).toEqual([]);
+
+    expect(
+      productionDatabaseCredentialScopeViolations({
+        release: {
+          jobs: {
+            ...release.jobs,
+            "deploy-production-database": {
+              secrets: { SUPABASE_PRODUCTION_DB_URL: "forwarded" },
+            },
+          },
+        },
+        calledWorkflows: [
+          {
+            text: "secrets: inherit",
+            parsed: {
+              on: {
+                workflow_call: {
+                  secrets: { SUPABASE_PRODUCTION_DB_URL: { required: true } },
+                },
+              },
+              jobs: { deploy: {} },
+            },
+          },
+        ],
+      }),
+    ).toHaveLength(3);
+  });
+
   it("inventories generic Cloudflare API HTTP mutations", () => {
     const workflow = `
       curl --request PATCH https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p

@@ -65,8 +65,6 @@ on:
         required: true
       SUPABASE_ACCESS_TOKEN:
         required: true
-      SUPABASE_PRODUCTION_DB_URL:
-        required: true
       VITE_SUPABASE_PROJECT_ID:
         required: true
       VITE_SUPABASE_URL:
@@ -87,6 +85,7 @@ jobs:
   deploy:
     name: Production database migration gate
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 60
     env:
       PRODUCTION_CALLER_WORKFLOW_PATH: ".github/workflows/deploy-production-release.yml"

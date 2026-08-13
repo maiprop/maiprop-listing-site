@@ -45,11 +45,12 @@ describe("production DB advisor workflow", () => {
     expect(productionWorkflow).toContain("workflow_call:");
     expect(productionWorkflow).not.toContain("workflow_dispatch:");
     expect(parsed.concurrency).toBeUndefined();
-    expect(parsed.jobs.deploy.environment).toBeUndefined();
+    expect(parsed.jobs.deploy.environment).toBe("production");
     expect(parsed.permissions).toEqual({ actions: "read", contents: "read" });
-    expect(parsed.on.workflow_call.secrets?.SUPABASE_PRODUCTION_DB_URL).toEqual({
-      required: true,
-    });
+    expect(parsed.on.workflow_call.secrets?.SUPABASE_PRODUCTION_DB_URL).toBeUndefined();
+    expect(productionWorkflow).toContain(
+      "SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
+    );
     expect(parsed.on.workflow_call.secrets?.RELEASE_EVIDENCE_SIGNING_KEY).toEqual({
       required: true,
     });
