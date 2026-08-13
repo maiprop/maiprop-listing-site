@@ -4,6 +4,10 @@ import { resolve } from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
+import {
+  STRIPE_RUNTIME_BINDINGS,
+} from "./validate-cloudflare-pages-staging-posture.mjs";
+
 const root = resolve(import.meta.dirname, "..");
 const workflow = (name) =>
   readFileSync(resolve(root, ".github", "workflows", name), "utf8");
@@ -1273,17 +1277,8 @@ describe("production release train", () => {
     expect(job.env.BACKEND_APPROVAL_RUN_ATTEMPT).toBe(
       "${{ inputs.backend_approval_run_attempt }}",
     );
-    for (const name of [
-      "VITE_STRIPE_PUBLISHABLE_KEY",
-      "VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY",
-      "VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL",
-      "VITE_STRIPE_PRICE_AGENT_MONTHLY",
-      "VITE_STRIPE_PRICE_AGENT_ANNUAL",
-      "VITE_STRIPE_PRICE_DEVELOPER_MONTHLY",
-      "VITE_STRIPE_PRICE_DEVELOPER_ANNUAL",
-      "VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY",
-      "VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL",
-    ]) {
+    expect(STRIPE_RUNTIME_BINDINGS).toHaveLength(11);
+    for (const name of STRIPE_RUNTIME_BINDINGS) {
       expect(job.env[name], name).toBe(`\${{ vars.${name} }}`);
     }
     expect(content).toContain("persist-credentials: false");
