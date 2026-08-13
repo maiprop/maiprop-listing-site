@@ -82,8 +82,12 @@ describe("release-train live security workflow", () => {
     ]) {
       expect(workflow).not.toContain("actions/attest-build-provenance@");
       expect(workflow).not.toContain("gh attestation verify");
+    }
+    for (const workflow of [ciWorkflow, approvalWorkflow]) {
       expect(workflow).not.toMatch(/^\s{4}environment:\s*\S+/m);
     }
+    expect(stagingWorkflow).toContain("    environment: staging");
+    expect(supabaseStagingWorkflow).toContain("    environment: staging");
     expect(ciWorkflow).toContain("production-release-candidate-binding-${{ github.sha }}-${{ github.run_attempt }}");
     expect(ciWorkflow).toContain("RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}");
     expect(ciWorkflow).toContain("--trusted-current-run-id \"$GITHUB_RUN_ID\"");

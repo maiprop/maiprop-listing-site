@@ -84,6 +84,7 @@ permissions:
 jobs:
   deploy-supabase-staging:
     name: Prepare Supabase
+    environment: staging
     if: github.run_attempt == 1 && github.actor == github.triggering_actor && inputs.source_run_attempt == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 25

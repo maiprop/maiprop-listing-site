@@ -59,6 +59,10 @@ describe("GitHub Free private-repository release provenance readiness", () => {
       ".github/workflows/reusable-supabase-staging.yml",
       ".github/workflows/stage-release.yml",
     ]);
+    expect(readiness.summary.githubFreePrivateEnvironmentControls).toEqual({
+      active: false,
+      purpose: "deployment attribution and paid-plan scope only",
+    });
   });
 
   it("fails closed when signing-key ownership or same-run controls are removed", () => {
@@ -332,7 +336,7 @@ describe("GitHub Free private-repository release provenance readiness", () => {
     expect(readiness.failures.join("\n")).toMatch(/attestation|environment|OIDC/i);
   });
 
-  it("rejects reintroduced GitHub attestation or environment-review dependencies", () => {
+  it("rejects reintroduced GitHub attestation or OIDC dependencies in staging workflows", () => {
     const root = fixture();
     const stagePath = join(root, ".github/workflows/stage-release.yml");
     writeFileSync(
@@ -340,11 +344,154 @@ describe("GitHub Free private-repository release provenance readiness", () => {
       `${readFileSync(stagePath, "utf8")}\n` +
         "# actions/attest-build-provenance@floating\n" +
         "# gh attestation verify\n" +
-        "    environment: staging\n" +
         "      id-token: write\n",
     );
     const readiness = checkSlsaReadiness(root);
     expect(readiness.ok).toBe(false);
-    expect(readiness.failures.join("\n")).toMatch(/attestation|environment/i);
+    expect(readiness.failures.join("\n")).toMatch(/attestation|OIDC/i);
+  });
+
+  it("rejects staging environment scope on a reusable caller job", () => {
+    const root = fixture();
+    rewrite(
+      root,
+      ".github/workflows/stage-release.yml",
+      (source) => source.replace(
+        "  supabase-staging:\n    name: Stage Supabase exact SHA",
+        "  supabase-staging:\n    name: Stage Supabase exact SHA\n    environment: staging",
+      ),
+    );
+
+    const readiness = checkSlsaReadiness(root);
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.failures.join("\n")).toMatch(
+      /supabase-staging.*environment|environment.*supabase-staging/i,
+    );
+  });
+
+  it("rejects an unclassified stage-release job without an environment", () => {
+    const root = fixture();
+    rewrite(
+      root,
+      ".github/workflows/stage-release.yml",
+      (source) => `${source.trimEnd()}\n\n` +
+        "  unknown-unscoped-job:\n" +
+        "    name: Unknown unscoped job\n" +
+        "    runs-on: ubuntu-latest\n" +
+        "    steps:\n" +
+        "      - run: echo unclassified\n",
+    );
+
+    const readiness = checkSlsaReadiness(root);
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.failures.join("\n")).toMatch(
+      /unknown-unscoped-job.*not explicitly classified/i,
+    );
+  });
+
+  it("rejects an unclassified stage-release job even when it uses staging", () => {
+    const root = fixture();
+    rewrite(
+      root,
+      ".github/workflows/stage-release.yml",
+      (source) => `${source.trimEnd()}\n\n` +
+        "  unknown-staging-job:\n" +
+        "    name: Unknown staging job\n" +
+        "    environment: staging\n" +
+        "    runs-on: ubuntu-latest\n" +
+        "    steps:\n" +
+        "      - run: echo unclassified\n",
+    );
+
+    const readiness = checkSlsaReadiness(root);
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.failures.join("\n")).toMatch(
+      /unknown-staging-job.*not explicitly classified/i,
+    );
+  });
+
+  it("rejects an unclassified stage-release job assigned to another environment", () => {
+    const root = fixture();
+    rewrite(
+      root,
+      ".github/workflows/stage-release.yml",
+      (source) => `${source.trimEnd()}\n\n` +
+        "  unknown-mis-scoped-job:\n" +
+        "    name: Unknown mis-scoped job\n" +
+        "    environment: production\n" +
+        "    runs-on: ubuntu-latest\n" +
+        "    steps:\n" +
+        "      - run: echo unclassified\n",
+    );
+
+    const readiness = checkSlsaReadiness(root);
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.failures.join("\n")).toMatch(
+      /unknown-mis-scoped-job.*not explicitly classified/i,
+    );
+  });
+
+  it("rejects a renamed stage-release job until its classification changes", () => {
+    const root = fixture();
+    rewrite(
+      root,
+      ".github/workflows/stage-release.yml",
+      (source) => source.replace(
+        "  staging-business-proofs:\n",
+        "  renamed-staging-business-proofs:\n",
+      ),
+    );
+
+    const readiness = checkSlsaReadiness(root);
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.failures.join("\n")).toMatch(
+      /renamed-staging-business-proofs.*not explicitly classified/i,
+    );
+    expect(readiness.failures.join("\n")).toMatch(
+      /classified job staging-business-proofs is missing/i,
+    );
+  });
+
+  it("requires staging environment scope on mutation and evidence jobs", () => {
+    const root = fixture();
+    rewrite(
+      root,
+      ".github/workflows/stage-release.yml",
+      (source) => source.replace(
+        "  cloudflare-staging:\n    name: Stage Cloudflare exact artifact\n    environment: staging",
+        "  cloudflare-staging:\n    name: Stage Cloudflare exact artifact",
+      ),
+    );
+
+    const readiness = checkSlsaReadiness(root);
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.failures.join("\n")).toMatch(
+      /cloudflare-staging.*environment|environment.*cloudflare-staging/i,
+    );
+  });
+
+  it("rejects a classified staging job assigned to another environment", () => {
+    const root = fixture();
+    rewrite(
+      root,
+      ".github/workflows/stage-release.yml",
+      (source) => source.replace(
+        "  cloudflare-staging:\n    name: Stage Cloudflare exact artifact\n    environment: staging",
+        "  cloudflare-staging:\n    name: Stage Cloudflare exact artifact\n    environment: production",
+      ),
+    );
+
+    const readiness = checkSlsaReadiness(root);
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.failures.join("\n")).toMatch(
+      /cloudflare-staging.*staging environment/i,
+    );
   });
 });

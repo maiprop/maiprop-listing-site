@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import yaml from "js-yaml";
 
 const result = (failures, summary = {}) => ({
   ok: failures.length === 0,
@@ -30,12 +31,89 @@ const requirePatterns = (failures, path, text, patterns) => {
   }
 };
 
-const rejectUnsupportedControls = (failures, path, text) => {
+const STAGE_RELEASE_ENVIRONMENT_CLASSIFICATION = new Map([
+  ["validate-source", null],
+  ["capture-production-n-minus-one", "staging"],
+  ["supabase-staging", null],
+  ["staging-n-minus-one-compatibility", "staging"],
+  ["cloudflare-staging", "staging"],
+  ["staging-business-proofs", "staging"],
+  ["staging-stripe-payment", "staging"],
+  ["staging-live-security", "staging"],
+  ["staging-catalogue-performance", "staging"],
+  ["release-candidate-attested", "staging"],
+]);
+
+const REUSABLE_SUPABASE_ENVIRONMENT_CLASSIFICATION = new Map([
+  ["deploy-supabase-staging", "staging"],
+]);
+
+const requireEnvironmentClassification = (
+  failures,
+  path,
+  text,
+  classification,
+) => {
+  if (text === null) return;
+  let workflow;
+  try {
+    workflow = yaml.load(text);
+  } catch (error) {
+    failures.push(`${path} must contain valid YAML: ${error.message}`);
+    return;
+  }
+
+  const jobs = workflow?.jobs;
+  if (!jobs || typeof jobs !== "object") {
+    failures.push(`${path} must define jobs`);
+    return;
+  }
+
+  for (const [jobId, job] of Object.entries(jobs)) {
+    if (!classification.has(jobId)) {
+      failures.push(
+        `${path} ${jobId} is not explicitly classified as environment-scoped or unscoped`,
+      );
+      continue;
+    }
+
+    const environment = job?.environment;
+    const environmentName = typeof environment === "string"
+      ? environment
+      : environment?.name;
+    const requiredEnvironment = classification.get(jobId);
+    if (requiredEnvironment === null && environment !== undefined) {
+      failures.push(`${path} ${jobId} must not declare a GitHub environment`);
+    } else if (
+      requiredEnvironment !== null &&
+      environmentName !== requiredEnvironment
+    ) {
+      failures.push(
+        `${path} ${jobId} must use the ${requiredEnvironment} environment`,
+      );
+    }
+  }
+
+  for (const jobId of classification.keys()) {
+    if (!Object.hasOwn(jobs, jobId)) {
+      failures.push(`${path} classified job ${jobId} is missing`);
+    }
+  }
+};
+
+const rejectUnsupportedControls = (
+  failures,
+  path,
+  text,
+  { allowEnvironment = false } = {},
+) => {
   if (text === null) return;
   for (const [pattern, label] of [
     [/actions\/attest-build-provenance@/i, "GitHub build attestations"],
     [/\bgh\s+attestation\b/i, "gh attestation verification"],
-    [/^\s{4}environment\s*:/m, "GitHub Environment job gates"],
+    ...(allowEnvironment
+      ? []
+      : [[/^\s{4}environment\s*:/m, "GitHub Environment job gates"]]),
     [/^\s+(?:attestations|artifact-metadata|id-token):\s*(?:read|write)\b/mi, "attestation/OIDC permissions"],
   ]) {
     if (pattern.test(text)) failures.push(`${path} must not depend on ${label}`);
@@ -364,8 +442,23 @@ export function checkSlsaReadiness(root = process.cwd()) {
     "directCloudflare",
     "reusableCloudflare",
   ]) {
-    rejectUnsupportedControls(failures, paths[name], texts[name]);
+    rejectUnsupportedControls(failures, paths[name], texts[name], {
+      allowEnvironment: name === "stage" || name === "supabase",
+    });
   }
+
+  requireEnvironmentClassification(
+    failures,
+    paths.stage,
+    texts.stage,
+    STAGE_RELEASE_ENVIRONMENT_CLASSIFICATION,
+  );
+  requireEnvironmentClassification(
+    failures,
+    paths.supabase,
+    texts.supabase,
+    REUSABLE_SUPABASE_ENVIRONMENT_CLASSIFICATION,
+  );
 
   const bindingWorkflowFiles = [
     "approval",
@@ -379,7 +472,13 @@ export function checkSlsaReadiness(root = process.cwd()) {
     .filter((name) => texts[name]?.includes("node scripts/create-release-artifact-binding.mjs"))
     .map((name) => paths[name])
     .sort();
-  return result(failures, { bindingWorkflowFiles });
+  return result(failures, {
+    bindingWorkflowFiles,
+    githubFreePrivateEnvironmentControls: {
+      active: false,
+      purpose: "deployment attribution and paid-plan scope only",
+    },
+  });
 }
 
 const main = () => {
@@ -389,7 +488,9 @@ const main = () => {
     process.exitCode = 1;
     return;
   }
-  process.stdout.write("GitHub Free release artifact binding readiness OK\n");
+  process.stdout.write(
+    "GitHub Free release artifact binding readiness OK; staging environment labels are not active protection controls on this private plan\n",
+  );
 };
 
 if (

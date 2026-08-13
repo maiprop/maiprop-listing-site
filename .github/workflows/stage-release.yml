@@ -302,6 +302,7 @@ jobs:
 
   capture-production-n-minus-one:
     name: Capture production N-1 artifact before staging mutation
+    environment: staging
     needs: [validate-source]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -557,6 +558,7 @@ jobs:
 
   staging-n-minus-one-compatibility:
     name: Prove N-1 frontend against staged backend
+    environment: staging
     needs:
       - validate-source
       - capture-production-n-minus-one
@@ -788,6 +790,7 @@ jobs:
 
   cloudflare-staging:
     name: Stage Cloudflare exact artifact
+    environment: staging
     needs: [validate-source, supabase-staging]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -1905,6 +1908,7 @@ jobs:
 
   staging-business-proofs:
     name: Prove staged tenant and cleanup invariants
+    environment: staging
     needs: [validate-source, supabase-staging, cloudflare-staging]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -2077,6 +2081,7 @@ jobs:
 
   staging-stripe-payment:
     name: Prove staged Stripe test payment
+    environment: staging
     needs: [validate-source, supabase-staging, cloudflare-staging]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -2181,6 +2186,7 @@ jobs:
 
   staging-live-security:
     name: Prove staged live security boundaries
+    environment: staging
     needs: [validate-source, supabase-staging, cloudflare-staging]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -2367,6 +2373,7 @@ jobs:
 
   staging-catalogue-performance:
     name: Prove exact-SHA staging catalogues and performance
+    environment: staging
     needs: [validate-source, supabase-staging, cloudflare-staging]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -2630,6 +2637,7 @@ jobs:
 
   release-candidate-attested:
     name: Release candidate attested
+    environment: staging
     if: github.run_attempt == 1 && github.actor == github.triggering_actor
     needs:
       - validate-source

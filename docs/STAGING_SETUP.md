@@ -68,7 +68,15 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
 
 ### 4. GitHub
 
-- Settings -> Environments -> create `staging` env. No reviewers required.
+- Staging mutation and security-evidence jobs declare `environment: staging`;
+  the reusable Supabase caller cannot declare an environment, so its called
+  runner declares the scope. On the current private GitHub Free plan these
+  declarations provide deployment attribution only: environment secrets,
+  deployment branch policies, required reviewers, and prevent-self-review are
+  not active controls. Credentials and control variables remain repository
+  scoped. After a GitHub Team/Enterprise upgrade, configure the existing
+  `staging` environment and move only staging-specific credentials into it as
+  defense in depth.
 - Add repository variable `STAGING_RELEASE_ENABLED=true` only after the
   dedicated staging Supabase and Cloudflare projects are fully provisioned.
   Missing or any value other than exact lowercase `true` keeps the automatic
@@ -112,10 +120,12 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   Supabase URL, project ref, and publishable key must exactly match the isolated
   staging project; the release train fails instead of falling back to
   production.
-- GitHub required-reviewer protection is not available for this private
-  repository on the current plan. The `main`-only environment branch policy,
-  default-off release flag, and exact workflow-SHA trust pin are therefore
-  mandatory controls; do not enable staging without all three.
+- GitHub environment protection is not available for this private repository
+  on the current plan. The default-off release flag, exact workflow-SHA trust
+  pin, attempt-one actor checks, signed artifact bindings, and staging mutation
+  acknowledgement are therefore mandatory controls; do not enable staging
+  without all of them. Configure a `main`-only environment branch policy only
+  after upgrading to a plan that enforces it for private repositories.
 - Do not store a separate `STAGING_SUPABASE_SERVICE_ROLE_KEY` GitHub secret.
   The Supabase staging workflow resolves and masks the staging `service_role`
   JWT at runtime through the Management API using `SUPABASE_ACCESS_TOKEN`.
