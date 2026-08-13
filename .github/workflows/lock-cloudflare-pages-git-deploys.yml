@@ -103,18 +103,25 @@ jobs:
               --arg id "$id" \
               --arg source_type "$source_type" '
                 .success == true and .result.name == $name and .result.id == $id and
-                (.result | has("source")) and
-                (.result.source | type == "object") and
-                (.result.source.type == "github" or .result.source.type == "gitlab") and
-                ($source_type == "" or .result.source.type == $source_type)
+                (
+                  .result.source == null or
+                  (
+                    (.result.source | type == "object") and
+                    (.result.source.type == "github" or .result.source.type == "gitlab") and
+                    ($source_type == "" or .result.source.type == $source_type)
+                  )
+                )
               ' "$file" > /dev/null
           }
 
           validate_locked() {
             jq -e '
-              .result.source.config.deployments_enabled == false and
-              .result.source.config.production_deployments_enabled == false and
-              .result.source.config.preview_deployment_setting == "none"
+              .result.source == null or
+              (
+                .result.source.config.deployments_enabled == false and
+                .result.source.config.production_deployments_enabled == false and
+                .result.source.config.preview_deployment_setting == "none"
+              )
             ' "$1" > /dev/null
           }
 
@@ -124,14 +131,16 @@ jobs:
             jq '{
               id: .result.id,
               name: .result.name,
-              source: {
-                type: .result.source.type,
-                config: {
-                  deployments_enabled: .result.source.config.deployments_enabled,
-                  production_deployments_enabled: .result.source.config.production_deployments_enabled,
-                  preview_deployment_setting: .result.source.config.preview_deployment_setting
-                }
-              }
+              source: (
+                if .result.source == null then null else {
+                  type: .result.source.type,
+                  config: {
+                    deployments_enabled: .result.source.config.deployments_enabled,
+                    production_deployments_enabled: .result.source.config.production_deployments_enabled,
+                    preview_deployment_setting: .result.source.config.preview_deployment_setting
+                  }
+                } end
+              )
             }' "$file" > "$out"
           }
 
@@ -172,6 +181,9 @@ jobs:
             local out="$3"
             local body="$RAW_DIR/$name-patch-body.json"
             local current_main
+            if [ -z "$source_type" ]; then
+              return 0
+            fi
             jq -n --arg source_type "$source_type" '{
               source: {
                 "type": $source_type,
@@ -213,8 +225,8 @@ jobs:
             "$STAGING_PRE" \
             "$STAGING_PROJECT" \
             "$EXPECTED_STAGING_PROJECT_ID"
-          PRODUCTION_SOURCE_TYPE="$(jq -r '.result.source.type' "$PRODUCTION_PRE")"
-          STAGING_SOURCE_TYPE="$(jq -r '.result.source.type' "$STAGING_PRE")"
+          PRODUCTION_SOURCE_TYPE="$(jq -r '.result.source.type // ""' "$PRODUCTION_PRE")"
+          STAGING_SOURCE_TYPE="$(jq -r '.result.source.type // ""' "$STAGING_PRE")"
           minimize_project "$PRODUCTION_PRE" "$PRODUCTION_PRE_MIN"
           minimize_project "$STAGING_PRE" "$STAGING_PRE_MIN"
           write_two_project_evidence \

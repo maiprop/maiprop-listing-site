@@ -11,7 +11,9 @@ only through the protected, exact-artifact release train after signed approval.
    use **Direct upload**. If a Git integration is retained, disable both
    production and preview automatic deployments. The staging train checks that
    posture through the Cloudflare Pages API for both staging and production and
-   fails before mutation when either project can auto-deploy.
+   fails before mutation when either project can auto-deploy. Direct Upload
+   projects report no Git source and are treated as already locked; the lock
+   workflow never fabricates or PATCHes a Git source for them.
 2. Project name: `maiprop-listing-site` (must match `CF_PROJECT` in
    `.github/workflows/ci.yml`).
 3. Production branch: `main`.

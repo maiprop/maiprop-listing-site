@@ -98,6 +98,12 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     expect(control.run).toContain(
       'get_project "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" "$CLOUDFLARE_STAGING_ACCOUNT_ID" "$STAGING_PROJECT" "$STAGING_RAW"',
     );
+    expect(control.run).toContain(
+      '.result.source == null or',
+    );
+    expect(control.run).toContain(
+      'if .result.source == null then null else',
+    );
     expect(control.run).toContain("bootstrap_required=1");
     expect(control.run).toContain("validate_identity");
     expect(control.run).toContain("validate_locked");
@@ -217,6 +223,12 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     );
     expect(control.run).toContain(
       'CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_STAGING_ACCOUNT_ID"',
+    );
+    expect(control.run).toContain(
+      'if [ -z "$source_type" ]; then',
+    );
+    expect(control.run).toContain(
+      '.result.source == null or',
     );
     expect(control.run.indexOf("EXPECTED_PRODUCTION_PROJECT_ID")).toBeLessThan(
       control.run.indexOf("patch_project"),

@@ -59,13 +59,15 @@ secrets. Candidate-branch execution is rejected. Protected release trains do
 not use the legacy broad `CLOUDFLARE_API_TOKEN`.
 
 When the project-ID variables are absent, the read-only standards workflow
-GETs both fixed project names, validates identity/source type, and uploads
+GETs both fixed project names, validates identity and optional Git source type, and uploads
 minimized evidence containing their distinct IDs even when Git previews remain
 unlocked. It then fails with a bootstrap instruction without treating lock
 posture as an identity prerequisite. Set both variables from that evidence and
 rerun; only the pinned rerun enforces lock posture. The bootstrap lock workflow
 never bootstraps identity: both distinct pinned IDs are mandatory before it can
-change Git integration posture. The production release train performs no
+change Git integration posture. A Direct Upload project has no Git source and
+is therefore already locked; the workflow records `source: null` and performs
+no settings PATCH for that project. The production release train performs no
 project-settings PATCH and accepts only pre-provisioned runtime bindings.
 
 The caller resolves these repository or organization secrets explicitly when

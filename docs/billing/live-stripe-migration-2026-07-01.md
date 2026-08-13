@@ -67,7 +67,8 @@
 ## Current Evidence
 - Historical connector observations are not current release evidence. The Stripe connector presently requires reauthentication, so no connector result may be used to authorize this release.
 - GitHub run `31572311971` failed closed before provider access because `PRODUCTION_RELEASE_APPROVERS` is unset; it produced no readiness artifact.
-- Repository and organization scopes currently lack the restricted readiness key and release-evidence signing key required by the verifier.
+- As of 2026-08-13, repository controls now include the independent approver/deployer allowlists, `RELEASE_EVIDENCE_SIGNING_KEY`, and key ID `ecas-release-hmac-2026-08-13-v1`. Historical unsigned artifacts remain invalid; a fresh attempt-1 candidate and readiness run are still required.
+- Repository and organization scopes still lack the minimally scoped `STRIPE_RESTRICTED_KEY` required by the live verifier.
 - Production Supabase currently has Stripe-related Edge secrets set by name, including `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_RUNTIME_MODE`, `STRIPE_LIVE_MODE`, public price fallback secrets, and company VAT secrets.
 - Production Supabase pricing metadata still points at the existing sandbox/test Stripe IDs until the live catalogue SQL is applied.
 

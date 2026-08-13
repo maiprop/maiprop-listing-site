@@ -214,7 +214,7 @@ describe("production release train", () => {
       '($id == "" or .result.id == $id)',
     );
     expect(controlStep.run).toContain(
-      '.result | has("source")',
+      '.result.source == null or',
     );
     expect(controlStep.run).toContain(
       '.result.source.type == "github" or .result.source.type == "gitlab"',
@@ -398,11 +398,12 @@ describe("production release train", () => {
       '.success == true and .result.name == $name and .result.id == $id',
     );
     expect(controlStep.run).toContain(
-      '.result | has("source")',
+      '.result.source == null or',
     );
     expect(controlStep.run).toContain(
       '.result.source.type == "github" or .result.source.type == "gitlab"',
     );
+    expect(controlStep.run).toContain('if [ -z "$source_type" ]; then');
     expect(controlStep.run.indexOf(
       '[ -z "$EXPECTED_PRODUCTION_PROJECT_ID" ]',
     )).toBeLessThan(controlStep.run.indexOf("patch_project()"));

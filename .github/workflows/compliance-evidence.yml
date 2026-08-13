@@ -116,17 +116,24 @@ jobs:
               .success == true and .result.name == $name and
               (.result.id | type == "string" and length > 0) and
               ($id == "" or .result.id == $id) and
-              (.result | has("source")) and
-              (.result.source | type == "object") and
-              (.result.source.type == "github" or .result.source.type == "gitlab")
+              (
+                .result.source == null or
+                (
+                  (.result.source | type == "object") and
+                  (.result.source.type == "github" or .result.source.type == "gitlab")
+                )
+              )
             ' "$file" > /dev/null
           }
 
           validate_locked() {
             jq -e '
-              .result.source.config.deployments_enabled == false and
-              .result.source.config.production_deployments_enabled == false and
-              .result.source.config.preview_deployment_setting == "none"
+              .result.source == null or
+              (
+                .result.source.config.deployments_enabled == false and
+                .result.source.config.production_deployments_enabled == false and
+                .result.source.config.preview_deployment_setting == "none"
+              )
             ' "$1" > /dev/null
           }
 
@@ -136,14 +143,16 @@ jobs:
             jq '{
               id: .result.id,
               name: .result.name,
-              source: {
-                type: .result.source.type,
-                config: {
-                  deployments_enabled: .result.source.config.deployments_enabled,
-                  production_deployments_enabled: .result.source.config.production_deployments_enabled,
-                  preview_deployment_setting: .result.source.config.preview_deployment_setting
-                }
-              }
+              source: (
+                if .result.source == null then null else {
+                  type: .result.source.type,
+                  config: {
+                    deployments_enabled: .result.source.config.deployments_enabled,
+                    production_deployments_enabled: .result.source.config.production_deployments_enabled,
+                    preview_deployment_setting: .result.source.config.preview_deployment_setting
+                  }
+                } end
+              )
             }' "$file" > "$out"
           }
 
@@ -177,15 +186,25 @@ jobs:
             '{
               schema_version: 1,
               evidence_type: "cloudflare-pages-git-auto-deploy-post-state",
-              verified: (
-                $bootstrap_required == 0 and
-                $production[0].source.config.deployments_enabled == false and
-                $production[0].source.config.production_deployments_enabled == false and
-                $production[0].source.config.preview_deployment_setting == "none" and
-                $staging[0].source.config.deployments_enabled == false and
-                $staging[0].source.config.production_deployments_enabled == false and
-                $staging[0].source.config.preview_deployment_setting == "none"
-              ),
+             verified: (
+               $bootstrap_required == 0 and
+               (
+                 $production[0].source == null or
+                 (
+                   $production[0].source.config.deployments_enabled == false and
+                   $production[0].source.config.production_deployments_enabled == false and
+                   $production[0].source.config.preview_deployment_setting == "none"
+                 )
+               ) and
+               (
+                 $staging[0].source == null or
+                 (
+                   $staging[0].source.config.deployments_enabled == false and
+                   $staging[0].source.config.production_deployments_enabled == false and
+                   $staging[0].source.config.preview_deployment_setting == "none"
+                 )
+               )
+             ),
               bootstrap_required: ($bootstrap_required == 1),
               projects: {
                 production: $production[0],
@@ -201,24 +220,44 @@ jobs:
             '{
               schema_version: 1,
               evidence_type: "cloudflare-pages-git-auto-deploy-posture",
-              verified: (
-                $bootstrap_required == 0 and
-                $production[0].source.config.deployments_enabled == false and
-                $production[0].source.config.production_deployments_enabled == false and
-                $production[0].source.config.preview_deployment_setting == "none" and
-                $staging[0].source.config.deployments_enabled == false and
-                $staging[0].source.config.production_deployments_enabled == false and
-                $staging[0].source.config.preview_deployment_setting == "none"
-              ),
+             verified: (
+               $bootstrap_required == 0 and
+               (
+                 $production[0].source == null or
+                 (
+                   $production[0].source.config.deployments_enabled == false and
+                   $production[0].source.config.production_deployments_enabled == false and
+                   $production[0].source.config.preview_deployment_setting == "none"
+                 )
+               ) and
+               (
+                 $staging[0].source == null or
+                 (
+                   $staging[0].source.config.deployments_enabled == false and
+                   $staging[0].source.config.production_deployments_enabled == false and
+                   $staging[0].source.config.preview_deployment_setting == "none"
+                 )
+               )
+             ),
               bootstrap_required: ($bootstrap_required == 1),
-              allAutomaticDeploymentsDisabled: (
-                $production[0].source.config.deployments_enabled == false and
-                $production[0].source.config.production_deployments_enabled == false and
-                $production[0].source.config.preview_deployment_setting == "none" and
-                $staging[0].source.config.deployments_enabled == false and
-                $staging[0].source.config.production_deployments_enabled == false and
-                $staging[0].source.config.preview_deployment_setting == "none"
-              ),
+             allAutomaticDeploymentsDisabled: (
+               (
+                 $production[0].source == null or
+                 (
+                   $production[0].source.config.deployments_enabled == false and
+                   $production[0].source.config.production_deployments_enabled == false and
+                   $production[0].source.config.preview_deployment_setting == "none"
+                 )
+               ) and
+               (
+                 $staging[0].source == null or
+                 (
+                   $staging[0].source.config.deployments_enabled == false and
+                   $staging[0].source.config.production_deployments_enabled == false and
+                   $staging[0].source.config.preview_deployment_setting == "none"
+                 )
+               )
+             ),
               projects: {
                 production: $production[0],
                 staging: $staging[0]
@@ -234,22 +273,28 @@ jobs:
               idPresent: (.result.id | type == "string" and length > 0),
               name: .result.name,
               productionBranch: .result.production_branch,
-              domains: (.result.domains // []),
-              gitAutoDeploy: {
-                sourceConnected: true,
-                productionDeploymentsEnabled: .result.source.config.production_deployments_enabled,
-                previewDeploymentSetting: .result.source.config.preview_deployment_setting,
-                allAutomaticDeploymentsDisabled: (
-                  .result.source.config.deployments_enabled == false and
-                  .result.source.config.production_deployments_enabled == false and
-                  .result.source.config.preview_deployment_setting == "none"
-                ),
-                status: (
-                  if (
-                    .result.source.config.deployments_enabled == false and
-                    .result.source.config.production_deployments_enabled == false and
-                    .result.source.config.preview_deployment_setting == "none"
-                  )
+               domains: (.result.domains // []),
+               gitAutoDeploy: {
+                 sourceConnected: (.result.source != null),
+                 productionDeploymentsEnabled: (.result.source.config.production_deployments_enabled // null),
+                 previewDeploymentSetting: (.result.source.config.preview_deployment_setting // null),
+                 allAutomaticDeploymentsDisabled: (
+                   .result.source == null or
+                   (
+                     .result.source.config.deployments_enabled == false and
+                     .result.source.config.production_deployments_enabled == false and
+                     .result.source.config.preview_deployment_setting == "none"
+                   )
+                 ),
+                 status: (
+                   if (
+                     .result.source == null or
+                     (
+                       .result.source.config.deployments_enabled == false and
+                       .result.source.config.production_deployments_enabled == false and
+                       .result.source.config.preview_deployment_setting == "none"
+                     )
+                   )
                   then "disabled"
                   else "enabled"
                   end
