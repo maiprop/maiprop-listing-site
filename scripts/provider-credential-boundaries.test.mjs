@@ -50,6 +50,53 @@ describe("provider credential boundaries", () => {
     );
   });
 
+  it("classifies every stage-release job as staging-scoped or unscoped", () => {
+    const stageRelease = parsedWorkflow("stage-release.yml");
+    const classifications = Object.fromEntries(
+      Object.entries(stageRelease.jobs).map(([jobId, job]) => [
+        jobId,
+        job.environment ?? null,
+      ]),
+    );
+
+    expect(classifications).toEqual({
+      "validate-source": null,
+      "capture-production-n-minus-one": "staging",
+      "supabase-staging": null,
+      "staging-n-minus-one-compatibility": "staging",
+      "cloudflare-staging": "staging",
+      "staging-business-proofs": "staging",
+      "staging-stripe-payment": "staging",
+      "staging-live-security": "staging",
+      "staging-catalogue-performance": "staging",
+      "release-candidate-attested": "staging",
+    });
+  });
+
+  it("applies staging scope inside the reusable Supabase consumer", () => {
+    const stageRelease = parsedWorkflow("stage-release.yml");
+    const reusableSupabase = parsedWorkflow("reusable-supabase-staging.yml");
+    const caller = stageRelease.jobs["supabase-staging"];
+    const consumer = reusableSupabase.jobs["deploy-supabase-staging"];
+
+    expect(caller.uses).toBe(
+      "./.github/workflows/reusable-supabase-staging.yml",
+    );
+    expect(caller.environment).toBeUndefined();
+    expect(consumer.environment).toBe("staging");
+    expect(Object.keys(reusableSupabase.jobs)).toEqual([
+      "deploy-supabase-staging",
+    ]);
+    expect(Object.keys(caller.secrets).sort()).toEqual([
+      "RELEASE_EVIDENCE_SIGNING_KEY",
+      "STAGING_SUPABASE_PROJECT_ID",
+      "STAGING_SUPABASE_PUBLISHABLE_KEY",
+      "STAGING_SUPABASE_URL",
+      "SUPABASE_ACCESS_TOKEN",
+      "SUPABASE_STAGING_DB_URL",
+    ]);
+  });
+
   it("binds the weekly Supabase advisor report to the current main SHA", () => {
     const parsed = parsedWorkflow("supabase-advisor-report.yml");
     const source = workflow("supabase-advisor-report.yml");

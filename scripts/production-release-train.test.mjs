@@ -969,7 +969,7 @@ describe("production release train", () => {
 
     expect(capture).toBeDefined();
     expect(capture.needs).toEqual(["validate-source"]);
-    expect(capture.environment).toBeUndefined();
+    expect(capture.environment).toBe("staging");
     expect(captureSource).toContain("CLOUDFLARE_PAGES_READ_TOKEN");
     expect(captureSource).not.toContain("CLOUDFLARE_PAGES_EDIT_TOKEN");
     expect(captureSource).toContain("canonical_deployment");
@@ -989,7 +989,7 @@ describe("production release train", () => {
       "capture-production-n-minus-one",
       "supabase-staging",
     ]);
-    expect(compatibility.environment).toBeUndefined();
+    expect(compatibility.environment).toBe("staging");
     expect(compatibilitySource).toContain("wrangler pages dev");
     expect(compatibilitySource).toContain("STAGING_SUPABASE_URL");
     expect(compatibilitySource).toContain("STAGING_SUPABASE_PROJECT_ID");
@@ -1027,7 +1027,7 @@ describe("production release train", () => {
       "supabase-staging",
       "cloudflare-staging",
     ]);
-    expect(proof.environment).toBeUndefined();
+    expect(proof.environment).toBe("staging");
     expect(proofSource).toContain("staging-catalogue-gates.spec.ts");
     expect(proofSource).toContain("--reporter=json");
     expect(proofSource).toContain("check:production-deploy");
