@@ -21,6 +21,38 @@ That job proves the signed static candidate only; it is not production approval.
 All production entry points share the `maiprop-production-release` concurrency
 lease. A release is never cancelled after it starts.
 
+CI retains each attempt-1 release candidate, signed binding, staging bootstrap
+evidence, and captured N-1 evidence for **90 days**, matching the repository's
+organization-enforced Actions artifact cap. Transient Actions retention is not
+the durable rollback source.
+
+Before the first backend mutation, each successful production dispatch creates
+or verifies one SHA-bound **immutable GitHub prerelease** named
+`production-source-<sha>`. It contains only the deterministic candidate archive
+and its HMAC-signed source binding. The production workflow requires repository
+immutable releases to be enabled, verifies both release-asset digests, the exact
+tag commit, attempt-one CI provenance, and the signed manifest, then makes the
+database job depend on that archive gate. Future staging N-1 capture prefers
+this durable release and uses an unexpired Actions artifact only as a transition
+fallback for a legacy production SHA that predates the archive contract.
+The single legacy production SHA
+`db53d1b9adae41edae93fbeb3e612b42dd8fec0b` predates both retained candidate
+forms. While that exact SHA remains Cloudflare canonical, staging may rebuild
+its Git tree with staging runtime values solely for the N-1 compatibility test.
+The workflow verifies the live legacy marker and its successful attempt-one
+origin CI run, labels the result as reconstructed, and records that it is not byte-identical production evidence. Only the current control SHA's non-runtime
+Supabase reconciliation metadata is added so the modern manifest verifier can
+package the old tree; the package is never an input to a database mutation.
+This exception cannot run for another SHA
+and disappears automatically after the first release under the durable archive
+contract. Cloudflare's retained deployment ID remains the production rollback
+source throughout the transition.
+Enable **Settings -> General -> Releases -> Enable release immutability** once
+before opening the production lane. CI needs no repository-administration token:
+it writes the draft with the built-in job token, then requires GitHub to report
+the published release as immutable. If GitHub reports a mutable release, the
+workflow deletes it and fails before the database job can start.
+
 ## GitHub Free Release Controls
 
 The repository is private on a GitHub Free organization plan. Native

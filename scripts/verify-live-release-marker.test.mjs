@@ -5,7 +5,7 @@ import {
 } from "./verify-live-release-marker.mjs";
 
 const manifest = {
-  schema_version: 1,
+  schema_version: 2,
   release_sha: "0123456789abcdef0123456789abcdef01234567",
   source_tree: "89abcdef0123456789abcdef0123456789abcdef",
   source_run_id: "123",
@@ -35,6 +35,20 @@ describe("live release marker verification", () => {
   });
 
   it("rejects stale, incomplete, or split-brain markers", () => {
+    expect(() =>
+      validateLiveReleaseMarkers({
+        manifest,
+        staticMarker: { ...marker, schema_version: 2 },
+        apiMarker: marker,
+      }),
+    ).toThrow(/static marker/i);
+    expect(() =>
+      validateLiveReleaseMarkers({
+        manifest: { ...manifest, schema_version: 1 },
+        staticMarker: marker,
+        apiMarker: marker,
+      }),
+    ).toThrow(/manifest.*schema/i);
     expect(() =>
       validateLiveReleaseMarkers({
         manifest,

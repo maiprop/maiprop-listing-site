@@ -34,6 +34,7 @@ const requirePatterns = (failures, path, text, patterns) => {
 const STAGE_RELEASE_ENVIRONMENT_CLASSIFICATION = new Map([
   ["validate-source", null],
   ["capture-production-n-minus-one", "staging"],
+  ["cloudflare-staging-preflight", "staging"],
   ["supabase-staging", null],
   ["staging-n-minus-one-compatibility", "staging"],
   ["cloudflare-staging", "staging"],
@@ -133,6 +134,7 @@ export function checkSlsaReadiness(root = process.cwd()) {
     binding: "scripts/release-artifact-binding.mjs",
     create: "scripts/create-release-artifact-binding.mjs",
     verify: "scripts/verify-release-artifact-binding.mjs",
+    productionSource: "scripts/production-source-release.mjs",
   };
   const texts = Object.fromEntries(
     Object.entries(paths).map(([name, path]) => [name, readText(root, path)]),
@@ -181,6 +183,15 @@ export function checkSlsaReadiness(root = process.cwd()) {
     'args["artifact-id"]',
     'args["artifact-name"]',
     'args["artifact-digest"]',
+  ]);
+  requireMarkers(failures, paths.productionSource, texts.productionSource, [
+    "maiprop.production-source-release.v1",
+    'createHmac("sha256"',
+    "timingSafeEqual",
+    "source run attempt",
+    "archive run attempt",
+    "production-source-${releaseSha}",
+    ".github/workflows/deploy-production-release.yml",
   ]);
 
   requireMarkers(failures, paths.ci, texts.ci, [

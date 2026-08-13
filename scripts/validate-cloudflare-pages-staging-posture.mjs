@@ -26,6 +26,7 @@ const PRODUCTION_SECRET_BINDINGS = [
   "CLOUDFLARE_TURN_KEY_ID",
   "CLOUDFLARE_TURN_API_TOKEN",
 ];
+const OPTIONAL_SECRET_BINDINGS = ["SITE_LOCK_PASSWORD"];
 export const STRIPE_PRICE_BINDINGS = [
   "VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY",
   "VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL",
@@ -127,12 +128,14 @@ function validateBindingSchema({
   requiredPlainText,
   requiredSecrets,
   optionalPlainText = [],
+  optionalSecrets = [],
   valueMismatchMessage = `${projectRole} Pages bindings do not match the expected runtime.`,
 }) {
   const expectedTypes = new Map([
     ...Object.keys(requiredPlainText).map((name) => [name, "plain_text"]),
     ...requiredSecrets.map((name) => [name, "secret_text"]),
     ...optionalPlainText.map((name) => [name, "plain_text"]),
+    ...optionalSecrets.map((name) => [name, "secret_text"]),
   ]);
   for (const name of Object.keys(bindings)) {
     assertOk(
@@ -498,6 +501,7 @@ export function buildCloudflarePagesStagingPostureEvidence({
     requiredPlainText: expectedPlainText,
     requiredSecrets: SECRET_BINDINGS,
     optionalPlainText: STRIPE_RUNTIME_BINDINGS,
+    optionalSecrets: OPTIONAL_SECRET_BINDINGS,
     valueMismatchMessage:
       "Staging Pages bindings must not contain production-valued catalogue or origin variables.",
   });
@@ -612,6 +616,7 @@ export function buildCloudflarePagesProductionPostureEvidence({
     requiredPlainText: expectedPlainText,
     requiredSecrets: PRODUCTION_SECRET_BINDINGS,
     optionalPlainText: STRIPE_RUNTIME_BINDINGS,
+    optionalSecrets: OPTIONAL_SECRET_BINDINGS,
     valueMismatchMessage:
       "Production Pages bindings do not match the exact production runtime.",
   });

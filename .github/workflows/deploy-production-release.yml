@@ -515,10 +515,473 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  deploy-production-database:
-    name: Promote production database
+  cloudflare-production-preflight:
+    name: Preflight production Cloudflare before backend mutation
     needs: validate
     if: ${{ needs.validate.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install pinned release tooling
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Verify Cloudflare production credentials identity and rollback baseline
+        env:
+          CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CF_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          CLOUDFLARE_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          for value in \
+            "$CF_READ_TOKEN" \
+            "$CF_EDIT_TOKEN" \
+            "$CF_ACCOUNT_ID" \
+            "$STAGING_CF_READ_TOKEN" \
+            "$STAGING_CF_ACCOUNT_ID" \
+            "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID"; do
+            if [ -z "$value" ]; then
+              echo "::error::Complete production Cloudflare preflight credentials and project IDs are required."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+          done
+          if [ "$PRODUCTION_PROJECT" != "maiprop-listing-site" ] ||
+             [ "$STAGING_PROJECT" != "maiprop-listing-site-staging" ] ||
+             [ "$CF_ACCOUNT_ID" = "$STAGING_CF_ACCOUNT_ID" ] ||
+             [ "$CF_READ_TOKEN" = "$CF_EDIT_TOKEN" ] ||
+             [ "$CF_READ_TOKEN" = "$STAGING_CF_READ_TOKEN" ] ||
+             [ "$CF_EDIT_TOKEN" = "$STAGING_CF_READ_TOKEN" ]; then
+            echo "::error::Cloudflare production preflight identities are not isolated from staging."
+            exit 1
+          fi
+          if { [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -z "$CF_ACCESS_CLIENT_SECRET" ]; } ||
+             { [ -z "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; }; then
+            echo "::error::Cloudflare Access credentials must be supplied as a pair."
+            exit 1
+          fi
+
+          production_read="$RUNNER_TEMP/cloudflare-production-preflight-read.json"
+          production_edit="$RUNNER_TEMP/cloudflare-production-preflight-edit.json"
+          staging_read="$RUNNER_TEMP/cloudflare-staging-production-preflight.json"
+          rollback="$RUNNER_TEMP/cloudflare-production-preflight-rollback.json"
+          deployments="$RUNNER_TEMP/cloudflare-production-preflight-deployments.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$production_read"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_EDIT_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$production_edit"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_read"
+          jq -e --arg id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            '.success == true and .result.id == $id and .result.name == "maiprop-listing-site"' \
+            "$production_edit" > /dev/null
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode git-lock \
+            --staging-project-file "$staging_read" \
+            --production-project-file "$production_read" \
+            --out "$RUNNER_TEMP/cloudflare-production-preflight-posture.json"
+          jq -e '.success == true and (.result.canonical_deployment | type == "object")' \
+            "$production_read" > /dev/null
+          jq '.result.canonical_deployment' "$production_read" > "$rollback"
+          rollback_sha="$(jq -er '.deployment_trigger.metadata.commit_hash' "$rollback")"
+          if [ "${rollback_sha,,}" = "${RELEASE_SHA,,}" ]; then
+            echo "::error::Production rollback baseline must differ from the release candidate."
+            exit 1
+          fi
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file "$rollback" \
+            --project "$PRODUCTION_PROJECT" \
+            --project-id "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$rollback_sha"
+          npm run --silent release:verify-live-marker -- \
+            "https://portal.maiprop.co" \
+            --expected-sha "$rollback_sha" \
+            > "$RUNNER_TEMP/cloudflare-production-preflight-rollback-marker.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments?env=production&per_page=100" \
+            > "$deployments"
+          jq -e --arg id "$(jq -er '.id' "$rollback")" \
+            '.success == true and any(.result[]; .id == $id)' \
+            "$deployments" > /dev/null
+
+  archive-production-source:
+    name: Archive immutable production source before backend mutation
+    needs: [validate, cloudflare-production-preflight]
+    if: ${{ needs.validate.result == 'success' && needs.cloudflare-production-preflight.result == 'success' }}
+    permissions:
+      actions: read
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install pinned release tooling
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Re-verify and package exact attempt-1 source candidate
+        id: source_archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate.outputs.source_tree }}
+          SOURCE_RUN_ID: ${{ needs.validate.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.validate.outputs.source_run_attempt }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+        run: |
+          set -euo pipefail
+          if [ "$SOURCE_RUN_ATTEMPT" != "1" ] || [ "$GITHUB_RUN_ATTEMPT" != "1" ]; then
+            echo "::error::Durable source archival requires attempt-1 source and production runs."
+            exit 1
+          fi
+
+          root="$RUNNER_TEMP/production-source"
+          candidate="$root/release-candidate"
+          binding="$root/source-binding"
+          metadata="$root/source-metadata"
+          mkdir -p "$candidate" "$binding" "$metadata"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" \
+            > "$metadata/artifacts.json"
+          candidate_name="production-release-candidate-${RELEASE_SHA}-1"
+          binding_name="production-release-candidate-binding-${RELEASE_SHA}-1"
+          mapfile -t candidate_ids < <(
+            jq -r --arg name "$candidate_name" \
+              '.artifacts[] | select(.expired == false and .name == $name) | .id' \
+              "$metadata/artifacts.json"
+          )
+          mapfile -t binding_ids < <(
+            jq -r --arg name "$binding_name" \
+              '.artifacts[] | select(.expired == false and .name == $name) | .id' \
+              "$metadata/artifacts.json"
+          )
+          if [ "${#candidate_ids[@]}" -ne 1 ] || [ "${#binding_ids[@]}" -ne 1 ]; then
+            echo "::error::The exact attempt-1 source candidate and binding must each resolve uniquely."
+            exit 1
+          fi
+
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts/${binding_ids[0]}/zip" \
+            > "$root/source-binding.zip"
+          unzip -q "$root/source-binding.zip" -d "$binding"
+          bound_artifact_id="$(jq -er '.artifact.id' "$binding/release-artifact-binding.json")"
+          if [ "$bound_artifact_id" != "${candidate_ids[0]}" ]; then
+            echo "::error::The signed source binding does not identify the selected candidate."
+            exit 1
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${candidate_ids[0]}" \
+            > "$metadata/artifact.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" \
+            > "$metadata/run.json"
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts/${candidate_ids[0]}/zip" \
+            > "$root/release-candidate.zip"
+          unzip -q "$root/release-candidate.zip" -d "$candidate"
+          source_actor="$(jq -er '.actor.login' "$metadata/run.json")"
+          source_triggering_actor="$(jq -er '.triggering_actor.login' "$metadata/run.json")"
+          npm run --silent release:artifact:verify -- \
+            --dir "$candidate" \
+            --sha "$RELEASE_SHA" \
+            --tree "$SOURCE_TREE" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding "$binding/release-artifact-binding.json" \
+            --payload-root "$candidate" \
+            --artifact-metadata "$metadata/artifact.json" \
+            --producer-run "$metadata/run.json" \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/ci.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event push \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --actor "$source_actor" \
+            --triggering-actor "$source_triggering_actor" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > "$root/source-verification.json"
+
+          tag_name="production-source-${RELEASE_SHA}"
+          asset_name="${tag_name}.tar.gz"
+          binding_asset_name="${tag_name}.binding.json"
+          asset_path="$root/$asset_name"
+          binding_path="$root/$binding_asset_name"
+          unsafe_candidate_entry="$(find "$candidate" \( ! -type f -a ! -type d \) -print -quit)"
+          if [ -n "$unsafe_candidate_entry" ]; then
+            echo "::error::Release candidate contains a special filesystem entry and cannot be archived."
+            exit 1
+          fi
+          tar --sort=name --mtime='UTC 1970-01-01' \
+            --owner=0 --group=0 --numeric-owner --hard-dereference \
+            -C "$candidate" -cf - . | gzip -n > "$asset_path"
+          node scripts/production-source-release.mjs create \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --archive-run-id "$GITHUB_RUN_ID" \
+            --archive-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --archive-actor "$GITHUB_ACTOR" \
+            --tag-name "$tag_name" \
+            --asset-name "$asset_name" \
+            --asset "$asset_path" \
+            --manifest "$candidate/release-manifest.json" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            --out "$binding_path" \
+            > "$root/archive-binding-create.json"
+          {
+            echo "root=$root"
+            echo "tag_name=$tag_name"
+            echo "asset_name=$asset_name"
+            echo "asset_path=$asset_path"
+            echo "binding_asset_name=$binding_asset_name"
+            echo "binding_path=$binding_path"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish or verify immutable SHA-bound source release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ needs.validate.outputs.source_tree }}
+          SOURCE_RUN_ID: ${{ needs.validate.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.validate.outputs.source_run_attempt }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          RELEASE_EVIDENCE_VERIFICATION_KEYS: ${{ secrets.RELEASE_EVIDENCE_VERIFICATION_KEYS }}
+          ROOT: ${{ steps.source_archive.outputs.root }}
+          TAG_NAME: ${{ steps.source_archive.outputs.tag_name }}
+          ASSET_NAME: ${{ steps.source_archive.outputs.asset_name }}
+          ASSET_PATH: ${{ steps.source_archive.outputs.asset_path }}
+          BINDING_ASSET_NAME: ${{ steps.source_archive.outputs.binding_asset_name }}
+          BINDING_PATH: ${{ steps.source_archive.outputs.binding_path }}
+        run: |
+          set -euo pipefail
+          github_api() {
+            gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              "$@"
+          }
+          github_get_status() {
+            local path="$1"
+            local output="$2"
+            curl -sS --retry 3 --retry-all-errors \
+              -o "$output" \
+              -w '%{http_code}' \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/$path"
+          }
+          release_json="$ROOT/release.json"
+          downloaded_asset="$ROOT/downloaded-$ASSET_NAME"
+          downloaded_binding="$ROOT/downloaded-$BINDING_ASSET_NAME"
+          downloaded_manifest="$ROOT/downloaded-release-manifest.json"
+          archive_paths="$ROOT/downloaded-archive-paths.txt"
+          archive_listing="$ROOT/downloaded-archive-listing.txt"
+
+          verify_release() {
+            jq -e \
+              --arg tag "$TAG_NAME" \
+              --arg sha "$RELEASE_SHA" \
+              --arg asset "$ASSET_NAME" \
+              --arg binding "$BINDING_ASSET_NAME" '
+                .draft == false and
+                .prerelease == true and
+                .immutable == true and
+                .tag_name == $tag and
+                .target_commitish == $sha and
+                ([.assets[].name] | sort) == ([$asset, $binding] | sort)
+              ' "$release_json" > /dev/null
+            github_api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG_NAME}" \
+              --jq '.object.type + " " + .object.sha' \
+              | grep -Fx "commit $RELEASE_SHA" > /dev/null
+
+            asset_id="$(jq -er --arg name "$ASSET_NAME" '.assets[] | select(.name == $name) | .id' "$release_json")"
+            binding_id="$(jq -er --arg name "$BINDING_ASSET_NAME" '.assets[] | select(.name == $name) | .id' "$release_json")"
+            github_api -H "Accept: application/octet-stream" \
+              "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}" \
+              > "$downloaded_asset"
+            github_api -H "Accept: application/octet-stream" \
+              "repos/${GITHUB_REPOSITORY}/releases/assets/${binding_id}" \
+              > "$downloaded_binding"
+            asset_digest="sha256:$(sha256sum "$downloaded_asset" | awk '{print $1}')"
+            binding_digest="sha256:$(sha256sum "$downloaded_binding" | awk '{print $1}')"
+            jq -e --arg name "$ASSET_NAME" --arg digest "$asset_digest" \
+              '.assets[] | select(.name == $name) | .digest == $digest' \
+              "$release_json" > /dev/null
+            jq -e --arg name "$BINDING_ASSET_NAME" --arg digest "$binding_digest" \
+              '.assets[] | select(.name == $name) | .digest == $digest' \
+              "$release_json" > /dev/null
+            tar -tzf "$downloaded_asset" > "$archive_paths"
+            tar -tvzf "$downloaded_asset" > "$archive_listing"
+            if grep -Eq '(^/|(^|/)\.\.(/|$)|\\)' "$archive_paths"; then
+              echo "::error::Production source archive contains an unsafe path."
+              exit 1
+            fi
+            if grep -Eq '^[^d-]' "$archive_listing"; then
+              echo "::error::Production source archive contains a special filesystem entry."
+              exit 1
+            fi
+            tar -xOzf "$downloaded_asset" ./release-manifest.json \
+              > "$downloaded_manifest"
+            node scripts/production-source-release.mjs verify \
+              --repository "$GITHUB_REPOSITORY" \
+              --release-sha "$RELEASE_SHA" \
+              --source-tree "$SOURCE_TREE" \
+              --source-run-id "$SOURCE_RUN_ID" \
+              --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+              --tag-name "$TAG_NAME" \
+              --asset-name "$ASSET_NAME" \
+              --asset "$downloaded_asset" \
+              --manifest "$downloaded_manifest" \
+              --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+              --binding "$downloaded_binding" \
+              > "$ROOT/archive-binding-verification.json"
+          }
+
+          release_status="$(github_get_status "releases/tags/${TAG_NAME}" "$release_json")"
+          if [ "$release_status" = "200" ]; then
+            verify_release
+          elif [ "$release_status" = "404" ]; then
+            tag_status="$(github_get_status "git/ref/tags/${TAG_NAME}" "$ROOT/existing-tag.json")"
+            if [ "$tag_status" = "200" ]; then
+              jq -e --arg sha "$RELEASE_SHA" \
+                '.object.type == "commit" and .object.sha == $sha' \
+                "$ROOT/existing-tag.json" > /dev/null
+            elif [ "$tag_status" != "404" ]; then
+              echo "::error::GitHub tag lookup failed with HTTP $tag_status."
+              exit 1
+            fi
+            github_api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+              -f tag_name="$TAG_NAME" \
+              -f target_commitish="$RELEASE_SHA" \
+              -f name="Production source $RELEASE_SHA" \
+              -f body="Immutable, signed source used by the production release dispatch for $RELEASE_SHA." \
+              -F draft=true \
+              -F prerelease=true \
+              > "$release_json"
+            release_id="$(jq -er '.id' "$release_json")"
+            cleanup_confirmed_draft() {
+              trap - ERR
+              set +e
+              cleanup_release_json="$ROOT/cleanup-release.json"
+              cleanup_status="$(github_get_status "releases/${release_id}" "$cleanup_release_json")"
+              if [ "$cleanup_status" = "200" ] && jq -e \
+                --argjson release_id "$release_id" \
+                '.id == $release_id and .draft == true and .immutable == false' \
+                "$cleanup_release_json" > /dev/null; then
+                github_api --method DELETE \
+                  "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+                  >/dev/null 2>&1 || true
+              else
+                echo "::warning::Release cleanup skipped because the exact release was not confirmed draft and mutable."
+              fi
+            }
+            trap cleanup_confirmed_draft ERR
+            upload_url="$(jq -er '.upload_url | sub("\\{\\?name,label\\}$"; "")' "$release_json")"
+            expected_upload_url="https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets"
+            if [ "$upload_url" != "$expected_upload_url" ]; then
+              echo "::error::GitHub returned an unexpected release asset upload URL."
+              exit 1
+            fi
+            upload_release_asset() {
+              local asset_path="$1"
+              local asset_name="$2"
+              local content_type="$3"
+              local response_path="$4"
+              curl -fsS --request POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                -H "X-GitHub-Api-Version: 2026-03-10" \
+                -H "Content-Type: $content_type" \
+                --data-binary @"$asset_path" \
+                "${upload_url}?name=${asset_name}" \
+                > "$response_path"
+              jq -e --arg name "$asset_name" \
+                '.name == $name and .state == "uploaded"' \
+                "$response_path" > /dev/null
+            }
+            upload_release_asset \
+              "$ASSET_PATH" "$ASSET_NAME" "application/gzip" \
+              "$ROOT/uploaded-asset.json"
+            upload_release_asset \
+              "$BINDING_PATH" "$BINDING_ASSET_NAME" "application/json" \
+              "$ROOT/uploaded-binding.json"
+            trap - ERR
+            github_api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+              -F draft=false \
+              -F prerelease=true \
+              > "$release_json"
+            github_api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_NAME}" \
+              > "$release_json"
+            if [ "$(jq -r '.immutable' "$release_json")" != "true" ]; then
+              echo "::error::GitHub did not publish an immutable release; preserving the release for operator reconciliation."
+              exit 1
+            fi
+            verify_release
+          else
+            echo "::error::GitHub immutable release lookup failed with HTTP $release_status."
+            exit 1
+          fi
+          {
+            echo "### Durable production source"
+            echo "- Tag: $TAG_NAME"
+            echo "- Immutable: true"
+            echo "- Candidate SHA: $RELEASE_SHA"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-production-database:
+    name: Promote production database
+    needs: [validate, cloudflare-production-preflight, archive-production-source]
+    if: ${{ needs.validate.result == 'success' && needs.cloudflare-production-preflight.result == 'success' && needs.archive-production-source.result == 'success' }}
     uses: ./.github/workflows/deploy-supabase-production-db.yml
     with:
       release_sha: ${{ inputs.release_sha }}

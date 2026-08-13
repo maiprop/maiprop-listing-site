@@ -34,6 +34,7 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     expect(step.run).toContain("lock-cloudflare-pages-git-deploys.yml");
     expect(step.run).toContain("reusable-cloudflare-production-deploy.yml");
     expect(step.run).toContain("stage-release.yml");
+    expect(step.run).toContain("bootstrap-cloudflare-staging-pages.yml");
   });
 
   it("keeps read-only identity bootstrap on verified current main", () => {

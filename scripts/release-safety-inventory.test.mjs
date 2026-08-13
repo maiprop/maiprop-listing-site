@@ -8,9 +8,41 @@ import {
   isAuthorizedCloudflareHttpMutationWorkflow,
   productionDatabaseCredentialScopeViolations,
   scanWorkflows,
+  stageReleaseBuildPolicyViolation,
 } from "./release-safety-inventory.mjs";
 
 describe("release safety inventory", () => {
+  it("allows only the pinned, staging-only legacy N-1 reconstruction build", () => {
+    const workflowPath = resolve(
+      process.cwd(),
+      ".github/workflows/stage-release.yml",
+    );
+    const source = readFileSync(workflowPath, "utf8");
+
+    expect(stageReleaseBuildPolicyViolation(source)).toBeNull();
+    expect(
+      stageReleaseBuildPolicyViolation(
+        source.replace(
+          "LEGACY_PRODUCTION_SHA: db53d1b9adae41edae93fbeb3e612b42dd8fec0b",
+          "LEGACY_PRODUCTION_SHA: 0000000000000000000000000000000000000000",
+        ),
+      ),
+    ).toMatch(/without rebuilding/i);
+    expect(
+      stageReleaseBuildPolicyViolation(
+        `${source}\n# A current-candidate rebuild must remain forbidden.\nnpm run build\n`,
+      ),
+    ).toMatch(/without rebuilding/i);
+    expect(
+      stageReleaseBuildPolicyViolation(
+        source.replace(
+          'purpose: "staging-n-minus-one-compatibility-only"',
+          'purpose: "production-compatible"',
+        ),
+      ),
+    ).toMatch(/without rebuilding/i);
+  });
+
   it("fails closed on production database credential-scope regressions", () => {
     const calledWorkflow = {
       text: "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",

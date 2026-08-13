@@ -33,6 +33,9 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
 ### 2. Cloudflare Pages
 
 - Create a dedicated staging Pages project; do not reuse the production project.
+- Its stable origin is exactly
+  `https://maiprop-listing-site-staging.pages.dev`; do not use the production
+  project's `https://staging.maiprop-listing-site.pages.dev` preview hostname.
 - Project settings -> Builds & deployments -> configure production branch as
   `main`.
 - Use direct-upload mode, or disable both production and preview automatic
@@ -46,9 +49,15 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   again, and fails if any `wrangler.toml`, `wrangler.json`, or `wrangler.jsonc`
   can be discovered in an ancestor. Do not add environment-specific `[vars]`
   to the repository root `wrangler.toml`.
-- Configure the dedicated project's production runtime bindings from
-  `.env.staging.example`. `SUPABASE_URL`, `SUPABASE_PROJECT_ID`, and
-  `SUPABASE_PUBLISHABLE_KEY` must exactly match the isolated staging project.
+- `.env.staging.example` is a cross-provider inventory, not a Pages import file.
+  Do not bulk-copy it into Cloudflare Pages. Configure only the strict runtime
+  allowlist enforced by `validate-cloudflare-pages-staging-posture.mjs`:
+  `SUPABASE_URL`, `SUPABASE_PROJECT_ID`, `SUPABASE_PUBLISHABLE_KEY`, their three
+  `VITE_*` aliases, `VITE_APP_URL`, `VITE_PUBLIC_API_ORIGIN`,
+  `VITE_APP_ENVIRONMENT=staging`, and `MAIPROP_TURN_TTL_SECONDS=21600` as
+  `plain_text`; the documented Stripe browser bindings are optional. All
+  Supabase values must exactly match the isolated staging project. Unexpected
+  Pages bindings fail the release preflight.
 - Pre-provision `SUPABASE_SERVICE_ROLE_KEY` as a `secret_text` binding and,
   when used, `SITE_LOCK_PASSWORD` as a `secret_text` binding. Never write
   either value into Wrangler `[vars]` or build artifacts.
@@ -81,6 +90,8 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   dedicated staging Supabase and Cloudflare projects are fully provisioned.
   Missing or any value other than exact lowercase `true` keeps the automatic
   staging release train off.
+- Keep `STAGING_PAGES_BOOTSTRAP_ENABLED=false` except during the separately
+  authorized first-deployment procedure below.
 - Set `STAGING_TRUSTED_CONTROL_SHA` to the full reviewed `main` commit only
   when authorizing that exact release. The workflow requires this value to
   match both `github.workflow_sha` and the release SHA, so a later commit
@@ -113,8 +124,11 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   `STAGING_DEVELOPER_FREE_EMAIL`, and `STAGING_SELLER_FREE_EMAIL`; the release
   workflow intentionally leaves those variables unset so empty GitHub secrets
   cannot suppress the validated defaults.
-- Optional: add `STAGING_SITE_LOCK_PASSWORD` when the dedicated staging
-  deployment should be passcode-protected.
+- Optional: pre-provision `SITE_LOCK_PASSWORD` on the dedicated Pages project
+  only as a `secret_text` binding, and add the same value as the repository
+  secret `STAGING_SITE_LOCK_PASSWORD` for authenticated verification. The
+  strict runtime allowlist accepts its name and encrypted type but never reads,
+  uploads, or compares its Cloudflare value; plaintext is rejected.
 - The dedicated Cloudflare staging project must pre-provision
   `SUPABASE_SERVICE_ROLE_KEY` as a `secret_text` binding. Its plain-text
   Supabase URL, project ref, and publishable key must exactly match the isolated
@@ -167,7 +181,19 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
    repository-secret HMAC binding over the exact payload and attempt-one
    producer metadata. CI does not mutate staging or production; failed binding
    creation fails the candidate.
-3. When `STAGING_RELEASE_ENABLED=true`, the successful main CI run stages that
+3. Before the first Pages deployment only, an allowlisted release deployer may
+   temporarily set `STAGING_PAGES_BOOTSTRAP_ENABLED=true` and manually dispatch
+   `Bootstrap Cloudflare Staging Pages` with the exact current-main SHA,
+   successful attempt-1 CI run ID, and `BOOTSTRAP_STAGING_PAGES`. The workflow
+   requires the normal staging release flag and trusted control SHA, verifies
+   the signed candidate binding and current-main lease, refuses production
+   credentials or an ambiguous nonempty staging project, and makes one Direct
+   Upload deployment to `maiprop-listing-site-staging`. It verifies both static
+   and `/api/release` SHA markers plus runtime configuration at the immutable
+   and stable URLs. Re-dispatching the same trusted SHA is verification-only
+   when that exact healthy function-enabled canonical deployment already
+   exists. Set the bootstrap flag back to `false` after success.
+4. When `STAGING_RELEASE_ENABLED=true`, the successful main CI run stages that
    exact candidate only after the binding verifier checks the HMAC, artifact
    API metadata, payload files, source SHA/tree, `main` ref, workflow, and
    attempt-one actor tuple. The staging run then emits its
@@ -180,12 +206,12 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
    binding isolation cannot rely on stale pre-deploy evidence. Raw project,
    binding, and deployment API responses remain job-local; uploaded artifacts
    contain only redacted posture and minimized deployment identity.
-4. Production promotion remains disabled until the exact staged SHA has valid
+5. Production promotion remains disabled until the exact staged SHA has valid
    catalogue and health evidence, Stripe live readiness is signed, a different
    allowlisted actor approves it, and the production dispatcher is explicitly
    enabled. Promotion then runs database, Edge Functions, and Cloudflare Pages
    in that order without rebuilding the candidate.
-5. Smoke-test staging using the checklist below.
+6. Smoke-test staging using the checklist below.
 
 ## Manual smoke-test checklist (staging)
 

@@ -13,6 +13,13 @@ import {
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import {
+  LIVE_RELEASE_MARKER_SCHEMA_VERSION,
+  RELEASE_MANIFEST_SCHEMA_VERSION,
+  liveReleaseMarkerFromManifest,
+  validateLiveReleaseMarker,
+} from "./release-marker-contract.mjs";
+
 const FULL_SHA = /^[0-9a-f]{40}$/i;
 const SHA256 = /^[0-9a-f]{64}$/i;
 const MANIFEST_NAME = "release-manifest.json";
@@ -286,7 +293,7 @@ export function createReleaseArtifact({
     markerPath,
     `${JSON.stringify(
       {
-        schema_version: 1,
+        schema_version: LIVE_RELEASE_MARKER_SCHEMA_VERSION,
         release_sha: normalizedReleaseSha,
         source_tree: normalizedSourceTree,
         source_run_id: normalizedRunId,
@@ -308,7 +315,7 @@ export function createReleaseArtifact({
   for (const path of supabasePaths) assertPackagedSupabasePath(path);
   const supabaseFiles = fileRecords(absoluteOut, supabasePaths);
   const manifest = {
-    schema_version: 2,
+    schema_version: RELEASE_MANIFEST_SCHEMA_VERSION,
     algorithm: "sha256",
     release_sha: normalizedReleaseSha,
     source_tree: normalizedSourceTree,
@@ -345,6 +352,10 @@ export function verifyReleaseArtifact(
   const manifestPath = join(root, MANIFEST_NAME);
   assertFile(manifestPath, "Release manifest");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+  if (manifest.schema_version !== RELEASE_MANIFEST_SCHEMA_VERSION) {
+    throw new Error("Release manifest has an unsupported schema version.");
+  }
 
   if (!FULL_SHA.test(String(manifest.release_sha ?? ""))) {
     throw new Error("Release manifest has an invalid release SHA.");
@@ -418,16 +429,13 @@ export function verifyReleaseArtifact(
     throw new Error("Release Supabase digest mismatch.");
   }
 
-  const marker = JSON.parse(
+  const marker = validateLiveReleaseMarker(JSON.parse(
     readFileSync(join(root, "dist", MARKER_NAME), "utf8"),
-  );
-  if (
-    marker.release_sha !== manifest.release_sha ||
-    marker.source_tree !== manifest.source_tree ||
-    marker.source_run_id !== manifest.source_run_id ||
-    marker.source_run_attempt !== manifest.source_run_attempt ||
-    marker.payload_sha256 !== manifest.payload_sha256
-  ) {
+  ));
+  const expectedMarker = liveReleaseMarkerFromManifest(manifest);
+  if (Object.entries(expectedMarker).some(
+    ([key, value]) => marker[key] !== value
+  )) {
     throw new Error("Release marker does not match its manifest.");
   }
 
