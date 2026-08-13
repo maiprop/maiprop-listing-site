@@ -631,7 +631,8 @@ describe("production release train", () => {
     const edge = workflow("deploy-edge-functions.yml");
     const parsed = yaml.load(edge);
     const secrets = parsed.on.workflow_call.secrets;
-    expect(secrets.SUPABASE_PRODUCTION_DB_URL.required).toBe(true);
+    expect(secrets.SUPABASE_PRODUCTION_DB_URL).toBeUndefined();
+    expect(parsed.jobs.deploy.environment).toBe("production");
 
     const steps = parsed.jobs.deploy.steps;
     const parityIndex = steps.findIndex(
@@ -1732,7 +1733,6 @@ describe("production release train", () => {
     expect(call.secrets).toEqual({
       RELEASE_EVIDENCE_SIGNING_KEY: { required: true },
       SUPABASE_ACCESS_TOKEN: { required: true },
-      SUPABASE_PRODUCTION_DB_URL: { required: true },
       VITE_SUPABASE_PROJECT_ID: { required: true },
       VITE_SUPABASE_URL: { required: true },
     });
@@ -1742,7 +1742,7 @@ describe("production release train", () => {
     expect(job.outputs.database_binding_artifact).toBe(
       "${{ steps.database_binding.outputs.binding_artifact_name }}",
     );
-    expect(job.environment).toBeUndefined();
+    expect(job.environment).toBe("production");
     expect(parsed.concurrency).toBeUndefined();
     expect(parsed.permissions).toEqual({ actions: "read", contents: "read" });
     expect(content).toContain('PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"');
@@ -1965,11 +1965,10 @@ describe("production release train", () => {
     expect(call.secrets).toEqual({
       RELEASE_EVIDENCE_SIGNING_KEY: { required: true },
       SUPABASE_ACCESS_TOKEN: { required: true },
-      SUPABASE_PRODUCTION_DB_URL: { required: true },
       VITE_SUPABASE_PROJECT_ID: { required: true },
       VITE_SUPABASE_URL: { required: true },
     });
-    expect(job.environment).toBeUndefined();
+    expect(job.environment).toBe("production");
     expect(parsed.concurrency).toBeUndefined();
     expect(parsed.permissions).toEqual({ actions: "read", contents: "read" });
     expect(content).toContain('PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"');

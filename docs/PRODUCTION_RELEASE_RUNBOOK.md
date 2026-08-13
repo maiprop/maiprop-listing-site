@@ -86,9 +86,13 @@ invoking the reusable provider boundaries:
 - `CLOUDFLARE_TURN_KEY_ID`
 - `CLOUDFLARE_TURN_API_TOKEN`
 
-`SUPABASE_PRODUCTION_DB_URL` is a repository secret exposed only through the
-explicit reusable database workflow secret contract. The caller forwards it by
-name; `secrets: inherit` is forbidden.
+`SUPABASE_PRODUCTION_DB_URL` is stored only in the exact GitHub `production`
+environment. The called production database and Edge deployment jobs bind that
+environment and read the credential directly; a reusable-workflow caller cannot
+forward an environment-scoped secret. This environment binding scopes the
+credential only and is not treated as release authorization. The signed release
+binding, mutation lease, and provider preflight remain the authorization gates.
+`secrets: inherit` is forbidden.
 
 The Supabase project ref in `VITE_SUPABASE_PROJECT_ID`, the API host in
 `VITE_SUPABASE_URL`, and the direct host or pooler username in

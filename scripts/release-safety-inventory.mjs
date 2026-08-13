@@ -253,6 +253,40 @@ function scanEnvNames() {
   };
 }
 
+export function productionDatabaseCredentialScopeViolations({
+  release,
+  calledWorkflows,
+}) {
+  const violations = [];
+  for (const jobName of [
+    "deploy-production-database",
+    "deploy-production-edge",
+  ]) {
+    const secrets = release?.jobs?.[jobName]?.secrets ?? {};
+    if (Object.hasOwn(secrets, "SUPABASE_PRODUCTION_DB_URL")) {
+      violations.push(
+        `${productionReleaseWorkflow} ${jobName} must not forward the production database environment secret`,
+      );
+    }
+  }
+
+  for (const { text, parsed } of calledWorkflows) {
+    const callSecrets = parsed?.on?.workflow_call?.secrets ?? {};
+    if (Object.hasOwn(callSecrets, "SUPABASE_PRODUCTION_DB_URL")) {
+      violations.push(
+        "Production database deployment workflows must not declare the environment-scoped database URL in workflow_call.secrets",
+      );
+    }
+    if (!text.includes("secrets.SUPABASE_PRODUCTION_DB_URL")) {
+      violations.push(
+        "Production database deployment workflows must consume the environment-scoped database URL directly",
+      );
+    }
+  }
+
+  return violations;
+}
+
 export function scanWorkflows() {
   const files = readdirSync(workflowDir)
     .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
@@ -888,10 +922,10 @@ export function scanWorkflows() {
       triggerNames.length !== 1 ||
       triggerNames[0] !== "workflow_call" ||
       !deploy ||
-      deploy.environment !== undefined
+      deploy.environment !== "production"
     ) {
       violations.push(
-        `${workflowPath} must remain workflow-call-only with repository-scoped exact-release controls`,
+        `${workflowPath} must remain workflow-call-only with the production-scoped database credential and exact-release controls`,
       );
     }
     if (
@@ -920,6 +954,19 @@ export function scanWorkflows() {
       );
     }
   }
+
+  violations.push(
+    ...productionDatabaseCredentialScopeViolations({
+      release: workflowYaml[productionReleaseWorkflow],
+      calledWorkflows: [
+        ".github/workflows/deploy-supabase-production-db.yml",
+        ".github/workflows/deploy-edge-functions.yml",
+      ].map((workflowPath) => ({
+        text: workflowText[workflowPath] ?? "",
+        parsed: workflowYaml[workflowPath],
+      })),
+    }),
+  );
 
   const documented = new Set();
   for (const doc of envDocs) {
