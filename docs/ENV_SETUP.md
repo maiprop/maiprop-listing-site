@@ -296,7 +296,7 @@ or override it in repository secrets.
 | `CAPACITOR_APP_ID` | Android package id override; default is `co.maiprop.portal.mobile` | Android WebView APK workflow |
 | `CAPACITOR_APP_NAME` | Android app label override; default is `MaiProp Portal` | Android WebView APK workflow |
 | `CAPACITOR_SERVER_URL` | remote web origin for non-bundled Capacitor builds; default is `https://portal.maiprop.co` | Android WebView APK workflow |
-| `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate | repository secret and encrypted Pages binding |
+| `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate; the strict runtime allowlist accepts it only as a pre-provisioned `secret_text` binding and never exposes its value | repository secret and encrypted Pages binding |
 | `STAGING_SUPABASE_URL` | optional isolated staging Supabase URL for security/E2E jobs; PR preview deploys require it to be a non-production Supabase URL matching `STAGING_SUPABASE_PROJECT_ID` | repository secret |
 | `STAGING_SUPABASE_PUBLISHABLE_KEY` | optional isolated staging anon/publishable key; PR preview deploys are skipped when it matches the production key | repository secret |
 | `STAGING_SUPABASE_PROJECT_ID` | optional isolated staging Supabase project ref; if absent, matching production, or mismatched from `STAGING_SUPABASE_URL`, CI treats the setup as production-only and skips staging/preview deploys | repository secret |
@@ -311,10 +311,11 @@ or override it in repository secrets.
 | `STRIPE_COMPANY_VAT_ID` | expected company VAT identifier checked by live readiness when configured | repository variable |
 | `STRIPE_WEBHOOK_EXPECTED_URL` | exact production Stripe webhook endpoint expected by live readiness | repository variable |
 | `STAGING_RELEASE_ENABLED` | exact lowercase `true` enables the automatic staging release train only after every prerequisite is provisioned; any other value keeps staging mutation disabled | repository variable |
+| `STAGING_PAGES_BOOTSTRAP_ENABLED` | exact lowercase `true` opens only the manual first-deployment staging Pages bootstrap lane; return it to `false` after a verified function-enabled canonical deployment exists | repository variable |
 | `STAGING_TRUSTED_CONTROL_SHA` | full manually approved `main` SHA containing the staging workflows; must equal both `github.workflow_sha` and the exact release SHA before any privileged staging job can start | repository variable |
 | `STAGING_MUTATION_ACKNOWLEDGEMENT` | non-secret staging-only mutation acknowledgement; must equal `MUTATE_STAGING_xsiehskfgeoqyazcgauv` and is independently checked before every staging mutation | repository variable |
 | `STAGING_SUPABASE_SERVICE_ROLE_KEY` | runtime-only alias used by staging proof scripts after the workflow resolves and masks an isolated staging service credential through the Management API; never configure it as a GitHub secret | GitHub Actions generated runtime env |
-| `STAGING_APP_URL` | optional explicit Cloudflare Pages PR preview/staging origin; when absent, CI derives `https://<branch>.<project>.pages.dev` and bakes that into the preview bundle as `VITE_APP_URL` | repository variable |
+| `STAGING_APP_URL` | exact dedicated stable release origin `https://maiprop-listing-site-staging.pages.dev`; PR preview tooling may derive branch URLs separately | repository variable |
 | `STAGING_SITE_LOCK_PASSWORD` | optional Cloudflare Pages Preview runtime passcode gate; never reuse `SITE_LOCK_PASSWORD` unless preview should intentionally share the production passcode | repository secret |
 | `STAGING_TURN_PROOF_EMAIL` | seeded staging professional used to prove authenticated authorized-room TURN issuance on immutable and canonical staging URLs; credentials and room identifiers are redacted from evidence | repository variable |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI deploy/list token | repo or environment scoped to deploy jobs |

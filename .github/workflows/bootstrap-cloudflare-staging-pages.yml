@@ -1,0 +1,434 @@
+name: Bootstrap Cloudflare Staging Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Full current-main SHA with an attempt-1 signed CI candidate"
+        required: true
+        type: string
+      source_run_id:
+        description: "Successful attempt-1 CI run ID that produced the candidate"
+        required: true
+        type: string
+      confirm:
+        description: "Type BOOTSTRAP_STAGING_PAGES"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: maiprop-staging-release
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Establish first function-enabled staging deployment
+    environment: staging
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      inputs.confirm == 'BOOTSTRAP_STAGING_PAGES' &&
+      vars.STAGING_RELEASE_ENABLED == 'true' &&
+      vars.STAGING_PAGES_BOOTSTRAP_ENABLED == 'true' &&
+      vars.STAGING_TRUSTED_CONTROL_SHA == github.workflow_sha &&
+      github.workflow_sha == inputs.release_sha &&
+      github.run_attempt == 1 &&
+      github.actor == github.triggering_actor
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      STAGING_PROJECT: "maiprop-listing-site-staging"
+      PRODUCTION_PROJECT: "maiprop-listing-site"
+      STAGING_APP_URL: "https://maiprop-listing-site-staging.pages.dev"
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      SOURCE_RUN_ATTEMPT: "1"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install pinned release tooling
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Validate trusted bootstrap and source identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          ALLOWED_ACTORS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+          TRUSTED_CONTROL_SHA: ${{ vars.STAGING_TRUSTED_CONTROL_SHA }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+             ! [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]] ||
+             [ "$TRUSTED_CONTROL_SHA" != "$GITHUB_WORKFLOW_SHA" ] ||
+             [ "$GITHUB_WORKFLOW_SHA" != "$RELEASE_SHA" ] ||
+             [ "$(git rev-parse HEAD)" != "$RELEASE_SHA" ]; then
+            echo "::error::Bootstrap must run from the trusted exact current-main control SHA."
+            exit 1
+          fi
+          case ",${ALLOWED_ACTORS// /}," in
+            *,"$GITHUB_ACTOR",*) ;;
+            *)
+              echo "::error::Bootstrap actor is not an allowlisted release deployer."
+              exit 1
+              ;;
+          esac
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if [ "$current_main" != "$RELEASE_SHA" ]; then
+            echo "::error::Bootstrap release SHA is no longer current main."
+            exit 1
+          fi
+          mkdir -p source-binding-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" \
+            > source-binding-metadata/run.json
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$RELEASE_SHA" '
+              .conclusion == "success" and
+              .status == "completed" and
+              .event == "push" and
+              .head_branch == "main" and
+              .head_sha == $sha and
+              .head_repository.full_name == $repo and
+              .run_attempt == 1 and
+              .actor.login == .triggering_actor.login and
+              (.path == ".github/workflows/ci.yml" or
+                (.workflow_url | endswith("/actions/workflows/ci.yml")))
+            ' source-binding-metadata/run.json > /dev/null
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+
+      - name: Download signed source candidate binding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-release-candidate-binding-${{ inputs.release_sha }}-1
+          path: source-binding
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Resolve immutable source candidate
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_id="$(jq -er '.artifact.id' source-binding/release-artifact-binding.json)"
+          if ! [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Signed source binding has no immutable artifact ID."
+            exit 1
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" \
+            > source-binding-metadata/artifact.json
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download immutable source candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ steps.source.outputs.artifact_id }}
+          path: release-candidate
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify exact signed source candidate
+        env:
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+        run: |
+          set -euo pipefail
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          source_actor="$(jq -er '.actor.login' source-binding-metadata/run.json)"
+          source_triggering_actor="$(jq -er '.triggering_actor.login' source-binding-metadata/run.json)"
+          npm run --silent release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding source-binding/release-artifact-binding.json \
+            --payload-root release-candidate \
+            --artifact-metadata source-binding-metadata/artifact.json \
+            --producer-run source-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$source_tree" \
+            --workflow-path .github/workflows/ci.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event push \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --actor "$source_actor" \
+            --triggering-actor "$source_triggering_actor" \
+            --artifact-id "${{ steps.source.outputs.artifact_id }}" \
+            --artifact-name "production-release-candidate-${RELEASE_SHA}-1" \
+            --artifact-digest "$(jq -er '.digest' source-binding-metadata/artifact.json)" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > source-binding-verification.json
+
+      - name: Preflight empty or already bootstrapped staging project
+        id: preflight
+        env:
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          PRODUCTION_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          PRODUCTION_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          for value in \
+            "$STAGING_CF_READ_TOKEN" \
+            "$STAGING_CF_EDIT_TOKEN" \
+            "$STAGING_CF_ACCOUNT_ID" \
+            "$PRODUCTION_CF_READ_TOKEN" \
+            "$PRODUCTION_CF_ACCOUNT_ID" \
+            "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" \
+            "$CLOUDFLARE_PAGES_PROJECT_ID"; do
+            if [ -z "$value" ]; then
+              echo "::error::Bootstrap requires complete isolated Cloudflare identities and project IDs."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+          done
+          if [ "$STAGING_CF_ACCOUNT_ID" = "$PRODUCTION_CF_ACCOUNT_ID" ] ||
+             [ "$STAGING_CF_READ_TOKEN" = "$STAGING_CF_EDIT_TOKEN" ] ||
+             [ "$STAGING_CF_READ_TOKEN" = "$PRODUCTION_CF_READ_TOKEN" ] ||
+             [ "$STAGING_CF_EDIT_TOKEN" = "$PRODUCTION_CF_READ_TOKEN" ]; then
+            echo "::error::Bootstrap Cloudflare credentials are not isolated from production."
+            exit 1
+          fi
+
+          staging_read="$RUNNER_TEMP/bootstrap-staging-read.json"
+          staging_edit="$RUNNER_TEMP/bootstrap-staging-edit.json"
+          production_read="$RUNNER_TEMP/bootstrap-production-read.json"
+          deployments="$RUNNER_TEMP/bootstrap-staging-deployments-before.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_read"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_EDIT_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_edit"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $PRODUCTION_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$PRODUCTION_CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$production_read"
+          jq -e --arg id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" --arg host "${STAGING_APP_URL#https://}" '
+              .success == true and
+              .result.id == $id and
+              .result.name == "maiprop-listing-site-staging" and
+              .result.subdomain == $host
+            ' "$staging_edit" > /dev/null
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode staging \
+            --staging-project-file "$staging_read" \
+            --production-project-file "$production_read" \
+            --out "$RUNNER_TEMP/bootstrap-staging-posture.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/deployments?env=production&per_page=100" \
+            > "$deployments"
+          jq -e '.success == true and (.result | type == "array")' "$deployments" > /dev/null
+
+          canonical_type="$(jq -r '.result.canonical_deployment | type' "$staging_read")"
+          if [ "$canonical_type" = "null" ]; then
+            jq -e '.result | length == 0' "$deployments" > /dev/null || {
+              echo "::error::Bootstrap refuses a project with deployments but no canonical baseline."
+              exit 1
+            }
+            echo "bootstrap_required=true" >> "$GITHUB_OUTPUT"
+          elif [ "$canonical_type" = "object" ]; then
+            jq '.result.canonical_deployment' "$staging_read" \
+              > "$RUNNER_TEMP/bootstrap-existing-canonical.json"
+            npm run --silent release:validate -- cloudflare-deployment \
+              --file "$RUNNER_TEMP/bootstrap-existing-canonical.json" \
+              --project "$STAGING_PROJECT" \
+              --project-id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" \
+              --environment production \
+              --branch main \
+              --sha "$RELEASE_SHA"
+            jq -e '.uses_functions == true and .latest_stage.status == "success"' \
+              "$RUNNER_TEMP/bootstrap-existing-canonical.json" > /dev/null
+            echo "bootstrap_required=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Staging canonical deployment state is malformed."
+            exit 1
+          fi
+
+      - name: Prepare isolated immutable staging candidate
+        id: isolated
+        run: |
+          set -euo pipefail
+          isolated_directory="$RUNNER_TEMP/maiprop-staging-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -rf "$isolated_directory"
+          mkdir -p "$isolated_directory"
+          cp -a release-candidate/. "$isolated_directory/"
+          npm run --silent release:artifact:verify -- \
+            --dir "$isolated_directory" \
+            --sha "$RELEASE_SHA" \
+            --tree "$(git rev-parse 'HEAD^{tree}')" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          workspace_real="$(realpath "$GITHUB_WORKSPACE")"
+          isolated_real="$(realpath "$isolated_directory")"
+          case "$isolated_real" in
+            "$workspace_real"|"$workspace_real"/*)
+              echo "::error::Bootstrap deploy directory must be outside the checkout."
+              exit 1
+              ;;
+          esac
+          echo "directory=$isolated_real" >> "$GITHUB_OUTPUT"
+
+      - name: Revalidate lease immediately before bootstrap mutation
+        if: ${{ steps.preflight.outputs.bootstrap_required == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+
+      - name: Deploy first function-enabled staging artifact
+        id: deploy
+        if: ${{ steps.preflight.outputs.bootstrap_required == 'true' }}
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          workingDirectory: ${{ steps.isolated.outputs.directory }}
+          wranglerVersion: "4.86.0"
+          command: >-
+            pages deploy dist
+            --project-name=maiprop-listing-site-staging
+            --branch=main
+            --commit-hash=${{ inputs.release_sha }}
+            --commit-dirty=false
+
+      - name: Verify exact canonical staging runtime and API
+        id: verify
+        env:
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          PRODUCTION_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          PRODUCTION_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          mkdir -p bootstrap-evidence
+          staging_after="$RUNNER_TEMP/bootstrap-staging-after.json"
+          production_after="$RUNNER_TEMP/bootstrap-production-after.json"
+          canonical="$RUNNER_TEMP/bootstrap-staging-canonical.json"
+          for attempt in $(seq 1 18); do
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+              > "$staging_after"
+            jq '.result.canonical_deployment' "$staging_after" > "$canonical"
+            if jq -e --arg sha "$RELEASE_SHA" '
+                .uses_functions == true and
+                .latest_stage.status == "success" and
+                (.deployment_trigger.metadata.commit_hash | ascii_downcase) == $sha
+              ' "$canonical" > /dev/null; then
+              break
+            fi
+            sleep 5
+          done
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file "$canonical" \
+            --project "$STAGING_PROJECT" \
+            --project-id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$RELEASE_SHA"
+          jq -e '.uses_functions == true and .latest_stage.status == "success"' \
+            "$canonical" > /dev/null
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $PRODUCTION_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$PRODUCTION_CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$production_after"
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode staging \
+            --staging-project-file "$staging_after" \
+            --production-project-file "$production_after" \
+            --out bootstrap-evidence/cloudflare-staging-bootstrap-posture.json
+          deployment_url="$(jq -er '.url' "$canonical")"
+          npm run --silent release:verify-live-marker -- \
+            "$deployment_url" release-candidate/release-manifest.json \
+            > bootstrap-evidence/deployment-release-marker.json
+          npm run --silent release:verify-live-marker -- \
+            "https://maiprop-listing-site-staging.pages.dev" \
+            release-candidate/release-manifest.json \
+            > bootstrap-evidence/stable-release-marker.json
+          npm run --silent release:verify-runtime-config -- \
+            "$deployment_url" \
+            "$STAGING_SUPABASE_URL" \
+            "$STAGING_SUPABASE_PROJECT_ID" \
+            "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            "$STAGING_APP_URL" \
+            --staging-project-file "$staging_after" \
+            --production-project-file "$production_after" \
+            --environment staging \
+            > bootstrap-evidence/deployment-runtime-config.json
+          npm run --silent release:verify-runtime-config -- \
+            "https://maiprop-listing-site-staging.pages.dev" \
+            "$STAGING_SUPABASE_URL" \
+            "$STAGING_SUPABASE_PROJECT_ID" \
+            "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            "$STAGING_APP_URL" \
+            --staging-project-file "$staging_after" \
+            --production-project-file "$production_after" \
+            --environment staging \
+            > bootstrap-evidence/stable-runtime-config.json
+          jq -n \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg deployment_id "$(jq -er '.id' "$canonical")" \
+            --arg deployment_url "$deployment_url" \
+            --argjson mutation_performed "${{ steps.preflight.outputs.bootstrap_required }}" '{
+              schema_version: 1,
+              evidence_type: "maiprop-staging-pages-bootstrap",
+              release_sha: $release_sha,
+              project_name: "maiprop-listing-site-staging",
+              deployment_id: $deployment_id,
+              deployment_url: $deployment_url,
+              stable_url: "https://maiprop-listing-site-staging.pages.dev",
+              function_enabled: true,
+              mutation_performed: $mutation_performed,
+              status: "passed"
+            }' > bootstrap-evidence/bootstrap.json
+
+      - name: Upload minimized staging bootstrap evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: staging-pages-bootstrap-${{ inputs.release_sha }}-${{ github.run_id }}-1
+          path: bootstrap-evidence/
+          if-no-files-found: error
+          retention-days: 90

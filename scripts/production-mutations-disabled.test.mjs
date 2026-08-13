@@ -110,6 +110,8 @@ describe("production mutation boundaries", () => {
 
     expect(Object.keys(jobs)).toEqual([
       "validate",
+      "cloudflare-production-preflight",
+      "archive-production-source",
       "deploy-production-database",
       "renew-edge-mutation-lease",
       "deploy-production-edge",
@@ -150,7 +152,11 @@ describe("production mutation boundaries", () => {
     expect(ciJobs["deploy-supabase-staging"]).toBeUndefined();
     expect(stagingJobs["validate-source"]).toBeDefined();
     expect(stagingJobs["supabase-staging"]).toMatchObject({
-      needs: ["validate-source", "capture-production-n-minus-one"],
+      needs: [
+        "validate-source",
+        "capture-production-n-minus-one",
+        "cloudflare-staging-preflight",
+      ],
       uses: "./.github/workflows/reusable-supabase-staging.yml",
     });
     expect(workflow("stage-release.yml")).toContain(
@@ -165,6 +171,7 @@ describe("production mutation boundaries", () => {
     const authorizedMutationWorkflows = new Set([
       "deploy-edge-functions.yml",
       "deploy-supabase-production-db.yml",
+      "bootstrap-cloudflare-staging-pages.yml",
       "reusable-cloudflare-production-deploy.yml",
       "stage-release.yml",
       "reusable-supabase-staging.yml",

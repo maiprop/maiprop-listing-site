@@ -8,32 +8,12 @@ import {
   mergeHeaders,
 } from "./check-production-deploy-site-lock.mjs";
 import { fetchReleaseResource } from "./release-http.mjs";
+import {
+  liveReleaseMarkerFromManifest,
+  validateLiveReleaseMarker,
+} from "./release-marker-contract.mjs";
 
 const FULL_SHA = /^[0-9a-f]{40}$/i;
-const SHA256 = /^[0-9a-f]{64}$/i;
-const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
-
-function markerFromManifest(manifest) {
-  const marker = {
-    schema_version: manifest?.schema_version,
-    release_sha: String(manifest?.release_sha ?? ""),
-    source_tree: String(manifest?.source_tree ?? ""),
-    source_run_id: String(manifest?.source_run_id ?? ""),
-    source_run_attempt: String(manifest?.source_run_attempt ?? ""),
-    payload_sha256: String(manifest?.payload_sha256 ?? ""),
-  };
-  if (
-    marker.schema_version !== 1 ||
-    !FULL_SHA.test(marker.release_sha) ||
-    !FULL_SHA.test(marker.source_tree) ||
-    !POSITIVE_INTEGER.test(marker.source_run_id) ||
-    !POSITIVE_INTEGER.test(marker.source_run_attempt) ||
-    !SHA256.test(marker.payload_sha256)
-  ) {
-    throw new Error("Release manifest cannot produce a valid live marker.");
-  }
-  return marker;
-}
 
 function sameMarker(actual, expected) {
   return actual &&
@@ -46,11 +26,19 @@ export function validateLiveReleaseMarkers({
   staticMarker,
   apiMarker,
 }) {
-  const expected = markerFromManifest(manifest);
-  if (!sameMarker(staticMarker, expected)) {
+  const expected = liveReleaseMarkerFromManifest(manifest);
+  const normalizedStatic = validateLiveReleaseMarker(
+    staticMarker,
+    "Static marker",
+  );
+  if (!sameMarker(normalizedStatic, expected)) {
     throw new Error("Static marker does not match the immutable artifact.");
   }
-  if (!sameMarker(apiMarker, expected)) {
+  const normalizedApi = validateLiveReleaseMarker(
+    apiMarker,
+    "Pages Function marker",
+  );
+  if (!sameMarker(normalizedApi, expected)) {
     throw new Error(
       "Pages Function marker does not match the immutable artifact.",
     );
@@ -69,11 +57,15 @@ export function validateLiveReleaseSha({
   if (!FULL_SHA.test(normalizedExpectedSha)) {
     throw new Error("Expected rollback SHA must be a full Git commit SHA.");
   }
-  const expected = markerFromManifest(staticMarker);
+  const expected = validateLiveReleaseMarker(staticMarker, "Static marker");
   if (expected.release_sha.toLowerCase() !== normalizedExpectedSha) {
     throw new Error("Static marker does not match the expected rollback SHA.");
   }
-  if (!sameMarker(apiMarker, expected)) {
+  const normalizedApi = validateLiveReleaseMarker(
+    apiMarker,
+    "Pages Function marker",
+  );
+  if (!sameMarker(normalizedApi, expected)) {
     throw new Error(
       "Pages Function marker does not match the static rollback marker.",
     );

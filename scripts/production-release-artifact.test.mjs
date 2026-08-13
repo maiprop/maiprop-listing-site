@@ -13,6 +13,7 @@ import {
   createReleaseArtifact,
   verifyReleaseArtifact,
 } from "./production-release-artifact.mjs";
+import { validateLiveReleaseMarkers } from "./verify-live-release-marker.mjs";
 
 const sha = "0123456789abcdef0123456789abcdef01234567";
 const roots = [];
@@ -229,6 +230,15 @@ describe("immutable production release artifact", () => {
       release_sha: sha,
       payload_sha256: manifest.payload_sha256,
     });
+    expect(manifest.schema_version).toBe(2);
+    expect(marker.schema_version).toBe(1);
+    expect(
+      validateLiveReleaseMarkers({
+        manifest,
+        staticMarker: marker,
+        apiMarker: structuredClone(marker),
+      }),
+    ).toEqual(marker);
   });
 
   it.each([

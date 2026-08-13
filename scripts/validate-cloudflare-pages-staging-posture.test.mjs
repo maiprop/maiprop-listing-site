@@ -435,6 +435,45 @@ describe("Cloudflare staging Pages posture validation", () => {
     ).toThrow(/unexpected staging Pages binding STRIPE_SECRET_KEY/i);
   });
 
+  it("allows SITE_LOCK_PASSWORD only as an optional redacted secret binding", () => {
+    const stagingApi = projectEnvelope({
+      name: options.stagingProjectName,
+      values: stagingValues,
+    });
+    stagingApi.result.deployment_configs.production.env_vars.SITE_LOCK_PASSWORD = {
+      type: "secret_text",
+      value: "unreadable-secret-placeholder",
+    };
+
+    const evidence = buildCloudflarePagesStagingPostureEvidence({
+      ...options,
+      stagingApi,
+      productionApi: projectEnvelope({
+        name: options.productionProjectName,
+        values: productionValues,
+      }),
+    });
+    expect(evidence.status).toBe("passed");
+    expect(JSON.stringify(evidence)).not.toContain(
+      "unreadable-secret-placeholder",
+    );
+
+    stagingApi.result.deployment_configs.production.env_vars.SITE_LOCK_PASSWORD = {
+      type: "plain_text",
+      value: "unsafe-plaintext",
+    };
+    expect(() =>
+      buildCloudflarePagesStagingPostureEvidence({
+        ...options,
+        stagingApi,
+        productionApi: projectEnvelope({
+          name: options.productionProjectName,
+          values: productionValues,
+        }),
+      })
+    ).toThrow(/SITE_LOCK_PASSWORD must be secret_text/i);
+  });
+
   it("rejects malformed staging binding objects", () => {
     const stagingApi = projectEnvelope({
       name: options.stagingProjectName,
@@ -606,6 +645,48 @@ describe("Cloudflare production Pages posture validation", () => {
     expect(serialized).not.toContain("price_production_");
     expect(serialized).not.toContain("supabase.co");
     expect(serialized).not.toContain("portal.maiprop.co");
+  });
+
+  it("allows a pre-provisioned production site lock without exposing its value", () => {
+    const productionApi = projectEnvelope({
+      name: options.productionProjectName,
+      values: productionRuntimeValues,
+      includeServiceRole: false,
+    });
+    productionApi.result.deployment_configs.production.env_vars
+      .SITE_LOCK_PASSWORD = {
+        type: "secret_text",
+        value: "unreadable-production-placeholder",
+      };
+
+    const evidence = buildCloudflarePagesProductionPostureEvidence({
+      ...productionOptions,
+      stagingApi: projectEnvelope({
+        name: options.stagingProjectName,
+        values: stagingValues,
+      }),
+      productionApi,
+    });
+    expect(evidence.status).toBe("passed");
+    expect(JSON.stringify(evidence)).not.toContain(
+      "unreadable-production-placeholder",
+    );
+
+    productionApi.result.deployment_configs.production.env_vars
+      .SITE_LOCK_PASSWORD = {
+        type: "plain_text",
+        value: "unsafe-production-plaintext",
+      };
+    expect(() =>
+      buildCloudflarePagesProductionPostureEvidence({
+        ...productionOptions,
+        stagingApi: projectEnvelope({
+          name: options.stagingProjectName,
+          values: stagingValues,
+        }),
+        productionApi,
+      })
+    ).toThrow(/SITE_LOCK_PASSWORD must be secret_text/i);
   });
 
   it("rejects privileged Supabase secrets and non-live production Stripe bindings", () => {

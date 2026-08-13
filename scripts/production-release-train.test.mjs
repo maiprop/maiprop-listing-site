@@ -48,6 +48,7 @@ describe("production release train", () => {
       "approve-production-release.yml",
       "compliance-evidence.yml",
       "lock-cloudflare-pages-git-deploys.yml",
+      "bootstrap-cloudflare-staging-pages.yml",
       "stage-release.yml",
       "reusable-supabase-staging.yml",
       "deploy-edge-functions.yml",
@@ -981,6 +982,7 @@ describe("production release train", () => {
     expect(supabase.needs).toEqual([
       "validate-source",
       "capture-production-n-minus-one",
+      "cloudflare-staging-preflight",
     ]);
 
     expect(compatibility).toBeDefined();
@@ -1674,11 +1676,11 @@ describe("production release train", () => {
     const stagingCommands = staging.match(
       /release:validate -- cloudflare-deployment[\s\S]*?(?=\n\s{10}\S|$)/g,
     ) ?? [];
-    expect(stagingCommands).toHaveLength(3);
+    expect(stagingCommands).toHaveLength(4);
     const isolatedStagingCommands = stagingCommands.filter((command) =>
       command.includes("CLOUDFLARE_STAGING_PAGES_PROJECT_ID"),
     );
-    expect(isolatedStagingCommands).toHaveLength(2);
+    expect(isolatedStagingCommands).toHaveLength(3);
     for (const command of isolatedStagingCommands) {
       expect(command).toContain(
         '--project-id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID"',
@@ -2054,6 +2056,9 @@ describe("production release train", () => {
     const release = workflow("deploy-production-release.yml");
     const parsed = yaml.load(release);
     const validate = parsed.jobs.validate;
+    const cloudflarePreflight =
+      parsed.jobs["cloudflare-production-preflight"];
+    const sourceArchive = parsed.jobs["archive-production-source"];
     const database = parsed.jobs["deploy-production-database"];
     const renew = parsed.jobs["renew-edge-mutation-lease"];
     const edge = parsed.jobs["deploy-production-edge"];
@@ -2098,7 +2103,22 @@ describe("production release train", () => {
     expect(database.uses).toBe(
       "./.github/workflows/deploy-supabase-production-db.yml",
     );
-    expect(database.needs).toBe("validate");
+    expect(cloudflarePreflight.needs).toBe("validate");
+    expect(cloudflarePreflight.environment).toBeUndefined();
+    expect(sourceArchive.environment).toBeUndefined();
+    expect(sourceArchive.needs).toEqual([
+      "validate",
+      "cloudflare-production-preflight",
+    ]);
+    expect(sourceArchive.permissions).toEqual({
+      actions: "read",
+      contents: "write",
+    });
+    expect(database.needs).toEqual([
+      "validate",
+      "cloudflare-production-preflight",
+      "archive-production-source",
+    ]);
     expect(database.with.production_run_id).toBe("${{ github.run_id }}");
     expect(database.with.production_run_attempt).toBe(
       "${{ github.run_attempt }}",
@@ -2252,7 +2272,7 @@ describe("production release train", () => {
    it("API-attests disabled Git auto-deploy for both Pages projects", () => {
      const stage = workflow("stage-release.yml");
 
-     expect(stage.match(/--mode staging/g)).toHaveLength(3);
+     expect(stage.match(/--mode staging/g)).toHaveLength(4);
      expect(stage).toContain("cloudflare-staging-project.json");
      expect(stage).toContain("cloudflare-production-project.json");
      expect(stage).toContain("cloudflare-pages-final-posture.json");

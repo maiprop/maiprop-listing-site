@@ -476,6 +476,25 @@ describe("GitHub Free private-repository release provenance readiness", () => {
     );
   });
 
+  it("requires staging environment scope on Cloudflare preflight", () => {
+    const root = fixture();
+    rewrite(
+      root,
+      ".github/workflows/stage-release.yml",
+      (source) => source.replace(
+        "  cloudflare-staging-preflight:\n    name: Preflight staging Cloudflare before backend mutation\n    environment: staging",
+        "  cloudflare-staging-preflight:\n    name: Preflight staging Cloudflare before backend mutation",
+      ),
+    );
+
+    const readiness = checkSlsaReadiness(root);
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.failures.join("\n")).toMatch(
+      /cloudflare-staging-preflight.*environment|environment.*cloudflare-staging-preflight/i,
+    );
+  });
+
   it("rejects a classified staging job assigned to another environment", () => {
     const root = fixture();
     rewrite(

@@ -48,6 +48,8 @@ const envDocs = [
 const ignoredFunctionDirs = new Set(["_shared", "node_modules"]);
 const productionReleaseWorkflow =
   ".github/workflows/deploy-production-release.yml";
+const legacyProductionReconstructionSha =
+  "db53d1b9adae41edae93fbeb3e612b42dd8fec0b";
 const documentedEnvAllowlist = new Set([
   "CI",
   "DEV",
@@ -287,6 +289,50 @@ export function productionDatabaseCredentialScopeViolations({
   return violations;
 }
 
+export function stageReleaseBuildPolicyViolation(stageRelease) {
+  if (/build:homepage-initial/.test(stageRelease)) {
+    return ".github/workflows/stage-release.yml must deploy the source CI artifact without rebuilding it";
+  }
+
+  const buildMatches = [
+    ...stageRelease.matchAll(/npm run build(?=\s|$)/gm),
+  ];
+  if (buildMatches.length === 0) return null;
+
+  const legacyStartMarker =
+    'elif [ "$previous_sha" = "$LEGACY_PRODUCTION_SHA" ]; then';
+  const legacyEndMarker =
+    'else\n              echo "::error::No durable release or uniquely bound unexpired attempt-1 CI artifact exists';
+  const normalized = stageRelease.replace(/\r\n/g, "\n");
+  const legacyStart = normalized.indexOf(legacyStartMarker);
+  const legacyEnd = normalized.indexOf(legacyEndMarker, legacyStart);
+  const buildIndex = normalized.indexOf("npm run build", legacyStart);
+  const legacyShaDeclarations = [
+    ...normalized.matchAll(/LEGACY_PRODUCTION_SHA:\s*([0-9a-f]{40})/g),
+  ];
+  const requiredMarkers = [
+    'if [ "$STAGING_APP_URL" != "https://maiprop-listing-site-staging.pages.dev" ]; then',
+    'selected_source_kind="legacy-reconstructed-for-staging-compatibility"',
+    'purpose: "staging-n-minus-one-compatibility-only"',
+    "original_production_bytes: false",
+  ];
+  const isPinnedLegacyStagingReconstruction =
+    buildMatches.length === 1 &&
+    legacyStart >= 0 &&
+    legacyEnd > legacyStart &&
+    buildIndex > legacyStart &&
+    buildIndex < legacyEnd &&
+    legacyShaDeclarations.length === 2 &&
+    legacyShaDeclarations.every(
+      (match) => match[1] === legacyProductionReconstructionSha,
+    ) &&
+    requiredMarkers.every((marker) => normalized.includes(marker));
+
+  return isPinnedLegacyStagingReconstruction
+    ? null
+    : ".github/workflows/stage-release.yml must deploy the source CI artifact without rebuilding it";
+}
+
 export function scanWorkflows() {
   const files = readdirSync(workflowDir)
     .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
@@ -340,6 +386,7 @@ export function scanWorkflows() {
   const authorizedMutationWorkflows = new Set([
     ".github/workflows/deploy-edge-functions.yml",
     ".github/workflows/deploy-supabase-production-db.yml",
+    ".github/workflows/bootstrap-cloudflare-staging-pages.yml",
     ".github/workflows/lock-cloudflare-pages-git-deploys.yml",
     ".github/workflows/reusable-cloudflare-production-deploy.yml",
     ".github/workflows/stage-release.yml",
@@ -447,6 +494,15 @@ export function scanWorkflows() {
         "production-mutation-lease.json",
         "run-scoped production mutation lease",
       ],
+      [
+        "archive-production-source",
+        "durable production source archive gate",
+      ],
+      [".immutable == true", "immutable GitHub release postcondition"],
+      [
+        "production-source-release.mjs",
+        "signed durable production source binding",
+      ],
     ];
     for (const [marker, label] of requiredReleaseMarkers) {
       if (!release.includes(marker)) {
@@ -457,6 +513,9 @@ export function scanWorkflows() {
     const parsedRelease = workflowYaml[productionReleaseWorkflow];
     const releaseJobs = parsedRelease?.jobs ?? {};
     const validateJob = releaseJobs.validate;
+    const cloudflarePreflightJob =
+      releaseJobs["cloudflare-production-preflight"];
+    const archiveSourceJob = releaseJobs["archive-production-source"];
     const databaseJob = releaseJobs["deploy-production-database"];
     const renewEdgeLeaseJob = releaseJobs["renew-edge-mutation-lease"];
     const edgeJob = releaseJobs["deploy-production-edge"];
@@ -475,8 +534,31 @@ export function scanWorkflows() {
         `${productionReleaseWorkflow} validation must emit the exact approved release and lease tuple`,
       );
     }
+    const databaseNeeds = Array.isArray(databaseJob?.needs)
+      ? databaseJob.needs
+      : [databaseJob?.needs].filter(Boolean);
+    const archiveNeeds = Array.isArray(archiveSourceJob?.needs)
+      ? archiveSourceJob.needs
+      : [archiveSourceJob?.needs].filter(Boolean);
     if (
-      databaseJob?.needs !== "validate" ||
+      !archiveNeeds.includes("validate") ||
+      !archiveNeeds.includes("cloudflare-production-preflight") ||
+      archiveSourceJob?.environment !== undefined ||
+      archiveSourceJob?.permissions?.actions !== "read" ||
+      archiveSourceJob?.permissions?.contents !== "write" ||
+      Object.keys(archiveSourceJob?.permissions ?? {}).sort().join("\n") !==
+        ["actions", "contents"].sort().join("\n")
+    ) {
+      violations.push(
+        `${productionReleaseWorkflow} must archive signed immutable source before production mutation`,
+      );
+    }
+    if (
+      cloudflarePreflightJob?.needs !== "validate" ||
+      cloudflarePreflightJob?.environment !== undefined ||
+      !databaseNeeds.includes("validate") ||
+      !databaseNeeds.includes("cloudflare-production-preflight") ||
+      !databaseNeeds.includes("archive-production-source") ||
       databaseJob?.uses !==
         "./.github/workflows/deploy-supabase-production-db.yml" ||
       databaseJob?.with?.release_sha !== "${{ inputs.release_sha }}" ||
@@ -600,14 +682,8 @@ export function scanWorkflows() {
       );
     }
   }
-  if (
-    /build:homepage-initial/.test(stageRelease) ||
-    /npm run build(?:\s|$)/m.test(stageRelease)
-  ) {
-    violations.push(
-      ".github/workflows/stage-release.yml must deploy the source CI artifact without rebuilding it",
-    );
-  }
+  const stageBuildViolation = stageReleaseBuildPolicyViolation(stageRelease);
+  if (stageBuildViolation) violations.push(stageBuildViolation);
 
   const supabaseStaging =
     workflowText[".github/workflows/reusable-supabase-staging.yml"] ?? "";

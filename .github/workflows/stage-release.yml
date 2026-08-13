@@ -305,7 +305,7 @@ jobs:
     environment: staging
     needs: [validate-source]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     outputs:
       artifact_name: ${{ steps.capture.outputs.artifact_name }}
       previous_sha: ${{ steps.capture.outputs.previous_sha }}
@@ -330,6 +330,7 @@ jobs:
         id: capture
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
@@ -337,8 +338,30 @@ jobs:
           RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
           RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
           RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          LEGACY_PRODUCTION_SHA: db53d1b9adae41edae93fbeb3e612b42dd8fec0b
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
         run: |
           set -euo pipefail
+          github_api() {
+            gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              "$@"
+          }
+          github_get_status() {
+            local path="$1"
+            local output="$2"
+            curl -sS --retry 3 --retry-all-errors \
+              -o "$output" \
+              -w '%{http_code}' \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/$path"
+          }
           for value in \
             "$CF_API_TOKEN" \
             "$CF_ACCOUNT_ID" \
@@ -375,126 +398,309 @@ jobs:
             --branch main \
             --sha "$previous_sha"
 
-          gh api --method GET \
-            "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
-            -f head_sha="$previous_sha" \
-            -f branch=main \
-            -f event=push \
-            -f status=success \
-            -f per_page=100 \
-            > n-minus-one/ci-runs.json
-
-          selected_run_id=""
-          selected_run_attempt=""
-          selected_artifact_id=""
-          selected_artifact_name=""
-          selected_binding_artifact_id=""
-          selected_actor=""
-          selected_triggering_actor=""
-          while IFS=$'\t' read -r run_id run_attempt actor triggering_actor; do
-            [ -n "$run_id" ] || continue
-            [ "$run_attempt" = "1" ] || continue
-            [ "$actor" = "$triggering_actor" ] || continue
-            gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" \
-              > n-minus-one/run-artifacts.json
-            artifact_name="production-release-candidate-${previous_sha}-1"
-            binding_name="production-release-candidate-binding-${previous_sha}-1"
-            mapfile -t artifact_ids < <(
-              jq -r --arg name "$artifact_name" \
-                '.artifacts[] | select(.expired == false and .name == $name) | .id' \
-                n-minus-one/run-artifacts.json
-            )
-            mapfile -t binding_ids < <(
-              jq -r --arg name "$binding_name" \
-                '.artifacts[] | select(.expired == false and .name == $name) | .id' \
-                n-minus-one/run-artifacts.json
-            )
-            if [ "${#artifact_ids[@]}" -eq 1 ] && [ "${#binding_ids[@]}" -eq 1 ]; then
-              selected_run_id="$run_id"
-              selected_run_attempt="$run_attempt"
-              selected_artifact_id="${artifact_ids[0]}"
-              selected_artifact_name="$artifact_name"
-              selected_binding_artifact_id="${binding_ids[0]}"
-              selected_actor="$actor"
-              selected_triggering_actor="$triggering_actor"
-              break
-            fi
-          done < <(
-            jq -r --arg repo "$GITHUB_REPOSITORY" '
-              .workflow_runs
-              | map(select(
-                  .conclusion == "success" and
-                  .event == "push" and
-                  .head_branch == "main" and
-                  .head_repository.full_name == $repo and
-                  .run_attempt == 1 and
-                  .actor.login == .triggering_actor.login
-                ))
-              | sort_by(.run_number, .run_attempt)
-              | reverse[]
-              | [.id, .run_attempt, .actor.login, .triggering_actor.login]
-              | @tsv
-            ' n-minus-one/ci-runs.json
-          )
-          if [ -z "$selected_artifact_id" ] || [ -z "$selected_binding_artifact_id" ]; then
-            echo "::error::No uniquely bound attempt-1 CI artifact exists for canonical production SHA $previous_sha."
-            exit 1
-          fi
-
-          mkdir -p n-minus-one/release-binding n-minus-one/binding-metadata
-          gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_binding_artifact_id/zip" \
-            > n-minus-one/release-binding.zip
-          unzip -q n-minus-one/release-binding.zip \
-            -d n-minus-one/release-binding
-          rm n-minus-one/release-binding.zip
-          bound_artifact_id="$(jq -er '.artifact.id' n-minus-one/release-binding/release-artifact-binding.json)"
-          if [ "$bound_artifact_id" != "$selected_artifact_id" ]; then
-            echo "::error::The N-1 binding does not identify the selected payload artifact."
-            exit 1
-          fi
-          gh api \
-            "/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_artifact_id" \
-            > n-minus-one/binding-metadata/artifact.json
-          gh api \
-            "/repos/$GITHUB_REPOSITORY/actions/runs/$selected_run_id" \
-            > n-minus-one/binding-metadata/run.json
-          gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_artifact_id/zip" \
-            > n-minus-one/release-candidate.zip
-          unzip -q n-minus-one/release-candidate.zip \
-            -d n-minus-one/release-candidate
-          rm n-minus-one/release-candidate.zip
           git fetch --no-tags origin "$previous_sha"
           previous_tree="$(git rev-parse "${previous_sha}^{tree}")"
-          npm run release:artifact:verify -- \
+          selected_run_id=""
+          selected_run_attempt=""
+          selected_artifact_name=""
+          selected_source_kind=""
+          legacy_origin_ci_run_id=""
+          legacy_origin_ci_run_attempt=""
+          durable_tag="production-source-${previous_sha}"
+          durable_asset="${durable_tag}.tar.gz"
+          durable_binding="${durable_tag}.binding.json"
+          durable_status="$(github_get_status "releases/tags/$durable_tag" n-minus-one/source-release.json)"
+          if [ "$durable_status" = "200" ]; then
+            jq -e \
+              --arg tag "$durable_tag" \
+              --arg sha "$previous_sha" \
+              --arg asset "$durable_asset" \
+              --arg binding "$durable_binding" '
+                .draft == false and
+                .prerelease == true and
+                .immutable == true and
+                .tag_name == $tag and
+                .target_commitish == $sha and
+                ([.assets[].name] | sort) == ([$asset, $binding] | sort)
+              ' n-minus-one/source-release.json > /dev/null
+            github_api "/repos/$GITHUB_REPOSITORY/git/ref/tags/$durable_tag" \
+              --jq '.object.type + " " + .object.sha' \
+              | grep -Fx "commit $previous_sha" > /dev/null
+            durable_asset_id="$(jq -er --arg name "$durable_asset" '.assets[] | select(.name == $name) | .id' n-minus-one/source-release.json)"
+            durable_binding_id="$(jq -er --arg name "$durable_binding" '.assets[] | select(.name == $name) | .id' n-minus-one/source-release.json)"
+            github_api -H "Accept: application/octet-stream" \
+              "/repos/$GITHUB_REPOSITORY/releases/assets/$durable_asset_id" \
+              > "n-minus-one/$durable_asset"
+            github_api -H "Accept: application/octet-stream" \
+              "/repos/$GITHUB_REPOSITORY/releases/assets/$durable_binding_id" \
+              > "n-minus-one/$durable_binding"
+            durable_asset_digest="sha256:$(sha256sum "n-minus-one/$durable_asset" | awk '{print $1}')"
+            durable_binding_digest="sha256:$(sha256sum "n-minus-one/$durable_binding" | awk '{print $1}')"
+            jq -e --arg name "$durable_asset" --arg digest "$durable_asset_digest" \
+              '.assets[] | select(.name == $name) | .digest == $digest' \
+              n-minus-one/source-release.json > /dev/null
+            jq -e --arg name "$durable_binding" --arg digest "$durable_binding_digest" \
+              '.assets[] | select(.name == $name) | .digest == $digest' \
+              n-minus-one/source-release.json > /dev/null
+            tar -tzf "n-minus-one/$durable_asset" \
+              > n-minus-one/durable-archive-paths.txt
+            tar -tvzf "n-minus-one/$durable_asset" \
+              > n-minus-one/durable-archive-listing.txt
+            if grep -Eq '(^/|(^|/)\.\.(/|$)|\\)' \
+              n-minus-one/durable-archive-paths.txt; then
+              echo "::error::Immutable production source contains an unsafe path."
+              exit 1
+            fi
+            if grep -Eq '^[^d-]' n-minus-one/durable-archive-listing.txt; then
+              echo "::error::Immutable production source contains a special filesystem entry."
+              exit 1
+            fi
+            tar -xOzf "n-minus-one/$durable_asset" ./release-manifest.json \
+              > n-minus-one/durable-release-manifest.json
+            selected_run_id="$(jq -er '.source_run_id' "n-minus-one/$durable_binding")"
+            selected_run_attempt="$(jq -er '.source_run_attempt' "n-minus-one/$durable_binding")"
+            node scripts/production-source-release.mjs verify \
+              --repository "$GITHUB_REPOSITORY" \
+              --release-sha "$previous_sha" \
+              --source-tree "$previous_tree" \
+              --source-run-id "$selected_run_id" \
+              --source-run-attempt "$selected_run_attempt" \
+              --tag-name "$durable_tag" \
+              --asset-name "$durable_asset" \
+              --asset "n-minus-one/$durable_asset" \
+              --manifest n-minus-one/durable-release-manifest.json \
+              --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+              --binding "n-minus-one/$durable_binding" \
+              > n-minus-one/provenance-verification.json
+            tar -xzf "n-minus-one/$durable_asset" \
+              --no-same-owner --no-same-permissions \
+              -C n-minus-one/release-candidate
+            selected_artifact_name="$durable_asset"
+            selected_source_kind="immutable-github-release"
+          elif [ "$durable_status" = "404" ]; then
+            github_api --method GET \
+              "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+              -f head_sha="$previous_sha" \
+              -f branch=main \
+              -f event=push \
+              -f status=success \
+              -f per_page=100 \
+              > n-minus-one/ci-runs.json
+            selected_artifact_id=""
+            selected_binding_artifact_id=""
+            selected_actor=""
+            selected_triggering_actor=""
+            while IFS=$'\t' read -r run_id run_attempt actor triggering_actor; do
+              [ -n "$run_id" ] || continue
+              [ "$run_attempt" = "1" ] || continue
+              [ "$actor" = "$triggering_actor" ] || continue
+              github_api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" \
+                > n-minus-one/run-artifacts.json
+              artifact_name="production-release-candidate-${previous_sha}-1"
+              binding_name="production-release-candidate-binding-${previous_sha}-1"
+              mapfile -t artifact_ids < <(
+                jq -r --arg name "$artifact_name" \
+                  '.artifacts[] | select(.expired == false and .name == $name) | .id' \
+                  n-minus-one/run-artifacts.json
+              )
+              mapfile -t binding_ids < <(
+                jq -r --arg name "$binding_name" \
+                  '.artifacts[] | select(.expired == false and .name == $name) | .id' \
+                  n-minus-one/run-artifacts.json
+              )
+              if [ "${#artifact_ids[@]}" -eq 1 ] && [ "${#binding_ids[@]}" -eq 1 ]; then
+                selected_run_id="$run_id"
+                selected_run_attempt="$run_attempt"
+                selected_artifact_id="${artifact_ids[0]}"
+                selected_artifact_name="$artifact_name"
+                selected_binding_artifact_id="${binding_ids[0]}"
+                selected_actor="$actor"
+                selected_triggering_actor="$triggering_actor"
+                break
+              fi
+            done < <(
+              jq -r --arg repo "$GITHUB_REPOSITORY" '
+                .workflow_runs
+                | map(select(
+                    .conclusion == "success" and
+                    .event == "push" and
+                    .head_branch == "main" and
+                    .head_repository.full_name == $repo and
+                    .run_attempt == 1 and
+                    .actor.login == .triggering_actor.login
+                  ))
+                | sort_by(.run_number, .run_attempt)
+                | reverse[]
+                | [.id, .run_attempt, .actor.login, .triggering_actor.login]
+                | @tsv
+              ' n-minus-one/ci-runs.json
+            )
+            if [ -n "$selected_artifact_id" ] && [ -n "$selected_binding_artifact_id" ]; then
+              mkdir -p n-minus-one/release-binding n-minus-one/binding-metadata
+              github_api \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_binding_artifact_id/zip" \
+                > n-minus-one/release-binding.zip
+              unzip -q n-minus-one/release-binding.zip \
+                -d n-minus-one/release-binding
+              rm n-minus-one/release-binding.zip
+              bound_artifact_id="$(jq -er '.artifact.id' n-minus-one/release-binding/release-artifact-binding.json)"
+              if [ "$bound_artifact_id" != "$selected_artifact_id" ]; then
+                echo "::error::The N-1 binding does not identify the selected payload artifact."
+                exit 1
+              fi
+              github_api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_artifact_id" \
+                > n-minus-one/binding-metadata/artifact.json
+              github_api "/repos/$GITHUB_REPOSITORY/actions/runs/$selected_run_id" \
+                > n-minus-one/binding-metadata/run.json
+              github_api \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/$GITHUB_REPOSITORY/actions/artifacts/$selected_artifact_id/zip" \
+                > n-minus-one/release-candidate.zip
+              unzip -q n-minus-one/release-candidate.zip \
+                -d n-minus-one/release-candidate
+              rm n-minus-one/release-candidate.zip
+              node scripts/verify-release-artifact-binding.mjs \
+                --binding n-minus-one/release-binding/release-artifact-binding.json \
+                --payload-root n-minus-one/release-candidate \
+                --artifact-metadata n-minus-one/binding-metadata/artifact.json \
+                --producer-run n-minus-one/binding-metadata/run.json \
+                --repository "$GITHUB_REPOSITORY" \
+                --release-sha "$previous_sha" \
+                --source-tree "$previous_tree" \
+                --workflow-path .github/workflows/ci.yml \
+                --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
+                --workflow-sha "$previous_sha" \
+                --event push \
+                --run-id "$selected_run_id" \
+                --run-attempt "$selected_run_attempt" \
+                --actor "$selected_actor" \
+                --triggering-actor "$selected_triggering_actor" \
+                --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+                > n-minus-one/provenance-verification.json
+              jq -e '.ok == true and .verification_mode == "prior-run"' \
+                n-minus-one/provenance-verification.json >/dev/null
+              selected_source_kind="actions-artifact-fallback"
+            elif [ "$previous_sha" = "$LEGACY_PRODUCTION_SHA" ]; then
+              mapfile -t legacy_origin_runs < <(
+                jq -r --arg repo "$GITHUB_REPOSITORY" '
+                  .workflow_runs
+                  | map(select(
+                      .conclusion == "success" and
+                      .event == "push" and
+                      .head_branch == "main" and
+                      .head_repository.full_name == $repo and
+                      .run_attempt == 1 and
+                      .actor.login == .triggering_actor.login
+                    ))
+                  | [.[] | [.id, .run_attempt] | @tsv]
+                  | .[]
+                ' n-minus-one/ci-runs.json
+              )
+              if [ "${#legacy_origin_runs[@]}" -ne 1 ]; then
+                echo "::error::Legacy reconstruction requires exactly one successful attempt-1 origin CI run."
+                exit 1
+              fi
+              IFS=$'\t' read -r legacy_origin_ci_run_id legacy_origin_ci_run_attempt \
+                <<< "${legacy_origin_runs[0]}"
+              legacy_deployment_url="$(jq -er '.url' n-minus-one/cloudflare-production-canonical.json)"
+              curl -fsS --retry 3 \
+                "${legacy_deployment_url%/}/deploy-version.json" \
+                > n-minus-one/legacy-live-marker.json
+              jq -e \
+                --arg sha "$previous_sha" \
+                --arg run_id "$legacy_origin_ci_run_id" \
+                --arg run_attempt "$legacy_origin_ci_run_attempt" '
+                  .sha == $sha and
+                  .run_id == $run_id and
+                  .run_attempt == $run_attempt
+                ' n-minus-one/legacy-live-marker.json >/dev/null
+              for value in \
+                "$STAGING_SUPABASE_PROJECT_ID" \
+                "$STAGING_SUPABASE_URL" \
+                "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+                "$STAGING_APP_URL"; do
+                if [ -z "$value" ]; then
+                  echo "::error::Legacy N-1 reconstruction requires the isolated staging runtime identity."
+                  exit 1
+                fi
+                echo "::add-mask::$value"
+              done
+              if [ "$STAGING_APP_URL" != "https://maiprop-listing-site-staging.pages.dev" ]; then
+                echo "::error::Legacy N-1 reconstruction requires the dedicated staging origin."
+                exit 1
+              fi
+
+              legacy_root="$RUNNER_TEMP/legacy-production-source"
+              mkdir -p "$legacy_root"
+              git archive --format=tar "$previous_sha" \
+                | tar -x -C "$legacy_root"
+              (
+                cd "$legacy_root"
+                npm ci --ignore-scripts --prefer-offline --no-audit
+                VITE_SUPABASE_PROJECT_ID="$STAGING_SUPABASE_PROJECT_ID" \
+                  VITE_SUPABASE_URL="$STAGING_SUPABASE_URL" \
+                  VITE_SUPABASE_PUBLISHABLE_KEY="$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+                  VITE_APP_URL="$STAGING_APP_URL" \
+                  VITE_PUBLIC_API_ORIGIN="$STAGING_APP_URL" \
+                  npm run build
+                npm run build:cloudflare-pages-worker
+                npm sbom --sbom-format cyclonedx --package-lock-only \
+                  > sbom.cdx.json
+              )
+              mkdir -p "$legacy_root/supabase/reconciliation"
+              cp \
+                supabase/reconciliation/production-history-v1.json \
+                supabase/reconciliation/production-history-v1.sql \
+                "$legacy_root/supabase/reconciliation/"
+              node scripts/production-release-artifact.mjs create \
+                --dist "$legacy_root/dist" \
+                --sbom "$legacy_root/sbom.cdx.json" \
+                --supabase "$legacy_root/supabase" \
+                --out n-minus-one/release-candidate \
+                --sha "$previous_sha" \
+                --tree "$previous_tree" \
+                --run-id "$GITHUB_RUN_ID" \
+                --run-attempt "$GITHUB_RUN_ATTEMPT" \
+                > n-minus-one/legacy-reconstruction-manifest.json
+              selected_run_id="$GITHUB_RUN_ID"
+              selected_run_attempt="$GITHUB_RUN_ATTEMPT"
+              selected_artifact_name="legacy-reconstructed-source-${previous_sha}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              selected_source_kind="legacy-reconstructed-for-staging-compatibility"
+              jq -n \
+                --arg previous_sha "$previous_sha" \
+                --arg previous_tree "$previous_tree" \
+                --arg origin_ci_run_id "$legacy_origin_ci_run_id" \
+                --arg origin_ci_run_attempt "$legacy_origin_ci_run_attempt" \
+                --arg reconstruction_run_id "$GITHUB_RUN_ID" \
+                --arg reconstruction_run_attempt "$GITHUB_RUN_ATTEMPT" \
+                --arg packaging_metadata_control_sha "$RELEASE_SHA" '{
+                  schema_version: 1,
+                  evidence_type: "maiprop-legacy-production-source-reconstruction",
+                  previous_sha: $previous_sha,
+                  previous_tree: $previous_tree,
+                  origin_ci_run_id: $origin_ci_run_id,
+                  origin_ci_run_attempt: $origin_ci_run_attempt,
+                  reconstruction_run_id: $reconstruction_run_id,
+                  reconstruction_run_attempt: $reconstruction_run_attempt,
+                  packaging_metadata_control_sha: $packaging_metadata_control_sha,
+                  purpose: "staging-n-minus-one-compatibility-only",
+                  original_production_bytes: false
+                }' > n-minus-one/legacy-reconstruction-evidence.json
+            else
+              echo "::error::No durable release or uniquely bound unexpired attempt-1 CI artifact exists for canonical production SHA $previous_sha."
+              exit 1
+            fi
+          else
+            echo "::error::GitHub durable source lookup failed with HTTP $durable_status."
+            exit 1
+          fi
+          npm run --silent release:artifact:verify -- \
             --dir n-minus-one/release-candidate \
             --sha "$previous_sha" \
             --tree "$previous_tree" \
             --run-id "$selected_run_id" \
             --run-attempt "$selected_run_attempt"
-          node scripts/verify-release-artifact-binding.mjs \
-            --binding n-minus-one/release-binding/release-artifact-binding.json \
-            --payload-root n-minus-one/release-candidate \
-            --artifact-metadata n-minus-one/binding-metadata/artifact.json \
-            --producer-run n-minus-one/binding-metadata/run.json \
-            --repository "$GITHUB_REPOSITORY" \
-            --release-sha "$previous_sha" \
-            --source-tree "$previous_tree" \
-            --workflow-path .github/workflows/ci.yml \
-            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
-            --workflow-sha "$previous_sha" \
-            --event push \
-            --run-id "$selected_run_id" \
-            --run-attempt "$selected_run_attempt" \
-            --actor "$selected_actor" \
-            --triggering-actor "$selected_triggering_actor" \
-            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
-            > n-minus-one/provenance-verification.json
-          jq -e '.ok == true and .verification_mode == "prior-run"' \
-            n-minus-one/provenance-verification.json >/dev/null
           jq -n \
             --arg release_sha "$RELEASE_SHA" \
             --arg previous_sha "$previous_sha" \
@@ -505,7 +711,10 @@ jobs:
             --arg deployment_url "$(jq -er '.url' n-minus-one/cloudflare-production-canonical.json)" \
             --arg source_run_id "$selected_run_id" \
             --arg source_run_attempt "$selected_run_attempt" \
-            --arg source_artifact_name "$selected_artifact_name" '{
+            --arg source_artifact_name "$selected_artifact_name" \
+            --arg source_storage "$selected_source_kind" \
+            --arg legacy_origin_ci_run_id "$legacy_origin_ci_run_id" \
+            --arg legacy_origin_ci_run_attempt "$legacy_origin_ci_run_attempt" '{
               schema_version: 1,
               evidence_type: "maiprop-production-n-minus-one-source",
               release_sha: $release_sha,
@@ -517,7 +726,11 @@ jobs:
               deployment_url: $deployment_url,
               source_run_id: $source_run_id,
               source_run_attempt: $source_run_attempt,
-              source_artifact_name: $source_artifact_name
+              source_artifact_name: $source_artifact_name,
+              source_storage: $source_storage,
+              original_production_bytes: ($source_storage != "legacy-reconstructed-for-staging-compatibility"),
+              legacy_origin_ci_run_id: (if $legacy_origin_ci_run_id == "" then null else $legacy_origin_ci_run_id end),
+              legacy_origin_ci_run_attempt: (if $legacy_origin_ci_run_attempt == "" then null else $legacy_origin_ci_run_attempt end)
             }' > n-minus-one/source-evidence.json
           artifact_name="production-n-minus-one-source-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
           {
@@ -533,11 +746,122 @@ jobs:
           name: production-n-minus-one-source-${{ needs.validate-source.outputs.release_sha }}-${{ github.run_attempt }}
           path: n-minus-one/
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
+
+  cloudflare-staging-preflight:
+    name: Preflight staging Cloudflare before backend mutation
+    environment: staging
+    needs: [validate-source, capture-production-n-minus-one]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate-source.outputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install pinned release tooling
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      - name: Verify Cloudflare staging identity credentials and canonical baseline
+        env:
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          PRODUCTION_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          PRODUCTION_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          PRODUCTION_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          for value in \
+            "$STAGING_CF_READ_TOKEN" \
+            "$STAGING_CF_EDIT_TOKEN" \
+            "$STAGING_CF_ACCOUNT_ID" \
+            "$PRODUCTION_CF_READ_TOKEN" \
+            "$PRODUCTION_CF_ACCOUNT_ID" \
+            "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" \
+            "$CLOUDFLARE_PAGES_PROJECT_ID"; do
+            if [ -z "$value" ]; then
+              echo "::error::Complete staging and production Cloudflare preflight credentials and project IDs are required."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+          done
+          if [ "$STAGING_PROJECT" != "maiprop-listing-site-staging" ] ||
+             [ "$PRODUCTION_PROJECT" != "maiprop-listing-site" ] ||
+             [ "$STAGING_PROJECT" = "$PRODUCTION_PROJECT" ] ||
+             [ "$STAGING_CF_ACCOUNT_ID" = "$PRODUCTION_CF_ACCOUNT_ID" ] ||
+             [ "$STAGING_CF_READ_TOKEN" = "$STAGING_CF_EDIT_TOKEN" ] ||
+             [ "$STAGING_CF_READ_TOKEN" = "$PRODUCTION_CF_READ_TOKEN" ] ||
+             [ "$STAGING_CF_EDIT_TOKEN" = "$PRODUCTION_CF_READ_TOKEN" ]; then
+            echo "::error::Cloudflare staging preflight identities are not isolated from production."
+            exit 1
+          fi
+          if [ "$STAGING_APP_URL" != "https://maiprop-listing-site-staging.pages.dev" ]; then
+            echo "::error::STAGING_APP_URL must use the dedicated staging Pages origin."
+            exit 1
+          fi
+
+          staging_read="$RUNNER_TEMP/cloudflare-staging-preflight-read.json"
+          staging_edit="$RUNNER_TEMP/cloudflare-staging-preflight-edit.json"
+          production_read="$RUNNER_TEMP/cloudflare-production-preflight-read.json"
+          deployments="$RUNNER_TEMP/cloudflare-staging-preflight-deployments.json"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_read"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_EDIT_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT" \
+            > "$staging_edit"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $PRODUCTION_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$PRODUCTION_CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT" \
+            > "$production_read"
+          jq -e --arg id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" \
+            '.success == true and .result.id == $id and .result.name == "maiprop-listing-site-staging"' \
+            "$staging_edit" > /dev/null
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode staging \
+            --staging-project-file "$staging_read" \
+            --production-project-file "$production_read" \
+            --out "$RUNNER_TEMP/cloudflare-staging-preflight-posture.json"
+          jq -e '.success == true and (.result.canonical_deployment | type == "object")' \
+            "$staging_read" > /dev/null
+          jq '.result.canonical_deployment' "$staging_read" \
+            > "$RUNNER_TEMP/cloudflare-staging-preflight-canonical.json"
+          baseline_sha="$(jq -er '.deployment_trigger.metadata.commit_hash' "$RUNNER_TEMP/cloudflare-staging-preflight-canonical.json")"
+          npm run --silent release:validate -- cloudflare-deployment \
+            --file "$RUNNER_TEMP/cloudflare-staging-preflight-canonical.json" \
+            --project "$STAGING_PROJECT" \
+            --project-id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" \
+            --environment production \
+            --branch main \
+            --sha "$baseline_sha"
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/deployments?env=production&per_page=100" \
+            > "$deployments"
+          jq -e --arg id "$(jq -er '.id' "$RUNNER_TEMP/cloudflare-staging-preflight-canonical.json")" \
+            '.success == true and any(.result[]; .id == $id)' \
+            "$deployments" > /dev/null
 
   supabase-staging:
     name: Stage Supabase exact SHA
-    needs: [validate-source, capture-production-n-minus-one]
+    needs: [validate-source, capture-production-n-minus-one, cloudflare-staging-preflight]
     uses: ./.github/workflows/reusable-supabase-staging.yml
     with:
       release_sha: ${{ needs.validate-source.outputs.release_sha }}
@@ -594,6 +918,7 @@ jobs:
           PREVIOUS_SHA: ${{ needs.capture-production-n-minus-one.outputs.previous_sha }}
           PREVIOUS_SOURCE_RUN_ID: ${{ needs.capture-production-n-minus-one.outputs.previous_source_run_id }}
           PREVIOUS_SOURCE_RUN_ATTEMPT: ${{ needs.capture-production-n-minus-one.outputs.previous_source_run_attempt }}
+          LEGACY_PRODUCTION_SHA: db53d1b9adae41edae93fbeb3e612b42dd8fec0b
         run: |
           set -euo pipefail
           git fetch --no-tags origin "$PREVIOUS_SHA"
@@ -608,8 +933,39 @@ jobs:
               .release_sha == $release_sha and
               .previous_sha == $previous_sha and
               .source_run_id == $source_run_id and
-              .source_run_attempt == $source_run_attempt
+              .source_run_attempt == $source_run_attempt and
+              (
+                (.source_storage == "legacy-reconstructed-for-staging-compatibility" and
+                 .previous_sha == "db53d1b9adae41edae93fbeb3e612b42dd8fec0b" and
+                 .original_production_bytes == false and
+                 (.legacy_origin_ci_run_id | type == "string") and
+                 .legacy_origin_ci_run_attempt == "1") or
+                (.source_storage != "legacy-reconstructed-for-staging-compatibility" and
+                 .original_production_bytes == true)
+              )
             ' n-minus-one/source-evidence.json >/dev/null
+          if [ "$(jq -r '.source_storage' n-minus-one/source-evidence.json)" = \
+               "legacy-reconstructed-for-staging-compatibility" ]; then
+            jq -e \
+              --arg previous_sha "$LEGACY_PRODUCTION_SHA" \
+              --arg previous_tree "$previous_tree" \
+              --arg origin_ci_run_id "$(jq -er '.legacy_origin_ci_run_id' n-minus-one/source-evidence.json)" \
+              --arg reconstruction_run_id "$GITHUB_RUN_ID" \
+              --arg reconstruction_run_attempt "$GITHUB_RUN_ATTEMPT" \
+              --arg packaging_metadata_control_sha "$RELEASE_SHA" '
+                .schema_version == 1 and
+                .evidence_type == "maiprop-legacy-production-source-reconstruction" and
+                .previous_sha == $previous_sha and
+                .previous_tree == $previous_tree and
+                .origin_ci_run_id == $origin_ci_run_id and
+                .origin_ci_run_attempt == "1" and
+                .reconstruction_run_id == $reconstruction_run_id and
+                .reconstruction_run_attempt == $reconstruction_run_attempt and
+                .packaging_metadata_control_sha == $packaging_metadata_control_sha and
+                .purpose == "staging-n-minus-one-compatibility-only" and
+                .original_production_bytes == false
+              ' n-minus-one/legacy-reconstruction-evidence.json >/dev/null
+          fi
           npm run release:artifact:verify -- \
             --dir n-minus-one/release-candidate \
             --sha "$PREVIOUS_SHA" \
@@ -791,7 +1147,7 @@ jobs:
   cloudflare-staging:
     name: Stage Cloudflare exact artifact
     environment: staging
-    needs: [validate-source, supabase-staging]
+    needs: [validate-source, cloudflare-staging-preflight, supabase-staging]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
