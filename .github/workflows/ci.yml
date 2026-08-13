@@ -65,14 +65,27 @@ jobs:
             exit 0
           fi
 
-          gh api "repos/$GITHUB_REPOSITORY" > repository-merge-settings.json
+          repo_owner="${GITHUB_REPOSITORY%%/*}"
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          gh api graphql \
+            -f owner="$repo_owner" \
+            -f name="$repo_name" \
+            -f query='query($owner: String!, $name: String!) {
+              repository(owner: $owner, name: $name) {
+                mergeCommitAllowed
+                rebaseMergeAllowed
+                squashMergeAllowed
+                squashMergeCommitTitle
+              }
+            }' > repository-merge-settings.json
           if ! jq -e '
-            .allow_squash_merge == true and
-            .allow_merge_commit == false and
-            .allow_rebase_merge == false and
-            .squash_merge_commit_title == "PR_TITLE"
+            .data.repository.squashMergeAllowed == true and
+            .data.repository.mergeCommitAllowed == false and
+            .data.repository.rebaseMergeAllowed == false and
+            .data.repository.squashMergeCommitTitle == "PR_TITLE"
           ' repository-merge-settings.json > /dev/null; then
             echo "::error::Sensitive Cloudflare bootstrap changes require squash-only PR-title commit settings."
+            jq -c '.data.repository // {}' repository-merge-settings.json
             exit 1
           fi
           case "$PR_TITLE" in

@@ -26,7 +26,8 @@ describe("trusted-main Cloudflare bootstrap workflows", () => {
     expect(step.if).toContain("github.event_name == 'pull_request'");
     expect(step.env.PR_TITLE).toBe("${{ github.event.pull_request.title }}");
     expect(step.env.GH_TOKEN).toBe("${{ github.token }}");
-    expect(step.run).toContain("squash_merge_commit_title");
+    expect(step.run).toContain("squashMergeCommitTitle");
+    expect(step.run).toContain("gh api graphql");
     expect(step.run).toContain('== "PR_TITLE"');
     expect(step.run).toContain("[CF-Pages-Skip]");
     expect(step.run).toContain("compliance-evidence.yml");
