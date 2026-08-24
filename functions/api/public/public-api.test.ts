@@ -1049,6 +1049,97 @@ describe("public API cache helpers", () => {
     await expect(cacheStore.get(url.toString())?.json()).resolves.toEqual({ version: 2 });
   });
 
+  it("keeps a stale refresh coalesced until the creator's late seed settles", async () => {
+    const url = new URL("https://portal.maiprop.co/api/public/open-houses?stale-refresh-joiner=1");
+    const cacheOptions = { producerTimeoutMs: 5, staleFallbackSeconds: 600 };
+    const initialTasks: Promise<unknown>[] = [];
+    await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => initialTasks.push(promise) }),
+      url,
+      async () => jsonResponse({ version: 1 }),
+      cacheOptions,
+    );
+    await Promise.all(initialTasks);
+    cacheStore.delete(url.toString());
+
+    let resolveCreator!: (response: Response) => void;
+    const creatorGate = new Promise<Response>((resolve) => {
+      resolveCreator = resolve;
+    });
+    let releasePut!: () => void;
+    const putGate = new Promise<void>((resolve) => {
+      releasePut = resolve;
+    });
+    let markPutStarted!: () => void;
+    const putStarted = new Promise<void>((resolve) => {
+      markPutStarted = resolve;
+    });
+    cacheApi.put.mockImplementation(async (request: Request, response: Response) => {
+      markPutStarted();
+      await putGate;
+      cacheStore.set(request.url, response.clone());
+    });
+    const creatorTasks: Promise<unknown>[] = [];
+
+    const creator = await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => creatorTasks.push(promise) }),
+      url,
+      () => creatorGate,
+      cacheOptions,
+    );
+    expect(creator.headers.get("X-Maiprop-Cache")).toBe("STALE");
+
+    const joiner = await cachedJson(makeCtx(url.toString()), url, async () => jsonResponse({ version: 3 }), cacheOptions);
+    expect(joiner.headers.get("X-Maiprop-Cache")).toBe("STALE");
+
+    resolveCreator(jsonResponse({ version: 2 }));
+    await putStarted;
+
+    const duplicateProducer = vi.fn(async () => jsonResponse({ version: 4 }));
+    const third = await cachedJson(makeCtx(url.toString()), url, duplicateProducer, cacheOptions);
+
+    try {
+      expect(third.headers.get("X-Maiprop-Cache")).toBe("STALE");
+      expect(duplicateProducer).not.toHaveBeenCalled();
+    } finally {
+      releasePut();
+      await Promise.all(creatorTasks);
+    }
+  });
+
+  it("preserves no-store headers for a coalesced timed-out producer", async () => {
+    const url = new URL("https://portal.maiprop.co/api/public/open-houses?coalesced-timeout=1");
+    const backgroundTasks: Promise<unknown>[] = [];
+    let resolveProducer!: (response: Response) => void;
+    const producerGate = new Promise<Response>((resolve) => {
+      resolveProducer = resolve;
+    });
+
+    const first = await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => backgroundTasks.push(promise) }),
+      url,
+      () => producerGate,
+      { producerTimeoutMs: 5 },
+    );
+    const coalesced = await cachedJson(
+      makeCtx(url.toString()),
+      url,
+      async () => jsonResponse({ source: "second producer" }),
+      { producerTimeoutMs: 5 },
+    );
+
+    try {
+      expect(first.status).toBe(503);
+      expect(coalesced.status).toBe(503);
+      expect(coalesced.headers.get("X-Maiprop-Cache")).toBe("COALESCED");
+      expect(coalesced.headers.get("Cache-Control")).toBe("no-store");
+      expect(coalesced.headers.get("CDN-Cache-Control")).toBe("no-store");
+    } finally {
+      resolveProducer(jsonResponse({ source: "late producer" }));
+      await Promise.all(backgroundTasks);
+    }
+  });
+
   it("does not seed the edge cache for late unsuccessful producers", async () => {
     const late503Url = new URL("https://portal.maiprop.co/api/public/open-houses?late-producer=503");
     const late503Tasks: Promise<unknown>[] = [];

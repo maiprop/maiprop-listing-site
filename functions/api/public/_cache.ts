@@ -382,10 +382,7 @@ function staleCacheUrl(cacheKey: URL): URL {
 }
 
 function cacheHeaderResponse(response: Response, cacheState: string, cache: CacheOptions): Response {
-  const headers = new Headers(response.headers);
-  applyCacheHeaders(headers, cache, true);
-  headers.set("X-Maiprop-Cache", cacheState);
-  applySecurityHeaders(headers);
+  const headers = responseHeaders(response, cacheState, cache);
   return new Response(response.clone().body, { status: response.status, headers });
 }
 
@@ -601,8 +598,6 @@ export async function cachedJson(
     if (!refresh) {
       refresh = produceAndCache();
       trackInflightCacheMiss(cacheId, refresh);
-      scheduleBackgroundRefresh(ctx, cacheId, refresh, cacheSeedState);
-    } else {
       scheduleBackgroundRefresh(ctx, cacheId, refresh, cacheSeedState);
     }
     return stale;
