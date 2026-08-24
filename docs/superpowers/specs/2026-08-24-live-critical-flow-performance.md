@@ -3,6 +3,7 @@
 **Date:** 2026-08-24
 
 **Scope:** landing, catalogue, sign-up, sign-in, dashboard entry, listing creation, and newly-created listing visibility
+
 **Production origin:** `https://portal.maiprop.co`
 
 ## Objective
