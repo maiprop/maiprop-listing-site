@@ -281,6 +281,13 @@ describe("JWT session identity", () => {
     expect(sessionIdFromAccessToken(jwtWithSessionId(null))).toBeNull();
     expect(sessionIdFromAccessToken("not-a-jwt")).toBeNull();
   });
+
+  it("rejects structurally invalid header or signature segments before trusting the payload", () => {
+    const [header, payload, signature] = jwtWithSessionId("session-a").split(".");
+
+    expect(sessionIdFromAccessToken(["A", payload, signature].join("."))).toBeNull();
+    expect(sessionIdFromAccessToken([header, payload, "A"].join("."))).toBeNull();
+  });
 });
 
 describe("AuthProvider initial state and signed-out flow", () => {
@@ -754,6 +761,99 @@ describe("AuthProvider signed-in flow", () => {
     expect(result.current.user?.id).toBe("recovery-new");
     expect(result.current.profileLoading).toBe(false);
     expect(appQueryClient.getQueryData(externalFingerprintKey)).toEqual({ preserved: true });
+  });
+
+  it("restores the latest external session when an older restore callback arrives afterward", async () => {
+    const oldSession = sessionFixture("restore-race-old", "restore-race-old-session");
+    const candidateC = sessionFixture("restore-race-c", "restore-race-c-session");
+    const candidateD = sessionFixture("restore-race-d", "restore-race-d-session");
+    const releaseSignedOut = deferred<void>();
+    const candidateCStarted = deferred<void>();
+    const releaseCandidateC = deferred<void>();
+    const profileForUser = {
+      "restore-race-c": {
+        user_id: "restore-race-c",
+        role: "buyer",
+        participant_type: "buyer",
+      },
+      "restore-race-d": {
+        user_id: "restore-race-d",
+        role: "developer",
+        participant_type: "developer",
+      },
+    };
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: oldSession } });
+    supabaseMock.from.mockImplementation((table: string) => {
+      let requestedUserId: string | null = null;
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn((column: string, value: string) => {
+          if (column === "user_id") requestedUserId = value;
+          return query;
+        }),
+        single: vi.fn(() => Promise.resolve({
+          data: table === "profiles" && requestedUserId
+            ? profileForUser[requestedUserId as keyof typeof profileForUser] ?? null
+            : null,
+          error: null,
+        })),
+        then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve),
+      };
+      return query;
+    });
+    supabaseMock.auth.signOut.mockImplementationOnce(async () => {
+      await releaseSignedOut.promise;
+      authStateCallbackHolder.current?.("SIGNED_OUT", null);
+      return { error: null };
+    });
+    supabaseMock.auth.setSession.mockImplementation(async ({ access_token, refresh_token }) => {
+      if (access_token === candidateC.access_token) {
+        expect(refresh_token).toBe(candidateC.refresh_token);
+        candidateCStarted.resolve();
+        await releaseCandidateC.promise;
+        authStateCallbackHolder.current?.("SIGNED_IN", candidateC);
+        return { data: { user: candidateC.user, session: candidateC }, error: null };
+      }
+      expect(access_token).toBe(candidateD.access_token);
+      expect(refresh_token).toBe(candidateD.refresh_token);
+      authStateCallbackHolder.current?.("SIGNED_IN", candidateD);
+      return { data: { user: candidateD.user, session: candidateD }, error: null };
+    });
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.user?.id).toBe("restore-race-old"));
+
+    let signOut!: Promise<void>;
+    act(() => {
+      signOut = result.current.signOut();
+    });
+    await waitFor(() => expect(supabaseMock.auth.signOut).toHaveBeenCalledWith());
+    act(() => {
+      authStateCallbackHolder.current?.("SIGNED_IN", candidateC);
+    });
+    await act(async () => {
+      releaseSignedOut.resolve();
+      await candidateCStarted.promise;
+    });
+    act(() => {
+      authStateCallbackHolder.current?.("SIGNED_IN", candidateD);
+    });
+    await act(async () => {
+      releaseCandidateC.resolve();
+      await signOut;
+    });
+
+    await waitFor(() => expect(result.current.profile?.user_id).toBe("restore-race-d"));
+    expect(supabaseMock.auth.setSession).toHaveBeenNthCalledWith(1, {
+      access_token: candidateC.access_token,
+      refresh_token: candidateC.refresh_token,
+    });
+    expect(supabaseMock.auth.setSession).toHaveBeenNthCalledWith(2, {
+      access_token: candidateD.access_token,
+      refresh_token: candidateD.refresh_token,
+    });
+    expect(result.current.user?.id).toBe("restore-race-d");
+    expect(result.current.session?.access_token).toBe(candidateD.access_token);
+    expect(result.current.profileLoading).toBe(false);
   });
 
   it("leaves the app signed out when external session restoration returns an error", async () => {

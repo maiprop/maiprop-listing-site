@@ -58,30 +58,39 @@ type PendingAuthSignOut = {
   phase: "signing_out" | "restoring";
   deferred: DeferredAuthSession | null;
   restoringSessionId: string | null;
+  restoringUserId: string | null;
 };
 
 const BASE64_URL_SEGMENT_RE = /^[A-Za-z0-9_-]+$/;
+
+const decodeBase64UrlSegment = (segment: string): Uint8Array | null => {
+  if (!BASE64_URL_SEGMENT_RE.test(segment) || segment.length % 4 === 1) return null;
+
+  try {
+    const base64 = segment
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(segment.length / 4) * 4, "=");
+    const binary = atob(base64);
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  } catch {
+    return null;
+  }
+};
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function sessionIdFromAccessToken(accessToken: string): string | null {
   if (typeof accessToken !== "string") return null;
   const parts = accessToken.split(".");
-  if (
-    parts.length !== 3 ||
-    parts.some((part) => !BASE64_URL_SEGMENT_RE.test(part))
-  ) return null;
+  if (parts.length !== 3) return null;
 
-  const payload = parts[1];
-  if (payload.length % 4 === 1) return null;
+  const decodedSegments = parts.map(decodeBase64UrlSegment);
+  if (decodedSegments.some((segment) => segment === null)) return null;
+  const payload = decodedSegments[1];
+  if (!payload) return null;
 
   try {
-    const base64Payload = payload
-      .replace(/-/g, "+")
-      .replace(/_/g, "/")
-      .padEnd(Math.ceil(payload.length / 4) * 4, "=");
-    const binaryPayload = atob(base64Payload);
-    const bytes = Uint8Array.from(binaryPayload, (character) => character.charCodeAt(0));
-    const decodedPayload = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const decodedPayload = new TextDecoder("utf-8", { fatal: true }).decode(payload);
     const parsedPayload: unknown = JSON.parse(decodedPayload);
     if (!parsedPayload || typeof parsedPayload !== "object" || Array.isArray(parsedPayload)) {
       return null;
@@ -449,13 +458,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     }
 
-    const restoring = pending.deferred;
-    if (!incoming || !restoring) return true;
+    if (!incoming) return true;
     const isMatchingRestoreEvent =
       (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") &&
       pending.restoringSessionId === incoming.identity.sessionId &&
-      isKnownSameAuthSession(restoring.identity, incoming.identity);
+      pending.restoringUserId === incoming.identity.userId;
     if (isMatchingRestoreEvent) return false;
+    const restoring = pending.deferred;
+    if (!restoring) return true;
     if (isDefinitelyDifferentAuthSession(restoring.identity, incoming.identity)) {
       pending.deferred = incoming;
     }
@@ -874,6 +884,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (pendingAuthSignOut) {
         pendingAuthSignOut.deferred = null;
         pendingAuthSignOut.restoringSessionId = null;
+        pendingAuthSignOut.restoringUserId = null;
       }
       pendingAuthSignOutRef.current = null;
       profileFetchGenerationRef.current += 1;
@@ -1026,6 +1037,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         phase: "signing_out",
         deferred: null,
         restoringSessionId: null,
+        restoringUserId: null,
       };
       pendingAuthSignOutRef.current = pending;
       try {
@@ -1034,6 +1046,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const candidate = pending.deferred;
           pending.phase = "restoring";
           pending.restoringSessionId = candidate.identity.sessionId;
+          pending.restoringUserId = candidate.identity.userId;
           try {
             const { error } = await supabase.auth.setSession({
               access_token: candidate.session.access_token,
@@ -1044,6 +1057,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             logger.warn("Auth session restoration failed");
           } finally {
             pending.restoringSessionId = null;
+            pending.restoringUserId = null;
             if (pending.deferred === candidate) pending.deferred = null;
           }
         }
@@ -1051,6 +1065,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (pendingAuthSignOutRef.current === pending) {
           pending.deferred = null;
           pending.restoringSessionId = null;
+          pending.restoringUserId = null;
           pendingAuthSignOutRef.current = null;
         }
       }
