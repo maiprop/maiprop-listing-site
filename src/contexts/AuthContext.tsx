@@ -43,24 +43,108 @@ type InFlightProfileFetch = {
   promise: Promise<Profile | null>;
 };
 
-type AuthSessionIncarnation = {
+type AuthSessionIdentity = {
   userId: string;
-  lastSignInAt: string | null;
+  sessionId: string | null;
 };
 
-const authSessionIncarnationFor = (
+type DeferredAuthSession = {
+  session: Session;
+  identity: AuthSessionIdentity;
+};
+
+type PendingAuthSignOut = {
+  target: AuthSessionIdentity | null;
+  phase: "signing_out" | "restoring";
+  deferred: DeferredAuthSession | null;
+  restoringSessionId: string | null;
+};
+
+const BASE64_URL_SEGMENT_RE = /^[A-Za-z0-9_-]+$/;
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+export function sessionIdFromAccessToken(accessToken: string): string | null {
+  if (typeof accessToken !== "string") return null;
+  const parts = accessToken.split(".");
+  if (
+    parts.length !== 3 ||
+    parts.some((part) => !BASE64_URL_SEGMENT_RE.test(part))
+  ) return null;
+
+  const payload = parts[1];
+  if (payload.length % 4 === 1) return null;
+
+  try {
+    const base64Payload = payload
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    const binaryPayload = atob(base64Payload);
+    const bytes = Uint8Array.from(binaryPayload, (character) => character.charCodeAt(0));
+    const decodedPayload = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const parsedPayload: unknown = JSON.parse(decodedPayload);
+    if (!parsedPayload || typeof parsedPayload !== "object" || Array.isArray(parsedPayload)) {
+      return null;
+    }
+    const sessionId = (parsedPayload as { session_id?: unknown }).session_id;
+    return typeof sessionId === "string" && sessionId.trim().length > 0
+      ? sessionId
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const authSessionIdentityFor = (
   currentSession: Session | null,
-): AuthSessionIncarnation | null => {
+): AuthSessionIdentity | null => {
   const currentUser = currentSession?.user;
   if (!currentUser) return null;
 
   return {
     userId: currentUser.id,
-    lastSignInAt: typeof currentUser.last_sign_in_at === "string" &&
-        currentUser.last_sign_in_at.length > 0
-      ? currentUser.last_sign_in_at
-      : null,
+    sessionId: sessionIdFromAccessToken(currentSession.access_token),
   };
+};
+
+const isKnownSameAuthSession = (
+  left: AuthSessionIdentity | null,
+  right: AuthSessionIdentity | null,
+) => Boolean(
+  left &&
+  right &&
+  left.userId === right.userId &&
+  left.sessionId !== null &&
+  right.sessionId !== null &&
+  left.sessionId === right.sessionId,
+);
+
+const isDefinitelyDifferentAuthSession = (
+  left: AuthSessionIdentity | null,
+  right: AuthSessionIdentity | null,
+) => Boolean(
+  left &&
+  right &&
+  (
+    left.userId !== right.userId ||
+    (left.sessionId !== null &&
+      right.sessionId !== null &&
+      left.sessionId !== right.sessionId)
+  ),
+);
+
+const deferredAuthSessionFor = (
+  currentSession: Session | null,
+): DeferredAuthSession | null => {
+  const identity = authSessionIdentityFor(currentSession);
+  if (
+    !identity?.sessionId ||
+    !currentSession ||
+    !currentSession.access_token ||
+    !currentSession.refresh_token
+  ) return null;
+
+  return { session: currentSession, identity };
 };
 
 export const buildAuthorizationFingerprint = (
@@ -298,36 +382,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // refresh must not make an already-started logout lose authority over the
   // current auth session.
   const authSessionEpochRef = useRef(0);
-  const authSessionIncarnationRef = useRef<AuthSessionIncarnation | null>(null);
+  const authSessionIdentityRef = useRef<AuthSessionIdentity | null>(null);
+  const pendingAuthSignOutRef = useRef<PendingAuthSignOut | null>(null);
+  const authMutationTailRef = useRef<Promise<void>>(Promise.resolve());
   // Guard: avoid duplicate auth telemetry from INITIAL_SESSION + getSession races.
   const lastAuthActivityRef = useRef<{ key: string; at: number } | null>(null);
 
-  const adoptAuthSessionIncarnation = useCallback((
-    currentSession: Session | null,
-    event: string | null,
-  ) => {
-    const nextIncarnation = authSessionIncarnationFor(currentSession);
-    const previousIncarnation = authSessionIncarnationRef.current;
-
-    if (!nextIncarnation) {
-      if (previousIncarnation) authSessionEpochRef.current += 1;
-      authSessionIncarnationRef.current = null;
+  const adoptAuthSessionIdentity = useCallback((currentSession: Session | null) => {
+    const nextIdentity = authSessionIdentityFor(currentSession);
+    const previousIdentity = authSessionIdentityRef.current;
+    if (!nextIdentity) {
+      if (previousIdentity) authSessionEpochRef.current += 1;
+      authSessionIdentityRef.current = null;
       return;
     }
 
-    if (!previousIncarnation || previousIncarnation.userId !== nextIncarnation.userId) {
-      authSessionIncarnationRef.current = nextIncarnation;
+    // A malformed same-user event cannot prove a new session. Retaining the
+    // last known ID lets a later well-formed event still prove a real boundary.
+    if (
+      previousIdentity?.userId === nextIdentity.userId &&
+      previousIdentity.sessionId !== null &&
+      nextIdentity.sessionId === null
+    ) return;
+
+    if (!previousIdentity || isDefinitelyDifferentAuthSession(previousIdentity, nextIdentity)) {
       authSessionEpochRef.current += 1;
-      return;
+    }
+    authSessionIdentityRef.current = nextIdentity;
+  }, []);
+
+  const enqueueAuthMutation = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const result = authMutationTailRef.current.then(operation, operation);
+    authMutationTailRef.current = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }, []);
+
+  const didAuthSessionChangeSince = useCallback((
+    target: AuthSessionIdentity | null,
+    epoch: number,
+  ) => {
+    if (authSessionEpochRef.current === epoch) return false;
+    const current = authSessionIdentityRef.current;
+    if (target === null || current === null) return target !== current;
+    return isDefinitelyDifferentAuthSession(target, current);
+  }, []);
+
+  const shouldSuppressAuthStateChange = useCallback((
+    event: string,
+    currentSession: Session | null,
+  ) => {
+    const pending = pendingAuthSignOutRef.current;
+    if (!pending || event === "SIGNED_OUT" || !currentSession) return false;
+
+    const incoming = deferredAuthSessionFor(currentSession);
+    if (pending.phase === "signing_out") {
+      if (isKnownSameAuthSession(pending.target, incoming?.identity ?? null)) return true;
+      if (
+        incoming &&
+        (!pending.target || isDefinitelyDifferentAuthSession(pending.target, incoming.identity))
+      ) {
+        pending.deferred = incoming;
+      }
+      return true;
     }
 
-    const isKnownNewSignIn =
-      (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "get_session_restore") &&
-      previousIncarnation.lastSignInAt !== null &&
-      nextIncarnation.lastSignInAt !== null &&
-      previousIncarnation.lastSignInAt !== nextIncarnation.lastSignInAt;
-    authSessionIncarnationRef.current = nextIncarnation;
-    if (isKnownNewSignIn) authSessionEpochRef.current += 1;
+    const restoring = pending.deferred;
+    if (!incoming || !restoring) return true;
+    const isMatchingRestoreEvent =
+      (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") &&
+      pending.restoringSessionId === incoming.identity.sessionId &&
+      isKnownSameAuthSession(restoring.identity, incoming.identity);
+    if (isMatchingRestoreEvent) return false;
+    if (isDefinitelyDifferentAuthSession(restoring.identity, incoming.identity)) {
+      pending.deferred = incoming;
+    }
+    return true;
   }, []);
 
   const cancelSubscriptionRetry = useCallback((resetAttempts = false) => {
@@ -633,8 +765,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription: authSub },
     } = supabase.auth.onAuthStateChange((_event, sess) => {
+      if (shouldSuppressAuthStateChange(_event, sess)) return;
       authEventGenerationRef.current += 1;
-      adoptAuthSessionIncarnation(sess, _event);
+      adoptAuthSessionIdentity(sess);
       transitionQueryIdentity(appQueryClient, sess?.user.id ?? null);
       setSession(sess);
       setUser(sess?.user ?? null);
@@ -679,7 +812,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .getSession()
       .then(({ data: { session: sess } }) => {
         if (authEventGenerationRef.current !== restoreAuthGeneration) return;
-        adoptAuthSessionIncarnation(sess, "get_session_restore");
+        if (shouldSuppressAuthStateChange("get_session_restore", sess)) return;
+        adoptAuthSessionIdentity(sess);
         if (!sess) {
           transitionQueryIdentity(appQueryClient, null);
           // No session — stop loading, let login page show
@@ -735,7 +869,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       authEventGenerationRef.current += 1;
       authSessionEpochRef.current += 1;
-      authSessionIncarnationRef.current = null;
+      authSessionIdentityRef.current = null;
+      const pendingAuthSignOut = pendingAuthSignOutRef.current;
+      if (pendingAuthSignOut) {
+        pendingAuthSignOut.deferred = null;
+        pendingAuthSignOut.restoringSessionId = null;
+      }
+      pendingAuthSignOutRef.current = null;
       profileFetchGenerationRef.current += 1;
       profileFetchInProgressRef.current = null;
       expectedUserIdRef.current = null;
@@ -750,8 +890,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     eventToAuthActivity,
     recordAuthActivity,
     adoptSubscriptionUser,
-    adoptAuthSessionIncarnation,
+    adoptAuthSessionIdentity,
     cancelSubscriptionRetry,
+    shouldSuppressAuthStateChange,
   ]);
 
   useEffect(() => {
@@ -815,44 +956,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: meta.full_name },
-          emailRedirectTo: `${APP_ORIGIN}/onboarding`,
-        },
+      return enqueueAuthMutation(async () => {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: meta.full_name },
+            emailRedirectTo: `${APP_ORIGIN}/onboarding`,
+          },
+        });
+        const profileUpdates = {
+          ...(meta.phone ? { phone: meta.phone } : {}),
+        };
+        if (data.user && !error && Object.keys(profileUpdates).length > 0) {
+          const payload = parseMutationInput(
+            signUpProfileUpdateMutationSchema,
+            { userId: data.user.id, updates: profileUpdates },
+            "signup profile update",
+          );
+          await supabase
+            .from("profiles")
+            .update(payload.updates)
+            .eq("user_id", payload.userId);
+        }
+        // needsEmailConfirm = signup succeeded but no session yet (email confirmation required)
+        const needsEmailConfirm = !error && !!data.user && !data.session;
+        return { error: error as Error | null, needsEmailConfirm };
       });
-      const profileUpdates = {
-        ...(meta.phone ? { phone: meta.phone } : {}),
-      };
-      if (data.user && !error && Object.keys(profileUpdates).length > 0) {
-        const payload = parseMutationInput(
-          signUpProfileUpdateMutationSchema,
-          { userId: data.user.id, updates: profileUpdates },
-          "signup profile update",
-        );
-        await supabase
-          .from("profiles")
-          .update(payload.updates)
-          .eq("user_id", payload.userId);
-      }
-      // needsEmailConfirm = signup succeeded but no session yet (email confirmation required)
-      const needsEmailConfirm = !error && !!data.user && !data.session;
-      return { error: error as Error | null, needsEmailConfirm };
     },
-    [],
+    [enqueueAuthMutation],
   );
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+  const signIn = useCallback((email: string, password: string) => {
+    return enqueueAuthMutation(async () => {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      return { error: error as Error | null };
     });
-    return { error: error as Error | null };
-  }, []);
+  }, [enqueueAuthMutation]);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(() => {
+    const signOutTarget = authSessionIdentityRef.current;
     const signOutSessionEpoch = authSessionEpochRef.current;
     transitionQueryIdentity(appQueryClient, null);
     profileFetchGenerationRef.current += 1;
@@ -861,16 +1007,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     adoptSubscriptionUser(null);
     setProfile(null);
     setProfileLoading(false);
-    await recordUserAuthActivity({
-      eventType: "sign_out",
-      metadata: { source: "sign_out" },
+    try {
+      void Promise.resolve(recordUserAuthActivity({
+        eventType: "sign_out",
+        metadata: { source: "sign_out" },
+      })).catch(() => {
+        logger.warn("Sign-out activity recording failed");
+      });
+    } catch {
+      logger.warn("Sign-out activity recording failed");
+    }
+
+    return enqueueAuthMutation(async () => {
+      if (didAuthSessionChangeSince(signOutTarget, signOutSessionEpoch)) return;
+
+      const pending: PendingAuthSignOut = {
+        target: signOutTarget,
+        phase: "signing_out",
+        deferred: null,
+        restoringSessionId: null,
+      };
+      pendingAuthSignOutRef.current = pending;
+      try {
+        await supabase.auth.signOut();
+        while (pendingAuthSignOutRef.current === pending && pending.deferred) {
+          const candidate = pending.deferred;
+          pending.phase = "restoring";
+          pending.restoringSessionId = candidate.identity.sessionId;
+          try {
+            const { error } = await supabase.auth.setSession({
+              access_token: candidate.session.access_token,
+              refresh_token: candidate.session.refresh_token,
+            });
+            if (error) logger.warn("Auth session restoration failed");
+          } catch {
+            logger.warn("Auth session restoration failed");
+          } finally {
+            pending.restoringSessionId = null;
+            if (pending.deferred === candidate) pending.deferred = null;
+          }
+        }
+      } finally {
+        if (pendingAuthSignOutRef.current === pending) {
+          pending.deferred = null;
+          pending.restoringSessionId = null;
+          pendingAuthSignOutRef.current = null;
+        }
+      }
     });
-    if (authSessionEpochRef.current !== signOutSessionEpoch) return;
-    await supabase.auth.signOut();
-    if (authSessionEpochRef.current !== signOutSessionEpoch) return;
-    setProfile(null);
-    setProfileLoading(false);
-  }, [adoptSubscriptionUser]);
+  }, [
+    adoptSubscriptionUser,
+    didAuthSessionChangeSince,
+    enqueueAuthMutation,
+  ]);
 
   const updateProfile = useCallback(
     async (updates: Partial<Profile>) => {
