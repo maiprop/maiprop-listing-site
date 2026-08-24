@@ -46,6 +46,9 @@ supabase/supabase/.temp/
 # Cloudflare local temp/state (generated)
 .wrangler/
 
+# Agent-isolated development worktrees
+.worktrees/
+
 # Test artifacts
 coverage/
 .coverage-runs/
