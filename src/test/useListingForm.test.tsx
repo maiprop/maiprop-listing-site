@@ -8,7 +8,8 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider, type QueryKey } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 const { fromMock, storageMock, useAuthMock, navigateMock, toastMock, useDraftMock, useAIMock, geocodeAddressTextMock, createListingMock, updateListingMock } =
@@ -63,11 +64,18 @@ vi.mock("@/lib/compressImage", () => ({
 
 import { useListingForm } from "@/hooks/useListingForm";
 
+let queryClient: QueryClient;
+
 const wrap = ({ children }: { children: React.ReactNode }) => (
-  <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{children}</MemoryRouter>
+  <QueryClientProvider client={queryClient}>
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{children}</MemoryRouter>
+  </QueryClientProvider>
 );
 
 beforeEach(() => {
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   fromMock.mockReset();
   storageMock.upload.mockReset();
   storageMock.getPublicUrl.mockReset();
@@ -123,6 +131,25 @@ beforeEach(() => {
     revokeObjectURL: vi.fn(),
   });
 });
+
+function seedCatalogueQueryStates(listingId: string): QueryKey[] {
+  const queryKeys: QueryKey[] = [
+    ["homepage-featured"],
+    ["listings-paginated", { listing_type: "sale", page: 2 }],
+    ["manageable-listings", "u-1"],
+    ["listing", listingId],
+  ];
+  queryKeys.forEach((queryKey) => {
+    queryClient.setQueryData(queryKey, { seeded: queryKey[0] });
+  });
+  return queryKeys;
+}
+
+function expectCatalogueQueriesInvalidated(queryKeys: QueryKey[], isInvalidated: boolean) {
+  queryKeys.forEach((queryKey) => {
+    expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(isInvalidated);
+  });
+}
 
 describe("useListingForm — initialisation + simple setters", () => {
   it("starts with the canonical initial form", () => {
@@ -617,6 +644,86 @@ describe("useListingForm — handleSubmit", () => {
     ]);
   });
 
+  it("invalidates catalogue queries only after create and image reconciliation succeed", async () => {
+    const queryKeys = seedCatalogueQueryStates("L-catalogue");
+    let resolveImageInsert: (value: { error: null }) => void = () => undefined;
+    const imageInsert = vi.fn().mockReturnValue(new Promise<{ error: null }>((resolve) => {
+      resolveImageInsert = resolve;
+    }));
+    createListingMock.mockResolvedValueOnce({ id: "L-catalogue" });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listing_images") return { insert: imageInsert };
+      throw new Error(`unexpected table ${table}`);
+    });
+    storageMock.getPublicUrl
+      .mockReturnValueOnce({ data: { publicUrl: "https://cdn/cover.webp" } })
+      .mockReturnValueOnce({ data: { publicUrl: "https://cdn/extra.webp" } });
+    const cover = new File([new Uint8Array(1000)], "cover.jpg", { type: "image/jpeg" });
+    const extra = new File([new Uint8Array(1000)], "extra.jpg", { type: "image/jpeg" });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    await act(async () => {
+      await result.current.handleFilesSelected({ 0: cover, 1: extra, length: 2, item: () => null } as unknown as FileList);
+    });
+    setBaseForm(result);
+
+    let submit: Promise<void> = Promise.resolve();
+    await act(async () => {
+      submit = result.current.handleSubmit();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(imageInsert).toHaveBeenCalledOnce());
+
+    expectCatalogueQueriesInvalidated(queryKeys, false);
+
+    await act(async () => {
+      resolveImageInsert({ error: null });
+      await submit;
+    });
+
+    expectCatalogueQueriesInvalidated(queryKeys, true);
+  });
+
+  it("keeps catalogue queries fresh when the listing mutation fails", async () => {
+    const queryKeys = seedCatalogueQueryStates("L-listing-failure");
+    createListingMock.mockRejectedValueOnce(new Error("listing mutation failed"));
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    setBaseForm(result);
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith("listing mutation failed");
+    expectCatalogueQueriesInvalidated(queryKeys, false);
+  });
+
+  it("keeps catalogue queries fresh when image reconciliation fails", async () => {
+    const queryKeys = seedCatalogueQueryStates("L-image-failure");
+    const imageInsert = vi.fn().mockResolvedValue({ error: new Error("image mutation failed") });
+    createListingMock.mockResolvedValueOnce({ id: "L-image-failure" });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listing_images") return { insert: imageInsert };
+      throw new Error(`unexpected table ${table}`);
+    });
+    storageMock.getPublicUrl
+      .mockReturnValueOnce({ data: { publicUrl: "https://cdn/cover.webp" } })
+      .mockReturnValueOnce({ data: { publicUrl: "https://cdn/extra.webp" } });
+    const cover = new File([new Uint8Array(1000)], "cover.jpg", { type: "image/jpeg" });
+    const extra = new File([new Uint8Array(1000)], "extra.jpg", { type: "image/jpeg" });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    await act(async () => {
+      await result.current.handleFilesSelected({ 0: cover, 1: extra, length: 2, item: () => null } as unknown as FileList);
+    });
+    setBaseForm(result);
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith("image mutation failed");
+    expectCatalogueQueriesInvalidated(queryKeys, false);
+  });
+
   it("blocks draft and publish while any image upload is still pending", async () => {
     let resolveUpload: (value: { error: null }) => void = () => undefined;
     storageMock.upload.mockReturnValue(
@@ -912,7 +1019,7 @@ describe("useListingForm — handleSubmit", () => {
     expect(toastMock.error).toHaveBeenCalledWith("rls");
   });
 
-  it("updates an existing listing and preserves unchanged non-cover image rows in edit mode", async () => {
+  it("invalidates catalogue queries after an edit and preserves unchanged non-cover image rows", async () => {
     const updateMock = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
@@ -951,6 +1058,7 @@ describe("useListingForm — handleSubmit", () => {
       ownerIsPro: false,
       ownerParticipantType: "seller",
     } as never;
+    const queryKeys = seedCatalogueQueryStates("L-edit");
 
     const { result } = renderHook(() => useListingForm({
       mode: "edit",
@@ -977,6 +1085,7 @@ describe("useListingForm — handleSubmit", () => {
     expect(imageInsert).not.toHaveBeenCalled();
     expect(toastMock.success).toHaveBeenCalledWith("Listing updated successfully!");
     expect(navigateMock).toHaveBeenCalledWith("/property/L-edit");
+    expectCatalogueQueriesInvalidated(queryKeys, true);
   });
 
   it("does not delete existing edit-mode gallery rows when inserting replacement images fails", async () => {
