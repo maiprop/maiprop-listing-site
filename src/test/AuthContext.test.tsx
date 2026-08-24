@@ -128,9 +128,16 @@ beforeEach(() => {
     return { data: { subscription: { unsubscribe: vi.fn() } } };
   });
   supabaseMock.auth.getSession.mockResolvedValue({ data: { session: null } });
+  supabaseMock.auth.signOut.mockReset();
   supabaseMock.auth.signOut.mockResolvedValue({ error: null });
   supabaseMock.auth.signInWithPassword.mockResolvedValue({ error: null });
   supabaseMock.auth.signUp.mockResolvedValue({ data: { user: null, session: null }, error: null });
+  supabaseMock.from.mockImplementation(() => ({
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data: null, error: null }),
+  }));
   supabaseMock.functions.invoke.mockResolvedValue({ data: null, error: null });
   authActivityMock.recordUserAuthActivity.mockResolvedValue("auth-event-1");
   window.history.replaceState({}, "", "/");
@@ -446,6 +453,298 @@ describe("AuthProvider signed-in flow", () => {
     expect(result.current.profile?.user_id).toBe("new-user");
     expect(result.current.profileLoading).toBe(false);
     expect(appQueryClient.getQueryData(newFingerprintKey)).toEqual({ preserved: true });
+  });
+
+  it("does not let a delayed signOut mutate a same-user newer sign-in incarnation", async () => {
+    const oldProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const oldMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const newerProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const newerMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const profiles = [oldProfile, newerProfile];
+    const memberships = [oldMemberships, newerMemberships];
+    let profileRead = 0;
+    let membershipRead = 0;
+    const newerProfileData = {
+      user_id: "same-user-new-incarnation",
+      display_name: "New incarnation",
+      role: "developer",
+      participant_type: "developer",
+      is_platform_admin: false,
+      investor_mode: false,
+      force_pro_access: false,
+      subscription_product_id: null,
+      role_switch_in_progress_at: null,
+      account_status: "active",
+    };
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: {
+        session: {
+          user: {
+            id: "same-user-new-incarnation",
+            last_sign_in_at: "2026-08-24T20:10:00.000Z",
+          },
+        },
+      },
+    });
+    supabaseMock.from.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        const read = profiles[profileRead++];
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn(() => read.promise) };
+      }
+      const read = memberships[membershipRead++];
+      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), then: (resolve: (value: unknown) => unknown) => read.promise.then(resolve) };
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(authActivityMock.recordUserAuthActivity).toHaveBeenCalled());
+    const finishSignOutActivity = deferred<string>();
+    authActivityMock.recordUserAuthActivity.mockClear();
+    authActivityMock.recordUserAuthActivity.mockImplementationOnce(() => finishSignOutActivity.promise);
+    let emittedStaleSignOut = false;
+    supabaseMock.auth.signOut.mockImplementationOnce(async () => {
+      emittedStaleSignOut = true;
+      authStateCallbackHolder.current?.("SIGNED_OUT", null);
+      return { error: null };
+    });
+
+    let signOut!: Promise<void>;
+    act(() => {
+      signOut = result.current.signOut();
+      authStateCallbackHolder.current?.("SIGNED_IN", {
+        user: {
+          id: "same-user-new-incarnation",
+          last_sign_in_at: "2026-08-24T20:11:00.000Z",
+        },
+      });
+    });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(4));
+    await act(async () => {
+      newerProfile.resolve({ data: newerProfileData, error: null });
+      newerMemberships.resolve({ data: [], error: null });
+    });
+    await waitFor(() => expect(result.current.profile?.display_name).toBe("New incarnation"));
+    const newerFingerprintKey = authorizationQueryKey(
+      "same-user-new-incarnation",
+      buildAuthorizationFingerprint(newerProfileData as never, []),
+      "same-user-new-incarnation-race",
+    );
+    appQueryClient.setQueryData(newerFingerprintKey, { preserved: true });
+
+    await act(async () => {
+      finishSignOutActivity.resolve("signout-activity");
+      await signOut;
+    });
+
+    expect(supabaseMock.auth.signOut).not.toHaveBeenCalled();
+    expect(emittedStaleSignOut).toBe(false);
+    expect(result.current.user?.last_sign_in_at).toBe("2026-08-24T20:11:00.000Z");
+    expect(result.current.profile?.display_name).toBe("New incarnation");
+    expect(result.current.profileLoading).toBe(false);
+    expect(appQueryClient.getQueryData(newerFingerprintKey)).toEqual({ preserved: true });
+  });
+
+  it("does not let a pending auth signOut tail clear a newer session", async () => {
+    const oldProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const oldMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const newProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const newMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const profiles = [oldProfile, newProfile];
+    const memberships = [oldMemberships, newMemberships];
+    let profileRead = 0;
+    let membershipRead = 0;
+    const newProfileData = {
+      user_id: "post-auth-new-user",
+      display_name: "Post-auth newer session",
+      role: "developer",
+      participant_type: "developer",
+      is_platform_admin: false,
+      investor_mode: false,
+      force_pro_access: false,
+      subscription_product_id: null,
+      role_switch_in_progress_at: null,
+      account_status: "active",
+    };
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "post-auth-old-user", last_sign_in_at: "2026-08-24T20:20:00.000Z" } } },
+    });
+    supabaseMock.from.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        const read = profiles[profileRead++];
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn(() => read.promise) };
+      }
+      const read = memberships[membershipRead++];
+      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), then: (resolve: (value: unknown) => unknown) => read.promise.then(resolve) };
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(2));
+    const finishAuthSignOut = deferred<{ error: null }>();
+    supabaseMock.auth.signOut.mockImplementationOnce(() => finishAuthSignOut.promise);
+    let signOut!: Promise<void>;
+    act(() => {
+      signOut = result.current.signOut();
+    });
+    await waitFor(() => expect(supabaseMock.auth.signOut).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      authStateCallbackHolder.current?.("SIGNED_IN", {
+        user: {
+          id: "post-auth-new-user",
+          last_sign_in_at: "2026-08-24T20:21:00.000Z",
+        },
+      });
+    });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(4));
+    await act(async () => {
+      newProfile.resolve({ data: newProfileData, error: null });
+      newMemberships.resolve({ data: [], error: null });
+    });
+    await waitFor(() => expect(result.current.profile?.display_name).toBe("Post-auth newer session"));
+    const newFingerprintKey = authorizationQueryKey(
+      "post-auth-new-user",
+      buildAuthorizationFingerprint(newProfileData as never, []),
+      "post-auth-signout-race",
+    );
+    appQueryClient.setQueryData(newFingerprintKey, { preserved: true });
+
+    await act(async () => {
+      finishAuthSignOut.resolve({ error: null });
+      await signOut;
+    });
+
+    expect(supabaseMock.auth.signOut).toHaveBeenCalledTimes(1);
+    expect(result.current.user?.id).toBe("post-auth-new-user");
+    expect(result.current.profile?.display_name).toBe("Post-auth newer session");
+    expect(result.current.profileLoading).toBe(false);
+    expect(appQueryClient.getQueryData(newFingerprintKey)).toEqual({ preserved: true });
+  });
+
+  it("completes delayed signOut after refreshProfile replaces profile work", async () => {
+    const session = {
+      user: { id: "refresh-during-signout", last_sign_in_at: "2026-08-24T20:00:00.000Z" },
+    };
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session } });
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.user?.id).toBe("refresh-during-signout"));
+    await waitFor(() => expect(authActivityMock.recordUserAuthActivity).toHaveBeenCalled());
+    const finishTelemetry = deferred<string>();
+    authActivityMock.recordUserAuthActivity.mockClear();
+    authActivityMock.recordUserAuthActivity.mockImplementationOnce(() => finishTelemetry.promise);
+    supabaseMock.auth.signOut.mockImplementationOnce(async () => {
+      authStateCallbackHolder.current?.("SIGNED_OUT", null);
+      return { error: null };
+    });
+    const refresh = result.current.refreshProfile;
+    let signOut!: Promise<void>;
+    act(() => {
+      signOut = result.current.signOut();
+    });
+    await act(async () => {
+      await refresh();
+    });
+    await act(async () => {
+      finishTelemetry.resolve("signout-telemetry");
+      await signOut;
+    });
+    expect(supabaseMock.auth.signOut).toHaveBeenCalledTimes(1);
+    expect(result.current.user).toBeNull();
+    expect(result.current.profileLoading).toBe(false);
+  });
+
+  it("completes delayed signOut after realtime authorization replacement", async () => {
+    const session = {
+      user: { id: "realtime-during-signout", last_sign_in_at: "2026-08-24T20:01:00.000Z" },
+    };
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session } });
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.user?.id).toBe("realtime-during-signout"));
+    await waitFor(() => expect(realtimeCallbacks.some(({ table }) => table === "profiles")).toBe(true));
+    await waitFor(() => expect(authActivityMock.recordUserAuthActivity).toHaveBeenCalled());
+    const finishTelemetry = deferred<string>();
+    authActivityMock.recordUserAuthActivity.mockClear();
+    authActivityMock.recordUserAuthActivity.mockImplementationOnce(() => finishTelemetry.promise);
+    supabaseMock.auth.signOut.mockImplementationOnce(async () => {
+      authStateCallbackHolder.current?.("SIGNED_OUT", null);
+      return { error: null };
+    });
+    const profileCallback = realtimeCallbacks.find(({ table }) => table === "profiles")?.callback;
+    expect(profileCallback).toBeDefined();
+    const profileReadsBeforeRealtime = supabaseMock.from.mock.calls.length;
+    let signOut!: Promise<void>;
+    act(() => {
+      signOut = result.current.signOut();
+      profileCallback?.();
+    });
+    await waitFor(() => expect(supabaseMock.from.mock.calls.length).toBe(profileReadsBeforeRealtime + 2));
+    await act(async () => {
+      finishTelemetry.resolve("signout-telemetry");
+      await signOut;
+    });
+    expect(supabaseMock.auth.signOut).toHaveBeenCalledTimes(1);
+    expect(result.current.user).toBeNull();
+  });
+
+  it("completes delayed signOut after TOKEN_REFRESHED rotates tokens for the same incarnation", async () => {
+    const session = {
+      access_token: "token-before-refresh",
+      refresh_token: "refresh-before-refresh",
+      user: { id: "token-during-signout", last_sign_in_at: "2026-08-24T20:02:00.000Z" },
+    };
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session } });
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.user?.id).toBe("token-during-signout"));
+    await waitFor(() => expect(authActivityMock.recordUserAuthActivity).toHaveBeenCalled());
+    const finishTelemetry = deferred<string>();
+    authActivityMock.recordUserAuthActivity.mockClear();
+    authActivityMock.recordUserAuthActivity.mockImplementationOnce(() => finishTelemetry.promise);
+    supabaseMock.auth.signOut.mockImplementationOnce(async () => {
+      authStateCallbackHolder.current?.("SIGNED_OUT", null);
+      return { error: null };
+    });
+    let signOut!: Promise<void>;
+    act(() => {
+      signOut = result.current.signOut();
+      authStateCallbackHolder.current?.("TOKEN_REFRESHED", {
+        ...session,
+        access_token: "token-after-refresh",
+        refresh_token: "refresh-after-refresh",
+      });
+    });
+    await act(async () => {
+      finishTelemetry.resolve("signout-telemetry");
+      await signOut;
+    });
+    expect(supabaseMock.auth.signOut).toHaveBeenCalledTimes(1);
+    expect(result.current.user).toBeNull();
+  });
+
+  it("completes delayed signOut after redundant same-incarnation SIGNED_IN", async () => {
+    const session = {
+      user: { id: "redundant-signin", last_sign_in_at: "2026-08-24T20:03:00.000Z" },
+    };
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session } });
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.user?.id).toBe("redundant-signin"));
+    await waitFor(() => expect(authActivityMock.recordUserAuthActivity).toHaveBeenCalled());
+    const finishTelemetry = deferred<string>();
+    authActivityMock.recordUserAuthActivity.mockClear();
+    authActivityMock.recordUserAuthActivity.mockImplementationOnce(() => finishTelemetry.promise);
+    supabaseMock.auth.signOut.mockImplementationOnce(async () => {
+      authStateCallbackHolder.current?.("SIGNED_OUT", null);
+      return { error: null };
+    });
+    let signOut!: Promise<void>;
+    act(() => {
+      signOut = result.current.signOut();
+      authStateCallbackHolder.current?.("SIGNED_IN", session);
+    });
+    await act(async () => {
+      finishTelemetry.resolve("signout-telemetry");
+      await signOut;
+    });
+    expect(supabaseMock.auth.signOut).toHaveBeenCalledTimes(1);
+    expect(result.current.user).toBeNull();
   });
 
   it("replaces startup hydration from updateProfile and realtime authorization refreshes", async () => {

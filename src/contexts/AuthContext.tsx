@@ -43,6 +43,26 @@ type InFlightProfileFetch = {
   promise: Promise<Profile | null>;
 };
 
+type AuthSessionIncarnation = {
+  userId: string;
+  lastSignInAt: string | null;
+};
+
+const authSessionIncarnationFor = (
+  currentSession: Session | null,
+): AuthSessionIncarnation | null => {
+  const currentUser = currentSession?.user;
+  if (!currentUser) return null;
+
+  return {
+    userId: currentUser.id,
+    lastSignInAt: typeof currentUser.last_sign_in_at === "string" &&
+        currentUser.last_sign_in_at.length > 0
+      ? currentUser.last_sign_in_at
+      : null,
+  };
+};
+
 export const buildAuthorizationFingerprint = (
   profile: Profile | null,
   memberships: readonly AuthorizationMembership[],
@@ -274,8 +294,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     promise: Promise<void>;
   } | null>(null);
   const authEventGenerationRef = useRef(0);
+  // This is intentionally independent from profile fetch generations. A profile
+  // refresh must not make an already-started logout lose authority over the
+  // current auth session.
+  const authSessionEpochRef = useRef(0);
+  const authSessionIncarnationRef = useRef<AuthSessionIncarnation | null>(null);
   // Guard: avoid duplicate auth telemetry from INITIAL_SESSION + getSession races.
   const lastAuthActivityRef = useRef<{ key: string; at: number } | null>(null);
+
+  const adoptAuthSessionIncarnation = useCallback((
+    currentSession: Session | null,
+    event: string | null,
+  ) => {
+    const nextIncarnation = authSessionIncarnationFor(currentSession);
+    const previousIncarnation = authSessionIncarnationRef.current;
+
+    if (!nextIncarnation) {
+      if (previousIncarnation) authSessionEpochRef.current += 1;
+      authSessionIncarnationRef.current = null;
+      return;
+    }
+
+    if (!previousIncarnation || previousIncarnation.userId !== nextIncarnation.userId) {
+      authSessionIncarnationRef.current = nextIncarnation;
+      authSessionEpochRef.current += 1;
+      return;
+    }
+
+    const isKnownNewSignIn =
+      (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "get_session_restore") &&
+      previousIncarnation.lastSignInAt !== null &&
+      nextIncarnation.lastSignInAt !== null &&
+      previousIncarnation.lastSignInAt !== nextIncarnation.lastSignInAt;
+    authSessionIncarnationRef.current = nextIncarnation;
+    if (isKnownNewSignIn) authSessionEpochRef.current += 1;
+  }, []);
 
   const cancelSubscriptionRetry = useCallback((resetAttempts = false) => {
     if (subscriptionRetryTimerRef.current) {
@@ -581,6 +634,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription: authSub },
     } = supabase.auth.onAuthStateChange((_event, sess) => {
       authEventGenerationRef.current += 1;
+      adoptAuthSessionIncarnation(sess, _event);
       transitionQueryIdentity(appQueryClient, sess?.user.id ?? null);
       setSession(sess);
       setUser(sess?.user ?? null);
@@ -625,6 +679,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .getSession()
       .then(({ data: { session: sess } }) => {
         if (authEventGenerationRef.current !== restoreAuthGeneration) return;
+        adoptAuthSessionIncarnation(sess, "get_session_restore");
         if (!sess) {
           transitionQueryIdentity(appQueryClient, null);
           // No session — stop loading, let login page show
@@ -679,6 +734,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       authEventGenerationRef.current += 1;
+      authSessionEpochRef.current += 1;
+      authSessionIncarnationRef.current = null;
       profileFetchGenerationRef.current += 1;
       profileFetchInProgressRef.current = null;
       expectedUserIdRef.current = null;
@@ -693,6 +750,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     eventToAuthActivity,
     recordAuthActivity,
     adoptSubscriptionUser,
+    adoptAuthSessionIncarnation,
     cancelSubscriptionRetry,
   ]);
 
@@ -795,8 +853,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    const signOutSessionEpoch = authSessionEpochRef.current;
     transitionQueryIdentity(appQueryClient, null);
-    const signOutProfileGeneration = ++profileFetchGenerationRef.current;
+    profileFetchGenerationRef.current += 1;
     profileFetchInProgressRef.current = null;
     expectedUserIdRef.current = null;
     adoptSubscriptionUser(null);
@@ -806,15 +865,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       eventType: "sign_out",
       metadata: { source: "sign_out" },
     });
-    if (
-      expectedUserIdRef.current !== null ||
-      profileFetchGenerationRef.current !== signOutProfileGeneration
-    ) return;
+    if (authSessionEpochRef.current !== signOutSessionEpoch) return;
     await supabase.auth.signOut();
-    if (
-      expectedUserIdRef.current !== null ||
-      profileFetchGenerationRef.current !== signOutProfileGeneration
-    ) return;
+    if (authSessionEpochRef.current !== signOutSessionEpoch) return;
     setProfile(null);
     setProfileLoading(false);
   }, [adoptSubscriptionUser]);
