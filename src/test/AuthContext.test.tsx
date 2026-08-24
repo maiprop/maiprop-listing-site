@@ -106,6 +106,14 @@ function wrap({ children }: { children: React.ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((finish) => {
+    resolve = finish;
+  });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   appQueryClient.clear();
   resetIdentityQueryStateForTests();
@@ -230,6 +238,215 @@ describe("AuthProvider initial state and signed-out flow", () => {
 });
 
 describe("AuthProvider signed-in flow", () => {
+  it("coalesces getSession and INITIAL_SESSION profile hydration", async () => {
+    const startupProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const startupMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const profileFrom = vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn(() => startupProfile.promise),
+    }));
+    const membershipsFrom = vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      then: (resolve: (value: unknown) => unknown) => startupMemberships.promise.then(resolve),
+    }));
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "startup-user" } } },
+    });
+    supabaseMock.from.mockImplementation((table: string) => (
+      table === "profiles" ? profileFrom() : membershipsFrom()
+    ));
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(2));
+
+    act(() => {
+      authStateCallbackHolder.current?.("INITIAL_SESSION", {
+        user: { id: "startup-user" },
+      });
+    });
+
+    expect(supabaseMock.from).toHaveBeenCalledTimes(2);
+    expect(profileFrom).toHaveBeenCalledTimes(1);
+    expect(membershipsFrom).toHaveBeenCalledTimes(1);
+    expect(result.current.profileLoading).toBe(true);
+
+    const privateKey = accountQueryKey("startup-user", "authorization-probe");
+    appQueryClient.setQueryData(privateKey, { pending: true });
+    await act(async () => {
+      startupProfile.resolve({
+        data: {
+          user_id: "startup-user",
+          role: "developer",
+          participant_type: "developer",
+          is_platform_admin: false,
+          investor_mode: false,
+          force_pro_access: false,
+          subscription_product_id: null,
+          role_switch_in_progress_at: null,
+          account_status: "active",
+        },
+        error: null,
+      });
+      startupMemberships.resolve({
+        data: [{ organization_id: "org-startup", role: "admin", status: "active" }],
+        error: null,
+      });
+    });
+
+    await waitFor(() => expect(result.current.profile?.role).toBe("developer"));
+    expect(appQueryClient.getQueryData(privateKey)).toBeUndefined();
+    expect(result.current.profileLoading).toBe(false);
+  });
+
+  it("does not let a signed-out same-user generation apply a stale profile result", async () => {
+    const oldProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const oldMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const freshProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const freshMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const profiles = [oldProfile, freshProfile];
+    const memberships = [oldMemberships, freshMemberships];
+    let profileRead = 0;
+    let membershipRead = 0;
+    supabaseMock.from.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        const read = profiles[profileRead++];
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn(() => read.promise),
+        };
+      }
+      const read = memberships[membershipRead++];
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        then: (resolve: (value: unknown) => unknown) => read.promise.then(resolve),
+      };
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => {
+      authStateCallbackHolder.current?.("SIGNED_IN", { user: { id: "same-user" } });
+    });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(2));
+
+    act(() => {
+      authStateCallbackHolder.current?.("SIGNED_OUT", null);
+      authStateCallbackHolder.current?.("SIGNED_IN", { user: { id: "same-user" } });
+    });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(4));
+
+    await act(async () => {
+      freshProfile.resolve({
+        data: { user_id: "same-user", role: "developer", participant_type: "developer" },
+        error: null,
+      });
+      freshMemberships.resolve({ data: [], error: null });
+    });
+    await waitFor(() => expect(result.current.profile?.role).toBe("developer"));
+    expect(result.current.profileLoading).toBe(false);
+
+    await act(async () => {
+      oldProfile.resolve({
+        data: { user_id: "same-user", role: "buyer", participant_type: "buyer" },
+        error: null,
+      });
+      oldMemberships.resolve({ data: [], error: null });
+    });
+
+    expect(result.current.profile?.role).toBe("developer");
+    expect(result.current.profileLoading).toBe(false);
+  });
+
+  it("does not let a different-user generation apply a stale profile result", async () => {
+    const oldProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const oldMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const freshProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const freshMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const profiles = [oldProfile, freshProfile];
+    const memberships = [oldMemberships, freshMemberships];
+    let profileRead = 0;
+    let membershipRead = 0;
+    supabaseMock.from.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        const read = profiles[profileRead++];
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn(() => read.promise) };
+      }
+      const read = memberships[membershipRead++];
+      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), then: (resolve: (value: unknown) => unknown) => read.promise.then(resolve) };
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => {
+      authStateCallbackHolder.current?.("SIGNED_IN", { user: { id: "user-a" } });
+    });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(2));
+    act(() => {
+      authStateCallbackHolder.current?.("SIGNED_IN", { user: { id: "user-b" } });
+    });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(4));
+
+    await act(async () => {
+      freshProfile.resolve({ data: { user_id: "user-b", role: "developer", participant_type: "developer" }, error: null });
+      freshMemberships.resolve({ data: [], error: null });
+    });
+    await waitFor(() => expect(result.current.profile?.user_id).toBe("user-b"));
+    await act(async () => {
+      oldProfile.resolve({ data: { user_id: "user-a", role: "buyer", participant_type: "buyer" }, error: null });
+      oldMemberships.resolve({ data: [], error: null });
+    });
+    expect(result.current.profile?.user_id).toBe("user-b");
+  });
+
+  it("replaces startup profile hydration when refreshProfile is explicit", async () => {
+    const startupProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const startupMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const refreshedProfile = deferred<{ data: Record<string, unknown>; error: null }>();
+    const refreshedMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
+    const profiles = [startupProfile, refreshedProfile];
+    const memberships = [startupMemberships, refreshedMemberships];
+    let profileRead = 0;
+    let membershipRead = 0;
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "refresh-user" } } },
+    });
+    supabaseMock.from.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        const read = profiles[profileRead++];
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn(() => read.promise) };
+      }
+      const read = memberships[membershipRead++];
+      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), then: (resolve: (value: unknown) => unknown) => read.promise.then(resolve) };
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(2));
+    let refresh!: Promise<void>;
+    act(() => {
+      refresh = result.current.refreshProfile();
+    });
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(4));
+
+    await act(async () => {
+      refreshedProfile.resolve({ data: { user_id: "refresh-user", role: "developer", participant_type: "developer" }, error: null });
+      refreshedMemberships.resolve({ data: [], error: null });
+      await refresh;
+    });
+    expect(result.current.profile?.role).toBe("developer");
+    expect(result.current.profileLoading).toBe(false);
+
+    await act(async () => {
+      startupProfile.resolve({ data: { user_id: "refresh-user", role: "buyer", participant_type: "buyer" }, error: null });
+      startupMemberships.resolve({ data: [], error: null });
+    });
+    expect(result.current.profile?.role).toBe("developer");
+    expect(result.current.profileLoading).toBe(false);
+  });
+
   it("does not let a delayed initial session overwrite a newer auth event", async () => {
     let finishInitialSession!: (value: {
       data: { session: { user: { id: string } } };
