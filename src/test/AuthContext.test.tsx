@@ -383,7 +383,7 @@ describe("AuthProvider signed-in flow", () => {
     await waitFor(() => expect(result.current.profile?.user_id).toBe("sync-throw-user"));
   });
 
-  it("does not let a delayed signOut tail clear a newer generation", async () => {
+  it("does not let a delayed signOut mutate or clear a newer generation", async () => {
     const oldProfile = deferred<{ data: Record<string, unknown>; error: null }>();
     const oldMemberships = deferred<{ data: Array<Record<string, unknown>>; error: null }>();
     const newProfile = deferred<{ data: Record<string, unknown>; error: null }>();
@@ -411,6 +411,12 @@ describe("AuthProvider signed-in flow", () => {
     await waitFor(() => expect(authActivityMock.recordUserAuthActivity).toHaveBeenCalled());
     authActivityMock.recordUserAuthActivity.mockClear();
     authActivityMock.recordUserAuthActivity.mockImplementationOnce(() => finishSignOutActivity.promise);
+    let emittedStaleSignOut = false;
+    supabaseMock.auth.signOut.mockImplementationOnce(async () => {
+      emittedStaleSignOut = true;
+      authStateCallbackHolder.current?.("SIGNED_OUT", null);
+      return { error: null };
+    });
     let signOut!: Promise<void>;
     act(() => {
       signOut = result.current.signOut();
@@ -435,6 +441,8 @@ describe("AuthProvider signed-in flow", () => {
       finishSignOutActivity.resolve("signout-activity");
       await signOut;
     });
+    expect(supabaseMock.auth.signOut).not.toHaveBeenCalled();
+    expect(emittedStaleSignOut).toBe(false);
     expect(result.current.profile?.user_id).toBe("new-user");
     expect(result.current.profileLoading).toBe(false);
     expect(appQueryClient.getQueryData(newFingerprintKey)).toEqual({ preserved: true });

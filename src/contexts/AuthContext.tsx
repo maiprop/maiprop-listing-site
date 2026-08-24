@@ -806,6 +806,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       eventType: "sign_out",
       metadata: { source: "sign_out" },
     });
+    if (
+      expectedUserIdRef.current !== null ||
+      profileFetchGenerationRef.current !== signOutProfileGeneration
+    ) return;
     await supabase.auth.signOut();
     if (
       expectedUserIdRef.current !== null ||
