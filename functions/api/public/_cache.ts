@@ -286,30 +286,37 @@ async function matchCacheWithinBudget(
   }
 }
 
-async function producerWithTimeout(producer: () => Promise<Response>, cache: CacheOptions): Promise<Response> {
+type ProducerDeadlineResult = {
+  response: Response;
+  lateResponse?: Promise<Response>;
+};
+
+async function producerWithTimeout(
+  producer: () => Promise<Response>,
+  cache: CacheOptions,
+): Promise<ProducerDeadlineResult> {
   const timeoutMs = cacheProducerTimeoutMs(cache);
   const producerPromise = Promise.resolve().then(producer);
-  if (!timeoutMs) return producerPromise;
+  if (!timeoutMs) return { response: await producerPromise };
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  let timedOut = false;
-  const timeoutPromise = new Promise<Response>((resolve) => {
+  const timeoutPromise = new Promise<{ deadlineExceeded: true }>((resolve) => {
     timeoutId = setTimeout(() => {
-      timedOut = true;
-      resolve(upstreamUnavailable());
+      resolve({ deadlineExceeded: true });
     }, timeoutMs);
   });
 
   try {
-    return await Promise.race([producerPromise, timeoutPromise]);
+    const result = await Promise.race([
+      producerPromise.then((response) => ({ response })),
+      timeoutPromise,
+    ]);
+    if ("deadlineExceeded" in result) {
+      return { response: upstreamUnavailable(), lateResponse: producerPromise };
+    }
+    return result;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
-    if (timedOut) {
-      producerPromise.catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[public-api] cache producer resolved after timeout: ${message}`);
-      });
-    }
   }
 }
 
@@ -382,6 +389,17 @@ function cacheHeaderResponse(response: Response, cacheState: string, cache: Cach
   return new Response(response.clone().body, { status: response.status, headers });
 }
 
+function responseHeaders(response: Response, cacheState: string, cache: CacheOptions): Headers {
+  const headers = new Headers(response.headers);
+  const responseCacheControl = headers.get("Cache-Control") ?? "";
+  if (response.ok && !/\bno-store\b/i.test(responseCacheControl)) {
+    applyCacheHeaders(headers, cache, true);
+  }
+  headers.set("X-Maiprop-Cache", cacheState);
+  applySecurityHeaders(headers);
+  return headers;
+}
+
 function staleFallbackCacheSeconds(cache: CacheOptions): number {
   const requested = cache.staleFallbackSeconds;
   if (typeof requested === "number" && Number.isFinite(requested) && requested >= 0) {
@@ -413,7 +431,6 @@ async function matchStaleFallback(cacheApi: Cache, cacheKey: URL, cache: CacheOp
 }
 
 function putFreshAndStale(
-  ctx: PublicApiCtx,
   cacheApi: Cache,
   cacheRequest: Request,
   staleRequest: Request,
@@ -467,7 +484,6 @@ function putFreshAndStale(
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[public-api] cache seed failed for ${cacheRequest.url}: ${message}`);
   });
-  ctx.waitUntil?.(guardedPut);
   return guardedPut;
 }
 
@@ -480,17 +496,23 @@ function trackInflightCacheMiss(cacheId: string, promise: Promise<Response>): vo
   void promise.catch(() => undefined);
 }
 
-function scheduleBackgroundRefresh(ctx: PublicApiCtx, cacheId: string, refresh: Promise<Response>): void {
-  ctx.waitUntil?.(
-    refresh
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[public-api] background refresh for ${cacheId} failed: ${message}`);
-      })
-      .finally(() => {
-        if (inflightCacheMisses.get(cacheId) === refresh) inflightCacheMisses.delete(cacheId);
-      }),
-  );
+function scheduleBackgroundRefresh(
+  ctx: PublicApiCtx,
+  cacheId: string,
+  refresh: Promise<Response>,
+  cacheSeedState: { promise: Promise<void> | null },
+): void {
+  const guardedRefresh = refresh.catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[public-api] background refresh for ${cacheId} failed: ${message}`);
+  });
+  const refreshAndSeed = guardedRefresh.then(() => cacheSeedState.promise);
+  ctx.waitUntil?.(refreshAndSeed);
+  void refreshAndSeed
+    .finally(() => {
+      if (inflightCacheMisses.get(cacheId) === refresh) inflightCacheMisses.delete(cacheId);
+    })
+    .catch(() => undefined);
 }
 
 export async function cachedJson(
@@ -508,7 +530,10 @@ export async function cachedJson(
   const cacheApi = typeof caches !== "undefined" ? caches.default : null;
   const cacheRequest = new Request(cacheKey.toString(), { method: "GET" });
   const staleRequest = new Request(staleCacheUrl(cacheKey).toString(), { method: "GET" });
-  const cacheSeedState: { promise: Promise<void> | null } = { promise: null };
+  const cacheSeedState: {
+    promise: Promise<void> | null;
+    registeredWithWaitUntil: boolean;
+  } = { promise: null, registeredWithWaitUntil: false };
   if (cacheApi) {
     const hit = await matchCacheWithinBudget(cacheApi, cacheRequest, cachePolicy);
     if (hit && cacheResponseIsWithinBusinessValidity(hit)) {
@@ -518,22 +543,42 @@ export async function cachedJson(
 
   const cacheId = cacheRequest.url;
   const produceAndCache = async (): Promise<Response> => {
-    const response = await producerWithTimeout(producer, cachePolicy);
+    const { response, lateResponse } = await producerWithTimeout(producer, cachePolicy);
+    if (cacheApi && lateResponse) {
+      const lateCacheSeed = lateResponse
+        .then(async (lateResponse) => {
+          if (!lateResponse.ok) return;
+          const headers = responseHeaders(lateResponse, "MISS", cachePolicy);
+          const body = await lateResponse.text();
+          await putFreshAndStale(
+            cacheApi,
+            cacheRequest,
+            staleRequest,
+            body,
+            lateResponse.status,
+            headers,
+            cachePolicy,
+          );
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`[public-api] cache producer resolved after timeout: ${message}`);
+        });
+      cacheSeedState.promise = lateCacheSeed;
+      cacheSeedState.registeredWithWaitUntil = true;
+      ctx.waitUntil?.(lateCacheSeed);
+    }
     if (cacheApi && TRANSIENT_UPSTREAM_STATUSES.has(response.status)) {
       const stale = await matchStaleFallback(cacheApi, cacheKey, cachePolicy);
       if (stale) return stale;
     }
 
-    const headers = new Headers(response.headers);
-    if (response.ok) applyCacheHeaders(headers, cachePolicy, true);
-    headers.set("X-Maiprop-Cache", cacheApi ? "MISS" : "BYPASS");
-    applySecurityHeaders(headers);
+    const headers = responseHeaders(response, cacheApi ? "MISS" : "BYPASS", cachePolicy);
     const body = await response.text();
     const outbound = new Response(body, { status: response.status, headers });
 
     if (cacheApi && response.ok) {
       cacheSeedState.promise = putFreshAndStale(
-        ctx,
         cacheApi,
         cacheRequest,
         staleRequest,
@@ -556,9 +601,9 @@ export async function cachedJson(
     if (!refresh) {
       refresh = produceAndCache();
       trackInflightCacheMiss(cacheId, refresh);
-      scheduleBackgroundRefresh(ctx, cacheId, refresh);
+      scheduleBackgroundRefresh(ctx, cacheId, refresh, cacheSeedState);
     } else {
-      scheduleBackgroundRefresh(ctx, cacheId, refresh);
+      scheduleBackgroundRefresh(ctx, cacheId, refresh, cacheSeedState);
     }
     return stale;
   }
@@ -582,7 +627,7 @@ export async function cachedJson(
     const cacheSeed = cacheSeedState.promise;
     if (cacheSeed) {
       const clearAfterSeed = cacheSeed.finally(clearInflight);
-      ctx.waitUntil?.(clearAfterSeed);
+      if (!cacheSeedState.registeredWithWaitUntil) ctx.waitUntil?.(clearAfterSeed);
       void clearAfterSeed.catch(() => undefined);
     } else {
       clearInflight();
