@@ -135,12 +135,14 @@ first cold request wait indefinitely.
 
 ### 3. Coalesce same-user profile hydration
 
-`AuthProvider` tracks one in-flight profile/membership request by user ID.
-Concurrent `SIGNED_IN`, `INITIAL_SESSION`, restore, or explicit refresh callers
-for the same user share that promise. A different user always starts a new
-generation, and stale generations remain unable to update state. The in-flight
-slot clears after settlement, so a later explicit refresh still performs a
-fresh read.
+`AuthProvider` tracks one in-flight profile/membership request by user ID and
+identity generation. Only startup reconciliation paths (`getSession`,
+`INITIAL_SESSION`, and equivalent same-session auth callbacks) may coalesce
+onto that promise. Explicit refresh and post-update reads always replace any
+in-flight startup read so they cannot inherit pre-update data. A different
+user or a sign-out/same-user-sign-in boundary always starts a new generation,
+and stale generations remain unable to update state or clear a newer loading
+state. The in-flight slot clears after its exact promise settles.
 
 Subscription reconciliation remains independent and unchanged.
 
@@ -159,12 +161,15 @@ process.
 ### 5. Paint a safe mixed placeholder on the default catalogue route
 
 For an otherwise-unfiltered request with no listing type, combine the fresh
-embedded sale and rent first pages, deduplicate by listing ID, order newest
-first with stable ID tie-breaking, and keep the first twelve. React Query uses
-the result only as `placeholderData` and immediately performs the canonical
-unfiltered API request. Any city, price, property, feature, type, pagination,
-or non-default sort prevents the placeholder. Empty or expired embedded data
-does not suppress the loading state.
+embedded sale and rent first pages, retain only `sale`, `rent`, and
+`new_build` rows, deduplicate by listing ID, order newest first with stable ID
+tie-breaking, and keep the first twelve. The mixed placeholder is deliberately
+cursorless (`hasMore: false`, `nextCursor: null`) and omits publication
+metadata because its two source snapshots need not share a publication.
+React Query uses the result only as `placeholderData` and immediately performs
+the canonical unfiltered API request. Any city, price, property, feature,
+type, pagination, or non-default sort prevents the placeholder. Empty or
+expired embedded data does not suppress the loading state.
 
 The placeholder is presentation-only and never becomes a second catalogue
 authority.

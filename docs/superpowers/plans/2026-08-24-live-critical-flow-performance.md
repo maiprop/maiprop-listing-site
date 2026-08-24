@@ -27,12 +27,15 @@ Cloudflare Pages Functions/Cache API, Vitest, Playwright, GitHub Actions.
 - Preserve the existing caller-facing producer and cache-read deadlines.
 - Cache only successful, business-valid responses; never cache 4xx/5xx,
   `no-store`, or expired responses.
-- Same-user profile requests may coalesce only while in flight. A later
-  explicit refresh must make a new request, and a different user's generation
-  must never reuse or apply the prior user's result.
+- Same-user profile requests may coalesce only on startup reconciliation paths
+  and only while the exact generation is in flight. Explicit refresh and
+  post-update reads must replace any startup read; a sign-out, same-user
+  re-sign-in, or different user's generation must never reuse or apply the
+  prior result.
 - Listing query invalidation must not delay successful navigation.
-- Embedded catalogue data is placeholder-only, at most twelve rows, and may be
-  used only for an otherwise-unfiltered first page.
+- Embedded catalogue data is placeholder-only, at most twelve sale/rent/new-build
+  rows, cursorless (`hasMore: false`, `nextCursor: null`), and may be used only
+  for an otherwise-unfiltered first page.
 - No speculative database migration, dependency upgrade, index removal,
   release-policy bypass, or unrelated refactor belongs in these tasks.
 - All implementation uses TDD: capture RED before implementation and GREEN
@@ -136,22 +139,29 @@ git commit -m "fix: retain successful late catalogue responses"
 
 ### Step 1: Add failing concurrency tests
 
-Add tests that hold both the `profiles` and `organization_memberships` queries
-open, emit two same-user auth callbacks, and then release the queries. Assert:
+Add a startup test that makes `getSession()` return `startup-user`, holds both
+the `profiles` and `organization_memberships` queries open, and then emits
+`INITIAL_SESSION` for the same user. Assert:
 
-- each table chain is created once for that user;
-- both callers settle through the shared result;
+- each table chain is created exactly once for that startup generation;
+- restore and auth-event reconciliation settle through the shared result;
 - the final profile and authorization fingerprint are correct;
 - `profileLoading` becomes false.
 
-Add a second test that switches from user A to user B while A is in flight and
-proves B starts a new request and A's later result cannot update B. Add a third
-assertion that an explicit refresh after settlement performs a new read.
+Add a second test that starts a deferred request for user A, emits `SIGNED_OUT`,
+then signs the same user in again. Resolve the new request first and the old
+request last; prove two physical reads occurred and the stale result cannot
+replace the fresh profile or clear its loading state. Preserve or add the
+different-user generation assertion as well.
+
+Add a third test where an explicit refresh (and any post-update refresh path)
+arrives while startup hydration is still in flight. It must start a replacement
+read and apply that result rather than inheriting the pre-refresh startup read.
 
 Run:
 
 ```powershell
-npm run runtime -- npm test -- src/test/AuthContext.test.tsx -t "coalesces same-user profile hydration" --maxWorkers=1 --reporter=verbose
+npm run runtime -- npm test -- src/test/AuthContext.test.tsx -t "coalesces getSession and INITIAL_SESSION profile hydration" --maxWorkers=1 --reporter=verbose
 ```
 
 Expected RED: the current provider starts duplicate profile/membership query
@@ -159,27 +169,38 @@ sets.
 
 ### Step 2: Add an in-flight profile slot
 
-Near the existing profile generation refs, add a ref with the minimum state
-needed to share work:
+Near the existing profile generation refs, add an explicit mode and a ref with
+the minimum state needed to share startup work safely:
 
 ```ts
-const profileFetchInProgressRef = useRef<{
+type ProfileFetchMode = "replace" | "coalesce";
+
+type InFlightProfileFetch = {
   userId: string;
+  generation: number;
   promise: Promise<Profile | null>;
-} | null>(null);
+};
+
+const profileFetchInProgressRef = useRef<InFlightProfileFetch | null>(null);
 ```
 
-Convert `fetchProfile` from an always-new async function into a callback that:
+Convert `fetchProfile` from an always-new async function into a callback that
+accepts a `ProfileFetchMode` and:
 
-1. returns the existing promise when its `userId` matches;
-2. otherwise creates the existing generation-guarded work immediately;
+1. returns an existing promise only in `coalesce` mode when user ID, expected
+   user ID, and generation all match;
+2. creates a new generation immediately in `replace` mode, even for the same
+   user;
 3. assigns the promise before any awaited query can settle;
-4. clears only its own ref entry in `finally`;
-5. preserves stale-user/generation rejection and authorization transition
+4. clears only its exact ref entry in `finally`;
+5. sets `profileLoading` false only from the still-current generation;
+6. preserves stale-user/generation rejection and authorization transition
    semantics.
 
-On provider cleanup, invalidate the generation and clear the in-flight slot.
-Do not couple profile and subscription promises.
+Use `coalesce` only from session restore and same-session auth-event startup
+paths. Use `replace` from explicit `refreshProfile` and post-update reads. On
+sign-out and provider cleanup, increment the generation and clear the in-flight
+slot. Do not couple profile and subscription promises.
 
 ### Step 3: Run focused tests and app type checking
 
@@ -208,11 +229,14 @@ git commit -m "perf: coalesce profile hydration requests"
 
 ### Step 1: Add failing success and failure tests
 
-Mock `invalidatePublicCatalogueQueries`. Extend the existing create and edit
-submission tests to assert it is called once with the hook's QueryClient and
-the saved listing ID after all listing-image reconciliation succeeds. Add a
-failure assertion proving it is not called when the listing mutation or image
-mutation fails.
+Wrap the hook with a real `QueryClientProvider` and create a fresh QueryClient
+per test. Preseed representative caches for homepage, paginated catalogue,
+manageable listings, and the newly saved detail ID. Submit a valid create that
+returns that ID, then assert each real query state has
+`isInvalidated === true` only after all listing-image reconciliation succeeds.
+Keep or add the corresponding edit-success assertion. Add failure assertions
+proving the preseeded query states remain uninvalidated when the listing
+mutation or image mutation fails.
 
 Run:
 
@@ -220,7 +244,8 @@ Run:
 npm run runtime -- npm test -- src/test/useListingForm.test.tsx -t "invalidates catalogue" --maxWorkers=1 --reporter=verbose
 ```
 
-Expected RED: the wizard currently bypasses the centralized invalidation.
+Expected RED: the wizard currently leaves every real QueryClient cache fresh
+because it bypasses the centralized invalidation helper.
 
 ### Step 2: Reuse the centralized invalidation helper
 
@@ -267,9 +292,10 @@ Add a test where the canonical API promise remains pending and
 interleaved timestamps and one duplicate ID. Render
 `useListingsPaginated({})` and assert:
 
-- up to twelve unique rows paint immediately;
+- up to twelve unique `sale`, `rent`, or `new_build` rows paint immediately;
 - rows are newest-first with listing ID as deterministic tie-breaker;
 - `isPlaceholderData` is true;
+- `hasMore` is false, `nextCursor` is null, and publication metadata is absent;
 - the canonical unfiltered public API request still starts once.
 
 Add or extend tests proving no mixed placeholder is used for a city, property,
@@ -291,13 +317,14 @@ Generalize the default-snapshot eligibility helper so an otherwise-empty filter
 object may select a mixed placeholder. For that case:
 
 1. read the sale and rent embedded first pages;
-2. combine and deduplicate by non-empty listing ID;
-3. sort descending by valid `created_at`, then ascending by ID for a stable tie;
-4. take twelve;
-5. derive `hasMore` from either source page and set `nextCursor: null`, `page: 1`,
-   `pageSize: 12`, and `offset: 0`;
-6. normalize rows through `normalizeListingWithJoins`;
-7. return `undefined` if no row survives.
+2. retain only rows whose `listing_type` is `sale`, `rent`, or `new_build`;
+3. combine and deduplicate by non-empty listing ID;
+4. sort descending by valid `created_at`, then ascending by ID for a stable tie;
+5. take twelve;
+6. force `hasMore: false` and `nextCursor: null`, set `page: 1`,
+   `pageSize: 12`, and `offset: 0`, and omit publication metadata;
+7. normalize rows through `normalizeListingWithJoins`;
+8. return `undefined` if no row survives.
 
 Keep explicit sale/rent behavior unchanged. Treat only absent sort or the
 existing default sort as eligible. Do not write embedded data into the query
