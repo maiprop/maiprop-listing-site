@@ -326,58 +326,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchGeneration = profileFetchGenerationRef.current;
     setProfileLoading(true);
 
-    const fetchPromise = (async () => {
+    const inFlight: InFlightProfileFetch = {
+      userId,
+      generation: fetchGeneration,
+      promise: null as unknown as Promise<Profile | null>,
+    };
+    const fetchAttempt = (() => {
       try {
-        const [profileResult, membershipResult] = await Promise.all([
-          supabase
-            .from("profiles")
-            .select("*")
-            .eq("user_id", userId)
-            .single(),
-          supabase
-            .from("organization_memberships")
-            .select("organization_id, role, status")
-            .eq("user_id", userId)
-            .eq("status", "active"),
-        ]);
-        // Discard stale result if the auth user or fetch generation changed.
-        if (
-          expectedUserIdRef.current !== userId ||
-          profileFetchGenerationRef.current !== fetchGeneration
-        ) return null;
-        const nextProfile: Profile | null = profileResult.data;
-        const memberships = membershipResult.data ?? [];
-        if (profileResult.error) {
-          logger.warn("Profile fetch failed:", profileResult.error);
-        }
-        if (membershipResult.error) {
-          logger.warn("Organization membership fetch failed:", membershipResult.error);
-        }
-        transitionQueryAuthorization(
-          appQueryClient,
-          userId,
-          buildAuthorizationFingerprint(nextProfile, memberships),
-        );
-        setProfile(nextProfile);
-        return profileResult.data;
-      } finally {
-        if (profileFetchInProgressRef.current?.promise === fetchPromise) {
-          profileFetchInProgressRef.current = null;
-        }
+        const profileQuery = supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", userId)
+          .single();
+        const membershipQuery = supabase
+          .from("organization_memberships")
+          .select("organization_id, role, status")
+          .eq("user_id", userId)
+          .eq("status", "active");
+        return {
+          installSlot: true,
+          promise: Promise.all([profileQuery, membershipQuery]).then(([
+            profileResult,
+            membershipResult,
+          ]) => {
+            // Discard stale result if the auth user or fetch generation changed.
+            if (
+              expectedUserIdRef.current !== userId ||
+              profileFetchGenerationRef.current !== fetchGeneration
+            ) return null;
+            const nextProfile: Profile | null = profileResult.data;
+            const memberships = membershipResult.data ?? [];
+            if (profileResult.error) {
+              logger.warn("Profile fetch failed:", profileResult.error);
+            }
+            if (membershipResult.error) {
+              logger.warn("Organization membership fetch failed:", membershipResult.error);
+            }
+            transitionQueryAuthorization(
+              appQueryClient,
+              userId,
+              buildAuthorizationFingerprint(nextProfile, memberships),
+            );
+            setProfile(nextProfile);
+            return profileResult.data;
+          }).finally(() => {
+            if (profileFetchInProgressRef.current === inFlight) {
+              profileFetchInProgressRef.current = null;
+            }
+            if (
+              expectedUserIdRef.current === userId &&
+              profileFetchGenerationRef.current === fetchGeneration
+            ) {
+              setProfileLoading(false);
+            }
+          }),
+        };
+      } catch (err) {
         if (
           expectedUserIdRef.current === userId &&
           profileFetchGenerationRef.current === fetchGeneration
         ) {
           setProfileLoading(false);
         }
+        return {
+          installSlot: false,
+          promise: Promise.reject<Profile | null>(err),
+        };
       }
     })();
-    profileFetchInProgressRef.current = {
-      userId,
-      generation: fetchGeneration,
-      promise: fetchPromise,
-    };
-    return fetchPromise;
+    if (!fetchAttempt.installSlot) return fetchAttempt.promise;
+    inFlight.promise = fetchAttempt.promise;
+    profileFetchInProgressRef.current = inFlight;
+    return inFlight.promise;
   }, []);
 
   const adoptSubscriptionUser = useCallback((userId: string | null) => {
@@ -571,8 +591,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Unblock UI immediately — profile arrives shortly after
         setLoading(false);
         // Non-blocking: profile and subscription load in background
-        const profileFetchMode: ProfileFetchMode = _event !== "SIGNED_IN" &&
-            expectedUserIdRef.current === sess.user.id
+        const profileFetchMode: ProfileFetchMode = _event === "INITIAL_SESSION"
           ? "coalesce"
           : "replace";
         fetchProfile(sess.user.id, profileFetchMode).catch((err) => {
@@ -777,15 +796,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     transitionQueryIdentity(appQueryClient, null);
-    profileFetchGenerationRef.current += 1;
+    const signOutProfileGeneration = ++profileFetchGenerationRef.current;
     profileFetchInProgressRef.current = null;
     expectedUserIdRef.current = null;
     adoptSubscriptionUser(null);
+    setProfile(null);
+    setProfileLoading(false);
     await recordUserAuthActivity({
       eventType: "sign_out",
       metadata: { source: "sign_out" },
     });
     await supabase.auth.signOut();
+    if (
+      expectedUserIdRef.current !== null ||
+      profileFetchGenerationRef.current !== signOutProfileGeneration
+    ) return;
     setProfile(null);
     setProfileLoading(false);
   }, [adoptSubscriptionUser]);
