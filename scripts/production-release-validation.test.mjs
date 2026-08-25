@@ -2071,9 +2071,9 @@ describe("production release validation", () => {
     };
     const consumption = {
       artifact_id: "101",
-      artifact_digest: "2".repeat(64),
+      artifact_digest: "a".repeat(64),
       binding_artifact_id: "102",
-      payload_sha256: "3".repeat(64),
+      payload_sha256: "b".repeat(64),
       action: "production-deploy",
       incident_id: "PERF-BOOTSTRAP-20260826-01",
       release_sha: sha,
@@ -2132,6 +2132,11 @@ describe("production release validation", () => {
     };
 
     expect(validateMutationLease(expected)).toEqual(lease);
+    expect(() => validateMutationLease({
+      ...expected,
+      lease: { ...lease, production_run_attempt: "2" },
+      productionRunAttempt: "2",
+    })).toThrow(/schema.*3.*attempt 1|attempt 1.*schema.*3/i);
     for (const [field, value] of [
       ["artifact_id", "103"],
       ["artifact_digest", "4".repeat(64)],
@@ -2149,6 +2154,25 @@ describe("production release validation", () => {
           },
         }),
         field,
+      ).toThrow(/consumption/i);
+    }
+    for (const field of [
+      "artifact_digest",
+      "payload_sha256",
+      "release_sha",
+    ]) {
+      expect(
+        () => validateMutationLease({
+          ...expected,
+          lease: {
+            ...lease,
+            consumption: {
+              ...consumption,
+              [field]: consumption[field].toUpperCase(),
+            },
+          },
+        }),
+        `${field} uppercase`,
       ).toThrow(/consumption/i);
     }
     expect(() => validateMutationLease({
@@ -2493,6 +2517,143 @@ describe("production release validation", () => {
         "2026-07-28T12:05:00.000Z",
       ], { cwd: root, encoding: "utf8" });
       expect(leaseResult.status, leaseResult.stderr).toBe(0);
+      expect(leaseResult.stdout).toContain("Verified production mutation lease");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps legacy standard CLI approval and mutation lease valid without authorization files", () => {
+    const directory = mkdtempSync(resolve(tmpdir(), "maiprop-release-legacy-"));
+    const approvalPath = resolve(directory, "approval.json");
+    const leasePath = resolve(directory, "lease.json");
+    writeFileSync(approvalPath, JSON.stringify({
+      schema_version: 1,
+      repository: "maiprop/maiprop-listing-site",
+      release_sha: sha,
+      source_tree: "b".repeat(40),
+      source_run_id: "40",
+      source_run_attempt: "2",
+      artifact_sha256: "a".repeat(64),
+      staging_run_id: "50",
+      staging_run_attempt: "1",
+      approval_run_id: "60",
+      approval_run_attempt: "3",
+      approver: "release-reviewer",
+      nonce: "c".repeat(64),
+      approved_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T13:00:00.000Z",
+      revoked: false,
+    }));
+    writeFileSync(leasePath, JSON.stringify({
+      schema_version: 2,
+      repository: "maiprop/maiprop-listing-site",
+      release_sha: sha,
+      source_tree: "b".repeat(40),
+      artifact_sha256: "a".repeat(64),
+      approval_nonce: "c".repeat(64),
+      nonce: "d".repeat(64),
+      source_run_id: "40",
+      source_run_attempt: "2",
+      staging_run_id: "50",
+      staging_run_attempt: "1",
+      approval_run_id: "60",
+      approval_run_attempt: "1",
+      production_run_id: "70",
+      production_run_attempt: "3",
+      stripe_readiness_run_id: "80",
+      stripe_readiness_run_attempt: "1",
+      stripe_readiness_sha256: "e".repeat(64),
+      stripe_readiness_artifact_id: "90",
+      stripe_readiness_artifact_digest: "f".repeat(64),
+      stripe_readiness_checked_at: "2026-07-28T11:59:00.000Z",
+      issued_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T12:14:00.000Z",
+    }));
+
+    try {
+      const approvalResult = spawnSync(process.execPath, [
+        "scripts/production-release-validation.mjs",
+        "release-approval",
+        "--file",
+        approvalPath,
+        "--sha",
+        sha,
+        "--repository",
+        "maiprop/maiprop-listing-site",
+        "--source-tree",
+        "b".repeat(40),
+        "--source-run-id",
+        "40",
+        "--source-run-attempt",
+        "2",
+        "--artifact-sha256",
+        "a".repeat(64),
+        "--staging-run-id",
+        "50",
+        "--staging-run-attempt",
+        "1",
+        "--approval-run-id",
+        "60",
+        "--approval-run-attempt",
+        "3",
+        "--deploy-actor",
+        "release-operator",
+        "--allowed-approvers",
+        "release-reviewer,backup-reviewer",
+        "--now",
+        "2026-07-28T12:30:00.000Z",
+      ], { cwd: root, encoding: "utf8" });
+      const leaseResult = spawnSync(process.execPath, [
+        "scripts/production-release-validation.mjs",
+        "mutation-lease",
+        "--file",
+        leasePath,
+        "--sha",
+        sha,
+        "--repository",
+        "maiprop/maiprop-listing-site",
+        "--source-tree",
+        "b".repeat(40),
+        "--approval-nonce",
+        "c".repeat(64),
+        "--artifact-sha256",
+        "a".repeat(64),
+        "--source-run-id",
+        "40",
+        "--source-run-attempt",
+        "2",
+        "--staging-run-id",
+        "50",
+        "--staging-run-attempt",
+        "1",
+        "--approval-run-id",
+        "60",
+        "--approval-run-attempt",
+        "1",
+        "--production-run-id",
+        "70",
+        "--production-run-attempt",
+        "3",
+        "--stripe-readiness-run-id",
+        "80",
+        "--stripe-readiness-run-attempt",
+        "1",
+        "--stripe-readiness-sha256",
+        "e".repeat(64),
+        "--stripe-readiness-artifact-id",
+        "90",
+        "--stripe-readiness-artifact-digest",
+        "f".repeat(64),
+        "--now",
+        "2026-07-28T12:05:00.000Z",
+      ], { cwd: root, encoding: "utf8" });
+
+      expect(
+        [approvalResult.status, leaseResult.status],
+        `${approvalResult.stderr}\n${leaseResult.stderr}`,
+      ).toEqual([0, 0]);
+      expect(approvalResult.stdout).toContain("Verified release approval");
       expect(leaseResult.stdout).toContain("Verified production mutation lease");
     } finally {
       rmSync(directory, { recursive: true, force: true });

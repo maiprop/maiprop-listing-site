@@ -1086,11 +1086,11 @@ export function validateMutationLease({
   if (record.schema_version !== 2 && record.schema_version !== 3) {
     throw new Error("Mutation lease schema version is unsupported.");
   }
-  if (expectedAuthorization === undefined) {
-    throw new Error("Expected release authorization is required for mutation leases.");
-  }
   if (record.schema_version === 2) {
-    if (expectedAuthorization?.mode !== "standard") {
+    if (
+      expectedAuthorization !== undefined &&
+      expectedAuthorization?.mode !== "standard"
+    ) {
       throw new Error("Mutation lease schema 2 is standard-only.");
     }
     if (
@@ -1100,17 +1100,29 @@ export function validateMutationLease({
     ) {
       throw new Error("Mutation lease schema 2 cannot contain consumption evidence.");
     }
-    validateReleaseAuthorization(expectedAuthorization, {
-      mode: "standard",
-      action: "production-deploy",
-      releaseSha: sha,
-    }, { now });
+    if (expectedAuthorization !== undefined) {
+      validateReleaseAuthorization(expectedAuthorization, {
+        mode: "standard",
+        action: "production-deploy",
+        releaseSha: sha,
+      }, { now });
+    }
   } else {
+    if (expectedAuthorization === undefined) {
+      throw new Error("Expected release authorization is required for mutation lease schema 3.");
+    }
     if (expectedAuthorization?.mode !== "break_glass") {
       throw new Error("Mutation lease schema 3 requires break-glass authorization.");
     }
     if (expectedConsumption === undefined) {
       throw new Error("Expected consumption is required for mutation lease schema 3.");
+    }
+    const expectedProductionRunAttempt = requirePositiveIntegerString(
+      productionRunAttempt,
+      "Expected production run attempt",
+    );
+    if (expectedProductionRunAttempt !== "1") {
+      throw new Error("Mutation lease schema 3 must use production run attempt 1.");
     }
     const authorizationContext = {
       mode: "break_glass",
@@ -1120,7 +1132,7 @@ export function validateMutationLease({
         productionRunId,
         "Expected production run ID",
       ),
-      runAttempt: "1",
+      runAttempt: expectedProductionRunAttempt,
     };
     const expectedValidatedAuthorization = validateReleaseAuthorization(
       expectedAuthorization,
@@ -1151,26 +1163,38 @@ export function validateMutationLease({
         "release_sha",
         "parent_run_id",
       ], label);
+      const artifactDigest = requireSha256(
+        consumption.artifact_digest,
+        `${label} artifact digest`,
+      );
+      if (consumption.artifact_digest !== artifactDigest) {
+        throw new Error(`${label} artifact digest must be exact lowercase hexadecimal.`);
+      }
+      const payloadSha256 = requireSha256(
+        consumption.payload_sha256,
+        `${label} payload digest`,
+      );
+      if (consumption.payload_sha256 !== payloadSha256) {
+        throw new Error(`${label} payload digest must be exact lowercase hexadecimal.`);
+      }
+      const releaseSha = normalizeReleaseSha(consumption.release_sha);
+      if (consumption.release_sha !== releaseSha) {
+        throw new Error(`${label} release SHA must be exact lowercase hexadecimal.`);
+      }
       const normalized = {
         artifact_id: requirePositiveIntegerString(
           consumption.artifact_id,
           `${label} artifact ID`,
         ),
-        artifact_digest: requireSha256(
-          consumption.artifact_digest,
-          `${label} artifact digest`,
-        ),
+        artifact_digest: artifactDigest,
         binding_artifact_id: requirePositiveIntegerString(
           consumption.binding_artifact_id,
           `${label} binding artifact ID`,
         ),
-        payload_sha256: requireSha256(
-          consumption.payload_sha256,
-          `${label} payload digest`,
-        ),
+        payload_sha256: payloadSha256,
         action: String(consumption.action ?? ""),
         incident_id: String(consumption.incident_id ?? ""),
-        release_sha: normalizeReleaseSha(consumption.release_sha),
+        release_sha: releaseSha,
         parent_run_id: requirePositiveIntegerString(
           consumption.parent_run_id,
           `${label} parent run ID`,
@@ -2108,6 +2132,7 @@ async function main() {
     const expectedAuthorization = jsonFileArg(
       "--authorization-file",
       "Release authorization",
+      { required: approval.schema_version === 2 },
     );
     validateReleaseApproval({
       approval,
@@ -2141,11 +2166,12 @@ async function main() {
     const expectedAuthorization = jsonFileArg(
       "--authorization-file",
       "Release authorization",
+      { required: lease.schema_version === 3 },
     );
     const expectedConsumption = jsonFileArg(
       "--consumption-file",
       "Break-glass consumption",
-      { required: false },
+      { required: lease.schema_version === 3 },
     );
     validateMutationLease({
       lease,
