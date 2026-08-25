@@ -75,6 +75,7 @@
     "check:production-deploy": "node scripts/check-production-deploy.mjs",
     "release:artifact:create": "node scripts/production-release-artifact.mjs create",
     "release:artifact:verify": "node scripts/production-release-artifact.mjs verify",
+    "release:authorization:validate": "node scripts/production-break-glass-validation.mjs validate-workflow",
     "release:validate": "node scripts/production-release-validation.mjs",
     "release:verify-live-marker": "node scripts/verify-live-release-marker.mjs",
     "release:verify-runtime-config": "node scripts/verify-runtime-config.mjs",
