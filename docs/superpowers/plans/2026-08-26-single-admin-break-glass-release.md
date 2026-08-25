@@ -686,11 +686,12 @@ Wait for exact-SHA CI, dispatch isolated staging, require its signed evidence an
 ```powershell
 npm run runtime -- npm run release:verify-live-marker -- --base-url https://portal.maiprop.co --sha $releaseSha
 npm run runtime -- npm run check:production-deploy -- --base-url https://portal.maiprop.co
-npm run runtime -- npm run perf:live-critical -- --samples=5 --artifact-dir=artifacts/live-performance/release-a
+$env:PLAYWRIGHT_BASE_URL='https://portal.maiprop.co'
+npm run runtime -- npm run test:e2e:live-smoke
 npm run runtime -- npm run diagnose:public-listings-latency -- https://portal.maiprop.co --iterations=30 --timeout-ms=8000
 ```
 
-Measure landing, explore/listings, sign-in, duplicate-account sign-up confirmation, dashboard, listing-wizard entry/steps, no-photo staging listing publication, property render, public publication lag, and sign-out. Report p50, p95, failures, cache states, request counts, deployed SHA, and before/after deltas.
+Two fresh QA agents independently measure landing, explore/listings, sign-in, duplicate-account sign-up confirmation, dashboard, listing-wizard entry/steps, no-photo staging listing publication, property render, public publication lag, and sign-out with browser `performance.now()` marks. Use five fresh contexts and five warm navigations per non-mutating action; time Auth/server responses separately from UI settlement. Report p50, p95, failures, cache states, request counts, deployed SHA, and before/after deltas. The reusable `perf:live-critical` command is intentionally created later by Task 3 of the performance plan; this initial release does not invoke a command that is not yet present.
 
 - [ ] **Step 8: Remove temporary authorization and continue the performance plan**
 
