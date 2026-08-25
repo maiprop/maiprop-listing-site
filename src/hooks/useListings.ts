@@ -8,6 +8,7 @@ import { fetchPublicApi } from "@/lib/publicApi";
 import { getListingLocationSearchTokenGroups } from "@/lib/location/locationSearchSemantics";
 import { readInitialListingsPage } from "@/lib/homepageSnapshotCache";
 import type { NewBuildProject } from "@/lib/newBuildProjectDetail";
+import { getInitialListingsPlaceholder } from "@/hooks/listingsInitialPlaceholder";
 
 export {
   useCreateListing,
@@ -396,99 +397,6 @@ function shouldUsePublicListingsApi(filters?: ListingsFilters): boolean {
   return true;
 }
 
-type DefaultCatalogueSnapshot = "sale" | "rent" | "mixed";
-
-function getDefaultCatalogueSnapshot(filters?: ListingsFilters): DefaultCatalogueSnapshot | undefined {
-  if (filters?.listing_type && filters.listing_type !== "sale" && filters.listing_type !== "rent") {
-    return undefined;
-  }
-
-  for (const [key, value] of Object.entries(filters ?? {})) {
-    if (value === undefined || value === null || value === "") continue;
-    if (Array.isArray(value) && value.length === 0) continue;
-    if (key === "listing_type") continue;
-    if (key === "sort" && value === "relevant") continue;
-    return undefined;
-  }
-
-  return filters?.listing_type === "sale" || filters?.listing_type === "rent"
-    ? filters.listing_type
-    : "mixed";
-}
-
-function mixedPlaceholderCreatedAt(listing: ListingWithJoins): number | null {
-  const createdAt = Date.parse(listing.created_at);
-  return Number.isFinite(createdAt) ? createdAt : null;
-}
-
-function buildMixedInitialListingsPage(): ListingsPageResponse | undefined {
-  const salePage = readInitialListingsPage<ListingWithJoins>("sale");
-  const rentPage = readInitialListingsPage<ListingWithJoins>("rent");
-  if (!salePage || !rentPage) return undefined;
-
-  const listingsById = new Map<string, ListingWithJoins>();
-  for (const listing of [...salePage.data, ...rentPage.data]) {
-    const id = typeof listing.id === "string" ? listing.id.trim() : "";
-    if (!id || listingsById.has(id)) continue;
-    if (listing.listing_type !== "sale" && listing.listing_type !== "rent" && listing.listing_type !== "new_build") {
-      continue;
-    }
-    listingsById.set(id, listing);
-  }
-
-  const listings = [...listingsById.values()]
-    .sort((left, right) => {
-      const leftCreatedAt = mixedPlaceholderCreatedAt(left);
-      const rightCreatedAt = mixedPlaceholderCreatedAt(right);
-      if (leftCreatedAt !== null && rightCreatedAt !== null && leftCreatedAt !== rightCreatedAt) {
-        return rightCreatedAt - leftCreatedAt;
-      }
-      if (leftCreatedAt !== null && rightCreatedAt === null) return -1;
-      if (leftCreatedAt === null && rightCreatedAt !== null) return 1;
-      return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
-    })
-    .slice(0, INITIAL_GRID_PAGE_SIZE)
-    .map(normalizeListingWithJoins);
-  if (listings.length === 0) return undefined;
-
-  return {
-    data: listings,
-    hasMore: false,
-    nextCursor: null,
-    page: 1,
-    pageSize: INITIAL_GRID_PAGE_SIZE,
-    offset: 0,
-  };
-}
-
-function getInitialListingsPlaceholder(
-  filters?: ListingsFilters,
-): { pages: ListingsPageResponse[]; pageParams: ListingsPageParam[] } | undefined {
-  const snapshot = getDefaultCatalogueSnapshot(filters);
-  if (!snapshot) return undefined;
-  if (snapshot === "mixed") {
-    const page = buildMixedInitialListingsPage();
-    return page
-      ? {
-          pages: [page],
-          pageParams: [INITIAL_LISTINGS_PAGE_PARAM],
-        }
-      : undefined;
-  }
-
-  const listingType = snapshot;
-  const page = readInitialListingsPage<ListingWithJoins>(listingType);
-  if (!page || page.data.length === 0) return undefined;
-  const normalizedPage: ListingsPageResponse = {
-    ...page,
-    data: page.data.map(normalizeListingWithJoins),
-  };
-  return {
-    pages: [normalizedPage],
-    pageParams: [INITIAL_LISTINGS_PAGE_PARAM],
-  };
-}
-
 function publicListingsPath(
   filters: ListingsFilters | undefined,
   page: number,
@@ -631,7 +539,13 @@ export const useListingsPaginated = (
   filters?: ListingsFilters,
   options?: UseListingsOptions,
 ) => {
-  const placeholderData = getInitialListingsPlaceholder(filters);
+  const placeholderData = getInitialListingsPlaceholder({
+    filters,
+    initialGridPageSize: INITIAL_GRID_PAGE_SIZE,
+    initialPageParam: INITIAL_LISTINGS_PAGE_PARAM,
+    normalizeListing: normalizeListingWithJoins,
+    readInitialListingsPage,
+  });
   return useInfiniteQuery({
     queryKey: [
       "listings-paginated",
