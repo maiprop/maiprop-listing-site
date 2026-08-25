@@ -742,6 +742,76 @@ describe("production release train", () => {
     expect(activation.run).toContain("production-role-switch-cron-state.json");
   });
 
+  it("keeps source provenance evidence outside the immutable release candidate", () => {
+    const parsed = yaml.load(workflow("stage-release.yml"));
+    const validationJobs = Object.entries(parsed.jobs ?? {}).filter(
+      ([, job]) => job.name === "Validate trusted main candidate",
+    );
+
+    expect(validationJobs).toHaveLength(1);
+    const [[jobName, validationJob]] = validationJobs;
+    const verificationSteps = validationJob.steps.filter(
+      (step) => step.name === "Verify cryptographic build provenance",
+    );
+    const uploadSteps = validationJob.steps.filter(
+      (step) => step.name === "Upload provenance verification evidence",
+    );
+
+    expect(
+      verificationSteps,
+      `${jobName}:provenance verification`,
+    ).toHaveLength(1);
+    expect(
+      uploadSteps,
+      `${jobName}:provenance evidence upload`,
+    ).toHaveLength(1);
+
+    const [verificationStep] = verificationSteps;
+    const [uploadStep] = uploadSteps;
+    const runLines = verificationStep.run
+      .split(/\r?\n/)
+      .map((line) => line.trim());
+    const verifierOutputIndex = runLines.findIndex((line) =>
+      /^>\s+\S+\/provenance-verification\.json$/.test(line),
+    );
+    const jqInputIndex = runLines.findIndex((line) =>
+      /^\S+\/provenance-verification\.json\s+>\s+\/dev\/null$/.test(line),
+    );
+
+    expect(verificationStep.run).toContain("--payload-root release-candidate");
+    expect(verifierOutputIndex, `${jobName}:verifier output`).toBeGreaterThan(-1);
+    expect(jqInputIndex, `${jobName}:jq evidence input`).toBeGreaterThan(-1);
+
+    const verifierOutputPath = runLines[verifierOutputIndex].match(
+      /^>\s+(\S+\/provenance-verification\.json)$/,
+    )?.[1];
+    const jqInputPath = runLines[jqInputIndex].match(
+      /^(\S+\/provenance-verification\.json)\s+>\s+\/dev\/null$/,
+    )?.[1];
+    const expectedEvidencePath =
+      "source-provenance-verification/provenance-verification.json";
+
+    expect(verifierOutputPath).toBe(expectedEvidencePath);
+    expect(jqInputPath).toBe(expectedEvidencePath);
+    expect(uploadStep.with?.path).toBe(expectedEvidencePath);
+    for (const evidencePath of [
+      verifierOutputPath,
+      jqInputPath,
+      uploadStep.with?.path,
+    ]) {
+      expect(evidencePath).not.toMatch(/^release-candidate\//);
+    }
+
+    const mkdirIndex = runLines.findIndex(
+      (line) => line === "mkdir -p source-provenance-verification",
+    );
+    expect(
+      mkdirIndex,
+      `${jobName}:evidence directory creation`,
+    ).toBeGreaterThan(-1);
+    expect(mkdirIndex).toBeLessThan(verifierOutputIndex);
+  });
+
   it("keeps staging default-off and binds every privileged job to the trusted candidate", () => {
     const stage = workflow("stage-release.yml");
 

@@ -255,6 +255,7 @@ jobs:
         run: |
           set -euo pipefail
           source_tree="$(git rev-parse 'HEAD^{tree}')"
+          mkdir -p source-provenance-verification
           node scripts/verify-release-artifact-binding.mjs \
             --binding source-binding/release-artifact-binding.json \
             --payload-root release-candidate \
@@ -272,9 +273,9 @@ jobs:
             --actor "$SOURCE_ACTOR" \
             --triggering-actor "$SOURCE_TRIGGERING_ACTOR" \
             --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
-            > release-candidate/provenance-verification.json
+            > source-provenance-verification/provenance-verification.json
           jq -e '.ok == true and .run_attempt == "1" and .actor == .triggering_actor' \
-            release-candidate/provenance-verification.json > /dev/null
+            source-provenance-verification/provenance-verification.json > /dev/null
           artifact_name="source-provenance-verification-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}"
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
 
@@ -282,7 +283,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.provenance.outputs.artifact_name }}
-          path: release-candidate/provenance-verification.json
+          path: source-provenance-verification/provenance-verification.json
           if-no-files-found: error
           retention-days: 30
 
