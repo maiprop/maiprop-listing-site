@@ -5,6 +5,7 @@ import {
   reconcileMigrationHistories,
   validateLegacyMigrationSchemaEvidence,
 } from "./legacy-migration-reconciliation.mjs";
+import { validateReleaseAuthorization } from "./production-break-glass-validation.mjs";
 
 export {
   reconcileMigrationHistories,
@@ -817,6 +818,56 @@ function requireOpaqueId(value, label) {
   return normalized;
 }
 
+function requireExactKeys(record, expectedKeys, label) {
+  const actual = Object.keys(record).sort();
+  const expected = [...expectedKeys].sort();
+  if (
+    actual.length !== expected.length ||
+    actual.some((key, index) => key !== expected[index])
+  ) {
+    throw new Error(`${label} has unsupported or missing fields.`);
+  }
+}
+
+function validatedApprovalAuthorization({
+  record,
+  expectedAuthorization,
+  expectedSha,
+  expectedApprovalRunId,
+  approvalRunAttempt,
+  approver,
+  now,
+}) {
+  if (expectedAuthorization === undefined) {
+    throw new Error("Expected release authorization is required for approval schema 2.");
+  }
+  const expectedContext = {
+    action: "production-approval",
+    actor: approver,
+    releaseSha: expectedSha,
+    runId: expectedApprovalRunId,
+    runAttempt: requirePositiveIntegerString(
+      approvalRunAttempt,
+      "Expected approval run attempt",
+    ),
+  };
+  const options = { now };
+  const expected = validateReleaseAuthorization(
+    expectedAuthorization,
+    expectedContext,
+    options,
+  );
+  const actual = validateReleaseAuthorization(
+    record.authorization,
+    expected,
+    options,
+  );
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error("Release approval authorization does not match expected evidence.");
+  }
+  return actual;
+}
+
 export function validateReleaseApproval({
   approval,
   sha,
@@ -831,6 +882,7 @@ export function validateReleaseApproval({
   approvalRunAttempt,
   deployActor,
   allowedApprovers,
+  expectedAuthorization,
   now = new Date(),
 }) {
   const record = requireRecord(approval, "Release approval");
@@ -848,7 +900,7 @@ export function validateReleaseApproval({
     "Expected approval run ID",
   );
 
-  if (record.schema_version !== 1) {
+  if (record.schema_version !== 1 && record.schema_version !== 2) {
     throw new Error("Release approval schema version is unsupported.");
   }
   if (normalizeReleaseSha(record.release_sha) !== expectedSha) {
@@ -893,22 +945,84 @@ export function validateReleaseApproval({
   }
 
   const approver = String(record.approver ?? "").trim();
+  if (!approver) {
+    throw new Error("Release approver is required.");
+  }
+  let authorization;
+  if (record.schema_version === 1) {
+    if (expectedAuthorization !== undefined) {
+      if (expectedAuthorization?.mode !== "standard") {
+        throw new Error("Release approval schema 1 is standard-only.");
+      }
+      const expected = validateReleaseAuthorization(
+        expectedAuthorization,
+        {
+          mode: "standard",
+          action: "production-approval",
+          actor: approver,
+          releaseSha: expectedSha,
+        },
+        { now, allowHistoricalExpiry: true },
+      );
+      if (expected.mode !== "standard") throw new Error("Release approval schema 1 is standard-only.");
+    }
+  } else {
+    requireExactKeys(record, [
+      "schema_version",
+      "repository",
+      "release_sha",
+      "source_tree",
+      "source_run_id",
+      "source_run_attempt",
+      "artifact_sha256",
+      "staging_run_id",
+      "staging_run_attempt",
+      "approval_run_id",
+      "approval_run_attempt",
+      "approver",
+      "nonce",
+      "revoked",
+      "approved_at",
+      "expires_at",
+      "authorization",
+    ], "Release approval schema 2");
+    authorization = validatedApprovalAuthorization({
+      record,
+      expectedAuthorization,
+      expectedSha,
+      expectedApprovalRunId,
+      approvalRunAttempt,
+      approver,
+      now,
+    });
+  }
   const allowlist = new Set(
     (allowedApprovers ?? [])
       .map((value) => String(value).trim().toLowerCase())
       .filter(Boolean),
   );
-  if (!approver || !allowlist.has(approver.toLowerCase())) {
-    throw new Error("Release approver is not allowlisted.");
-  }
   const normalizedDeployActor = String(deployActor ?? "").trim().toLowerCase();
   if (!normalizedDeployActor) {
     throw new Error("Production deploy actor is required.");
   }
-  if (approver.toLowerCase() === normalizedDeployActor) {
-    throw new Error(
-      "Production deployment requires independent approval by a different actor.",
-    );
+  if (authorization?.mode === "break_glass") {
+    if (
+      authorization.actor !== approver.toLowerCase() ||
+      authorization.actor !== normalizedDeployActor
+    ) {
+      throw new Error(
+        "Break-glass approval requires the authorized approver and deploy actor.",
+      );
+    }
+  } else {
+    if (!allowlist.has(approver.toLowerCase())) {
+      throw new Error("Release approver is not allowlisted.");
+    }
+    if (approver.toLowerCase() === normalizedDeployActor) {
+      throw new Error(
+        "Production deployment requires independent approval by a different actor.",
+      );
+    }
   }
 
   const approvedAt = requireDate(record.approved_at, "Approval time");
@@ -923,7 +1037,18 @@ export function validateReleaseApproval({
   if (expiresAt.getTime() - approvedAt.getTime() > 2 * 60 * 60 * 1000) {
     throw new Error("Release approval expiry must be no more than two hours.");
   }
-  if (nowDate >= expiresAt) {
+  let effectiveExpiry = expiresAt.getTime();
+  if (authorization?.mode === "break_glass") {
+    const authorizedExpiry = requireDate(
+      authorization.authorized_expires_at,
+      "Authorization expiry",
+    );
+    if (approvedAt >= authorizedExpiry) {
+      throw new Error("Break-glass authorization expiry must follow approval time.");
+    }
+    effectiveExpiry = Math.min(effectiveExpiry, authorizedExpiry.getTime());
+  }
+  if (nowDate.getTime() >= effectiveExpiry) {
     throw new Error("Release approval has expired.");
   }
   return approval;
@@ -936,6 +1061,8 @@ export function validateMutationLease({
   sourceTree,
   artifactSha256,
   approvalNonce,
+  expectedAuthorization,
+  expectedConsumption,
   sourceRunId,
   sourceRunAttempt,
   stagingRunId,
@@ -956,8 +1083,130 @@ export function validateMutationLease({
   now = new Date(),
 }) {
   const record = requireRecord(lease, "Mutation lease");
-  if (record.schema_version !== 2) {
+  if (record.schema_version !== 2 && record.schema_version !== 3) {
     throw new Error("Mutation lease schema version is unsupported.");
+  }
+  if (expectedAuthorization === undefined) {
+    throw new Error("Expected release authorization is required for mutation leases.");
+  }
+  if (record.schema_version === 2) {
+    if (expectedAuthorization?.mode !== "standard") {
+      throw new Error("Mutation lease schema 2 is standard-only.");
+    }
+    if (
+      expectedConsumption !== undefined ||
+      Object.hasOwn(record, "authorization") ||
+      Object.hasOwn(record, "consumption")
+    ) {
+      throw new Error("Mutation lease schema 2 cannot contain consumption evidence.");
+    }
+    validateReleaseAuthorization(expectedAuthorization, {
+      mode: "standard",
+      action: "production-deploy",
+      releaseSha: sha,
+    }, { now });
+  } else {
+    if (expectedAuthorization?.mode !== "break_glass") {
+      throw new Error("Mutation lease schema 3 requires break-glass authorization.");
+    }
+    if (expectedConsumption === undefined) {
+      throw new Error("Expected consumption is required for mutation lease schema 3.");
+    }
+    const authorizationContext = {
+      mode: "break_glass",
+      action: "production-deploy",
+      releaseSha: sha,
+      runId: requirePositiveIntegerString(
+        productionRunId,
+        "Expected production run ID",
+      ),
+      runAttempt: "1",
+    };
+    const expectedValidatedAuthorization = validateReleaseAuthorization(
+      expectedAuthorization,
+      authorizationContext,
+      { now },
+    );
+    const actualAuthorization = validateReleaseAuthorization(
+      record.authorization,
+      expectedValidatedAuthorization,
+      { now },
+    );
+    if (
+      JSON.stringify(actualAuthorization) !==
+      JSON.stringify(expectedValidatedAuthorization)
+    ) {
+      throw new Error("Mutation lease authorization does not match expected evidence.");
+    }
+
+    const validateConsumption = (value, label) => {
+      const consumption = requireRecord(value, label);
+      requireExactKeys(consumption, [
+        "artifact_id",
+        "artifact_digest",
+        "binding_artifact_id",
+        "payload_sha256",
+        "action",
+        "incident_id",
+        "release_sha",
+        "parent_run_id",
+      ], label);
+      const normalized = {
+        artifact_id: requirePositiveIntegerString(
+          consumption.artifact_id,
+          `${label} artifact ID`,
+        ),
+        artifact_digest: requireSha256(
+          consumption.artifact_digest,
+          `${label} artifact digest`,
+        ),
+        binding_artifact_id: requirePositiveIntegerString(
+          consumption.binding_artifact_id,
+          `${label} binding artifact ID`,
+        ),
+        payload_sha256: requireSha256(
+          consumption.payload_sha256,
+          `${label} payload digest`,
+        ),
+        action: String(consumption.action ?? ""),
+        incident_id: String(consumption.incident_id ?? ""),
+        release_sha: normalizeReleaseSha(consumption.release_sha),
+        parent_run_id: requirePositiveIntegerString(
+          consumption.parent_run_id,
+          `${label} parent run ID`,
+        ),
+      };
+      if (normalized.action !== "production-deploy") {
+        throw new Error(`${label} action must be production-deploy.`);
+      }
+      if (normalized.incident_id !== actualAuthorization.incident_id) {
+        throw new Error(`${label} incident does not match authorization.`);
+      }
+      if (normalized.release_sha !== normalizeReleaseSha(sha)) {
+        throw new Error(`${label} release SHA does not match.`);
+      }
+      if (
+        normalized.parent_run_id !==
+        requirePositiveIntegerString(productionRunId, "Expected production run ID")
+      ) {
+        throw new Error(`${label} parent run does not match.`);
+      }
+      return normalized;
+    };
+    const expectedValidatedConsumption = validateConsumption(
+      expectedConsumption,
+      "Expected consumption",
+    );
+    const actualConsumption = validateConsumption(
+      record.consumption,
+      "Mutation lease consumption",
+    );
+    if (
+      JSON.stringify(actualConsumption) !==
+      JSON.stringify(expectedValidatedConsumption)
+    ) {
+      throw new Error("Mutation lease consumption does not match expected evidence.");
+    }
   }
   if (normalizeReleaseSha(record.release_sha) !== normalizeReleaseSha(sha)) {
     throw new Error("Mutation lease release SHA does not match.");
@@ -1633,6 +1882,15 @@ function argValue(name) {
   return index >= 0 ? process.argv[index + 1] ?? "" : "";
 }
 
+function jsonFileArg(name, label, options = {}) {
+  const file = argValue(name);
+  if (!file) {
+    if (options.required === false) return undefined;
+    throw new Error(`${label} file is required.`);
+  }
+  return JSON.parse(readFileSync(file, "utf8"));
+}
+
 async function githubJson(path, token) {
   const response = await fetch(`${GITHUB_API}${path}`, {
     headers: {
@@ -1847,6 +2105,10 @@ async function main() {
     const approval = JSON.parse(
       readFileSync(argValue("--file"), "utf8"),
     );
+    const expectedAuthorization = jsonFileArg(
+      "--authorization-file",
+      "Release authorization",
+    );
     validateReleaseApproval({
       approval,
       sha,
@@ -1864,6 +2126,7 @@ async function main() {
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean),
+      expectedAuthorization,
       now: argValue("--now") || undefined,
     });
     process.stdout.write(
@@ -1875,6 +2138,15 @@ async function main() {
     const lease = JSON.parse(
       readFileSync(argValue("--file"), "utf8"),
     );
+    const expectedAuthorization = jsonFileArg(
+      "--authorization-file",
+      "Release authorization",
+    );
+    const expectedConsumption = jsonFileArg(
+      "--consumption-file",
+      "Break-glass consumption",
+      { required: false },
+    );
     validateMutationLease({
       lease,
       sha,
@@ -1882,6 +2154,8 @@ async function main() {
       sourceTree: argValue("--source-tree"),
       artifactSha256: argValue("--artifact-sha256"),
       approvalNonce: argValue("--approval-nonce"),
+      expectedAuthorization,
+      expectedConsumption,
       sourceRunId: argValue("--source-run-id"),
       sourceRunAttempt: argValue("--source-run-attempt"),
       stagingRunId: argValue("--staging-run-id"),

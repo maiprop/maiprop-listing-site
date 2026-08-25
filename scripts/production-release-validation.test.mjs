@@ -1290,6 +1290,306 @@ describe("production release validation", () => {
     }
   });
 
+  it("keeps approval authorization mode standard-only for schema v1", () => {
+    const approval = {
+      schema_version: 1,
+      repository: "maiprop/maiprop-listing-site",
+      release_sha: sha,
+      source_tree: "b".repeat(40),
+      source_run_id: "40",
+      source_run_attempt: "2",
+      artifact_sha256: "a".repeat(64),
+      staging_run_id: "50",
+      staging_run_attempt: "1",
+      approval_run_id: "60",
+      approval_run_attempt: "3",
+      approver: "release-reviewer",
+      nonce: "c".repeat(64),
+      approved_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T13:00:00.000Z",
+      revoked: false,
+    };
+    const expected = {
+      sha,
+      repository: "maiprop/maiprop-listing-site",
+      sourceTree: "b".repeat(40),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      artifactSha256: "a".repeat(64),
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "3",
+      deployActor: "release-operator",
+      allowedApprovers: ["release-reviewer"],
+      now: new Date("2026-07-28T12:30:00.000Z"),
+    };
+    const standardAuthorization = {
+      mode: "standard",
+      action: "production-approval",
+      actor: "release-reviewer",
+      release_sha: sha,
+      workflow_run_id: "60",
+      workflow_run_attempt: "1",
+    };
+    const breakGlassAuthorization = {
+      mode: "break_glass",
+      action: "production-approval",
+      actor: "krenios",
+      release_sha: sha,
+      incident_id: "PERF-BOOTSTRAP-20260826-01",
+      reason_sha256: "d".repeat(64),
+      authorized_expires_at: "2026-07-28T14:00:00.000Z",
+      workflow_run_id: "60",
+      workflow_run_attempt: "1",
+    };
+
+    expect(validateReleaseApproval({
+      approval,
+      ...expected,
+      expectedAuthorization: standardAuthorization,
+    })).toEqual(approval);
+    expect(() => validateReleaseApproval({
+      approval,
+      ...expected,
+      deployActor: "release-reviewer",
+      expectedAuthorization: standardAuthorization,
+    })).toThrow(/independent/i);
+    expect(() => validateReleaseApproval({
+      approval,
+      ...expected,
+      expectedAuthorization: breakGlassAuthorization,
+    })).toThrow(/schema.*1.*standard|standard.*schema.*1/i);
+  });
+
+  it("preserves independent approval checks in standard authorization mode schema v2", () => {
+    const authorization = {
+      mode: "standard",
+      action: "production-approval",
+      actor: "release-reviewer",
+      release_sha: sha,
+      workflow_run_id: "60",
+      workflow_run_attempt: "1",
+    };
+    const approval = {
+      schema_version: 2,
+      repository: "maiprop/maiprop-listing-site",
+      release_sha: sha,
+      source_tree: "b".repeat(40),
+      source_run_id: "40",
+      source_run_attempt: "2",
+      artifact_sha256: "a".repeat(64),
+      staging_run_id: "50",
+      staging_run_attempt: "1",
+      approval_run_id: "60",
+      approval_run_attempt: "1",
+      approver: "release-reviewer",
+      nonce: "c".repeat(64),
+      revoked: false,
+      approved_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T14:00:00.000Z",
+      authorization,
+    };
+    const expected = {
+      approval,
+      sha,
+      repository: "maiprop/maiprop-listing-site",
+      sourceTree: "b".repeat(40),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      artifactSha256: "a".repeat(64),
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      deployActor: "release-operator",
+      allowedApprovers: ["release-reviewer"],
+      expectedAuthorization: authorization,
+      now: new Date("2026-07-28T12:30:00.000Z"),
+    };
+
+    expect(validateReleaseApproval(expected)).toEqual(approval);
+    expect(() => validateReleaseApproval({
+      ...expected,
+      allowedApprovers: ["backup-reviewer"],
+    })).toThrow(/allowlisted/i);
+    expect(() => validateReleaseApproval({
+      ...expected,
+      deployActor: "release-reviewer",
+    })).toThrow(/independent/i);
+  });
+
+  it("allows one actor only in exact break-glass approval authorization mode", () => {
+    const authorization = {
+      mode: "break_glass",
+      action: "production-approval",
+      actor: "krenios",
+      release_sha: sha,
+      incident_id: "PERF-BOOTSTRAP-20260826-01",
+      reason_sha256: "d".repeat(64),
+      authorized_expires_at: "2026-07-28T13:00:00.000Z",
+      workflow_run_id: "60",
+      workflow_run_attempt: "1",
+    };
+    const approval = {
+      schema_version: 2,
+      repository: "maiprop/maiprop-listing-site",
+      release_sha: sha,
+      source_tree: "b".repeat(40),
+      source_run_id: "40",
+      source_run_attempt: "2",
+      artifact_sha256: "a".repeat(64),
+      staging_run_id: "50",
+      staging_run_attempt: "1",
+      approval_run_id: "60",
+      approval_run_attempt: "1",
+      approver: "krenios",
+      nonce: "c".repeat(64),
+      revoked: false,
+      approved_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T14:00:00.000Z",
+      authorization,
+    };
+    const expected = {
+      approval,
+      sha,
+      repository: "maiprop/maiprop-listing-site",
+      sourceTree: "b".repeat(40),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      artifactSha256: "a".repeat(64),
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      deployActor: "krenios",
+      allowedApprovers: ["release-reviewer"],
+      expectedAuthorization: authorization,
+      now: new Date("2026-07-28T12:59:59.999Z"),
+    };
+
+    expect(validateReleaseApproval(expected)).toEqual(approval);
+    for (const [field, value] of [
+      ["mode", "emergency"],
+      ["action", "production-deploy"],
+      ["actor", "release-reviewer"],
+      ["release_sha", "f".repeat(40)],
+      ["incident_id", "PERF-BOOTSTRAP-20260826-02"],
+      ["reason_sha256", "e".repeat(64)],
+      ["authorized_expires_at", "2026-07-28T13:30:00.000Z"],
+      ["workflow_run_id", "61"],
+      ["workflow_run_attempt", "2"],
+    ]) {
+      expect(
+        () => validateReleaseApproval({
+          ...expected,
+          approval: {
+            ...approval,
+            authorization: { ...authorization, [field]: value },
+          },
+        }),
+        field,
+      ).toThrow(/authorization/i);
+    }
+    expect(() => validateReleaseApproval({
+      ...expected,
+      approval: {
+        ...approval,
+        authorization: { ...authorization, unexpected: true },
+      },
+    })).toThrow(/authorization/i);
+    const overlongAuthorization = {
+      ...authorization,
+      authorized_expires_at: "2026-07-28T18:00:00.000Z",
+    };
+    expect(() => validateReleaseApproval({
+      ...expected,
+      approval: {
+        ...approval,
+        authorization: overlongAuthorization,
+      },
+      expectedAuthorization: overlongAuthorization,
+      now: new Date("2026-07-28T12:30:00.000Z"),
+    })).toThrow(/four hours/i);
+  });
+
+  it("uses both exclusive expiry boundaries in break-glass approval authorization mode", () => {
+    const approval = {
+      schema_version: 2,
+      repository: "maiprop/maiprop-listing-site",
+      release_sha: sha,
+      source_tree: "b".repeat(40),
+      source_run_id: "40",
+      source_run_attempt: "2",
+      artifact_sha256: "a".repeat(64),
+      staging_run_id: "50",
+      staging_run_attempt: "1",
+      approval_run_id: "60",
+      approval_run_attempt: "1",
+      approver: "krenios",
+      nonce: "c".repeat(64),
+      revoked: false,
+      approved_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T14:00:00.000Z",
+      authorization: {
+        mode: "break_glass",
+        action: "production-approval",
+        actor: "krenios",
+        release_sha: sha,
+        incident_id: "PERF-BOOTSTRAP-20260826-01",
+        reason_sha256: "d".repeat(64),
+        authorized_expires_at: "2026-07-28T13:00:00.000Z",
+        workflow_run_id: "60",
+        workflow_run_attempt: "1",
+      },
+    };
+    const expected = {
+      approval,
+      sha,
+      repository: "maiprop/maiprop-listing-site",
+      sourceTree: "b".repeat(40),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      artifactSha256: "a".repeat(64),
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      deployActor: "krenios",
+      allowedApprovers: [],
+      expectedAuthorization: approval.authorization,
+    };
+
+    expect(validateReleaseApproval({
+      ...expected,
+      now: new Date("2026-07-28T12:59:59.999Z"),
+    })).toEqual(approval);
+    expect(() => validateReleaseApproval({
+      ...expected,
+      now: new Date("2026-07-28T13:00:00.000Z"),
+    })).toThrow(/expired|expiry.*future/i);
+
+    const twoHourApproval = {
+      ...approval,
+      authorization: {
+        ...approval.authorization,
+        authorized_expires_at: "2026-07-28T15:00:00.000Z",
+      },
+    };
+    expect(validateReleaseApproval({
+      ...expected,
+      approval: twoHourApproval,
+      expectedAuthorization: twoHourApproval.authorization,
+      now: new Date("2026-07-28T13:59:59.999Z"),
+    })).toEqual(twoHourApproval);
+    expect(() => validateReleaseApproval({
+      ...expected,
+      approval: twoHourApproval,
+      expectedAuthorization: twoHourApproval.authorization,
+      now: new Date("2026-07-28T14:00:00.000Z"),
+    })).toThrow(/expired/i);
+  });
+
   it("revalidates the exact mutation lease before every production boundary", () => {
     const lease = {
       schema_version: 2,
@@ -1320,6 +1620,14 @@ describe("production release validation", () => {
       repository: "maiprop/maiprop-listing-site",
       sourceTree: "b".repeat(40),
       approvalNonce: "c".repeat(64),
+      expectedAuthorization: {
+        mode: "standard",
+        action: "production-deploy",
+        actor: "release-operator",
+        release_sha: sha,
+        workflow_run_id: "70",
+        workflow_run_attempt: "1",
+      },
       stripeReadinessRunId: "80",
       stripeReadinessRunAttempt: "1",
       stripeReadinessSha256: "e".repeat(64),
@@ -1660,6 +1968,208 @@ describe("production release validation", () => {
     })).toThrow(/validation time.*ISO date/i);
   });
 
+  it("keeps mutation lease schema 2 in standard authorization mode without consumption", () => {
+    const lease = {
+      schema_version: 2,
+      repository: "maiprop/maiprop-listing-site",
+      release_sha: sha,
+      source_tree: "b".repeat(40),
+      artifact_sha256: "b".repeat(64),
+      approval_nonce: "c".repeat(64),
+      nonce: "d".repeat(64),
+      source_run_id: "40",
+      source_run_attempt: "2",
+      staging_run_id: "50",
+      staging_run_attempt: "1",
+      approval_run_id: "60",
+      approval_run_attempt: "1",
+      production_run_id: "70",
+      production_run_attempt: "3",
+      stripe_readiness_run_id: "80",
+      stripe_readiness_run_attempt: "1",
+      stripe_readiness_sha256: "e".repeat(64),
+      stripe_readiness_artifact_id: "90",
+      stripe_readiness_artifact_digest: "f".repeat(64),
+      stripe_readiness_checked_at: "2026-07-28T11:59:00.000Z",
+      issued_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T12:14:00.000Z",
+    };
+    const standardAuthorization = {
+      mode: "standard",
+      action: "production-deploy",
+      actor: "release-operator",
+      release_sha: sha,
+      workflow_run_id: "70",
+      workflow_run_attempt: "1",
+    };
+    const breakGlassAuthorization = {
+      mode: "break_glass",
+      action: "production-deploy",
+      actor: "krenios",
+      release_sha: sha,
+      incident_id: "PERF-BOOTSTRAP-20260826-01",
+      reason_sha256: "1".repeat(64),
+      authorized_expires_at: "2026-07-28T14:00:00.000Z",
+      workflow_run_id: "70",
+      workflow_run_attempt: "1",
+    };
+    const expected = {
+      lease,
+      sha,
+      repository: "maiprop/maiprop-listing-site",
+      sourceTree: "b".repeat(40),
+      artifactSha256: "b".repeat(64),
+      approvalNonce: "c".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      productionRunId: "70",
+      productionRunAttempt: "3",
+      stripeReadinessRunId: "80",
+      stripeReadinessRunAttempt: "1",
+      stripeReadinessSha256: "e".repeat(64),
+      stripeReadinessArtifactId: "90",
+      stripeReadinessArtifactDigest: "f".repeat(64),
+      expectedAuthorization: standardAuthorization,
+      now: new Date("2026-07-28T12:05:00.000Z"),
+    };
+
+    expect(validateMutationLease(expected)).toEqual(lease);
+    expect(() => validateMutationLease({
+      ...expected,
+      expectedAuthorization: breakGlassAuthorization,
+    })).toThrow(/schema.*2.*standard|standard.*schema.*2/i);
+    expect(() => validateMutationLease({
+      ...expected,
+      expectedConsumption: {
+        artifact_id: "101",
+        artifact_digest: "2".repeat(64),
+        binding_artifact_id: "102",
+        payload_sha256: "3".repeat(64),
+        action: "production-deploy",
+        incident_id: "PERF-BOOTSTRAP-20260826-01",
+        release_sha: sha,
+        parent_run_id: "70",
+      },
+    })).toThrow(/schema.*2.*consumption|consumption.*schema.*2/i);
+  });
+
+  it("requires exact authorization and consumption tuples in mutation lease schema 3", () => {
+    const authorization = {
+      mode: "break_glass",
+      action: "production-deploy",
+      actor: "krenios",
+      release_sha: sha,
+      incident_id: "PERF-BOOTSTRAP-20260826-01",
+      reason_sha256: "1".repeat(64),
+      authorized_expires_at: "2026-07-28T14:00:00.000Z",
+      workflow_run_id: "70",
+      workflow_run_attempt: "1",
+    };
+    const consumption = {
+      artifact_id: "101",
+      artifact_digest: "2".repeat(64),
+      binding_artifact_id: "102",
+      payload_sha256: "3".repeat(64),
+      action: "production-deploy",
+      incident_id: "PERF-BOOTSTRAP-20260826-01",
+      release_sha: sha,
+      parent_run_id: "70",
+    };
+    const lease = {
+      schema_version: 3,
+      repository: "maiprop/maiprop-listing-site",
+      release_sha: sha,
+      source_tree: "b".repeat(40),
+      artifact_sha256: "b".repeat(64),
+      approval_nonce: "c".repeat(64),
+      nonce: "d".repeat(64),
+      source_run_id: "40",
+      source_run_attempt: "2",
+      staging_run_id: "50",
+      staging_run_attempt: "1",
+      approval_run_id: "60",
+      approval_run_attempt: "1",
+      production_run_id: "70",
+      production_run_attempt: "1",
+      stripe_readiness_run_id: "80",
+      stripe_readiness_run_attempt: "1",
+      stripe_readiness_sha256: "e".repeat(64),
+      stripe_readiness_artifact_id: "90",
+      stripe_readiness_artifact_digest: "f".repeat(64),
+      stripe_readiness_checked_at: "2026-07-28T11:59:00.000Z",
+      issued_at: "2026-07-28T12:00:00.000Z",
+      expires_at: "2026-07-28T12:14:00.000Z",
+      authorization,
+      consumption,
+    };
+    const expected = {
+      lease,
+      sha,
+      repository: "maiprop/maiprop-listing-site",
+      sourceTree: "b".repeat(40),
+      artifactSha256: "b".repeat(64),
+      approvalNonce: "c".repeat(64),
+      sourceRunId: "40",
+      sourceRunAttempt: "2",
+      stagingRunId: "50",
+      stagingRunAttempt: "1",
+      approvalRunId: "60",
+      approvalRunAttempt: "1",
+      productionRunId: "70",
+      productionRunAttempt: "1",
+      stripeReadinessRunId: "80",
+      stripeReadinessRunAttempt: "1",
+      stripeReadinessSha256: "e".repeat(64),
+      stripeReadinessArtifactId: "90",
+      stripeReadinessArtifactDigest: "f".repeat(64),
+      expectedAuthorization: authorization,
+      expectedConsumption: consumption,
+      now: new Date("2026-07-28T12:05:00.000Z"),
+    };
+
+    expect(validateMutationLease(expected)).toEqual(lease);
+    for (const [field, value] of [
+      ["artifact_id", "103"],
+      ["artifact_digest", "4".repeat(64)],
+      ["binding_artifact_id", "104"],
+      ["payload_sha256", "5".repeat(64)],
+      ["action", "pages-production"],
+      ["parent_run_id", "71"],
+    ]) {
+      expect(
+        () => validateMutationLease({
+          ...expected,
+          lease: {
+            ...lease,
+            consumption: { ...consumption, [field]: value },
+          },
+        }),
+        field,
+      ).toThrow(/consumption/i);
+    }
+    expect(() => validateMutationLease({
+      ...expected,
+      lease: {
+        ...lease,
+        authorization: {
+          ...authorization,
+          reason_sha256: "6".repeat(64),
+        },
+      },
+    })).toThrow(/authorization/i);
+    expect(() => validateMutationLease({
+      ...expected,
+      lease: {
+        ...lease,
+        consumption: { ...consumption, unexpected: true },
+      },
+    })).toThrow(/consumption/i);
+  });
+
   it("binds production database and Edge attestations to one exact release tuple", () => {
     const tuple = {
       repository: "maiprop/maiprop-listing-site",
@@ -1762,9 +2272,56 @@ describe("production release validation", () => {
   it("exposes approval and mutation-lease validation through the CLI", () => {
     const directory = mkdtempSync(resolve(tmpdir(), "maiprop-release-"));
     const approvalPath = resolve(directory, "approval.json");
+    const approvalAuthorizationPath = resolve(
+      directory,
+      "approval-authorization.json",
+    );
     const leasePath = resolve(directory, "lease.json");
+    const deployAuthorizationPath = resolve(
+      directory,
+      "deploy-authorization.json",
+    );
+    const consumptionPath = resolve(directory, "consumption.json");
+    const approvalAuthorization = {
+      mode: "break_glass",
+      action: "production-approval",
+      actor: "krenios",
+      release_sha: sha,
+      incident_id: "PERF-BOOTSTRAP-20260826-01",
+      reason_sha256: "1".repeat(64),
+      authorized_expires_at: "2026-07-28T13:00:00.000Z",
+      workflow_run_id: "60",
+      workflow_run_attempt: "1",
+    };
+    const deployAuthorization = {
+      mode: "break_glass",
+      action: "production-deploy",
+      actor: "krenios",
+      release_sha: sha,
+      incident_id: "PERF-BOOTSTRAP-20260826-01",
+      reason_sha256: "1".repeat(64),
+      authorized_expires_at: "2026-07-28T14:00:00.000Z",
+      workflow_run_id: "70",
+      workflow_run_attempt: "1",
+    };
+    const consumption = {
+      artifact_id: "101",
+      artifact_digest: "2".repeat(64),
+      binding_artifact_id: "102",
+      payload_sha256: "3".repeat(64),
+      action: "production-deploy",
+      incident_id: "PERF-BOOTSTRAP-20260826-01",
+      release_sha: sha,
+      parent_run_id: "70",
+    };
+    writeFileSync(
+      approvalAuthorizationPath,
+      JSON.stringify(approvalAuthorization),
+    );
+    writeFileSync(deployAuthorizationPath, JSON.stringify(deployAuthorization));
+    writeFileSync(consumptionPath, JSON.stringify(consumption));
     writeFileSync(approvalPath, JSON.stringify({
-      schema_version: 1,
+      schema_version: 2,
       repository: "maiprop/maiprop-listing-site",
       release_sha: sha,
       source_tree: "b".repeat(40),
@@ -1774,15 +2331,16 @@ describe("production release validation", () => {
       staging_run_id: "50",
       staging_run_attempt: "1",
       approval_run_id: "60",
-      approval_run_attempt: "3",
-      approver: "release-reviewer",
+      approval_run_attempt: "1",
+      approver: "krenios",
       nonce: "c".repeat(64),
       approved_at: "2026-07-28T12:00:00.000Z",
-      expires_at: "2026-07-28T13:00:00.000Z",
+      expires_at: "2026-07-28T14:00:00.000Z",
       revoked: false,
+      authorization: approvalAuthorization,
     }));
     writeFileSync(leasePath, JSON.stringify({
-      schema_version: 2,
+      schema_version: 3,
       repository: "maiprop/maiprop-listing-site",
       release_sha: sha,
       source_tree: "b".repeat(40),
@@ -1796,7 +2354,7 @@ describe("production release validation", () => {
       approval_run_id: "60",
       approval_run_attempt: "1",
       production_run_id: "70",
-      production_run_attempt: "3",
+      production_run_attempt: "1",
       stripe_readiness_run_id: "80",
       stripe_readiness_run_attempt: "1",
       stripe_readiness_sha256: "e".repeat(64),
@@ -1805,6 +2363,8 @@ describe("production release validation", () => {
       stripe_readiness_checked_at: "2026-07-28T11:59:00.000Z",
       issued_at: "2026-07-28T12:00:00.000Z",
       expires_at: "2026-07-28T12:14:00.000Z",
+      authorization: deployAuthorization,
+      consumption,
     }));
 
     try {
@@ -1832,16 +2392,57 @@ describe("production release validation", () => {
         "--approval-run-id",
         "60",
         "--approval-run-attempt",
-        "3",
+        "1",
         "--deploy-actor",
-        "release-operator",
+        "krenios",
         "--allowed-approvers",
         "release-reviewer,backup-reviewer",
+        "--authorization-file",
+        approvalAuthorizationPath,
         "--now",
         "2026-07-28T12:30:00.000Z",
       ], { cwd: root, encoding: "utf8" });
       expect(approvalResult.status, approvalResult.stderr).toBe(0);
       expect(approvalResult.stdout).toContain("Verified release approval");
+
+      const looseAuthorizationResult = spawnSync(process.execPath, [
+        "scripts/production-release-validation.mjs",
+        "release-approval",
+        "--file",
+        approvalPath,
+        "--sha",
+        sha,
+        "--repository",
+        "maiprop/maiprop-listing-site",
+        "--source-tree",
+        "b".repeat(40),
+        "--source-run-id",
+        "40",
+        "--source-run-attempt",
+        "2",
+        "--artifact-sha256",
+        "a".repeat(64),
+        "--staging-run-id",
+        "50",
+        "--staging-run-attempt",
+        "1",
+        "--approval-run-id",
+        "60",
+        "--approval-run-attempt",
+        "1",
+        "--deploy-actor",
+        "krenios",
+        "--allowed-approvers",
+        "release-reviewer,backup-reviewer",
+        "--authorization-mode",
+        "break_glass",
+        "--authorization-actor",
+        "krenios",
+        "--now",
+        "2026-07-28T12:30:00.000Z",
+      ], { cwd: root, encoding: "utf8" });
+      expect(looseAuthorizationResult.status).not.toBe(0);
+      expect(looseAuthorizationResult.stderr).toMatch(/authorization/i);
 
       const leaseResult = spawnSync(process.execPath, [
         "scripts/production-release-validation.mjs",
@@ -1873,7 +2474,7 @@ describe("production release validation", () => {
         "--production-run-id",
         "70",
         "--production-run-attempt",
-        "3",
+        "1",
         "--stripe-readiness-run-id",
         "80",
         "--stripe-readiness-run-attempt",
@@ -1884,6 +2485,10 @@ describe("production release validation", () => {
         "90",
         "--stripe-readiness-artifact-digest",
         "f".repeat(64),
+        "--authorization-file",
+        deployAuthorizationPath,
+        "--consumption-file",
+        consumptionPath,
         "--now",
         "2026-07-28T12:05:00.000Z",
       ], { cwd: root, encoding: "utf8" });
