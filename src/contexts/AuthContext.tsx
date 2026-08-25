@@ -14,7 +14,6 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { logger } from "@/lib/logger";
 import { APP_ORIGIN } from "@/lib/config";
-import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { validatePassword } from "@/lib/passwordPolicy";
 import { recordUserAuthActivity, type AuthActivityEventType } from "@/lib/authActivity";
 import {
@@ -27,57 +26,36 @@ import {
   transitionQueryAuthorization,
   transitionQueryIdentity,
 } from "@/lib/identityQueryBoundary";
+import {
+  authSessionIdentityFor,
+  buildAuthorizationFingerprint,
+  checkoutSessionIdForReconciliation,
+  deferredAuthSessionFor,
+  emptySubscriptionState,
+  isDefinitelyDifferentAuthSession,
+  isCheckoutSessionId,
+  isKnownSameAuthSession,
+  profileNeedsOnboarding,
+  unavailableSubscriptionState,
+  withSubscriptionDeadline,
+} from "./authContextSupport";
+import type {
+  AuthSessionIdentity,
+  InFlightProfileFetch,
+  PendingAuthSignOut,
+  Profile,
+  ProfileFetchMode,
+  SubscriptionState,
+} from "./authContextSupport";
 
-export type Profile = Tables<"profiles">;
-
-type AuthorizationMembership = Pick<
-  Tables<"organization_memberships">,
-  "organization_id" | "role" | "status"
->;
-
-export const buildAuthorizationFingerprint = (
-  profile: Profile | null,
-  memberships: readonly AuthorizationMembership[],
-) => JSON.stringify({
-  profile: profile
-    ? {
-        role: profile.role,
-        participantType: profile.participant_type,
-        platformAdmin: profile.is_platform_admin,
-        investorMode: profile.investor_mode,
-        forcedPro: profile.force_pro_access,
-        subscriptionProductId: profile.subscription_product_id,
-        roleSwitchInProgress: Boolean(profile.role_switch_in_progress_at),
-        accountStatus: profile.account_status,
-      }
-    : null,
-  memberships: [...memberships]
-    .map(({ organization_id, role, status }) => ({
-      organizationId: organization_id,
-      role,
-      status,
-    }))
-    .sort((left, right) => (
-      left.organizationId.localeCompare(right.organizationId) ||
-      left.role.localeCompare(right.role) ||
-      left.status.localeCompare(right.status)
-    )),
-});
-
-export interface SubscriptionState {
-  subscribed: boolean;
-  productId: string | null;
-  planKey?: string | null;
-  audience?: string | null;
-  billingCycle?: string | null;
-  subscriptionEnd: string | null;
-  billingStatus?: string | null;
-  source: "billing_state" | "investor" | "database" | "stripe";
-  syncStatus: "synced" | "pending" | "timeout";
-  /** Temporary fail-soft window after a transport/deadline failure. */
-  staleUntil?: number | null;
-  loading: boolean;
-}
+export {
+  buildAuthorizationFingerprint,
+  profileNeedsOnboarding,
+  profileRoleSwitchInProgress,
+  sessionIdFromAccessToken,
+  unavailableSubscriptionState,
+} from "./authContextSupport";
+export type { Profile, SubscriptionState } from "./authContextSupport";
 
 interface AuthContextType {
   session: Session | null;
@@ -111,109 +89,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const CHECKOUT_SESSION_ID_RE = /^cs_(?:test|live)_[A-Za-z0-9_]{6,240}$/;
-const SUBSCRIPTION_CHECK_TIMEOUT_MS = 6_500;
-const SUBSCRIPTION_STALE_GRACE_MS = 30_000;
 const SUBSCRIPTION_RETRY_DELAYS_MS = [10_000, 15_000] as const;
-
-const emptySubscriptionState = (): SubscriptionState => ({
-  subscribed: false,
-  productId: null,
-  planKey: null,
-  audience: null,
-  billingCycle: null,
-  subscriptionEnd: null,
-  billingStatus: null,
-  source: "database",
-  syncStatus: "synced",
-  loading: false,
-});
-
-export const unavailableSubscriptionState = (
-  previous: SubscriptionState,
-  now = Date.now(),
-): SubscriptionState => {
-  const parsedEnd = previous.subscriptionEnd
-    ? Date.parse(previous.subscriptionEnd)
-    : null;
-  const entitlementExpired = parsedEnd !== null &&
-    (!Number.isFinite(parsedEnd) || parsedEnd <= now);
-
-  if (!previous.subscribed || entitlementExpired) {
-    return {
-      ...emptySubscriptionState(),
-      syncStatus: "timeout",
-    };
-  }
-
-  const existingBoundary = previous.syncStatus === "timeout" &&
-      typeof previous.staleUntil === "number"
-    ? previous.staleUntil
-    : null;
-  const staleUntil = existingBoundary ?? now + SUBSCRIPTION_STALE_GRACE_MS;
-  if (staleUntil <= now) {
-    return {
-      ...emptySubscriptionState(),
-      syncStatus: "timeout",
-    };
-  }
-
-  return {
-    ...previous,
-    syncStatus: "timeout",
-    staleUntil,
-    loading: false,
-  };
-};
-
-const withSubscriptionDeadline = async <T,>(promise: Promise<T>): Promise<T> => {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(new Error("Subscription check timed out")),
-          SUBSCRIPTION_CHECK_TIMEOUT_MS,
-        );
-      }),
-    ]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-};
-
-const checkoutSessionIdForReconciliation = (): string | null => {
-  if (typeof window === "undefined") return null;
-  const params = new URLSearchParams(window.location.search);
-  const checkoutSucceeded = params.get("checkout") === "success" ||
-    params.get("checkout") === "trial_started" ||
-    params.get("pro") === "success";
-  if (!checkoutSucceeded) return null;
-
-  const sessionId = params.get("checkout_session_id") ??
-    params.get("session_id");
-  return sessionId && CHECKOUT_SESSION_ID_RE.test(sessionId) ? sessionId : null;
-};
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-export function profileRoleSwitchInProgress(
-  profile: { role_switch_in_progress_at?: string | null } | null,
-): boolean {
-  return Boolean(profile?.role_switch_in_progress_at);
-}
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-export function profileNeedsOnboarding(p: Profile | null): boolean {
-  if (!p) return false;
-  if (p.role === "admin") return false;
-  if (profileRoleSwitchInProgress(p)) return true;
-  const explicitType = getExplicitParticipantTypeFromProfile(p);
-  const roleText = p.role ? String(p.role) : null;
-  // Onboarding is complete only when both role + participant_type are explicitly set.
-  // This prevents implicit defaults from being treated as intentional role choice.
-  return !(explicitType && roleText && explicitType === roleText);
-}
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -249,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Guard: discard profile fetch results that belong to a previous user session
   const expectedUserIdRef = useRef<string | null>(null);
   const profileFetchGenerationRef = useRef(0);
+  const profileFetchInProgressRef = useRef<InFlightProfileFetch | null>(null);
   // Subscription work is scoped to one auth identity and generation. A delayed
   // response from a prior account can never update the current account.
   const expectedSubscriptionUserIdRef = useRef<string | null>(null);
@@ -265,8 +142,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     promise: Promise<void>;
   } | null>(null);
   const authEventGenerationRef = useRef(0);
+  // This is intentionally independent from profile fetch generations. A profile
+  // refresh must not make an already-started logout lose authority over the
+  // current auth session.
+  const authSessionEpochRef = useRef(0);
+  const authSessionIdentityRef = useRef<AuthSessionIdentity | null>(null);
+  const pendingAuthSignOutRef = useRef<PendingAuthSignOut | null>(null);
+  const authMutationTailRef = useRef<Promise<void>>(Promise.resolve());
   // Guard: avoid duplicate auth telemetry from INITIAL_SESSION + getSession races.
   const lastAuthActivityRef = useRef<{ key: string; at: number } | null>(null);
+
+  const adoptAuthSessionIdentity = useCallback((currentSession: Session | null) => {
+    const nextIdentity = authSessionIdentityFor(currentSession);
+    const previousIdentity = authSessionIdentityRef.current;
+    if (!nextIdentity) {
+      if (previousIdentity) authSessionEpochRef.current += 1;
+      authSessionIdentityRef.current = null;
+      return;
+    }
+
+    // A malformed same-user event cannot prove a new session. Retaining the
+    // last known ID lets a later well-formed event still prove a real boundary.
+    if (
+      previousIdentity?.userId === nextIdentity.userId &&
+      previousIdentity.sessionId !== null &&
+      nextIdentity.sessionId === null
+    ) return;
+
+    if (!previousIdentity || isDefinitelyDifferentAuthSession(previousIdentity, nextIdentity)) {
+      authSessionEpochRef.current += 1;
+    }
+    authSessionIdentityRef.current = nextIdentity;
+  }, []);
+
+  const enqueueAuthMutation = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const result = authMutationTailRef.current.then(operation, operation);
+    authMutationTailRef.current = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }, []);
+
+  const didAuthSessionChangeSince = useCallback((
+    target: AuthSessionIdentity | null,
+    epoch: number,
+  ) => {
+    if (authSessionEpochRef.current === epoch) return false;
+    const current = authSessionIdentityRef.current;
+    if (target === null || current === null) return target !== current;
+    return isDefinitelyDifferentAuthSession(target, current);
+  }, []);
+
+  const shouldSuppressAuthStateChange = useCallback((
+    event: string,
+    currentSession: Session | null,
+  ) => {
+    const pending = pendingAuthSignOutRef.current;
+    if (!pending || event === "SIGNED_OUT" || !currentSession) return false;
+
+    const incoming = deferredAuthSessionFor(currentSession);
+    if (pending.phase === "signing_out") {
+      if (isKnownSameAuthSession(pending.target, incoming?.identity ?? null)) return true;
+      if (
+        incoming &&
+        (!pending.target || isDefinitelyDifferentAuthSession(pending.target, incoming.identity))
+      ) {
+        pending.deferred = incoming;
+      }
+      return true;
+    }
+
+    if (!incoming) return true;
+    const isMatchingRestoreEvent =
+      (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") &&
+      pending.restoringSessionId === incoming.identity.sessionId &&
+      pending.restoringUserId === incoming.identity.userId;
+    if (isMatchingRestoreEvent) return false;
+    const restoring = pending.deferred;
+    if (!restoring) return true;
+    if (isDefinitelyDifferentAuthSession(restoring.identity, incoming.identity)) {
+      pending.deferred = incoming;
+    }
+    return true;
+  }, []);
 
   const cancelSubscriptionRetry = useCallback((resetAttempts = false) => {
     if (subscriptionRetryTimerRef.current) {
@@ -295,43 +254,100 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, delay);
   }, []);
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    expectedUserIdRef.current = userId;
-    const fetchGeneration = ++profileFetchGenerationRef.current;
-    setProfileLoading(true);
-    const [profileResult, membershipResult] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", userId)
-        .single(),
-      supabase
-        .from("organization_memberships")
-        .select("organization_id, role, status")
-        .eq("user_id", userId)
-        .eq("status", "active"),
-    ]);
-    // Discard stale result if the auth user changed before this resolved
+  const fetchProfile = useCallback((
+    userId: string,
+    mode: ProfileFetchMode = "replace",
+  ): Promise<Profile | null> => {
+    const existingFetch = profileFetchInProgressRef.current;
+    const currentGeneration = profileFetchGenerationRef.current;
     if (
-      expectedUserIdRef.current !== userId ||
-      profileFetchGenerationRef.current !== fetchGeneration
-    ) return null;
-    const nextProfile: Profile | null = profileResult.data;
-    const memberships = membershipResult.data ?? [];
-    if (profileResult.error) {
-      logger.warn("Profile fetch failed:", profileResult.error);
+      mode === "coalesce" &&
+      existingFetch?.userId === userId &&
+      existingFetch.generation === currentGeneration &&
+      expectedUserIdRef.current === userId
+    ) {
+      return existingFetch.promise;
     }
-    if (membershipResult.error) {
-      logger.warn("Organization membership fetch failed:", membershipResult.error);
+
+    if (mode === "replace" || expectedUserIdRef.current !== userId) {
+      expectedUserIdRef.current = userId;
+      profileFetchGenerationRef.current += 1;
     }
-    transitionQueryAuthorization(
-      appQueryClient,
+    const fetchGeneration = profileFetchGenerationRef.current;
+    setProfileLoading(true);
+
+    const inFlight: InFlightProfileFetch = {
       userId,
-      buildAuthorizationFingerprint(nextProfile, memberships),
-    );
-    setProfile(nextProfile);
-    setProfileLoading(false);
-    return profileResult.data;
+      generation: fetchGeneration,
+      promise: null as unknown as Promise<Profile | null>,
+    };
+    const fetchAttempt = (() => {
+      try {
+        const profileQuery = supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", userId)
+          .single();
+        const membershipQuery = supabase
+          .from("organization_memberships")
+          .select("organization_id, role, status")
+          .eq("user_id", userId)
+          .eq("status", "active");
+        return {
+          installSlot: true,
+          promise: Promise.all([profileQuery, membershipQuery]).then(([
+            profileResult,
+            membershipResult,
+          ]) => {
+            // Discard stale result if the auth user or fetch generation changed.
+            if (
+              expectedUserIdRef.current !== userId ||
+              profileFetchGenerationRef.current !== fetchGeneration
+            ) return null;
+            const nextProfile: Profile | null = profileResult.data;
+            const memberships = membershipResult.data ?? [];
+            if (profileResult.error) {
+              logger.warn("Profile fetch failed:", profileResult.error);
+            }
+            if (membershipResult.error) {
+              logger.warn("Organization membership fetch failed:", membershipResult.error);
+            }
+            transitionQueryAuthorization(
+              appQueryClient,
+              userId,
+              buildAuthorizationFingerprint(nextProfile, memberships),
+            );
+            setProfile(nextProfile);
+            return profileResult.data;
+          }).finally(() => {
+            if (profileFetchInProgressRef.current === inFlight) {
+              profileFetchInProgressRef.current = null;
+            }
+            if (
+              expectedUserIdRef.current === userId &&
+              profileFetchGenerationRef.current === fetchGeneration
+            ) {
+              setProfileLoading(false);
+            }
+          }),
+        };
+      } catch (err) {
+        if (
+          expectedUserIdRef.current === userId &&
+          profileFetchGenerationRef.current === fetchGeneration
+        ) {
+          setProfileLoading(false);
+        }
+        return {
+          installSlot: false,
+          promise: Promise.reject<Profile | null>(err),
+        };
+      }
+    })();
+    if (!fetchAttempt.installSlot) return fetchAttempt.promise;
+    inFlight.promise = fetchAttempt.promise;
+    profileFetchInProgressRef.current = inFlight;
+    return inFlight.promise;
   }, []);
 
   const adoptSubscriptionUser = useCallback((userId: string | null) => {
@@ -514,7 +530,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription: authSub },
     } = supabase.auth.onAuthStateChange((_event, sess) => {
+      if (shouldSuppressAuthStateChange(_event, sess)) return;
       authEventGenerationRef.current += 1;
+      adoptAuthSessionIdentity(sess);
       transitionQueryIdentity(appQueryClient, sess?.user.id ?? null);
       setSession(sess);
       setUser(sess?.user ?? null);
@@ -525,9 +543,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Unblock UI immediately — profile arrives shortly after
         setLoading(false);
         // Non-blocking: profile and subscription load in background
-        fetchProfile(sess.user.id).catch((err) => {
+        const profileFetchMode: ProfileFetchMode = _event === "INITIAL_SESSION"
+          ? "coalesce"
+          : "replace";
+        fetchProfile(sess.user.id, profileFetchMode).catch((err) => {
           logger.warn("Profile fetch failed:", err);
-          setProfileLoading(false);
         });
         // setTimeout(0) avoids a Supabase deadlock when invoking functions
         // inside onAuthStateChange; the dedup ref prevents concurrent calls.
@@ -538,6 +558,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } else {
         // Clear all user-scoped state on sign-out
+        profileFetchGenerationRef.current += 1;
+        profileFetchInProgressRef.current = null;
         expectedUserIdRef.current = null;
         adoptSubscriptionUser(null);
         setProfile(null);
@@ -555,6 +577,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .getSession()
       .then(({ data: { session: sess } }) => {
         if (authEventGenerationRef.current !== restoreAuthGeneration) return;
+        if (shouldSuppressAuthStateChange("get_session_restore", sess)) return;
+        adoptAuthSessionIdentity(sess);
         if (!sess) {
           transitionQueryIdentity(appQueryClient, null);
           // No session — stop loading, let login page show
@@ -569,9 +593,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (userChanged) setProfile(null);
         setLoading(false);
 
-        fetchProfile(sess.user.id).catch((err) => {
+        fetchProfile(sess.user.id, "coalesce").catch((err) => {
           logger.warn("Profile fetch failed during session restore:", err);
-          setProfileLoading(false);
         });
         checkSubscription(
           sess,
@@ -610,7 +633,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       authEventGenerationRef.current += 1;
+      authSessionEpochRef.current += 1;
+      authSessionIdentityRef.current = null;
+      const pendingAuthSignOut = pendingAuthSignOutRef.current;
+      if (pendingAuthSignOut) {
+        pendingAuthSignOut.deferred = null;
+        pendingAuthSignOut.restoringSessionId = null;
+        pendingAuthSignOut.restoringUserId = null;
+      }
+      pendingAuthSignOutRef.current = null;
       profileFetchGenerationRef.current += 1;
+      profileFetchInProgressRef.current = null;
       expectedUserIdRef.current = null;
       clearTimeout(safetyTimer);
       cancelSubscriptionRetry(true);
@@ -623,7 +656,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     eventToAuthActivity,
     recordAuthActivity,
     adoptSubscriptionUser,
+    adoptAuthSessionIdentity,
     cancelSubscriptionRetry,
+    shouldSuppressAuthStateChange,
   ]);
 
   useEffect(() => {
@@ -631,12 +666,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!userId) return;
 
     const refreshAuthorization = () => {
-      void fetchProfile(userId).catch((err: unknown) => {
+      void fetchProfile(userId, "replace").catch((err: unknown) => {
         logger.warn(
           "Authorization context refresh failed:",
           err instanceof Error ? err.message : err,
         );
-        setProfileLoading(false);
       });
     };
     const channel = supabase
@@ -688,54 +722,114 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: meta.full_name },
-          emailRedirectTo: `${APP_ORIGIN}/onboarding`,
-        },
+      return enqueueAuthMutation(async () => {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: meta.full_name },
+            emailRedirectTo: `${APP_ORIGIN}/onboarding`,
+          },
+        });
+        const profileUpdates = {
+          ...(meta.phone ? { phone: meta.phone } : {}),
+        };
+        if (data.user && !error && Object.keys(profileUpdates).length > 0) {
+          const payload = parseMutationInput(
+            signUpProfileUpdateMutationSchema,
+            { userId: data.user.id, updates: profileUpdates },
+            "signup profile update",
+          );
+          await supabase
+            .from("profiles")
+            .update(payload.updates)
+            .eq("user_id", payload.userId);
+        }
+        // needsEmailConfirm = signup succeeded but no session yet (email confirmation required)
+        const needsEmailConfirm = !error && !!data.user && !data.session;
+        return { error: error as Error | null, needsEmailConfirm };
       });
-      const profileUpdates = {
-        ...(meta.phone ? { phone: meta.phone } : {}),
-      };
-      if (data.user && !error && Object.keys(profileUpdates).length > 0) {
-        const payload = parseMutationInput(
-          signUpProfileUpdateMutationSchema,
-          { userId: data.user.id, updates: profileUpdates },
-          "signup profile update",
-        );
-        await supabase
-          .from("profiles")
-          .update(payload.updates)
-          .eq("user_id", payload.userId);
-      }
-      // needsEmailConfirm = signup succeeded but no session yet (email confirmation required)
-      const needsEmailConfirm = !error && !!data.user && !data.session;
-      return { error: error as Error | null, needsEmailConfirm };
     },
-    [],
+    [enqueueAuthMutation],
   );
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+  const signIn = useCallback((email: string, password: string) => {
+    return enqueueAuthMutation(async () => {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      return { error: error as Error | null };
     });
-    return { error: error as Error | null };
-  }, []);
+  }, [enqueueAuthMutation]);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(() => {
+    const signOutTarget = authSessionIdentityRef.current;
+    const signOutSessionEpoch = authSessionEpochRef.current;
     transitionQueryIdentity(appQueryClient, null);
+    profileFetchGenerationRef.current += 1;
+    profileFetchInProgressRef.current = null;
     expectedUserIdRef.current = null;
     adoptSubscriptionUser(null);
-    await recordUserAuthActivity({
-      eventType: "sign_out",
-      metadata: { source: "sign_out" },
-    });
-    await supabase.auth.signOut();
     setProfile(null);
-  }, [adoptSubscriptionUser]);
+    setProfileLoading(false);
+    try {
+      void Promise.resolve(recordUserAuthActivity({
+        eventType: "sign_out",
+        metadata: { source: "sign_out" },
+      })).catch(() => {
+        logger.warn("Sign-out activity recording failed");
+      });
+    } catch {
+      logger.warn("Sign-out activity recording failed");
+    }
+
+    return enqueueAuthMutation(async () => {
+      if (didAuthSessionChangeSince(signOutTarget, signOutSessionEpoch)) return;
+
+      const pending: PendingAuthSignOut = {
+        target: signOutTarget,
+        phase: "signing_out",
+        deferred: null,
+        restoringSessionId: null,
+        restoringUserId: null,
+      };
+      pendingAuthSignOutRef.current = pending;
+      try {
+        await supabase.auth.signOut();
+        while (pendingAuthSignOutRef.current === pending && pending.deferred) {
+          const candidate = pending.deferred;
+          pending.phase = "restoring";
+          pending.restoringSessionId = candidate.identity.sessionId;
+          pending.restoringUserId = candidate.identity.userId;
+          try {
+            const { error } = await supabase.auth.setSession({
+              access_token: candidate.session.access_token,
+              refresh_token: candidate.session.refresh_token,
+            });
+            if (error) logger.warn("Auth session restoration failed");
+          } catch {
+            logger.warn("Auth session restoration failed");
+          } finally {
+            pending.restoringSessionId = null;
+            pending.restoringUserId = null;
+            if (pending.deferred === candidate) pending.deferred = null;
+          }
+        }
+      } finally {
+        if (pendingAuthSignOutRef.current === pending) {
+          pending.deferred = null;
+          pending.restoringSessionId = null;
+          pending.restoringUserId = null;
+          pendingAuthSignOutRef.current = null;
+        }
+      }
+    });
+  }, [
+    adoptSubscriptionUser,
+    didAuthSessionChangeSince,
+    enqueueAuthMutation,
+  ]);
 
   const updateProfile = useCallback(
     async (updates: Partial<Profile>) => {
@@ -776,14 +870,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from("profiles")
         .update(payload.updates)
         .eq("user_id", payload.userId);
-      if (!error) await fetchProfile(user.id);
+      if (!error) await fetchProfile(user.id, "replace");
       return { error: error as Error | null };
     },
     [user, fetchProfile],
   );
 
   const refreshProfile = useCallback(async () => {
-    if (user) await fetchProfile(user.id);
+    if (user) await fetchProfile(user.id, "replace");
   }, [user, fetchProfile]);
 
   const refreshSubscription = useCallback(async (requestedSessionId?: string | null) => {
@@ -791,7 +885,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const expectedGeneration = subscriptionGenerationRef.current;
     const checkoutSessionId = requestedSessionId === undefined
       ? checkoutSessionIdForReconciliation()
-      : requestedSessionId && CHECKOUT_SESSION_ID_RE.test(requestedSessionId)
+      : isCheckoutSessionId(requestedSessionId)
         ? requestedSessionId
         : null;
     const {

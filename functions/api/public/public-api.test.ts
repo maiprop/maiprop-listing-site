@@ -873,6 +873,7 @@ describe("public API cache helpers", () => {
       expect(settledBeforeClientDeadline).toBe(true);
       expect(response.status).toBe(503);
       expect(response.headers.get("Cache-Control")).toBe("no-store");
+      await vi.advanceTimersByTimeAsync(10_000);
     } finally {
       vi.useRealTimers();
     }
@@ -966,6 +967,225 @@ describe("public API cache helpers", () => {
     } finally {
       releaseProducer();
       await pending.catch(() => null);
+    }
+  });
+
+  it("seeds the edge cache when a late producer succeeds", async () => {
+    const url = new URL("https://portal.maiprop.co/api/public/open-houses?late-producer=success");
+    const backgroundTasks: Promise<unknown>[] = [];
+    let resolveProducer!: (response: Response) => void;
+    const producerGate = new Promise<Response>((resolve) => {
+      resolveProducer = resolve;
+    });
+
+    const timedOut = await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => backgroundTasks.push(promise) }),
+      url,
+      () => producerGate,
+      { producerTimeoutMs: 5 },
+    );
+
+    expect(timedOut.status).toBe(503);
+    expect(cacheStore).toHaveLength(0);
+
+    resolveProducer(jsonResponse({ source: "late producer" }));
+    await Promise.all(backgroundTasks);
+
+    expect(cacheStore.has(url.toString())).toBe(true);
+    expect(cacheStore.has(`${url.toString()}&__maiprop_stale=1`)).toBe(true);
+
+    const secondProducer = vi.fn(async () => jsonResponse({ source: "second producer" }));
+    const cached = await cachedJson(makeCtx(url.toString()), url, secondProducer);
+
+    expect(cached.headers.get("X-Maiprop-Cache")).toBe("HIT");
+    await expect(cached.json()).resolves.toEqual({ source: "late producer" });
+    expect(secondProducer).not.toHaveBeenCalled();
+  });
+
+  it("keeps a stale refresh alive until its cache seed settles", async () => {
+    const url = new URL("https://portal.maiprop.co/api/public/open-houses?stale-refresh-seed=1");
+    const cacheOptions = { staleFallbackSeconds: 600 };
+    const initialTasks: Promise<unknown>[] = [];
+    await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => initialTasks.push(promise) }),
+      url,
+      async () => jsonResponse({ version: 1 }),
+      cacheOptions,
+    );
+    await Promise.all(initialTasks);
+    cacheStore.delete(url.toString());
+
+    let releaseProducer!: (response: Response) => void;
+    const producerGate = new Promise<Response>((resolve) => {
+      releaseProducer = resolve;
+    });
+    let releasePut!: () => void;
+    const putGate = new Promise<void>((resolve) => {
+      releasePut = resolve;
+    });
+    cacheApi.put.mockImplementation(async (request: Request, response: Response) => {
+      await putGate;
+      cacheStore.set(request.url, response.clone());
+    });
+    const refreshTasks: Promise<unknown>[] = [];
+
+    const stale = await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => refreshTasks.push(promise) }),
+      url,
+      () => producerGate,
+      cacheOptions,
+    );
+    expect(stale.headers.get("X-Maiprop-Cache")).toBe("STALE");
+
+    releaseProducer(jsonResponse({ version: 2 }));
+    const refreshSettledBeforeSeed = await Promise.race([
+      Promise.all(refreshTasks).then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 20)),
+    ]);
+
+    expect(refreshSettledBeforeSeed).toBe(false);
+    releasePut();
+    await Promise.all(refreshTasks);
+    await expect(cacheStore.get(url.toString())?.json()).resolves.toEqual({ version: 2 });
+  });
+
+  it("keeps a stale refresh coalesced until the creator's late seed settles", async () => {
+    const url = new URL("https://portal.maiprop.co/api/public/open-houses?stale-refresh-joiner=1");
+    const cacheOptions = { producerTimeoutMs: 5, staleFallbackSeconds: 600 };
+    const initialTasks: Promise<unknown>[] = [];
+    await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => initialTasks.push(promise) }),
+      url,
+      async () => jsonResponse({ version: 1 }),
+      cacheOptions,
+    );
+    await Promise.all(initialTasks);
+    cacheStore.delete(url.toString());
+
+    let resolveCreator!: (response: Response) => void;
+    const creatorGate = new Promise<Response>((resolve) => {
+      resolveCreator = resolve;
+    });
+    let releasePut!: () => void;
+    const putGate = new Promise<void>((resolve) => {
+      releasePut = resolve;
+    });
+    let markPutStarted!: () => void;
+    const putStarted = new Promise<void>((resolve) => {
+      markPutStarted = resolve;
+    });
+    cacheApi.put.mockImplementation(async (request: Request, response: Response) => {
+      markPutStarted();
+      await putGate;
+      cacheStore.set(request.url, response.clone());
+    });
+    const creatorTasks: Promise<unknown>[] = [];
+
+    const creator = await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => creatorTasks.push(promise) }),
+      url,
+      () => creatorGate,
+      cacheOptions,
+    );
+    expect(creator.headers.get("X-Maiprop-Cache")).toBe("STALE");
+
+    const joiner = await cachedJson(makeCtx(url.toString()), url, async () => jsonResponse({ version: 3 }), cacheOptions);
+    expect(joiner.headers.get("X-Maiprop-Cache")).toBe("STALE");
+
+    resolveCreator(jsonResponse({ version: 2 }));
+    await putStarted;
+
+    const duplicateProducer = vi.fn(async () => jsonResponse({ version: 4 }));
+    const third = await cachedJson(makeCtx(url.toString()), url, duplicateProducer, cacheOptions);
+
+    try {
+      expect(third.headers.get("X-Maiprop-Cache")).toBe("STALE");
+      expect(duplicateProducer).not.toHaveBeenCalled();
+    } finally {
+      releasePut();
+      await Promise.all(creatorTasks);
+    }
+  });
+
+  it("preserves no-store headers for a coalesced timed-out producer", async () => {
+    const url = new URL("https://portal.maiprop.co/api/public/open-houses?coalesced-timeout=1");
+    const backgroundTasks: Promise<unknown>[] = [];
+    let resolveProducer!: (response: Response) => void;
+    const producerGate = new Promise<Response>((resolve) => {
+      resolveProducer = resolve;
+    });
+
+    const first = await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => backgroundTasks.push(promise) }),
+      url,
+      () => producerGate,
+      { producerTimeoutMs: 5 },
+    );
+    const coalesced = await cachedJson(
+      makeCtx(url.toString()),
+      url,
+      async () => jsonResponse({ source: "second producer" }),
+      { producerTimeoutMs: 5 },
+    );
+
+    try {
+      expect(first.status).toBe(503);
+      expect(coalesced.status).toBe(503);
+      expect(coalesced.headers.get("X-Maiprop-Cache")).toBe("COALESCED");
+      expect(coalesced.headers.get("Cache-Control")).toBe("no-store");
+      expect(coalesced.headers.get("CDN-Cache-Control")).toBe("no-store");
+    } finally {
+      resolveProducer(jsonResponse({ source: "late producer" }));
+      await Promise.all(backgroundTasks);
+    }
+  });
+
+  it("does not seed the edge cache for late unsuccessful producers", async () => {
+    const late503Url = new URL("https://portal.maiprop.co/api/public/open-houses?late-producer=503");
+    const late503Tasks: Promise<unknown>[] = [];
+    let resolveLate503!: (response: Response) => void;
+    const late503Producer = new Promise<Response>((resolve) => {
+      resolveLate503 = resolve;
+    });
+
+    const late503 = await cachedJson(
+      makeCtx(late503Url.toString(), { waitUntil: (promise) => late503Tasks.push(promise) }),
+      late503Url,
+      () => late503Producer,
+      { producerTimeoutMs: 5 },
+    );
+    expect(late503.status).toBe(503);
+    resolveLate503(new Response("late upstream failure", { status: 503 }));
+    await Promise.all(late503Tasks);
+    expect(cacheStore).toHaveLength(0);
+
+    const rejectedUrl = new URL("https://portal.maiprop.co/api/public/open-houses?late-producer=rejected");
+    const rejectedTasks: Promise<unknown>[] = [];
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      unhandledRejections.push(event.reason);
+    };
+    globalThis.addEventListener("unhandledrejection", onUnhandledRejection);
+    let rejectLateProducer!: (reason?: unknown) => void;
+    const rejectedProducer = new Promise<Response>((_resolve, reject) => {
+      rejectLateProducer = reject;
+    });
+
+    try {
+      const rejected = await cachedJson(
+        makeCtx(rejectedUrl.toString(), { waitUntil: (promise) => rejectedTasks.push(promise) }),
+        rejectedUrl,
+        () => rejectedProducer,
+        { producerTimeoutMs: 5 },
+      );
+      expect(rejected.status).toBe(503);
+      rejectLateProducer(new Error("late producer rejected"));
+      await Promise.all(rejectedTasks);
+      await Promise.resolve();
+      expect(cacheStore).toHaveLength(0);
+      expect(unhandledRejections).toEqual([]);
+    } finally {
+      globalThis.removeEventListener("unhandledrejection", onUnhandledRejection);
     }
   });
 

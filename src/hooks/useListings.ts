@@ -8,6 +8,7 @@ import { fetchPublicApi } from "@/lib/publicApi";
 import { getListingLocationSearchTokenGroups } from "@/lib/location/locationSearchSemantics";
 import { readInitialListingsPage } from "@/lib/homepageSnapshotCache";
 import type { NewBuildProject } from "@/lib/newBuildProjectDetail";
+import { getInitialListingsPlaceholder } from "@/hooks/listingsInitialPlaceholder";
 
 export {
   useCreateListing,
@@ -170,7 +171,7 @@ export type ListingsFilters = {
   ai_score_min?: number;
   walkability_min?: number;
   features?: string[];
-  sort?: "featured" | "newest" | "price-asc" | "price-desc" | "ai-score" | "views";
+  sort?: "relevant" | "featured" | "newest" | "price-asc" | "price-desc" | "ai-score" | "views";
 };
 
 type ListingsQueryScope = {
@@ -396,37 +397,6 @@ function shouldUsePublicListingsApi(filters?: ListingsFilters): boolean {
   return true;
 }
 
-function getDefaultCatalogueType(filters?: ListingsFilters): "sale" | "rent" | undefined {
-  if (filters?.listing_type !== "sale" && filters?.listing_type !== "rent") return undefined;
-
-  for (const [key, value] of Object.entries(filters)) {
-    if (value === undefined || value === null || value === "") continue;
-    if (Array.isArray(value) && value.length === 0) continue;
-    if (key === "listing_type") continue;
-    if (key === "sort" && value === "relevant") continue;
-    return undefined;
-  }
-
-  return filters.listing_type;
-}
-
-function getInitialListingsPlaceholder(
-  filters?: ListingsFilters,
-): { pages: ListingsPageResponse[]; pageParams: ListingsPageParam[] } | undefined {
-  const listingType = getDefaultCatalogueType(filters);
-  if (!listingType) return undefined;
-  const page = readInitialListingsPage<ListingWithJoins>(listingType);
-  if (!page || page.data.length === 0) return undefined;
-  const normalizedPage: ListingsPageResponse = {
-    ...page,
-    data: page.data.map(normalizeListingWithJoins),
-  };
-  return {
-    pages: [normalizedPage],
-    pageParams: [INITIAL_LISTINGS_PAGE_PARAM],
-  };
-}
-
 function publicListingsPath(
   filters: ListingsFilters | undefined,
   page: number,
@@ -569,7 +539,13 @@ export const useListingsPaginated = (
   filters?: ListingsFilters,
   options?: UseListingsOptions,
 ) => {
-  const placeholderData = getInitialListingsPlaceholder(filters);
+  const placeholderData = getInitialListingsPlaceholder({
+    filters,
+    initialGridPageSize: INITIAL_GRID_PAGE_SIZE,
+    initialPageParam: INITIAL_LISTINGS_PAGE_PARAM,
+    normalizeListing: normalizeListingWithJoins,
+    readInitialListingsPage,
+  });
   return useInfiniteQuery({
     queryKey: [
       "listings-paginated",

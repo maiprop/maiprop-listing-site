@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -40,6 +41,7 @@ import {
   createListingForUser,
   updateListingForUser,
 } from "@/hooks/listingManagementBoundary";
+import { invalidatePublicCatalogueQueries } from "@/lib/publicCatalogueQueryInvalidation";
 
 // Re-export the types so existing callers (`import { type ListingFormData }
 // from "@/hooks/useListingForm"`) keep working.
@@ -199,6 +201,7 @@ function listingToImages(listing: ListingWithJoins): UploadedImage[] {
 export function useListingForm(options?: UseListingFormOptions) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const isEditMode = options?.mode === "edit";
   const editListingId = options?.listingId;
@@ -651,6 +654,7 @@ export function useListingForm(options?: UseListingFormOptions) {
         if (insertImageError) throw insertImageError;
       }
 
+      void invalidatePublicCatalogueQueries(queryClient, savedListing.id);
       toast.success(isEditMode
         ? tr("createListing.validation.updated", "Listing updated successfully!")
         : asDraft
@@ -662,7 +666,7 @@ export function useListingForm(options?: UseListingFormOptions) {
     } finally {
       setSubmitting(false);
     }
-  }, [editListingId, form, images, coverImageId, initialListing, isEditMode, user, navigate, options?.allowPreSale, options?.organizationId, tr]);
+  }, [editListingId, form, images, coverImageId, initialListing, isEditMode, user, navigate, options?.allowPreSale, options?.organizationId, queryClient, tr]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 

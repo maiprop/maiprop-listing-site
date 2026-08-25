@@ -35,7 +35,12 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: null }),
 }));
 
-import { useListing, useListings, useListingsPaginated } from "@/hooks/useListings";
+import {
+  useListing,
+  useListings,
+  useListingsPaginated,
+  type ListingsFilters,
+} from "@/hooks/useListings";
 
 const wrap = (children: React.ReactNode) => {
   const qc = new QueryClient({
@@ -192,13 +197,21 @@ describe("public listings API source continuity", () => {
     publicApiMock.mockReturnValue(new Promise((resolve) => {
       resolveApi = resolve;
     }));
-    initialListingsPageMock.mockReturnValue({
-      data: [{ id: "snapshot-sale", owner_id: null, listing_images: [] }],
-      hasMore: false,
-      page: 1,
-      pageSize: 12,
-      offset: 0,
-    });
+    initialListingsPageMock.mockImplementation((listingType: string) => listingType === "sale"
+      ? {
+          data: [{ id: "snapshot-sale", owner_id: null, listing_images: [] }],
+          hasMore: false,
+          page: 1,
+          pageSize: 12,
+          offset: 0,
+        }
+      : {
+          data: [{ id: "snapshot-rent", owner_id: null, listing_images: [] }],
+          hasMore: false,
+          page: 1,
+          pageSize: 12,
+          offset: 0,
+        });
 
     const { result } = renderHookWithQuery(() => useListingsPaginated({ listing_type: "sale" }));
 
@@ -207,6 +220,8 @@ describe("public listings API source continuity", () => {
     ]);
     expect(result.current.isPlaceholderData).toBe(true);
     expect(publicApiMock).toHaveBeenCalledTimes(1);
+    expect(initialListingsPageMock).toHaveBeenCalledTimes(1);
+    expect(initialListingsPageMock).toHaveBeenCalledWith("sale");
 
     await act(async () => {
       resolveApi?.({
@@ -221,6 +236,151 @@ describe("public listings API source continuity", () => {
     expect(result.current.data?.pages[0]?.data).toEqual([
       expect.objectContaining({ id: "live-sale" }),
     ]);
+  });
+
+  it.each<ListingsFilters>([{}, { sort: "relevant" }])(
+    "paints a mixed placeholder for an otherwise-unfiltered catalogue (%o)",
+    (filters) => {
+      publicApiMock.mockReturnValue(new Promise(() => undefined));
+      initialListingsPageMock.mockImplementation((listingType: string) => {
+        const pages = {
+          sale: {
+            data: [
+              { id: "sale-new", listing_type: "sale", created_at: "2026-08-18T12:00:00.000Z", listing_images: undefined },
+              { id: "sale-mid", listing_type: "sale", created_at: "2026-08-15T12:00:00.000Z", listing_images: [] },
+              { id: "duplicate", listing_type: "sale", created_at: "2026-08-13T12:00:00.000Z", listing_images: [] },
+              { id: "tie-z", listing_type: "sale", created_at: "2026-08-12T12:00:00.000Z", listing_images: [] },
+              { id: "sale-old", listing_type: "sale", created_at: "2026-08-10T12:00:00.000Z", listing_images: [] },
+              { id: "sale-older", listing_type: "sale", created_at: "2026-08-08T12:00:00.000Z", listing_images: [] },
+              { id: "sale-trimmed", listing_type: "sale", created_at: "2026-08-06T12:00:00.000Z", listing_images: [] },
+              { id: "firesale", listing_type: "firesale", created_at: "2026-08-25T12:00:00.000Z", listing_images: [] },
+              { id: "", listing_type: "sale", created_at: "2026-08-24T12:00:00.000Z", listing_images: [] },
+            ],
+            hasMore: true,
+            nextCursor: "sale-source-cursor",
+            page: 1,
+            pageSize: 12,
+            offset: 0,
+            publicationId: 101,
+          },
+          rent: {
+            data: [
+              { id: "rent-newest", listing_type: "rent", created_at: "2026-08-20T12:00:00.000Z", listing_images: [] },
+              { id: "new-build", listing_type: "new_build", created_at: "2026-08-17T12:00:00.000Z", listing_images: [] },
+              { id: "rent-mid", listing_type: "rent", created_at: "2026-08-14T12:00:00.000Z", listing_images: [] },
+              { id: "duplicate", listing_type: "rent", created_at: "2026-08-13T12:00:00.000Z", listing_images: [] },
+              { id: "tie-a", listing_type: "rent", created_at: "2026-08-12T12:00:00.000Z", listing_images: [] },
+              { id: "rent-old", listing_type: "rent", created_at: "2026-08-09T12:00:00.000Z", listing_images: [] },
+              { id: "rent-older", listing_type: "rent", created_at: "2026-08-07T12:00:00.000Z", listing_images: [] },
+              { id: "rent-trimmed", listing_type: "rent", created_at: "2026-08-05T12:00:00.000Z", listing_images: [] },
+              { id: "unknown", listing_type: "auction", created_at: "2026-08-23T12:00:00.000Z", listing_images: [] },
+            ],
+            hasMore: true,
+            nextCursor: "rent-source-cursor",
+            page: 1,
+            pageSize: 12,
+            offset: 0,
+            publicationId: 202,
+          },
+        };
+        return pages[listingType as keyof typeof pages];
+      });
+
+      const { result } = renderHookWithQuery(() => useListingsPaginated(filters));
+
+      expect(result.current.data?.pages[0]?.data.map((listing) => listing.id)).toEqual([
+        "rent-newest",
+        "sale-new",
+        "new-build",
+        "sale-mid",
+        "rent-mid",
+        "duplicate",
+        "tie-a",
+        "tie-z",
+        "sale-old",
+        "rent-old",
+        "sale-older",
+        "rent-older",
+      ]);
+      expect(result.current.data?.pages[0]?.data[1]?.listing_images).toEqual([]);
+      expect(result.current.data?.pages[0]).toEqual(expect.objectContaining({
+        hasMore: false,
+        nextCursor: null,
+        page: 1,
+        pageSize: 12,
+        offset: 0,
+      }));
+      expect(result.current.data?.pages[0]).not.toHaveProperty("publicationId");
+      expect(result.current.isPlaceholderData).toBe(true);
+      expect(publicApiMock).toHaveBeenCalledTimes(1);
+      expect(initialListingsPageMock).toHaveBeenNthCalledWith(1, "sale");
+      expect(initialListingsPageMock).toHaveBeenNthCalledWith(2, "rent");
+    },
+  );
+
+  it.each<ListingsFilters>([
+    { city: "Athens" },
+    { property_type: "apartment" },
+    { price_min: 100_000 },
+    { features: ["has_pool"] },
+    { sort: "newest" },
+    { page: 2 },
+    { cursor: "v1.later-page" } as unknown as ListingsFilters,
+  ])("does not paint a mixed placeholder for a filtered or later catalogue request (%o)", (filters) => {
+    publicApiMock.mockReturnValue(new Promise(() => undefined));
+    initialListingsPageMock.mockReturnValue({
+      data: [{ id: "snapshot-sale", listing_type: "sale", created_at: "2026-08-20T12:00:00.000Z" }],
+      hasMore: false,
+      page: 1,
+      pageSize: 12,
+      offset: 0,
+    });
+
+    const { result } = renderHookWithQuery(() => useListingsPaginated(filters));
+
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.isPlaceholderData).toBe(false);
+    expect(result.current.data).toBeUndefined();
+    expect(initialListingsPageMock).not.toHaveBeenCalled();
+    expect(publicApiMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps loading when either mixed snapshot is expired or both mixed snapshots are empty", () => {
+    publicApiMock.mockReturnValue(new Promise(() => undefined));
+    initialListingsPageMock.mockImplementation((listingType: string) => listingType === "sale"
+      ? {
+          data: [{ id: "fresh-sale", listing_type: "sale", created_at: "2026-08-20T12:00:00.000Z" }],
+          hasMore: false,
+          page: 1,
+          pageSize: 12,
+          offset: 0,
+        }
+      : undefined);
+
+    const expired = renderHookWithQuery(() => useListingsPaginated({}));
+    expect(expired.result.current.isLoading).toBe(true);
+    expect(expired.result.current.isPlaceholderData).toBe(false);
+    expect(expired.result.current.data).toBeUndefined();
+    expect(initialListingsPageMock).toHaveBeenNthCalledWith(1, "sale");
+    expect(initialListingsPageMock).toHaveBeenNthCalledWith(2, "rent");
+    expired.unmount();
+
+    initialListingsPageMock.mockReset();
+    initialListingsPageMock.mockReturnValue({
+      data: [],
+      hasMore: false,
+      page: 1,
+      pageSize: 12,
+      offset: 0,
+    });
+
+    const empty = renderHookWithQuery(() => useListingsPaginated({}));
+    expect(empty.result.current.isLoading).toBe(true);
+    expect(empty.result.current.isPlaceholderData).toBe(false);
+    expect(empty.result.current.data).toBeUndefined();
+    expect(initialListingsPageMock).toHaveBeenNthCalledWith(1, "sale");
+    expect(initialListingsPageMock).toHaveBeenNthCalledWith(2, "rent");
+    expect(publicApiMock).toHaveBeenCalledTimes(2);
   });
 
   it("keeps loading when the embedded catalogue is empty until the live query resolves", () => {

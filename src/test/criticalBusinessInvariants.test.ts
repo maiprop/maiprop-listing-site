@@ -19,6 +19,10 @@ describe("critical business invariants", () => {
     const lifecycle = read("supabase/migrations/20260525171000_subscription_lifecycle_grace_and_lapse.sql");
     const grants = read("supabase/migrations/20260707060000_explicit_data_api_grants.sql");
     const authContext = read("src/contexts/AuthContext.tsx");
+    const authSourceSurface = [
+      authContext,
+      read("src/contexts/authContextSupport.ts"),
+    ].join("\n");
 
     expect(checkout).toContain('developer_pro: { audience: "developer", role: "developer" }');
     expect(checkout).toContain("isCheckoutAudienceAllowed");
@@ -44,7 +48,7 @@ describe("critical business invariants", () => {
     expect(lifecycle).toContain("public.apply_subscription_lapse_controls");
 
     expect(grants).toContain("authenticated must not update public.profiles.force_pro_access");
-    expect(authContext).toContain("force_pro_access");
+    expect(authSourceSurface).toContain("force_pro_access");
     expect(authContext).toContain("const ALLOWED_FIELDS");
     expect(authContext).toContain("Privileged account fields");
     expect(authContext).not.toContain('"force_pro_access",');

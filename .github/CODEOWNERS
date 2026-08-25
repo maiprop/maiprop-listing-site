@@ -28,6 +28,7 @@
 
 # Auth surface — imported by 20.7% of the codebase.
 /src/contexts/AuthContext.tsx                    @krenios
+/src/contexts/authContextSupport.ts              @krenios
 /src/lib/participantConfig.ts                    @krenios
 
 # Paywall / subscription gate.
