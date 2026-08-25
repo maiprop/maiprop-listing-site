@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import yaml from "js-yaml";
@@ -59,6 +59,87 @@ describe("production release train", () => {
     ]) {
       expect(() => yaml.load(workflow(name)), name).not.toThrow();
     }
+  });
+
+  it("keeps every ID-selected artifact flat for direct-path consumers", () => {
+    const workflowDirectory = resolve(root, ".github", "workflows");
+    const selectedArtifacts = [];
+    const offenders = [];
+
+    for (const workflowName of readdirSync(workflowDirectory)
+      .filter((name) => name.endsWith(".yml"))
+      .sort()) {
+      const parsed = yaml.load(
+        readFileSync(resolve(workflowDirectory, workflowName), "utf8"),
+      );
+      for (const [jobName, job] of Object.entries(parsed.jobs ?? {})) {
+        for (const [stepIndex, step] of (job.steps ?? []).entries()) {
+          if (
+            typeof step?.uses !== "string" ||
+            !step.uses.startsWith("actions/download-artifact@") ||
+            step.with?.["artifact-ids"] === undefined
+          ) {
+            continue;
+          }
+          const location = `${workflowName}:${jobName}:${step.name ?? `step-${stepIndex + 1}`}`;
+          selectedArtifacts.push(location);
+          if (step.with?.["merge-multiple"] !== true) {
+            offenders.push(location);
+          }
+        }
+      }
+    }
+
+    expect(selectedArtifacts.length).toBeGreaterThan(0);
+    expect(offenders).toEqual([]);
+  });
+
+  it("rejects non-singleton Stripe artifact IDs before reusable production downloads", () => {
+    const offenders = [];
+    const singletonGuard =
+      'if ! [[ "$STRIPE_READINESS_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]; then';
+
+    for (const workflowName of [
+      "deploy-edge-functions.yml",
+      "deploy-supabase-production-db.yml",
+    ]) {
+      const parsed = yaml.load(workflow(workflowName));
+      const validationSteps = [];
+
+      for (const [jobName, job] of Object.entries(parsed.jobs ?? {})) {
+        for (const [stepIndex, step] of (job.steps ?? []).entries()) {
+          if (step.name === "Validate exact production release tuple") {
+            validationSteps.push({ jobName, stepIndex, step, steps: job.steps });
+          }
+        }
+      }
+
+      expect(
+        validationSteps,
+        `${workflowName}:Validate exact production release tuple`,
+      ).toHaveLength(1);
+      const [{ jobName, stepIndex, step, steps }] = validationSteps;
+      const downloadIndexes = steps
+        .map((candidate, index) => ({ candidate, index }))
+        .filter(({ candidate }) =>
+          candidate.uses?.startsWith("actions/download-artifact@"),
+        )
+        .map(({ index }) => index);
+
+      expect(
+        downloadIndexes.length,
+        `${workflowName}:${jobName}`,
+      ).toBeGreaterThan(0);
+      expect(
+        downloadIndexes.every((downloadIndex) => stepIndex < downloadIndex),
+        `${workflowName}:${jobName}:artifact download ordering`,
+      ).toBe(true);
+      if (!step.run?.includes(singletonGuard)) {
+        offenders.push(`${workflowName}:${jobName}:${step.name}`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
   });
 
   it("keeps the bare PostgreSQL migration harness aligned with Supabase-managed helpers", () => {
@@ -1171,7 +1252,6 @@ describe("production release train", () => {
     expect(aggregateSource).toContain("stripePayment.playwright?.expected !== 1");
     expect(aggregateSource).toContain("stripePayment.playwright?.skipped !== 0");
     expect(aggregateSource).toContain("stripePaymentPlaywright.sha256");
-    expect(workflow("stage-release.yml")).toContain("schema_version: 5");
   });
 
   it("makes Cloudflare production promotion workflow-call-only and immutable", () => {
@@ -2210,17 +2290,21 @@ describe("production release train", () => {
     const stage = workflow("stage-release.yml");
     const parsed = yaml.load(stage);
     const job = parsed.jobs["release-candidate-attested"];
+    const finalAttestation = job.steps.find(
+      (step) => step.name === "Create final exact-SHA staging attestation",
+    );
 
     expect(job.permissions).toEqual({
       actions: "read",
       contents: "read",
     });
+    expect(finalAttestation).toBeDefined();
+    expect(finalAttestation.run).toContain("schema_version: 5");
     expect(stage).toContain("Create and verify final release candidate binding");
     expect(stage).toContain("Upload final release candidate binding");
     expect(stage).toContain("verify-release-artifact-binding.mjs");
     expect(stage).not.toContain("gh attestation");
     expect(stage).not.toContain("actions/attest-build-provenance");
-    expect(stage).toContain("schema_version: 4");
     expect(stage).toContain("security: securityEvidence.sha256");
     expect(stage).toContain("n_minus_one: nMinusOneEvidence.sha256");
     expect(stage).toContain(

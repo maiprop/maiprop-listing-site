@@ -106,7 +106,7 @@ Production is eligible only after staging is green:
 - [ ] Confirm database, Edge, and Cloudflare jobs consume the same artifact and manifest digests and attempt-qualified evidence.
 - [ ] Confirm the captured production rollback deployment ID/SHA still matches canonical production immediately before deploy and differs from the candidate SHA.
 - [ ] Confirm rollback authorization is bound to the exact rollback ID/SHA and candidate ID/SHA and refuses a newer or unrelated canonical deployment.
-- [ ] Confirm the signed schema-v4 staging aggregate binds N-1 compatibility and catalogue endpoint/route/CWV/query evidence digests.
+- [ ] Confirm the signed schema-v5 staging aggregate binds N-1 compatibility and catalogue endpoint/route/CWV/query evidence digests.
 - [ ] Confirm the signed terminal aggregate reports `release_status=passed` and `rollback_performed=false`.
 - [ ] Use direct Cloudflare recovery only when one prior coordinated run attempt proves both database and Edge success; require a fresh approval and never rebuild the candidate.
 - [ ] Rollback owner and on-call owner are named.
