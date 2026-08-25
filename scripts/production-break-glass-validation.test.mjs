@@ -179,6 +179,21 @@ test("rejects missing, expired, invalid, and overlong authorizations", () => {
   }
 });
 
+test("rejects RFC 3339 UTC calendar and clock values before Date normalization", () => {
+  for (const [label, expiry, validationNow] of [
+    ["hour 24", "2026-08-26T24:00:00Z", "2026-08-26T21:00:00.000Z"],
+    ["invalid month", "2026-13-01T00:00:00Z", "2026-12-31T21:00:00.000Z"],
+    ["invalid day", "2026-04-31T00:00:00Z", "2026-04-30T21:00:00.000Z"],
+    ["non-leap-year February 29", "2026-02-29T00:00:00Z", "2026-02-28T21:00:00.000Z"],
+  ]) {
+    assert.throws(
+      () => selectReleaseAuthorization(input({ breakGlassExpiresAt: expiry }), options({ now: validationNow })),
+      Error,
+      label,
+    );
+  }
+});
+
 test("requires the exact confirmation without generic, wrong-action, or whitespace variants", () => {
   for (const confirmation of [
     "DEPLOY_PRODUCTION_RELEASE",

@@ -98,8 +98,19 @@ function normalizeExpiry(value, options = {}) {
   if (typeof value !== "string" || !RFC3339_UTC.test(value)) {
     fail("authorization expiry must be an RFC 3339 UTC timestamp.");
   }
+  const components = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/.exec(value);
   const expiresAt = new Date(value);
-  if (Number.isNaN(expiresAt.getTime())) {
+  if (
+    !components ||
+    Number.isNaN(expiresAt.getTime()) ||
+    expiresAt.getUTCFullYear() !== Number(components[1]) ||
+    expiresAt.getUTCMonth() + 1 !== Number(components[2]) ||
+    expiresAt.getUTCDate() !== Number(components[3]) ||
+    expiresAt.getUTCHours() !== Number(components[4]) ||
+    expiresAt.getUTCMinutes() !== Number(components[5]) ||
+    expiresAt.getUTCSeconds() !== Number(components[6]) ||
+    expiresAt.getUTCMilliseconds() !== Number((components[7] ?? "").padEnd(3, "0"))
+  ) {
     fail("authorization expiry is invalid.");
   }
   if (options.allowHistoricalExpiry === true) return expiresAt.toISOString();
