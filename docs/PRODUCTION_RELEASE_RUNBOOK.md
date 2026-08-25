@@ -224,7 +224,7 @@ migration to manufacture convergence.
    lease, Edge Functions, renewed Cloudflare lease, Cloudflare Pages, signed
    aggregate.
 7. Retain the attempt-qualified N-1 source/compatibility, catalogue-performance,
-   database, Edge, Cloudflare, and final release artifacts. The schema-v4
+   database, Edge, Cloudflare, and final release artifacts. The schema-v5
    staging attestation must bind every evidence digest. The final production
    aggregate must report `release_status=passed` and
    `rollback_performed=false`.
