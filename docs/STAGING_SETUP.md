@@ -129,8 +129,13 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   secret `STAGING_SITE_LOCK_PASSWORD` for authenticated verification. The
   strict runtime allowlist accepts its name and encrypted type but never reads,
   uploads, or compares its Cloudflare value; plaintext is rejected.
-- The dedicated Cloudflare staging project must pre-provision
-  `SUPABASE_SERVICE_ROLE_KEY` as a `secret_text` binding. Its plain-text
+- The dedicated Cloudflare staging project must contain
+  `SUPABASE_SERVICE_ROLE_KEY` as a `secret_text` binding. The protected
+  `Provision Cloudflare Pages Runtime` workflow resolves and masks this value
+  from the isolated Supabase Management API and sends it directly to
+  Cloudflare; it is never stored as a GitHub secret or uploaded as evidence.
+  The workflow also requires dedicated `CLOUDFLARE_STAGING_TURN_KEY_ID` and
+  `CLOUDFLARE_STAGING_TURN_API_TOKEN` repository secrets. Its plain-text
   Supabase URL, project ref, and publishable key must exactly match the isolated
   staging project; the release train fails instead of falling back to
   production.
@@ -146,6 +151,12 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   An absent staging service role is a hard failure; there is no production
   fallback. The dedicated Cloudflare project still requires its independently
   pre-provisioned `SUPABASE_SERVICE_ROLE_KEY` `secret_text` binding.
+- Runtime provisioning is a separate administrative operation, not part of a
+  deployment. Temporarily enable only the matching release flag, dispatch the
+  target-specific confirmation phrase from an allowlisted approver identity
+  that is not a deployer, verify its redacted evidence, and return the flag to
+  `false`. A subsequent exact-artifact deployment is still required before
+  Pages Functions consume changed bindings.
 - When isolated staging is selected, CI resolves its service-role key and
   creates or resets the configured RLS and onboarding identities immediately
   before security E2E. The exact-SHA job runs the RLS, account-deletion, and

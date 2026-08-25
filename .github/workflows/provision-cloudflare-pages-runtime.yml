@@ -1,0 +1,424 @@
+name: Provision Cloudflare Pages Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Fixed Pages runtime to provision"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      release_sha:
+        description: "Full exact current-main control SHA"
+        required: true
+        type: string
+      confirm:
+        description: "Type the target-specific PROVISION_*_PAGES_RUNTIME phrase"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify-provider-credential-isolation:
+    name: Verify provider credential isolation
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.run_attempt == 1 &&
+      github.actor == github.triggering_actor &&
+      inputs.release_sha == github.workflow_sha &&
+      (
+        (
+          inputs.target == 'staging' &&
+          inputs.confirm == 'PROVISION_STAGING_PAGES_RUNTIME' &&
+          vars.STAGING_RELEASE_ENABLED == 'true'
+        ) ||
+        (
+          inputs.target == 'production' &&
+          inputs.confirm == 'PROVISION_PRODUCTION_PAGES_RUNTIME' &&
+          vars.PRODUCTION_RELEASE_ENABLED == 'true'
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reject shared provider credentials
+        env:
+          CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CLOUDFLARE_PAGES_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
+          CLOUDFLARE_STAGING_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}
+          CLOUDFLARE_TURN_KEY_ID: ${{ secrets.CLOUDFLARE_TURN_KEY_ID }}
+          CLOUDFLARE_TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_TURN_API_TOKEN }}
+          CLOUDFLARE_STAGING_TURN_KEY_ID: ${{ secrets.CLOUDFLARE_STAGING_TURN_KEY_ID }}
+          CLOUDFLARE_STAGING_TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_TURN_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          values=(
+            "$CLOUDFLARE_PAGES_READ_TOKEN"
+            "$CLOUDFLARE_PAGES_EDIT_TOKEN"
+            "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN"
+            "$CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN"
+            "$CLOUDFLARE_TURN_KEY_ID"
+            "$CLOUDFLARE_TURN_API_TOKEN"
+            "$CLOUDFLARE_STAGING_TURN_KEY_ID"
+            "$CLOUDFLARE_STAGING_TURN_API_TOKEN"
+          )
+          for value in "${values[@]}"; do
+            if [ -z "$value" ]; then
+              echo "::error::Complete production and staging provider credentials are required."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+          done
+          pages_tokens=(
+            "$CLOUDFLARE_PAGES_READ_TOKEN"
+            "$CLOUDFLARE_PAGES_EDIT_TOKEN"
+            "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN"
+            "$CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN"
+          )
+          if [ "$(printf '%s\n' "${pages_tokens[@]}" | sort -u | wc -l)" -ne 4 ]; then
+            echo "::error::Pages read/edit credentials must be four distinct scoped tokens."
+            exit 1
+          fi
+          if [ "$CLOUDFLARE_STAGING_TURN_KEY_ID" = "$CLOUDFLARE_TURN_KEY_ID" ] ||
+             [ "$CLOUDFLARE_STAGING_TURN_API_TOKEN" = "$CLOUDFLARE_TURN_API_TOKEN" ]; then
+            echo "::error::Staging and production TURN credentials must be distinct."
+            exit 1
+          fi
+
+  provision:
+    name: Provision strict Pages runtime bindings
+    needs: verify-provider-credential-isolation
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.run_attempt == 1 &&
+      github.actor == github.triggering_actor &&
+      inputs.release_sha == github.workflow_sha &&
+      (
+        (
+          inputs.target == 'staging' &&
+          inputs.confirm == 'PROVISION_STAGING_PAGES_RUNTIME' &&
+          vars.STAGING_RELEASE_ENABLED == 'true'
+        ) ||
+        (
+          inputs.target == 'production' &&
+          inputs.confirm == 'PROVISION_PRODUCTION_PAGES_RUNTIME' &&
+          vars.PRODUCTION_RELEASE_ENABLED == 'true'
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: maiprop-cloudflare-pages-runtime-${{ inputs.target }}
+      cancel-in-progress: false
+    steps:
+      - name: Verify exact current-main control identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALLOWED_ACTORS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
+          DEPLOYER_ACTORS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if ! [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+             [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ] ||
+             [ "$GITHUB_SHA" != "$GITHUB_WORKFLOW_SHA" ] ||
+             [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ]; then
+            echo "::error::Pages runtime provisioning must execute from the exact current main SHA."
+            exit 1
+          fi
+          case ",${ALLOWED_ACTORS// /}," in
+            *,"$GITHUB_ACTOR",*) ;;
+            *)
+              echo "::error::Pages runtime provisioning dispatcher is not an allowlisted release approver."
+              exit 1
+              ;;
+          esac
+          case ",${DEPLOYER_ACTORS// /}," in
+            *,"$GITHUB_ACTOR",*)
+              echo "::error::A release deployer cannot also provision the protected Pages runtime."
+              exit 1
+              ;;
+            *) ;;
+          esac
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+
+      - name: Provision strict Cloudflare Pages runtime bindings
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGES_TARGET: ${{ inputs.target }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_STAGING_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          CLOUDFLARE_STAGING_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          TARGET_EDIT_TOKEN: ${{ inputs.target == 'staging' && secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN || secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
+          CLOUDFLARE_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+          CLOUDFLARE_STAGING_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          SUPABASE_ACCESS_TOKEN: ${{ inputs.target == 'staging' && secrets.SUPABASE_ACCESS_TOKEN || '' }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_APP_URL: ${{ vars.STAGING_APP_URL }}
+          PAGES_RUNTIME_TURN_KEY_ID: ${{ inputs.target == 'staging' && secrets.CLOUDFLARE_STAGING_TURN_KEY_ID || secrets.CLOUDFLARE_TURN_KEY_ID }}
+          PAGES_RUNTIME_TURN_API_TOKEN: ${{ inputs.target == 'staging' && secrets.CLOUDFLARE_STAGING_TURN_API_TOKEN || secrets.CLOUDFLARE_TURN_API_TOKEN }}
+          PRODUCTION_SUPABASE_PROJECT_ID: ${{ vars.PRODUCTION_SUPABASE_PROJECT_ID }}
+          PRODUCTION_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          PRODUCTION_APP_URL: https://portal.maiprop.co
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ vars.VITE_STRIPE_PUBLISHABLE_KEY }}
+          VITE_STRIPE_RUNTIME_MODE: ${{ vars.VITE_STRIPE_RUNTIME_MODE }}
+          VITE_BILLING_MODE: ${{ vars.VITE_BILLING_MODE }}
+          VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY }}
+          VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL }}
+          VITE_STRIPE_PRICE_AGENT_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_AGENT_MONTHLY }}
+          VITE_STRIPE_PRICE_AGENT_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_AGENT_ANNUAL }}
+          VITE_STRIPE_PRICE_DEVELOPER_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_DEVELOPER_MONTHLY }}
+          VITE_STRIPE_PRICE_DEVELOPER_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_DEVELOPER_ANNUAL }}
+          VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY }}
+          VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL }}
+        run: |
+          set -euo pipefail
+          PRODUCTION_PROJECT="maiprop-listing-site"
+          STAGING_PROJECT="maiprop-listing-site-staging"
+          export PRODUCTION_PROJECT STAGING_PROJECT
+          API_BASE="https://api.cloudflare.com/client/v4"
+          RAW_DIR="$RUNNER_TEMP/cloudflare-pages-runtime-raw"
+          EVIDENCE_DIR="$RUNNER_TEMP/cloudflare-pages-runtime-evidence"
+          mkdir -p "$RAW_DIR" "$EVIDENCE_DIR"
+          trap 'rm -rf "$RAW_DIR"' EXIT
+
+          for value in \
+            "$CLOUDFLARE_PAGES_READ_TOKEN" \
+            "$CLOUDFLARE_ACCOUNT_ID" \
+            "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" \
+            "$CLOUDFLARE_STAGING_ACCOUNT_ID" \
+            "$TARGET_EDIT_TOKEN" \
+            "$PAGES_RUNTIME_TURN_KEY_ID" \
+            "$PAGES_RUNTIME_TURN_API_TOKEN" \
+            "$CLOUDFLARE_PAGES_PROJECT_ID" \
+            "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID"; do
+            if [ -z "$value" ]; then
+              echo "::error::Complete isolated Pages read/edit identities are required."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+          done
+          if [ "$CLOUDFLARE_ACCOUNT_ID" = "$CLOUDFLARE_STAGING_ACCOUNT_ID" ] ||
+             [ "$CLOUDFLARE_PAGES_PROJECT_ID" = "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" ]; then
+            echo "::error::Pages runtime identities are not isolated."
+            exit 1
+          fi
+
+          get_project() {
+            local token="$1"
+            local account_id="$2"
+            local name="$3"
+            local out="$4"
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $token" \
+              -H "Accept: application/json" \
+              "$API_BASE/accounts/$account_id/pages/projects/$name" \
+              > "$out"
+          }
+
+          PRODUCTION_PRE="$RAW_DIR/production-pre.json"
+          STAGING_PRE="$RAW_DIR/staging-pre.json"
+          get_project \
+            "$CLOUDFLARE_PAGES_READ_TOKEN" \
+            "$CLOUDFLARE_ACCOUNT_ID" \
+            "$PRODUCTION_PROJECT" \
+            "$PRODUCTION_PRE"
+          get_project \
+            "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" \
+            "$CLOUDFLARE_STAGING_ACCOUNT_ID" \
+            "$STAGING_PROJECT" \
+            "$STAGING_PRE"
+          jq -e --arg id "$CLOUDFLARE_PAGES_PROJECT_ID" --arg name "$PRODUCTION_PROJECT" \
+            '.success == true and .result.id == $id and .result.name == $name' \
+            "$PRODUCTION_PRE" > /dev/null
+          jq -e --arg id "$CLOUDFLARE_STAGING_PAGES_PROJECT_ID" --arg name "$STAGING_PROJECT" \
+            '.success == true and .result.id == $id and .result.name == $name' \
+            "$STAGING_PRE" > /dev/null
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode git-lock \
+            --staging-project-file "$STAGING_PRE" \
+            --production-project-file "$PRODUCTION_PRE" \
+            --out "$EVIDENCE_DIR/cloudflare-pages-runtime-pre-lock.json"
+
+          service_role_key=""
+          if [ "$PAGES_TARGET" = "staging" ]; then
+            TARGET_PROJECT="$STAGING_PROJECT"
+            TARGET_PROJECT_ID="$CLOUDFLARE_STAGING_PAGES_PROJECT_ID"
+            TARGET_ACCOUNT_ID="$CLOUDFLARE_STAGING_ACCOUNT_ID"
+            TARGET_CURRENT="$STAGING_PRE"
+            service_role_key="$(
+              curl -fsS --retry 3 \
+                -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID/api-keys?reveal=true" \
+                | jq -er '
+                    (if type == "array" then . else (.keys // .result // []) end)
+                    | map(select(
+                        (.type // "") == "secret" or
+                        (.name // .role // .id // "") == "service_role"
+                      ))
+                    | sort_by(if (.type // "") == "secret" then 0 else 1 end)
+                    | .[0]
+                    | (.api_key // .key // .value // empty)
+                  '
+            )"
+            if [ -z "$service_role_key" ] ||
+               [ "$service_role_key" = "$STAGING_SUPABASE_PUBLISHABLE_KEY" ]; then
+              echo "::error::Could not resolve an isolated staging Supabase service credential."
+              exit 1
+            fi
+            echo "::add-mask::$service_role_key"
+            plain_text_json="$(
+              jq -cn \
+                --arg url "$STAGING_SUPABASE_URL" \
+                --arg project "$STAGING_SUPABASE_PROJECT_ID" \
+                --arg key "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+                --arg app "$STAGING_APP_URL" '{
+                  SUPABASE_URL: $url,
+                  SUPABASE_PROJECT_ID: $project,
+                  SUPABASE_PUBLISHABLE_KEY: $key,
+                  VITE_SUPABASE_URL: $url,
+                  VITE_SUPABASE_PROJECT_ID: $project,
+                  VITE_SUPABASE_PUBLISHABLE_KEY: $key,
+                  VITE_APP_URL: $app,
+                  VITE_PUBLIC_API_ORIGIN: $app,
+                  VITE_APP_ENVIRONMENT: "staging",
+                  MAIPROP_TURN_TTL_SECONDS: "21600"
+                }'
+            )"
+          else
+            TARGET_PROJECT="$PRODUCTION_PROJECT"
+            TARGET_PROJECT_ID="$CLOUDFLARE_PAGES_PROJECT_ID"
+            TARGET_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID"
+            TARGET_CURRENT="$PRODUCTION_PRE"
+            plain_text_json="$(
+              jq -cn \
+                --arg url "$PRODUCTION_SUPABASE_URL" \
+                --arg project "$PRODUCTION_SUPABASE_PROJECT_ID" \
+                --arg key "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" \
+                --arg app "$PRODUCTION_APP_URL" \
+                --arg stripe_key "$VITE_STRIPE_PUBLISHABLE_KEY" \
+                --arg stripe_mode "$VITE_STRIPE_RUNTIME_MODE" \
+                --arg billing_mode "$VITE_BILLING_MODE" \
+                --arg participant_monthly "$VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY" \
+                --arg participant_annual "$VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL" \
+                --arg agent_monthly "$VITE_STRIPE_PRICE_AGENT_MONTHLY" \
+                --arg agent_annual "$VITE_STRIPE_PRICE_AGENT_ANNUAL" \
+                --arg developer_monthly "$VITE_STRIPE_PRICE_DEVELOPER_MONTHLY" \
+                --arg developer_annual "$VITE_STRIPE_PRICE_DEVELOPER_ANNUAL" \
+                --arg professional_monthly "$VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY" \
+                --arg professional_annual "$VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL" '{
+                  SUPABASE_URL: $url,
+                  SUPABASE_PROJECT_ID: $project,
+                  SUPABASE_PUBLISHABLE_KEY: $key,
+                  VITE_SUPABASE_URL: $url,
+                  VITE_SUPABASE_PROJECT_ID: $project,
+                  VITE_SUPABASE_PUBLISHABLE_KEY: $key,
+                  VITE_APP_URL: $app,
+                  VITE_PUBLIC_API_ORIGIN: $app,
+                  VITE_APP_ENVIRONMENT: "production",
+                  MAIPROP_TURN_TTL_SECONDS: "21600",
+                  VITE_STRIPE_PUBLISHABLE_KEY: $stripe_key,
+                  VITE_STRIPE_RUNTIME_MODE: $stripe_mode,
+                  VITE_BILLING_MODE: $billing_mode,
+                  VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY: $participant_monthly,
+                  VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL: $participant_annual,
+                  VITE_STRIPE_PRICE_AGENT_MONTHLY: $agent_monthly,
+                  VITE_STRIPE_PRICE_AGENT_ANNUAL: $agent_annual,
+                  VITE_STRIPE_PRICE_DEVELOPER_MONTHLY: $developer_monthly,
+                  VITE_STRIPE_PRICE_DEVELOPER_ANNUAL: $developer_annual,
+                  VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY: $professional_monthly,
+                  VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL: $professional_annual
+                }'
+            )"
+          fi
+          echo "::add-mask::$PAGES_RUNTIME_TURN_KEY_ID"
+          echo "::add-mask::$PAGES_RUNTIME_TURN_API_TOKEN"
+
+          PATCH_BODY="$RAW_DIR/runtime-patch.json"
+          PATCH_PLAN="$EVIDENCE_DIR/cloudflare-pages-runtime-patch-plan.json"
+          PAGES_RUNTIME_PLAIN_TEXT_JSON="$plain_text_json" \
+          PAGES_RUNTIME_SUPABASE_SERVICE_ROLE_KEY="$service_role_key" \
+            node scripts/build-cloudflare-pages-runtime-patch.mjs \
+              --target "$PAGES_TARGET" \
+              --current "$TARGET_CURRENT" \
+              --out "$PATCH_BODY" \
+              --evidence "$PATCH_PLAN"
+          unset service_role_key plain_text_json
+
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ] ||
+             [ "$current_main" != "$RELEASE_SHA" ]; then
+            echo "::error::main advanced before the Pages runtime mutation; refusing to continue."
+            exit 1
+          fi
+          curl -fsS \
+            --request PATCH \
+            -H "Authorization: Bearer $TARGET_EDIT_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary "@$PATCH_BODY" \
+            "$API_BASE/accounts/$TARGET_ACCOUNT_ID/pages/projects/$TARGET_PROJECT" \
+            > "$RAW_DIR/runtime-patch-response.json"
+          jq -e \
+            --arg id "$TARGET_PROJECT_ID" \
+            --arg name "$TARGET_PROJECT" \
+            '.success == true and .result.id == $id and .result.name == $name' \
+            "$RAW_DIR/runtime-patch-response.json" > /dev/null
+
+          PRODUCTION_POST="$RAW_DIR/production-post.json"
+          STAGING_POST="$RAW_DIR/staging-post.json"
+          get_project \
+            "$CLOUDFLARE_PAGES_READ_TOKEN" \
+            "$CLOUDFLARE_ACCOUNT_ID" \
+            "$PRODUCTION_PROJECT" \
+            "$PRODUCTION_POST"
+          get_project \
+            "$CLOUDFLARE_STAGING_PAGES_READ_TOKEN" \
+            "$CLOUDFLARE_STAGING_ACCOUNT_ID" \
+            "$STAGING_PROJECT" \
+            "$STAGING_POST"
+          node scripts/validate-cloudflare-pages-staging-posture.mjs \
+            --mode "$PAGES_TARGET" \
+            --staging-project-file "$STAGING_POST" \
+            --production-project-file "$PRODUCTION_POST" \
+            --out "$EVIDENCE_DIR/cloudflare-pages-runtime-posture.json"
+          jq -n \
+            --arg target "$PAGES_TARGET" \
+            --arg project_id "$TARGET_PROJECT_ID" \
+            --arg release_sha "$RELEASE_SHA" '{
+              schema_version: 1,
+              evidence_type: "cloudflare-pages-runtime-provision-result",
+              target: $target,
+              project_id: $project_id,
+              release_sha: $release_sha,
+              status: "verified"
+            }' > "$EVIDENCE_DIR/cloudflare-pages-runtime-result.json"
+
+      - name: Upload minimized Cloudflare Pages runtime evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cloudflare-pages-runtime-${{ inputs.target }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/cloudflare-pages-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 30

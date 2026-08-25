@@ -289,8 +289,10 @@ or override it in repository secrets.
 | `VITE_PLAUSIBLE_DOMAIN` | optional analytics domain | repository secret |
 | `VITE_APP_URL` | canonical app origin for production build | repository secret |
 | `VITE_PUBLIC_API_ORIGIN` | optional absolute origin for cached `/api/public/*` routes in bundled Capacitor apps over native HTTP; browser builds ignore it; defaults to `VITE_APP_URL` for native calls | production/staging build |
-| `CLOUDFLARE_TURN_KEY_ID` | server-only Cloudflare Realtime TURN key ID; configure as encrypted Pages binding, never `VITE_*` | production/staging Pages runtime |
-| `CLOUDFLARE_TURN_API_TOKEN` | server-only API token used by `/api/turn-credentials`; configure as encrypted Pages binding | production/staging Pages runtime |
+| `CLOUDFLARE_TURN_KEY_ID` | server-only production Cloudflare Realtime TURN key ID; repository secret used by the protected runtime-provision workflow and encrypted production Pages binding, never `VITE_*` | repository secret and production Pages runtime |
+| `CLOUDFLARE_TURN_API_TOKEN` | server-only production API token used by `/api/turn-credentials`; repository secret used by the protected runtime-provision workflow and encrypted production Pages binding | repository secret and production Pages runtime |
+| `CLOUDFLARE_STAGING_TURN_KEY_ID` | isolated staging Realtime TURN key ID; never reuse the production key | repository secret and staging Pages runtime |
+| `CLOUDFLARE_STAGING_TURN_API_TOKEN` | isolated staging TURN API token; never reuse the production token | repository secret and staging Pages runtime |
 | `MAIPROP_TURN_TTL_SECONDS` | expiring TURN credential TTL; canonical value is `21600` and code caps it at 24 hours | production/staging Pages runtime |
 | `CAPACITOR_BUNDLED_WEB` | set to `true` for APK builds that bundle the Vite output instead of opening a remote URL | Android WebView APK workflow |
 | `CAPACITOR_APP_ID` | Android package id override; default is `co.maiprop.portal.mobile` | Android WebView APK workflow |
@@ -358,6 +360,10 @@ or override it in repository secrets.
 | `ARTIFACT_SHA256` | internal digest of the immutable release artifact used while assembling staging attestations | GitHub Actions generated runtime env |
 | `STAGING_PROJECT` | internal Cloudflare Pages project-name alias populated from `CLOUDFLARE_STAGING_PAGES_PROJECT` for staging posture and attestation scripts; do not set independently | GitHub Actions generated runtime env |
 | `PRODUCTION_PROJECT` | internal Cloudflare Pages project-name alias populated from `CLOUDFLARE_PAGES_PROJECT` for cross-project isolation checks; do not set independently | GitHub Actions generated runtime env |
+| `PAGES_RUNTIME_PLAIN_TEXT_JSON` | workflow-internal JSON map of strict non-secret Pages runtime values consumed only by the payload builder; stored under the runner temp directory and never uploaded raw | GitHub Actions generated runtime env |
+| `PAGES_RUNTIME_SUPABASE_SERVICE_ROLE_KEY` | workflow-internal staging service credential passed only to the payload builder after Management API resolution and masking; never configure or persist it | GitHub Actions generated runtime env |
+| `PAGES_RUNTIME_TURN_KEY_ID` | workflow-internal target-specific TURN key alias passed only to the payload builder; masked and unset in the provisioning step | GitHub Actions generated runtime env |
+| `PAGES_RUNTIME_TURN_API_TOKEN` | workflow-internal target-specific TURN token alias passed only to the payload builder; masked and unset in the provisioning step | GitHub Actions generated runtime env |
 | `STAGING_LIVE_SECURITY_EVIDENCE` | internal path to the minimized staging security evidence assembled by the staging workflow | GitHub Actions generated runtime env |
 | `PLAYWRIGHT_BASE_URL` | live or staging app origin used by Playwright suites that are skipped by default | E2E diagnostics only |
 | `PLAYWRIGHT_JSON_REPORT` | internal filesystem path for Playwright JSON reporter output in CI | GitHub Actions generated runtime env |

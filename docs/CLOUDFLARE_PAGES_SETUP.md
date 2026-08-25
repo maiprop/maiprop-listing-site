@@ -114,20 +114,31 @@ Pages Functions run on the Workers runtime; they read env vars from the
 | `CLOUDFLARE_TURN_API_TOKEN` | server-only API token for generating short-lived TURN ICE credentials. Store as `secret_text`. |
 | `MAIPROP_TURN_TTL_SECONDS`  | non-secret TTL for issued TURN credentials. Use `21600`; the Pages Function enforces a 24-hour maximum. |
 
-Pages runtime bindings are pre-provisioned independently on the dedicated
-staging and production projects. The staging release train reads both project
-records through the API, requires staging bindings to equal the isolated
-staging values, rejects production-valued origins/catalogue bindings, and
-requires Stripe to be test-mode or absent. A configured staging publishable key
-must use `pk_test_*`; runtime and billing modes must be `test` or absent; every
-staging `VITE_STRIPE_PRICE_*` value must differ from every production Pages
-price value. It does not copy production bindings into staging.
-Adding a server-side binding requires updating the project settings, the
-staging preflight, and the attestation validator.
+Pages runtime bindings are provisioned independently on the dedicated staging
+and production projects by the manual `Provision Cloudflare Pages Runtime`
+workflow. It is exact-current-main, attempt-one, target-specific, default-off,
+and restricted to an allowlisted approver who is not a release deployer. It
+patches only the fixed project selected by the dispatcher, removes unexpected
+plaintext bindings, refuses to delete unknown encrypted bindings, and uploads
+only redacted post-state evidence. The staging service credential is resolved
+and masked in memory through the Supabase Management API; dedicated staging and
+production TURN credentials remain separate repository secrets.
 
-The production release train also treats runtime bindings as pre-provisioned.
+The staging release train then reads both project records through the API,
+requires staging bindings to equal the isolated staging values, rejects
+production-valued origins/catalogue bindings, and requires Stripe to be
+test-mode or absent. A configured staging publishable key must use `pk_test_*`;
+runtime and billing modes must be `test` or absent; every staging
+`VITE_STRIPE_PRICE_*` value must differ from every production Pages price
+value. It does not copy production bindings into staging. Adding a server-side
+binding requires updating the payload builder, project preflight, and
+attestation validator.
+
+The production release train still treats runtime bindings as pre-provisioned.
 It verifies them read-only, proves N-1 compatibility against the verified
-posture, and performs no project-settings PATCH or runtime-secret synchronization.
+posture, and performs no project-settings PATCH or runtime-secret
+synchronization. After an administrative binding change, deploy the exact
+signed artifact before claiming that Pages Functions consume the new values.
 
 The workflow repeats the two-project Pages API posture check after deployment
 and re-fetches both projects again immediately before final attestation. Live

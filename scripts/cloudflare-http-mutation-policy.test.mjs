@@ -96,13 +96,18 @@ steps:
     ).toEqual(["DELETE"]);
   });
 
-  it("authorizes only the three structurally constrained release workflows", () => {
+  it("authorizes only the structurally constrained release workflows", () => {
     const lock =
       ".github/workflows/lock-cloudflare-pages-git-deploys.yml";
+    const runtimeProvision =
+      ".github/workflows/provision-cloudflare-pages-runtime.yml";
     const patch =
       'curl --request PATCH "https://api.cloudflare.com/client/v4/accounts/a/pages/projects/p"';
 
     expect(isAuthorizedCloudflareHttpMutationWorkflow(lock)).toBe(true);
+    expect(isAuthorizedCloudflareHttpMutationWorkflow(runtimeProvision)).toBe(
+      true,
+    );
     expect(
       isAuthorizedCloudflareHttpMutationWorkflow(
         ".github/workflows/compliance-evidence.yml",
@@ -206,6 +211,32 @@ gh api --method PATCH "https://api.cloudflare.com/client/v4/accounts/account/pag
         workflowPath: lock,
         text: `${fixedProjects}
 curl -X PATCH "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT"`,
+      }),
+    ).toMatch(/unauthorized/i);
+  });
+
+  it("accepts only the fixed single-project runtime provision PATCH", () => {
+    const workflowPath =
+      ".github/workflows/provision-cloudflare-pages-runtime.yml";
+    const root = resolve(import.meta.dirname, "..");
+    const baseline = readFileSync(resolve(root, workflowPath), "utf8");
+
+    expect(
+      cloudflareHttpMutationViolation({ workflowPath, text: baseline }),
+    ).toBeNull();
+    expect(
+      cloudflareHttpMutationViolation({
+        workflowPath,
+        text: baseline.replace(
+          "/pages/projects/$TARGET_PROJECT",
+          "/zones/$TARGET_PROJECT",
+        ),
+      }),
+    ).toMatch(/unauthorized/i);
+    expect(
+      cloudflareHttpMutationViolation({
+        workflowPath,
+        text: `${baseline}\ncurl -X DELETE "$API_BASE/accounts/$TARGET_ACCOUNT_ID/pages/projects/$TARGET_PROJECT"`,
       }),
     ).toMatch(/unauthorized/i);
   });
