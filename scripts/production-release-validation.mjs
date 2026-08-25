@@ -950,6 +950,24 @@ export function validateReleaseApproval({
   }
   let authorization;
   if (record.schema_version === 1) {
+    requireExactKeys(record, [
+      "schema_version",
+      "repository",
+      "release_sha",
+      "source_tree",
+      "source_run_id",
+      "source_run_attempt",
+      "artifact_sha256",
+      "staging_run_id",
+      "staging_run_attempt",
+      "approval_run_id",
+      "approval_run_attempt",
+      "approver",
+      "nonce",
+      "revoked",
+      "approved_at",
+      "expires_at",
+    ], "Release approval schema 1");
     if (expectedAuthorization !== undefined) {
       if (expectedAuthorization?.mode !== "standard") {
         throw new Error("Release approval schema 1 is standard-only.");

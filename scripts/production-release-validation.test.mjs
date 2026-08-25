@@ -1360,6 +1360,22 @@ describe("production release validation", () => {
       ...expected,
       expectedAuthorization: breakGlassAuthorization,
     })).toThrow(/schema.*1.*standard|standard.*schema.*1/i);
+    for (const [field, value] of [
+      ["authorization", breakGlassAuthorization],
+      ["consumption", {
+        artifact_id: "101",
+        artifact_digest: "a".repeat(64),
+      }],
+      ["incident_id", "PERF-BOOTSTRAP-20260826-01"],
+    ]) {
+      expect(
+        () => validateReleaseApproval({
+          approval: { ...approval, [field]: value },
+          ...expected,
+        }),
+        field,
+      ).toThrow(/schema.*1.*unsupported|unsupported.*schema.*1/i);
+    }
   });
 
   it("preserves independent approval checks in standard authorization mode schema v2", () => {
