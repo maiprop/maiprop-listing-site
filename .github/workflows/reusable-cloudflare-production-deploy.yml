@@ -84,6 +84,46 @@ on:
       mutation_lease_artifact:
         required: true
         type: string
+      authorization_mode:
+        required: false
+        default: standard
+        type: string
+      authorization_sha256:
+        required: false
+        default: ""
+        type: string
+      authorization_artifact_id:
+        required: false
+        default: ""
+        type: string
+      authorization_artifact_digest:
+        required: false
+        default: ""
+        type: string
+      authorization_run_id:
+        required: false
+        default: ""
+        type: string
+      authorization_run_attempt:
+        required: false
+        default: ""
+        type: string
+      consumption_artifact_id:
+        required: false
+        default: ""
+        type: string
+      consumption_artifact_digest:
+        required: false
+        default: ""
+        type: string
+      consumption_binding_artifact_id:
+        required: false
+        default: ""
+        type: string
+      consumption_payload_sha256:
+        required: false
+        default: ""
+        type: string
       production_project_id:
         required: true
         type: string
@@ -206,6 +246,16 @@ jobs:
       ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
       MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
       APPROVAL_NONCE: ${{ inputs.approval_nonce }}
+      AUTHORIZATION_MODE: ${{ inputs.authorization_mode }}
+      AUTHORIZATION_SHA256: ${{ inputs.authorization_sha256 }}
+      AUTHORIZATION_ARTIFACT_ID: ${{ inputs.authorization_artifact_id }}
+      AUTHORIZATION_ARTIFACT_DIGEST: ${{ inputs.authorization_artifact_digest }}
+      AUTHORIZATION_RUN_ID: ${{ inputs.authorization_run_id }}
+      AUTHORIZATION_RUN_ATTEMPT: ${{ inputs.authorization_run_attempt }}
+      CONSUMPTION_ARTIFACT_ID: ${{ inputs.consumption_artifact_id }}
+      CONSUMPTION_ARTIFACT_DIGEST: ${{ inputs.consumption_artifact_digest }}
+      CONSUMPTION_BINDING_ARTIFACT_ID: ${{ inputs.consumption_binding_artifact_id }}
+      CONSUMPTION_PAYLOAD_SHA256: ${{ inputs.consumption_payload_sha256 }}
       DEPLOY_ACTOR: ${{ inputs.deploy_actor }}
       ALLOWED_DEPLOYERS: ${{ inputs.allowed_deployers }}
       RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ inputs.release_evidence_signing_key_id }}
@@ -371,7 +421,19 @@ jobs:
             ' evidence/staging-aggregate/release-candidate-attestation.json \
             > /dev/null
 
-      - name: Download signed production approval
+      - name: Download signed production approval by immutable identity
+        if: ${{ inputs.authorization_artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ inputs.authorization_artifact_id }}
+          merge-multiple: true
+          path: evidence/approval
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.approval_run_id }}
+
+      - name: Download signed production approval for direct standard recovery
+        if: ${{ inputs.authorization_artifact_id == '' && inputs.authorization_mode == 'standard' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: production-release-approval-${{ inputs.release_sha }}-${{ inputs.approval_run_id }}-${{ inputs.approval_run_attempt }}
@@ -386,6 +448,11 @@ jobs:
           ALLOWED_APPROVERS: ${{ inputs.allowed_approvers }}
         run: |
           set -euo pipefail
+          approval_args=()
+          if [ "$(jq -r '.schema_version' evidence/approval/production-release-approval.json)" = "2" ]; then
+            jq '.authorization' evidence/approval/production-release-approval.json > evidence/approval-authorization.json
+            approval_args+=(--authorization-file evidence/approval-authorization.json)
+          fi
           npm run --silent release:validate -- release-approval \
             --file evidence/approval/production-release-approval.json \
             --sha "$RELEASE_SHA" \
@@ -399,7 +466,8 @@ jobs:
             --approval-run-id "$APPROVAL_RUN_ID" \
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --deploy-actor "$GITHUB_ACTOR" \
-            --allowed-approvers "$ALLOWED_APPROVERS"
+            --allowed-approvers "$ALLOWED_APPROVERS" \
+            "${approval_args[@]}"
           jq -e --arg nonce "$APPROVAL_NONCE" '.nonce == $nonce' \
             evidence/approval/production-release-approval.json > /dev/null
 
@@ -411,6 +479,58 @@ jobs:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.production_run_id }}
+
+      - name: Download exact production authorization and consumption evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ "$AUTHORIZATION_MODE" = "standard" ]; then
+            test -z "$CONSUMPTION_ARTIFACT_ID$CONSUMPTION_ARTIFACT_DIGEST$CONSUMPTION_BINDING_ARTIFACT_ID$CONSUMPTION_PAYLOAD_SHA256"
+            jq -e '.schema_version == 2 and (has("authorization") | not) and (has("consumption") | not)' evidence/mutation-lease/production-mutation-lease.json > /dev/null
+          elif [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            jq '.authorization' evidence/mutation-lease/production-mutation-lease.json > evidence/release-authorization.json
+            jq '.consumption' evidence/mutation-lease/production-mutation-lease.json > evidence/consumption-tuple.json
+            mkdir -p evidence/consumption evidence/consumption-binding evidence/consumption-metadata
+            gh api -H "Accept: application/vnd.github+json" "repos/${GITHUB_REPOSITORY}/actions/artifacts/${CONSUMPTION_ARTIFACT_ID}/zip" > evidence/consumption.zip
+            unzip -q evidence/consumption.zip -d evidence/consumption
+            gh api -H "Accept: application/vnd.github+json" "repos/${GITHUB_REPOSITORY}/actions/artifacts/${CONSUMPTION_BINDING_ARTIFACT_ID}/zip" > evidence/consumption-binding.zip
+            unzip -q evidence/consumption-binding.zip -d evidence/consumption-binding
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${CONSUMPTION_ARTIFACT_ID}" > evidence/consumption-metadata/artifact.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PRODUCTION_RUN_ID}" > evidence/consumption-metadata/run.json
+            receipt_name="$(node scripts/production-break-glass-consumption.mjs name --authorization evidence/release-authorization.json)"
+            receipt_actor="$(jq -er '.actor.login' evidence/consumption-metadata/run.json)"
+            receipt_triggering_actor="$(jq -er '.triggering_actor.login' evidence/consumption-metadata/run.json)"
+            node scripts/verify-release-artifact-binding.mjs \
+              --binding evidence/consumption-binding/release-artifact-binding.json \
+              --payload-root evidence/consumption/production-break-glass-consumption.json \
+              --artifact-metadata evidence/consumption-metadata/artifact.json \
+              --producer-run evidence/consumption-metadata/run.json --repository "$GITHUB_REPOSITORY" \
+              --release-sha "$RELEASE_SHA" --source-tree "$SOURCE_TREE" \
+              --workflow-path .github/workflows/deploy-production-release.yml \
+              --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/deploy-production-release.yml@refs/heads/main" \
+              --workflow-sha "$RELEASE_SHA" --event workflow_dispatch --run-id "$PRODUCTION_RUN_ID" \
+              --run-attempt "$PRODUCTION_RUN_ATTEMPT" --actor "$receipt_actor" \
+              --triggering-actor "$receipt_triggering_actor" --artifact-id "$CONSUMPTION_ARTIFACT_ID" \
+              --artifact-name "$receipt_name" --artifact-digest "$CONSUMPTION_ARTIFACT_DIGEST" \
+              --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" > evidence/consumption-binding-verification.json
+            test "$(sha256sum evidence/consumption/production-break-glass-consumption.json | awk '{print $1}')" = "$CONSUMPTION_PAYLOAD_SHA256"
+            node scripts/production-break-glass-consumption.mjs verify \
+              --file evidence/consumption/production-break-glass-consumption.json \
+              --authorization evidence/release-authorization.json --action production-deploy
+            node --input-type=module <<'NODE'
+            import { readFileSync } from "node:fs";
+            import { releaseAuthorizationSha256, validateReleaseAuthorizationGrant } from "./scripts/production-break-glass-validation.mjs";
+            const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+            const authorization = read("evidence/release-authorization.json");
+            validateReleaseAuthorizationGrant([authorization, read("evidence/approval-authorization.json")]);
+            if (releaseAuthorizationSha256(authorization) !== process.env.AUTHORIZATION_SHA256) throw new Error("Production authorization SHA-256 changed before mutation.");
+            NODE
+          else
+            echo "::error::Authorization mode must be explicit."
+            exit 1
+          fi
 
       - name: Validate current production mutation lease
         env:
@@ -424,6 +544,10 @@ jobs:
             --sha "$RELEASE_SHA" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          validation_args=()
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            validation_args+=(--authorization-file evidence/release-authorization.json --consumption-file evidence/consumption-tuple.json)
+          fi
           npm run --silent release:validate -- mutation-lease \
             --file evidence/mutation-lease/production-mutation-lease.json \
             --sha "$RELEASE_SHA" \
@@ -443,7 +567,8 @@ jobs:
             --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
             --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
             --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
-            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            "${validation_args[@]}"
 
       - name: Download production database attestation
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -978,6 +1103,13 @@ jobs:
             --run-attempt "$SOURCE_RUN_ATTEMPT"
           echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           cd "$ISOLATED_DIRECTORY"
+          lease_args=()
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            lease_args+=(
+              --authorization-file "$GITHUB_WORKSPACE/evidence/release-authorization.json"
+              --consumption-file "$GITHUB_WORKSPACE/evidence/consumption-tuple.json"
+            )
+          fi
           node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" github-staging-lease \
             --repository "$GITHUB_REPOSITORY" \
             --sha "$RELEASE_SHA" \
@@ -1002,7 +1134,8 @@ jobs:
             --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
             --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
             --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
-            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            "${lease_args[@]}"
           staging_mutation_file="$RUNNER_TEMP/cloudflare-staging-project-deploy-mutation.json"
           production_mutation_file="$RUNNER_TEMP/cloudflare-production-project-deploy-mutation.json"
           curl -fsS --retry 3 \
@@ -1042,7 +1175,8 @@ jobs:
             --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
             --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
             --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
-            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            "${lease_args[@]}"
           if ! jq -e \
             --arg rollback_id "$ROLLBACK_ID" \
             --arg rollback_sha "${ROLLBACK_SHA,,}" '
@@ -1064,11 +1198,12 @@ jobs:
             "$deployments_before" > /dev/null
           echo "deployments_before=$deployments_before" >> "$GITHUB_OUTPUT"
           mutation_attempt_file="$GITHUB_WORKSPACE/evidence/cloudflare-production-mutation-attempt.json"
+          forward_mutation_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           jq -n \
             --arg release_sha "$RELEASE_SHA" \
             --arg project "$PRODUCTION_PROJECT" \
             --arg project_id "$CLOUDFLARE_PAGES_PROJECT_ID" \
-            --arg attempted_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
+            --arg attempted_at "$forward_mutation_started_at" '{
               schema_version: 1,
               evidence_type: "maiprop-pages-mutation-attempt",
               mutation_attempted: true,
@@ -1078,6 +1213,7 @@ jobs:
               attempted_at: $attempted_at
             }' > "$mutation_attempt_file"
           echo "mutation_attempted=true" >> "$GITHUB_OUTPUT"
+          echo "forward_mutation_started_at=$forward_mutation_started_at" >> "$GITHUB_OUTPUT"
           echo "mutation_attempt_file=$mutation_attempt_file" >> "$GITHUB_OUTPUT"
           wrangler_output_dir="$RUNNER_TEMP/cloudflare-production-wrangler-output"
           rm -rf "$wrangler_output_dir"
@@ -1380,8 +1516,27 @@ jobs:
           CLOUDFLARE_TURN_KEY_ID: ${{ secrets.CLOUDFLARE_TURN_KEY_ID }}
           CLOUDFLARE_TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_TURN_API_TOKEN }}
           MAIPROP_TURN_TTL_SECONDS: "600"
+          FORWARD_MUTATION_STARTED_AT: ${{ steps.deploy.outputs.forward_mutation_started_at }}
         run: |
           set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          import { validateReleaseAuthorizationGrant } from "./scripts/production-break-glass-validation.mjs";
+          const lease = JSON.parse(readFileSync("evidence/mutation-lease/production-mutation-lease.json", "utf8"));
+          const started = Date.parse(process.env.FORWARD_MUTATION_STARTED_AT);
+          if (!Number.isFinite(started) || started >= Date.parse(lease.expires_at)) {
+            throw new Error("Rollback refused: forward mutation did not begin while the mutation lease was valid.");
+          }
+          if (lease.authorization?.mode === "break_glass") {
+            if (started >= Date.parse(lease.authorization.authorized_expires_at)) {
+              throw new Error("Rollback refused: forward mutation did not begin while authorization was valid.");
+            }
+            const approval = JSON.parse(readFileSync("evidence/approval-authorization.json", "utf8"));
+            validateReleaseAuthorizationGrant([lease.authorization, approval], { allowHistoricalExpiry: true });
+          }
+          // Rollback may continue after authorization expiry only when the recorded
+          // forward mutation began while authorization and lease were valid.
+          NODE
           if [ -z "$CANDIDATE_RECEIPT" ] || [ ! -s "$CANDIDATE_RECEIPT" ]; then
             echo "::error::Rollback refused because this run has no durable exact-candidate receipt."
             exit 1
@@ -1420,7 +1575,8 @@ jobs:
             exit 1
           fi
           "$RUNNER_TEMP/verify-cloudflare-release-bindings.sh"
-          npm run --silent release:validate -- release-approval \
+          if [ "$AUTHORIZATION_MODE" = "standard" ]; then
+            npm run --silent release:validate -- release-approval \
             --file evidence/approval/production-release-approval.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -1434,6 +1590,7 @@ jobs:
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --deploy-actor "$DEPLOY_ACTOR" \
             --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS"
+          fi
           node --input-type=module <<'NODE'
           import { randomBytes } from "node:crypto";
           import { readFileSync, writeFileSync } from "node:fs";
@@ -1444,7 +1601,7 @@ jobs:
             "utf8",
           ));
           const lease = {
-            schema_version: 2,
+            schema_version: sourceLease.authorization?.mode === "break_glass" ? 3 : 2,
             repository: process.env.GITHUB_REPOSITORY,
             release_sha: process.env.RELEASE_SHA,
             source_tree: process.env.SOURCE_TREE,
@@ -1481,6 +1638,12 @@ jobs:
             issued_at: issuedAt.toISOString(),
             expires_at: new Date(issuedAt.getTime() + 15 * 60 * 1000)
               .toISOString(),
+            ...(sourceLease.authorization?.mode === "break_glass"
+              ? {
+                  authorization: sourceLease.authorization,
+                  consumption: sourceLease.consumption,
+                }
+              : {}),
           };
           writeFileSync(
             "evidence/cloudflare-production-rollback-mutation-lease.json",
@@ -1488,7 +1651,8 @@ jobs:
             { mode: 0o600 },
           );
           NODE
-          npm run --silent release:validate -- mutation-lease \
+          if [ "$AUTHORIZATION_MODE" = "standard" ]; then
+            npm run --silent release:validate -- mutation-lease \
             --file evidence/cloudflare-production-rollback-mutation-lease.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -1512,6 +1676,18 @@ jobs:
             --rollback-sha "$ROLLBACK_SHA" \
             --candidate-deployment-id "$CANDIDATE_DEPLOYMENT_ID" \
             --candidate-sha "$RELEASE_SHA"
+          else
+            node --input-type=module <<'NODE'
+            import { readFileSync } from "node:fs";
+            const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+            const source = read("evidence/mutation-lease/production-mutation-lease.json");
+            const rollback = read("evidence/cloudflare-production-rollback-mutation-lease.json");
+            if (
+              JSON.stringify(rollback.authorization) !== JSON.stringify(source.authorization) ||
+              JSON.stringify(rollback.consumption) !== JSON.stringify(source.consumption)
+            ) throw new Error("Rollback authorization or consumption tuple changed.");
+            NODE
+          fi
           staging_mutation_file="$RUNNER_TEMP/cloudflare-staging-project-rollback-mutation.json"
           production_mutation_file="$RUNNER_TEMP/cloudflare-production-project-rollback-mutation.json"
           curl -fsS --retry 3 \
@@ -1532,7 +1708,8 @@ jobs:
             --sha "$RELEASE_SHA" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
-          npm run --silent release:validate -- mutation-lease \
+          if [ "$AUTHORIZATION_MODE" = "standard" ]; then
+            npm run --silent release:validate -- mutation-lease \
             --file evidence/cloudflare-production-rollback-mutation-lease.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -1556,6 +1733,7 @@ jobs:
             --rollback-sha "$ROLLBACK_SHA" \
             --candidate-deployment-id "$CANDIDATE_DEPLOYMENT_ID" \
             --candidate-sha "$RELEASE_SHA"
+          fi
           staging_deployment_mutation_file="$RUNNER_TEMP/cloudflare-staging-project-rollback-deployment-mutation.json"
           production_deployment_mutation_file="$RUNNER_TEMP/cloudflare-production-project-rollback-deployment-mutation.json"
           curl -fsS --retry 3 \
@@ -1576,7 +1754,8 @@ jobs:
             --sha "$RELEASE_SHA" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
-          npm run --silent release:validate -- mutation-lease \
+          if [ "$AUTHORIZATION_MODE" = "standard" ]; then
+            npm run --silent release:validate -- mutation-lease \
             --file evidence/cloudflare-production-rollback-mutation-lease.json \
             --sha "$RELEASE_SHA" \
             --repository "$GITHUB_REPOSITORY" \
@@ -1600,6 +1779,7 @@ jobs:
             --rollback-sha "$ROLLBACK_SHA" \
             --candidate-deployment-id "$CANDIDATE_DEPLOYMENT_ID" \
             --candidate-sha "$RELEASE_SHA"
+          fi
           rollback_project="$RUNNER_TEMP/cloudflare-production-project-rollback.json"
           rollback_canonical="$RUNNER_TEMP/cloudflare-production-canonical-rollback.json"
           rollback_project_final="$RUNNER_TEMP/cloudflare-production-project-rollback-final.json"
@@ -1796,6 +1976,7 @@ jobs:
           ROLLBACK_ID: ${{ steps.preflight.outputs.rollback_id }}
           ROLLBACK_SHA: ${{ steps.preflight.outputs.rollback_sha }}
           DEPLOYMENT_URL: ${{ steps.deployment.outputs.deployment_url }}
+          FORWARD_MUTATION_STARTED_AT: ${{ steps.deploy.outputs.forward_mutation_started_at }}
         run: |
           set -euo pipefail
           mkdir -p evidence
@@ -1823,6 +2004,11 @@ jobs:
           const evidence = {
             schema_version: 1,
             evidence_type: "maiprop-cloudflare-production-promotion",
+            authorization_mode: process.env.AUTHORIZATION_MODE,
+            authorization_sha256: process.env.AUTHORIZATION_SHA256 || null,
+            consumption_sha256: process.env.AUTHORIZATION_MODE === "break_glass"
+              ? process.env.CONSUMPTION_PAYLOAD_SHA256
+              : null,
             repository: process.env.GITHUB_REPOSITORY,
             release_sha: process.env.RELEASE_SHA,
             source_tree: process.env.SOURCE_TREE,
@@ -1850,6 +2036,11 @@ jobs:
             deployment_url: process.env.DEPLOYMENT_URL || null,
             rollback_target_id: process.env.ROLLBACK_ID || null,
             rollback_target_sha: process.env.ROLLBACK_SHA || null,
+            forward_mutation_started_at:
+              process.env.FORWARD_MUTATION_STARTED_AT || null,
+            lease_expires_at: mutationLease?.expires_at ?? null,
+            authorized_expires_at:
+              mutationLease?.authorization?.authorized_expires_at ?? null,
             runtime_strategy: "preprovisioned-verified-runtime",
             secret_binding_verification: "allowlisted-name-and-type",
             authenticated_live_functional_proof:

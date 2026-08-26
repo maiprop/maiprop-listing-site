@@ -71,6 +71,56 @@ const documentedEnvAllowlist = new Set([
   "SSR",
 ]);
 
+const productionAuthorizationInputNames = [
+  "authorization_mode",
+  "authorization_sha256",
+  "authorization_artifact_id",
+  "authorization_artifact_digest",
+  "authorization_run_id",
+  "authorization_run_attempt",
+  "consumption_artifact_id",
+  "consumption_artifact_digest",
+  "consumption_binding_artifact_id",
+  "consumption_payload_sha256",
+];
+
+export function productionAuthorizationInputContractViolations(
+  inputs,
+  { directRecoveryCompatible = false } = {},
+) {
+  const violations = [];
+  const authorizationNames = Object.keys(inputs ?? {})
+    .filter((name) => /^(?:authorization|consumption)_/.test(name))
+    .sort();
+  if (
+    authorizationNames.join("\n") !==
+    [...productionAuthorizationInputNames].sort().join("\n")
+  ) {
+    violations.push("authorization and consumption input names must be exact");
+  }
+  for (const name of productionAuthorizationInputNames) {
+    const input = inputs?.[name];
+    if (!input || input.type !== "string") {
+      violations.push(`${name} must be a string input`);
+      continue;
+    }
+    if (directRecoveryCompatible) {
+      const expectedDefault = name === "authorization_mode" ? "standard" : "";
+      if (input.required !== false || input.default !== expectedDefault) {
+        violations.push(
+          `${name} must preserve its unchanged direct-recovery default`,
+        );
+      }
+    } else if (
+      input.required !== true ||
+      Object.hasOwn(input, "default")
+    ) {
+      violations.push(`${name} must be required without a default`);
+    }
+  }
+  return violations;
+}
+
 function read(path) {
   return readFileSync(path, "utf8");
 }
@@ -811,13 +861,33 @@ export function scanWorkflows() {
       "edge_binding_artifact",
     ];
     const inputs = workflowCall?.inputs ?? {};
+    const exactInputs = [
+      ...requiredInputs,
+      ...productionAuthorizationInputNames,
+    ];
     if (
       requiredInputs.some((name) => inputs[name]?.required !== true) ||
-      Object.keys(inputs).sort().join("\n") !== requiredInputs.sort().join("\n")
+      productionAuthorizationInputContractViolations(inputs, {
+        directRecoveryCompatible: true,
+      }).length > 0 ||
+      Object.keys(inputs).sort().join("\n") !== exactInputs.sort().join("\n")
     ) {
       violations.push(
         `${cloudflareProductionWorkflow} must require only the exact release tuple, digests, lease, and upstream attestation inputs`,
       );
+    }
+
+    for (const workflowPath of [
+      ".github/workflows/deploy-supabase-production-db.yml",
+      ".github/workflows/deploy-edge-functions.yml",
+    ]) {
+      const reusableInputs =
+        workflowYaml[workflowPath]?.on?.workflow_call?.inputs ?? {};
+      if (productionAuthorizationInputContractViolations(reusableInputs).length > 0) {
+        violations.push(
+          `${workflowPath} must require the exact authorization and consumption tuple inputs`,
+        );
+      }
     }
 
     const requiredSecrets = [

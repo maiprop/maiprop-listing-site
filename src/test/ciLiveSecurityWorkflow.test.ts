@@ -18,8 +18,34 @@ const approvalWorkflow = readFileSync(
   join(process.cwd(), ".github", "workflows", "approve-production-release.yml"),
   "utf8",
 );
+const productionWorkflow = readFileSync(
+  join(process.cwd(), ".github", "workflows", "deploy-production-release.yml"),
+  "utf8",
+);
 
 describe("release-train live security workflow", () => {
+  it("keeps release validation and consumption ahead of production secrets and mutations", () => {
+    const authorization = productionWorkflow.indexOf(
+      "Validate production deployment authorization",
+    );
+    const signingSecret = productionWorkflow.indexOf(
+      "RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}",
+    );
+    const consume = productionWorkflow.indexOf(
+      "consume-break-glass-authorization:",
+    );
+    const archive = productionWorkflow.indexOf("archive-production-source:");
+    const database = productionWorkflow.indexOf("deploy-production-database:");
+
+    expect(authorization).toBeGreaterThan(-1);
+    expect(signingSecret).toBeGreaterThan(authorization);
+    expect(consume).toBeGreaterThan(signingSecret);
+    expect(archive).toBeGreaterThan(consume);
+    expect(database).toBeGreaterThan(archive);
+    expect(productionWorkflow).toContain("PRODUCTION_RELEASE_ENABLED");
+    expect(productionWorkflow).toContain("PRODUCTION_RELEASE_DEPLOYERS");
+  });
+
   it("keeps CI validation-only and starts staging only from a successful main push", () => {
     expect(ciWorkflow).toContain("uses: ./.github/workflows/reusable-release-safety.yml");
     expect(ciWorkflow).not.toContain("SUPABASE_ACCESS_TOKEN");

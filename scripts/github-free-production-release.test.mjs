@@ -1,7 +1,14 @@
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { describe, expect, it } from "vitest";
+const directNodeTest =
+  typeof globalThis.describe === "function" && typeof globalThis.it === "function"
+    ? null
+    : await import(/* @vite-ignore */ ["node", "test"].join(":"));
+const describe = directNodeTest ? directNodeTest.describe.skip : globalThis.describe;
+const it = directNodeTest ? directNodeTest.it : globalThis.it;
+const expect = globalThis.expect;
 
 const workflow = (name) => readFileSync(
   resolve(import.meta.dirname, "..", ".github", "workflows", name),
@@ -16,6 +23,19 @@ const productionWorkflows = [
   directCloudflare,
   reusableCloudflare,
 ];
+
+it("binds the production-deploy receipt before every coordinated mutation", () => {
+  assert.match(productionRelease, /consume-break-glass-authorization:/);
+  assert.match(productionRelease, /overwrite: false/);
+  assert.match(productionRelease, /retention-days: 7/);
+  assert.match(productionRelease, /create-release-artifact-binding\.mjs/);
+  assert.match(productionRelease, /verify-release-artifact-binding\.mjs/);
+  assert.match(productionRelease, /consumption_binding_artifact_id/);
+  for (const source of [productionRelease, reusableCloudflare]) {
+    assert.match(source, /authorization_sha256/);
+    assert.match(source, /consumption_sha256/);
+  }
+});
 
 describe("GitHub Free production release controls", () => {
   it("does not claim unavailable private-repository environments or attestations", () => {
