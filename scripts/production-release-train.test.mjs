@@ -606,24 +606,29 @@ it("Cloudflare authorizes the exact millisecond forward mutation boundary", () =
   const finalGithubLease = run.lastIndexOf(
     'node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" github-staging-lease',
   );
-  const timestamp = run.indexOf(
-    "forward_mutation_started_at=\"$(node --input-type=module --eval 'process.stdout.write(new Date().toISOString())')\"",
-  );
   const boundaryValidation = run.indexOf(
     'node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" mutation-lease',
-    timestamp,
+    finalGithubLease,
   );
-  const wrangler = run.indexOf("npx --no-install wrangler pages deploy dist", timestamp);
+  const preparation = run.indexOf('wrangler_output_dir="$RUNNER_TEMP/cloudflare-production-wrangler-output"', boundaryValidation);
+  const boundaryClock = run.indexOf('provider_boundary_epoch_real="$EPOCHREALTIME"', preparation);
+  const wrangler = run.indexOf("npx --no-install wrangler pages deploy dist", boundaryClock);
+  const timestamp = run.indexOf("forward_mutation_started_at=", wrangler);
   assert.ok(deploymentsRead >= 0 && finalGithubLease > deploymentsRead);
-  assert.ok(timestamp > finalGithubLease);
-  assert.ok(boundaryValidation > timestamp && wrangler > boundaryValidation);
-  const boundary = run.slice(timestamp, wrangler);
-  assert.match(boundary, /--now "\$forward_mutation_started_at"/);
-  assert.match(boundary, /--arg attempted_at "\$forward_mutation_started_at"/);
-  assert.match(boundary, /forward_mutation_started_at=\$forward_mutation_started_at/);
-  const afterValidation = run.slice(boundaryValidation, wrangler);
-  assert.doesNotMatch(afterValidation, /curl |gh api|sleep /);
-  assert.doesNotMatch(boundary, /date -u \+%Y-%m-%dT%H:%M:%SZ/);
+  assert.ok(boundaryValidation > finalGithubLease);
+  assert.ok(preparation > boundaryValidation && boundaryClock > preparation);
+  assert.ok(wrangler > boundaryClock && timestamp > wrangler);
+  const atomicBoundary = run.slice(boundaryClock, wrangler);
+  assert.match(atomicBoundary, />=/);
+  assert.doesNotMatch(
+    atomicBoundary,
+    /\$\(|\b(?:date|jq|node|npm|npx|gh|curl|wget|sleep|find|sha256sum)\b/,
+  );
+  const afterMutation = run.slice(wrangler, timestamp);
+  assert.match(afterMutation, /wrangler_statuses=\("\$\{PIPESTATUS\[@\]\}"\)/);
+  const evidenceBoundary = run.slice(timestamp);
+  assert.match(evidenceBoundary, /--arg attempted_at "\$forward_mutation_started_at"/);
+  assert.match(evidenceBoundary, /forward_mutation_started_at=\$forward_mutation_started_at/);
   const rollback = parsed.jobs.deploy.steps.find(
     (step) => step.name === "Roll back failed production candidate",
   );
@@ -2662,12 +2667,15 @@ describe("production release train", () => {
       (step) => step.name === "Resolve and validate exact production deployment",
     );
 
-    expect(deploy.run.indexOf("mutation_attempted=true")).toBeLessThan(
-      deploy.run.indexOf("wrangler pages deploy"),
-    );
+    const mutationIndex = deploy.run.indexOf("wrangler pages deploy");
+    const statusIndex = deploy.run.indexOf('wrangler_statuses=("${PIPESTATUS[@]}")', mutationIndex);
+    const attemptedIndex = deploy.run.indexOf("mutation_attempted=true", statusIndex);
+    expect(mutationIndex).toBeGreaterThan(-1);
+    expect(statusIndex).toBeGreaterThan(mutationIndex);
+    expect(attemptedIndex).toBeGreaterThan(statusIndex);
     expect(deploy.run).toContain("cloudflare-production-deployments-before.json");
     expect(deploy.run.indexOf("deployments?env=production&per_page=100"))
-      .toBeLessThan(deploy.run.indexOf("mutation_attempted=true"));
+      .toBeLessThan(mutationIndex);
     expect(reconciliation.env.DEPLOYMENTS_BEFORE).toBe(
       "${{ steps.deploy.outputs.deployments_before }}",
     );

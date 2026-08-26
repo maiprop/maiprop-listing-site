@@ -533,13 +533,13 @@ jobs:
               --file evidence/consumption/production-break-glass-consumption.json \
               --authorization evidence/release-authorization.json --action production-deploy
             node --input-type=module <<'NODE'
-            import { readFileSync } from "node:fs";
-            import { releaseAuthorizationSha256, validateReleaseAuthorizationGrant } from "./scripts/production-break-glass-validation.mjs";
-            const read = (path) => JSON.parse(readFileSync(path, "utf8"));
-            const authorization = read("evidence/release-authorization.json");
-            validateReleaseAuthorizationGrant([authorization, read("evidence/approval-authorization.json")]);
-            if (releaseAuthorizationSha256(authorization) !== process.env.AUTHORIZATION_SHA256) throw new Error("Production authorization SHA-256 changed before mutation.");
-            NODE
+          import { readFileSync } from "node:fs";
+          import { releaseAuthorizationSha256, validateReleaseAuthorizationGrant } from "./scripts/production-break-glass-validation.mjs";
+          const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+          const authorization = read("evidence/release-authorization.json");
+          validateReleaseAuthorizationGrant([authorization, read("evidence/approval-authorization.json")]);
+          if (releaseAuthorizationSha256(authorization) !== process.env.AUTHORIZATION_SHA256) throw new Error("Production authorization SHA-256 changed before mutation.");
+          NODE
           else
             echo "::error::Authorization mode must be explicit."
             exit 1
@@ -1153,7 +1153,32 @@ jobs:
           );
           NODE
             "$RUNNER_TEMP/verify-production-provider-bindings.sh"
+            lease_expires_at="$(jq -er '.expires_at' evidence/mutation-lease/production-mutation-lease.json)"
+            lease_expires_epoch_ms="$(date -u --date="$lease_expires_at" +'%s%3N')"
+            authorization_expires_epoch_ms=""
+            if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+              authorization_expires_at="$(jq -er '.authorized_expires_at' evidence/release-authorization.json)"
+              authorization_expires_epoch_ms="$(date -u --date="$authorization_expires_at" +'%s%3N')"
+            fi
+            if ! [[ "$lease_expires_epoch_ms" =~ ^[1-9][0-9]{12,}$ ]] ||
+               { [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+                 ! [[ "$authorization_expires_epoch_ms" =~ ^[1-9][0-9]{12,}$ ]]; }; then
+              echo "::error::Production Edge mutation deadline is not canonical."
+              exit 1
+            fi
             set +e
+            provider_boundary_epoch_real="$EPOCHREALTIME"
+            if ! [[ "$provider_boundary_epoch_real" =~ ^[1-9][0-9]{9,}\.[0-9]{6}$ ]]; then
+              echo "::error::Production Edge mutation boundary clock is not canonical."
+              exit 1
+            fi
+            provider_boundary_epoch_us="${provider_boundary_epoch_real/./}"
+            if (( 10#$provider_boundary_epoch_us >= 10#$lease_expires_epoch_ms * 1000 )) ||
+               { [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+                 (( 10#$provider_boundary_epoch_us >= 10#$authorization_expires_epoch_ms * 1000 )); }; then
+              echo "::error::Production Edge mutation authorization expired before deploying $function_name."
+              exit 1
+            fi
             npx --no-install supabase --workdir release-candidate functions deploy "$function_name" \
               --use-api \
               --project-ref "$PRODUCTION_PROJECT_REF" \
@@ -1261,8 +1286,33 @@ jobs:
           npm run --silent release:validate -- supabase-target \
             > production-supabase-cron-target.json
           "$RUNNER_TEMP/verify-production-provider-bindings.sh"
+          lease_expires_at="$(jq -er '.expires_at' evidence/mutation-lease/production-mutation-lease.json)"
+          lease_expires_epoch_ms="$(date -u --date="$lease_expires_at" +'%s%3N')"
+          authorization_expires_epoch_ms=""
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            authorization_expires_at="$(jq -er '.authorized_expires_at' evidence/release-authorization.json)"
+            authorization_expires_epoch_ms="$(date -u --date="$authorization_expires_at" +'%s%3N')"
+          fi
+          if ! [[ "$lease_expires_epoch_ms" =~ ^[1-9][0-9]{12,}$ ]] ||
+             { [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+               ! [[ "$authorization_expires_epoch_ms" =~ ^[1-9][0-9]{12,}$ ]]; }; then
+            echo "::error::Production cron mutation deadline is not canonical."
+            exit 1
+          fi
 
           raw_state="$(mktemp)"
+          provider_boundary_epoch_real="$EPOCHREALTIME"
+          if ! [[ "$provider_boundary_epoch_real" =~ ^[1-9][0-9]{9,}\.[0-9]{6}$ ]]; then
+            echo "::error::Production cron mutation boundary clock is not canonical."
+            exit 1
+          fi
+          provider_boundary_epoch_us="${provider_boundary_epoch_real/./}"
+          if (( 10#$provider_boundary_epoch_us >= 10#$lease_expires_epoch_ms * 1000 )) ||
+             { [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+               (( 10#$provider_boundary_epoch_us >= 10#$authorization_expires_epoch_ms * 1000 )); }; then
+            echo "::error::Production cron mutation authorization expired before activation."
+            exit 1
+          fi
           psql "$SUPABASE_PRODUCTION_DB_URL" \
             --no-psqlrc \
             --set ON_ERROR_STOP=1 \

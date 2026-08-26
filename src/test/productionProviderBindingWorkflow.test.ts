@@ -82,6 +82,10 @@ const releaseSha = "0123456789abcdef0123456789abcdef01234567";
 const incidentId = "PERF-BOOTSTRAP-20260826-01";
 const reason = "Emergency release to restore production performance safely.";
 const reasonSha256 = "3a7e0232d1a54441027669a65abbaf8ba8b9272a06e9205c6d9c1ffa4c9e6067";
+const fixtureNowMs = Date.now();
+const fixtureTime = (offsetMs: number) => new Date(fixtureNowMs + offsetMs).toISOString();
+const fixtureNow = fixtureTime(0);
+const fixtureAuthorizationExpiry = fixtureTime(3 * 60 * 60 * 1000);
 
 function stepBlock(source: string, name: string): string {
   const marker = `      - name: ${name}`;
@@ -114,7 +118,7 @@ function breakGlassInput(overrides: Record<string, unknown> = {}) {
     breakGlassActor: "krenios",
     breakGlassReleaseSha: releaseSha,
     breakGlassIncidentId: incidentId,
-    breakGlassExpiresAt: "2026-08-26T12:00:00.000Z",
+    breakGlassExpiresAt: fixtureAuthorizationExpiry,
     ...overrides,
   };
 }
@@ -131,7 +135,7 @@ function authorization(
     release_sha: releaseSha,
     incident_id: incidentId,
     reason_sha256: reasonSha256,
-    authorized_expires_at: "2026-08-26T12:00:00.000Z",
+    authorized_expires_at: fixtureAuthorizationExpiry,
     workflow_run_id: runId,
     workflow_run_attempt: "1",
     ...overrides,
@@ -162,7 +166,7 @@ function receipt(overrides: Record<string, unknown> = {}) {
     workflow_sha: releaseSha,
     workflow_run_id: "70",
     workflow_run_attempt: "1",
-    consumed_at: "2026-08-26T10:00:00.000Z",
+    consumed_at: fixtureTime(-30_000),
     nonce: "9".repeat(64),
     authorization: authorization(),
     ...overrides,
@@ -186,8 +190,8 @@ function approval(overrides: Record<string, unknown> = {}) {
     approver: "krenios",
     nonce: "d".repeat(64),
     revoked: false,
-    approved_at: "2026-08-26T10:00:00.000Z",
-    expires_at: "2026-08-26T11:30:00.000Z",
+    approved_at: fixtureTime(-10 * 60 * 1000),
+    expires_at: fixtureTime(60 * 60 * 1000),
     authorization: approvalAuthorization,
     ...overrides,
   };
@@ -215,9 +219,9 @@ function lease(overrides: Record<string, unknown> = {}) {
     stripe_readiness_sha256: "f".repeat(64),
     stripe_readiness_artifact_id: "90",
     stripe_readiness_artifact_digest: "1".repeat(64),
-    stripe_readiness_checked_at: "2026-08-26T09:59:00.000Z",
-    issued_at: "2026-08-26T10:00:00.000Z",
-    expires_at: "2026-08-26T10:14:00.000Z",
+    stripe_readiness_checked_at: fixtureTime(-60_000),
+    issued_at: fixtureTime(-30_000),
+    expires_at: fixtureTime(14 * 60 * 1000),
     authorization: authorization(),
     consumption: consumption(),
     ...overrides,
@@ -247,7 +251,7 @@ function validateLease(candidate = lease()) {
     stripeReadinessSha256: "f".repeat(64),
     stripeReadinessArtifactId: "90",
     stripeReadinessArtifactDigest: "1".repeat(64),
-    now: new Date("2026-08-26T10:05:00.000Z"),
+    now: new Date(fixtureNow),
   });
 }
 
@@ -880,13 +884,16 @@ describe("Supabase production provider signed-binding contract", () => {
       ["wrong workflow SHA", { workflowSha: "f".repeat(40) }],
       ["wrong checkout SHA", { checkoutSha: "f".repeat(40) }],
       ["wrong incident", { breakGlassIncidentId: "PERF-BOOTSTRAP-20260826-02" }],
-      ["expired authorization", { breakGlassExpiresAt: "2026-08-26T09:59:59.999Z" }],
+      ["expired authorization", { breakGlassExpiresAt: fixtureNow }],
+      ["overlong authorization", {
+        breakGlassExpiresAt: fixtureTime(4 * 60 * 60 * 1000 + 1),
+      }],
       ["attempt greater than one", { runAttempt: "2" }],
     ] as const) {
       expect(
         () => selectReleaseAuthorization(
           breakGlassInput(overrides),
-          { now: "2026-08-26T10:00:00.000Z" },
+          { now: fixtureNow },
         ),
         label,
       ).toThrow();
@@ -927,7 +934,7 @@ describe("Supabase production provider signed-binding contract", () => {
       deployActor: "krenios",
       allowedApprovers: ["release-reviewer"],
       expectedAuthorization: approvalAuthorization,
-      now: new Date("2026-08-26T10:30:00.000Z"),
+      now: new Date(fixtureNow),
     };
     expect(validateReleaseApproval(expected)).toEqual(expected.approval);
     expect(() => validateReleaseApproval({
@@ -996,7 +1003,7 @@ describe("Supabase production provider signed-binding contract", () => {
     expect(validateConsumptionReceipt(
       receipt(),
       expectedReceipt,
-      { now: "2026-08-26T10:05:00.000Z" },
+      { now: fixtureNow },
     )).toEqual(receipt());
     for (const [label, change] of [
       ["wrong action", { authorization: authorization("pages-production") }],
@@ -1011,7 +1018,7 @@ describe("Supabase production provider signed-binding contract", () => {
         () => validateConsumptionReceipt(
           receipt(change),
           expectedReceipt,
-          { now: "2026-08-26T10:05:00.000Z" },
+          { now: fixtureNow },
         ),
         label,
       ).toThrow();
@@ -1164,17 +1171,19 @@ describe("Supabase production provider signed-binding contract", () => {
     const rollback = parsedCloudflare.jobs.deploy.steps.find(
       (step: WorkflowStep) => step.name === "Roll back failed production candidate",
     );
-    const forwardStart = deploy.run.indexOf("forward_mutation_started_at=");
-    const boundaryValidation = deploy.run.indexOf(
-      "production-release-validation.mjs\" mutation-lease",
-      forwardStart,
+    const boundary = deploy.run.indexOf(
+      'provider_boundary_epoch_real="$EPOCHREALTIME"',
     );
-    const mutation = deploy.run.indexOf("wrangler pages deploy", forwardStart);
-    expect(forwardStart).toBeGreaterThanOrEqual(0);
-    expect(boundaryValidation).toBeGreaterThan(forwardStart);
-    expect(mutation).toBeGreaterThan(boundaryValidation);
-    expect(deploy.run.slice(forwardStart, mutation)).toContain(
-      '--now "$forward_mutation_started_at"',
+    const mutation = deploy.run.indexOf("wrangler pages deploy", boundary);
+    const forwardStart = deploy.run.indexOf("forward_mutation_started_at=", mutation);
+    expect(boundary).toBeGreaterThanOrEqual(0);
+    expect(mutation).toBeGreaterThan(boundary);
+    expect(forwardStart).toBeGreaterThan(mutation);
+    expect(deploy.run.slice(mutation, forwardStart)).toContain(
+      'wrangler_statuses=("${PIPESTATUS[@]}")',
+    );
+    expect(deploy.run.slice(forwardStart)).toContain(
+      '--arg attempted_at "$forward_mutation_started_at"',
     );
     expect(rollback.env.FORWARD_MUTATION_STARTED_AT).toBe(
       "${{ steps.deploy.outputs.forward_mutation_started_at }}",

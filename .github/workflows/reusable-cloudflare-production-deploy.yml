@@ -1315,7 +1315,6 @@ jobs:
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
           mutation_attempt_file="$GITHUB_WORKSPACE/evidence/cloudflare-production-mutation-attempt.json"
-          forward_mutation_started_at="$(node --input-type=module --eval 'process.stdout.write(new Date().toISOString())')"
           node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" mutation-lease \
             --file "$GITHUB_WORKSPACE/evidence/mutation-lease/production-mutation-lease.json" \
             --sha "$RELEASE_SHA" \
@@ -1336,8 +1335,51 @@ jobs:
             --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
             --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
             --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
-            --now "$forward_mutation_started_at" \
             "${lease_args[@]}"
+          lease_expires_at="$(jq -er '.expires_at' "$GITHUB_WORKSPACE/evidence/mutation-lease/production-mutation-lease.json")"
+          lease_expires_epoch_ms="$(date -u --date="$lease_expires_at" +'%s%3N')"
+          authorization_expires_epoch_ms=""
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            authorization_expires_at="$(jq -er '.authorized_expires_at' "$GITHUB_WORKSPACE/evidence/release-authorization.json")"
+            authorization_expires_epoch_ms="$(date -u --date="$authorization_expires_at" +'%s%3N')"
+          fi
+          if ! [[ "$lease_expires_epoch_ms" =~ ^[1-9][0-9]{12,}$ ]] ||
+             { [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+               ! [[ "$authorization_expires_epoch_ms" =~ ^[1-9][0-9]{12,}$ ]]; }; then
+            echo "::error::Cloudflare Pages mutation deadline is not canonical."
+            exit 1
+          fi
+          wrangler_output_dir="$RUNNER_TEMP/cloudflare-production-wrangler-output"
+          rm -rf "$wrangler_output_dir"
+          mkdir -p "$wrangler_output_dir"
+          set +e
+          provider_boundary_epoch_real="$EPOCHREALTIME"
+          if ! [[ "$provider_boundary_epoch_real" =~ ^[1-9][0-9]{9,}\.[0-9]{6}$ ]]; then
+            echo "::error::Cloudflare Pages mutation boundary clock is not canonical."
+            exit 1
+          fi
+          provider_boundary_epoch_us="${provider_boundary_epoch_real/./}"
+          if (( 10#$provider_boundary_epoch_us >= 10#$lease_expires_epoch_ms * 1000 )) ||
+             { [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+               (( 10#$provider_boundary_epoch_us >= 10#$authorization_expires_epoch_ms * 1000 )); }; then
+            echo "::error::Cloudflare Pages mutation authorization expired before deployment."
+            exit 1
+          fi
+          WRANGLER_OUTPUT_DIR="$wrangler_output_dir" \
+            npx --no-install wrangler pages deploy dist \
+            --project-name=maiprop-listing-site \
+            --branch=main \
+            --commit-hash="$RELEASE_SHA" \
+            --commit-dirty=false \
+            2>&1 | tee "$RUNNER_TEMP/cloudflare-production-wrangler.log"
+          wrangler_statuses=("${PIPESTATUS[@]}")
+          wrangler_status="${wrangler_statuses[0]}"
+          tee_status="${wrangler_statuses[1]}"
+          set -e
+          forward_mutation_started_seconds="${provider_boundary_epoch_real%%.*}"
+          forward_mutation_started_millis="${provider_boundary_epoch_real#*.}"
+          forward_mutation_started_millis="${forward_mutation_started_millis:0:3}"
+          forward_mutation_started_at="$(date -u --date="@$forward_mutation_started_seconds" +'%Y-%m-%dT%H:%M:%S').${forward_mutation_started_millis}Z"
           jq -n \
             --arg release_sha "$RELEASE_SHA" \
             --arg project "$PRODUCTION_PROJECT" \
@@ -1354,16 +1396,12 @@ jobs:
           echo "mutation_attempted=true" >> "$GITHUB_OUTPUT"
           echo "forward_mutation_started_at=$forward_mutation_started_at" >> "$GITHUB_OUTPUT"
           echo "mutation_attempt_file=$mutation_attempt_file" >> "$GITHUB_OUTPUT"
-          wrangler_output_dir="$RUNNER_TEMP/cloudflare-production-wrangler-output"
-          rm -rf "$wrangler_output_dir"
-          mkdir -p "$wrangler_output_dir"
-          WRANGLER_OUTPUT_DIR="$wrangler_output_dir" \
-            npx --no-install wrangler pages deploy dist \
-            --project-name=maiprop-listing-site \
-            --branch=main \
-            --commit-hash="$RELEASE_SHA" \
-            --commit-dirty=false \
-            2>&1 | tee "$RUNNER_TEMP/cloudflare-production-wrangler.log"
+          if [ "$wrangler_status" -ne 0 ]; then
+            exit "$wrangler_status"
+          fi
+          if [ "$tee_status" -ne 0 ]; then
+            exit "$tee_status"
+          fi
           mapfile -t wrangler_receipts < <(
             find "$wrangler_output_dir" -type f -name '*.json' -print
           )
