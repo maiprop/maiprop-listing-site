@@ -480,6 +480,110 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.production_run_id }}
 
+      - name: Authenticate declared production authorization mode
+        env:
+          APPROVAL_FILE: evidence/approval/production-release-approval.json
+          MUTATION_LEASE_FILE: evidence/mutation-lease/production-mutation-lease.json
+          DECLARED_AUTHORIZATION_MODE: ${{ inputs.authorization_mode }}
+          EXPECTED_AUTHORIZATION_SHA256: ${{ inputs.authorization_sha256 }}
+          DEPLOY_ACTOR: ${{ inputs.deploy_actor }}
+          DIRECT_STANDARD_RECOVERY: ${{ inputs.authorization_artifact_id == '' }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          import {
+            releaseAuthorizationSha256,
+            validateReleaseAuthorization,
+            validateReleaseAuthorizationGrant,
+          } from "./scripts/production-break-glass-validation.mjs";
+
+          const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+          const approval = read(process.env.APPROVAL_FILE);
+          const lease = read(process.env.MUTATION_LEASE_FILE);
+          const mode = process.env.DECLARED_AUTHORIZATION_MODE;
+          const directRecovery = process.env.DIRECT_STANDARD_RECOVERY === "true";
+          if (mode !== "standard" && mode !== "break_glass") {
+            throw new Error("Declared production authorization mode is unsupported.");
+          }
+          let approvalAuthorization;
+          if (approval.schema_version === 1) {
+            if (mode !== "standard") {
+              throw new Error("Schema-version-1 approval is standard-only.");
+            }
+          } else if (approval.schema_version === 2) {
+            approvalAuthorization = validateReleaseAuthorization(
+              approval.authorization,
+              {
+                mode,
+                action: "production-approval",
+                actor: String(approval.approver).toLowerCase(),
+                releaseSha: process.env.RELEASE_SHA,
+                runId: process.env.APPROVAL_RUN_ID,
+                runAttempt: process.env.APPROVAL_RUN_ATTEMPT,
+              },
+            );
+          } else {
+            throw new Error("Production approval schema version is unsupported.");
+          }
+          let deploymentAuthorization;
+          if (mode === "standard") {
+            if (
+              lease.schema_version !== 2 ||
+              Object.hasOwn(lease, "authorization") ||
+              Object.hasOwn(lease, "consumption")
+            ) {
+              throw new Error("Standard authorization requires an exact schema-version-2 lease.");
+            }
+            deploymentAuthorization = validateReleaseAuthorization({
+              mode: "standard",
+              action: "production-deploy",
+              actor: String(process.env.DEPLOY_ACTOR).toLowerCase(),
+              release_sha: process.env.RELEASE_SHA,
+              workflow_run_id: process.env.PRODUCTION_RUN_ID,
+              workflow_run_attempt: process.env.PRODUCTION_RUN_ATTEMPT,
+            }, {
+              mode: "standard",
+              action: "production-deploy",
+              actor: String(process.env.DEPLOY_ACTOR).toLowerCase(),
+              releaseSha: process.env.RELEASE_SHA,
+              runId: process.env.PRODUCTION_RUN_ID,
+              runAttempt: process.env.PRODUCTION_RUN_ATTEMPT,
+            });
+          } else {
+            if (directRecovery || lease.schema_version !== 3) {
+              throw new Error("Break-glass authorization requires the coordinated schema-version-3 lease.");
+            }
+            deploymentAuthorization = validateReleaseAuthorization(
+              lease.authorization,
+              {
+                mode: "break_glass",
+                action: "production-deploy",
+                actor: String(process.env.DEPLOY_ACTOR).toLowerCase(),
+                releaseSha: process.env.RELEASE_SHA,
+                runId: process.env.PRODUCTION_RUN_ID,
+                runAttempt: process.env.PRODUCTION_RUN_ATTEMPT,
+              },
+            );
+          }
+          if (approvalAuthorization) {
+            validateReleaseAuthorizationGrant([
+              deploymentAuthorization,
+              approvalAuthorization,
+            ]);
+          }
+          const expectedHash = process.env.EXPECTED_AUTHORIZATION_SHA256;
+          if (directRecovery) {
+            if (mode !== "standard" || expectedHash !== "") {
+              throw new Error("Direct recovery accepts only its legacy standard authorization sentinel.");
+            }
+          } else if (
+            releaseAuthorizationSha256(deploymentAuthorization) !== expectedHash
+          ) {
+            throw new Error("Declared production authorization SHA-256 does not match the exact deployment authorization.");
+          }
+          NODE
+
       - name: Download exact production authorization and consumption evidence
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1197,8 +1301,35 @@ jobs:
           jq -e '.success == true and (.result | type == "array")' \
             "$deployments_before" > /dev/null
           echo "deployments_before=$deployments_before" >> "$GITHUB_OUTPUT"
+          node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
           mutation_attempt_file="$GITHUB_WORKSPACE/evidence/cloudflare-production-mutation-attempt.json"
-          forward_mutation_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          forward_mutation_started_at="$(node --input-type=module --eval 'process.stdout.write(new Date().toISOString())')"
+          node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" mutation-lease \
+            --file "$GITHUB_WORKSPACE/evidence/mutation-lease/production-mutation-lease.json" \
+            --sha "$RELEASE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-tree "$SOURCE_TREE" \
+            --artifact-sha256 "$ARTIFACT_SHA256" \
+            --approval-nonce "$APPROVAL_NONCE" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" \
+            --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
+            --production-run-id "$PRODUCTION_RUN_ID" \
+            --production-run-attempt "$PRODUCTION_RUN_ATTEMPT" \
+            --stripe-readiness-run-id "$STRIPE_READINESS_RUN_ID" \
+            --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
+            --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
+            --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            --now "$forward_mutation_started_at" \
+            "${lease_args[@]}"
           jq -n \
             --arg release_sha "$RELEASE_SHA" \
             --arg project "$PRODUCTION_PROJECT" \
