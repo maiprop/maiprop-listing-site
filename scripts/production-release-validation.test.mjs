@@ -1,8 +1,8 @@
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
 import {
   assertCloudflareDeployment,
   assertEdgeBundleParity,
@@ -23,6 +23,57 @@ import {
   validateReleaseApproval,
   validateStagingLease,
 } from "./production-release-validation.mjs";
+
+const hasVitestRuntime =
+  typeof globalThis.describe === "function" &&
+  typeof globalThis.it === "function" &&
+  typeof globalThis.expect === "function";
+const testRuntime = hasVitestRuntime
+  ? globalThis
+  : await import(/* @vite-ignore */ ["node", "test"].join(":"));
+const { describe, it } = testRuntime;
+
+function matchingShape(actual, expected) {
+  if (Array.isArray(expected)) {
+    return expected.map((value, index) => matchingShape(actual?.[index], value));
+  }
+  if (expected !== null && typeof expected === "object") {
+    return Object.fromEntries(Object.entries(expected).map(([key, value]) => [
+      key,
+      matchingShape(actual?.[key], value),
+    ]));
+  }
+  return actual;
+}
+
+const expect = hasVitestRuntime ? globalThis.expect : ((actual, message) => ({
+  toBe(expected) {
+    assert.strictEqual(actual, expected, message);
+  },
+  toBeTypeOf(expected) {
+    assert.strictEqual(typeof actual, expected, message);
+  },
+  toContain(expected) {
+    assert.ok(actual.includes(expected), message);
+  },
+  toEqual(expected) {
+    assert.deepStrictEqual(actual, expected, message);
+  },
+  toMatch(expected) {
+    assert.match(String(actual), expected, message);
+  },
+  toMatchObject(expected) {
+    assert.deepStrictEqual(matchingShape(actual, expected), expected, message);
+  },
+  toThrow(expected) {
+    assert.throws(actual, expected, message);
+  },
+  not: {
+    toBe(expected) {
+      assert.notStrictEqual(actual, expected, message);
+    },
+  },
+}));
 
 const sha = "0123456789abcdef0123456789abcdef01234567";
 const root = resolve(import.meta.dirname, "..");
