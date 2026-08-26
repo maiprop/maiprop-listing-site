@@ -3,9 +3,14 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { describe, it } from "node:test";
 
 import yaml from "js-yaml";
+
+const testRuntime =
+  typeof globalThis.describe === "function" && typeof globalThis.it === "function"
+    ? globalThis
+    : await import(/* @vite-ignore */ ["node", "test"].join(":"));
+const { describe, it } = testRuntime;
 
 const workflowPath = resolve(
   ".github/workflows/verify-stripe-live-readiness.yml",

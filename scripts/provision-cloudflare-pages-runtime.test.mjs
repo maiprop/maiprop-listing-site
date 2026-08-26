@@ -3,9 +3,14 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { describe, it } from "node:test";
 
 import yaml from "js-yaml";
+
+const testRuntime =
+  typeof globalThis.describe === "function" && typeof globalThis.it === "function"
+    ? globalThis
+    : await import(/* @vite-ignore */ ["node", "test"].join(":"));
+const { describe, it } = testRuntime;
 
 import {
   consumptionArtifactName,
@@ -191,6 +196,38 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
     assert.doesNotMatch(JSON.stringify(upload),
       /SUPABASE_SERVICE_ROLE_KEY|TURN_API_TOKEN|PAGES_EDIT_TOKEN/,
     );
+  });
+
+  it("uploads minimized evidence even after a provisioning or post-read failure", () => {
+    const parsed = workflow();
+    const provision = parsed.jobs.provision;
+    const mutationIndex = stepIndex(
+      provision,
+      "Provision strict Cloudflare Pages runtime bindings",
+    );
+    const uploadIndex = stepIndex(
+      provision,
+      "Upload minimized Cloudflare Pages runtime evidence",
+    );
+    const upload = provision.steps[uploadIndex];
+    const binding = provision.steps.find(
+      (step) => step.name === "Create and same-run verify Pages runtime evidence binding",
+    );
+
+    assert.ok(mutationIndex >= 0);
+    assert.ok(uploadIndex > mutationIndex);
+    assert.equal(upload.if, "${{ always() }}");
+    assert.equal(
+      upload.with.path,
+      "${{ runner.temp }}/cloudflare-pages-runtime-evidence/",
+    );
+    assert.equal(upload.with["if-no-files-found"], "error");
+    assert.equal(upload.with.overwrite, false);
+    assert.equal(upload.with["retention-days"], 30);
+    assert.ok(binding.run.includes("--same-run"));
+    assert.ok(binding.run.includes(
+      '--payload-root "$RUNNER_TEMP/cloudflare-pages-runtime-evidence"',
+    ));
   });
 
   it("maps both targets through central validation after checkout and before credentials", () => {
