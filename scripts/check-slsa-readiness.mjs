@@ -3,11 +3,220 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import yaml from "js-yaml";
 
+import {
+  releaseAuthorizationSha256,
+  validateReleaseAuthorization,
+} from "./production-break-glass-validation.mjs";
+
 const result = (failures, summary = {}) => ({
   ok: failures.length === 0,
   failures,
   summary,
 });
+
+const LOWERCASE_SHA256 = /^[0-9a-f]{64}$/;
+const LOWERCASE_SHA = /^[0-9a-f]{40}$/;
+const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
+const INCIDENT_ID = /^[A-Z0-9][A-Z0-9._-]{7,63}$/;
+
+const isPlainObject = (value) =>
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  Object.getPrototypeOf(value) === Object.prototype;
+
+const exactKeys = (value, expected) => {
+  if (!isPlainObject(value)) return false;
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return actual.length === wanted.length &&
+    actual.every((key, index) => key === wanted[index]);
+};
+
+const productionAttestationTypes = Object.freeze({
+  database: "maiprop-production-database-promotion",
+  edge: "maiprop-production-edge-promotion",
+  cloudflare: "maiprop-cloudflare-production-promotion",
+  aggregate: "maiprop-coordinated-production-release",
+});
+
+function validateConsumptionTuple(failures, value, authorization) {
+  const keys = [
+    "artifact_id",
+    "artifact_digest",
+    "binding_artifact_id",
+    "payload_sha256",
+    "action",
+    "incident_id",
+    "release_sha",
+    "parent_run_id",
+  ];
+  if (!exactKeys(value, keys)) {
+    failures.push("Break-glass consumption evidence has unsupported or missing fields");
+    return null;
+  }
+  for (const field of ["artifact_id", "binding_artifact_id", "parent_run_id"]) {
+    if (typeof value[field] !== "string" || !POSITIVE_INTEGER.test(value[field])) {
+      failures.push(`Break-glass consumption ${field} must be an exact positive integer string`);
+    }
+  }
+  for (const field of ["artifact_digest", "payload_sha256"]) {
+    if (typeof value[field] !== "string" || !LOWERCASE_SHA256.test(value[field])) {
+      failures.push(`Break-glass consumption ${field} must be an exact lowercase SHA-256 value`);
+    }
+  }
+  if (
+    value.action !== "production-deploy" ||
+    value.incident_id !== authorization.incident_id ||
+    value.release_sha !== authorization.release_sha ||
+    value.parent_run_id !== authorization.workflow_run_id ||
+    !INCIDENT_ID.test(value.incident_id ?? "") ||
+    !LOWERCASE_SHA.test(value.release_sha ?? "")
+  ) {
+    failures.push("Break-glass consumption action, incident, SHA, or parent run is not exact");
+  }
+  return value;
+}
+
+function validateCoordinatedReleaseEvidence(failures, evidence) {
+  if (!exactKeys(evidence, ["route", "authorization", "consumption", "attestations"])) {
+    failures.push("Coordinated release evidence has unsupported or missing fields");
+    return {};
+  }
+  let authorization;
+  try {
+    authorization = validateReleaseAuthorization(
+      evidence.authorization,
+      { action: "production-deploy" },
+      { allowHistoricalExpiry: true },
+    );
+    if (
+      !exactKeys(evidence.authorization, Object.keys(authorization)) ||
+      Object.entries(authorization).some(
+        ([key, value]) => evidence.authorization[key] !== value,
+      )
+    ) {
+      throw new Error("authorization is not exactly normalized");
+    }
+  } catch (error) {
+    failures.push(`Coordinated release authorization is invalid: ${error.message}`);
+    return {};
+  }
+
+  const expectedAuthorizationSha256 = releaseAuthorizationSha256(authorization);
+  let expectedConsumptionSha256 = null;
+  if (authorization.mode === "standard") {
+    if (!exactKeys(evidence.consumption, ["mode"]) || evidence.consumption.mode !== "standard") {
+      failures.push("Standard coordinated release evidence cannot contain break-glass consumption");
+    }
+  } else {
+    const consumption = validateConsumptionTuple(
+      failures,
+      evidence.consumption,
+      authorization,
+    );
+    expectedConsumptionSha256 = consumption?.payload_sha256 ?? null;
+  }
+
+  if (!exactKeys(evidence.attestations, Object.keys(productionAttestationTypes))) {
+    failures.push("Coordinated production attestations are partial or contain extra evidence");
+    return authorization.mode === "break_glass"
+      ? { mode: "break_glass", incident_id: authorization.incident_id }
+      : { mode: "standard" };
+  }
+
+  for (const [name, evidenceType] of Object.entries(productionAttestationTypes)) {
+    const attestation = evidence.attestations[name];
+    if (!isPlainObject(attestation)) {
+      failures.push(`${name} production attestation must be an object`);
+      continue;
+    }
+    if (attestation.schema_version !== 1 || attestation.evidence_type !== evidenceType) {
+      failures.push(`${name} production attestation schema or evidence type is invalid`);
+    }
+    if (attestation.authorization_mode !== authorization.mode) {
+      failures.push(`${name} production authorization mode is mixed or changed`);
+    }
+    if (
+      typeof attestation.authorization_sha256 !== "string" ||
+      !LOWERCASE_SHA256.test(attestation.authorization_sha256) ||
+      attestation.authorization_sha256 !== expectedAuthorizationSha256
+    ) {
+      failures.push(`${name} production authorization hash is missing, malformed, or changed`);
+    }
+    if (
+      authorization.mode === "break_glass"
+        ? (
+          typeof attestation.consumption_sha256 !== "string" ||
+          !LOWERCASE_SHA256.test(attestation.consumption_sha256) ||
+          attestation.consumption_sha256 !== expectedConsumptionSha256
+        )
+        : attestation.consumption_sha256 !== null
+    ) {
+      failures.push(`${name} production consumption hash is missing, malformed, or changed`);
+    }
+    for (const forbidden of [
+      "authorization",
+      "consumption",
+      "incident_id",
+      "reason",
+      "reason_sha256",
+      "authorized_expires_at",
+    ]) {
+      if (Object.hasOwn(attestation, forbidden)) {
+        failures.push(`${name} production attestation contains unsupported authorization evidence`);
+      }
+    }
+  }
+  return authorization.mode === "break_glass"
+    ? { mode: "break_glass", incident_id: authorization.incident_id }
+    : { mode: "standard" };
+}
+
+function validateDirectRecoveryEvidence(failures, evidence) {
+  if (!exactKeys(evidence, ["route", "attestation"]) || !isPlainObject(evidence.attestation)) {
+    failures.push("Direct recovery evidence has unsupported or missing fields");
+    return {};
+  }
+  const attestation = evidence.attestation;
+  if (
+    attestation.schema_version !== 1 ||
+    attestation.evidence_type !== "maiprop-cloudflare-production-recovery"
+  ) {
+    failures.push("Direct recovery evidence schema or evidence type is invalid");
+  }
+  for (const forbidden of [
+    "authorization_mode",
+    "authorization_sha256",
+    "consumption_sha256",
+    "incident_id",
+    "authorization",
+    "consumption",
+    "reason",
+    "reason_sha256",
+    "authorized_expires_at",
+  ]) {
+    if (Object.hasOwn(attestation, forbidden)) {
+      failures.push("Direct recovery evidence cannot contain break-glass authorization or consumption fields");
+    }
+  }
+  return { mode: "standard" };
+}
+
+function validateReleaseEvidence(failures, evidence) {
+  if (!isPlainObject(evidence)) {
+    failures.push("Release evidence must be an object");
+    return {};
+  }
+  if (evidence.route === "coordinated") {
+    return validateCoordinatedReleaseEvidence(failures, evidence);
+  }
+  if (evidence.route === "direct_recovery") {
+    return validateDirectRecoveryEvidence(failures, evidence);
+  }
+  failures.push("Release evidence route is unsupported");
+  return {};
+}
 
 const readText = (root, relativePath) => {
   const path = join(root, relativePath);
@@ -121,7 +330,7 @@ const rejectUnsupportedControls = (
   }
 };
 
-export function checkSlsaReadiness(root = process.cwd()) {
+export function checkSlsaReadiness(root = process.cwd(), options = {}) {
   const failures = [];
   const paths = {
     ci: ".github/workflows/ci.yml",
@@ -129,6 +338,8 @@ export function checkSlsaReadiness(root = process.cwd()) {
     approval: ".github/workflows/approve-production-release.yml",
     supabase: ".github/workflows/reusable-supabase-staging.yml",
     production: ".github/workflows/deploy-production-release.yml",
+    productionDatabase: ".github/workflows/deploy-supabase-production-db.yml",
+    productionEdge: ".github/workflows/deploy-edge-functions.yml",
     directCloudflare: ".github/workflows/direct-cloudflare-production-deploy.yml",
     reusableCloudflare: ".github/workflows/reusable-cloudflare-production-deploy.yml",
     binding: "scripts/release-artifact-binding.mjs",
@@ -322,7 +533,20 @@ export function checkSlsaReadiness(root = process.cwd()) {
     "mutation_lease_artifact: ${{ needs.renew-cloudflare-mutation-lease.outputs.mutation_lease_artifact }}",
     "production-release-attestation-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
     "production-release-attestation-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}-binding",
+    "authorization_sha256: process.env.AUTHORIZATION_SHA256",
+    'consumption_sha256: process.env.AUTHORIZATION_MODE === "break_glass"',
   ]);
+  for (const name of ["productionDatabase", "productionEdge"]) {
+    requireMarkers(failures, paths[name], texts[name], [
+      "authorization_sha256: process.env.AUTHORIZATION_SHA256",
+      'consumption_sha256: process.env.AUTHORIZATION_MODE === "break_glass"',
+      "node scripts/create-release-artifact-binding.mjs",
+      "node scripts/verify-release-artifact-binding.mjs",
+      "--artifact-id",
+      "--artifact-digest",
+      "--same-run",
+    ]);
+  }
   requireMarkers(failures, paths.directCloudflare, texts.directCloudflare, [
     "inputs.confirm == 'RECOVER_CLOUDFLARE_PRODUCTION'",
     "github.run_attempt == 1",
@@ -397,6 +621,8 @@ export function checkSlsaReadiness(root = process.cwd()) {
     "node scripts/verify-release-artifact-binding.mjs",
     '--artifact-id "$PAYLOAD_ARTIFACT_ID"',
     '--artifact-digest "$PAYLOAD_ARTIFACT_DIGEST"',
+    "authorization_sha256: process.env.AUTHORIZATION_SHA256 || null",
+    'consumption_sha256: process.env.AUTHORIZATION_MODE === "break_glass"',
   ]);
   requirePatterns(
     failures,
@@ -483,12 +709,25 @@ export function checkSlsaReadiness(root = process.cwd()) {
     .filter((name) => texts[name]?.includes("node scripts/create-release-artifact-binding.mjs"))
     .map((name) => paths[name])
     .sort();
+  let releaseAuthorization;
+  if (Object.keys(options).some((key) => key !== "releaseEvidence")) {
+    failures.push("SLSA readiness options contain unsupported fields");
+  }
+  if (Object.hasOwn(options, "releaseEvidence")) {
+    releaseAuthorization = validateReleaseEvidence(
+      failures,
+      options.releaseEvidence,
+    );
+  }
   return result(failures, {
     bindingWorkflowFiles,
     githubFreePrivateEnvironmentControls: {
       active: false,
       purpose: "deployment attribution and paid-plan scope only",
     },
+    ...(releaseAuthorization && Object.keys(releaseAuthorization).length > 0
+      ? { releaseAuthorization }
+      : {}),
   });
 }
 

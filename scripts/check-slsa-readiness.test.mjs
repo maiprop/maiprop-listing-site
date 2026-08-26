@@ -1,4 +1,3 @@
-import { afterEach, describe, expect, it } from "vitest";
 import {
   cpSync,
   mkdirSync,
@@ -11,6 +10,32 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { checkSlsaReadiness } from "./check-slsa-readiness.mjs";
+import { releaseAuthorizationSha256 } from "./production-break-glass-validation.mjs";
+
+const testRuntime =
+  typeof globalThis.describe === "function" &&
+  typeof globalThis.it === "function" &&
+  typeof globalThis.expect === "function"
+    ? globalThis
+    : await import(/* @vite-ignore */ ["node", "test"].join(":"));
+const { afterEach, describe, it } = testRuntime;
+const expect = globalThis.expect ?? ((actual) => ({
+  toBe(expected) {
+    if (!Object.is(actual, expected)) {
+      throw new Error(`Expected ${JSON.stringify(actual)} to be ${JSON.stringify(expected)}.`);
+    }
+  },
+  toEqual(expected) {
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`Expected ${JSON.stringify(actual)} to equal ${JSON.stringify(expected)}.`);
+    }
+  },
+  toMatch(expected) {
+    if (!expected.test(String(actual))) {
+      throw new Error(`Expected ${JSON.stringify(actual)} to match ${expected}.`);
+    }
+  },
+}));
 
 const roots = [];
 const requiredFiles = [
@@ -44,6 +69,101 @@ function fixture() {
 function rewrite(root, relativePath, transform) {
   const path = join(root, relativePath);
   writeFileSync(path, transform(readFileSync(path, "utf8")));
+}
+
+const releaseSha = "0123456789abcdef0123456789abcdef01234567";
+const incidentId = "PERF-BOOTSTRAP-20260826-01";
+const reasonSha256 = "3a7e0232d1a54441027669a65abbaf8ba8b9272a06e9205c6d9c1ffa4c9e6067";
+
+function breakGlassAuthorization(overrides = {}) {
+  return {
+    mode: "break_glass",
+    action: "production-deploy",
+    actor: "krenios",
+    release_sha: releaseSha,
+    incident_id: incidentId,
+    reason_sha256: reasonSha256,
+    authorized_expires_at: "2026-08-26T12:00:00.000Z",
+    workflow_run_id: "70",
+    workflow_run_attempt: "1",
+    ...overrides,
+  };
+}
+
+function standardAuthorization(overrides = {}) {
+  return {
+    mode: "standard",
+    action: "production-deploy",
+    actor: "release-operator",
+    release_sha: releaseSha,
+    workflow_run_id: "70",
+    workflow_run_attempt: "1",
+    ...overrides,
+  };
+}
+
+function breakGlassConsumption(overrides = {}) {
+  return {
+    artifact_id: "101",
+    artifact_digest: "a".repeat(64),
+    binding_artifact_id: "102",
+    payload_sha256: "b".repeat(64),
+    action: "production-deploy",
+    incident_id: incidentId,
+    release_sha: releaseSha,
+    parent_run_id: "70",
+    ...overrides,
+  };
+}
+
+function attestation(name, mode, authorizationSha256, consumptionSha256, overrides = {}) {
+  return {
+    schema_version: 1,
+    evidence_type: name,
+    authorization_mode: mode,
+    authorization_sha256: authorizationSha256,
+    consumption_sha256: consumptionSha256,
+    ...overrides,
+  };
+}
+
+function coordinatedReleaseEvidence(overrides = {}) {
+  const authorization = breakGlassAuthorization();
+  const consumption = breakGlassConsumption();
+  const authorizationSha256 = releaseAuthorizationSha256(authorization);
+  const attestations = {
+    database: attestation(
+      "maiprop-production-database-promotion",
+      "break_glass",
+      authorizationSha256,
+      consumption.payload_sha256,
+    ),
+    edge: attestation(
+      "maiprop-production-edge-promotion",
+      "break_glass",
+      authorizationSha256,
+      consumption.payload_sha256,
+    ),
+    cloudflare: attestation(
+      "maiprop-cloudflare-production-promotion",
+      "break_glass",
+      authorizationSha256,
+      consumption.payload_sha256,
+    ),
+    aggregate: attestation(
+      "maiprop-coordinated-production-release",
+      "break_glass",
+      authorizationSha256,
+      consumption.payload_sha256,
+    ),
+  };
+  return {
+    route: "coordinated",
+    authorization,
+    consumption,
+    attestations,
+    ...overrides,
+  };
 }
 
 describe("GitHub Free private-repository release provenance readiness", () => {
@@ -512,5 +632,144 @@ describe("GitHub Free private-repository release provenance readiness", () => {
     expect(readiness.failures.join("\n")).toMatch(
       /cloudflare-staging.*staging environment/i,
     );
+  });
+
+  it("accepts only one exact signed break-glass hash tuple across all production attestations", () => {
+    const readiness = checkSlsaReadiness(process.cwd(), {
+      releaseEvidence: coordinatedReleaseEvidence(),
+    });
+
+    expect(readiness.failures).toEqual([]);
+    expect(readiness.summary.releaseAuthorization).toEqual({
+      mode: "break_glass",
+      incident_id: incidentId,
+    });
+    expect(JSON.stringify(readiness.summary).includes(reasonSha256)).toBe(false);
+  });
+
+  it("rejects missing, malformed, uppercase, changed, partial, and mixed production hashes", () => {
+    for (const [label, mutate] of [
+      ["missing authorization hash", (value) => {
+        delete value.attestations.database.authorization_sha256;
+      }],
+      ["missing consumption hash", (value) => {
+        delete value.attestations.edge.consumption_sha256;
+      }],
+      ["malformed authorization hash", (value) => {
+        value.attestations.cloudflare.authorization_sha256 = "not-a-digest";
+      }],
+      ["uppercase authorization hash", (value) => {
+        value.attestations.aggregate.authorization_sha256 =
+          value.attestations.aggregate.authorization_sha256.toUpperCase();
+      }],
+      ["changed consumption hash", (value) => {
+        value.attestations.database.consumption_sha256 = "c".repeat(64);
+      }],
+      ["partial consumption tuple", (value) => {
+        delete value.consumption.binding_artifact_id;
+      }],
+      ["extra consumption tuple identity", (value) => {
+        value.consumption.binding_digest = "d".repeat(64);
+      }],
+      ["uppercase consumption identity", (value) => {
+        value.consumption.payload_sha256 = value.consumption.payload_sha256.toUpperCase();
+      }],
+      ["mixed attestation mode", (value) => {
+        value.attestations.edge.authorization_mode = "standard";
+      }],
+    ]) {
+      const evidence = coordinatedReleaseEvidence();
+      mutate(evidence);
+      const readiness = checkSlsaReadiness(process.cwd(), {
+        releaseEvidence: evidence,
+      });
+      expect(readiness.ok, label).toBe(false);
+      expect(readiness.failures.join("\n"), label).toMatch(
+        /authorization|consumption|hash|mode|evidence/i,
+      );
+    }
+  });
+
+  it("rejects changed, partial, or extra break-glass authorization evidence", () => {
+    for (const [label, mutate] of [
+      ["changed incident", (value) => {
+        value.authorization.incident_id = "PERF-BOOTSTRAP-20260826-02";
+      }],
+      ["changed reason hash", (value) => {
+        value.authorization.reason_sha256 = "e".repeat(64);
+      }],
+      ["partial authorization", (value) => {
+        delete value.authorization.workflow_run_attempt;
+      }],
+      ["extra authorization", (value) => {
+        value.authorization.reason = "plaintext must never be accepted or reported";
+      }],
+    ]) {
+      const evidence = coordinatedReleaseEvidence();
+      mutate(evidence);
+      const readiness = checkSlsaReadiness(process.cwd(), {
+        releaseEvidence: evidence,
+      });
+      expect(readiness.ok, label).toBe(false);
+      expect(readiness.failures.join("\n"), label).toMatch(/authorization|incident|reason|fields/i);
+      expect(JSON.stringify(readiness.summary).includes("plaintext")).toBe(false);
+    }
+  });
+
+  it("preserves the coordinated standard evidence contract without break-glass consumption", () => {
+    const authorization = standardAuthorization();
+    const authorizationSha256 = releaseAuthorizationSha256(authorization);
+    const attestations = Object.fromEntries([
+      ["database", "maiprop-production-database-promotion"],
+      ["edge", "maiprop-production-edge-promotion"],
+      ["cloudflare", "maiprop-cloudflare-production-promotion"],
+      ["aggregate", "maiprop-coordinated-production-release"],
+    ].map(([key, evidenceType]) => [
+      key,
+      attestation(evidenceType, "standard", authorizationSha256, null),
+    ]));
+
+    const readiness = checkSlsaReadiness(process.cwd(), {
+      releaseEvidence: {
+        route: "coordinated",
+        authorization,
+        consumption: { mode: "standard" },
+        attestations,
+      },
+    });
+
+    expect(readiness.failures).toEqual([]);
+    expect(readiness.summary.releaseAuthorization).toEqual({ mode: "standard" });
+  });
+
+  it("preserves legacy direct recovery evidence and rejects every break-glass field", () => {
+    const direct = {
+      route: "direct_recovery",
+      attestation: {
+        schema_version: 1,
+        evidence_type: "maiprop-cloudflare-production-recovery",
+        release_status: "passed",
+        rollback_performed: false,
+      },
+    };
+    expect(checkSlsaReadiness(process.cwd(), { releaseEvidence: direct }).failures).toEqual([]);
+
+    for (const [field, value] of [
+      ["authorization_mode", "break_glass"],
+      ["authorization_sha256", "a".repeat(64)],
+      ["consumption_sha256", "b".repeat(64)],
+      ["incident_id", incidentId],
+      ["authorization", breakGlassAuthorization()],
+      ["consumption", breakGlassConsumption()],
+    ]) {
+      const readiness = checkSlsaReadiness(process.cwd(), {
+        releaseEvidence: {
+          ...direct,
+          attestation: { ...direct.attestation, [field]: value },
+        },
+      });
+      expect(readiness.ok, field).toBe(false);
+      expect(readiness.failures.join("\n"), field).toMatch(/direct recovery|break-glass/i);
+    }
   });
 });

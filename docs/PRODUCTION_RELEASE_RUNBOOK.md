@@ -189,6 +189,141 @@ uploaded release evidence.
 - Every destructive schema or API change uses a two-phase rollout or feature
   gate. A release that breaks N-1 compatibility must not start.
 
+## One-Time Single-Admin Release A Bootstrap
+
+This procedure is approved only for incident `PERF-BOOTSTRAP-20260826-01` and
+actor `krenios`. Task 7 resolves `<release-sha>` from remote `main` after the
+reviewed break-glass implementation is merged and computes `<expires-at>`
+immediately before the first dispatch. `<release-sha>` must be lowercase and
+40 characters. `<expires-at>` must be a future RFC 3339 UTC timestamp no more
+than four hours from validation. If remote `main` advances, stop and begin a
+new incident against the new SHA; never reuse evidence from the old SHA.
+
+Use one printable, single-line, 20–500-character reason for every dispatch.
+Keep the plaintext only in operator memory and the transient dispatch fields:
+never put it in a command transcript, issue, document, release ledger, summary,
+or artifact. Record and compare only its lowercase SHA-256. Stripe, both Pages
+proofs, approval, and deployment must carry the same reason hash, incident,
+actor, SHA, and authorization expiry.
+
+Before dispatch, record the intended steady-state values of
+`STAGING_RELEASE_ENABLED` and `PRODUCTION_RELEASE_ENABLED`. Then create exactly
+these temporary repository variables under **Settings → Secrets and variables
+→ Actions → Variables**:
+
+```text
+PRODUCTION_BREAK_GLASS_ACTOR=krenios
+PRODUCTION_BREAK_GLASS_RELEASE_SHA=<release-sha>
+PRODUCTION_BREAK_GLASS_INCIDENT_ID=PERF-BOOTSTRAP-20260826-01
+PRODUCTION_BREAK_GLASS_EXPIRES_AT=<expires-at>
+```
+
+For each manual workflow below, select `main`, set `release_sha` to the same
+`<release-sha>`, set `single_admin_break_glass=true`, set `incident_id` to
+`PERF-BOOTSTRAP-20260826-01`, enter the identical operator-held reason, and use
+the exact action confirmation:
+
+```text
+Verify Stripe Live Readiness:
+VERIFY_STRIPE_BREAK_GLASS <release-sha> PERF-BOOTSTRAP-20260826-01
+
+Provision Cloudflare Pages Runtime, target=staging:
+PROVISION_STAGING_PAGES_BREAK_GLASS <release-sha> PERF-BOOTSTRAP-20260826-01
+
+Provision Cloudflare Pages Runtime, target=production:
+PROVISION_PRODUCTION_PAGES_BREAK_GLASS <release-sha> PERF-BOOTSTRAP-20260826-01
+
+Approve Production Release:
+APPROVE_PRODUCTION_BREAK_GLASS <release-sha> PERF-BOOTSTRAP-20260826-01
+
+Deploy Production Release:
+DEPLOY_PRODUCTION_BREAK_GLASS <release-sha> PERF-BOOTSTRAP-20260826-01
+```
+
+Execute the incident in this exact order:
+
+1. Verify attempt-one exact-SHA CI for the merged remote-`main` SHA, configure
+   the four temporary variables, and keep both standard release-enabled gates
+   at their pre-bootstrap disabled values.
+2. Dispatch **Verify Stripe Live Readiness**. It is read-only and does not burn
+   an action.
+3. Dispatch **Provision Cloudflare Pages Runtime** with `target=staging`.
+   Require the `pages-staging` receipt, its same-run binding, the signed staging
+   Pages proof, and matching authorization grant.
+4. Dispatch the same workflow with `target=production`. Require the
+   `pages-production` receipt, its same-run binding, the signed production
+   Pages proof, and matching authorization grant.
+5. Only after both Pages proofs pass, set `STAGING_RELEASE_ENABLED=true` and
+   `PRODUCTION_RELEASE_ENABLED=true` for the coordinated train.
+6. Stage the exact candidate and verify its signed staging evidence. Do not
+   rebuild or substitute the SHA.
+7. Dispatch **Approve Production Release** with the approval confirmation.
+   Approval is read-only and does not burn an action.
+8. Dispatch **Deploy Production Release** with the deployment confirmation.
+   Require the `production-deploy` receipt and same-run binding before archive,
+   database, Edge, or Cloudflare mutation.
+9. Verify the signed database, Edge, Cloudflare, and aggregate proofs, automatic
+   rollback readiness, `release_status=passed`, `rollback_performed=false`, the
+   stable production health checks, and the exact live deployment marker.
+10. Hand off to the existing live timing protocol: capture repeated cold and
+    warm explore/listing discovery, sign-in, non-destructive sign-up,
+    listing-creation navigation, an authorized test listing creation with
+    verified cleanup, and the relevant navigation transitions. Record median,
+    p95 where sample size permits, failures, provider/application errors, and
+    before/after deltas without changing the performance thresholds.
+11. Record the intended steady-state release-enabled values, then delete
+    `PRODUCTION_BREAK_GLASS_EXPIRES_AT`,
+    `PRODUCTION_BREAK_GLASS_INCIDENT_ID`,
+    `PRODUCTION_BREAK_GLASS_RELEASE_SHA`, and
+    `PRODUCTION_BREAK_GLASS_ACTOR`, in that order. Verify all four are absent,
+    restore only the recorded intended standard gate values, and return every
+    subsequent release to the normal two-person train.
+
+Receipt names are exact and action-scoped:
+
+```text
+production-break-glass-consumed-pages-staging-<release-sha>-PERF-BOOTSTRAP-20260826-01
+production-break-glass-consumed-pages-production-<release-sha>-PERF-BOOTSTRAP-20260826-01
+production-break-glass-consumed-production-deploy-<release-sha>-PERF-BOOTSTRAP-20260826-01
+```
+
+Each receipt and its `<receipt-name>-binding` are immutable, uploaded with
+`overwrite=false`, retained for 7 days, and same-run verified against the exact
+artifact ID, GitHub digest, payload SHA-256, actor tuple, run ID, and attempt.
+Uploading the receipt burns that action even if validation, provider mutation,
+health verification, or automatic rollback later fails. A burned action may
+not be retried under this incident: create a new incident ID and fresh expiry,
+then restart the affected coordinated sequence. A GitHub rerun is never valid;
+dispatch a new attempt-one run. Stripe readiness and approval may be dispatched
+again as new attempt-one runs under the same still-valid incident because they
+do not mutate provider state.
+
+Capture immutable run IDs, attempts, artifact IDs, and GitHub digests for these
+attempt-qualified signed artifacts:
+
+| Evidence | Exact artifact name | Retention |
+| --- | --- | ---: |
+| Stripe payload / binding | `stripe-live-readiness-<release-sha>-<run-id>-<attempt>` and `...-binding` | 90 days |
+| Pages payload / binding | `cloudflare-pages-runtime-<target>-<release-sha>-<run-id>-<attempt>` and `...-binding` | 30 days |
+| Approval payload / binding | `production-release-approval-<release-sha>-<run-id>-<attempt>` and `production-release-approval-binding-<release-sha>-<run-id>-<attempt>` | 7 days |
+| Mutation leases / bindings | `production-mutation-lease-<release-sha>-<production-run-id>-<attempt>-database`, `...-edge`, and `...-cloudflare`, each with `-binding` | 1 day |
+| Database payload / binding | `production-supabase-db-attestation-<release-sha>-<production-run-id>-<attempt>` and `...-binding` | 30 days |
+| Edge payload / binding | `production-supabase-edge-attestation-<release-sha>-<production-run-id>-<attempt>` and `...-binding` | 30 days |
+| Cloudflare payload / binding | `cloudflare-production-evidence-<release-sha>-<production-run-id>-<attempt>` and `...-binding` | 30 days |
+| Aggregate payload / binding | `production-release-attestation-<release-sha>-<production-run-id>-<attempt>` and `...-binding` | 90 days |
+
+The database, Edge, Cloudflare, and aggregate payload bindings must cover the
+same lowercase `authorization_sha256`; in break-glass mode they must also cover
+the same lowercase receipt-payload `consumption_sha256`. Each provider verifies
+the immutable binding before mutation, and the aggregate rejects changed or
+mixed hashes.
+
+Break-glass is deliberately absent from **Direct Cloudflare Production
+Deploy**, standalone recovery, and direct reusable-workflow invocation. Never
+resume a consumed incident through one of those routes. Partial provider
+failure follows the existing rollback/reconciliation contract; there is no
+force-forward break-glass recovery.
+
 ## Legacy Migration Convergence
 
 Historical migration-ledger differences are accepted only when they match the

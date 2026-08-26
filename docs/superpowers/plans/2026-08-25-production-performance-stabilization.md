@@ -10,12 +10,16 @@ measured latency and ownership defects, and keep production inside the agreed
 p95 and error-rate budgets for a full observation window.
 
 **Architecture:** Treat the current `main` release as Release A and deploy it
-through the immutable staging/approval/production train before changing more
-code. Use the exact-SHA post-deploy measurements to separate fixed defects from
-remaining work. Release B then reduces critical JavaScript, mounts dashboard
-data only when needed, shortens local sign-out, removes listing-wizard startup
-work, adds cleanup-safe fixture handling, and installs continuous synthetic
-gates.
+through the one-time approved single-admin bootstrap in
+`docs/PRODUCTION_RELEASE_RUNBOOK.md`, preserving the immutable
+staging/approval/production evidence train before changing more code. Delete
+the temporary authorization immediately after final proof, health, and timing
+handoff, then return Release B and all later releases to the normal two-person
+train. Use the exact-SHA
+post-deploy measurements to separate fixed defects from remaining work.
+Release B then reduces critical JavaScript, mounts dashboard data only when
+needed, shortens local sign-out, removes listing-wizard startup work, adds
+cleanup-safe fixture handling, and installs continuous synthetic gates.
 
 **Tech Stack:** React 18, TypeScript, Vite 8, TanStack Query 5, Supabase Auth and
 Postgres, Supabase Edge Functions, Cloudflare Pages Functions/Cache API,
@@ -135,8 +139,10 @@ if ($releaseSha -notmatch '^[0-9a-f]{40}$') { throw 'Remote main did not resolve
 $releaseSha
 ```
 
-Expected now: `a995b1e78c0624215df4c619491e6e03665460f9`.
-If remote `main` changes, restart Task 1 with the new SHA; never mix artifacts.
+Task 7 resolves this value from remote `main` after the reviewed single-admin
+bootstrap implementation merges. Do not substitute the historical candidate
+shown in the baseline table. If remote `main` changes, start a new incident
+with the new SHA; never mix artifacts.
 
 - [ ] **Step 2: Complete Stripe restricted-key verification**
 
@@ -144,8 +150,13 @@ In Stripe live mode, finish the email verification for the pending restricted
 key, give it only the read permissions required by
 `verify-stripe-live-readiness.yml`, and store the revealed `rk_live_...` value
 as the GitHub repository secret `STRIPE_RESTRICTED_KEY`. Never paste the key in
-a terminal or task message. Dispatch **Verify Stripe Live Readiness** from
-`main`; require an attempt-one success for `$releaseSha`.
+a terminal or task message. Configure the four temporary variables for incident
+`PERF-BOOTSTRAP-20260826-01` exactly as documented in the production runbook,
+then dispatch **Verify Stripe Live Readiness** from `main` with
+`single_admin_break_glass=true`, the operator-held identical reason, and
+`VERIFY_STRIPE_BREAK_GLASS $releaseSha PERF-BOOTSTRAP-20260826-01`. Require an
+attempt-one signed success for `$releaseSha`; this read-only action does not
+burn a receipt.
 
 - [ ] **Step 3: Activate and provision Cloudflare TURN**
 
@@ -163,29 +174,38 @@ CLOUDFLARE_TURN_API_TOKEN
 Require staging and production key IDs/tokens to differ. Configure
 `MAIPROP_TURN_TTL_SECONDS=21600` through the protected workflow only.
 
-- [ ] **Step 4: Satisfy the independent approval contract**
+- [ ] **Step 4: Apply the approved one-time approval exception**
 
-The repository deliberately rejects an approver who is also the source,
-staging, or deployment actor. Repository-owner/admin status does not override
-this control. Use one allowlisted GitHub identity to dispatch the exact-SHA
-approval and a different allowlisted identity for deployment. If the owner is
-the approver, the deployment actor must be another existing release operator;
-do not weaken the workflow or edit an allowlist during a release attempt.
+For this Release A incident only, follow the runbook's signed, exact-SHA,
+four-hour, single-admin procedure for actor `krenios`. The actor must remain in
+`PRODUCTION_RELEASE_DEPLOYERS`; the exception waives only approval allowlist
+membership and actor separation after central validation. Do not edit a
+workflow or allowlist during the incident. After final proof, delete all four
+temporary variables in the documented order. The ordinary independent
+allowlisted approver/deployer contract remains authoritative for every later
+release.
 
 - [ ] **Step 5: Provision both Pages runtimes**
 
-From the allowlisted provisioning actor, dispatch **Provision Cloudflare Pages
-Runtime** twice—first `staging`, then `production`—using the exact confirmation
-phrase required by the workflow. Require the minimized binding evidence to
-show both encrypted TURN bindings and `MAIPROP_TURN_TTL_SECONDS=21600` without
-revealing values.
+As `krenios`, dispatch **Provision Cloudflare Pages Runtime** twice—first
+`staging` with
+`PROVISION_STAGING_PAGES_BREAK_GLASS $releaseSha PERF-BOOTSTRAP-20260826-01`,
+then `production` with
+`PROVISION_PRODUCTION_PAGES_BREAK_GLASS $releaseSha PERF-BOOTSTRAP-20260826-01`.
+Use the same transient reason and `single_admin_break_glass=true`. Require each
+action's immutable 7-day receipt and same-run signed binding before mutation,
+plus its attempt-qualified 30-day Pages payload/binding. The minimized evidence
+must show both encrypted TURN bindings and `MAIPROP_TURN_TTL_SECONDS=21600`
+without revealing values.
 
 - [ ] **Step 6: Enable the release lane only after all proofs pass**
 
 Set the documented repository variables `STAGING_RELEASE_ENABLED=true` and
 `PRODUCTION_RELEASE_ENABLED=true` only after Stripe and both Pages runtime
-proofs are green. Record actor, run ID, run attempt, UTC start/end, and artifact
-digest in the release log.
+proofs are green. Record actor, run ID, run attempt, UTC start/end, immutable
+artifact ID, GitHub digest, and binding artifact ID in the release log. Do not
+delete the temporary authorization until coordinated final proof, health, and
+timing handoff complete.
 
 ---
 
@@ -222,18 +242,27 @@ Dispatch the staging release for `$releaseSha`. Require all of the following:
   convergence, security gates, authenticated TURN, and N-1 compatibility pass;
 - zero skipped catalogue compatibility assertions.
 
-- [ ] **Step 3: Create exact-SHA independent approval**
+- [ ] **Step 3: Create the exact-SHA one-time approval**
 
-The allowlisted approver dispatches **Approve Production Release** for the
-signed staging run. Require the approval artifact to bind `$releaseSha`, source
-run, staging run, artifact digests, approver, nonce, and expiry.
+As `krenios`, dispatch **Approve Production Release** for the signed staging
+run with `single_admin_break_glass=true`, the identical transient reason,
+incident `PERF-BOOTSTRAP-20260826-01`, and
+`APPROVE_PRODUCTION_BREAK_GLASS $releaseSha PERF-BOOTSTRAP-20260826-01`.
+Require the attempt-one signed approval artifact to bind `$releaseSha`, source
+run, staging run, artifact digests, approver, nonce, authorization hash, and
+effective expiry. This read-only action does not burn a receipt.
 
 - [ ] **Step 4: Deploy through the coordinated workflow**
 
-From the distinct deployer identity, dispatch **Deploy Production Release**
-from `main` with `release_sha=$releaseSha` and confirmation
-`DEPLOY_PRODUCTION_RELEASE`. Monitor database, Edge, then Pages. Stop on any
-lease, provenance, migration, N-1, provider, or health failure.
+As `krenios`, dispatch **Deploy Production Release** from `main` with
+`release_sha=$releaseSha`, `single_admin_break_glass=true`, the identical
+reason and incident, and confirmation
+`DEPLOY_PRODUCTION_BREAK_GLASS $releaseSha PERF-BOOTSTRAP-20260826-01`.
+Require the immutable `production-deploy` receipt and same-run binding before
+archive or mutation. Monitor database, Edge, then Pages. Stop on any lease,
+provenance, migration, N-1, provider, or health failure. Once the receipt is
+uploaded, any retry requires a new incident and fresh expiry; never rerun the
+workflow or resume through direct Cloudflare recovery.
 
 - [ ] **Step 5: Verify live identity**
 
@@ -371,6 +400,12 @@ git commit -m "test: make live critical-flow timings reproducible"
 
 - [ ] **Step 1: Run the exact non-mutating suite**
 
+This is the live-timing handoff required by the one-time Release A procedure.
+First reconfirm the production marker equals `$releaseSha` and that the signed
+database, Edge, Cloudflare, and aggregate evidence shares the exact
+authorization and consumption hashes. Keep the plaintext incident reason out
+of timing output and artifacts.
+
 ```powershell
 $env:PERF_BASE_URL='https://portal.maiprop.co'
 Remove-Item Env:PERF_ALLOW_PRODUCTION_MUTATION -ErrorAction SilentlyContinue
@@ -399,6 +434,18 @@ and 17.79 s lab LCP to a particular script or image.
 
 Commit the JSON evidence only if repository evidence policy accepts that
 artifact class; otherwise retain it in the workflow artifact and link the run.
+
+- [ ] **Step 4: Remove the temporary exception and restore steady state**
+
+After proof, production health, and the Release A timing evidence are captured,
+record the intended steady-state values of `STAGING_RELEASE_ENABLED` and
+`PRODUCTION_RELEASE_ENABLED`. Delete
+`PRODUCTION_BREAK_GLASS_EXPIRES_AT`,
+`PRODUCTION_BREAK_GLASS_INCIDENT_ID`,
+`PRODUCTION_BREAK_GLASS_RELEASE_SHA`, and
+`PRODUCTION_BREAK_GLASS_ACTOR`, in that order; verify all four are absent.
+Restore only the recorded intended standard gate values. Release B and every
+later train use the normal independent two-person approval/deployment path.
 
 ---
 
