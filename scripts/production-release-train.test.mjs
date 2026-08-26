@@ -172,6 +172,77 @@ function executeAuthorizationGuard(source, env) {
   });
 }
 
+function productionConsumptionPostcheckFilter() {
+  const parsed = yaml.load(workflow("deploy-production-release.yml"));
+  const step = parsed.jobs["consume-break-glass-authorization"].steps.find(
+    (candidate) => candidate.name === "Finalize exact production consumption tuple",
+  );
+  assert.ok(step, "production release must finalize the exact consumption tuple");
+  const match = /--arg digest "\$RECEIPT_ARTIFACT_DIGEST" '\n([\s\S]*?)\n\s+' receipt-postcheck\.json/.exec(
+    step.run,
+  );
+  assert.ok(match, "production receipt postcheck must expose an executable jq filter");
+  return match[1];
+}
+
+function githubArtifact(overrides = {}) {
+  const digest = "a".repeat(64);
+  return {
+    id: 91,
+    node_id: "MDg6QXJ0aWZhY3Q5MQ==",
+    name: "production-break-glass-consumed-production-deploy-release-incident",
+    size_in_bytes: 123,
+    url: "https://api.github.com/repos/maiprop/maiprop-listing-site/actions/artifacts/91",
+    archive_download_url:
+      "https://api.github.com/repos/maiprop/maiprop-listing-site/actions/artifacts/91/zip",
+    expired: false,
+    created_at: "2026-08-26T10:00:00Z",
+    expires_at: "2026-09-02T10:00:00Z",
+    updated_at: "2026-08-26T10:00:00Z",
+    digest: `sha256:${digest}`,
+    workflow_run: {
+      id: 70,
+      repository_id: 1,
+      head_repository_id: 1,
+      head_branch: "main",
+      head_sha: "a".repeat(40),
+    },
+    ...overrides,
+  };
+}
+
+function executeProductionConsumptionPostcheck({
+  artifacts,
+  expectedId = "91",
+  expectedDigest = "a".repeat(64),
+}) {
+  const filter = productionConsumptionPostcheckFilter();
+  const jqCommand = process.platform === "win32" ? "wsl.exe" : "jq";
+  const jqPrefix = process.platform === "win32" ? ["--exec", "jq"] : [];
+  return spawnSync(
+    jqCommand,
+    [
+      ...jqPrefix,
+      "-e",
+      "--arg",
+      "name",
+      "production-break-glass-consumed-production-deploy-release-incident",
+      "--arg",
+      "id",
+      expectedId,
+      "--arg",
+      "digest",
+      expectedDigest,
+      filter,
+    ],
+    {
+      cwd: root,
+      encoding: "utf8",
+      input: JSON.stringify({ total_count: artifacts.length, artifacts }),
+    },
+  );
+}
+
 it("break-glass approval uses central authorization and signs schema 2 evidence", () => {
   const parsed = yaml.load(workflow("approve-production-release.yml"));
   const dispatch = parsed.on.workflow_dispatch.inputs;
@@ -672,6 +743,34 @@ it("coordinated break-glass deployment consumes and propagates one exact tuple",
   assert.match(cloudflare, /authorized_expires_at/);
   assert.match(cloudflare, /lease_expires_at/);
   assert.match(cloudflare, /rollback.*forward mutation began while authorization and lease were valid/is);
+});
+
+it("accepts the exact API-shaped sha256 production consumption artifact", () => {
+  const result = executeProductionConsumptionPostcheck({ artifacts: [githubArtifact()] });
+  assert.equal(result.status, 0, result.stderr);
+});
+
+it("rejects non-exact production consumption artifact identities", () => {
+  const digest = "a".repeat(64);
+  const invalidCases = [
+    ["wrong algorithm", [githubArtifact({ digest: `sha512:${digest}` })], {}],
+    ["missing prefix", [githubArtifact({ digest })], {}],
+    ["wrong digest", [githubArtifact({ digest: `sha256:${"b".repeat(64)}` })], {}],
+    ["uppercase API digest", [githubArtifact({ digest: `sha256:${digest.toUpperCase()}` })], {}],
+    ["malformed API digest", [githubArtifact({ digest: "sha256:abc" })], {}],
+    [
+      "duplicate exact name",
+      [githubArtifact(), githubArtifact({ id: 92, node_id: "MDg6QXJ0aWZhY3Q5Mg==" })],
+      {},
+    ],
+    ["wrong artifact ID", [githubArtifact({ id: 92 })], {}],
+    ["uppercase expected digest", [githubArtifact()], { expectedDigest: digest.toUpperCase() }],
+  ];
+
+  for (const [label, artifacts, expected] of invalidCases) {
+    const result = executeProductionConsumptionPostcheck({ artifacts, ...expected });
+    assert.notEqual(result.status, 0, label);
+  }
 });
 
 describe("production release train", () => {

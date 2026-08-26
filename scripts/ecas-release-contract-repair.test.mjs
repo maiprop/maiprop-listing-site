@@ -146,6 +146,7 @@ describe("ECAS Cloudflare release contract repair", () => {
     expect(archive.permissions).toEqual({ actions: "read", contents: "write" });
     expect(archive.needs).toEqual([
       "validate",
+      "consume-break-glass-authorization",
       "cloudflare-production-preflight",
     ]);
     expect(JSON.stringify(archive)).toContain("production-source-release.mjs");

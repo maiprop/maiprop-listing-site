@@ -762,9 +762,14 @@ jobs:
           jq -e --arg name "$RECEIPT_ARTIFACT_NAME" \
             --arg id "$RECEIPT_ARTIFACT_ID" \
             --arg digest "$RECEIPT_ARTIFACT_DIGEST" '
+              ($id | test("^[1-9][0-9]*$")) and
+              ($digest | test("^[0-9a-f]{64}$")) and
               ([.artifacts[] | select(.name == $name)] | length) == 1 and
               ([.artifacts[] | select(
-                .name == $name and (.id | tostring) == $id and .digest == $digest
+                .name == $name and
+                (.id | tostring) == $id and
+                .expired == false and
+                .digest == ("sha256:" + $digest)
               )] | length) == 1
             ' receipt-postcheck.json > /dev/null
           node scripts/production-break-glass-consumption.mjs verify \

@@ -35,6 +35,9 @@ const { describe, it } = testRuntime;
 
 function matchingShape(actual, expected) {
   if (Array.isArray(expected)) {
+    if (!Array.isArray(actual) || actual.length !== expected.length) {
+      return actual;
+    }
     return expected.map((value, index) => matchingShape(actual?.[index], value));
   }
   if (expected !== null && typeof expected === "object") {
@@ -77,6 +80,14 @@ const expect = hasVitestRuntime ? globalThis.expect : ((actual, message) => ({
 
 const sha = "0123456789abcdef0123456789abcdef01234567";
 const root = resolve(import.meta.dirname, "..");
+
+describe("cross-runner assertion parity", () => {
+  it("rejects extra actual array elements in toMatchObject", () => {
+    expect(() => expect(
+      [{ name: "expected" }, { name: "unexpected" }],
+    ).toMatchObject([{ name: "expected" }])).toThrow();
+  });
+});
 
 describe("production release validation", () => {
   it("requires a full immutable Git SHA", () => {

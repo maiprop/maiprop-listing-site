@@ -3,7 +3,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import test from "node:test";
+
+const hasVitestRuntime = typeof globalThis.it === "function";
+const testRuntime = hasVitestRuntime
+  ? globalThis
+  : await import(/* @vite-ignore */ ["node", "test"].join(":"));
+const test = hasVitestRuntime ? globalThis.it : testRuntime.test;
 
 import {
   consumptionArtifactName,
