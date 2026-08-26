@@ -630,7 +630,7 @@ jobs:
             const authorization = read("evidence/release-authorization.json");
             validateReleaseAuthorizationGrant([authorization, read("evidence/approval-authorization.json")]);
             if (releaseAuthorizationSha256(authorization) !== process.env.AUTHORIZATION_SHA256) throw new Error("Production authorization SHA-256 changed before mutation.");
-            NODE
+          NODE
           else
             echo "::error::Authorization mode must be explicit."
             exit 1
@@ -1826,7 +1826,7 @@ jobs:
               JSON.stringify(rollback.authorization) !== JSON.stringify(source.authorization) ||
               JSON.stringify(rollback.consumption) !== JSON.stringify(source.consumption)
             ) throw new Error("Rollback authorization or consumption tuple changed.");
-            NODE
+          NODE
           fi
           staging_mutation_file="$RUNNER_TEMP/cloudflare-staging-project-rollback-mutation.json"
           production_mutation_file="$RUNNER_TEMP/cloudflare-production-project-rollback-mutation.json"

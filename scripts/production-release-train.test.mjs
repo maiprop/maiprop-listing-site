@@ -288,6 +288,12 @@ function executeJq(filter, input, args = []) {
   });
 }
 
+function executeBashSyntax(run) {
+  const command = process.platform === "win32" ? "wsl.exe" : "bash";
+  const args = process.platform === "win32" ? ["--exec", "bash", "-n"] : ["-n"];
+  return spawnSync(command, args, { encoding: "utf8", input: run });
+}
+
 function pagesRuntimeResultContract() {
   const producer = yaml.load(workflow("provision-cloudflare-pages-runtime.yml"));
   const producerStep = producer.jobs.provision.steps.find(
@@ -1057,6 +1063,24 @@ it("accepts the real Pages runtime producer result in both strict production con
       ]);
       assert.notEqual(rejected.status, 0, `${target} accepted status ${String(status)}`);
     }
+    const withoutStatus = { ...evidence };
+    delete withoutStatus.status;
+    for (const [label, invalid] of [
+      ["legacy ok true", { ...withoutStatus, ok: true }],
+      ["legacy ok false", { ...withoutStatus, ok: false }],
+      ["mixed ok true", { ...evidence, ok: true }],
+      ["mixed ok false", { ...evidence, ok: false }],
+      ["success alias", { ...evidence, success: true }],
+      ["verified alias", { ...evidence, verified: true }],
+      ["unexpected success detail", { ...evidence, status_detail: "verified" }],
+    ]) {
+      const rejected = executeJq(contract.consumer, invalid, [
+        "-e",
+        "--arg", "target", target,
+        "--arg", "sha", validatorFixture.releaseSha,
+      ]);
+      assert.notEqual(rejected.status, 0, `${target} accepted ${label}`);
+    }
   }
 });
 
@@ -1094,6 +1118,27 @@ it("keeps mutation lease artifact input data-only inside the signing-secret shel
     verification.run.indexOf('case "$MUTATION_LEASE_ARTIFACT" in') <
       verification.run.indexOf("download_binding mutation-lease"),
   );
+});
+
+it("parses every reusable Cloudflare release run block as real Bash", () => {
+  const reusable = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
+  const runnable = reusable.jobs.deploy.steps.filter(
+    (step) => typeof step.run === "string",
+  );
+  for (const required of [
+    "Authenticate declared production authorization mode",
+    "Roll back failed production candidate",
+  ]) {
+    assert.ok(runnable.some((step) => step.name === required), `${required} is required`);
+  }
+  for (const step of runnable) {
+    const result = executeBashSyntax(step.run);
+    assert.equal(
+      result.status,
+      0,
+      `${step.name ?? "unnamed run step"}: ${result.stderr}`,
+    );
+  }
 });
 
 describe("production release train", () => {

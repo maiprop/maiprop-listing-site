@@ -419,8 +419,17 @@ jobs:
               --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
               > "$root/binding-verification.json"
             jq -e --arg target "$target" --arg sha "$RELEASE_SHA" '
+              .schema_version == 2 and
               .evidence_type == "cloudflare-pages-runtime-provision-result" and
-              .target == $target and .release_sha == $sha and .status == "verified"
+              .target == $target and .release_sha == $sha and
+              (.project_id | type == "string" and length > 0) and
+              (.authorization | type == "object") and
+              (.consumption == null or (.consumption | type == "object")) and
+              .status == "verified" and
+              (keys | sort) == ([
+                "authorization", "consumption", "evidence_type", "project_id",
+                "release_sha", "schema_version", "status", "target"
+              ] | sort)
             ' "$root/evidence/cloudflare-pages-runtime-result.json" > /dev/null
             printf '%s' "$selected_run" > "$root/run-id"
             printf '%s' "$actor" > "$root/actor"

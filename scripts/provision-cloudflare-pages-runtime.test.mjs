@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -14,10 +15,12 @@ const { describe, it } = testRuntime;
 
 import {
   consumptionArtifactName,
+  consumptionTuple,
   createConsumptionReceipt,
   validateConsumptionReceipt,
 } from "./production-break-glass-consumption.mjs";
 import { selectReleaseAuthorization } from "./production-break-glass-validation.mjs";
+import { createReleaseArtifactBinding } from "./release-artifact-binding.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const workflowPath = resolve(
@@ -68,6 +71,56 @@ function runArtifactListingGuard(source, listing, mode, name, expectedId = "", e
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+}
+
+function bashPath(path) {
+  if (process.platform !== "win32") return path;
+  const normalized = path.replaceAll("\\", "/");
+  return normalized.replace(/^([A-Za-z]):/, (_, drive) => `/mnt/${drive.toLowerCase()}`);
+}
+
+function finalMutationValidationSource(parsed) {
+  const step = parsed.jobs.provision.steps.find(
+    (candidate) => candidate.name === "Provision strict Cloudflare Pages runtime bindings",
+  );
+  assert.ok(step, "Pages provider mutation step is missing");
+  const start = step.run.lastIndexOf('if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then');
+  const end = step.run.lastIndexOf('current_main="$(gh api');
+  assert.ok(start >= 0 && end > start, "final Pages mutation validation shell is not extractable");
+  return step.run.slice(start, end);
+}
+
+function runFinalMutationValidation(source, fixtureRoot, overrides = {}) {
+  const repositoryRoot = bashPath(root);
+  const fixture = bashPath(fixtureRoot);
+  const adapted = source.replaceAll(
+    "node scripts/production-break-glass-consumption.mjs",
+    'node "$TEST_REPOSITORY_ROOT/scripts/production-break-glass-consumption.mjs"',
+  );
+  const environment = {
+    AUTHORIZATION_MODE: "break_glass",
+    PAGES_ACTION: "pages-staging",
+    RELEASE_SHA: releaseSha,
+    GITHUB_REPOSITORY: "maiprop/maiprop-listing-site",
+    GITHUB_WORKFLOW_REF:
+      "maiprop/maiprop-listing-site/.github/workflows/provision-cloudflare-pages-runtime.yml@refs/heads/main",
+    GITHUB_WORKFLOW_SHA: releaseSha,
+    GITHUB_RUN_ID: "42",
+    GITHUB_RUN_ATTEMPT: "1",
+    RECEIPT_BINDING_ARTIFACT_ID: "102",
+    TEST_REPOSITORY_ROOT: repositoryRoot,
+    TEST_FIXTURE_ROOT: fixture,
+    ...overrides,
+  };
+  const command = process.platform === "win32" ? "wsl.exe" : "env";
+  const prefix = process.platform === "win32" ? ["--exec", "env"] : [];
+  return spawnSync(command, [
+    ...prefix,
+    ...Object.entries(environment).map(([key, value]) => `${key}=${value}`),
+    "bash",
+    "-c",
+    `set -euo pipefail\ncd "$TEST_FIXTURE_ROOT"\n${adapted}`,
+  ], { encoding: "utf8" });
 }
 
 describe("Cloudflare Pages runtime provisioning workflow", () => {
@@ -614,6 +667,224 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
       });
       assert.notEqual(result.status, 0, "rolled-over authorization reached PATCH boundary");
       assert.match(result.stderr, /expir/i);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("binds the final Pages mutation to the exact signed receipt bytes", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-pages-receipt-rebind-"));
+    try {
+      const repository = "maiprop/maiprop-listing-site";
+      const workflowPath = ".github/workflows/provision-cloudflare-pages-runtime.yml";
+      const workflowRef = `${repository}/${workflowPath}@refs/heads/main`;
+      const sourceTree = "b".repeat(40);
+      const artifactDigest = "c".repeat(64);
+      const signingKey = "pages-receipt-binding-test-key-".padEnd(64, "x");
+      const keyId = "pages-receipt-test-key";
+      const receiptPath = join(fixtureRoot, "production-break-glass-consumption.json");
+      const authorizationPath = join(fixtureRoot, "release-authorization.json");
+      const tuplePath = join(fixtureRoot, "consumption-tuple.json");
+      const bindingRoot = join(fixtureRoot, "receipt-binding");
+      const bindingPath = join(bindingRoot, "release-artifact-binding.json");
+      const verificationPath = join(bindingRoot, "verification.json");
+      const metadataRoot = join(fixtureRoot, "metadata");
+      const artifactPath = join(metadataRoot, "artifact.json");
+      const runPath = join(metadataRoot, "run.json");
+      mkdirSync(bindingRoot, { recursive: true });
+      mkdirSync(metadataRoot, { recursive: true });
+
+      const now = Date.now();
+      const authorization = selectReleaseAuthorization({
+        action: "pages-staging",
+        standardConfirmation: "PROVISION_STAGING_PAGES_RUNTIME",
+        singleAdminBreakGlass: "true",
+        incidentId,
+        reason: plaintextReason,
+        confirmation: `PROVISION_STAGING_PAGES_BREAK_GLASS ${releaseSha} ${incidentId}`,
+        releaseSha,
+        currentMainSha: releaseSha,
+        checkoutSha: releaseSha,
+        workflowSha: releaseSha,
+        repository,
+        ref: "refs/heads/main",
+        eventName: "workflow_dispatch",
+        actor: "krenios",
+        triggeringActor: "krenios",
+        runId: "42",
+        runAttempt: "1",
+        productionReleaseDeployers: "krenios",
+        breakGlassActor: "krenios",
+        breakGlassReleaseSha: releaseSha,
+        breakGlassIncidentId: incidentId,
+        breakGlassExpiresAt: new Date(now + 5 * 60 * 1000).toISOString(),
+      }, { now: new Date(now - 5_000).toISOString() });
+      const receipt = (consumedAt, nonce) => createConsumptionReceipt({
+        authorization,
+        repository,
+        workflowRef,
+        workflowSha: releaseSha,
+        runId: "42",
+        runAttempt: "1",
+        consumedAt,
+        nonce,
+      });
+      const receiptA = receipt(new Date(now - 3_000).toISOString(), "8".repeat(64));
+      const receiptB = receipt(new Date(now - 2_000).toISOString(), "9".repeat(64));
+      const writeReceipt = (value) => {
+        const bytes = `${JSON.stringify(value, null, 2)}\n`;
+        writeFileSync(receiptPath, bytes);
+        return createHash("sha256").update(bytes).digest("hex");
+      };
+      writeFileSync(authorizationPath, `${JSON.stringify(authorization, null, 2)}\n`);
+      const receiptSha256 = writeReceipt(receiptA);
+      const tuple = consumptionTuple({
+        receipt: receiptA,
+        payloadArtifact: { artifactId: "101", artifactDigest },
+        bindingArtifact: { artifactId: "102" },
+        payloadSha256: receiptSha256,
+      });
+      writeFileSync(tuplePath, `${JSON.stringify(tuple, null, 2)}\n`);
+
+      const artifactName = consumptionArtifactName({
+        action: "pages-staging",
+        releaseSha,
+        incidentId,
+      });
+      const binding = createReleaseArtifactBinding({
+        payloadRoot: receiptPath,
+        repository,
+        releaseSha,
+        sourceTree,
+        workflowPath,
+        workflowRef,
+        workflowSha: releaseSha,
+        event: "workflow_dispatch",
+        runId: "42",
+        runAttempt: "1",
+        actor: "krenios",
+        triggeringActor: "krenios",
+        artifactId: "101",
+        artifactName,
+        artifactDigest,
+        keyId,
+        signingKey,
+        issuedAt: new Date(now - 2_500).toISOString(),
+        nonce: "7".repeat(64),
+      });
+      writeFileSync(bindingPath, `${JSON.stringify(binding, null, 2)}\n`);
+      writeFileSync(artifactPath, `${JSON.stringify({
+        id: 101,
+        name: artifactName,
+        expired: false,
+        digest: `sha256:${artifactDigest}`,
+        workflow_run: {
+          id: 42,
+          head_sha: releaseSha,
+          repository_id: 1,
+          head_repository_id: 1,
+        },
+      })}\n`);
+      writeFileSync(runPath, `${JSON.stringify({
+        id: 42,
+        run_attempt: 1,
+        head_sha: releaseSha,
+        head_branch: "main",
+        path: workflowPath,
+        event: "workflow_dispatch",
+        status: "in_progress",
+        conclusion: null,
+        actor: { login: "krenios" },
+        triggering_actor: { login: "krenios" },
+        repository: { full_name: repository, id: 1 },
+        head_repository: { full_name: repository, id: 1 },
+      })}\n`);
+      const verification = spawnSync(process.execPath, [
+        resolve(root, "scripts", "verify-release-artifact-binding.mjs"),
+        "--binding", bindingPath,
+        "--payload-root", receiptPath,
+        "--artifact-metadata", artifactPath,
+        "--producer-run", runPath,
+        "--repository", repository,
+        "--release-sha", releaseSha,
+        "--source-tree", sourceTree,
+        "--workflow-path", workflowPath,
+        "--workflow-ref", workflowRef,
+        "--workflow-sha", releaseSha,
+        "--event", "workflow_dispatch",
+        "--run-id", "42",
+        "--run-attempt", "1",
+        "--actor", "krenios",
+        "--triggering-actor", "krenios",
+        "--artifact-id", "101",
+        "--artifact-name", artifactName,
+        "--artifact-digest", artifactDigest,
+        "--key-id", keyId,
+        "--same-run",
+        "--trusted-current-run-id", "42",
+        "--trusted-current-run-attempt", "1",
+        "--trusted-current-actor", "krenios",
+        "--trusted-current-triggering-actor", "krenios",
+      ], {
+        cwd: root,
+        encoding: "utf8",
+        env: { ...process.env, RELEASE_EVIDENCE_SIGNING_KEY: signingKey },
+      });
+      assert.equal(verification.status, 0, verification.stderr);
+      writeFileSync(verificationPath, verification.stdout);
+
+      const finalValidation = finalMutationValidationSource(workflow());
+      const original = runFinalMutationValidation(finalValidation, fixtureRoot);
+      assert.equal(original.status, 0, original.stderr);
+      const standard = runFinalMutationValidation(finalValidation, fixtureRoot, {
+        AUTHORIZATION_MODE: "standard",
+      });
+      assert.equal(standard.status, 0, standard.stderr);
+
+      writeReceipt(receiptB);
+      const substituted = runFinalMutationValidation(finalValidation, fixtureRoot);
+      assert.notEqual(
+        substituted.status,
+        0,
+        "valid receipt B with the same authorization and run replaced signed receipt A",
+      );
+      writeReceipt(receiptA);
+
+      const originalTuple = JSON.parse(readFileSync(tuplePath, "utf8"));
+      for (const [label, changed] of [
+        ["payload digest", { ...originalTuple, payload_sha256: "d".repeat(64) }],
+        ["payload artifact digest", { ...originalTuple, artifact_digest: "d".repeat(64) }],
+        ["payload artifact ID", { ...originalTuple, artifact_id: "104" }],
+        ["binding artifact ID", { ...originalTuple, binding_artifact_id: "103" }],
+        ["incident ID", { ...originalTuple, incident_id: "PERF-REBOUND-20260826-02" }],
+        ["extra tuple field", { ...originalTuple, receipt_sha256: receiptSha256 }],
+      ]) {
+        writeFileSync(tuplePath, `${JSON.stringify(changed, null, 2)}\n`);
+        const result = runFinalMutationValidation(finalValidation, fixtureRoot);
+        assert.notEqual(result.status, 0, `${label} mismatch reached PATCH`);
+      }
+      writeFileSync(tuplePath, `${JSON.stringify(originalTuple, null, 2)}\n`);
+
+      const originalVerification = JSON.parse(readFileSync(verificationPath, "utf8"));
+      writeFileSync(verificationPath, `${JSON.stringify({
+        ...originalVerification,
+        files: [
+          ...originalVerification.files,
+          { path: "extra.json", size: 0, sha256: "e".repeat(64) },
+        ],
+      }, null, 2)}\n`);
+      const extraFile = runFinalMutationValidation(finalValidation, fixtureRoot);
+      assert.notEqual(extraFile.status, 0, "binding verification accepted an extra file");
+      writeFileSync(verificationPath, `${JSON.stringify(originalVerification, null, 2)}\n`);
+
+      const changedBinding = structuredClone(binding);
+      changedBinding.files[0].sha256 = "f".repeat(64);
+      writeFileSync(bindingPath, `${JSON.stringify(changedBinding, null, 2)}\n`);
+      const bindingMismatch = runFinalMutationValidation(finalValidation, fixtureRoot);
+      assert.notEqual(bindingMismatch.status, 0, "signed binding digest mismatch reached PATCH");
+
+      assert.match(finalValidation, /payload_sha256 == \$receipt_sha256/);
+      assert.match(finalValidation, /release-artifact-binding\.json/);
     } finally {
       rmSync(fixtureRoot, { recursive: true, force: true });
     }

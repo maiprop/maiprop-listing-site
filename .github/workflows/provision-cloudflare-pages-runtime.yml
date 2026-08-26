@@ -406,6 +406,7 @@ jobs:
           RELEASE_SHA: ${{ inputs.release_sha }}
           AUTHORIZATION_MODE: ${{ steps.authorization.outputs.mode }}
           PAGES_ACTION: ${{ steps.authorization.outputs.action }}
+          RECEIPT_BINDING_ARTIFACT_ID: ${{ steps.receipt_binding_upload.outputs.artifact-id }}
           CONSUMPTION_VERIFIED: ${{ steps.standard_consumption.outputs.verified || steps.break_glass_consumption.outputs.verified }}
           CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -618,23 +619,63 @@ jobs:
             test -s production-break-glass-consumption.json
             test -s release-authorization.json
             test -s receipt-binding/verification.json
+            test -s receipt-binding/release-artifact-binding.json
             test -s consumption-tuple.json
+            receipt_sha256="$(sha256sum production-break-glass-consumption.json | awk '{print $1}')"
+            receipt_size="$(wc -c < production-break-glass-consumption.json | tr -d '[:space:]')"
+            if ! [[ "$receipt_sha256" =~ ^[0-9a-f]{64}$ ]] ||
+               ! [[ "$receipt_size" =~ ^[1-9][0-9]*$ ]] ||
+               ! [[ "$RECEIPT_BINDING_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Final receipt identity is invalid."
+              exit 1
+            fi
             jq -e \
               --arg sha "$RELEASE_SHA" \
               --arg run_id "$GITHUB_RUN_ID" \
-              --arg run_attempt "$GITHUB_RUN_ATTEMPT" '
+              --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+              --arg receipt_sha256 "$receipt_sha256" \
+              --argjson receipt_size "$receipt_size" \
+              --slurpfile binding receipt-binding/release-artifact-binding.json \
+              --slurpfile tuple consumption-tuple.json '
                 .evidence_type == "maiprop-release-artifact-binding-verification" and
                 .ok == true and .verification_mode == "same-run" and
                 .release_sha == $sha and .workflow_sha == $sha and
                 (.run_id | tostring) == $run_id and
-                (.run_attempt | tostring) == $run_attempt
+                (.run_attempt | tostring) == $run_attempt and
+                .files == [{
+                  path: "production-break-glass-consumption.json",
+                  size: $receipt_size,
+                  sha256: $receipt_sha256
+                }] and
+                ($binding | length) == 1 and ($tuple | length) == 1 and
+                $binding[0].evidence_type == "maiprop-release-artifact-binding" and
+                $binding[0].binding_digest_sha256 == .binding_digest_sha256 and
+                $binding[0].files == .files and
+                ($binding[0].artifact.id | tostring) == ($tuple[0].artifact_id | tostring) and
+                $binding[0].artifact.digest == $tuple[0].artifact_digest and
+                (.artifact_id | tostring) == ($tuple[0].artifact_id | tostring) and
+                .artifact_digest == $tuple[0].artifact_digest
               ' receipt-binding/verification.json > /dev/null
             jq -e \
               --arg action "$PAGES_ACTION" \
               --arg sha "$RELEASE_SHA" \
-              --arg run_id "$GITHUB_RUN_ID" '
+              --arg run_id "$GITHUB_RUN_ID" \
+              --arg binding_artifact_id "$RECEIPT_BINDING_ARTIFACT_ID" \
+              --arg receipt_sha256 "$receipt_sha256" \
+              --slurpfile receipt production-break-glass-consumption.json '
                 .action == $action and .release_sha == $sha and
-                (.parent_run_id | tostring) == $run_id
+                (.parent_run_id | tostring) == $run_id and
+                (.binding_artifact_id | tostring) == $binding_artifact_id and
+                .payload_sha256 == $receipt_sha256 and
+                ($receipt | length) == 1 and
+                .action == $receipt[0].authorization.action and
+                .incident_id == $receipt[0].authorization.incident_id and
+                .release_sha == $receipt[0].authorization.release_sha and
+                (.parent_run_id | tostring) == ($receipt[0].workflow_run_id | tostring) and
+                (keys | sort) == ([
+                  "action", "artifact_digest", "artifact_id", "binding_artifact_id",
+                  "incident_id", "parent_run_id", "payload_sha256", "release_sha"
+                ] | sort)
               ' consumption-tuple.json > /dev/null
             node scripts/production-break-glass-consumption.mjs verify \
               --file production-break-glass-consumption.json \
