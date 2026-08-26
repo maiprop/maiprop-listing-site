@@ -96,7 +96,7 @@ function finalMutationValidationSource(parsed) {
     'if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then',
     receiptValidation,
   );
-  const end = step.run.indexOf("mutation_boundary_at=", receiptValidation);
+  const end = step.run.indexOf('authorization_expires_epoch_ms=""', receiptValidation);
   assert.ok(start >= 0 && end > start, "final Pages mutation validation shell is not extractable");
   return step.run.slice(start, end);
 }
@@ -155,10 +155,15 @@ function runFinalMutationValidation(source, fixtureRoot, overrides = {}) {
 function runFullMutationBoundary(source, fixtureRoot, overrides = {}) {
   const repositoryRoot = bashPath(root);
   const fixture = bashPath(fixtureRoot);
-  const adapted = source.replaceAll(
-    "node scripts/production-break-glass-consumption.mjs",
-    'node "$TEST_REPOSITORY_ROOT/scripts/production-break-glass-consumption.mjs"',
-  );
+  const adapted = source
+    .replaceAll(
+      "node scripts/production-break-glass-consumption.mjs",
+      'node "$TEST_REPOSITORY_ROOT/scripts/production-break-glass-consumption.mjs"',
+    )
+    .replace(
+      'mutation_boundary_epoch_real="$EPOCHREALTIME"',
+      'mutation_boundary_epoch_real="${TEST_BOUNDARY_EPOCH_REALTIME:-$EPOCHREALTIME}"',
+    );
   const environment = {
     AUTHORIZATION_MODE: "break_glass",
     PAGES_ACTION: "pages-staging",
@@ -179,6 +184,12 @@ function runFullMutationBoundary(source, fixtureRoot, overrides = {}) {
     PATCH_BODY: `${fixture}/runtime-patch.json`,
     TEST_CURRENT_MAIN: releaseSha,
     TEST_GH_DELAY_SECONDS: "0",
+    TEST_BOUNDARY_AT: "",
+    TEST_BOUNDARY_EPOCH_REALTIME: "",
+    TEST_EXPIRED_EPOCH_REALTIME: "",
+    TEST_EXPIRY_EPOCH_MS: "",
+    TEST_ADVANCE_CLOCK_AFTER_EXPIRY_CHECK: "false",
+    TEST_CLOCK_PHASE: "live",
     TEST_PATCH_SENTINEL: `${fixture}/patch-called`,
     TEST_REPOSITORY_ROOT: repositoryRoot,
     TEST_FIXTURE_ROOT: fixture,
@@ -195,12 +206,32 @@ gh() {
   sleep "$TEST_GH_DELAY_SECONDS"
   printf '%s\n' "$TEST_CURRENT_MAIN"
 }
+jq() {
+  command jq "$@"
+  status=$?
+  if [ "$status" -eq 0 ] &&
+     [ "$TEST_ADVANCE_CLOCK_AFTER_EXPIRY_CHECK" = "true" ] &&
+     [[ " $* " == *".authorization.authorized_expires_at"* ]]; then
+    TEST_CLOCK_PHASE="expired"
+    TEST_BOUNDARY_EPOCH_REALTIME="$TEST_EXPIRED_EPOCH_REALTIME"
+  fi
+  return "$status"
+}
+date() {
+  if [ -z "$TEST_BOUNDARY_AT" ]; then
+    command date "$@"
+  elif [[ " $* " == *"+%s%3N"* ]]; then
+    printf '%s\n' "$TEST_EXPIRY_EPOCH_MS"
+  else
+    printf '%s\n' "$TEST_BOUNDARY_AT"
+  fi
+}
 curl() {
   case " $* " in
     *" --request PATCH "*) ;;
     *) return 64 ;;
   esac
-  printf 'PATCH\n' > "$TEST_PATCH_SENTINEL"
+  printf '%s\n' "$TEST_CLOCK_PHASE" > "$TEST_PATCH_SENTINEL"
   printf '{"success":true,"result":{"id":"%s","name":"%s"}}\n' \
     "$TARGET_PROJECT_ID" "$TARGET_PROJECT"
 }
@@ -1005,6 +1036,57 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
       assert.notEqual(staleMain.status, 0, "current-main mismatch reached PATCH");
       assert.equal(existsSync(patchSentinel), false, "current-main mismatch invoked PATCH");
 
+      const expiryEpochMs = Date.parse(authorization.authorized_expires_at);
+      const epochRealtime = (epochMs) =>
+        `${Math.floor(epochMs / 1_000)}.${String(epochMs % 1_000).padStart(3, "0")}000`;
+      const controlledClock = {
+        TEST_EXPIRY_EPOCH_MS: String(expiryEpochMs),
+        TEST_EXPIRED_EPOCH_REALTIME: epochRealtime(expiryEpochMs + 1),
+      };
+      const justLive = runBoundary({
+        ...controlledClock,
+        TEST_BOUNDARY_AT: new Date(expiryEpochMs - 1).toISOString(),
+        TEST_BOUNDARY_EPOCH_REALTIME: epochRealtime(expiryEpochMs - 1),
+      });
+      assert.equal(justLive.status, 0, justLive.stderr);
+      assert.equal(readFileSync(patchSentinel, "utf8").trim(), "live");
+
+      const equality = runBoundary({
+        ...controlledClock,
+        TEST_BOUNDARY_AT: new Date(expiryEpochMs).toISOString(),
+        TEST_BOUNDARY_EPOCH_REALTIME: epochRealtime(expiryEpochMs),
+      });
+      assert.notEqual(equality.status, 0, `expiry equality reached PATCH: ${equality.stderr}`);
+      assert.equal(existsSync(patchSentinel), false, "expiry equality invoked PATCH");
+
+      const expired = runBoundary({
+        ...controlledClock,
+        TEST_BOUNDARY_AT: new Date(expiryEpochMs + 1).toISOString(),
+        TEST_BOUNDARY_EPOCH_REALTIME: epochRealtime(expiryEpochMs + 1),
+      });
+      assert.notEqual(expired.status, 0, "expired boundary reached PATCH");
+      assert.equal(existsSync(patchSentinel), false, "expired boundary invoked PATCH");
+
+      const crossedAfterCapture = runBoundary({
+        ...controlledClock,
+        TEST_BOUNDARY_AT: new Date(expiryEpochMs - 1).toISOString(),
+        TEST_BOUNDARY_EPOCH_REALTIME: epochRealtime(expiryEpochMs - 1),
+        TEST_ADVANCE_CLOCK_AFTER_EXPIRY_CHECK: "true",
+      });
+      const crossedPatchPhase = existsSync(patchSentinel)
+        ? readFileSync(patchSentinel, "utf8").trim()
+        : "not-called";
+      assert.equal(
+        crossedPatchPhase,
+        "not-called",
+        `authorization expired during the external expiry check but PATCH ran in ${crossedPatchPhase} phase (status ${crossedAfterCapture.status})`,
+      );
+      assert.notEqual(
+        crossedAfterCapture.status,
+        0,
+        "authorization expired after boundary capture but still reached PATCH",
+      );
+
       const nearExpiryNow = Date.now();
       const nearExpiryAuthorization = makeAuthorization({
         expiresAt: new Date(nearExpiryNow + 3_000).toISOString(),
@@ -1044,6 +1126,10 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
         ["live break-glass", liveBreakGlass],
         ["standard", standardBoundary],
         ["current-main mismatch", staleMain],
+        ["just-live boundary", justLive],
+        ["expiry equality", equality],
+        ["expired boundary", expired],
+        ["post-capture expiry", crossedAfterCapture],
         ["expiry rollover", rolledOver],
       ]) {
         assert.doesNotMatch(
@@ -1057,20 +1143,29 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
       const finalLiveCheck = fullBoundary.lastIndexOf(
         "production-break-glass-consumption.mjs verify",
       );
-      const mutationBoundary = fullBoundary.indexOf("mutation_boundary_at=");
+      const expiryPrecomputation = fullBoundary.indexOf('authorization_expires_epoch_ms=""');
+      const mutationBoundary = fullBoundary.indexOf(
+        'mutation_boundary_epoch_real="$EPOCHREALTIME"',
+      );
       const patch = fullBoundary.indexOf("--request PATCH");
       const patchCommand = fullBoundary.lastIndexOf("curl -fsS", patch);
       assert.ok(currentMain >= 0 && currentMain < finalLiveCheck);
-      assert.ok(finalLiveCheck < mutationBoundary && mutationBoundary < patchCommand);
+      assert.ok(finalLiveCheck < expiryPrecomputation);
+      assert.ok(expiryPrecomputation < mutationBoundary && mutationBoundary < patchCommand);
       const boundaryTail = fullBoundary.slice(mutationBoundary, patchCommand);
-      assert.doesNotMatch(boundaryTail, /\b(?:gh|curl|wget)\b/);
+      assert.doesNotMatch(boundaryTail, /\b(?:date|jq|node|gh|curl|wget|sleep)\b/);
       assert.equal(
         boundaryTail.trim(),
-        `mutation_boundary_at="$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')"
-if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
-  jq -e --arg mutation_boundary_at "$mutation_boundary_at" '
-    .authorization.authorized_expires_at > $mutation_boundary_at
-  ' production-break-glass-consumption.json > /dev/null
+        `mutation_boundary_epoch_real="$EPOCHREALTIME"
+if ! [[ "$mutation_boundary_epoch_real" =~ ^[1-9][0-9]{9,}\\.[0-9]{6}$ ]]; then
+  echo "::error::Mutation boundary clock is not canonical."
+  exit 1
+fi
+mutation_boundary_epoch_us="\${mutation_boundary_epoch_real/./}"
+if [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+   (( 10#$mutation_boundary_epoch_us >= 10#$authorization_expires_epoch_ms * 1000 )); then
+  echo "::error::Break-glass authorization expired before the Pages mutation boundary."
+  exit 1
 fi`,
       );
       assert.match(

@@ -688,11 +688,31 @@ jobs:
               --authorization release-authorization.json \
               --action "$PAGES_ACTION"
           fi
-          mutation_boundary_at="$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')"
+          authorization_expires_epoch_ms=""
           if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
-            jq -e --arg mutation_boundary_at "$mutation_boundary_at" '
-              .authorization.authorized_expires_at > $mutation_boundary_at
-            ' production-break-glass-consumption.json > /dev/null
+            authorization_expiry_path="$RAW_DIR/authorization-expires-at"
+            jq -er '.authorization.authorized_expires_at' \
+              production-break-glass-consumption.json > "$authorization_expiry_path"
+            IFS= read -r authorization_expires_at < "$authorization_expiry_path"
+            rm -f "$authorization_expiry_path"
+            authorization_expires_epoch_ms="$(
+              date -u --date="$authorization_expires_at" +'%s%3N'
+            )"
+            if ! [[ "$authorization_expires_epoch_ms" =~ ^[1-9][0-9]{12,}$ ]]; then
+              echo "::error::Break-glass authorization expiry is not a canonical epoch."
+              exit 1
+            fi
+          fi
+          mutation_boundary_epoch_real="$EPOCHREALTIME"
+          if ! [[ "$mutation_boundary_epoch_real" =~ ^[1-9][0-9]{9,}\.[0-9]{6}$ ]]; then
+            echo "::error::Mutation boundary clock is not canonical."
+            exit 1
+          fi
+          mutation_boundary_epoch_us="${mutation_boundary_epoch_real/./}"
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+             (( 10#$mutation_boundary_epoch_us >= 10#$authorization_expires_epoch_ms * 1000 )); then
+            echo "::error::Break-glass authorization expired before the Pages mutation boundary."
+            exit 1
           fi
           curl -fsS \
             --request PATCH \
