@@ -67,35 +67,26 @@ const productionSecurityEvidenceKeys = Object.freeze({
 });
 
 function isSecurityEvidenceKey(key) {
-  const separated = key
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-  const compact = separated.join("");
-  return separated.includes("auth") ||
-    separated.some((part) => [
-      "authorization",
-      "authorized",
-      "consumption",
-      "consumed",
-      "incident",
-      "reason",
-    ].includes(part)) ||
-    [
-      "authorization",
-      "authorized",
-      "consumption",
-      "consumed",
-      "incident",
-      "reason",
-    ].some((prefix) => compact.startsWith(prefix));
+  const canonical = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if ([
+    "authorization",
+    "authorized",
+    "consumption",
+    "consumed",
+    "incident",
+    "reason",
+  ].some((term) => canonical.includes(term))) {
+    return true;
+  }
+  return /auth(?:sha|hash|digest|mode|grant|evidence|expir|id|binding|artifact|run|actor|payload|receipt|tuple)/
+    .test(canonical) || canonical.endsWith("auth");
 }
 
 function rejectUnknownSecurityEvidenceKeys(failures, name, attestation) {
   const allowed = productionSecurityEvidenceKeys[name] ?? new Set();
   for (const key of Object.keys(attestation)) {
-    if (isSecurityEvidenceKey(key) && !allowed.has(key)) {
+    if (allowed.has(key)) continue;
+    if (isSecurityEvidenceKey(key)) {
       failures.push(`${name} production attestation contains unsupported security evidence`);
     }
   }

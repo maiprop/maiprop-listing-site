@@ -166,6 +166,25 @@ function coordinatedReleaseEvidence(overrides = {}) {
   };
 }
 
+function positionIndependentSecurityAliases() {
+  return [
+    ["DBAuthorizationSha256", "a".repeat(64)],
+    ["releaseauthorization_sha256", "a".repeat(64)],
+    ["SLSAConsumptionSha256", "b".repeat(64)],
+    ["releaseAuthorizationDigest", "a".repeat(64)],
+    ["RELEASE-AUTHORIZATION-SHA-256", "a".repeat(64)],
+    ["build_consumption_digest", "b".repeat(64)],
+    ["releaseconsumptionhash", "b".repeat(64)],
+    ["releaseIncidentReference", incidentId],
+    ["releaseincidentreference", incidentId],
+    ["buildReasonHash", reasonSha256],
+    ["releasereasonhash", reasonSha256],
+    ["DBAuthSha256", "a".repeat(64)],
+    ["release_auth_digest", "a".repeat(64)],
+    ["releaseauthdigest", "a".repeat(64)],
+  ];
+}
+
 describe("GitHub Free private-repository release provenance readiness", () => {
   it("accepts the repository HMAC binding and GitHub artifact API contract", () => {
     const readiness = checkSlsaReadiness(process.cwd());
@@ -702,6 +721,7 @@ describe("GitHub Free private-repository release provenance readiness", () => {
       ["Incident_ID", incidentId],
       ["reason_hash", reasonSha256],
       ["Reason", "plaintext must never be accepted or reported"],
+      ...positionIndependentSecurityAliases(),
     ];
     for (const attestationName of ["database", "edge", "cloudflare", "aggregate"]) {
       for (const [field, value] of aliases) {
@@ -792,6 +812,7 @@ describe("GitHub Free private-repository release provenance readiness", () => {
       ["Consumption_sha_256", "b".repeat(64)],
       ["incident_reference", incidentId],
       ["Reason", "plaintext must never be accepted or reported"],
+      ...positionIndependentSecurityAliases(),
     ];
     for (const [attestationName, evidenceType] of [
       ["database", "maiprop-production-database-promotion"],
@@ -876,6 +897,7 @@ describe("GitHub Free private-repository release provenance readiness", () => {
       ["Consumption_sha_256", "b".repeat(64)],
       ["incident_reference", incidentId],
       ["Reason", "plaintext must never be accepted or reported"],
+      ...positionIndependentSecurityAliases(),
     ]) {
       const readiness = checkSlsaReadiness(process.cwd(), {
         releaseEvidence: {
