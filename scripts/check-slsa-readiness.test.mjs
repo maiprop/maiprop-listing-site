@@ -690,6 +690,35 @@ describe("GitHub Free private-repository release provenance readiness", () => {
     }
   });
 
+  it("rejects every unrecognized authorization, consumption, incident, or reason alias on each production attestation", () => {
+    const aliases = [
+      ["authorization_digest", "a".repeat(64)],
+      ["authorization_hash", "a".repeat(64)],
+      ["authorization_sha_256", "a".repeat(64)],
+      ["Authorization_sha256", "a".repeat(64)],
+      ["consumption_digest", "b".repeat(64)],
+      ["Consumption_sha256", "b".repeat(64)],
+      ["incident", incidentId],
+      ["Incident_ID", incidentId],
+      ["reason_hash", reasonSha256],
+      ["Reason", "plaintext must never be accepted or reported"],
+    ];
+    for (const attestationName of ["database", "edge", "cloudflare", "aggregate"]) {
+      for (const [field, value] of aliases) {
+        const evidence = coordinatedReleaseEvidence();
+        evidence.attestations[attestationName][field] = value;
+        const readiness = checkSlsaReadiness(process.cwd(), {
+          releaseEvidence: evidence,
+        });
+        expect(readiness.ok, `${attestationName}.${field}`).toBe(false);
+        expect(readiness.failures.join("\n"), `${attestationName}.${field}`).toMatch(
+          /authorization|consumption|incident|reason|security evidence/i,
+        );
+        expect(JSON.stringify(readiness.summary).includes("plaintext")).toBe(false);
+      }
+    }
+  });
+
   it("rejects changed, partial, or extra break-glass authorization evidence", () => {
     for (const [label, mutate] of [
       ["changed incident", (value) => {
@@ -726,7 +755,20 @@ describe("GitHub Free private-repository release provenance readiness", () => {
       ["aggregate", "maiprop-coordinated-production-release"],
     ].map(([key, evidenceType]) => [
       key,
-      attestation(evidenceType, "standard", authorizationSha256, null),
+      attestation(
+        evidenceType,
+        "standard",
+        authorizationSha256,
+        null,
+        key === "cloudflare"
+          ? {
+            authorized_expires_at: null,
+            mutation_authorization: null,
+            rollback_authorization: null,
+            release_status: "passed",
+          }
+          : { release_status: "passed" },
+      ),
     ]));
 
     const readiness = checkSlsaReadiness(process.cwd(), {
@@ -740,6 +782,53 @@ describe("GitHub Free private-repository release provenance readiness", () => {
 
     expect(readiness.failures).toEqual([]);
     expect(readiness.summary.releaseAuthorization).toEqual({ mode: "standard" });
+  });
+
+  it("rejects unrecognized security-evidence aliases from every standard production attestation", () => {
+    const aliases = [
+      ["authorization_digest", "a".repeat(64)],
+      ["Authorization_sha256", "a".repeat(64)],
+      ["consumption_hash", "b".repeat(64)],
+      ["Consumption_sha_256", "b".repeat(64)],
+      ["incident_reference", incidentId],
+      ["Reason", "plaintext must never be accepted or reported"],
+    ];
+    for (const [attestationName, evidenceType] of [
+      ["database", "maiprop-production-database-promotion"],
+      ["edge", "maiprop-production-edge-promotion"],
+      ["cloudflare", "maiprop-cloudflare-production-promotion"],
+      ["aggregate", "maiprop-coordinated-production-release"],
+    ]) {
+      for (const [field, value] of aliases) {
+        const authorization = standardAuthorization();
+        const authorizationSha256 = releaseAuthorizationSha256(authorization);
+        const attestations = Object.fromEntries([
+          ["database", "maiprop-production-database-promotion"],
+          ["edge", "maiprop-production-edge-promotion"],
+          ["cloudflare", "maiprop-cloudflare-production-promotion"],
+          ["aggregate", "maiprop-coordinated-production-release"],
+        ].map(([key, type]) => [
+          key,
+          attestation(type, "standard", authorizationSha256, null),
+        ]));
+        attestations[attestationName] = attestation(
+          evidenceType,
+          "standard",
+          authorizationSha256,
+          null,
+          { [field]: value },
+        );
+        const readiness = checkSlsaReadiness(process.cwd(), {
+          releaseEvidence: {
+            route: "coordinated",
+            authorization,
+            consumption: { mode: "standard" },
+            attestations,
+          },
+        });
+        expect(readiness.ok, `${attestationName}.${field}`).toBe(false);
+      }
+    }
   });
 
   it("preserves legacy direct recovery evidence and rejects every break-glass field", () => {
@@ -770,6 +859,35 @@ describe("GitHub Free private-repository release provenance readiness", () => {
       });
       expect(readiness.ok, field).toBe(false);
       expect(readiness.failures.join("\n"), field).toMatch(/direct recovery|break-glass/i);
+    }
+  });
+
+  it("rejects alias and case variants of security evidence from direct recovery", () => {
+    const directAttestation = {
+      schema_version: 1,
+      evidence_type: "maiprop-cloudflare-production-recovery",
+      release_status: "passed",
+      rollback_performed: false,
+    };
+    for (const [field, value] of [
+      ["authorization_digest", "a".repeat(64)],
+      ["Authorization_sha256", "a".repeat(64)],
+      ["consumption_hash", "b".repeat(64)],
+      ["Consumption_sha_256", "b".repeat(64)],
+      ["incident_reference", incidentId],
+      ["Reason", "plaintext must never be accepted or reported"],
+    ]) {
+      const readiness = checkSlsaReadiness(process.cwd(), {
+        releaseEvidence: {
+          route: "direct_recovery",
+          attestation: { ...directAttestation, [field]: value },
+        },
+      });
+      expect(readiness.ok, field).toBe(false);
+      expect(readiness.failures.join("\n"), field).toMatch(
+        /direct recovery|security evidence/i,
+      );
+      expect(JSON.stringify(readiness.summary).includes("plaintext")).toBe(false);
     }
   });
 });

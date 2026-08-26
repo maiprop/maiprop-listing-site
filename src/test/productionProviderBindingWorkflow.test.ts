@@ -1,11 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import yaml from "js-yaml";
 
 import {
+  releaseAuthorizationSha256,
   selectReleaseAuthorization,
   validateReleaseAuthorizationGrant,
 } from "../../scripts/production-break-glass-validation.mjs";
@@ -16,6 +18,7 @@ import {
   validateMutationLease,
   validateReleaseApproval,
 } from "../../scripts/production-release-validation.mjs";
+import { checkSlsaReadiness } from "../../scripts/check-slsa-readiness.mjs";
 
 const workflows = {
   database: readFileSync(
@@ -70,6 +73,11 @@ const parsedPages = yaml.load(pagesWorkflow) as ParsedWorkflow;
 const parsedProduction = yaml.load(productionWorkflow) as ParsedWorkflow;
 const parsedCloudflare = yaml.load(cloudflareWorkflow) as ParsedWorkflow;
 const parsedDirectRecovery = yaml.load(directRecoveryWorkflow) as ParsedWorkflow;
+const parsedProviders = {
+  database: yaml.load(workflows.database) as ParsedWorkflow,
+  edge: yaml.load(workflows.edge) as ParsedWorkflow,
+  cloudflare: parsedCloudflare,
+};
 const releaseSha = "0123456789abcdef0123456789abcdef01234567";
 const incidentId = "PERF-BOOTSTRAP-20260826-01";
 const reason = "Emergency release to restore production performance safely.";
@@ -286,7 +294,10 @@ function embeddedNodeSource(step: WorkflowStep): string {
   return step.run.slice(start + marker.length, end);
 }
 
-function runCloudflareAuthorizationGuard(overrides: Record<string, string> = {}) {
+function runProviderAuthorizationGuard(
+  provider: keyof typeof parsedProviders,
+  overrides: Record<string, string> = {},
+) {
   const directory = mkdtempSync(join(tmpdir(), "maiprop-task6-direct-"));
   try {
     const approvalFile = join(directory, "approval.json");
@@ -301,7 +312,7 @@ function runCloudflareAuthorizationGuard(overrides: Record<string, string> = {})
     delete standardLease.consumption;
     writeFileSync(approvalFile, JSON.stringify(standardApproval), "utf8");
     writeFileSync(leaseFile, JSON.stringify(standardLease), "utf8");
-    const step = parsedCloudflare.jobs.deploy.steps.find(
+    const step = parsedProviders[provider].jobs.deploy.steps.find(
       (candidate: WorkflowStep) => candidate.name === "Authenticate declared production authorization mode",
     );
     const env = {
@@ -327,6 +338,302 @@ function runCloudflareAuthorizationGuard(overrides: Record<string, string> = {})
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+}
+
+function runDirectIdentityGuard(
+  provider: keyof typeof parsedProviders,
+  overrides: Record<string, string>,
+) {
+  const step = parsedProviders[provider].jobs.deploy.steps.find(
+    (candidate: WorkflowStep) =>
+      candidate.name === "Download exact production authorization and consumption evidence",
+  );
+  expect(step).toBeTruthy();
+  const start = step.run.indexOf('if [ "$AUTHORIZATION_MODE" = "standard" ]; then');
+  const end = step.run.indexOf('elif [ "$AUTHORIZATION_MODE" = "break_glass" ]; then', start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  const standardBranch = `set -euo pipefail\n${step.run.slice(start, end)}else\n  exit 97\nfi\n`;
+  return spawnSync("bash", ["-lc", standardBranch], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      AUTHORIZATION_MODE: "standard",
+      CONSUMPTION_ARTIFACT_ID: "",
+      CONSUMPTION_ARTIFACT_DIGEST: "",
+      CONSUMPTION_BINDING_ARTIFACT_ID: "",
+      CONSUMPTION_PAYLOAD_SHA256: "",
+      ...overrides,
+    },
+  });
+}
+
+function runReleaseGrantContract(missingTarget?: "staging" | "production") {
+  const directory = mkdtempSync(join(tmpdir(), "maiprop-task6-proofs-"));
+  try {
+    const contract = parsedProduction.jobs.validate.steps.find(
+      (step: WorkflowStep) => step.name === "Require current main and final exact-SHA readiness",
+    );
+    expect(contract).toBeTruthy();
+    const validatorUrl = pathToFileURL(join(
+      process.cwd(),
+      "scripts/production-break-glass-validation.mjs",
+    )).href;
+    const source = embeddedNodeSource(contract).replace(
+      '"./scripts/production-break-glass-validation.mjs"',
+      JSON.stringify(validatorUrl),
+    );
+    const writeJson = (relativePath: string, value: unknown) => {
+      const path = join(directory, relativePath);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, `${JSON.stringify(value)}\n`, "utf8");
+    };
+    writeJson("release-authorization.json", authorization());
+    writeJson("stripe-readiness-evidence/stripe-live-migration-evidence.json", {
+      authorization: authorization("stripe-readiness", "80"),
+    });
+    if (missingTarget !== "staging") {
+      writeJson("pages-staging/evidence/cloudflare-pages-runtime-result.json", {
+        authorization: authorization("pages-staging", "81"),
+        consumption: consumption({ action: "pages-staging" }),
+      });
+    }
+    if (missingTarget !== "production") {
+      writeJson("pages-production/evidence/cloudflare-pages-runtime-result.json", {
+        authorization: authorization("pages-production", "82"),
+        consumption: consumption({ action: "pages-production" }),
+      });
+    }
+    writeJson("approval-evidence/production-release-approval.json", {
+      authorization: authorization("production-approval", "60"),
+    });
+    return spawnSync(process.execPath, ["--input-type=module", "--eval", source], {
+      cwd: directory,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_ACTOR: "krenios",
+        GITHUB_RUN_ID: "70",
+        RELEASE_SHA: releaseSha,
+        AUTHORIZATION_MODE: "break_glass",
+        STRIPE_READINESS_ACTOR: "krenios",
+        STRIPE_READINESS_RUN_ID: "80",
+        PAGES_STAGING_ACTOR: "krenios",
+        PAGES_STAGING_RUN_ID: "81",
+        PAGES_PRODUCTION_ACTOR: "krenios",
+        PAGES_PRODUCTION_RUN_ID: "82",
+        approval_actor: "krenios",
+        APPROVAL_RUN_ID: "60",
+        APPROVAL_RUN_ATTEMPT: "1",
+      },
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+function assignedObjectSource(step: WorkflowStep, variable: string): string {
+  const source = embeddedNodeSource(step);
+  const marker = `const ${variable} = {`;
+  const markerStart = source.indexOf(marker);
+  expect(markerStart, variable).toBeGreaterThanOrEqual(0);
+  const start = source.indexOf("{", markerStart);
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'" || character === "`") {
+      quote = character;
+    } else if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  throw new Error(`Could not extract ${variable} payload constructor.`);
+}
+
+function executePayloadConstructor(
+  parsed: ParsedWorkflow,
+  stepName: string,
+  variable: string,
+  context: Record<string, unknown>,
+  env: Record<string, string>,
+): Record<string, unknown> {
+  const step = Object.values(parsed.jobs).flatMap((job) => job.steps ?? []).find(
+    (candidate) => candidate?.name === stepName,
+  );
+  expect(step).toBeTruthy();
+  const names = Object.keys(context);
+  const create = Function(
+    ...names,
+    "process",
+    `"use strict"; return (${assignedObjectSource(step, variable)});`,
+  );
+  return create(...names.map((name) => context[name]), { env }) as Record<string, unknown>;
+}
+
+function constructedProductionAttestations() {
+  const deploymentAuthorization = authorization();
+  const authorizationSha256 = releaseAuthorizationSha256(deploymentAuthorization);
+  const releaseConsumption = consumption();
+  const env = {
+    AUTHORIZATION_MODE: "break_glass",
+    AUTHORIZATION_SHA256: authorizationSha256,
+    CONSUMPTION_PAYLOAD_SHA256: releaseConsumption.payload_sha256,
+    GITHUB_REPOSITORY: "maiprop/maiprop-listing-site",
+    RELEASE_SHA: releaseSha,
+    SOURCE_TREE: "b".repeat(40),
+    SOURCE_RUN_ID: "40",
+    SOURCE_RUN_ATTEMPT: "1",
+    STAGING_RUN_ID: "50",
+    STAGING_RUN_ATTEMPT: "1",
+    APPROVAL_RUN_ID: "60",
+    APPROVAL_RUN_ATTEMPT: "1",
+    PRODUCTION_RUN_ID: "70",
+    PRODUCTION_RUN_ATTEMPT: "1",
+    GITHUB_RUN_ID: "70",
+    GITHUB_RUN_ATTEMPT: "1",
+    ARTIFACT_SHA256: "c".repeat(64),
+    MANIFEST_SHA256: "d".repeat(64),
+    DATABASE_ATTESTATION_SHA256: "e".repeat(64),
+    EDGE_ATTESTATION_SHA256: "f".repeat(64),
+    PRODUCTION_PROJECT: "maiprop-production",
+    CLOUDFLARE_PAGES_PROJECT_ID: "project-id",
+    DEPLOYMENT_ID: "deployment-id",
+    DEPLOYMENT_URL: "https://example.pages.dev",
+    RUNTIME_VERIFY_OUTCOME: "success",
+    N_MINUS_ONE_OUTCOME: "success",
+    DEPLOY_OUTCOME: "success",
+    DEPLOYMENT_OUTCOME: "success",
+    HEALTH_OUTCOME: "success",
+    ROLLBACK_OUTCOME: "not-requested",
+    ROLLBACK_PERFORMED: "false",
+    BACKEND_RUN_ID: "70",
+    BACKEND_RUN_ATTEMPT: "1",
+    BACKEND_APPROVAL_RUN_ID: "60",
+    BACKEND_APPROVAL_RUN_ATTEMPT: "1",
+  };
+  const wrapped = (value: unknown = {}) => ({
+    sha256: "1".repeat(64),
+    value,
+  });
+  const database = executePayloadConstructor(
+    parsedProviders.database,
+    "Create production database attestation",
+    "attestation",
+    {
+      manifest: wrapped({ supabase_sha256: "2".repeat(64) }),
+      staging: wrapped({ migration_inventory_sha256: "3".repeat(64) }),
+      before: wrapped(),
+      preApply: wrapped(),
+      after: wrapped([]),
+      legacySchemaBefore: wrapped(),
+      legacySchemaAfter: wrapped({ ok: true }),
+      plan: wrapped({ pending: [] }),
+      reconciliation: wrapped({
+        ok: true,
+        candidate_count: 1,
+        staging_count: 1,
+        production_count: 1,
+        staging_is_exact_candidate: true,
+        production_is_canonical_prefix: true,
+      }),
+      roleSwitchIndexStateBefore: wrapped(),
+      roleSwitchIndexPreflightBefore: wrapped(),
+      roleSwitchIndexStateMutationBoundary: wrapped(),
+      roleSwitchIndexPreflightMutationBoundary: wrapped(),
+      roleSwitchOnlineFinalization: wrapped(),
+      roleSwitchIndexStateAfter: wrapped(),
+      roleSwitchIndexPreflightAfter: wrapped(),
+      roleSwitchForeignKeyStateAfter: wrapped(),
+      roleSwitchForeignKeyPostApply: wrapped(),
+      indexStats: wrapped(),
+      advisor: wrapped(),
+      securitySha256: "4".repeat(64),
+    },
+    env,
+  );
+  const edge = executePayloadConstructor(
+    parsedProviders.edge,
+    "Create production Edge attestation",
+    "attestation",
+    {
+      manifest: { supabase_sha256: "2".repeat(64) },
+      staging: {
+        edge_source_manifest: { manifest_sha256: "5".repeat(64) },
+      },
+      database,
+      live: {
+        edge_source_manifest: { manifest_sha256: "6".repeat(64) },
+      },
+      roleSwitchCron: { ok: true },
+      edgeBundles: [],
+      digest: () => "7".repeat(64),
+    },
+    env,
+  );
+  const cloudflare = executePayloadConstructor(
+    parsedProviders.cloudflare,
+    "Create minimized production evidence",
+    "evidence",
+    {
+      mutationLease: lease(),
+      recoveryLease: null,
+      digest: () => "8".repeat(64),
+    },
+    env,
+  );
+  const aggregate = executePayloadConstructor(
+    parsedProduction,
+    "Validate and aggregate production release evidence",
+    "aggregate",
+    {
+      expected: {
+        repository: env.GITHUB_REPOSITORY,
+        release_sha: releaseSha,
+        source_tree: env.SOURCE_TREE,
+        source_run_id: "40",
+        source_run_attempt: "1",
+        staging_run_id: "50",
+        staging_run_attempt: "1",
+        approval_run_id: "60",
+        approval_run_attempt: "1",
+        production_run_id: "70",
+        production_run_attempt: "1",
+        artifact_sha256: env.ARTIFACT_SHA256,
+        manifest_sha256: env.MANIFEST_SHA256,
+      },
+      database: { digest: "9".repeat(64), value: database },
+      edge: { digest: "a".repeat(64), value: edge },
+      cloudflare: { digest: "b".repeat(64), value: cloudflare },
+      stripeDigest: "c".repeat(64),
+      leaseBytes: Buffer.from("lease"),
+      sha256: () => "d".repeat(64),
+    },
+    {
+      ...env,
+      STRIPE_READINESS_RUN_ID: "80",
+      STRIPE_READINESS_RUN_ATTEMPT: "1",
+      STRIPE_READINESS_SHA256: "e".repeat(64),
+      STRIPE_READINESS_ARTIFACT_ID: "90",
+      STRIPE_READINESS_ARTIFACT_DIGEST: "f".repeat(64),
+      PRODUCTION_PROJECT_ID: "project-id",
+    },
+  );
+  return {
+    authorization: deploymentAuthorization,
+    consumption: releaseConsumption,
+    attestations: { database, edge, cloudflare, aggregate },
+  };
 }
 
 describe("Supabase production provider signed-binding contract", () => {
@@ -767,28 +1074,16 @@ describe("Supabase production provider signed-binding contract", () => {
     }
   });
 
-  it("parses each proof's own authorization action and shared grant comparison", () => {
+  it("executes the parsed release grant contract and rejects either missing Pages proof", () => {
     const contract = parsedProduction.jobs.validate.steps.find(
       (step: WorkflowStep) => step.name === "Require current main and final exact-SHA readiness",
     );
-    expect(contract.run).toContain("validateReleaseAuthorizationGrant");
-    for (const [proof, action] of [
-      ["stripe", "stripe-readiness"],
-      ["pages-staging", "pages-staging"],
-      ["pages-production", "pages-production"],
-      ["approval", "production-approval"],
-    ]) {
-      expect(contract.run, proof).toContain(`action: "${action}"`);
-    }
-    for (const missing of ["pages-staging", "pages-production"]) {
-      const grants = [
-        authorization("stripe-readiness", "80"),
-        authorization("pages-staging", "81"),
-        authorization("pages-production", "82"),
-        authorization("production-approval", "60"),
-      ].filter((record) => record.action !== missing);
-      expect(grants).toHaveLength(3);
-      expect(contract.run, missing).toContain(`pages-${missing.split("-")[1]}`);
+    expect(contract).toBeTruthy();
+    expect(runReleaseGrantContract().status).toBe(0);
+    for (const missing of ["staging", "production"] as const) {
+      const execution = runReleaseGrantContract(missing);
+      expect(execution.status, `${missing}: ${execution.stderr}`).not.toBe(0);
+      expect(execution.stderr, missing).toMatch(/ENOENT|no such file/i);
     }
     expect(() => validateReleaseAuthorizationGrant([
       authorization("stripe-readiness", "80"),
@@ -812,16 +1107,57 @@ describe("Supabase production provider signed-binding contract", () => {
     expect(reusableInputs.authorization_mode.default).toBe("standard");
     expect(reusableInputs.authorization_sha256.default).toBe("");
     expect(reusableInputs.consumption_artifact_id.default).toBe("");
-    expect(runCloudflareAuthorizationGuard().status).toBe(0);
-    expect(runCloudflareAuthorizationGuard({
-      DECLARED_AUTHORIZATION_MODE: "break_glass",
-    }).status).not.toBe(0);
-    expect(runCloudflareAuthorizationGuard({
-      EXPECTED_AUTHORIZATION_SHA256: "A".repeat(64),
-    }).status).not.toBe(0);
+    for (const provider of Object.keys(parsedProviders) as Array<keyof typeof parsedProviders>) {
+      expect(runProviderAuthorizationGuard(provider).status, provider).toBe(0);
+      for (const [label, identities] of [
+        ["partial authorization", { EXPECTED_AUTHORIZATION_SHA256: "a".repeat(64) }],
+        ["partial receipt", { CONSUMPTION_ARTIFACT_ID: "101" }],
+        ["partial receipt digest", { CONSUMPTION_ARTIFACT_DIGEST: "a".repeat(64) }],
+        ["partial binding", { CONSUMPTION_BINDING_ARTIFACT_ID: "102" }],
+        ["partial payload", { CONSUMPTION_PAYLOAD_SHA256: "b".repeat(64) }],
+        ["extra receipt tuple", {
+          CONSUMPTION_ARTIFACT_ID: "101",
+          CONSUMPTION_ARTIFACT_DIGEST: "a".repeat(64),
+          CONSUMPTION_BINDING_ARTIFACT_ID: "102",
+          CONSUMPTION_PAYLOAD_SHA256: "b".repeat(64),
+        }],
+      ] as const) {
+        if (Object.hasOwn(identities, "EXPECTED_AUTHORIZATION_SHA256")) {
+          expect(
+            runProviderAuthorizationGuard(provider, identities).status,
+            `${provider}: ${label}`,
+          ).not.toBe(0);
+        } else {
+          const execution = runDirectIdentityGuard(provider, identities);
+          expect(execution.status, `${provider}: ${label}`).toBe(1);
+          expect(execution.stderr, `${provider}: ${label}`).toBe("");
+        }
+      }
+      expect(runProviderAuthorizationGuard(provider, {
+        DECLARED_AUTHORIZATION_MODE: "break_glass",
+      }).status, provider).not.toBe(0);
+      expect(runProviderAuthorizationGuard(provider, {
+        EXPECTED_AUTHORIZATION_SHA256: "A".repeat(64),
+      }).status, provider).not.toBe(0);
+    }
   });
 
-  it("preserves exact-millisecond forward-start rollback authorization and hash propagation", () => {
+  it("executes actual provider and aggregate payload constructors through readiness", () => {
+    const constructed = constructedProductionAttestations();
+    const readiness = checkSlsaReadiness(process.cwd(), {
+      releaseEvidence: {
+        route: "coordinated",
+        ...constructed,
+      },
+    });
+    expect(readiness.failures).toEqual([]);
+    expect(readiness.summary.releaseAuthorization).toEqual({
+      mode: "break_glass",
+      incident_id: incidentId,
+    });
+  });
+
+  it("preserves exact-millisecond forward-start rollback authorization", () => {
     const deploy = parsedCloudflare.jobs.deploy.steps.find(
       (step: WorkflowStep) => step.name === "Deploy exact immutable production artifact",
     );
@@ -844,10 +1180,6 @@ describe("Supabase production provider signed-binding contract", () => {
       "${{ steps.deploy.outputs.forward_mutation_started_at }}",
     );
     expect(rollback.run).toContain("Date.parse(process.env.FORWARD_MUTATION_STARTED_AT)");
-    for (const source of [workflows.database, workflows.edge, cloudflareWorkflow, productionWorkflow]) {
-      expect(source).toContain("authorization_sha256");
-      expect(source).toContain("consumption_sha256");
-    }
     expect(JSON.stringify([
       parsedPages,
       parsedProduction,

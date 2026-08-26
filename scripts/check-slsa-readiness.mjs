@@ -40,6 +40,67 @@ const productionAttestationTypes = Object.freeze({
   aggregate: "maiprop-coordinated-production-release",
 });
 
+const productionSecurityEvidenceKeys = Object.freeze({
+  database: new Set([
+    "authorization_mode",
+    "authorization_sha256",
+    "consumption_sha256",
+  ]),
+  edge: new Set([
+    "authorization_mode",
+    "authorization_sha256",
+    "consumption_sha256",
+  ]),
+  cloudflare: new Set([
+    "authorization_mode",
+    "authorization_sha256",
+    "consumption_sha256",
+    "authorized_expires_at",
+    "mutation_authorization",
+    "rollback_authorization",
+  ]),
+  aggregate: new Set([
+    "authorization_mode",
+    "authorization_sha256",
+    "consumption_sha256",
+  ]),
+});
+
+function isSecurityEvidenceKey(key) {
+  const separated = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  const compact = separated.join("");
+  return separated.includes("auth") ||
+    separated.some((part) => [
+      "authorization",
+      "authorized",
+      "consumption",
+      "consumed",
+      "incident",
+      "reason",
+    ].includes(part)) ||
+    [
+      "authorization",
+      "authorized",
+      "consumption",
+      "consumed",
+      "incident",
+      "reason",
+    ].some((prefix) => compact.startsWith(prefix));
+}
+
+function rejectUnknownSecurityEvidenceKeys(failures, name, attestation) {
+  const allowed = productionSecurityEvidenceKeys[name] ?? new Set();
+  for (const key of Object.keys(attestation)) {
+    if (isSecurityEvidenceKey(key) && !allowed.has(key)) {
+      failures.push(`${name} production attestation contains unsupported security evidence`);
+    }
+  }
+}
+
 function validateConsumptionTuple(failures, value, authorization) {
   const keys = [
     "artifact_id",
@@ -155,18 +216,7 @@ function validateCoordinatedReleaseEvidence(failures, evidence) {
     ) {
       failures.push(`${name} production consumption hash is missing, malformed, or changed`);
     }
-    for (const forbidden of [
-      "authorization",
-      "consumption",
-      "incident_id",
-      "reason",
-      "reason_sha256",
-      "authorized_expires_at",
-    ]) {
-      if (Object.hasOwn(attestation, forbidden)) {
-        failures.push(`${name} production attestation contains unsupported authorization evidence`);
-      }
-    }
+    rejectUnknownSecurityEvidenceKeys(failures, name, attestation);
   }
   return authorization.mode === "break_glass"
     ? { mode: "break_glass", incident_id: authorization.incident_id }
@@ -185,19 +235,9 @@ function validateDirectRecoveryEvidence(failures, evidence) {
   ) {
     failures.push("Direct recovery evidence schema or evidence type is invalid");
   }
-  for (const forbidden of [
-    "authorization_mode",
-    "authorization_sha256",
-    "consumption_sha256",
-    "incident_id",
-    "authorization",
-    "consumption",
-    "reason",
-    "reason_sha256",
-    "authorized_expires_at",
-  ]) {
-    if (Object.hasOwn(attestation, forbidden)) {
-      failures.push("Direct recovery evidence cannot contain break-glass authorization or consumption fields");
+  for (const key of Object.keys(attestation)) {
+    if (isSecurityEvidenceKey(key)) {
+      failures.push("Direct recovery evidence cannot contain unsupported security evidence");
     }
   }
   return { mode: "standard" };
