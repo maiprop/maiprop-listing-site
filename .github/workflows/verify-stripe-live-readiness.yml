@@ -11,6 +11,19 @@ on:
         description: Type VERIFY_STRIPE_LIVE_READINESS
         required: true
         type: string
+      single_admin_break_glass:
+        description: Use the exact-SHA single-admin break-glass authorization
+        required: true
+        default: false
+        type: boolean
+      incident_id:
+        description: Configured break-glass incident ID; empty in standard mode
+        required: false
+        type: string
+      reason:
+        description: Ephemeral break-glass reason; empty in standard mode
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -40,27 +53,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ inputs.release_sha }}
-          CONFIRM: ${{ inputs.confirm }}
-          ACTOR: ${{ github.actor }}
-          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
-          ALLOWED_ACTORS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
         run: |
           set -euo pipefail
-          if [ "$CONFIRM" != "VERIFY_STRIPE_LIVE_READINESS" ]; then
-            echo "::error::The exact Stripe readiness acknowledgement is required."
-            exit 1
-          fi
           if ! [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::release_sha must be an exact lowercase 40-character Git SHA."
             exit 1
           fi
-          case ",${ALLOWED_ACTORS// /}," in
-            *,"$ACTOR",*) ;;
-            *)
-              echo "::error::Stripe readiness dispatcher is not allowlisted."
-              exit 1
-              ;;
-          esac
           current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
           if [ "$current_main" != "$RELEASE_SHA" ]; then
             echo "::error::release_sha is not the current main SHA."
@@ -71,6 +69,7 @@ jobs:
             echo "::error::The workflow and dispatch source must equal the requested release SHA."
             exit 1
           fi
+          echo "current_main_sha=$current_main" >> "$GITHUB_OUTPUT"
 
       - name: Check out the exact release
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6.0.2
@@ -98,7 +97,49 @@ jobs:
             echo "::error::Exact release checkout validation failed."
             exit 1
           fi
+          echo "checkout_sha=$ACTUAL_SHA" >> "$GITHUB_OUTPUT"
           echo "source_tree=$SOURCE_TREE" >> "$GITHUB_OUTPUT"
+
+      - name: Select release authorization
+        id: authorization
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_AUTHORIZATION_ACTION: stripe-readiness
+          RELEASE_STANDARD_CONFIRMATION: VERIFY_STRIPE_LIVE_READINESS
+          RELEASE_SINGLE_ADMIN_BREAK_GLASS: ${{ inputs.single_admin_break_glass }}
+          RELEASE_INCIDENT_ID: ${{ inputs.incident_id }}
+          RELEASE_REASON: ${{ inputs.reason }}
+          RELEASE_CONFIRM: ${{ inputs.confirm }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          RELEASE_CHECKOUT_SHA: ${{ steps.checkout.outputs.checkout_sha }}
+          GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+          PRODUCTION_BREAK_GLASS_ACTOR: ${{ vars.PRODUCTION_BREAK_GLASS_ACTOR }}
+          PRODUCTION_BREAK_GLASS_RELEASE_SHA: ${{ vars.PRODUCTION_BREAK_GLASS_RELEASE_SHA }}
+          PRODUCTION_BREAK_GLASS_INCIDENT_ID: ${{ vars.PRODUCTION_BREAK_GLASS_INCIDENT_ID }}
+          PRODUCTION_BREAK_GLASS_EXPIRES_AT: ${{ vars.PRODUCTION_BREAK_GLASS_EXPIRES_AT }}
+        run: |
+          set -euo pipefail
+          export RELEASE_CURRENT_MAIN_SHA
+          RELEASE_CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          node scripts/production-break-glass-validation.mjs validate-workflow \
+            --out release-authorization.json \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Enforce standard Stripe dispatcher allowlist
+        if: ${{ steps.authorization.outputs.mode == 'standard' }}
+        env:
+          ACTOR: ${{ github.actor }}
+          ALLOWED_ACTORS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
+        run: |
+          set -euo pipefail
+          case ",${ALLOWED_ACTORS// /}," in
+            *,"$ACTOR",*) ;;
+            *)
+              echo "::error::Stripe readiness dispatcher is not allowlisted."
+              exit 1
+              ;;
+          esac
 
       - name: Install pinned dependencies
         run: npm ci --ignore-scripts --no-audit --prefer-offline
@@ -116,6 +157,9 @@ jobs:
         run: |
           set -euo pipefail
           npm run --silent check:stripe-live-migration -- --evidence-json \
+            > stripe-live-migration-evidence.raw.json
+          jq --slurpfile authorization release-authorization.json '. + {authorization: $authorization[0]}' \
+            stripe-live-migration-evidence.raw.json \
             > stripe-live-migration-evidence.json
           npm run --silent verify:stripe-live-migration-evidence -- \
             --evidence stripe-live-migration-evidence.json \

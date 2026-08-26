@@ -18,35 +18,163 @@ on:
         description: "Type the target-specific PROVISION_*_PAGES_RUNTIME phrase"
         required: true
         type: string
+      single_admin_break_glass:
+        description: "Use the exact-SHA single-admin break-glass authorization"
+        required: true
+        default: false
+        type: boolean
+      incident_id:
+        description: "Configured break-glass incident ID; empty in standard mode"
+        required: false
+        type: string
+      reason:
+        description: "Ephemeral break-glass reason; empty in standard mode"
+        required: false
+        type: string
 
 permissions:
   actions: read
   contents: read
 
 jobs:
-  verify-provider-credential-isolation:
-    name: Verify provider credential isolation
+  provision:
+    name: Provision strict Pages runtime bindings
     if: >-
       github.ref == 'refs/heads/main' &&
       github.run_attempt == 1 &&
       github.actor == github.triggering_actor &&
       inputs.release_sha == github.workflow_sha &&
-      (
-        (
-          inputs.target == 'staging' &&
-          inputs.confirm == 'PROVISION_STAGING_PAGES_RUNTIME' &&
-          vars.STAGING_RELEASE_ENABLED == 'true'
-        ) ||
-        (
-          inputs.target == 'production' &&
-          inputs.confirm == 'PROVISION_PRODUCTION_PAGES_RUNTIME' &&
-          vars.PRODUCTION_RELEASE_ENABLED == 'true'
-        )
-      )
+      (inputs.target == 'staging' || inputs.target == 'production')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    concurrency:
+      group: maiprop-cloudflare-pages-runtime-${{ inputs.target }}
+      cancel-in-progress: false
     steps:
-      - name: Reject shared provider credentials
+      - name: Verify exact current-main control identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if ! [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+             [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ] ||
+             [ "$GITHUB_SHA" != "$GITHUB_WORKFLOW_SHA" ] ||
+             [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ]; then
+            echo "::error::Pages runtime provisioning must execute from the exact current main SHA."
+            exit 1
+          fi
+
+      - name: Check out the exact release
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+
+      - name: Verify exact checkout identity
+        id: checkout
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          checkout_sha="$(git rev-parse HEAD)"
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          if [ "$checkout_sha" != "$RELEASE_SHA" ] ||
+             ! [[ "$source_tree" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Exact Pages runtime checkout validation failed."
+            exit 1
+          fi
+          echo "checkout_sha=$checkout_sha" >> "$GITHUB_OUTPUT"
+          echo "source_tree=$source_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Select release authorization
+        id: authorization
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGES_TARGET: ${{ inputs.target }}
+          RELEASE_SINGLE_ADMIN_BREAK_GLASS: ${{ inputs.single_admin_break_glass }}
+          RELEASE_INCIDENT_ID: ${{ inputs.incident_id }}
+          RELEASE_REASON: ${{ inputs.reason }}
+          RELEASE_CONFIRM: ${{ inputs.confirm }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          RELEASE_CHECKOUT_SHA: ${{ steps.checkout.outputs.checkout_sha }}
+          PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+          PRODUCTION_BREAK_GLASS_ACTOR: ${{ vars.PRODUCTION_BREAK_GLASS_ACTOR }}
+          PRODUCTION_BREAK_GLASS_RELEASE_SHA: ${{ vars.PRODUCTION_BREAK_GLASS_RELEASE_SHA }}
+          PRODUCTION_BREAK_GLASS_INCIDENT_ID: ${{ vars.PRODUCTION_BREAK_GLASS_INCIDENT_ID }}
+          PRODUCTION_BREAK_GLASS_EXPIRES_AT: ${{ vars.PRODUCTION_BREAK_GLASS_EXPIRES_AT }}
+        run: |
+          set -euo pipefail
+          if [ "$PAGES_TARGET" = "staging" ]; then
+            RELEASE_AUTHORIZATION_ACTION="pages-staging"
+            RELEASE_STANDARD_CONFIRMATION="PROVISION_STAGING_PAGES_RUNTIME"
+          else
+            RELEASE_AUTHORIZATION_ACTION="pages-production"
+            RELEASE_STANDARD_CONFIRMATION="PROVISION_PRODUCTION_PAGES_RUNTIME"
+          fi
+          export RELEASE_AUTHORIZATION_ACTION RELEASE_STANDARD_CONFIRMATION
+          export RELEASE_CURRENT_MAIN_SHA
+          RELEASE_CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          node scripts/production-break-glass-validation.mjs validate-workflow \
+            --out release-authorization.json \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Enforce standard Pages authorization gates
+        if: ${{ steps.authorization.outputs.mode == 'standard' }}
+        env:
+          PAGES_TARGET: ${{ inputs.target }}
+          ALLOWED_ACTORS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
+          DEPLOYER_ACTORS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+          STAGING_RELEASE_ENABLED: ${{ vars.STAGING_RELEASE_ENABLED }}
+          PRODUCTION_RELEASE_ENABLED: ${{ vars.PRODUCTION_RELEASE_ENABLED }}
+        run: |
+          set -euo pipefail
+          if [ "$PAGES_TARGET" = "staging" ]; then
+            target_release_enabled="$STAGING_RELEASE_ENABLED"
+          else
+            target_release_enabled="$PRODUCTION_RELEASE_ENABLED"
+          fi
+          if [ "$target_release_enabled" != "true" ]; then
+            echo "::error::The target release-enabled gate must be true in standard mode."
+            exit 1
+          fi
+          case ",${ALLOWED_ACTORS// /}," in
+            *,"$GITHUB_ACTOR",*) ;;
+            *)
+              echo "::error::Pages runtime provisioning dispatcher is not an allowlisted release approver."
+              exit 1
+              ;;
+          esac
+          case ",${DEPLOYER_ACTORS// /}," in
+            *,"$GITHUB_ACTOR",*)
+              echo "::error::A release deployer cannot also provision the protected Pages runtime."
+              exit 1
+              ;;
+            *) ;;
+          esac
+
+      - name: Reject disabled standard Pages target
+        if: ${{ steps.authorization.outputs.mode == 'standard' && !((inputs.target == 'staging' && vars.STAGING_RELEASE_ENABLED == 'true') || (inputs.target == 'production' && vars.PRODUCTION_RELEASE_ENABLED == 'true')) }}
+        run: |
+          echo "::error::The target release-enabled gate must be true in standard mode."
+          exit 1
+
+      - name: Record standard no-consumption sentinel
+        id: standard_consumption
+        if: ${{ steps.authorization.outputs.mode == 'standard' }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"mode":"standard"}' > consumption-tuple.json
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify provider credential isolation
         env:
           CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
           CLOUDFLARE_PAGES_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
@@ -91,78 +219,191 @@ jobs:
             exit 1
           fi
 
-  provision:
-    name: Provision strict Pages runtime bindings
-    needs: verify-provider-credential-isolation
-    if: >-
-      github.ref == 'refs/heads/main' &&
-      github.run_attempt == 1 &&
-      github.actor == github.triggering_actor &&
-      inputs.release_sha == github.workflow_sha &&
-      (
-        (
-          inputs.target == 'staging' &&
-          inputs.confirm == 'PROVISION_STAGING_PAGES_RUNTIME' &&
-          vars.STAGING_RELEASE_ENABLED == 'true'
-        ) ||
-        (
-          inputs.target == 'production' &&
-          inputs.confirm == 'PROVISION_PRODUCTION_PAGES_RUNTIME' &&
-          vars.PRODUCTION_RELEASE_ENABLED == 'true'
-        )
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    concurrency:
-      group: maiprop-cloudflare-pages-runtime-${{ inputs.target }}
-      cancel-in-progress: false
-    steps:
-      - name: Verify exact current-main control identity
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ALLOWED_ACTORS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
-          DEPLOYER_ACTORS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
-          RELEASE_SHA: ${{ inputs.release_sha }}
+      - name: Install exact-name receipt listing guard
         run: |
           set -euo pipefail
-          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
-          if ! [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] ||
-             [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ] ||
-             [ "$GITHUB_SHA" != "$GITHUB_WORKFLOW_SHA" ] ||
-             [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ]; then
-            echo "::error::Pages runtime provisioning must execute from the exact current main SHA."
+          cat > "$RUNNER_TEMP/verify-consumption-artifacts.mjs" <<'NODE'
+          import { readFileSync } from "node:fs";
+
+          const [listingPath, exactName, mode, expectedId = "", expectedDigest = ""] =
+            process.argv.slice(2);
+          const listing = JSON.parse(readFileSync(listingPath, "utf8"));
+          if (!listing || typeof listing !== "object" || !Array.isArray(listing.artifacts)) {
+            throw new Error("Artifact listing has an invalid shape.");
+          }
+          const matches = listing.artifacts.filter(
+            (artifact) => artifact && artifact.name === exactName,
+          );
+          if (mode === "precheck") {
+            if (matches.length !== 0) {
+              throw new Error("The exact break-glass action is already consumed.");
+            }
+          } else if (mode === "postcheck") {
+            if (!/^[1-9][0-9]*$/.test(expectedId) || !/^[0-9a-f]{64}$/.test(expectedDigest)) {
+              throw new Error("Expected immutable artifact identity is invalid.");
+            }
+            const match = matches[0];
+            const digest = String(match?.digest ?? "").replace(/^sha256:/, "");
+            if (
+              matches.length !== 1 ||
+              String(match?.id ?? "") !== expectedId ||
+              digest !== expectedDigest ||
+              match?.expired !== false
+            ) {
+              throw new Error("Uploaded consumption artifact identity is not unique and exact.");
+            }
+          } else {
+            throw new Error("Artifact listing verification mode is unsupported.");
+          }
+          NODE
+
+      - name: Precheck and create break-glass consumption receipt
+        id: receipt
+        if: ${{ steps.authorization.outputs.mode == 'break_glass' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          receipt_name="$(node scripts/production-break-glass-consumption.mjs name \
+            --authorization release-authorization.json)"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${receipt_name}&per_page=100" \
+            > receipt-precheck.json
+          node "$RUNNER_TEMP/verify-consumption-artifacts.mjs" \
+            receipt-precheck.json "$receipt_name" precheck
+          node scripts/production-break-glass-consumption.mjs create \
+            --authorization release-authorization.json \
+            --out production-break-glass-consumption.json
+          echo "receipt_name=$receipt_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable break-glass consumption receipt
+        id: receipt_upload
+        if: ${{ steps.authorization.outputs.mode == 'break_glass' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.receipt.outputs.receipt_name }}
+          path: production-break-glass-consumption.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+
+      - name: Create and same-run verify consumption receipt binding
+        if: ${{ steps.authorization.outputs.mode == 'break_glass' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.receipt_upload.outputs.artifact-id }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.receipt_upload.outputs.artifact-digest }}
+          RECEIPT_ARTIFACT_NAME: ${{ steps.receipt.outputs.receipt_name }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ steps.checkout.outputs.source_tree }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$PAYLOAD_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]] ||
+             ! [[ "$PAYLOAD_ARTIFACT_DIGEST" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::The consumption receipt upload did not return immutable identity."
             exit 1
           fi
-          case ",${ALLOWED_ACTORS// /}," in
-            *,"$GITHUB_ACTOR",*) ;;
-            *)
-              echo "::error::Pages runtime provisioning dispatcher is not an allowlisted release approver."
-              exit 1
-              ;;
-          esac
-          case ",${DEPLOYER_ACTORS// /}," in
-            *,"$GITHUB_ACTOR",*)
-              echo "::error::A release deployer cannot also provision the protected Pages runtime."
-              exit 1
-              ;;
-            *) ;;
-          esac
+          mkdir -p receipt-binding receipt-binding-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > receipt-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > receipt-binding-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root production-break-glass-consumption.json \
+            --out receipt-binding/release-artifact-binding.json \
+            --repository "$GITHUB_REPOSITORY" --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/provision-cloudflare-pages-runtime.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" --workflow-sha "$GITHUB_WORKFLOW_SHA" \
+            --event "$GITHUB_EVENT_NAME" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" --artifact-name "$RECEIPT_ARTIFACT_NAME" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding receipt-binding/release-artifact-binding.json \
+            --payload-root production-break-glass-consumption.json \
+            --artifact-metadata receipt-binding-metadata/artifact.json \
+            --producer-run receipt-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/provision-cloudflare-pages-runtime.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" --workflow-sha "$GITHUB_WORKFLOW_SHA" \
+            --event "$GITHUB_EVENT_NAME" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" --artifact-name "$RECEIPT_ARTIFACT_NAME" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > receipt-binding/verification.json
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Upload immutable consumption receipt binding
+        id: receipt_binding_upload
+        if: ${{ steps.authorization.outputs.mode == 'break_glass' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          ref: ${{ inputs.release_sha }}
-          fetch-depth: 1
-          persist-credentials: false
+          name: ${{ steps.receipt.outputs.receipt_name }}-binding
+          path: receipt-binding/
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: .node-version
+      - name: Postcheck and finalize break-glass consumption tuple
+        id: break_glass_consumption
+        if: ${{ steps.authorization.outputs.mode == 'break_glass' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECEIPT_ARTIFACT_NAME: ${{ steps.receipt.outputs.receipt_name }}
+          RECEIPT_ARTIFACT_ID: ${{ steps.receipt_upload.outputs.artifact-id }}
+          RECEIPT_ARTIFACT_DIGEST: ${{ steps.receipt_upload.outputs.artifact-digest }}
+          RECEIPT_BINDING_ARTIFACT_ID: ${{ steps.receipt_binding_upload.outputs.artifact-id }}
+          PAGES_ACTION: ${{ steps.authorization.outputs.action }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${RECEIPT_ARTIFACT_NAME}&per_page=100" \
+            > receipt-postcheck.json
+          node "$RUNNER_TEMP/verify-consumption-artifacts.mjs" \
+            receipt-postcheck.json "$RECEIPT_ARTIFACT_NAME" postcheck \
+            "$RECEIPT_ARTIFACT_ID" "$RECEIPT_ARTIFACT_DIGEST"
+          node scripts/production-break-glass-consumption.mjs verify \
+            --file production-break-glass-consumption.json \
+            --authorization release-authorization.json \
+            --action "$PAGES_ACTION"
+          payload_sha256="$(sha256sum production-break-glass-consumption.json | awk '{print $1}')"
+          export RECEIPT_PAYLOAD_SHA256="$payload_sha256"
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+          import { consumptionTuple } from "./scripts/production-break-glass-consumption.mjs";
+          const receipt = JSON.parse(
+            readFileSync("production-break-glass-consumption.json", "utf8"),
+          );
+          const tuple = consumptionTuple({
+            receipt,
+            payloadArtifact: {
+              artifactId: process.env.RECEIPT_ARTIFACT_ID,
+              artifactDigest: process.env.RECEIPT_ARTIFACT_DIGEST,
+            },
+            bindingArtifact: {
+              artifactId: process.env.RECEIPT_BINDING_ARTIFACT_ID,
+            },
+            payloadSha256: process.env.RECEIPT_PAYLOAD_SHA256,
+          });
+          writeFileSync("consumption-tuple.json", `${JSON.stringify(tuple, null, 2)}\n`);
+          NODE
+          echo "verified=true" >> "$GITHUB_OUTPUT"
 
       - name: Provision strict Cloudflare Pages runtime bindings
         env:
           GH_TOKEN: ${{ github.token }}
           PAGES_TARGET: ${{ inputs.target }}
           RELEASE_SHA: ${{ inputs.release_sha }}
+          CONSUMPTION_VERIFIED: ${{ steps.standard_consumption.outputs.verified || steps.break_glass_consumption.outputs.verified }}
           CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_STAGING_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
@@ -194,6 +435,10 @@ jobs:
           VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL }}
         run: |
           set -euo pipefail
+          if [ "$CONSUMPTION_VERIFIED" != "true" ]; then
+            echo "::error::Pages mutation requires a verified standard sentinel or one-shot consumption tuple."
+            exit 1
+          fi
           PRODUCTION_PROJECT="maiprop-listing-site"
           STAGING_PROJECT="maiprop-listing-site-staging"
           export PRODUCTION_PROJECT STAGING_PROJECT
@@ -403,22 +648,94 @@ jobs:
             --production-project-file "$PRODUCTION_POST" \
             --out "$EVIDENCE_DIR/cloudflare-pages-runtime-posture.json"
           jq -n \
+            --slurpfile authorization release-authorization.json \
+            --slurpfile consumption consumption-tuple.json \
             --arg target "$PAGES_TARGET" \
             --arg project_id "$TARGET_PROJECT_ID" \
             --arg release_sha "$RELEASE_SHA" '{
-              schema_version: 1,
+              schema_version: 2,
               evidence_type: "cloudflare-pages-runtime-provision-result",
               target: $target,
               project_id: $project_id,
               release_sha: $release_sha,
+              authorization: $authorization[0],
+              consumption: $consumption[0],
               status: "verified"
             }' > "$EVIDENCE_DIR/cloudflare-pages-runtime-result.json"
 
       - name: Upload minimized Cloudflare Pages runtime evidence
-        if: ${{ always() }}
+        id: pages_evidence_upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: cloudflare-pages-runtime-${{ inputs.target }}-${{ github.run_id }}
+          name: cloudflare-pages-runtime-${{ inputs.target }}-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/cloudflare-pages-runtime-evidence/
           if-no-files-found: error
+          overwrite: false
+          retention-days: 30
+
+      - name: Create and same-run verify Pages runtime evidence binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD_ARTIFACT_ID: ${{ steps.pages_evidence_upload.outputs.artifact-id }}
+          PAYLOAD_ARTIFACT_DIGEST: ${{ steps.pages_evidence_upload.outputs.artifact-digest }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ steps.checkout.outputs.source_tree }}
+          PAGES_TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$PAYLOAD_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]] ||
+             ! [[ "$PAYLOAD_ARTIFACT_DIGEST" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::The Pages evidence upload did not return immutable identity."
+            exit 1
+          fi
+          artifact_name="cloudflare-pages-runtime-${PAGES_TARGET}-${RELEASE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p pages-runtime-binding pages-runtime-binding-metadata
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PAYLOAD_ARTIFACT_ID}" \
+            > pages-runtime-binding-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > pages-runtime-binding-metadata/run.json
+          node scripts/create-release-artifact-binding.mjs \
+            --payload-root "$RUNNER_TEMP/cloudflare-pages-runtime-evidence" \
+            --out pages-runtime-binding/release-artifact-binding.json \
+            --repository "$GITHUB_REPOSITORY" --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/provision-cloudflare-pages-runtime.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" --workflow-sha "$GITHUB_WORKFLOW_SHA" \
+            --event "$GITHUB_EVENT_NAME" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" --artifact-name "$artifact_name" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding pages-runtime-binding/release-artifact-binding.json \
+            --payload-root "$RUNNER_TEMP/cloudflare-pages-runtime-evidence" \
+            --artifact-metadata pages-runtime-binding-metadata/artifact.json \
+            --producer-run pages-runtime-binding-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/provision-cloudflare-pages-runtime.yml \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" --workflow-sha "$GITHUB_WORKFLOW_SHA" \
+            --event "$GITHUB_EVENT_NAME" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --artifact-id "$PAYLOAD_ARTIFACT_ID" --artifact-name "$artifact_name" \
+            --artifact-digest "$PAYLOAD_ARTIFACT_DIGEST" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" --same-run \
+            --trusted-current-run-id "$GITHUB_RUN_ID" \
+            --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --trusted-current-actor "$GITHUB_ACTOR" \
+            --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > pages-runtime-binding/verification.json
+
+      - name: Upload immutable Pages runtime evidence binding
+        id: pages_binding_upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cloudflare-pages-runtime-${{ inputs.target }}-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}-binding
+          path: pages-runtime-binding/
+          if-no-files-found: error
+          overwrite: false
           retention-days: 30

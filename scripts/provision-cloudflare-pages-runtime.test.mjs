@@ -1,8 +1,18 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { describe, it } from "node:test";
 
 import yaml from "js-yaml";
-import { describe, expect, it } from "vitest";
+
+import {
+  consumptionArtifactName,
+  createConsumptionReceipt,
+  validateConsumptionReceipt,
+} from "./production-break-glass-consumption.mjs";
+import { selectReleaseAuthorization } from "./production-break-glass-validation.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const workflowPath = resolve(
@@ -11,126 +21,422 @@ const workflowPath = resolve(
   "workflows",
   "provision-cloudflare-pages-runtime.yml",
 );
+const releaseSha = "0123456789abcdef0123456789abcdef01234567";
+const incidentId = "PERF-BOOTSTRAP-20260826-01";
+const plaintextReason = "Emergency Pages runtime bootstrap for the exact release.";
 
 function workflow() {
   return yaml.load(readFileSync(workflowPath, "utf8"));
 }
 
+function stepIndex(job, name) {
+  return job.steps.findIndex((step) => step.name === name);
+}
+
+function artifactListingGuardSource(parsed) {
+  const step = parsed.jobs.provision.steps.find(
+    (candidate) => candidate.name === "Install exact-name receipt listing guard",
+  );
+  assert.ok(step, "exact-name receipt listing guard step is missing");
+  const marker = "cat > \"$RUNNER_TEMP/verify-consumption-artifacts.mjs\" <<'NODE'\n";
+  const start = step.run.indexOf(marker);
+  const end = step.run.indexOf("\nNODE", start + marker.length);
+  assert.ok(start >= 0 && end > start, "receipt listing guard source is not executable");
+  return step.run.slice(start + marker.length, end);
+}
+
+function runArtifactListingGuard(source, listing, mode, name, expectedId = "", expectedDigest = "") {
+  const root = mkdtempSync(join(tmpdir(), "maiprop-receipt-listing-"));
+  try {
+    const guardPath = join(root, "verify-consumption-artifacts.mjs");
+    const listingPath = join(root, "listing.json");
+    writeFileSync(guardPath, `${source}\n`, "utf8");
+    writeFileSync(listingPath, `${JSON.stringify(listing)}\n`, "utf8");
+    return spawnSync(process.execPath, [
+      guardPath,
+      listingPath,
+      name,
+      mode,
+      expectedId,
+      expectedDigest,
+    ], { encoding: "utf8" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
 describe("Cloudflare Pages runtime provisioning workflow", () => {
-  it("is manual, exact-main, attempt-1, and approver-only", () => {
+  it("is manual, exact-main, attempt-1, and preserves standard approver gates", () => {
     const parsed = workflow();
     const provision = parsed.jobs.provision;
-    const identity = provision.steps[0];
+    const identity = provision.steps.find(
+      (step) => step.name === "Verify exact current-main control identity",
+    );
+    const standard = provision.steps.find(
+      (step) => step.name === "Enforce standard Pages authorization gates",
+    );
 
-    expect(Object.keys(parsed.on)).toEqual(["workflow_dispatch"]);
-    expect(parsed.on.workflow_dispatch.inputs.target).toMatchObject({
+    assert.deepEqual(Object.keys(parsed.on), ["workflow_dispatch"]);
+    assert.deepEqual(parsed.on.workflow_dispatch.inputs.target, {
+      description: "Fixed Pages runtime to provision",
       required: true,
       type: "choice",
       options: ["staging", "production"],
     });
-    expect(parsed.on.workflow_dispatch.inputs.release_sha).toMatchObject({
+    assert.deepEqual(parsed.on.workflow_dispatch.inputs.release_sha, {
+      description: "Full exact current-main control SHA",
       required: true,
       type: "string",
     });
-    expect(provision.if).toContain("github.ref == 'refs/heads/main'");
-    expect(provision.if).toContain("github.run_attempt == 1");
-    expect(provision.if).toContain("github.actor == github.triggering_actor");
-    expect(provision.if).toContain("inputs.release_sha == github.workflow_sha");
-    expect(provision.if).toContain("PROVISION_STAGING_PAGES_RUNTIME");
-    expect(provision.if).toContain("PROVISION_PRODUCTION_PAGES_RUNTIME");
-    expect(provision.if).toContain("vars.STAGING_RELEASE_ENABLED == 'true'");
-    expect(provision.if).toContain("vars.PRODUCTION_RELEASE_ENABLED == 'true'");
-    expect(identity.name).toBe("Verify exact current-main control identity");
-    expect(identity.env.ALLOWED_ACTORS).toBe(
+    assert.ok(provision.if.includes("github.ref == 'refs/heads/main'"));
+    assert.ok(provision.if.includes("github.run_attempt == 1"));
+    assert.ok(provision.if.includes("github.actor == github.triggering_actor"));
+    assert.ok(provision.if.includes("inputs.release_sha == github.workflow_sha"));
+    assert.equal(provision.if.includes("PROVISION_STAGING_PAGES_RUNTIME"), false);
+    assert.equal(provision.if.includes("RELEASE_ENABLED"), false);
+    assert.equal(identity.name, "Verify exact current-main control identity");
+    assert.equal(standard.if, "${{ steps.authorization.outputs.mode == 'standard' }}");
+    assert.equal(standard.env.ALLOWED_ACTORS,
       "${{ vars.PRODUCTION_RELEASE_APPROVERS }}",
     );
-    expect(identity.run).toContain(
+    assert.equal(standard.env.DEPLOYER_ACTORS, "${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}");
+    assert.equal(standard.env.STAGING_RELEASE_ENABLED, "${{ vars.STAGING_RELEASE_ENABLED }}");
+    assert.equal(standard.env.PRODUCTION_RELEASE_ENABLED, "${{ vars.PRODUCTION_RELEASE_ENABLED }}");
+    assert.ok(standard.run.includes("PRODUCTION_RELEASE_ENABLED"));
+    assert.ok(standard.run.includes("STAGING_RELEASE_ENABLED"));
+    assert.ok(identity.run.includes(
       'current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq \'.commit.sha\')"',
-    );
-    expect(JSON.stringify(identity)).not.toContain("CLOUDFLARE_");
-    expect(JSON.stringify(identity)).not.toContain("SUPABASE_ACCESS_TOKEN");
+    ));
+    assert.ok(!JSON.stringify(identity).includes("CLOUDFLARE_"));
+    assert.ok(!JSON.stringify(identity).includes("SUPABASE_ACCESS_TOKEN"));
   });
 
   it("patches only one immutable Pages project and verifies strict redacted post-state", () => {
     const parsed = workflow();
     const provision = parsed.jobs.provision;
-    const isolation = parsed.jobs["verify-provider-credential-isolation"];
+    const isolation = provision.steps.find(
+      (step) => step.name === "Verify provider credential isolation",
+    );
     const control = provision.steps.find(
       (step) => step.name === "Provision strict Cloudflare Pages runtime bindings",
     );
-    const upload = provision.steps.find((step) =>
-      String(step.uses ?? "").startsWith("actions/upload-artifact@"),
-    );
+    const upload = provision.steps.find((step) => step.id === "pages_evidence_upload");
 
-    expect(control.env.CLOUDFLARE_PAGES_READ_TOKEN).toBe(
+    assert.equal(control.env.CLOUDFLARE_PAGES_READ_TOKEN,
       "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}",
     );
-    expect(control.env.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN).toBe(
+    assert.equal(control.env.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN,
       undefined,
     );
-    expect(control.env.CLOUDFLARE_PAGES_EDIT_TOKEN).toBeUndefined();
-    expect(control.env.TARGET_EDIT_TOKEN).toContain(
+    assert.equal(control.env.CLOUDFLARE_PAGES_EDIT_TOKEN, undefined);
+    assert.ok(control.env.TARGET_EDIT_TOKEN.includes(
       "inputs.target == 'staging'",
-    );
-    expect(control.env.TARGET_EDIT_TOKEN).toContain(
+    ));
+    assert.ok(control.env.TARGET_EDIT_TOKEN.includes(
       "secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN",
-    );
-    expect(control.env.TARGET_EDIT_TOKEN).toContain(
+    ));
+    assert.ok(control.env.TARGET_EDIT_TOKEN.includes(
       "secrets.CLOUDFLARE_PAGES_EDIT_TOKEN",
-    );
-    expect(control.env.PAGES_RUNTIME_TURN_KEY_ID).toContain(
+    ));
+    assert.ok(control.env.PAGES_RUNTIME_TURN_KEY_ID.includes(
       "inputs.target == 'staging'",
-    );
-    expect(control.env.PAGES_RUNTIME_TURN_API_TOKEN).toContain(
+    ));
+    assert.ok(control.env.PAGES_RUNTIME_TURN_API_TOKEN.includes(
       "inputs.target == 'staging'",
-    );
-    expect(control.env.CLOUDFLARE_STAGING_TURN_KEY_ID).toBeUndefined();
-    expect(control.env.CLOUDFLARE_STAGING_TURN_API_TOKEN).toBeUndefined();
-    expect(control.env.CLOUDFLARE_TURN_KEY_ID).toBeUndefined();
-    expect(control.env.CLOUDFLARE_TURN_API_TOKEN).toBeUndefined();
-    expect(provision.needs).toBe("verify-provider-credential-isolation");
-    expect(isolation.steps).toHaveLength(1);
-    expect(isolation.steps[0].run).toContain(
+    ));
+    assert.equal(control.env.CLOUDFLARE_STAGING_TURN_KEY_ID, undefined);
+    assert.equal(control.env.CLOUDFLARE_STAGING_TURN_API_TOKEN, undefined);
+    assert.equal(control.env.CLOUDFLARE_TURN_KEY_ID, undefined);
+    assert.equal(control.env.CLOUDFLARE_TURN_API_TOKEN, undefined);
+    assert.equal(provision.needs, undefined);
+    assert.ok(isolation.run.includes(
       '[ "$CLOUDFLARE_STAGING_TURN_KEY_ID" = "$CLOUDFLARE_TURN_KEY_ID" ]',
-    );
-    expect(isolation.steps[0].run).toContain(
+    ));
+    assert.ok(isolation.run.includes(
       '[ "$CLOUDFLARE_STAGING_TURN_API_TOKEN" = "$CLOUDFLARE_TURN_API_TOKEN" ]',
-    );
-    expect(control.run).toContain('PRODUCTION_PROJECT="maiprop-listing-site"');
-    expect(control.run).toContain(
+    ));
+    assert.ok(control.run.includes('PRODUCTION_PROJECT="maiprop-listing-site"'));
+    assert.ok(control.run.includes(
       'STAGING_PROJECT="maiprop-listing-site-staging"',
-    );
-    expect(control.run).toContain(
+    ));
+    assert.ok(control.run.includes(
       "export PRODUCTION_PROJECT STAGING_PROJECT",
-    );
-    expect(control.run).toContain(
+    ));
+    assert.ok(control.run.includes(
       "node scripts/build-cloudflare-pages-runtime-patch.mjs",
-    );
-    expect(control.run).toContain(
+    ));
+    assert.ok(control.run.includes(
       "node scripts/validate-cloudflare-pages-staging-posture.mjs",
-    );
-    expect(control.run).toContain("?reveal=true");
-    expect(control.run).toContain('echo "::add-mask::$service_role_key"');
-    expect(control.run.match(/--request PATCH/g)).toHaveLength(1);
+    ));
+    assert.ok(control.run.includes("?reveal=true"));
+    assert.ok(control.run.includes('echo "::add-mask::$service_role_key"'));
+    assert.equal(control.run.match(/--request PATCH/g)?.length, 1);
     const patchCommand = control.run.slice(
       control.run.indexOf("curl -fsS", control.run.indexOf("current_main=")),
       control.run.indexOf("runtime-patch-response.json") +
         "runtime-patch-response.json".length,
     );
-    expect(patchCommand).toContain("--request PATCH");
-    expect(patchCommand).not.toContain("--retry");
+    assert.ok(patchCommand.includes("--request PATCH"));
+    assert.ok(!patchCommand.includes("--retry"));
     const currentMainCheck = control.run.lastIndexOf(
       'current_main="$(gh api',
     );
-    expect(currentMainCheck).toBeGreaterThanOrEqual(0);
-    expect(currentMainCheck).toBeLessThan(control.run.indexOf("--request PATCH"));
-    expect(control.run).toContain('trap \'rm -rf "$RAW_DIR"\' EXIT');
-    expect(upload.with.path).toBe(
+    assert.ok(currentMainCheck >= 0);
+    assert.ok(currentMainCheck < control.run.indexOf("--request PATCH"));
+    assert.ok(control.run.includes('trap \'rm -rf "$RAW_DIR"\' EXIT'));
+    assert.equal(upload.with.path,
       "${{ runner.temp }}/cloudflare-pages-runtime-evidence/",
     );
-    expect(upload.with.path).not.toContain("raw");
-    expect(JSON.stringify(upload)).not.toMatch(
+    assert.ok(!upload.with.path.includes("raw"));
+    assert.doesNotMatch(JSON.stringify(upload),
       /SUPABASE_SERVICE_ROLE_KEY|TURN_API_TOKEN|PAGES_EDIT_TOKEN/,
     );
+  });
+
+  it("maps both targets through central validation after checkout and before credentials", () => {
+    const parsed = workflow();
+    const inputs = parsed.on.workflow_dispatch.inputs;
+    const provision = parsed.jobs.provision;
+    assert.deepEqual(inputs.single_admin_break_glass, {
+      description: "Use the exact-SHA single-admin break-glass authorization",
+      required: true,
+      default: false,
+      type: "boolean",
+    });
+    assert.deepEqual(inputs.incident_id, {
+      description: "Configured break-glass incident ID; empty in standard mode",
+      required: false,
+      type: "string",
+    });
+    assert.deepEqual(inputs.reason, {
+      description: "Ephemeral break-glass reason; empty in standard mode",
+      required: false,
+      type: "string",
+    });
+    const checkout = stepIndex(provision, "Verify exact checkout identity");
+    const authorization = stepIndex(provision, "Select release authorization");
+    const credentials = stepIndex(provision, "Verify provider credential isolation");
+    assert.ok(checkout >= 0 && authorization > checkout && credentials > authorization);
+    const authorizationStep = provision.steps[authorization];
+    assert.ok(authorizationStep.run.includes("pages-staging"));
+    assert.ok(authorizationStep.run.includes("pages-production"));
+    assert.ok(authorizationStep.run.includes(
+      "node scripts/production-break-glass-validation.mjs validate-workflow",
+    ));
+    assert.equal(authorizationStep.env.RELEASE_REASON, "${{ inputs.reason }}");
+    for (const step of provision.steps.slice(0, authorization + 1)) {
+      assert.doesNotMatch(
+        JSON.stringify(step),
+        /CLOUDFLARE_.*TOKEN|SUPABASE_ACCESS_TOKEN|RELEASE_EVIDENCE_SIGNING_KEY/,
+      );
+    }
+
+    for (const target of ["staging", "production"]) {
+      const action = `pages-${target}`;
+      const confirmation = target === "staging"
+        ? `PROVISION_STAGING_PAGES_BREAK_GLASS ${releaseSha} ${incidentId}`
+        : `PROVISION_PRODUCTION_PAGES_BREAK_GLASS ${releaseSha} ${incidentId}`;
+      const standardConfirmation = target === "staging"
+        ? "PROVISION_STAGING_PAGES_RUNTIME"
+        : "PROVISION_PRODUCTION_PAGES_RUNTIME";
+      const authorizationRecord = selectReleaseAuthorization({
+        action,
+        standardConfirmation,
+        singleAdminBreakGlass: "true",
+        incidentId,
+        reason: plaintextReason,
+        confirmation,
+        releaseSha,
+        currentMainSha: releaseSha,
+        checkoutSha: releaseSha,
+        workflowSha: releaseSha,
+        repository: "maiprop/maiprop-listing-site",
+        ref: "refs/heads/main",
+        eventName: "workflow_dispatch",
+        actor: "krenios",
+        triggeringActor: "krenios",
+        runId: "42",
+        runAttempt: "1",
+        productionReleaseDeployers: "release-bot,krenios",
+        breakGlassActor: "krenios",
+        breakGlassReleaseSha: releaseSha,
+        breakGlassIncidentId: incidentId,
+        breakGlassExpiresAt: "2026-08-26T10:00:00.000Z",
+      }, { now: "2026-08-26T08:00:00.000Z" });
+      const receipt = createConsumptionReceipt({
+        authorization: authorizationRecord,
+        repository: "maiprop/maiprop-listing-site",
+        workflowRef:
+          "maiprop/maiprop-listing-site/.github/workflows/provision-cloudflare-pages-runtime.yml@refs/heads/main",
+        workflowSha: releaseSha,
+        runId: "42",
+        runAttempt: "1",
+        consumedAt: "2026-08-26T08:30:00.000Z",
+        nonce: "9".repeat(64),
+      });
+      assert.equal(
+        consumptionArtifactName({ action, releaseSha, incidentId }),
+        `production-break-glass-consumed-${action}-${releaseSha}-${incidentId}`,
+      );
+      assert.deepEqual(validateConsumptionReceipt(receipt, {
+        authorization: authorizationRecord,
+        action,
+        repository: "maiprop/maiprop-listing-site",
+        workflowRef:
+          "maiprop/maiprop-listing-site/.github/workflows/provision-cloudflare-pages-runtime.yml@refs/heads/main",
+        workflowSha: releaseSha,
+        runId: "42",
+        runAttempt: "1",
+      }, { now: "2026-08-26T08:30:00.000Z" }), receipt);
+      assert.equal(JSON.stringify(receipt).includes(plaintextReason), false);
+    }
+  });
+
+  it("fails closed when standard target release-enabled variables are not true", () => {
+    const provision = workflow().jobs.provision;
+    const rejection = provision.steps.find(
+      (step) => step.name === "Reject disabled standard Pages target",
+    );
+    assert.ok(rejection, "disabled standard-target rejection step is missing");
+    assert.equal(
+      rejection.if,
+      "${{ steps.authorization.outputs.mode == 'standard' && !((inputs.target == 'staging' && vars.STAGING_RELEASE_ENABLED == 'true') || (inputs.target == 'production' && vars.PRODUCTION_RELEASE_ENABLED == 'true')) }}",
+    );
+    assert.ok(rejection.run.includes("exit 1"));
+    assert.ok(
+      stepIndex(provision, "Reject disabled standard Pages target") <
+        stepIndex(provision, "Verify provider credential isolation"),
+    );
+  });
+
+  it("burns expired or duplicate receipts and verifies exact post-upload identity", () => {
+    const guard = artifactListingGuardSource(workflow());
+    const exactName =
+      `production-break-glass-consumed-pages-staging-${releaseSha}-${incidentId}`;
+    const digest = "a".repeat(64);
+    const artifact = {
+      id: 101,
+      node_id: "MDg6QXJ0aWZhY3QxMDE=",
+      name: exactName,
+      size_in_bytes: 512,
+      url: "https://api.github.test/repos/maiprop/maiprop-listing-site/actions/artifacts/101",
+      archive_download_url:
+        "https://api.github.test/repos/maiprop/maiprop-listing-site/actions/artifacts/101/zip",
+      expired: false,
+      created_at: "2026-08-26T08:00:00Z",
+      expires_at: "2026-09-02T08:00:00Z",
+      updated_at: "2026-08-26T08:00:00Z",
+      digest: `sha256:${digest}`,
+      workflow_run: {
+        id: 42,
+        repository_id: 1,
+        head_repository_id: 1,
+        head_branch: "main",
+        head_sha: releaseSha,
+      },
+    };
+    const listing = (artifacts) => ({ total_count: artifacts.length, artifacts });
+    assert.equal(runArtifactListingGuard(guard, listing([]), "precheck", exactName).status, 0);
+    assert.notEqual(runArtifactListingGuard(guard, listing([artifact]), "precheck", exactName).status, 0);
+    assert.notEqual(runArtifactListingGuard(
+      guard,
+      listing([artifact, { ...artifact, id: 102 }]),
+      "precheck",
+      exactName,
+    ).status, 0);
+    assert.notEqual(runArtifactListingGuard(
+      guard,
+      listing([{ ...artifact, expired: true }]),
+      "precheck",
+      exactName,
+    ).status, 0);
+    assert.equal(runArtifactListingGuard(
+      guard,
+      listing([{ ...artifact, name: `${exactName}-suffix` }]),
+      "precheck",
+      exactName,
+    ).status, 0);
+    assert.equal(runArtifactListingGuard(
+      guard,
+      listing([artifact]),
+      "postcheck",
+      exactName,
+      "101",
+      digest,
+    ).status, 0);
+    assert.notEqual(runArtifactListingGuard(
+      guard,
+      listing([artifact]),
+      "postcheck",
+      exactName,
+      "102",
+      digest,
+    ).status, 0);
+    assert.notEqual(runArtifactListingGuard(
+      guard,
+      listing([artifact]),
+      "postcheck",
+      exactName,
+      "101",
+      "b".repeat(64),
+    ).status, 0);
+  });
+
+  it("structurally gates mutation on receipt binding/postcheck and signs attempt-qualified evidence", () => {
+    const parsed = workflow();
+    const provision = parsed.jobs.provision;
+    const orderedNames = [
+      "Precheck and create break-glass consumption receipt",
+      "Upload immutable break-glass consumption receipt",
+      "Create and same-run verify consumption receipt binding",
+      "Upload immutable consumption receipt binding",
+      "Postcheck and finalize break-glass consumption tuple",
+      "Provision strict Cloudflare Pages runtime bindings",
+    ];
+    const indices = orderedNames.map((name) => stepIndex(provision, name));
+    assert.ok(indices.every((index) => index >= 0));
+    assert.deepEqual(indices, [...indices].sort((left, right) => left - right));
+    const receiptUpload = provision.steps[indices[1]];
+    assert.equal(receiptUpload.with.overwrite, false);
+    assert.equal(receiptUpload.with["retention-days"], 7);
+    const receiptBinding = provision.steps[indices[2]];
+    assert.ok(receiptBinding.run.includes("scripts/create-release-artifact-binding.mjs"));
+    assert.ok(receiptBinding.run.includes("scripts/verify-release-artifact-binding.mjs"));
+    assert.ok(receiptBinding.run.includes("--same-run"));
+    const finalization = provision.steps[indices[4]];
+    assert.ok(finalization.run.includes("production-break-glass-consumption.mjs verify"));
+    assert.ok(finalization.run.includes("consumptionTuple"));
+    assert.ok(finalization.run.includes("verified=true"));
+    const mutation = provision.steps[indices[5]];
+    assert.equal(
+      mutation.env.CONSUMPTION_VERIFIED,
+      "${{ steps.standard_consumption.outputs.verified || steps.break_glass_consumption.outputs.verified }}",
+    );
+    assert.ok(mutation.run.indexOf('[ "$CONSUMPTION_VERIFIED" != "true" ]') >= 0);
+    assert.ok(mutation.run.indexOf('[ "$CONSUMPTION_VERIFIED" != "true" ]') < mutation.run.indexOf("--request PATCH"));
+    assert.ok(mutation.run.includes("--slurpfile authorization release-authorization.json"));
+    assert.ok(mutation.run.includes("--slurpfile consumption consumption-tuple.json"));
+
+    const evidenceUpload = provision.steps.find((step) => step.id === "pages_evidence_upload");
+    assert.equal(
+      evidenceUpload.with.name,
+      "cloudflare-pages-runtime-${{ inputs.target }}-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
+    assert.equal(evidenceUpload.with.overwrite, false);
+    assert.equal(evidenceUpload.with["retention-days"], 30);
+    const pagesBinding = provision.steps.find(
+      (step) => step.name === "Create and same-run verify Pages runtime evidence binding",
+    );
+    assert.ok(pagesBinding.run.includes("scripts/create-release-artifact-binding.mjs"));
+    assert.ok(pagesBinding.run.includes("scripts/verify-release-artifact-binding.mjs"));
+    assert.ok(pagesBinding.run.includes("--same-run"));
+    const bindingUpload = provision.steps.find((step) => step.id === "pages_binding_upload");
+    assert.equal(
+      bindingUpload.with.name,
+      "cloudflare-pages-runtime-${{ inputs.target }}-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}-binding",
+    );
+    assert.equal(bindingUpload.with.overwrite, false);
+    assert.equal(bindingUpload.with["retention-days"], 30);
+    assert.equal(JSON.stringify(provision.steps).includes("$GITHUB_STEP_SUMMARY"), false);
   });
 });

@@ -12,6 +12,10 @@ const workflows = {
     "utf8",
   ).replace(/\r\n/g, "\n"),
 };
+const pagesWorkflow = readFileSync(
+  ".github/workflows/provision-cloudflare-pages-runtime.yml",
+  "utf8",
+).replace(/\r\n/g, "\n");
 
 function stepBlock(source: string, name: string): string {
   const marker = `      - name: ${name}`;
@@ -221,5 +225,39 @@ describe("Supabase production provider signed-binding contract", () => {
     expect(block).toContain("--triggering-actor");
     expect(block).toContain("--file-root");
     expect(block).toContain("--file");
+  });
+
+  it("same-run binds both the one-shot Pages receipt and attempt-qualified provider proof", () => {
+    const receiptBinding = stepBlock(
+      pagesWorkflow,
+      "Create and same-run verify consumption receipt binding",
+    );
+    const pagesBinding = stepBlock(
+      pagesWorkflow,
+      "Create and same-run verify Pages runtime evidence binding",
+    );
+
+    for (const block of [receiptBinding, pagesBinding]) {
+      expect(block).toContain("scripts/create-release-artifact-binding.mjs");
+      expect(block).toContain("scripts/verify-release-artifact-binding.mjs");
+      expect(block).toContain("--artifact-id");
+      expect(block).toContain("--artifact-name");
+      expect(block).toContain("--artifact-digest");
+      expect(block).toContain("--workflow-path");
+      expect(block).toContain("--workflow-sha");
+      expect(block).toContain("--actor");
+      expect(block).toContain("--triggering-actor");
+      expect(block).toContain("--same-run");
+      expect(block).toContain('--trusted-current-run-id "$GITHUB_RUN_ID"');
+      expect(block).toContain('--trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT"');
+    }
+    expect(receiptBinding).toContain("production-break-glass-consumption.json");
+    expect(pagesBinding).toContain("cloudflare-pages-runtime-evidence");
+    expect(pagesWorkflow).toContain(
+      "cloudflare-pages-runtime-${{ inputs.target }}-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
+    expect(pagesWorkflow).toContain(
+      "cloudflare-pages-runtime-${{ inputs.target }}-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}-binding",
+    );
   });
 });
