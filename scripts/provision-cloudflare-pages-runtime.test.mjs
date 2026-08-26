@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -84,10 +91,32 @@ function finalMutationValidationSource(parsed) {
     (candidate) => candidate.name === "Provision strict Cloudflare Pages runtime bindings",
   );
   assert.ok(step, "Pages provider mutation step is missing");
-  const start = step.run.lastIndexOf('if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then');
-  const end = step.run.lastIndexOf('current_main="$(gh api');
+  const receiptValidation = step.run.lastIndexOf("test -s production-break-glass-consumption.json");
+  const start = step.run.lastIndexOf(
+    'if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then',
+    receiptValidation,
+  );
+  const end = step.run.indexOf("mutation_boundary_at=", receiptValidation);
   assert.ok(start >= 0 && end > start, "final Pages mutation validation shell is not extractable");
   return step.run.slice(start, end);
+}
+
+function fullMutationBoundarySource(parsed) {
+  const step = parsed.jobs.provision.steps.find(
+    (candidate) => candidate.name === "Provision strict Cloudflare Pages runtime bindings",
+  );
+  assert.ok(step, "Pages provider mutation step is missing");
+  const receiptValidation = step.run.lastIndexOf("test -s production-break-glass-consumption.json");
+  const finalValidation = step.run.lastIndexOf(
+    'if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then',
+    receiptValidation,
+  );
+  const currentMain = step.run.lastIndexOf('current_main="$(gh api');
+  const start = Math.min(finalValidation, currentMain);
+  const endMarker = '"$RAW_DIR/runtime-patch-response.json" > /dev/null';
+  const end = step.run.indexOf(endMarker, start);
+  assert.ok(start >= 0 && end > start, "full Pages mutation boundary shell is not extractable");
+  return step.run.slice(start, end + endMarker.length);
 }
 
 function runFinalMutationValidation(source, fixtureRoot, overrides = {}) {
@@ -120,6 +149,68 @@ function runFinalMutationValidation(source, fixtureRoot, overrides = {}) {
     "bash",
     "-c",
     `set -euo pipefail\ncd "$TEST_FIXTURE_ROOT"\n${adapted}`,
+  ], { encoding: "utf8" });
+}
+
+function runFullMutationBoundary(source, fixtureRoot, overrides = {}) {
+  const repositoryRoot = bashPath(root);
+  const fixture = bashPath(fixtureRoot);
+  const adapted = source.replaceAll(
+    "node scripts/production-break-glass-consumption.mjs",
+    'node "$TEST_REPOSITORY_ROOT/scripts/production-break-glass-consumption.mjs"',
+  );
+  const environment = {
+    AUTHORIZATION_MODE: "break_glass",
+    PAGES_ACTION: "pages-staging",
+    RELEASE_SHA: releaseSha,
+    GITHUB_REPOSITORY: "maiprop/maiprop-listing-site",
+    GITHUB_WORKFLOW_REF:
+      "maiprop/maiprop-listing-site/.github/workflows/provision-cloudflare-pages-runtime.yml@refs/heads/main",
+    GITHUB_WORKFLOW_SHA: releaseSha,
+    GITHUB_RUN_ID: "42",
+    GITHUB_RUN_ATTEMPT: "1",
+    RECEIPT_BINDING_ARTIFACT_ID: "102",
+    API_BASE: "https://api.cloudflare.test/client/v4",
+    TARGET_EDIT_TOKEN: "test-edit-token",
+    TARGET_ACCOUNT_ID: "test-account",
+    TARGET_PROJECT: "test-pages-project",
+    TARGET_PROJECT_ID: "test-pages-project-id",
+    RAW_DIR: `${fixture}/raw`,
+    PATCH_BODY: `${fixture}/runtime-patch.json`,
+    TEST_CURRENT_MAIN: releaseSha,
+    TEST_GH_DELAY_SECONDS: "0",
+    TEST_PATCH_SENTINEL: `${fixture}/patch-called`,
+    TEST_REPOSITORY_ROOT: repositoryRoot,
+    TEST_FIXTURE_ROOT: fixture,
+    ...overrides,
+  };
+  const command = process.platform === "win32" ? "wsl.exe" : "env";
+  const prefix = process.platform === "win32" ? ["--exec", "env"] : [];
+  const preamble = `
+set -euo pipefail
+cd "$TEST_FIXTURE_ROOT"
+mkdir -p "$RAW_DIR"
+printf '{}\n' > "$PATCH_BODY"
+gh() {
+  sleep "$TEST_GH_DELAY_SECONDS"
+  printf '%s\n' "$TEST_CURRENT_MAIN"
+}
+curl() {
+  case " $* " in
+    *" --request PATCH "*) ;;
+    *) return 64 ;;
+  esac
+  printf 'PATCH\n' > "$TEST_PATCH_SENTINEL"
+  printf '{"success":true,"result":{"id":"%s","name":"%s"}}\n' \
+    "$TARGET_PROJECT_ID" "$TARGET_PROJECT"
+}
+`;
+  return spawnSync(command, [
+    ...prefix,
+    ...Object.entries(environment).map(([key, value]) => `${key}=${value}`),
+    "bash",
+    "-c",
+    `${preamble}\n${adapted}`,
   ], { encoding: "utf8" });
 }
 
@@ -586,8 +677,8 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
     const patch = mutation.run.indexOf("--request PATCH");
     assert.ok(liveVerification >= 0, "provider shell must revalidate break-glass expiry");
     assert.ok(bindingVerification >= 0, "provider shell must require authenticated receipt binding");
-    assert.ok(bindingVerification < liveVerification);
-    assert.ok(liveVerification < currentMain && currentMain < patch);
+    assert.ok(currentMain < bindingVerification);
+    assert.ok(bindingVerification < liveVerification && liveVerification < patch);
     assert.doesNotMatch(mutation.run, /RELEASE_REASON/);
 
     const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-pages-expiry-rollover-"));
@@ -672,7 +763,7 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
     }
   });
 
-  it("binds the final Pages mutation to the exact signed receipt bytes", () => {
+  it("binds the final Pages mutation and revalidates expiry after current-main lookup", () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-pages-receipt-rebind-"));
     try {
       const repository = "maiprop/maiprop-listing-site";
@@ -695,7 +786,7 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
       mkdirSync(metadataRoot, { recursive: true });
 
       const now = Date.now();
-      const authorization = selectReleaseAuthorization({
+      const makeAuthorization = ({ expiresAt, selectedAt }) => selectReleaseAuthorization({
         action: "pages-staging",
         standardConfirmation: "PROVISION_STAGING_PAGES_RUNTIME",
         singleAdminBreakGlass: "true",
@@ -717,18 +808,23 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
         breakGlassActor: "krenios",
         breakGlassReleaseSha: releaseSha,
         breakGlassIncidentId: incidentId,
-        breakGlassExpiresAt: new Date(now + 5 * 60 * 1000).toISOString(),
-      }, { now: new Date(now - 5_000).toISOString() });
-      const receipt = (consumedAt, nonce) => createConsumptionReceipt({
-        authorization,
-        repository,
-        workflowRef,
-        workflowSha: releaseSha,
-        runId: "42",
-        runAttempt: "1",
-        consumedAt,
-        nonce,
+        breakGlassExpiresAt: expiresAt,
+      }, { now: selectedAt });
+      const authorization = makeAuthorization({
+        expiresAt: new Date(now + 5 * 60 * 1000).toISOString(),
+        selectedAt: new Date(now - 5_000).toISOString(),
       });
+      const receipt = (consumedAt, nonce, selectedAuthorization = authorization) =>
+        createConsumptionReceipt({
+          authorization: selectedAuthorization,
+          repository,
+          workflowRef,
+          workflowSha: releaseSha,
+          runId: "42",
+          runAttempt: "1",
+          consumedAt,
+          nonce,
+        });
       const receiptA = receipt(new Date(now - 3_000).toISOString(), "8".repeat(64));
       const receiptB = receipt(new Date(now - 2_000).toISOString(), "9".repeat(64));
       const writeReceipt = (value) => {
@@ -751,7 +847,7 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
         releaseSha,
         incidentId,
       });
-      const binding = createReleaseArtifactBinding({
+      const createBinding = () => createReleaseArtifactBinding({
         payloadRoot: receiptPath,
         repository,
         releaseSha,
@@ -772,6 +868,7 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
         issuedAt: new Date(now - 2_500).toISOString(),
         nonce: "7".repeat(64),
       });
+      const binding = createBinding();
       writeFileSync(bindingPath, `${JSON.stringify(binding, null, 2)}\n`);
       writeFileSync(artifactPath, `${JSON.stringify({
         id: 101,
@@ -799,7 +896,7 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
         repository: { full_name: repository, id: 1 },
         head_repository: { full_name: repository, id: 1 },
       })}\n`);
-      const verification = spawnSync(process.execPath, [
+      const verifyBinding = () => spawnSync(process.execPath, [
         resolve(root, "scripts", "verify-release-artifact-binding.mjs"),
         "--binding", bindingPath,
         "--payload-root", receiptPath,
@@ -830,6 +927,7 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
         encoding: "utf8",
         env: { ...process.env, RELEASE_EVIDENCE_SIGNING_KEY: signingKey },
       });
+      const verification = verifyBinding();
       assert.equal(verification.status, 0, verification.stderr);
       writeFileSync(verificationPath, verification.stdout);
 
@@ -882,6 +980,104 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
       writeFileSync(bindingPath, `${JSON.stringify(changedBinding, null, 2)}\n`);
       const bindingMismatch = runFinalMutationValidation(finalValidation, fixtureRoot);
       assert.notEqual(bindingMismatch.status, 0, "signed binding digest mismatch reached PATCH");
+
+      writeReceipt(receiptA);
+      writeFileSync(authorizationPath, `${JSON.stringify(authorization, null, 2)}\n`);
+      writeFileSync(tuplePath, `${JSON.stringify(originalTuple, null, 2)}\n`);
+      writeFileSync(bindingPath, `${JSON.stringify(binding, null, 2)}\n`);
+      writeFileSync(verificationPath, `${JSON.stringify(originalVerification, null, 2)}\n`);
+
+      const fullBoundary = fullMutationBoundarySource(workflow());
+      const patchSentinel = join(fixtureRoot, "patch-called");
+      const runBoundary = (overrides = {}) => {
+        rmSync(patchSentinel, { force: true });
+        return runFullMutationBoundary(fullBoundary, fixtureRoot, overrides);
+      };
+      const liveBreakGlass = runBoundary();
+      assert.equal(liveBreakGlass.status, 0, liveBreakGlass.stderr);
+      assert.equal(existsSync(patchSentinel), true, "live break-glass did not reach PATCH");
+
+      const standardBoundary = runBoundary({ AUTHORIZATION_MODE: "standard" });
+      assert.equal(standardBoundary.status, 0, standardBoundary.stderr);
+      assert.equal(existsSync(patchSentinel), true, "standard authorization did not reach PATCH");
+
+      const staleMain = runBoundary({ TEST_CURRENT_MAIN: "f".repeat(40) });
+      assert.notEqual(staleMain.status, 0, "current-main mismatch reached PATCH");
+      assert.equal(existsSync(patchSentinel), false, "current-main mismatch invoked PATCH");
+
+      const nearExpiryNow = Date.now();
+      const nearExpiryAuthorization = makeAuthorization({
+        expiresAt: new Date(nearExpiryNow + 3_000).toISOString(),
+        selectedAt: new Date(nearExpiryNow - 1_000).toISOString(),
+      });
+      const nearExpiryReceipt = receipt(
+        new Date(nearExpiryNow).toISOString(),
+        "6".repeat(64),
+        nearExpiryAuthorization,
+      );
+      writeFileSync(
+        authorizationPath,
+        `${JSON.stringify(nearExpiryAuthorization, null, 2)}\n`,
+      );
+      const nearExpiryReceiptSha256 = writeReceipt(nearExpiryReceipt);
+      const nearExpiryTuple = consumptionTuple({
+        receipt: nearExpiryReceipt,
+        payloadArtifact: { artifactId: "101", artifactDigest },
+        bindingArtifact: { artifactId: "102" },
+        payloadSha256: nearExpiryReceiptSha256,
+      });
+      writeFileSync(tuplePath, `${JSON.stringify(nearExpiryTuple, null, 2)}\n`);
+      const nearExpiryBinding = createBinding();
+      writeFileSync(bindingPath, `${JSON.stringify(nearExpiryBinding, null, 2)}\n`);
+      const nearExpiryVerification = verifyBinding();
+      assert.equal(nearExpiryVerification.status, 0, nearExpiryVerification.stderr);
+      writeFileSync(verificationPath, nearExpiryVerification.stdout);
+
+      const rolledOver = runBoundary({ TEST_GH_DELAY_SECONDS: "5" });
+      assert.equal(
+        existsSync(patchSentinel),
+        false,
+        `authorization expired during current-main lookup but PATCH ran (status ${rolledOver.status})`,
+      );
+      assert.notEqual(rolledOver.status, 0, "expired authorization reached PATCH");
+      for (const [label, result] of [
+        ["live break-glass", liveBreakGlass],
+        ["standard", standardBoundary],
+        ["current-main mismatch", staleMain],
+        ["expiry rollover", rolledOver],
+      ]) {
+        assert.doesNotMatch(
+          `${result.stdout}\n${result.stderr}`,
+          /Emergency Pages|test-key/,
+          `${label} logged plaintext authorization evidence`,
+        );
+      }
+
+      const currentMain = fullBoundary.indexOf('current_main="$(gh api');
+      const finalLiveCheck = fullBoundary.lastIndexOf(
+        "production-break-glass-consumption.mjs verify",
+      );
+      const mutationBoundary = fullBoundary.indexOf("mutation_boundary_at=");
+      const patch = fullBoundary.indexOf("--request PATCH");
+      const patchCommand = fullBoundary.lastIndexOf("curl -fsS", patch);
+      assert.ok(currentMain >= 0 && currentMain < finalLiveCheck);
+      assert.ok(finalLiveCheck < mutationBoundary && mutationBoundary < patchCommand);
+      const boundaryTail = fullBoundary.slice(mutationBoundary, patchCommand);
+      assert.doesNotMatch(boundaryTail, /\b(?:gh|curl|wget)\b/);
+      assert.equal(
+        boundaryTail.trim(),
+        `mutation_boundary_at="$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')"
+if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+  jq -e --arg mutation_boundary_at "$mutation_boundary_at" '
+    .authorization.authorized_expires_at > $mutation_boundary_at
+  ' production-break-glass-consumption.json > /dev/null
+fi`,
+      );
+      assert.match(
+        fullBoundary.slice(patchCommand, patch + "--request PATCH".length),
+        /^curl -fsS \\\n  --request PATCH$/,
+      );
+      assert.doesNotMatch(fullBoundary, /RELEASE_REASON|Emergency Pages/);
 
       assert.match(finalValidation, /payload_sha256 == \$receipt_sha256/);
       assert.match(finalValidation, /release-artifact-binding\.json/);

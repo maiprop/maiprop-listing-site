@@ -615,6 +615,12 @@ jobs:
               --evidence "$PATCH_PLAN"
           unset service_role_key plain_text_json
 
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          if [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ] ||
+             [ "$current_main" != "$RELEASE_SHA" ]; then
+            echo "::error::main advanced before the Pages runtime mutation; refusing to continue."
+            exit 1
+          fi
           if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
             test -s production-break-glass-consumption.json
             test -s release-authorization.json
@@ -682,11 +688,11 @@ jobs:
               --authorization release-authorization.json \
               --action "$PAGES_ACTION"
           fi
-          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
-          if [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ] ||
-             [ "$current_main" != "$RELEASE_SHA" ]; then
-            echo "::error::main advanced before the Pages runtime mutation; refusing to continue."
-            exit 1
+          mutation_boundary_at="$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')"
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            jq -e --arg mutation_boundary_at "$mutation_boundary_at" '
+              .authorization.authorized_expires_at > $mutation_boundary_at
+            ' production-break-glass-consumption.json > /dev/null
           fi
           curl -fsS \
             --request PATCH \
