@@ -243,6 +243,74 @@ function executeProductionConsumptionPostcheck({
   );
 }
 
+function executeTrustedMainGate(step, overrides = {}) {
+  const trustedSha = "a".repeat(40);
+  const environment = {
+    GH_TOKEN: "test-token",
+    RELEASE_SHA: trustedSha,
+    GITHUB_REPOSITORY: "maiprop/maiprop-listing-site",
+    GITHUB_SHA: trustedSha,
+    GITHUB_WORKFLOW_SHA: trustedSha,
+    GITHUB_ACTOR: "release-owner",
+    GITHUB_TRIGGERING_ACTOR: "release-owner",
+    GITHUB_RUN_ATTEMPT: "1",
+    TEST_CURRENT_MAIN: trustedSha,
+    ...overrides,
+  };
+  const command = process.platform === "win32" ? "wsl.exe" : "env";
+  const prefix = process.platform === "win32" ? ["--exec", "env"] : [];
+  const script = `
+gh() {
+  if [ "$1" = "api" ]; then
+    printf '%s\\n' "$TEST_CURRENT_MAIN"
+    return 0
+  fi
+  return 64
+}
+${step.run}
+`;
+  return spawnSync(command, [
+    ...prefix,
+    ...Object.entries(environment).map(([key, value]) => `${key}=${value}`),
+    "bash",
+    "-c",
+    script,
+  ], { encoding: "utf8" });
+}
+
+function executeJq(filter, input, args = []) {
+  const command = process.platform === "win32" ? "wsl.exe" : "jq";
+  const prefix = process.platform === "win32" ? ["--exec", "jq"] : [];
+  return spawnSync(command, [...prefix, ...args, filter], {
+    cwd: root,
+    encoding: "utf8",
+    input: JSON.stringify(input),
+  });
+}
+
+function pagesRuntimeResultContract() {
+  const producer = yaml.load(workflow("provision-cloudflare-pages-runtime.yml"));
+  const producerStep = producer.jobs.provision.steps.find(
+    (step) => step.name === "Provision strict Cloudflare Pages runtime bindings",
+  );
+  assert.ok(producerStep, "Pages runtime producer step is required");
+  const producerMatch = /--arg release_sha "\$RELEASE_SHA" '(\{[\s\S]*?\})' > "\$EVIDENCE_DIR\/cloudflare-pages-runtime-result\.json"/.exec(
+    producerStep.run,
+  );
+  assert.ok(producerMatch, "Pages runtime producer jq contract must remain executable");
+
+  const consumer = yaml.load(workflow("deploy-production-release.yml"));
+  const consumerStep = consumer.jobs.validate.steps.find(
+    (step) => step.name === "Require current main and final exact-SHA readiness",
+  );
+  assert.ok(consumerStep, "production release Pages proof consumer is required");
+  const consumerMatch = /jq -e --arg target "\$target" --arg sha "\$RELEASE_SHA" '([\s\S]*?)' "\$root\/evidence\/cloudflare-pages-runtime-result\.json"/.exec(
+    consumerStep.run,
+  );
+  assert.ok(consumerMatch, "Pages runtime consumer jq contract must remain executable");
+  return { producer: producerMatch[1], consumer: consumerMatch[1] };
+}
+
 it("break-glass approval uses central authorization and signs schema 2 evidence", () => {
   const parsed = yaml.load(workflow("approve-production-release.yml"));
   const dispatch = parsed.on.workflow_dispatch.inputs;
@@ -771,6 +839,261 @@ it("rejects non-exact production consumption artifact identities", () => {
     const result = executeProductionConsumptionPostcheck({ artifacts, ...expected });
     assert.notEqual(result.status, 0, label);
   }
+});
+
+it("gates approval and deployment on trusted current-main identity before repository code or signing secrets", () => {
+  for (const name of [
+    "approve-production-release.yml",
+    "deploy-production-release.yml",
+  ]) {
+    const parsed = yaml.load(workflow(name));
+    const job = name.startsWith("approve") ? parsed.jobs.approve : parsed.jobs.validate;
+    const gateIndex = job.steps.findIndex(
+      (step) => step.name === "Verify trusted exact current-main control identity",
+    );
+    const checkoutIndex = job.steps.findIndex((step) =>
+      String(step.uses ?? "").startsWith("actions/checkout@"));
+    const checkoutVerificationIndex = job.steps.findIndex(
+      (step) => step.name === "Verify exact clean checkout identity",
+    );
+    const firstRepositoryScript = job.steps.findIndex((step) =>
+      /(?:^|\s)(?:node|npm)\s+(?:scripts\/|run)/m.test(String(step.run ?? "")));
+    const firstSigningSecret = job.steps.findIndex((step) =>
+      JSON.stringify(step.env ?? {}).includes("RELEASE_EVIDENCE_SIGNING_KEY"));
+
+    assert.equal(gateIndex, 0, `${name}: trusted gate must be first`);
+    assert.ok(checkoutIndex > gateIndex, `${name}: checkout must follow trusted gate`);
+    assert.ok(
+      checkoutVerificationIndex > checkoutIndex,
+      `${name}: clean checkout verification must follow checkout`,
+    );
+    assert.ok(
+      firstRepositoryScript > checkoutVerificationIndex,
+      `${name}: repository code must follow clean checkout verification`,
+    );
+    assert.ok(
+      firstSigningSecret > checkoutVerificationIndex,
+      `${name}: signing secret must follow trusted checkout verification`,
+    );
+    assert.doesNotMatch(job.steps[gateIndex].run, /\$\{\{\s*inputs\./);
+    assert.match(job.steps[gateIndex].run, /\^\[0-9a-f\]\{40\}\$/);
+    assert.match(job.steps[checkoutVerificationIndex].run, /git status --porcelain/);
+
+    const valid = executeTrustedMainGate(job.steps[gateIndex]);
+    assert.equal(valid.status, 0, `${name}: ${valid.stderr}`);
+    for (const [label, override] of [
+      ["uppercase SHA", { RELEASE_SHA: "A".repeat(40) }],
+      ["shell-shaped SHA", { RELEASE_SHA: `${"a".repeat(39)};` }],
+      ["dispatch SHA mismatch", { GITHUB_SHA: "b".repeat(40) }],
+      ["workflow SHA mismatch", { GITHUB_WORKFLOW_SHA: "b".repeat(40) }],
+      ["substituted actor", { GITHUB_TRIGGERING_ACTOR: "other-owner" }],
+      ["rerun", { GITHUB_RUN_ATTEMPT: "2" }],
+      ["main advanced", { TEST_CURRENT_MAIN: "b".repeat(40) }],
+    ]) {
+      const rejected = executeTrustedMainGate(job.steps[gateIndex], override);
+      assert.notEqual(rejected.status, 0, `${name}: ${label}`);
+    }
+  }
+});
+
+it("keeps schema 2 standard approval authorization attached through direct recovery and rollback", () => {
+  const direct = yaml.load(workflow("direct-cloudflare-production-deploy.yml"));
+  const directValidation = direct.jobs.validate.steps.find(
+    (step) => step.name === "Verify signed recovery prerequisites and issue mutation lease",
+  );
+  assert.ok(directValidation, "direct recovery validation step is required");
+  assert.match(
+    directValidation.run,
+    /jq -e[\s\S]*\.authorization\.mode == "standard"[\s\S]*> evidence\/approval-authorization\.json/,
+    "direct recovery must extract only an exact standard schema 2 authorization",
+  );
+  assert.match(
+    directValidation.run,
+    /release:validate -- release-approval[\s\S]*--authorization-file evidence\/approval-authorization\.json/,
+    "direct recovery must pass the signed approval authorization to the schema 2 validator",
+  );
+  const authorizationModeIndex = directValidation.run.indexOf(
+    '.authorization.mode == "standard"',
+  );
+  const extractionStart = directValidation.run.lastIndexOf("if (", authorizationModeIndex);
+  const extractionEnd = directValidation.run.indexOf(" end'", authorizationModeIndex) + 4;
+  assert.ok(
+    extractionStart >= 0 && extractionEnd > extractionStart,
+    "direct standard authorization filter must remain executable",
+  );
+  const directExtraction = directValidation.run.slice(extractionStart, extractionEnd);
+
+  const reusable = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
+  const rollback = reusable.jobs.deploy.steps.find(
+    (step) => step.name === "Roll back failed production candidate",
+  );
+  assert.ok(rollback, "automatic rollback step is required");
+  const standardRollback = /if \[ "\$AUTHORIZATION_MODE" = "standard" \]; then([\s\S]*?)\n\s*fi/.exec(
+    rollback.run,
+  );
+  assert.ok(standardRollback, "rollback must retain a distinct standard authorization branch");
+  assert.match(
+    standardRollback[1],
+    /release:validate -- release-approval[\s\S]*--authorization-file evidence\/approval-authorization\.json/,
+    "rollback must revalidate schema 2 approval with its signed authorization",
+  );
+
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-standard-recovery-"));
+  try {
+    const approvalFile = join(fixtureRoot, "production-release-approval.json");
+    const authorizationFile = join(fixtureRoot, "approval-authorization.json");
+    const now = "2026-08-26T11:00:00.000Z";
+    const standardAuthorization = {
+      mode: "standard",
+      action: "production-approval",
+      actor: "reviewer",
+      release_sha: validatorFixture.releaseSha,
+      workflow_run_id: "50",
+      workflow_run_attempt: "1",
+    };
+    const extractAuthorization = (approval) => executeJq(
+      directExtraction,
+      approval,
+      [
+        "-e",
+        "--arg", "sha", validatorFixture.releaseSha,
+        "--arg", "run_id", "50",
+        "--arg", "run_attempt", "1",
+      ],
+    );
+    const standardApproval = releaseApproval(standardAuthorization);
+    const extracted = extractAuthorization(standardApproval);
+    assert.equal(extracted.status, 0, extracted.stderr);
+    assert.deepEqual(JSON.parse(extracted.stdout), standardAuthorization);
+    writeFileSync(approvalFile, JSON.stringify(standardApproval));
+
+    const validateAuthorization = (authorization) => {
+      writeFileSync(authorizationFile, JSON.stringify(authorization));
+      return spawnSync(
+        process.execPath,
+        validatorCliArgs("release-approval", approvalFile, now, authorizationFile),
+        { cwd: root, encoding: "utf8" },
+      );
+    };
+
+    const valid = validateAuthorization(standardAuthorization);
+    assert.equal(valid.status, 0, valid.stderr);
+
+    const rejectedApprovals = [
+      ["partial standard approval", releaseApproval({
+        ...standardAuthorization,
+        workflow_run_attempt: undefined,
+      })],
+      ["mismatched standard approval", releaseApproval({
+        ...standardAuthorization,
+        workflow_run_id: "51",
+      })],
+      ["break-glass approval", releaseApproval({
+        ...standardAuthorization,
+        mode: "break_glass",
+        incident_id: "PERF-RECOVERY-20260826-01",
+        reason_sha256: "0".repeat(64),
+        authorized_expires_at: "2026-08-26T12:00:00.000Z",
+      })],
+    ];
+    for (const [label, approval] of rejectedApprovals) {
+      const result = extractAuthorization(approval);
+      assert.notEqual(result.status, 0, `${label} passed the direct recovery callsite`);
+    }
+
+    for (const [label, authorization] of [
+      ["partial standard authorization", {
+        ...standardAuthorization,
+        workflow_run_attempt: undefined,
+      }],
+      ["mismatched standard authorization", {
+        ...standardAuthorization,
+        workflow_run_id: "51",
+      }],
+      ["break-glass authorization alias", {
+        ...standardAuthorization,
+        mode: "break_glass",
+        incident_id: "PERF-RECOVERY-20260826-01",
+        reason_sha256: "0".repeat(64),
+        authorized_expires_at: "2026-08-26T12:00:00.000Z",
+      }],
+    ]) {
+      const result = validateAuthorization(authorization);
+      assert.notEqual(result.status, 0, `${label} reached standard direct recovery`);
+    }
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+it("accepts the real Pages runtime producer result in both strict production consumers", () => {
+  const contract = pagesRuntimeResultContract();
+  for (const target of ["staging", "production"]) {
+    const produced = executeJq(contract.producer, null, [
+      "-n",
+      "--argjson", "authorization", '[{"mode":"standard"}]',
+      "--argjson", "consumption", "[null]",
+      "--arg", "target", target,
+      "--arg", "project_id", `project-${target}`,
+      "--arg", "release_sha", validatorFixture.releaseSha,
+    ]);
+    assert.equal(produced.status, 0, produced.stderr);
+    const evidence = JSON.parse(produced.stdout);
+    const accepted = executeJq(contract.consumer, evidence, [
+      "-e",
+      "--arg", "target", target,
+      "--arg", "sha", validatorFixture.releaseSha,
+    ]);
+    assert.equal(accepted.status, 0, `${target}: ${accepted.stderr}`);
+
+    for (const status of [undefined, "pending", "VERIFIED", true]) {
+      const invalid = { ...evidence };
+      if (status === undefined) delete invalid.status;
+      else invalid.status = status;
+      const rejected = executeJq(contract.consumer, invalid, [
+        "-e",
+        "--arg", "target", target,
+        "--arg", "sha", validatorFixture.releaseSha,
+      ]);
+      assert.notEqual(rejected.status, 0, `${target} accepted status ${String(status)}`);
+    }
+  }
+});
+
+it("keeps mutation lease artifact input data-only inside the signing-secret shell", () => {
+  const reusable = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
+  const job = reusable.jobs.deploy;
+  const verification = job.steps.find(
+    (step) => step.name === "Verify signed release and provider artifact bindings",
+  );
+  assert.ok(verification, "signed provider binding verification step is required");
+  assert.equal(
+    job.env.MUTATION_LEASE_ARTIFACT,
+    "${{ inputs.mutation_lease_artifact }}",
+  );
+  assert.ok(verification.env.RELEASE_EVIDENCE_SIGNING_KEY);
+  assert.doesNotMatch(
+    verification.run,
+    /\$\{\{\s*inputs\./,
+    "untrusted workflow input must never be rendered into a signing-secret shell",
+  );
+  assert.match(
+    verification.run,
+    /expected_lease_prefix="production-mutation-lease-\$\{RELEASE_SHA\}-\$\{PRODUCTION_RUN_ID\}-\$\{PRODUCTION_RUN_ATTEMPT\}-"/,
+  );
+  assert.match(
+    verification.run,
+    /case "\$MUTATION_LEASE_ARTIFACT" in[\s\S]*"\$\{expected_lease_prefix\}cloudflare"[\s\S]*"\$\{expected_lease_prefix\}cloudflare-recovery"[\s\S]*\*\)[\s\S]*exit 1/,
+    "only exact allowlisted lease artifact identities may reach signed downloads",
+  );
+  assert.match(
+    verification.run,
+    /download_binding mutation-lease "\$PRODUCTION_RUN_ID"[\s\S]*"\$\{MUTATION_LEASE_ARTIFACT\}-binding"/,
+  );
+  assert.ok(
+    verification.run.indexOf('case "$MUTATION_LEASE_ARTIFACT" in') <
+      verification.run.indexOf("download_binding mutation-lease"),
+  );
 });
 
 describe("production release train", () => {

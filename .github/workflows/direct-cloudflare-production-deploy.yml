@@ -275,6 +275,24 @@ jobs:
             --artifact-digest "$(jq -er '.digest' evidence/api/approval-artifact.json)" \
             --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
             > evidence/approval/cryptographic-verification.json
+          jq -e \
+            --arg sha "$RELEASE_SHA" \
+            --arg run_id "$APPROVAL_RUN_ID" \
+            --arg run_attempt "$APPROVAL_RUN_ATTEMPT" \
+            'if (
+              .schema_version == 2 and
+              .authorization.mode == "standard" and
+              .authorization.action == "production-approval" and
+              .authorization.release_sha == $sha and
+              .authorization.workflow_run_id == $run_id and
+              .authorization.workflow_run_attempt == $run_attempt and
+              (.authorization | keys | sort) == ([
+                "action", "actor", "mode", "release_sha",
+                "workflow_run_attempt", "workflow_run_id"
+              ] | sort)
+            ) then .authorization else error("Invalid standard approval authorization.") end' \
+            evidence/approval/production-release-approval.json \
+            > evidence/approval-authorization.json
           npm run --silent release:validate -- release-approval \
             --file evidence/approval/production-release-approval.json \
             --sha "$RELEASE_SHA" \
@@ -288,7 +306,8 @@ jobs:
             --approval-run-id "$APPROVAL_RUN_ID" \
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --deploy-actor "$DEPLOY_ACTOR" \
-            --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS"
+            --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS" \
+            --authorization-file evidence/approval-authorization.json
           APPROVAL_NONCE="$(jq -er '.nonce' evidence/approval/production-release-approval.json)"
 
           node scripts/production-release-validation.mjs github-recovery \

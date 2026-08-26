@@ -401,6 +401,39 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
       "101",
       digest,
     ).status, 0);
+    for (const [label, apiDigest] of [
+      ["bare upload digest", digest],
+      ["wrong algorithm", `sha512:${digest}`],
+      ["uppercase prefix", `SHA256:${digest}`],
+      ["uppercase payload", `sha256:${digest.toUpperCase()}`],
+      ["malformed payload", `sha256:${digest.slice(1)}`],
+      ["wrong API digest", `sha256:${"b".repeat(64)}`],
+    ]) {
+      assert.notEqual(runArtifactListingGuard(
+        guard,
+        listing([{ ...artifact, digest: apiDigest }]),
+        "postcheck",
+        exactName,
+        "101",
+        digest,
+      ).status, 0, `${label} was accepted`);
+    }
+    assert.notEqual(runArtifactListingGuard(
+      guard,
+      listing([artifact, { ...artifact, id: 102 }]),
+      "postcheck",
+      exactName,
+      "101",
+      digest,
+    ).status, 0);
+    assert.notEqual(runArtifactListingGuard(
+      guard,
+      listing([{ ...artifact, name: `${exactName}-suffix` }]),
+      "postcheck",
+      exactName,
+      "101",
+      digest,
+    ).status, 0);
     assert.notEqual(runArtifactListingGuard(
       guard,
       listing([artifact]),
@@ -475,5 +508,114 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
     assert.equal(bindingUpload.with.overwrite, false);
     assert.equal(bindingUpload.with["retention-days"], 30);
     assert.equal(JSON.stringify(provision.steps).includes("$GITHUB_STEP_SUMMARY"), false);
+  });
+
+  it("revalidates break-glass expiry and the authenticated receipt at the provider mutation boundary", () => {
+    const parsed = workflow();
+    const mutation = parsed.jobs.provision.steps.find(
+      (step) => step.name === "Provision strict Cloudflare Pages runtime bindings",
+    );
+    assert.equal(
+      mutation.env.AUTHORIZATION_MODE,
+      "${{ steps.authorization.outputs.mode }}",
+    );
+    assert.equal(
+      mutation.env.PAGES_ACTION,
+      "${{ steps.authorization.outputs.action }}",
+    );
+    const liveVerification = mutation.run.lastIndexOf(
+      "production-break-glass-consumption.mjs verify",
+    );
+    const bindingVerification = mutation.run.lastIndexOf(
+      "receipt-binding/verification.json",
+    );
+    const currentMain = mutation.run.lastIndexOf('current_main="$(gh api');
+    const patch = mutation.run.indexOf("--request PATCH");
+    assert.ok(liveVerification >= 0, "provider shell must revalidate break-glass expiry");
+    assert.ok(bindingVerification >= 0, "provider shell must require authenticated receipt binding");
+    assert.ok(bindingVerification < liveVerification);
+    assert.ok(liveVerification < currentMain && currentMain < patch);
+    assert.doesNotMatch(mutation.run, /RELEASE_REASON/);
+
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-pages-expiry-rollover-"));
+    try {
+      const authorizationPath = join(fixtureRoot, "release-authorization.json");
+      const receiptPath = join(fixtureRoot, "production-break-glass-consumption.json");
+      const now = Date.now();
+      const expiresAt = new Date(now - 1_000).toISOString();
+      const selectedAt = new Date(now - 5_000).toISOString();
+      const consumedAt = new Date(now - 2_000).toISOString();
+      const authorization = selectReleaseAuthorization({
+        action: "pages-staging",
+        standardConfirmation: "PROVISION_STAGING_PAGES_RUNTIME",
+        singleAdminBreakGlass: "true",
+        incidentId,
+        reason: plaintextReason,
+        confirmation: `PROVISION_STAGING_PAGES_BREAK_GLASS ${releaseSha} ${incidentId}`,
+        releaseSha,
+        currentMainSha: releaseSha,
+        checkoutSha: releaseSha,
+        workflowSha: releaseSha,
+        repository: "maiprop/maiprop-listing-site",
+        ref: "refs/heads/main",
+        eventName: "workflow_dispatch",
+        actor: "krenios",
+        triggeringActor: "krenios",
+        runId: "42",
+        runAttempt: "1",
+        productionReleaseDeployers: "krenios",
+        breakGlassActor: "krenios",
+        breakGlassReleaseSha: releaseSha,
+        breakGlassIncidentId: incidentId,
+        breakGlassExpiresAt: expiresAt,
+      }, { now: selectedAt });
+      const receipt = createConsumptionReceipt({
+        authorization,
+        repository: "maiprop/maiprop-listing-site",
+        workflowRef:
+          "maiprop/maiprop-listing-site/.github/workflows/provision-cloudflare-pages-runtime.yml@refs/heads/main",
+        workflowSha: releaseSha,
+        runId: "42",
+        runAttempt: "1",
+        consumedAt,
+        nonce: "9".repeat(64),
+      });
+      assert.deepEqual(validateConsumptionReceipt(receipt, {
+        authorization,
+        action: "pages-staging",
+        repository: "maiprop/maiprop-listing-site",
+        workflowRef:
+          "maiprop/maiprop-listing-site/.github/workflows/provision-cloudflare-pages-runtime.yml@refs/heads/main",
+        workflowSha: releaseSha,
+        runId: "42",
+        runAttempt: "1",
+      }, { now: consumedAt }), receipt);
+      writeFileSync(authorizationPath, `${JSON.stringify(authorization)}\n`);
+      writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`);
+
+      const result = spawnSync(process.execPath, [
+        resolve(root, "scripts", "production-break-glass-consumption.mjs"),
+        "verify",
+        "--file", receiptPath,
+        "--authorization", authorizationPath,
+        "--action", "pages-staging",
+      ], {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          GITHUB_REPOSITORY: "maiprop/maiprop-listing-site",
+          GITHUB_WORKFLOW_REF:
+            "maiprop/maiprop-listing-site/.github/workflows/provision-cloudflare-pages-runtime.yml@refs/heads/main",
+          GITHUB_WORKFLOW_SHA: releaseSha,
+          GITHUB_RUN_ID: "42",
+          GITHUB_RUN_ATTEMPT: "1",
+        },
+      });
+      assert.notEqual(result.status, 0, "rolled-over authorization reached PATCH boundary");
+      assert.match(result.stderr, /expir/i);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
   });
 });

@@ -243,11 +243,12 @@ jobs:
               throw new Error("Expected immutable artifact identity is invalid.");
             }
             const match = matches[0];
-            const digest = String(match?.digest ?? "").replace(/^sha256:/, "");
+            const apiDigest = String(match?.digest ?? "");
             if (
               matches.length !== 1 ||
               String(match?.id ?? "") !== expectedId ||
-              digest !== expectedDigest ||
+              !/^sha256:[0-9a-f]{64}$/.test(apiDigest) ||
+              apiDigest.slice("sha256:".length) !== expectedDigest ||
               match?.expired !== false
             ) {
               throw new Error("Uploaded consumption artifact identity is not unique and exact.");
@@ -403,6 +404,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PAGES_TARGET: ${{ inputs.target }}
           RELEASE_SHA: ${{ inputs.release_sha }}
+          AUTHORIZATION_MODE: ${{ steps.authorization.outputs.mode }}
+          PAGES_ACTION: ${{ steps.authorization.outputs.action }}
           CONSUMPTION_VERIFIED: ${{ steps.standard_consumption.outputs.verified || steps.break_glass_consumption.outputs.verified }}
           CLOUDFLARE_PAGES_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -611,6 +614,33 @@ jobs:
               --evidence "$PATCH_PLAN"
           unset service_role_key plain_text_json
 
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            test -s production-break-glass-consumption.json
+            test -s release-authorization.json
+            test -s receipt-binding/verification.json
+            test -s consumption-tuple.json
+            jq -e \
+              --arg sha "$RELEASE_SHA" \
+              --arg run_id "$GITHUB_RUN_ID" \
+              --arg run_attempt "$GITHUB_RUN_ATTEMPT" '
+                .evidence_type == "maiprop-release-artifact-binding-verification" and
+                .ok == true and .verification_mode == "same-run" and
+                .release_sha == $sha and .workflow_sha == $sha and
+                (.run_id | tostring) == $run_id and
+                (.run_attempt | tostring) == $run_attempt
+              ' receipt-binding/verification.json > /dev/null
+            jq -e \
+              --arg action "$PAGES_ACTION" \
+              --arg sha "$RELEASE_SHA" \
+              --arg run_id "$GITHUB_RUN_ID" '
+                .action == $action and .release_sha == $sha and
+                (.parent_run_id | tostring) == $run_id
+              ' consumption-tuple.json > /dev/null
+            node scripts/production-break-glass-consumption.mjs verify \
+              --file production-break-glass-consumption.json \
+              --authorization release-authorization.json \
+              --action "$PAGES_ACTION"
+          fi
           current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
           if [ "$current_main" != "$GITHUB_WORKFLOW_SHA" ] ||
              [ "$current_main" != "$RELEASE_SHA" ]; then

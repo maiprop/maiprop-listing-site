@@ -450,7 +450,7 @@ jobs:
           set -euo pipefail
           approval_args=()
           if [ "$(jq -r '.schema_version' evidence/approval/production-release-approval.json)" = "2" ]; then
-            jq '.authorization' evidence/approval/production-release-approval.json > evidence/approval-authorization.json
+            jq -e '.authorization' evidence/approval/production-release-approval.json > evidence/approval-authorization.json
             approval_args+=(--authorization-file evidence/approval-authorization.json)
           fi
           npm run --silent release:validate -- release-approval \
@@ -706,6 +706,14 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --name "$stripe_name" \
             --dir evidence/stripe
+          expected_lease_prefix="production-mutation-lease-${RELEASE_SHA}-${PRODUCTION_RUN_ID}-${PRODUCTION_RUN_ATTEMPT}-"
+          case "$MUTATION_LEASE_ARTIFACT" in
+            "${expected_lease_prefix}cloudflare"|"${expected_lease_prefix}cloudflare-recovery") ;;
+            *)
+              echo "::error::Production mutation lease artifact identity is invalid."
+              exit 1
+              ;;
+          esac
 
           download_binding() {
             local key="$1"
@@ -728,7 +736,7 @@ jobs:
             "production-release-approval-binding-${RELEASE_SHA}-${APPROVAL_RUN_ID}-${APPROVAL_RUN_ATTEMPT}"
           download_binding stripe "$STRIPE_READINESS_RUN_ID" "${stripe_name}-binding"
           download_binding mutation-lease "$PRODUCTION_RUN_ID" \
-            "${{ inputs.mutation_lease_artifact }}-binding"
+            "${MUTATION_LEASE_ARTIFACT}-binding"
           download_binding database "$BACKEND_RUN_ID" "$DATABASE_BINDING_ARTIFACT"
           download_binding edge "$BACKEND_RUN_ID" "$EDGE_BINDING_ARTIFACT"
 
@@ -1720,7 +1728,8 @@ jobs:
             --approval-run-id "$APPROVAL_RUN_ID" \
             --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" \
             --deploy-actor "$DEPLOY_ACTOR" \
-            --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS"
+            --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS" \
+            --authorization-file evidence/approval-authorization.json
           fi
           node --input-type=module <<'NODE'
           import { randomBytes } from "node:crypto";
