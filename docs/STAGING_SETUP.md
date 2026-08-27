@@ -88,15 +88,15 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   defense in depth.
 - Add repository variable `STAGING_RELEASE_ENABLED=true` only after the
   dedicated staging Supabase and Cloudflare projects are fully provisioned.
-  Missing or any value other than exact lowercase `true` keeps the automatic
-  staging release train off.
+  Missing or any value other than exact lowercase `true` keeps the separate
+  standard/manual staging provider lanes off. `Stage Release Candidate` uses
+  exact signed provider proof pairs as its authorization instead.
 - Keep `STAGING_PAGES_BOOTSTRAP_ENABLED=false` except during the separately
   authorized first-deployment procedure below.
 - Set `STAGING_TRUSTED_CONTROL_SHA` to the full reviewed `main` commit only
-  when authorizing that exact release. The workflow requires this value to
-  match both `github.workflow_sha` and the release SHA, so a later commit
-  cannot inherit staging credentials automatically. Clear or rotate the pin
-  after the staging run.
+  when authorizing the separate manual staging Pages bootstrap lane. That
+  workflow requires the value to match both `github.workflow_sha` and the
+  release SHA. Clear or rotate the pin after the bootstrap run.
 - Add repository variable
   `STAGING_MUTATION_ACKNOWLEDGEMENT=MUTATE_STAGING_xsiehskfgeoqyazcgauv`
   only when the fixed staging project `xsiehskfgeoqyazcgauv` is ready for
@@ -204,10 +204,15 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
    and stable URLs. Re-dispatching the same trusted SHA is verification-only
    when that exact healthy function-enabled canonical deployment already
    exists. Set the bootstrap flag back to `false` after success.
-4. When `STAGING_RELEASE_ENABLED=true`, the successful main CI run stages that
-   exact candidate only after the binding verifier checks the HMAC, artifact
-   API metadata, payload files, source SHA/tree, `main` ref, workflow, and
-   attempt-one actor tuple. The staging run then emits its
+4. Every successful attempt-one main CI run starts validation of that exact
+   candidate, then waits at most one hour for the exact-SHA, original-actor,
+   attempt-one Stripe, staging Pages, and production Pages payload-plus-binding
+   artifact pairs. The latch revalidates every unexpired pair and current
+   `main` on each poll, and releases staging automatically only when all three
+   exist. It does not read `STAGING_RELEASE_ENABLED` or
+   `STAGING_TRUSTED_CONTROL_SHA`. Before the latch, the binding verifier checks
+   the HMAC, artifact API metadata, payload files, source SHA/tree, `main` ref,
+   workflow, and attempt-one actor tuple. The staging run then emits its
    own exact-candidate evidence. It checks the immutable deployment URL and the
    canonical staging URL, including an authenticated HTTP 200 TURN issuance
    proof. Tokens, room IDs, usernames, credentials, and ICE server values are
@@ -237,10 +242,10 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
 
 ## Troubleshooting
 
-- **Edge functions not updated** - keep `STAGING_RELEASE_ENABLED=false` until
-  the staging control plane is complete. Once enabled, the exact-SHA staging
-  workflow applies migrations, deploys Edge Functions, validates their live
-  inventory, and then deploys Pages.
+- **Edge functions not updated** - keep standard/manual provider lanes disabled
+  until the staging control plane is complete. The exact-SHA staging workflow
+  applies migrations, deploys Edge Functions, validates their live inventory,
+  and deploys Pages only after its three exact provider proof pairs pass.
 - **Auth emails going to production URL** - set the required GitHub repository
   variable `STAGING_APP_URL` to the stable staging origin and configure
   Supabase Auth -> URL Configuration to allow that exact origin.

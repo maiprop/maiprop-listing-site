@@ -237,7 +237,7 @@ export function cloudflareHttpMutationViolation({ workflowPath, text }) {
     const controlled =
       methods.join("\n") === "POST" &&
       source.includes("workflow_run:") &&
-      source.includes("vars.STAGING_RELEASE_ENABLED == 'true'") &&
+      source.includes("node scripts/wait-for-staging-release-gates.mjs") &&
       source.includes("github-staging-lease") &&
       source.includes("release-artifact-binding.json") &&
       source.includes("/rollback");

@@ -317,9 +317,9 @@ or override it in repository secrets.
 | `STRIPE_EXPECTED_ACCOUNT_ID` | Runtime account guard for Edge Functions. The live-readiness workflow and catalogue bootstrap pin `acct_1TnuLTGfOEgBOxtl` in source and do not trust a repository variable. | production/staging Edge secret |
 | `STRIPE_COMPANY_VAT_ID` | expected company VAT identifier checked by live readiness when configured | repository variable |
 | `STRIPE_WEBHOOK_EXPECTED_URL` | exact production Stripe webhook endpoint expected by live readiness | repository variable |
-| `STAGING_RELEASE_ENABLED` | exact lowercase `true` enables the automatic staging release train only after every prerequisite is provisioned; any other value keeps staging mutation disabled | repository variable |
+| `STAGING_RELEASE_ENABLED` | exact lowercase `true` enables the standard/manual staging provider lanes after every prerequisite is provisioned; the automatic `Stage Release Candidate` train is authorized instead by its three exact provider proof pairs | repository variable |
 | `STAGING_PAGES_BOOTSTRAP_ENABLED` | exact lowercase `true` opens only the manual first-deployment staging Pages bootstrap lane; return it to `false` after a verified function-enabled canonical deployment exists | repository variable |
-| `STAGING_TRUSTED_CONTROL_SHA` | full manually approved `main` SHA containing the staging workflows; must equal both `github.workflow_sha` and the exact release SHA before any privileged staging job can start | repository variable |
+| `STAGING_TRUSTED_CONTROL_SHA` | full manually approved `main` SHA for the separate manual staging Pages bootstrap lane; that workflow requires it to equal both `github.workflow_sha` and the exact release SHA | repository variable |
 | `STAGING_MUTATION_ACKNOWLEDGEMENT` | non-secret staging-only mutation acknowledgement; must equal `MUTATE_STAGING_xsiehskfgeoqyazcgauv` and is independently checked before every staging mutation | repository variable |
 | `STAGING_SUPABASE_SERVICE_ROLE_KEY` | runtime-only alias used by staging proof scripts after the workflow resolves and masks an isolated staging service credential through the Management API; never configure it as a GitHub secret | GitHub Actions generated runtime env |
 | `STAGING_APP_URL` | exact dedicated stable release origin `https://maiprop-listing-site-staging.pages.dev`; PR preview tooling may derive branch URLs separately | repository variable |
@@ -387,8 +387,10 @@ the plaintext dispatch reason in Actions variables, secrets, local `.env`
 files, documentation, or artifacts; every participating proof stores only its
 lowercase SHA-256. Keep `STAGING_RELEASE_ENABLED` and
 `PRODUCTION_RELEASE_ENABLED` disabled while the break-glass Stripe and both
-Pages proofs are created, enable them only after both Pages proofs pass, and
-record their intended steady-state values before changing them.
+Pages proofs are created. The three exact proof pairs release the staging latch
+automatically. Enable only `PRODUCTION_RELEASE_ENABLED` after provider proofs
+and signed staging evidence pass, and record both flags' intended steady-state
+values before changing either one.
 
 After final signed proof, health verification, and live timing handoff, delete
 `PRODUCTION_BREAK_GLASS_EXPIRES_AT`, `PRODUCTION_BREAK_GLASS_INCIDENT_ID`,

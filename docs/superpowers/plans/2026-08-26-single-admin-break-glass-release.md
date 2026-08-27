@@ -675,11 +675,11 @@ Set `PRODUCTION_BREAK_GLASS_ACTOR=krenios`, `PRODUCTION_BREAK_GLASS_RELEASE_SHA=
 
 - [ ] **Step 5: Run provider readiness and Pages provisioning**
 
-Dispatch attempt-1 workflows for Stripe, staging Pages, and production Pages with the same incident and exact reason. Require valid signed bindings and unique target-specific consumption receipts. After both Pages proofs pass, set `STAGING_RELEASE_ENABLED=true` and `PRODUCTION_RELEASE_ENABLED=true`.
+Dispatch attempt-1 workflows for Stripe, staging Pages, and production Pages with the same incident and exact reason. Require valid signed bindings and unique target-specific consumption receipts. The three exact proof pairs release the already-running staging latch automatically. After staging evidence also passes, set `PRODUCTION_RELEASE_ENABLED=true`; restore `STAGING_RELEASE_ENABLED` only to its recorded intended steady-state value during cleanup.
 
 - [ ] **Step 6: Stage, approve, and deploy the exact SHA**
 
-Wait for exact-SHA CI, dispatch isolated staging, require its signed evidence and all performance/security/provider gates, then dispatch break-glass approval and coordinated deployment. Monitor database, Edge, Cloudflare, rollback readiness, and final aggregate. Never use direct Cloudflare recovery to continue a consumed incident.
+Let exact-SHA CI start candidate validation, dispatch the three provider proofs while the bounded staging latch waits, require its signed evidence and all performance/security/provider gates, then dispatch break-glass approval and coordinated deployment. Monitor database, Edge, Cloudflare, rollback readiness, and final aggregate. Never use direct Cloudflare recovery to continue a consumed incident.
 
 - [ ] **Step 7: Verify live identity and remeasure every critical action**
 

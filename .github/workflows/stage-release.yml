@@ -18,8 +18,6 @@ jobs:
   validate-source:
     name: Validate trusted main candidate
     if: >-
-      vars.STAGING_RELEASE_ENABLED == 'true' &&
-      vars.STAGING_TRUSTED_CONTROL_SHA == github.workflow_sha &&
       github.workflow_sha == github.event.workflow_run.head_sha &&
       github.event.workflow_run.conclusion == 'success' &&
       github.run_attempt == 1 &&
@@ -27,7 +25,7 @@ jobs:
       github.event.workflow_run.run_attempt == 1 &&
       github.event.workflow_run.actor.login == github.event.workflow_run.triggering_actor.login
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 70
     outputs:
       release_sha: ${{ steps.manifest.outputs.release_sha }}
       source_tree: ${{ steps.manifest.outputs.source_tree }}
@@ -54,14 +52,12 @@ jobs:
           SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           SOURCE_ACTOR: ${{ github.event.workflow_run.actor.login }}
           SOURCE_TRIGGERING_ACTOR: ${{ github.event.workflow_run.triggering_actor.login }}
-          TRUSTED_CONTROL_SHA: ${{ vars.STAGING_TRUSTED_CONTROL_SHA }}
           WORKFLOW_SHA: ${{ github.workflow_sha }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "$TRUSTED_CONTROL_SHA" != "$WORKFLOW_SHA" ] ||
-             [ "$WORKFLOW_SHA" != "$SOURCE_SHA" ]; then
-            echo "::error::Staging requires a manually pinned workflow SHA equal to the exact release SHA."
+          if [ "$WORKFLOW_SHA" != "$SOURCE_SHA" ]; then
+            echo "::error::Staging workflow SHA must equal the exact release SHA."
             exit 1
           fi
           if [ "$SOURCE_EVENT" != "push" ] ||
@@ -286,6 +282,13 @@ jobs:
           path: source-provenance-verification/provenance-verification.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Await exact staging release gates
+        env:
+          EXPECTED_ACTOR: ${{ github.event.workflow_run.triggering_actor.login }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/wait-for-staging-release-gates.mjs
 
       - name: Require fixed production identity and staging acknowledgement
         env:
