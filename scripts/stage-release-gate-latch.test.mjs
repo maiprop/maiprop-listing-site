@@ -88,7 +88,6 @@ describe("staging release gate latch", () => {
     let waits = 0;
 
     const result = await awaitStagingReleaseGate({
-      maxAttempts: 2,
       pollIntervalMs: 1,
       readState: async () => states[reads++],
       releaseSha: RELEASE_SHA,
@@ -102,9 +101,186 @@ describe("staging release gate latch", () => {
     expect(waits).toBe(1);
   });
 
+  it("retries a transient GitHub API failure before accepting complete proofs", async () => {
+    let reads = 0;
+    let waits = 0;
+
+    const result = await awaitStagingReleaseGate({
+      pollIntervalMs: 1,
+      readState: async () => {
+        reads += 1;
+        if (reads === 1) {
+          return readGitHubStagingReleaseGate({
+            expectedActor: "krenios",
+            fetchImpl: async () => ({
+              json: async () => ({}),
+              ok: false,
+              status: 503,
+            }),
+            releaseSha: RELEASE_SHA,
+            repository: "maiprop/maiprop-listing-site",
+            token: "test-token",
+          });
+        }
+        return {
+          currentMainSha: RELEASE_SHA,
+          productionPagesReady: true,
+          stagingPagesReady: true,
+          stripeReady: true,
+        };
+      },
+      releaseSha: RELEASE_SHA,
+      wait: async () => {
+        waits += 1;
+      },
+    });
+
+    expect(result).toEqual({ attempts: 2, releaseSha: RELEASE_SHA });
+    expect(reads).toBe(2);
+    expect(waits).toBe(1);
+  });
+
+  it("retries a malformed GitHub branch response before accepting complete proofs", async () => {
+    let reads = 0;
+    let waits = 0;
+
+    const result = await awaitStagingReleaseGate({
+      pollIntervalMs: 1,
+      readState: async () => {
+        reads += 1;
+        if (reads === 1) {
+          return readGitHubStagingReleaseGate({
+            expectedActor: "krenios",
+            fetchImpl: async (input) => {
+              const url = new URL(String(input));
+              const body = url.pathname.endsWith("/branches/main")
+                ? {}
+                : { workflow_runs: [] };
+              return { json: async () => body, ok: true, status: 200 };
+            },
+            releaseSha: RELEASE_SHA,
+            repository: "maiprop/maiprop-listing-site",
+            token: "test-token",
+          });
+        }
+        return {
+          currentMainSha: RELEASE_SHA,
+          productionPagesReady: true,
+          stagingPagesReady: true,
+          stripeReady: true,
+        };
+      },
+      releaseSha: RELEASE_SHA,
+      wait: async () => {
+        waits += 1;
+      },
+    });
+
+    expect(result).toEqual({ attempts: 2, releaseSha: RELEASE_SHA });
+    expect(reads).toBe(2);
+    expect(waits).toBe(1);
+  });
+
+  it("does not let a transient proof read mask an observed main-branch advance", async () => {
+    let reads = 0;
+
+    await expect(awaitStagingReleaseGate({
+      pollIntervalMs: 1,
+      readState: async () => {
+        reads += 1;
+        if (reads === 1) {
+          return readGitHubStagingReleaseGate({
+            expectedActor: "krenios",
+            fetchImpl: async (input) => {
+              const url = new URL(String(input));
+              if (url.pathname.endsWith("/branches/main")) {
+                return {
+                  json: async () => ({
+                    commit: { sha: "89abcdef0123456789abcdef0123456789abcdef" },
+                  }),
+                  ok: true,
+                  status: 200,
+                };
+              }
+              return { json: async () => ({}), ok: false, status: 503 };
+            },
+            releaseSha: RELEASE_SHA,
+            repository: "maiprop/maiprop-listing-site",
+            token: "test-token",
+          });
+        }
+        return {
+          currentMainSha: RELEASE_SHA,
+          productionPagesReady: true,
+          stagingPagesReady: true,
+          stripeReady: true,
+        };
+      },
+      releaseSha: RELEASE_SHA,
+      wait: async () => {},
+    })).rejects.toThrow("current main no longer matches the release SHA");
+
+    expect(reads).toBe(1);
+  });
+
+  it("retries a GitHub rate-limit 403 after the server-requested delay", async () => {
+    let now = 0;
+    let reads = 0;
+    const waits = [];
+
+    const result = await awaitStagingReleaseGate({
+      maxWaitMs: 5_000,
+      now: () => now,
+      pollIntervalMs: 30,
+      readState: async () => {
+        reads += 1;
+        if (reads === 1) {
+          return readGitHubStagingReleaseGate({
+            deadlineMs: 5_000,
+            expectedActor: "krenios",
+            fetchImpl: async (input) => {
+              const url = new URL(String(input));
+              if (url.pathname.endsWith("/branches/main")) {
+                return {
+                  json: async () => ({ commit: { sha: RELEASE_SHA } }),
+                  ok: true,
+                  status: 200,
+                };
+              }
+              return {
+                headers: new Headers({ "Retry-After": "2" }),
+                json: async () => ({ message: "API rate limit exceeded" }),
+                ok: false,
+                status: 403,
+              };
+            },
+            now: () => now,
+            releaseSha: RELEASE_SHA,
+            repository: "maiprop/maiprop-listing-site",
+            token: "test-token",
+          });
+        }
+        return {
+          currentMainSha: RELEASE_SHA,
+          productionPagesReady: true,
+          stagingPagesReady: true,
+          stripeReady: true,
+        };
+      },
+      releaseSha: RELEASE_SHA,
+      wait: async (milliseconds) => {
+        waits.push(milliseconds);
+        now += milliseconds;
+      },
+    });
+
+    expect(result).toEqual({ attempts: 2, releaseSha: RELEASE_SHA });
+    expect(reads).toBe(2);
+    expect(waits).toEqual([2_000]);
+  });
+
   it("fails closed as soon as current main advances", async () => {
     await expect(awaitStagingReleaseGate({
-      maxAttempts: 3,
       pollIntervalMs: 1,
       readState: async () => ({
         currentMainSha: "89abcdef0123456789abcdef0123456789abcdef",
@@ -131,11 +307,13 @@ describe("staging release gate latch", () => {
   });
 
   it("times out without performing an extra wait", async () => {
+    let now = 0;
     let reads = 0;
     let waits = 0;
 
     await expect(awaitStagingReleaseGate({
-      maxAttempts: 2,
+      maxWaitMs: 2,
+      now: () => now,
       pollIntervalMs: 1,
       readState: async () => {
         reads += 1;
@@ -149,11 +327,13 @@ describe("staging release gate latch", () => {
       releaseSha: RELEASE_SHA,
       wait: async () => {
         waits += 1;
+        now += 1;
       },
     })).rejects.toThrow("timed out waiting for exact staging release gates");
 
     expect(reads).toBe(2);
-    expect(waits).toBe(1);
+    expect(waits).toBe(2);
+    expect(now).toBe(2);
   });
 
   it("enforces an absolute deadline and clamps the final wait", async () => {
@@ -161,7 +341,6 @@ describe("staging release gate latch", () => {
     const waits = [];
 
     await expect(awaitStagingReleaseGate({
-      maxAttempts: 20,
       maxWaitMs: 100,
       now: () => now,
       pollIntervalMs: 60,
@@ -180,6 +359,37 @@ describe("staging release gate latch", () => {
 
     expect(waits).toEqual([60, 40]);
     expect(now).toBe(1_100);
+  });
+
+  it("waits through the full deadline instead of stopping at an attempt cap", async () => {
+    let now = 0;
+    let reads = 0;
+    const waits = [];
+
+    await expect(awaitStagingReleaseGate({
+      maxAttempts: 4,
+      maxWaitMs: 100,
+      now: () => now,
+      pollIntervalMs: 30,
+      readState: async () => {
+        reads += 1;
+        return {
+          currentMainSha: RELEASE_SHA,
+          productionPagesReady: false,
+          stagingPagesReady: false,
+          stripeReady: false,
+        };
+      },
+      releaseSha: RELEASE_SHA,
+      wait: async (milliseconds) => {
+        waits.push(milliseconds);
+        now += milliseconds;
+      },
+    })).rejects.toThrow("timed out waiting for exact staging release gates");
+
+    expect(reads).toBe(4);
+    expect(waits).toEqual([30, 30, 30, 10]);
+    expect(now).toBe(100);
   });
 
   it("reads exact attempt-one signed proof pairs through Actions APIs", async () => {

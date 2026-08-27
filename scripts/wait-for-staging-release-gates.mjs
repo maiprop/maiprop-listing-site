@@ -4,7 +4,6 @@ import { pathToFileURL } from "node:url";
 
 const FULL_LOWERCASE_SHA = /^[0-9a-f]{40}$/;
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-const DEFAULT_MAX_ATTEMPTS = 120;
 const DEFAULT_MAX_WAIT_MS = 60 * 60 * 1_000;
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
@@ -12,6 +11,33 @@ const API_PAGE_SIZE = 100;
 const MAX_API_PAGES = 100;
 const STRIPE_WORKFLOW = "verify-stripe-live-readiness.yml";
 const PAGES_WORKFLOW = "provision-cloudflare-pages-runtime.yml";
+
+class RetryableGitHubApiError extends Error {
+  constructor(message, options) {
+    super(message, options);
+    this.retryAfterMs = options?.retryAfterMs;
+  }
+}
+class PermanentGitHubApiError extends Error {}
+
+function githubHeader(response, name) {
+  return String(response?.headers?.get?.(name) ?? "").trim();
+}
+
+function githubRetryAfterMs(response) {
+  const retryAfter = githubHeader(response, "retry-after");
+  if (/^\d+$/.test(retryAfter)) return Math.max(1, Number(retryAfter) * 1_000);
+  const retryAt = Date.parse(retryAfter);
+  if (Number.isFinite(retryAt)) return Math.max(1, retryAt - Date.now());
+
+  if (githubHeader(response, "x-ratelimit-remaining") === "0") {
+    const resetSeconds = Number(githubHeader(response, "x-ratelimit-reset"));
+    if (Number.isFinite(resetSeconds) && resetSeconds > 0) {
+      return Math.max(1, resetSeconds * 1_000 - Date.now());
+    }
+  }
+  return undefined;
+}
 
 function requireReleaseSha(value) {
   if (typeof value !== "string" || !FULL_LOWERCASE_SHA.test(value)) {
@@ -50,7 +76,6 @@ export function evaluateStagingReleaseGate(input) {
 
 export async function awaitStagingReleaseGate(options) {
   const releaseSha = requireReleaseSha(options?.releaseSha);
-  const maxAttempts = requirePositiveInteger(options?.maxAttempts, "maxAttempts");
   const maxWaitMs = requirePositiveInteger(
     options?.maxWaitMs ?? DEFAULT_MAX_WAIT_MS,
     "maxWaitMs",
@@ -67,28 +92,40 @@ export async function awaitStagingReleaseGate(options) {
 
   const deadlineMs = now() + maxWaitMs;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  for (let attempt = 1; ; attempt += 1) {
     if (now() >= deadlineMs) {
       throw new Error("Staging gate latch timed out waiting for exact staging release gates.");
     }
-    const gate = evaluateStagingReleaseGate({
-      ...(await options.readState({ attempt, deadlineMs })),
-      releaseSha,
-    });
+    let state;
+    try {
+      state = await options.readState({ attempt, deadlineMs });
+    } catch (error) {
+      if (!(error instanceof RetryableGitHubApiError)) throw error;
+      const requestedWaitMs = Number.isSafeInteger(error.retryAfterMs) && error.retryAfterMs > 0
+        ? error.retryAfterMs
+        : pollIntervalMs;
+      const waitMs = Math.min(requestedWaitMs, deadlineMs - now());
+      if (waitMs <= 0) break;
+      options.onWait?.({
+        attempt,
+        reason: `transient GitHub API read failed: ${error.message}`,
+      });
+      await options.wait(waitMs);
+      continue;
+    }
+    const gate = evaluateStagingReleaseGate({ ...state, releaseSha });
     if (now() >= deadlineMs) {
       throw new Error("Staging gate latch timed out waiting for exact staging release gates.");
     }
     if (gate.ready) {
       return Object.freeze({ attempts: attempt, releaseSha });
     }
-    if (attempt < maxAttempts) {
-      const waitMs = Math.min(pollIntervalMs, deadlineMs - now());
-      if (waitMs <= 0) {
-        throw new Error("Staging gate latch timed out waiting for exact staging release gates.");
-      }
-      options.onWait?.({ attempt, maxAttempts, reason: gate.reason });
-      await options.wait(waitMs);
+    const waitMs = Math.min(pollIntervalMs, deadlineMs - now());
+    if (waitMs <= 0) {
+      throw new Error("Staging gate latch timed out waiting for exact staging release gates.");
     }
+    options.onWait?.({ attempt, reason: gate.reason });
+    await options.wait(waitMs);
   }
 
   throw new Error("Staging gate latch timed out waiting for exact staging release gates.");
@@ -116,16 +153,41 @@ async function githubJson(url, token, fetchImpl, options) {
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new Error(`GitHub API request failed closed with status ${response.status}.`);
+      let responseBody;
+      try {
+        responseBody = await response.json();
+      } catch {
+        responseBody = undefined;
+      }
+      const responseMessage = String(responseBody?.message ?? "").toLowerCase();
+      const retryAfterMs = githubRetryAfterMs(response);
+      const rateLimited403 = response.status === 403 && (
+        retryAfterMs !== undefined ||
+        githubHeader(response, "x-ratelimit-remaining") === "0" ||
+        responseMessage.includes("rate limit") ||
+        responseMessage.includes("abuse detection")
+      );
+      const ErrorType = response.status === 408 || response.status === 429 ||
+        response.status >= 500 || rateLimited403
+        ? RetryableGitHubApiError
+        : PermanentGitHubApiError;
+      throw new ErrorType(`GitHub API request failed closed with status ${response.status}.`, {
+        retryAfterMs: retryAfterMs ?? (rateLimited403 ? 60_000 : undefined),
+      });
     }
     return await response.json();
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error("GitHub API request timed out before the staging gate deadline.", {
+      throw new RetryableGitHubApiError("GitHub API request timed out before the staging gate deadline.", {
         cause: error,
       });
     }
-    throw error;
+    if (error instanceof PermanentGitHubApiError || error instanceof RetryableGitHubApiError) {
+      throw error;
+    }
+    throw new RetryableGitHubApiError("GitHub API request failed before a valid response was read.", {
+      cause: error,
+    });
   } finally {
     clearTimeout(timer);
   }
@@ -140,7 +202,7 @@ async function githubPaginated(url, arrayKey, token, fetchImpl, options) {
     const response = await githubJson(pageUrl.toString(), token, fetchImpl, options);
     const batch = response?.[arrayKey];
     if (!Array.isArray(batch)) {
-      throw new Error(`GitHub API response is missing ${arrayKey}.`);
+      throw new RetryableGitHubApiError(`GitHub API response is missing ${arrayKey}.`);
     }
     items.push(...batch);
     if (batch.length < API_PAGE_SIZE) return items;
@@ -172,6 +234,14 @@ function hasArtifactPair(artifacts, prefix, runId) {
   return names.has(payload) && names.has(`${payload}-binding`);
 }
 
+function githubBranchSha(branch) {
+  const sha = String(branch?.commit?.sha ?? "");
+  if (!FULL_LOWERCASE_SHA.test(sha)) {
+    throw new RetryableGitHubApiError("GitHub branch response is missing a valid commit SHA.");
+  }
+  return sha;
+}
+
 export async function readGitHubStagingReleaseGate(options) {
   const releaseSha = requireReleaseSha(options?.releaseSha);
   const repository = String(options?.repository ?? "");
@@ -197,8 +267,18 @@ export async function readGitHubStagingReleaseGate(options) {
   const runsUrl = (workflow) =>
     `${base}/actions/workflows/${encodeURIComponent(workflow)}/runs` +
     `?branch=main&event=workflow_dispatch&status=success&head_sha=${releaseSha}`;
-  const [branch, stripeRuns, pagesRuns] = await Promise.all([
-    githubJson(`${base}/branches/main`, token, fetchImpl, requestOptions),
+  const branch = await githubJson(`${base}/branches/main`, token, fetchImpl, requestOptions);
+  const currentMainSha = githubBranchSha(branch);
+  if (currentMainSha !== releaseSha) {
+    return Object.freeze({
+      currentMainSha,
+      productionPagesReady: false,
+      releaseSha,
+      stagingPagesReady: false,
+      stripeReady: false,
+    });
+  }
+  const [stripeRuns, pagesRuns] = await Promise.all([
     githubPaginated(
       runsUrl(STRIPE_WORKFLOW),
       "workflow_runs",
@@ -269,7 +349,7 @@ export async function readGitHubStagingReleaseGate(options) {
     : branch;
 
   return Object.freeze({
-    currentMainSha: String(finalBranch?.commit?.sha ?? ""),
+    currentMainSha: githubBranchSha(finalBranch),
     productionPagesReady,
     releaseSha,
     stagingPagesReady,
@@ -285,7 +365,6 @@ async function main(environment = process.env) {
   const apiUrl = String(environment.GITHUB_API_URL ?? "https://api.github.com");
 
   const result = await awaitStagingReleaseGate({
-    maxAttempts: DEFAULT_MAX_ATTEMPTS,
     maxWaitMs: DEFAULT_MAX_WAIT_MS,
     pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
     readState: ({ deadlineMs }) =>
@@ -299,8 +378,8 @@ async function main(environment = process.env) {
       }),
     releaseSha,
     wait: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
-    onWait: ({ attempt, maxAttempts, reason }) => {
-      console.log(`Staging gate latch ${attempt}/${maxAttempts}: ${reason}.`);
+    onWait: ({ attempt, reason }) => {
+      console.log(`Staging gate latch check ${attempt}: ${reason}.`);
     },
   });
   console.log(`Exact staging release proof gates accepted after ${result.attempts} check(s).`);
