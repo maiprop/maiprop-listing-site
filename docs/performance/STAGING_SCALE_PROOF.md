@@ -12,7 +12,7 @@ acknowledgement controls.
 - The production project ref is rejected independently.
 - The run must originate from the exact release SHA accepted by
   `stage-release.yml`.
-- `STAGING_RELEASE_ENABLED` and the staging mutation acknowledgement must be
+- The exact provider-proof latch and staging mutation acknowledgement must be
   validated before database credentials are exposed.
 - The URL must be the protected staging Pages hostname or a branch Pages URL.
 - Synthetic rows are tagged with `ecas-load:<run-id>` and cleaned before and

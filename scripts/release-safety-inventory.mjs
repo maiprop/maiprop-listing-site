@@ -710,7 +710,7 @@ export function scanWorkflows() {
   for (const marker of [
     "workflow_run:",
     'workflows: ["CI"]',
-    "vars.STAGING_RELEASE_ENABLED == 'true'",
+    "node scripts/wait-for-staging-release-gates.mjs",
     "github-staging-lease",
     "uses: ./.github/workflows/reusable-supabase-staging.yml",
     "production-release-candidate-binding-${{ github.event.workflow_run.head_sha }}",

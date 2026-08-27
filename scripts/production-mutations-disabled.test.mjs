@@ -161,7 +161,7 @@ describe("production mutation boundaries", () => {
       uses: "./.github/workflows/reusable-supabase-staging.yml",
     });
     expect(workflow("stage-release.yml")).toContain(
-      "vars.STAGING_RELEASE_ENABLED == 'true'",
+      "node scripts/wait-for-staging-release-gates.mjs",
     );
     expect(
       reusableStaging.steps.map((step) => step.run ?? "").join("\n"),

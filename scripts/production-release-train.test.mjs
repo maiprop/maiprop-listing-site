@@ -1916,17 +1916,13 @@ describe("production release train", () => {
     expect(mkdirIndex).toBeLessThan(verifierOutputIndex);
   });
 
-  it("keeps staging default-off and binds every privileged job to the trusted candidate", () => {
+  it("proof-gates staging and binds every privileged job to the trusted candidate", () => {
     const stage = workflow("stage-release.yml");
 
-    expect(stage).toContain("vars.STAGING_RELEASE_ENABLED == 'true'");
-    expect(stage).toContain(
-      "vars.STAGING_TRUSTED_CONTROL_SHA == github.workflow_sha",
-    );
+    expect(stage).toContain("node scripts/wait-for-staging-release-gates.mjs");
     expect(stage).toContain(
       "github.workflow_sha == github.event.workflow_run.head_sha",
     );
-    expect(stage).toContain("TRUSTED_CONTROL_SHA:");
     expect(stage).toContain("WORKFLOW_SHA:");
     expect(stage).toContain(
       "trusted_control_sha: ${{ github.workflow_sha }}",

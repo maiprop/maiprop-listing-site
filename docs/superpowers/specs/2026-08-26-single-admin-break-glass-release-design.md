@@ -192,7 +192,7 @@ In break-glass mode:
 - A target-specific consumption receipt is signed and verified before the first Cloudflare or Supabase mutation.
 - The provisioning evidence includes the authorization and consumption tuples and receives a signed artifact binding.
 
-This resolves the bootstrap ordering problem: Pages runtime proof can be established while `STAGING_RELEASE_ENABLED` and `PRODUCTION_RELEASE_ENABLED` remain false. Those variables are enabled only after both target proofs succeed.
+This resolves the bootstrap ordering problem: Pages runtime proof can be established while `STAGING_RELEASE_ENABLED` and `PRODUCTION_RELEASE_ENABLED` remain false. The three exact provider payload-plus-binding pairs are the authoritative staging authorization and release the already-running latch automatically. `PRODUCTION_RELEASE_ENABLED` is enabled only after both target proofs and staging evidence succeed; `STAGING_RELEASE_ENABLED` remains a control for separate standard/manual provider lanes rather than this staging train.
 
 ### Production approval
 
@@ -238,20 +238,22 @@ Standalone or manually dispatched recovery and direct Cloudflare production depl
 The exception follows this sequence:
 
 1. Merge the reviewed implementation to `main`.
-2. Wait for successful exact-SHA CI on the new `main` SHA.
+2. Let the exact-SHA, attempt-one CI completion start staging candidate
+   validation and its bounded read-only provider-proof latch, then verify CI
+   and the immutable candidate succeeded.
 3. Configure the four break-glass repository variables for that exact SHA, actor, incident, and a fresh expiry.
 4. Run signed Stripe readiness in break-glass mode.
 5. Provision staging Pages in break-glass mode; consume `pages-staging`.
 6. Provision production Pages in break-glass mode; consume `pages-production`.
-7. Verify both target proofs and then set `STAGING_RELEASE_ENABLED=true` and `PRODUCTION_RELEASE_ENABLED=true`.
-8. Stage the exact candidate and verify signed staging evidence.
+7. Let the already-running latch require the successful attempt-one exact-SHA Stripe and both Pages payload-plus-binding artifact pairs, release the exact candidate into staging automatically, and verify signed staging evidence. The latch does not read `STAGING_RELEASE_ENABLED` or `STAGING_TRUSTED_CONTROL_SHA`; the latter remains specific to the separate manual staging Pages bootstrap lane. Do not rerun or rebuild the candidate.
+8. Set `PRODUCTION_RELEASE_ENABLED=true` only after the provider proofs and signed staging evidence succeed. Restore `STAGING_RELEASE_ENABLED` only to its recorded intended steady-state value during final cleanup.
 9. Approve the exact release in break-glass mode.
 10. Dispatch the coordinated production deployment in break-glass mode; consume `production-deploy` before mutations.
 11. Verify database, Edge, Cloudflare, automatic rollback readiness, final production evidence, and the live application.
 12. Remeasure explore, sign-in, sign-up, listing creation, and relevant navigation timings with the existing performance protocol.
 13. Record the intended steady-state release-enabled values and delete all four `PRODUCTION_BREAK_GLASS_*` variables. The exception is removed regardless of whether the release-enabled gates remain true for the normal two-person train.
 
-If `main` advances at any point before deployment, every break-glass action for the old SHA fails and the operator must start with a new incident and exact SHA.
+If `main` advances at any point before deployment, every break-glass action for the old SHA fails and the operator must start with a new incident and exact SHA. The latch also fails closed after one hour; a timeout requires a new current-main release train rather than a rerun.
 
 ## Failure behavior
 

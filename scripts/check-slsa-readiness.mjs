@@ -463,7 +463,7 @@ export function checkSlsaReadiness(root = process.cwd(), options = {}) {
     '--trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR"',
   ]);
   requireMarkers(failures, paths.stage, texts.stage, [
-    "vars.STAGING_TRUSTED_CONTROL_SHA == github.workflow_sha",
+    "node scripts/wait-for-staging-release-gates.mjs",
     "github.workflow_sha == github.event.workflow_run.head_sha",
     "github.run_attempt == 1",
     "github.actor == github.triggering_actor",

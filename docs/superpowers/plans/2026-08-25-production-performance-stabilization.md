@@ -200,9 +200,11 @@ without revealing values.
 
 - [ ] **Step 6: Enable the release lane only after all proofs pass**
 
-Set the documented repository variables `STAGING_RELEASE_ENABLED=true` and
-`PRODUCTION_RELEASE_ENABLED=true` only after Stripe and both Pages runtime
-proofs are green. Record actor, run ID, run attempt, UTC start/end, immutable
+Let the three exact provider proof pairs release the already-running staging
+latch automatically. Set `PRODUCTION_RELEASE_ENABLED=true` only after Stripe,
+both Pages runtime proofs, and signed staging evidence are green; restore
+`STAGING_RELEASE_ENABLED` only to its recorded intended steady-state value
+during cleanup. Record actor, run ID, run attempt, UTC start/end, immutable
 artifact ID, GitHub digest, and binding artifact ID in the release log. Do not
 delete the temporary authorization until coordinated final proof, health, and
 timing handoff complete.

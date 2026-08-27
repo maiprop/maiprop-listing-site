@@ -242,9 +242,11 @@ DEPLOY_PRODUCTION_BREAK_GLASS <release-sha> PERF-BOOTSTRAP-20260826-01
 
 Execute the incident in this exact order:
 
-1. Verify attempt-one exact-SHA CI for the merged remote-`main` SHA, configure
-   the four temporary variables, and keep both standard release-enabled gates
-   at their pre-bootstrap disabled values.
+1. Verify attempt-one exact-SHA CI for the merged remote-`main` SHA. Its
+   `workflow_run` starts candidate validation and a bounded read-only provider
+   proof latch; the latch must remain on that same current-`main` SHA while both
+   standard release-enabled gates stay at their pre-bootstrap disabled values.
+   Configure the four temporary variables only after the candidate is verified.
 2. Dispatch **Verify Stripe Live Readiness**. It is read-only and does not burn
    an action.
 3. Dispatch **Provision Cloudflare Pages Runtime** with `target=staging`.
@@ -253,10 +255,19 @@ Execute the incident in this exact order:
 4. Dispatch the same workflow with `target=production`. Require the
    `pages-production` receipt, its same-run binding, the signed production
    Pages proof, and matching authorization grant.
-5. Only after both Pages proofs pass, set `STAGING_RELEASE_ENABLED=true` and
-   `PRODUCTION_RELEASE_ENABLED=true` for the coordinated train.
-6. Stage the exact candidate and verify its signed staging evidence. Do not
-   rebuild or substitute the SHA.
+5. Let the already-started `Stage Release Candidate` run accept the successful
+   attempt-one exact-SHA Stripe, staging Pages, and production Pages
+   payload-plus-binding artifact pairs. The proof latch is the authoritative
+   staging authorization for this train and opens automatically after the third
+   pair exists; it does not read `STAGING_RELEASE_ENABLED` or
+   `STAGING_TRUSTED_CONTROL_SHA`. Verify the signed staging evidence. Do not
+   rerun, rebuild, or substitute the SHA.
+6. Set `PRODUCTION_RELEASE_ENABLED=true` only after both Pages proofs and the
+   signed staging evidence pass. This flag remains a separate prerequisite for
+   the coordinated production deployment. Restore `STAGING_RELEASE_ENABLED`
+   only to its recorded intended steady-state value during final cleanup;
+   `STAGING_TRUSTED_CONTROL_SHA` is needed only by the separate manual staging
+   Pages bootstrap lane.
 7. Dispatch **Approve Production Release** with the approval confirmation.
    Approval is read-only and does not burn an action.
 8. Dispatch **Deploy Production Release** with the deployment confirmation.
@@ -278,6 +289,11 @@ Execute the incident in this exact order:
     `PRODUCTION_BREAK_GLASS_ACTOR`, in that order. Verify all four are absent,
     restore only the recorded intended standard gate values, and return every
     subsequent release to the normal two-person train.
+
+The latch waits for at most one hour and fails immediately if `main` advances.
+Expired, partial, rerun, mismatched-actor, or mismatched-SHA provider evidence
+never opens it. A timeout or SHA advance requires a new current-main release
+train; do not rerun the skipped or failed staging workflow.
 
 Receipt names are exact and action-scoped:
 
