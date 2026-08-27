@@ -15,6 +15,10 @@ export default defineConfig({
   plugins: [react()],
   test: {
     pool: "forks",
+    // Release-contract suites spawn many WSL/Bash/JQ child processes. Letting
+    // Vitest use every logical CPU oversubscribes those nested processes and
+    // makes otherwise healthy pre-push/CI runs time out under contention.
+    maxWorkers: 4,
     environment: "jsdom",
     globals: true,
     // Full-suite jsdom/component imports can exceed Vitest's 5s default on CI
