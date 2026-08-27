@@ -308,6 +308,10 @@ or override it in repository secrets.
 | `RELEASE_EVIDENCE_VERIFICATION_KEYS` | optional JSON object mapping retired release-evidence key IDs to their prior HMAC secrets; retain each entry while an immutable production-source release signed by that key can be selected as N-1 | repository secret |
 | `PRODUCTION_RELEASE_APPROVERS` | comma-separated GitHub logins allowed to issue an independent short-lived approval; the selected approver must differ from the deployer | repository variable |
 | `PRODUCTION_RELEASE_DEPLOYERS` | comma-separated GitHub logins allowed to dispatch production; each dispatch must be attempt one by the original actor | repository variable |
+| `PRODUCTION_BREAK_GLASS_ACTOR` | temporary single-admin actor; for the approved Release A incident the exact value is `krenios`, who must also remain in `PRODUCTION_RELEASE_DEPLOYERS` | temporary repository variable; delete after final proof |
+| `PRODUCTION_BREAK_GLASS_RELEASE_SHA` | temporary lowercase full SHA resolved from remote `main` after the reviewed implementation merges; must match dispatch, checkout, workflow, and current-main SHAs | temporary repository variable; delete after final proof |
+| `PRODUCTION_BREAK_GLASS_INCIDENT_ID` | temporary normalized incident identifier; exact approved Release A value `PERF-BOOTSTRAP-20260826-01` | temporary repository variable; delete after final proof |
+| `PRODUCTION_BREAK_GLASS_EXPIRES_AT` | fresh future RFC 3339 UTC expiry computed immediately before dispatch and no more than four hours away | temporary repository variable; delete after final proof |
 | `PRODUCTION_RELEASE_ENABLED` | exact lowercase `true` enables the final production dispatcher only after provider identities, secrets, staging evidence, Stripe live readiness, and an independent approval are valid; otherwise keep unset or `false` | repository variable |
 | `STRIPE_RESTRICTED_KEY` | live restricted key (`rk_live_...`) used only by the manual Stripe live-readiness workflow; test, standard secret, and fallback key forms are rejected | repository secret |
 | `STRIPE_EXPECTED_ACCOUNT_ID` | Runtime account guard for Edge Functions. The live-readiness workflow and catalogue bootstrap pin `acct_1TnuLTGfOEgBOxtl` in source and do not trust a repository variable. | production/staging Edge secret |
@@ -358,6 +362,8 @@ or override it in repository secrets.
 | `SOURCE_TREE` | internal full Git tree hash bound to the immutable release payload | GitHub Actions generated runtime env |
 | `RELEASE_EVIDENCE_NONCE` | internal run-scoped nonce tuple used when producing exact-SHA evidence; never configure manually | GitHub Actions generated runtime env |
 | `ARTIFACT_SHA256` | internal digest of the immutable release artifact used while assembling staging attestations | GitHub Actions generated runtime env |
+| `AUTHORIZATION_MODE` | workflow-internal normalized `standard` or `break_glass` mode propagated only after central validation; never configure manually | GitHub Actions generated runtime env |
+| `AUTHORIZATION_SHA256` | workflow-internal lowercase canonical digest of the normalized production authorization covered by provider and aggregate bindings; never configure manually | GitHub Actions generated runtime env |
 | `STAGING_PROJECT` | internal Cloudflare Pages project-name alias populated from `CLOUDFLARE_STAGING_PAGES_PROJECT` for staging posture and attestation scripts; do not set independently | GitHub Actions generated runtime env |
 | `PRODUCTION_PROJECT` | internal Cloudflare Pages project-name alias populated from `CLOUDFLARE_PAGES_PROJECT` for cross-project isolation checks; do not set independently | GitHub Actions generated runtime env |
 | `PAGES_RUNTIME_PLAIN_TEXT_JSON` | workflow-internal JSON map of strict non-secret Pages runtime values consumed only by the payload builder; stored under the runner temp directory and never uploaded raw | GitHub Actions generated runtime env |
@@ -372,6 +378,27 @@ or override it in repository secrets.
 | `VITE_WEB_VITALS_SAMPLE_RATE` | optional browser-side Web Vitals Sentry sampling rate from `0` to `1`; defaults to `0.1` | production/staging build |
 | `VITE_VIEW_TRACKING_SAMPLE_RATE` | optional browser-side listing-view sample rate; defaults to `1` | production/staging build |
 | `VIEW_TRACKING_SAMPLE_RATE` | optional non-Vite alias for listing-view sampling in scripts or server-side diagnostics | diagnostics only |
+
+The four `PRODUCTION_BREAK_GLASS_*` values are variables, never secrets or
+workflow-generated environment values. Create all four together only for the
+approved one-time procedure in
+[`PRODUCTION_RELEASE_RUNBOOK.md`](./PRODUCTION_RELEASE_RUNBOOK.md). Do not store
+the plaintext dispatch reason in Actions variables, secrets, local `.env`
+files, documentation, or artifacts; every participating proof stores only its
+lowercase SHA-256. Keep `STAGING_RELEASE_ENABLED` and
+`PRODUCTION_RELEASE_ENABLED` disabled while the break-glass Stripe and both
+Pages proofs are created, enable them only after both Pages proofs pass, and
+record their intended steady-state values before changing them.
+
+After final signed proof, health verification, and live timing handoff, delete
+`PRODUCTION_BREAK_GLASS_EXPIRES_AT`, `PRODUCTION_BREAK_GLASS_INCIDENT_ID`,
+`PRODUCTION_BREAK_GLASS_RELEASE_SHA`, and `PRODUCTION_BREAK_GLASS_ACTOR` in that
+order. Verify all four are absent, then restore only the recorded intended
+standard values of `STAGING_RELEASE_ENABLED` and
+`PRODUCTION_RELEASE_ENABLED`. Receipt retention does not extend authorization:
+the 7-day immutable receipts deliberately outlive the maximum 4-hour grant to
+prevent replay. Never set these variables for Direct Cloudflare Production
+Deploy, standalone recovery, or a direct reusable-workflow call.
 
 Public API deploy verification is fail closed. SPA HTML, redirects, timeouts, non-JSON
 responses, invalid payload shapes, API errors, and upstream 5xx responses fail the

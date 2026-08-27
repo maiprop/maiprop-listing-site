@@ -1,17 +1,65 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import {
   cloudflareHttpMutationViolation,
   findCloudflareHttpMutations,
   isAuthorizedCloudflareHttpMutationWorkflow,
   productionDatabaseCredentialScopeViolations,
+  productionAuthorizationInputContractViolations,
   scanWorkflows,
   stageReleaseBuildPolicyViolation,
 } from "./release-safety-inventory.mjs";
 
 describe("release safety inventory", () => {
+  it("enforces the exact production authorization workflow-call contract", () => {
+    const loadInputs = (name) => yaml.load(readFileSync(
+      resolve(process.cwd(), `.github/workflows/${name}`),
+      "utf8",
+    )).on.workflow_call.inputs;
+    const database = loadInputs("deploy-supabase-production-db.yml");
+    const edge = loadInputs("deploy-edge-functions.yml");
+    const cloudflare = loadInputs("reusable-cloudflare-production-deploy.yml");
+
+    expect(productionAuthorizationInputContractViolations(database)).toEqual([]);
+    expect(productionAuthorizationInputContractViolations(edge)).toEqual([]);
+    expect(productionAuthorizationInputContractViolations(cloudflare, {
+      directRecoveryCompatible: true,
+    })).toEqual([]);
+
+    const expectRejected = (inputs, options = {}) => {
+      expect(productionAuthorizationInputContractViolations(inputs, options))
+        .not.toEqual([]);
+    };
+    const missing = structuredClone(database);
+    delete missing.authorization_sha256;
+    expectRejected(missing);
+    expectRejected({ ...database, authorization_actor: { required: true, type: "string" } });
+    expectRejected({ ...database, consumption_nonce: { required: true, type: "string" } });
+    expectRejected({
+      ...database,
+      authorization_sha256: { required: true, type: "number" },
+    });
+    expectRejected({
+      ...database,
+      consumption_artifact_id: { required: false, type: "string" },
+    });
+    expectRejected({
+      ...cloudflare,
+      authorization_mode: { required: false, default: "", type: "string" },
+    }, { directRecoveryCompatible: true });
+    expectRejected({
+      ...cloudflare,
+      consumption_payload_sha256: {
+        required: false,
+        default: "unexpected",
+        type: "string",
+      },
+    }, { directRecoveryCompatible: true });
+  });
+
   it("allows only the pinned, staging-only legacy N-1 reconstruction build", () => {
     const workflowPath = resolve(
       process.cwd(),

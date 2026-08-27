@@ -1,12 +1,22 @@
-import { readFileSync, readdirSync } from "node:fs";
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import yaml from "js-yaml";
-import { describe, expect, it } from "vitest";
+
+const directNodeTest =
+  typeof globalThis.describe === "function" && typeof globalThis.it === "function"
+    ? null
+    : await import(/* @vite-ignore */ ["node", "test"].join(":"));
+const describe = directNodeTest ? directNodeTest.describe.skip : globalThis.describe;
+const it = directNodeTest ? directNodeTest.it : globalThis.it;
+const expect = globalThis.expect;
 
 import {
   STRIPE_RUNTIME_BINDINGS,
 } from "./validate-cloudflare-pages-staging-posture.mjs";
+import { releaseAuthorizationSha256 } from "./production-break-glass-validation.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const workflow = (name) =>
@@ -40,6 +50,1101 @@ function curlRequestsTo(run, accountVariable) {
   }
   return requests;
 }
+
+const validatorFixture = Object.freeze({
+  repository: "K-R21/maiprop-listing-site",
+  releaseSha: "a".repeat(40),
+  sourceTree: "b".repeat(40),
+  artifactSha256: "c".repeat(64),
+  approvalNonce: "d".repeat(64),
+  stripeSha256: "e".repeat(64),
+  stripeArtifactDigest: "f".repeat(64),
+});
+
+function standardMutationLease(overrides = {}) {
+  return {
+    schema_version: 2,
+    repository: validatorFixture.repository,
+    release_sha: validatorFixture.releaseSha,
+    source_tree: validatorFixture.sourceTree,
+    source_run_id: "10",
+    source_run_attempt: "1",
+    staging_run_id: "20",
+    staging_run_attempt: "1",
+    approval_run_id: "50",
+    approval_run_attempt: "1",
+    production_run_id: "70",
+    production_run_attempt: "1",
+    stripe_readiness_run_id: "30",
+    stripe_readiness_run_attempt: "1",
+    stripe_readiness_sha256: validatorFixture.stripeSha256,
+    stripe_readiness_artifact_id: "31",
+    stripe_readiness_artifact_digest: validatorFixture.stripeArtifactDigest,
+    stripe_readiness_checked_at: "2026-08-26T10:50:00.000Z",
+    artifact_sha256: validatorFixture.artifactSha256,
+    approval_nonce: validatorFixture.approvalNonce,
+    nonce: "1".repeat(64),
+    issued_at: "2026-08-26T10:55:00.000Z",
+    expires_at: "2026-08-26T11:05:00.000Z",
+    ...overrides,
+  };
+}
+
+function releaseApproval(authorization, overrides = {}) {
+  const approvedAt = "2026-08-26T10:30:00.000Z";
+  return {
+    schema_version: authorization ? 2 : 1,
+    repository: validatorFixture.repository,
+    release_sha: validatorFixture.releaseSha,
+    source_tree: validatorFixture.sourceTree,
+    source_run_id: "10",
+    source_run_attempt: "1",
+    artifact_sha256: validatorFixture.artifactSha256,
+    staging_run_id: "20",
+    staging_run_attempt: "1",
+    approval_run_id: "50",
+    approval_run_attempt: "1",
+    approver: authorization?.actor ?? "reviewer",
+    nonce: validatorFixture.approvalNonce,
+    revoked: false,
+    approved_at: approvedAt,
+    expires_at: "2026-08-26T12:00:00.000Z",
+    ...(authorization ? { authorization } : {}),
+    ...overrides,
+  };
+}
+
+function validatorCliArgs(mode, file, now, authorizationFile) {
+  const common = [
+    resolve(root, "scripts", "production-release-validation.mjs"),
+    mode,
+    "--file", file,
+    "--sha", validatorFixture.releaseSha,
+    "--repository", validatorFixture.repository,
+    "--source-tree", validatorFixture.sourceTree,
+    "--source-run-id", "10",
+    "--source-run-attempt", "1",
+    "--staging-run-id", "20",
+    "--staging-run-attempt", "1",
+    "--approval-run-id", "50",
+    "--approval-run-attempt", "1",
+  ];
+  if (mode === "release-approval") {
+    common.push(
+      "--artifact-sha256", validatorFixture.artifactSha256,
+      "--deploy-actor", "krenios",
+      "--allowed-approvers", "reviewer",
+    );
+  } else {
+    common.push(
+      "--artifact-sha256", validatorFixture.artifactSha256,
+      "--approval-nonce", validatorFixture.approvalNonce,
+      "--production-run-id", "70",
+      "--production-run-attempt", "1",
+      "--stripe-readiness-run-id", "30",
+      "--stripe-readiness-run-attempt", "1",
+      "--stripe-readiness-sha256", validatorFixture.stripeSha256,
+      "--stripe-readiness-artifact-id", "31",
+      "--stripe-readiness-artifact-digest", validatorFixture.stripeArtifactDigest,
+    );
+  }
+  if (authorizationFile) common.push("--authorization-file", authorizationFile);
+  common.push("--now", now);
+  return common;
+}
+
+function workflowAuthorizationGuard(name) {
+  const parsed = yaml.load(workflow(name));
+  const step = parsed.jobs.deploy.steps.find(
+    (candidate) => candidate.name === "Authenticate declared production authorization mode",
+  );
+  assert.ok(step, `${name} must authenticate the declared authorization mode`);
+  const match = /node --input-type=module <<'NODE'\n([\s\S]*?)\nNODE/.exec(step.run);
+  assert.ok(match, `${name} must expose an executable Node authorization guard`);
+  return match[1];
+}
+
+function executeAuthorizationGuard(source, env) {
+  return spawnSync(process.execPath, ["--input-type=module", "--eval", source], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+}
+
+function productionConsumptionPostcheckFilter() {
+  const parsed = yaml.load(workflow("deploy-production-release.yml"));
+  const step = parsed.jobs["consume-break-glass-authorization"].steps.find(
+    (candidate) => candidate.name === "Finalize exact production consumption tuple",
+  );
+  assert.ok(step, "production release must finalize the exact consumption tuple");
+  const match = /--arg digest "\$RECEIPT_ARTIFACT_DIGEST" '\n([\s\S]*?)\n\s+' receipt-postcheck\.json/.exec(
+    step.run,
+  );
+  assert.ok(match, "production receipt postcheck must expose an executable jq filter");
+  return match[1];
+}
+
+function githubArtifact(overrides = {}) {
+  const digest = "a".repeat(64);
+  return {
+    id: 91,
+    node_id: "MDg6QXJ0aWZhY3Q5MQ==",
+    name: "production-break-glass-consumed-production-deploy-release-incident",
+    size_in_bytes: 123,
+    url: "https://api.github.com/repos/maiprop/maiprop-listing-site/actions/artifacts/91",
+    archive_download_url:
+      "https://api.github.com/repos/maiprop/maiprop-listing-site/actions/artifacts/91/zip",
+    expired: false,
+    created_at: "2026-08-26T10:00:00Z",
+    expires_at: "2026-09-02T10:00:00Z",
+    updated_at: "2026-08-26T10:00:00Z",
+    digest: `sha256:${digest}`,
+    workflow_run: {
+      id: 70,
+      repository_id: 1,
+      head_repository_id: 1,
+      head_branch: "main",
+      head_sha: "a".repeat(40),
+    },
+    ...overrides,
+  };
+}
+
+function executeProductionConsumptionPostcheck({
+  artifacts,
+  expectedId = "91",
+  expectedDigest = "a".repeat(64),
+}) {
+  const filter = productionConsumptionPostcheckFilter();
+  const jqCommand = process.platform === "win32" ? "wsl.exe" : "jq";
+  const jqPrefix = process.platform === "win32" ? ["--exec", "jq"] : [];
+  return spawnSync(
+    jqCommand,
+    [
+      ...jqPrefix,
+      "-e",
+      "--arg",
+      "name",
+      "production-break-glass-consumed-production-deploy-release-incident",
+      "--arg",
+      "id",
+      expectedId,
+      "--arg",
+      "digest",
+      expectedDigest,
+      filter,
+    ],
+    {
+      cwd: root,
+      encoding: "utf8",
+      input: JSON.stringify({ total_count: artifacts.length, artifacts }),
+    },
+  );
+}
+
+function executeTrustedMainGate(step, overrides = {}) {
+  const trustedSha = "a".repeat(40);
+  const environment = {
+    GH_TOKEN: "test-token",
+    RELEASE_SHA: trustedSha,
+    GITHUB_REPOSITORY: "maiprop/maiprop-listing-site",
+    GITHUB_SHA: trustedSha,
+    GITHUB_WORKFLOW_SHA: trustedSha,
+    GITHUB_ACTOR: "release-owner",
+    GITHUB_TRIGGERING_ACTOR: "release-owner",
+    GITHUB_RUN_ATTEMPT: "1",
+    TEST_CURRENT_MAIN: trustedSha,
+    ...overrides,
+  };
+  const command = process.platform === "win32" ? "wsl.exe" : "env";
+  const prefix = process.platform === "win32" ? ["--exec", "env"] : [];
+  const script = `
+gh() {
+  if [ "$1" = "api" ]; then
+    printf '%s\\n' "$TEST_CURRENT_MAIN"
+    return 0
+  fi
+  return 64
+}
+${step.run}
+`;
+  return spawnSync(command, [
+    ...prefix,
+    ...Object.entries(environment).map(([key, value]) => `${key}=${value}`),
+    "bash",
+    "-c",
+    script,
+  ], { encoding: "utf8" });
+}
+
+function executeJq(filter, input, args = []) {
+  const command = process.platform === "win32" ? "wsl.exe" : "jq";
+  const prefix = process.platform === "win32" ? ["--exec", "jq"] : [];
+  return spawnSync(command, [...prefix, ...args, filter], {
+    cwd: root,
+    encoding: "utf8",
+    input: JSON.stringify(input),
+  });
+}
+
+function executeBashSyntax(run) {
+  const command = process.platform === "win32" ? "wsl.exe" : "bash";
+  const args = process.platform === "win32" ? ["--exec", "bash", "-n"] : ["-n"];
+  return spawnSync(command, args, { encoding: "utf8", input: run });
+}
+
+function pagesRuntimeResultContract() {
+  const producer = yaml.load(workflow("provision-cloudflare-pages-runtime.yml"));
+  const producerStep = producer.jobs.provision.steps.find(
+    (step) => step.name === "Provision strict Cloudflare Pages runtime bindings",
+  );
+  assert.ok(producerStep, "Pages runtime producer step is required");
+  const producerMatch = /--arg release_sha "\$RELEASE_SHA" '(\{[\s\S]*?\})' > "\$EVIDENCE_DIR\/cloudflare-pages-runtime-result\.json"/.exec(
+    producerStep.run,
+  );
+  assert.ok(producerMatch, "Pages runtime producer jq contract must remain executable");
+
+  const consumer = yaml.load(workflow("deploy-production-release.yml"));
+  const consumerStep = consumer.jobs.validate.steps.find(
+    (step) => step.name === "Require current main and final exact-SHA readiness",
+  );
+  assert.ok(consumerStep, "production release Pages proof consumer is required");
+  const consumerMatch = /jq -e --arg target "\$target" --arg sha "\$RELEASE_SHA" '([\s\S]*?)' "\$root\/evidence\/cloudflare-pages-runtime-result\.json"/.exec(
+    consumerStep.run,
+  );
+  assert.ok(consumerMatch, "Pages runtime consumer jq contract must remain executable");
+  return { producer: producerMatch[1], consumer: consumerMatch[1] };
+}
+
+it("break-glass approval uses central authorization and signs schema 2 evidence", () => {
+  const parsed = yaml.load(workflow("approve-production-release.yml"));
+  const dispatch = parsed.on.workflow_dispatch.inputs;
+  const job = parsed.jobs.approve;
+  const stepNames = job.steps.map((step) => step.name ?? "");
+  const authorizeIndex = stepNames.indexOf("Validate production approval authorization");
+  const evidenceIndex = stepNames.indexOf("Verify exact current-main release evidence");
+  const createIndex = stepNames.indexOf("Create short-lived exact-SHA approval");
+  const bindingIndex = stepNames.indexOf("Create and verify production approval binding");
+
+  assert.deepEqual(dispatch.single_admin_break_glass, {
+    description: "Use the exact configured single-admin break-glass authorization",
+    required: true,
+    default: false,
+    type: "boolean",
+  });
+  assert.equal(dispatch.incident_id.required, false);
+  assert.equal(dispatch.incident_id.type, "string");
+  assert.equal(dispatch.reason.required, false);
+  assert.equal(dispatch.reason.type, "string");
+  assert.match(job.if, /github\.ref == 'refs\/heads\/main'/);
+  assert.match(job.if, /github\.run_attempt == 1/);
+  assert.match(job.if, /github\.actor == github\.triggering_actor/);
+  assert.doesNotMatch(job.if, /APPROVE_PRODUCTION_RELEASE|single_admin_break_glass/);
+  assert.ok(authorizeIndex > stepNames.findIndex((name) => name === ""));
+  assert.ok(authorizeIndex < evidenceIndex);
+  assert.ok(evidenceIndex < createIndex);
+  assert.ok(createIndex < bindingIndex);
+
+  const authorize = job.steps[authorizeIndex];
+  assert.equal(authorize.env.RELEASE_AUTHORIZATION_ACTION, "production-approval");
+  assert.equal(authorize.env.RELEASE_STANDARD_CONFIRMATION, "APPROVE_PRODUCTION_RELEASE");
+  assert.equal(authorize.env.RELEASE_SINGLE_ADMIN_BREAK_GLASS, "${{ inputs.single_admin_break_glass }}");
+  assert.equal(authorize.env.RELEASE_INCIDENT_ID, "${{ inputs.incident_id }}");
+  assert.equal(authorize.env.RELEASE_REASON, "${{ inputs.reason }}");
+  assert.match(authorize.run, /production-break-glass-validation\.mjs validate-workflow/);
+  assert.match(authorize.run, /--out release-authorization\.json/);
+
+  const standardGate = job.steps.find(
+    (step) => step.name === "Require standard production approver allowlist",
+  );
+  assert.equal(standardGate.if, "${{ steps.authorization.outputs.mode == 'standard' }}");
+  assert.match(standardGate.run, /PRODUCTION_RELEASE_APPROVERS/);
+  const evidence = job.steps[evidenceIndex];
+  assert.equal(evidence.env.AUTHORIZATION_MODE, "${{ steps.authorization.outputs.mode }}");
+  assert.match(evidence.run, /AUTHORIZATION_MODE.*standard/);
+  assert.match(evidence.run, /independent from CI and staging producers/);
+
+  const create = job.steps[createIndex];
+  assert.match(create.run, /schema_version:\s*2/);
+  assert.match(create.run, /authorization/);
+  assert.match(create.run, /release-authorization\.json/);
+  assert.match(create.run, /Math\.min/);
+  assert.match(create.run, /authorized_expires_at/);
+  assert.doesNotMatch(create.run, /RELEASE_REASON/);
+  assert.match(job.steps[bindingIndex].run, /--payload-root production-release-approval\.json/);
+});
+
+it("reusable mutation guards reject mixed authorization evidence with real validators", () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-mixed-authorization-"));
+  try {
+    const approvalFile = join(fixtureRoot, "production-release-approval.json");
+    const approvalAuthorizationFile = join(fixtureRoot, "approval-authorization.json");
+    const leaseFile = join(fixtureRoot, "production-mutation-lease.json");
+    const probeNow = new Date();
+    const authorizedExpiry = new Date(probeNow.getTime() + 60 * 60 * 1000);
+    const approvedAt = new Date(probeNow.getTime() - 60 * 1000);
+    const breakGlassApprovalAuthorization = {
+      mode: "break_glass",
+      action: "production-approval",
+      actor: "krenios",
+      release_sha: validatorFixture.releaseSha,
+      incident_id: "PERF-BOOTSTRAP-20260826-01",
+      reason_sha256: "0".repeat(64),
+      authorized_expires_at: authorizedExpiry.toISOString(),
+      workflow_run_id: "50",
+      workflow_run_attempt: "1",
+    };
+    writeFileSync(approvalFile, JSON.stringify(releaseApproval(
+      breakGlassApprovalAuthorization,
+      {
+        approved_at: approvedAt.toISOString(),
+        expires_at: authorizedExpiry.toISOString(),
+      },
+    )));
+    writeFileSync(approvalAuthorizationFile, JSON.stringify(breakGlassApprovalAuthorization));
+    writeFileSync(leaseFile, JSON.stringify(standardMutationLease()));
+
+    const approvalProbe = spawnSync(
+      process.execPath,
+      validatorCliArgs(
+        "release-approval",
+        approvalFile,
+        probeNow.toISOString(),
+        approvalAuthorizationFile,
+      ),
+      { cwd: root, encoding: "utf8" },
+    );
+    assert.equal(approvalProbe.status, 0, approvalProbe.stderr);
+    const leaseProbe = spawnSync(
+      process.execPath,
+      validatorCliArgs(
+        "mutation-lease",
+        leaseFile,
+        "2026-08-26T11:00:00.000Z",
+      ),
+      { cwd: root, encoding: "utf8" },
+    );
+    assert.equal(leaseProbe.status, 0, leaseProbe.stderr);
+
+    const deploymentAuthorization = {
+      mode: "standard",
+      action: "production-deploy",
+      actor: "krenios",
+      release_sha: validatorFixture.releaseSha,
+      workflow_run_id: "70",
+      workflow_run_attempt: "1",
+    };
+    const standardHash = releaseAuthorizationSha256(deploymentAuthorization);
+    const baseEnv = {
+      APPROVAL_FILE: approvalFile,
+      MUTATION_LEASE_FILE: leaseFile,
+      DECLARED_AUTHORIZATION_MODE: "standard",
+      EXPECTED_AUTHORIZATION_SHA256: standardHash,
+      RELEASE_SHA: validatorFixture.releaseSha,
+      APPROVAL_RUN_ID: "50",
+      APPROVAL_RUN_ATTEMPT: "1",
+      PRODUCTION_RUN_ID: "70",
+      PRODUCTION_RUN_ATTEMPT: "1",
+      DEPLOY_ACTOR: "krenios",
+      DIRECT_STANDARD_RECOVERY: "false",
+    };
+    const guards = [
+      "deploy-supabase-production-db.yml",
+      "deploy-edge-functions.yml",
+      "reusable-cloudflare-production-deploy.yml",
+    ].map((name) => [name, workflowAuthorizationGuard(name)]);
+    for (const [name, guard] of guards) {
+      const mixed = executeAuthorizationGuard(guard, baseEnv);
+      assert.notEqual(mixed.status, 0, `${name} accepted break-glass approval as standard`);
+      assert.match(mixed.stderr, /mode|standard|authorization/i, name);
+    }
+
+    const standardApprovalAuthorization = {
+      mode: "standard",
+      action: "production-approval",
+      actor: "reviewer",
+      release_sha: validatorFixture.releaseSha,
+      workflow_run_id: "50",
+      workflow_run_attempt: "1",
+    };
+    writeFileSync(approvalFile, JSON.stringify(releaseApproval(standardApprovalAuthorization)));
+    for (const [name, guard] of guards) {
+      const valid = executeAuthorizationGuard(guard, baseEnv);
+      assert.equal(valid.status, 0, `${name}: ${valid.stderr}`);
+    }
+
+    const cloudflareGuard = guards.find(([name]) =>
+      name === "reusable-cloudflare-production-deploy.yml")[1];
+    const databaseGuard = guards[0][1];
+    writeFileSync(approvalFile, JSON.stringify(releaseApproval(undefined)));
+    for (const [name, guard] of guards) {
+      const legacyCoordinated = executeAuthorizationGuard(guard, baseEnv);
+      assert.equal(legacyCoordinated.status, 0, `${name}: ${legacyCoordinated.stderr}`);
+    }
+    const legacy = executeAuthorizationGuard(cloudflareGuard, {
+      ...baseEnv,
+      EXPECTED_AUTHORIZATION_SHA256: "",
+      DIRECT_STANDARD_RECOVERY: "true",
+    });
+    assert.equal(legacy.status, 0, legacy.stderr);
+
+    const breakGlassDeploymentAuthorization = {
+      ...breakGlassApprovalAuthorization,
+      action: "production-deploy",
+      workflow_run_id: "70",
+    };
+    const consumption = {
+      artifact_id: "80",
+      artifact_digest: "2".repeat(64),
+      binding_artifact_id: "81",
+      payload_sha256: "3".repeat(64),
+      action: "production-deploy",
+      incident_id: breakGlassDeploymentAuthorization.incident_id,
+      release_sha: validatorFixture.releaseSha,
+      parent_run_id: "70",
+    };
+    writeFileSync(approvalFile, JSON.stringify(releaseApproval(
+      breakGlassApprovalAuthorization,
+      {
+        approved_at: approvedAt.toISOString(),
+        expires_at: authorizedExpiry.toISOString(),
+      },
+    )));
+    writeFileSync(leaseFile, JSON.stringify({
+      ...standardMutationLease(),
+      schema_version: 3,
+      authorization: breakGlassDeploymentAuthorization,
+      consumption,
+    }));
+    const breakGlassEnv = {
+      ...baseEnv,
+      DECLARED_AUTHORIZATION_MODE: "break_glass",
+      EXPECTED_AUTHORIZATION_SHA256:
+        releaseAuthorizationSha256(breakGlassDeploymentAuthorization),
+    };
+    for (const [name, guard] of guards) {
+      const validBreakGlass = executeAuthorizationGuard(guard, breakGlassEnv);
+      assert.equal(validBreakGlass.status, 0, `${name}: ${validBreakGlass.stderr}`);
+    }
+
+    writeFileSync(approvalFile, JSON.stringify(releaseApproval(standardApprovalAuthorization)));
+    writeFileSync(leaseFile, JSON.stringify(standardMutationLease()));
+    for (const [label, env] of [
+      ["break-glass declaration with standard approval", {
+        DECLARED_AUTHORIZATION_MODE: "break_glass",
+      }],
+      ["unknown declared mode", { DECLARED_AUTHORIZATION_MODE: "unexpected" }],
+    ]) {
+      const result = executeAuthorizationGuard(databaseGuard, {
+        ...baseEnv,
+        ...env,
+      });
+      assert.notEqual(result.status, 0, `${label} was accepted`);
+    }
+    const directBreakGlass = executeAuthorizationGuard(cloudflareGuard, {
+      ...baseEnv,
+      DECLARED_AUTHORIZATION_MODE: "break_glass",
+      DIRECT_STANDARD_RECOVERY: "true",
+    });
+    assert.notEqual(directBreakGlass.status, 0, "direct recovery break-glass was accepted");
+    writeFileSync(approvalFile, JSON.stringify(releaseApproval(
+      breakGlassApprovalAuthorization,
+      {
+        approved_at: approvedAt.toISOString(),
+        expires_at: authorizedExpiry.toISOString(),
+      },
+    )));
+    const breakGlassWithStandardLease = executeAuthorizationGuard(
+      guards[0][1],
+      breakGlassEnv,
+    );
+    assert.notEqual(breakGlassWithStandardLease.status, 0);
+
+    writeFileSync(leaseFile, JSON.stringify(standardMutationLease()));
+    const rejectedVariants = [
+      ["missing hash", releaseApproval(standardApprovalAuthorization), {
+        EXPECTED_AUTHORIZATION_SHA256: "",
+      }],
+      ["uppercase hash", releaseApproval(standardApprovalAuthorization), {
+        EXPECTED_AUTHORIZATION_SHA256: standardHash.toUpperCase(),
+      }],
+      ["extra authorization field", releaseApproval({
+        ...standardApprovalAuthorization,
+        unexpected: "field",
+      }), {}],
+      ["wrong approval action", releaseApproval({
+        ...standardApprovalAuthorization,
+        action: "production-deploy",
+      }), {}],
+      ["wrong approval run", releaseApproval({
+        ...standardApprovalAuthorization,
+        workflow_run_id: "51",
+      }), {}],
+      ["wrong production parent", releaseApproval(standardApprovalAuthorization), {
+        PRODUCTION_RUN_ID: "71",
+      }],
+    ];
+    for (const [label, approval, env] of rejectedVariants) {
+      writeFileSync(approvalFile, JSON.stringify(approval));
+      const result = executeAuthorizationGuard(databaseGuard, { ...baseEnv, ...env });
+      assert.notEqual(result.status, 0, `${label} was accepted`);
+    }
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+it("Cloudflare authorizes the exact millisecond forward mutation boundary", () => {
+  const parsed = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
+  const deploy = parsed.jobs.deploy.steps.find(
+    (step) => step.name === "Deploy exact immutable production artifact",
+  );
+  assert.ok(deploy);
+  const run = deploy.run;
+  const deploymentsRead = run.indexOf('deployments_before="$RUNNER_TEMP/cloudflare-production-deployments-before.json"');
+  const finalGithubLease = run.lastIndexOf(
+    'node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" github-staging-lease',
+  );
+  const boundaryValidation = run.indexOf(
+    'node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" mutation-lease',
+    finalGithubLease,
+  );
+  const preparation = run.indexOf('wrangler_output_dir="$RUNNER_TEMP/cloudflare-production-wrangler-output"', boundaryValidation);
+  const boundaryClock = run.indexOf('provider_boundary_epoch_real="$EPOCHREALTIME"', preparation);
+  const wrangler = run.indexOf("npx --no-install wrangler pages deploy dist", boundaryClock);
+  const timestamp = run.indexOf("forward_mutation_started_at=", wrangler);
+  assert.ok(deploymentsRead >= 0 && finalGithubLease > deploymentsRead);
+  assert.ok(boundaryValidation > finalGithubLease);
+  assert.ok(preparation > boundaryValidation && boundaryClock > preparation);
+  assert.ok(wrangler > boundaryClock && timestamp > wrangler);
+  const atomicBoundary = run.slice(boundaryClock, wrangler);
+  assert.match(atomicBoundary, />=/);
+  assert.doesNotMatch(
+    atomicBoundary,
+    /\$\(|\b(?:date|jq|node|npm|npx|gh|curl|wget|sleep|find|sha256sum)\b/,
+  );
+  const afterMutation = run.slice(wrangler, timestamp);
+  assert.match(afterMutation, /wrangler_statuses=\("\$\{PIPESTATUS\[@\]\}"\)/);
+  const evidenceBoundary = run.slice(timestamp);
+  assert.match(evidenceBoundary, /--arg attempted_at "\$forward_mutation_started_at"/);
+  assert.match(evidenceBoundary, /forward_mutation_started_at=\$forward_mutation_started_at/);
+  const rollback = parsed.jobs.deploy.steps.find(
+    (step) => step.name === "Roll back failed production candidate",
+  );
+  const evidence = parsed.jobs.deploy.steps.find(
+    (step) => step.name === "Create minimized production evidence",
+  );
+  assert.equal(
+    rollback.env.FORWARD_MUTATION_STARTED_AT,
+    "${{ steps.deploy.outputs.forward_mutation_started_at }}",
+  );
+  assert.match(rollback.run, /Date\.parse\(process\.env\.FORWARD_MUTATION_STARTED_AT\)/);
+  assert.equal(
+    evidence.env.FORWARD_MUTATION_STARTED_AT,
+    "${{ steps.deploy.outputs.forward_mutation_started_at }}",
+  );
+  assert.match(evidence.run, /forward_mutation_started_at:[\s\S]*FORWARD_MUTATION_STARTED_AT/);
+
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-forward-boundary-"));
+  try {
+    const leaseFile = join(fixtureRoot, "production-mutation-lease.json");
+    writeFileSync(leaseFile, JSON.stringify(standardMutationLease({
+      issued_at: "2026-08-26T10:55:00.000Z",
+      expires_at: "2026-08-26T11:00:00.500Z",
+    })));
+    const beforeBoundary = spawnSync(process.execPath, validatorCliArgs(
+      "mutation-lease",
+      leaseFile,
+      "2026-08-26T11:00:00.499Z",
+    ), { cwd: root, encoding: "utf8" });
+    assert.equal(beforeBoundary.status, 0, beforeBoundary.stderr);
+    const exactExpiryBoundary = spawnSync(process.execPath, validatorCliArgs(
+      "mutation-lease",
+      leaseFile,
+      "2026-08-26T11:00:00.500Z",
+    ), { cwd: root, encoding: "utf8" });
+    assert.notEqual(exactExpiryBoundary.status, 0);
+    assert.match(exactExpiryBoundary.stderr, /lease has expired/i);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+it("coordinated break-glass deployment consumes and propagates one exact tuple", () => {
+  const parsed = yaml.load(workflow("deploy-production-release.yml"));
+  const dispatch = parsed.on.workflow_dispatch.inputs;
+  const validate = parsed.jobs.validate;
+  const consume = parsed.jobs["consume-break-glass-authorization"];
+  const archive = parsed.jobs["archive-production-source"];
+  const authorizationInputs = [
+    "authorization_mode",
+    "authorization_sha256",
+    "authorization_artifact_id",
+    "authorization_artifact_digest",
+    "authorization_run_id",
+    "authorization_run_attempt",
+  ];
+  const consumptionInputs = [
+    "consumption_artifact_id",
+    "consumption_artifact_digest",
+    "consumption_binding_artifact_id",
+    "consumption_payload_sha256",
+  ];
+  const tupleInputs = [...authorizationInputs, ...consumptionInputs];
+
+  assert.deepEqual(dispatch.single_admin_break_glass, {
+    description: "Use the exact configured single-admin break-glass authorization",
+    required: true,
+    default: false,
+    type: "boolean",
+  });
+  assert.equal(dispatch.incident_id.type, "string");
+  assert.equal(dispatch.reason.type, "string");
+  assert.match(dispatch.confirm.description, /DEPLOY_PRODUCTION_BREAK_GLASS/);
+  assert.doesNotMatch(validate.if, /DEPLOY_PRODUCTION_RELEASE|single_admin_break_glass/);
+
+  const validateSteps = validate.steps.map((step) => step.name ?? "");
+  const authorizeIndex = validateSteps.indexOf("Validate production deployment authorization");
+  const contractIndex = validateSteps.indexOf("Require current main and final exact-SHA readiness");
+  assert.ok(authorizeIndex > 0 && authorizeIndex < contractIndex);
+  const authorize = validate.steps[authorizeIndex];
+  assert.equal(authorize.env.RELEASE_AUTHORIZATION_ACTION, "production-deploy");
+  assert.equal(authorize.env.RELEASE_STANDARD_CONFIRMATION, "DEPLOY_PRODUCTION_RELEASE");
+  assert.match(authorize.run, /production-break-glass-validation\.mjs validate-workflow/);
+  assert.match(authorize.run, /--out release-authorization\.json/);
+  assert.match(validate.steps[contractIndex].run, /validateReleaseAuthorizationGrant/);
+  for (const proof of ["stripe", "pages-staging", "pages-production", "approval"]) {
+    assert.match(validate.steps[contractIndex].run, new RegExp(proof));
+  }
+  assert.match(validate.steps[contractIndex].run, /release-authorization\.json/);
+  assert.match(validate.steps[contractIndex].run, /PRODUCTION_RELEASE_ENABLED/);
+  assert.match(validate.steps[contractIndex].run, /PRODUCTION_RELEASE_DEPLOYERS/);
+
+  assert.ok(consume);
+  assert.equal(consume.needs, "validate");
+  assert.match(consume.if, /needs\.validate\.result == 'success'/);
+  for (const output of [
+    "authorization_mode",
+    "authorization_sha256",
+    "consumption_artifact_id",
+    "consumption_artifact_digest",
+    "consumption_binding_artifact_id",
+    "consumption_payload_sha256",
+  ]) {
+    assert.ok(consume.outputs[output], output);
+  }
+  const consumeSource = JSON.stringify(consume);
+  assert.match(consumeSource, /production-break-glass-consumption\.mjs name/);
+  assert.match(consumeSource, /production-break-glass-consumption\.mjs create/);
+  assert.match(consumeSource, /overwrite[^}]*false/);
+  assert.match(consumeSource, /retention-days[^}]*7/);
+  assert.match(consumeSource, /create-release-artifact-binding\.mjs/);
+  assert.match(consumeSource, /verify-release-artifact-binding\.mjs/);
+  assert.match(consumeSource, /production-break-glass-consumption\.mjs verify/);
+  assert.match(consumeSource, /total_count/);
+  assert.match(consumeSource, /\\?"mode\\?":\s*\\?"standard\\?"/);
+
+  for (const name of [
+    "archive-production-source",
+    "deploy-production-database",
+    "renew-edge-mutation-lease",
+    "deploy-production-edge",
+    "renew-cloudflare-mutation-lease",
+    "deploy-production-cloudflare",
+    "attest-production-release",
+  ]) {
+    const needs = Array.isArray(parsed.jobs[name].needs)
+      ? parsed.jobs[name].needs
+      : [parsed.jobs[name].needs];
+    assert.ok(needs.includes("consume-break-glass-authorization"), name);
+    assert.match(String(parsed.jobs[name].if ?? ""), /consume-break-glass-authorization\.result == 'success'/);
+  }
+  assert.ok(Array.isArray(archive.needs));
+
+  for (const name of [
+    "deploy-production-database",
+    "deploy-production-edge",
+    "deploy-production-cloudflare",
+  ]) {
+    const call = parsed.jobs[name];
+    for (const input of tupleInputs) {
+      assert.ok(call.with[input], `${name}:${input}`);
+      const output = input === "authorization_artifact_id" || input === "authorization_artifact_digest" ||
+        input === "authorization_run_id" || input === "authorization_run_attempt"
+        ? `needs.validate.outputs.${input}`
+        : `needs.consume-break-glass-authorization.outputs.${input}`;
+      assert.equal(call.with[input], `\${{ ${output} }}`, `${name}:${input}`);
+    }
+  }
+
+  for (const name of ["renew-edge-mutation-lease", "renew-cloudflare-mutation-lease"]) {
+    const source = parsed.jobs[name].steps.map((step) => step.run ?? "").join("\n");
+    assert.match(source, /schema_version:\s*previous\.authorization\?\.mode === "break_glass" \? 3 : 2/);
+    assert.match(source, /authorization/);
+    assert.match(source, /consumption/);
+    assert.match(source, /--authorization-file/);
+    assert.match(source, /--consumption-file/);
+  }
+
+  for (const name of [
+    "deploy-supabase-production-db.yml",
+    "deploy-edge-functions.yml",
+    "reusable-cloudflare-production-deploy.yml",
+  ]) {
+    const reusable = yaml.load(workflow(name));
+    for (const input of tupleInputs) {
+      const contract = reusable.on.workflow_call.inputs[input];
+      assert.equal(contract.type, "string", `${name}:${input}:type`);
+      if (name === "reusable-cloudflare-production-deploy.yml") {
+        assert.equal(contract.required, false, `${name}:${input}:direct-recovery-default`);
+        assert.equal(
+          contract.default,
+          input === "authorization_mode" ? "standard" : "",
+          `${name}:${input}:default`,
+        );
+      } else {
+        assert.equal(contract.required, true, `${name}:${input}:required`);
+      }
+    }
+    const source = workflow(name);
+    assert.match(source, /Download exact production authorization and consumption evidence/);
+    assert.match(source, /verify-release-artifact-binding\.mjs/);
+    assert.match(source, /production-break-glass-consumption\.mjs verify/);
+    assert.match(source, /--authorization-file/);
+    assert.match(source, /--consumption-file/);
+    assert.match(source, /authorization_sha256/);
+    assert.match(source, /consumption_sha256/);
+  }
+
+  const cloudflare = workflow("reusable-cloudflare-production-deploy.yml");
+  assert.match(cloudflare, /forward_mutation_started_at/);
+  assert.match(cloudflare, /authorized_expires_at/);
+  assert.match(cloudflare, /lease_expires_at/);
+  assert.match(cloudflare, /rollback.*forward mutation began while authorization and lease were valid/is);
+});
+
+it("accepts the exact API-shaped sha256 production consumption artifact", () => {
+  const result = executeProductionConsumptionPostcheck({ artifacts: [githubArtifact()] });
+  assert.equal(result.status, 0, result.stderr);
+});
+
+it("rejects non-exact production consumption artifact identities", () => {
+  const digest = "a".repeat(64);
+  const invalidCases = [
+    ["wrong algorithm", [githubArtifact({ digest: `sha512:${digest}` })], {}],
+    ["missing prefix", [githubArtifact({ digest })], {}],
+    ["wrong digest", [githubArtifact({ digest: `sha256:${"b".repeat(64)}` })], {}],
+    ["uppercase API digest", [githubArtifact({ digest: `sha256:${digest.toUpperCase()}` })], {}],
+    ["malformed API digest", [githubArtifact({ digest: "sha256:abc" })], {}],
+    [
+      "duplicate exact name",
+      [githubArtifact(), githubArtifact({ id: 92, node_id: "MDg6QXJ0aWZhY3Q5Mg==" })],
+      {},
+    ],
+    ["wrong artifact ID", [githubArtifact({ id: 92 })], {}],
+    ["uppercase expected digest", [githubArtifact()], { expectedDigest: digest.toUpperCase() }],
+  ];
+
+  for (const [label, artifacts, expected] of invalidCases) {
+    const result = executeProductionConsumptionPostcheck({ artifacts, ...expected });
+    assert.notEqual(result.status, 0, label);
+  }
+});
+
+it("gates approval and deployment on trusted current-main identity before repository code or signing secrets", () => {
+  for (const name of [
+    "approve-production-release.yml",
+    "deploy-production-release.yml",
+  ]) {
+    const parsed = yaml.load(workflow(name));
+    const job = name.startsWith("approve") ? parsed.jobs.approve : parsed.jobs.validate;
+    const gateIndex = job.steps.findIndex(
+      (step) => step.name === "Verify trusted exact current-main control identity",
+    );
+    const checkoutIndex = job.steps.findIndex((step) =>
+      String(step.uses ?? "").startsWith("actions/checkout@"));
+    const checkoutVerificationIndex = job.steps.findIndex(
+      (step) => step.name === "Verify exact clean checkout identity",
+    );
+    const firstRepositoryScript = job.steps.findIndex((step) =>
+      /(?:^|\s)(?:node|npm)\s+(?:scripts\/|run)/m.test(String(step.run ?? "")));
+    const firstSigningSecret = job.steps.findIndex((step) =>
+      JSON.stringify(step.env ?? {}).includes("RELEASE_EVIDENCE_SIGNING_KEY"));
+
+    assert.equal(gateIndex, 0, `${name}: trusted gate must be first`);
+    assert.ok(checkoutIndex > gateIndex, `${name}: checkout must follow trusted gate`);
+    assert.ok(
+      checkoutVerificationIndex > checkoutIndex,
+      `${name}: clean checkout verification must follow checkout`,
+    );
+    assert.ok(
+      firstRepositoryScript > checkoutVerificationIndex,
+      `${name}: repository code must follow clean checkout verification`,
+    );
+    assert.ok(
+      firstSigningSecret > checkoutVerificationIndex,
+      `${name}: signing secret must follow trusted checkout verification`,
+    );
+    assert.doesNotMatch(job.steps[gateIndex].run, /\$\{\{\s*inputs\./);
+    assert.match(job.steps[gateIndex].run, /\^\[0-9a-f\]\{40\}\$/);
+    assert.match(job.steps[checkoutVerificationIndex].run, /git status --porcelain/);
+
+    const valid = executeTrustedMainGate(job.steps[gateIndex]);
+    assert.equal(valid.status, 0, `${name}: ${valid.stderr}`);
+    for (const [label, override] of [
+      ["uppercase SHA", { RELEASE_SHA: "A".repeat(40) }],
+      ["shell-shaped SHA", { RELEASE_SHA: `${"a".repeat(39)};` }],
+      ["dispatch SHA mismatch", { GITHUB_SHA: "b".repeat(40) }],
+      ["workflow SHA mismatch", { GITHUB_WORKFLOW_SHA: "b".repeat(40) }],
+      ["substituted actor", { GITHUB_TRIGGERING_ACTOR: "other-owner" }],
+      ["rerun", { GITHUB_RUN_ATTEMPT: "2" }],
+      ["main advanced", { TEST_CURRENT_MAIN: "b".repeat(40) }],
+    ]) {
+      const rejected = executeTrustedMainGate(job.steps[gateIndex], override);
+      assert.notEqual(rejected.status, 0, `${name}: ${label}`);
+    }
+  }
+});
+
+it("keeps schema 2 standard approval authorization attached through direct recovery and rollback", () => {
+  const direct = yaml.load(workflow("direct-cloudflare-production-deploy.yml"));
+  const directValidation = direct.jobs.validate.steps.find(
+    (step) => step.name === "Verify signed recovery prerequisites and issue mutation lease",
+  );
+  assert.ok(directValidation, "direct recovery validation step is required");
+  assert.match(
+    directValidation.run,
+    /jq -e[\s\S]*\.authorization\.mode == "standard"[\s\S]*> evidence\/approval-authorization\.json/,
+    "direct recovery must extract only an exact standard schema 2 authorization",
+  );
+  assert.match(
+    directValidation.run,
+    /release:validate -- release-approval[\s\S]*--authorization-file evidence\/approval-authorization\.json/,
+    "direct recovery must pass the signed approval authorization to the schema 2 validator",
+  );
+  const authorizationModeIndex = directValidation.run.indexOf(
+    '.authorization.mode == "standard"',
+  );
+  const extractionStart = directValidation.run.lastIndexOf("if (", authorizationModeIndex);
+  const extractionEnd = directValidation.run.indexOf(" end'", authorizationModeIndex) + 4;
+  assert.ok(
+    extractionStart >= 0 && extractionEnd > extractionStart,
+    "direct standard authorization filter must remain executable",
+  );
+  const directExtraction = directValidation.run.slice(extractionStart, extractionEnd);
+
+  const reusable = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
+  const rollback = reusable.jobs.deploy.steps.find(
+    (step) => step.name === "Roll back failed production candidate",
+  );
+  assert.ok(rollback, "automatic rollback step is required");
+  const standardRollback = /if \[ "\$AUTHORIZATION_MODE" = "standard" \]; then([\s\S]*?)\n\s*fi/.exec(
+    rollback.run,
+  );
+  assert.ok(standardRollback, "rollback must retain a distinct standard authorization branch");
+  assert.match(
+    standardRollback[1],
+    /release:validate -- release-approval[\s\S]*--authorization-file evidence\/approval-authorization\.json/,
+    "rollback must revalidate schema 2 approval with its signed authorization",
+  );
+
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-standard-recovery-"));
+  try {
+    const approvalFile = join(fixtureRoot, "production-release-approval.json");
+    const authorizationFile = join(fixtureRoot, "approval-authorization.json");
+    const now = "2026-08-26T11:00:00.000Z";
+    const standardAuthorization = {
+      mode: "standard",
+      action: "production-approval",
+      actor: "reviewer",
+      release_sha: validatorFixture.releaseSha,
+      workflow_run_id: "50",
+      workflow_run_attempt: "1",
+    };
+    const extractAuthorization = (approval) => executeJq(
+      directExtraction,
+      approval,
+      [
+        "-e",
+        "--arg", "sha", validatorFixture.releaseSha,
+        "--arg", "run_id", "50",
+        "--arg", "run_attempt", "1",
+      ],
+    );
+    const standardApproval = releaseApproval(standardAuthorization);
+    const extracted = extractAuthorization(standardApproval);
+    assert.equal(extracted.status, 0, extracted.stderr);
+    assert.deepEqual(JSON.parse(extracted.stdout), standardAuthorization);
+    writeFileSync(approvalFile, JSON.stringify(standardApproval));
+
+    const validateAuthorization = (authorization) => {
+      writeFileSync(authorizationFile, JSON.stringify(authorization));
+      return spawnSync(
+        process.execPath,
+        validatorCliArgs("release-approval", approvalFile, now, authorizationFile),
+        { cwd: root, encoding: "utf8" },
+      );
+    };
+
+    const valid = validateAuthorization(standardAuthorization);
+    assert.equal(valid.status, 0, valid.stderr);
+
+    const rejectedApprovals = [
+      ["partial standard approval", releaseApproval({
+        ...standardAuthorization,
+        workflow_run_attempt: undefined,
+      })],
+      ["mismatched standard approval", releaseApproval({
+        ...standardAuthorization,
+        workflow_run_id: "51",
+      })],
+      ["break-glass approval", releaseApproval({
+        ...standardAuthorization,
+        mode: "break_glass",
+        incident_id: "PERF-RECOVERY-20260826-01",
+        reason_sha256: "0".repeat(64),
+        authorized_expires_at: "2026-08-26T12:00:00.000Z",
+      })],
+    ];
+    for (const [label, approval] of rejectedApprovals) {
+      const result = extractAuthorization(approval);
+      assert.notEqual(result.status, 0, `${label} passed the direct recovery callsite`);
+    }
+
+    for (const [label, authorization] of [
+      ["partial standard authorization", {
+        ...standardAuthorization,
+        workflow_run_attempt: undefined,
+      }],
+      ["mismatched standard authorization", {
+        ...standardAuthorization,
+        workflow_run_id: "51",
+      }],
+      ["break-glass authorization alias", {
+        ...standardAuthorization,
+        mode: "break_glass",
+        incident_id: "PERF-RECOVERY-20260826-01",
+        reason_sha256: "0".repeat(64),
+        authorized_expires_at: "2026-08-26T12:00:00.000Z",
+      }],
+    ]) {
+      const result = validateAuthorization(authorization);
+      assert.notEqual(result.status, 0, `${label} reached standard direct recovery`);
+    }
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+it("accepts the real Pages runtime producer result in both strict production consumers", { timeout: 60_000 }, () => {
+  const contract = pagesRuntimeResultContract();
+  for (const target of ["staging", "production"]) {
+    const produced = executeJq(contract.producer, null, [
+      "-n",
+      "--argjson", "authorization", '[{"mode":"standard"}]',
+      "--argjson", "consumption", "[null]",
+      "--arg", "target", target,
+      "--arg", "project_id", `project-${target}`,
+      "--arg", "release_sha", validatorFixture.releaseSha,
+    ]);
+    assert.equal(produced.status, 0, produced.stderr);
+    const evidence = JSON.parse(produced.stdout);
+    const accepted = executeJq(contract.consumer, evidence, [
+      "-e",
+      "--arg", "target", target,
+      "--arg", "sha", validatorFixture.releaseSha,
+    ]);
+    assert.equal(accepted.status, 0, `${target}: ${accepted.stderr}`);
+
+    for (const status of [undefined, "pending", "VERIFIED", true]) {
+      const invalid = { ...evidence };
+      if (status === undefined) delete invalid.status;
+      else invalid.status = status;
+      const rejected = executeJq(contract.consumer, invalid, [
+        "-e",
+        "--arg", "target", target,
+        "--arg", "sha", validatorFixture.releaseSha,
+      ]);
+      assert.notEqual(rejected.status, 0, `${target} accepted status ${String(status)}`);
+    }
+    const withoutStatus = { ...evidence };
+    delete withoutStatus.status;
+    for (const [label, invalid] of [
+      ["legacy ok true", { ...withoutStatus, ok: true }],
+      ["legacy ok false", { ...withoutStatus, ok: false }],
+      ["mixed ok true", { ...evidence, ok: true }],
+      ["mixed ok false", { ...evidence, ok: false }],
+      ["success alias", { ...evidence, success: true }],
+      ["verified alias", { ...evidence, verified: true }],
+      ["unexpected success detail", { ...evidence, status_detail: "verified" }],
+    ]) {
+      const rejected = executeJq(contract.consumer, invalid, [
+        "-e",
+        "--arg", "target", target,
+        "--arg", "sha", validatorFixture.releaseSha,
+      ]);
+      assert.notEqual(rejected.status, 0, `${target} accepted ${label}`);
+    }
+  }
+});
+
+it("keeps mutation lease artifact input data-only inside the signing-secret shell", () => {
+  const reusable = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
+  const job = reusable.jobs.deploy;
+  const verification = job.steps.find(
+    (step) => step.name === "Verify signed release and provider artifact bindings",
+  );
+  assert.ok(verification, "signed provider binding verification step is required");
+  assert.equal(
+    job.env.MUTATION_LEASE_ARTIFACT,
+    "${{ inputs.mutation_lease_artifact }}",
+  );
+  assert.ok(verification.env.RELEASE_EVIDENCE_SIGNING_KEY);
+  assert.doesNotMatch(
+    verification.run,
+    /\$\{\{\s*inputs\./,
+    "untrusted workflow input must never be rendered into a signing-secret shell",
+  );
+  assert.match(
+    verification.run,
+    /expected_lease_prefix="production-mutation-lease-\$\{RELEASE_SHA\}-\$\{PRODUCTION_RUN_ID\}-\$\{PRODUCTION_RUN_ATTEMPT\}-"/,
+  );
+  assert.match(
+    verification.run,
+    /case "\$MUTATION_LEASE_ARTIFACT" in[\s\S]*"\$\{expected_lease_prefix\}cloudflare"[\s\S]*"\$\{expected_lease_prefix\}cloudflare-recovery"[\s\S]*\*\)[\s\S]*exit 1/,
+    "only exact allowlisted lease artifact identities may reach signed downloads",
+  );
+  assert.match(
+    verification.run,
+    /download_binding mutation-lease "\$PRODUCTION_RUN_ID"[\s\S]*"\$\{MUTATION_LEASE_ARTIFACT\}-binding"/,
+  );
+  assert.ok(
+    verification.run.indexOf('case "$MUTATION_LEASE_ARTIFACT" in') <
+      verification.run.indexOf("download_binding mutation-lease"),
+  );
+});
+
+it("parses every reusable Cloudflare release run block as real Bash", { timeout: 60_000 }, () => {
+  const reusable = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
+  const runnable = reusable.jobs.deploy.steps.filter(
+    (step) => typeof step.run === "string",
+  );
+  for (const required of [
+    "Authenticate declared production authorization mode",
+    "Roll back failed production candidate",
+  ]) {
+    assert.ok(runnable.some((step) => step.name === required), `${required} is required`);
+  }
+  for (const step of runnable) {
+    const result = executeBashSyntax(step.run);
+    assert.equal(
+      result.status,
+      0,
+      `${step.name ?? "unnamed run step"}: ${result.stderr}`,
+    );
+  }
+});
 
 describe("production release train", () => {
   it("parses every production release workflow as valid YAML", () => {
@@ -546,9 +1651,7 @@ describe("production release train", () => {
     expect(job.name).toBe("Production release approved");
     expect(job.environment).toBeUndefined();
     expect(job.if).toContain("github.ref == 'refs/heads/main'");
-    expect(job.if).toContain(
-      "inputs.confirm == 'APPROVE_PRODUCTION_RELEASE'",
-    );
+    expect(job.if).not.toContain("APPROVE_PRODUCTION_RELEASE");
     expect(job.if).toContain("github.run_attempt == 1");
     expect(job.if).toContain("github.actor == github.triggering_actor");
     expect(job.permissions).toEqual({
@@ -560,7 +1663,7 @@ describe("production release train", () => {
     expect(approval).toContain(
       'gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq \'.commit.sha\'',
     );
-    expect(approval).toContain("Require allowlisted production approver");
+    expect(approval).toContain("Require standard production approver allowlist");
     expect(approval).toContain("PRODUCTION_RELEASE_APPROVERS");
     expect(approval).toContain("The approval actor is not allowlisted");
     expect(approval).toContain(
@@ -577,7 +1680,7 @@ describe("production release train", () => {
       ".github/workflows/stage-release.yml",
     );
     for (const field of [
-      "schema_version: 1",
+      "schema_version: 2",
       "repository:",
       "release_sha:",
       "source_tree:",
@@ -596,6 +1699,7 @@ describe("production release train", () => {
     ]) {
       expect(approval).toContain(field);
     }
+    expect(approval).toMatch(/\n\s+authorization,\n/);
     expect(approval).toContain(
       "production-release-approval-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
     );
@@ -1563,12 +2667,15 @@ describe("production release train", () => {
       (step) => step.name === "Resolve and validate exact production deployment",
     );
 
-    expect(deploy.run.indexOf("mutation_attempted=true")).toBeLessThan(
-      deploy.run.indexOf("wrangler pages deploy"),
-    );
+    const mutationIndex = deploy.run.indexOf("wrangler pages deploy");
+    const statusIndex = deploy.run.indexOf('wrangler_statuses=("${PIPESTATUS[@]}")', mutationIndex);
+    const attemptedIndex = deploy.run.indexOf("mutation_attempted=true", statusIndex);
+    expect(mutationIndex).toBeGreaterThan(-1);
+    expect(statusIndex).toBeGreaterThan(mutationIndex);
+    expect(attemptedIndex).toBeGreaterThan(statusIndex);
     expect(deploy.run).toContain("cloudflare-production-deployments-before.json");
     expect(deploy.run.indexOf("deployments?env=production&per_page=100"))
-      .toBeLessThan(deploy.run.indexOf("mutation_attempted=true"));
+      .toBeLessThan(mutationIndex);
     expect(reconciliation.env.DEPLOYMENTS_BEFORE).toBe(
       "${{ steps.deploy.outputs.deployments_before }}",
     );
@@ -2258,6 +3365,7 @@ describe("production release train", () => {
     expect(sourceArchive.environment).toBeUndefined();
     expect(sourceArchive.needs).toEqual([
       "validate",
+      "consume-break-glass-authorization",
       "cloudflare-production-preflight",
     ]);
     expect(sourceArchive.permissions).toEqual({
@@ -2266,6 +3374,7 @@ describe("production release train", () => {
     });
     expect(database.needs).toEqual([
       "validate",
+      "consume-break-glass-authorization",
       "cloudflare-production-preflight",
       "archive-production-source",
     ]);
@@ -2273,7 +3382,11 @@ describe("production release train", () => {
     expect(database.with.production_run_attempt).toBe(
       "${{ github.run_attempt }}",
     );
-    expect(renew.needs).toEqual(["validate", "deploy-production-database"]);
+    expect(renew.needs).toEqual([
+      "validate",
+      "consume-break-glass-authorization",
+      "deploy-production-database",
+    ]);
     expect(renew.environment).toBeUndefined();
     expect(renew.permissions).toEqual({
       actions: "read",
@@ -2282,6 +3395,7 @@ describe("production release train", () => {
     expect(edge.uses).toBe("./.github/workflows/deploy-edge-functions.yml");
     expect(edge.needs).toEqual([
       "validate",
+      "consume-break-glass-authorization",
       "deploy-production-database",
       "renew-edge-mutation-lease",
     ]);
@@ -2299,6 +3413,7 @@ describe("production release train", () => {
     );
     expect(renewCloudflare.needs).toEqual([
       "validate",
+      "consume-break-glass-authorization",
       "deploy-production-database",
       "deploy-production-edge",
     ]);
@@ -2308,6 +3423,7 @@ describe("production release train", () => {
     );
     expect(cloudflare.needs).toEqual([
       "validate",
+      "consume-break-glass-authorization",
       "deploy-production-database",
       "deploy-production-edge",
       "renew-cloudflare-mutation-lease",
@@ -2336,6 +3452,7 @@ describe("production release train", () => {
     );
     expect(aggregate.needs).toEqual([
       "validate",
+      "consume-break-glass-authorization",
       "deploy-production-database",
       "deploy-production-edge",
       "renew-cloudflare-mutation-lease",

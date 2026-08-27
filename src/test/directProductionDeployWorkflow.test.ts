@@ -42,5 +42,9 @@ describe("manual Cloudflare production deploy workflow", () => {
     expect(workflow).not.toContain("id-token:");
     expect(workflow).not.toContain("secrets: inherit");
     expect(workflow).not.toMatch(/npm run build|vite build/);
+    expect(workflow).not.toContain("single_admin_break_glass");
+    expect(workflow).not.toContain("PRODUCTION_BREAK_GLASS_");
+    expect(workflow).not.toContain("production-break-glass-validation.mjs");
+    expect(workflow).not.toContain("production-break-glass-consumption.mjs");
   });
 });

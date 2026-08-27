@@ -60,6 +60,36 @@ on:
       mutation_lease_artifact:
         required: true
         type: string
+      authorization_mode:
+        required: true
+        type: string
+      authorization_sha256:
+        required: true
+        type: string
+      authorization_artifact_id:
+        required: true
+        type: string
+      authorization_artifact_digest:
+        required: true
+        type: string
+      authorization_run_id:
+        required: true
+        type: string
+      authorization_run_attempt:
+        required: true
+        type: string
+      consumption_artifact_id:
+        required: true
+        type: string
+      consumption_artifact_digest:
+        required: true
+        type: string
+      consumption_binding_artifact_id:
+        required: true
+        type: string
+      consumption_payload_sha256:
+        required: true
+        type: string
     secrets:
       RELEASE_EVIDENCE_SIGNING_KEY:
         required: true
@@ -109,6 +139,16 @@ jobs:
       ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
       MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
       APPROVAL_NONCE: ${{ inputs.approval_nonce }}
+      AUTHORIZATION_MODE: ${{ inputs.authorization_mode }}
+      AUTHORIZATION_SHA256: ${{ inputs.authorization_sha256 }}
+      AUTHORIZATION_ARTIFACT_ID: ${{ inputs.authorization_artifact_id }}
+      AUTHORIZATION_ARTIFACT_DIGEST: ${{ inputs.authorization_artifact_digest }}
+      AUTHORIZATION_RUN_ID: ${{ inputs.authorization_run_id }}
+      AUTHORIZATION_RUN_ATTEMPT: ${{ inputs.authorization_run_attempt }}
+      CONSUMPTION_ARTIFACT_ID: ${{ inputs.consumption_artifact_id }}
+      CONSUMPTION_ARTIFACT_DIGEST: ${{ inputs.consumption_artifact_digest }}
+      CONSUMPTION_BINDING_ARTIFACT_ID: ${{ inputs.consumption_binding_artifact_id }}
+      CONSUMPTION_PAYLOAD_SHA256: ${{ inputs.consumption_payload_sha256 }}
     outputs:
       database_attestation_artifact: ${{ steps.database_attestation.outputs.artifact_name }}
       database_attestation_sha256: ${{ steps.database_attestation.outputs.attestation_sha256 }}
@@ -382,6 +422,216 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.production_run_id }}
 
+      - name: Download exact production authorization and consumption evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+          PRODUCTION_RELEASE_APPROVERS: ${{ vars.PRODUCTION_RELEASE_APPROVERS }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/authorization evidence/authorization-binding evidence/authorization-metadata
+          gh api -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts/${AUTHORIZATION_ARTIFACT_ID}/zip" \
+            > evidence/authorization.zip
+          unzip -q evidence/authorization.zip -d evidence/authorization
+          gh run download "$AUTHORIZATION_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "production-release-approval-binding-${RELEASE_SHA}-${AUTHORIZATION_RUN_ID}-${AUTHORIZATION_RUN_ATTEMPT}" \
+            --dir evidence/authorization-binding
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${AUTHORIZATION_ARTIFACT_ID}" \
+            > evidence/authorization-metadata/artifact.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${AUTHORIZATION_RUN_ID}" \
+            > evidence/authorization-metadata/run.json
+          authorization_actor="$(jq -er '.actor.login' evidence/authorization-metadata/run.json)"
+          authorization_triggering_actor="$(jq -er '.triggering_actor.login' evidence/authorization-metadata/run.json)"
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding evidence/authorization-binding/release-artifact-binding.json \
+            --payload-root evidence/authorization/production-release-approval.json \
+            --artifact-metadata evidence/authorization-metadata/artifact.json \
+            --producer-run evidence/authorization-metadata/run.json \
+            --repository "$GITHUB_REPOSITORY" --release-sha "$RELEASE_SHA" --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/approve-production-release.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/approve-production-release.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" --event workflow_dispatch \
+            --run-id "$AUTHORIZATION_RUN_ID" --run-attempt "$AUTHORIZATION_RUN_ATTEMPT" \
+            --actor "$authorization_actor" --triggering-actor "$authorization_triggering_actor" \
+            --artifact-id "$AUTHORIZATION_ARTIFACT_ID" \
+            --artifact-name "production-release-approval-${RELEASE_SHA}-${AUTHORIZATION_RUN_ID}-${AUTHORIZATION_RUN_ATTEMPT}" \
+            --artifact-digest "$AUTHORIZATION_ARTIFACT_DIGEST" --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
+            > evidence/authorization-binding-verification.json
+          approval_args=()
+          if [ "$(jq -r '.schema_version' evidence/authorization/production-release-approval.json)" = "2" ]; then
+            jq '.authorization' evidence/authorization/production-release-approval.json \
+              > evidence/approval-authorization.json
+            approval_args+=(--authorization-file evidence/approval-authorization.json)
+          fi
+          npm run --silent release:validate -- release-approval \
+            --file evidence/authorization/production-release-approval.json \
+            --sha "$RELEASE_SHA" --repository "$GITHUB_REPOSITORY" --source-tree "$SOURCE_TREE" \
+            --source-run-id "$SOURCE_RUN_ID" --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --artifact-sha256 "$ARTIFACT_SHA256" --staging-run-id "$STAGING_RUN_ID" \
+            --staging-run-attempt "$STAGING_RUN_ATTEMPT" --approval-run-id "$APPROVAL_RUN_ID" \
+            --approval-run-attempt "$APPROVAL_RUN_ATTEMPT" --deploy-actor "$GITHUB_ACTOR" \
+            --allowed-approvers "$PRODUCTION_RELEASE_APPROVERS" \
+            "${approval_args[@]}"
+          if [ "$AUTHORIZATION_MODE" = "standard" ]; then
+            if [ -n "$CONSUMPTION_ARTIFACT_ID$CONSUMPTION_ARTIFACT_DIGEST$CONSUMPTION_BINDING_ARTIFACT_ID$CONSUMPTION_PAYLOAD_SHA256" ]; then
+              echo "::error::Standard mutation invocation cannot carry break-glass consumption identity."
+              exit 1
+            fi
+            jq -e '.schema_version == 2 and (has("authorization") | not) and (has("consumption") | not)' \
+              evidence/mutation-lease/production-mutation-lease.json > /dev/null
+          elif [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            jq '.authorization' evidence/mutation-lease/production-mutation-lease.json > evidence/release-authorization.json
+            jq '.consumption' evidence/mutation-lease/production-mutation-lease.json > evidence/consumption-tuple.json
+            mkdir -p evidence/consumption evidence/consumption-binding evidence/consumption-metadata
+            gh api -H "Accept: application/vnd.github+json" \
+              "repos/${GITHUB_REPOSITORY}/actions/artifacts/${CONSUMPTION_ARTIFACT_ID}/zip" > evidence/consumption.zip
+            unzip -q evidence/consumption.zip -d evidence/consumption
+            gh api -H "Accept: application/vnd.github+json" \
+              "repos/${GITHUB_REPOSITORY}/actions/artifacts/${CONSUMPTION_BINDING_ARTIFACT_ID}/zip" > evidence/consumption-binding.zip
+            unzip -q evidence/consumption-binding.zip -d evidence/consumption-binding
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${CONSUMPTION_ARTIFACT_ID}" > evidence/consumption-metadata/artifact.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PRODUCTION_RUN_ID}" > evidence/consumption-metadata/run.json
+            receipt_name="$(node scripts/production-break-glass-consumption.mjs name --authorization evidence/release-authorization.json)"
+            receipt_actor="$(jq -er '.actor.login' evidence/consumption-metadata/run.json)"
+            receipt_triggering_actor="$(jq -er '.triggering_actor.login' evidence/consumption-metadata/run.json)"
+            node scripts/verify-release-artifact-binding.mjs \
+              --binding evidence/consumption-binding/release-artifact-binding.json \
+              --payload-root evidence/consumption/production-break-glass-consumption.json \
+              --artifact-metadata evidence/consumption-metadata/artifact.json \
+              --producer-run evidence/consumption-metadata/run.json --repository "$GITHUB_REPOSITORY" \
+              --release-sha "$RELEASE_SHA" --source-tree "$SOURCE_TREE" \
+              --workflow-path .github/workflows/deploy-production-release.yml \
+              --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/deploy-production-release.yml@refs/heads/main" \
+              --workflow-sha "$RELEASE_SHA" --event workflow_dispatch --run-id "$PRODUCTION_RUN_ID" \
+              --run-attempt "$PRODUCTION_RUN_ATTEMPT" --actor "$receipt_actor" \
+              --triggering-actor "$receipt_triggering_actor" --artifact-id "$CONSUMPTION_ARTIFACT_ID" \
+              --artifact-name "$receipt_name" --artifact-digest "$CONSUMPTION_ARTIFACT_DIGEST" \
+              --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" > evidence/consumption-binding-verification.json
+            test "$(sha256sum evidence/consumption/production-break-glass-consumption.json | awk '{print $1}')" = "$CONSUMPTION_PAYLOAD_SHA256"
+            node scripts/production-break-glass-consumption.mjs verify \
+              --file evidence/consumption/production-break-glass-consumption.json \
+              --authorization evidence/release-authorization.json --action production-deploy
+            node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          import { releaseAuthorizationSha256, validateReleaseAuthorizationGrant } from "./scripts/production-break-glass-validation.mjs";
+          const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+          const authorization = read("evidence/release-authorization.json");
+          const approval = read("evidence/approval-authorization.json");
+          validateReleaseAuthorizationGrant([authorization, approval]);
+          if (releaseAuthorizationSha256(authorization) !== process.env.AUTHORIZATION_SHA256) {
+            throw new Error("Production authorization SHA-256 changed before mutation.");
+          }
+          NODE
+          else
+            echo "::error::Authorization mode must be explicit."
+            exit 1
+          fi
+
+      - name: Authenticate declared production authorization mode
+        env:
+          APPROVAL_FILE: evidence/authorization/production-release-approval.json
+          MUTATION_LEASE_FILE: evidence/mutation-lease/production-mutation-lease.json
+          DECLARED_AUTHORIZATION_MODE: ${{ inputs.authorization_mode }}
+          EXPECTED_AUTHORIZATION_SHA256: ${{ inputs.authorization_sha256 }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+          DIRECT_STANDARD_RECOVERY: "false"
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          import {
+            releaseAuthorizationSha256,
+            validateReleaseAuthorization,
+            validateReleaseAuthorizationGrant,
+          } from "./scripts/production-break-glass-validation.mjs";
+
+          const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+          const approval = read(process.env.APPROVAL_FILE);
+          const lease = read(process.env.MUTATION_LEASE_FILE);
+          const mode = process.env.DECLARED_AUTHORIZATION_MODE;
+          const directRecovery = process.env.DIRECT_STANDARD_RECOVERY === "true";
+          if (mode !== "standard" && mode !== "break_glass") {
+            throw new Error("Declared production authorization mode is unsupported.");
+          }
+          let approvalAuthorization;
+          if (approval.schema_version === 1) {
+            if (mode !== "standard") {
+              throw new Error("Schema-version-1 approval is standard-only.");
+            }
+          } else if (approval.schema_version === 2) {
+            approvalAuthorization = validateReleaseAuthorization(
+              approval.authorization,
+              {
+                mode,
+                action: "production-approval",
+                actor: String(approval.approver).toLowerCase(),
+                releaseSha: process.env.RELEASE_SHA,
+                runId: process.env.APPROVAL_RUN_ID,
+                runAttempt: process.env.APPROVAL_RUN_ATTEMPT,
+              },
+            );
+          } else {
+            throw new Error("Production approval schema version is unsupported.");
+          }
+          let deploymentAuthorization;
+          if (mode === "standard") {
+            if (
+              lease.schema_version !== 2 ||
+              Object.hasOwn(lease, "authorization") ||
+              Object.hasOwn(lease, "consumption")
+            ) {
+              throw new Error("Standard authorization requires an exact schema-version-2 lease.");
+            }
+            deploymentAuthorization = validateReleaseAuthorization({
+              mode: "standard",
+              action: "production-deploy",
+              actor: String(process.env.DEPLOY_ACTOR).toLowerCase(),
+              release_sha: process.env.RELEASE_SHA,
+              workflow_run_id: process.env.PRODUCTION_RUN_ID,
+              workflow_run_attempt: process.env.PRODUCTION_RUN_ATTEMPT,
+            }, {
+              mode: "standard",
+              action: "production-deploy",
+              actor: String(process.env.DEPLOY_ACTOR).toLowerCase(),
+              releaseSha: process.env.RELEASE_SHA,
+              runId: process.env.PRODUCTION_RUN_ID,
+              runAttempt: process.env.PRODUCTION_RUN_ATTEMPT,
+            });
+          } else {
+            if (directRecovery || lease.schema_version !== 3) {
+              throw new Error("Break-glass authorization requires the coordinated schema-version-3 lease.");
+            }
+            deploymentAuthorization = validateReleaseAuthorization(
+              lease.authorization,
+              {
+                mode: "break_glass",
+                action: "production-deploy",
+                actor: String(process.env.DEPLOY_ACTOR).toLowerCase(),
+                releaseSha: process.env.RELEASE_SHA,
+                runId: process.env.PRODUCTION_RUN_ID,
+                runAttempt: process.env.PRODUCTION_RUN_ATTEMPT,
+              },
+            );
+          }
+          if (approvalAuthorization) {
+            validateReleaseAuthorizationGrant([
+              deploymentAuthorization,
+              approvalAuthorization,
+            ]);
+          }
+          const expectedHash = process.env.EXPECTED_AUTHORIZATION_SHA256;
+          if (directRecovery) {
+            if (mode !== "standard" || expectedHash !== "") {
+              throw new Error("Direct recovery accepts only its legacy standard authorization sentinel.");
+            }
+          } else if (
+            releaseAuthorizationSha256(deploymentAuthorization) !== expectedHash
+          ) {
+            throw new Error("Declared production authorization SHA-256 does not match the exact deployment authorization.");
+          }
+          NODE
+
       - name: Download exact Stripe readiness evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -513,6 +763,10 @@ jobs:
             --sha "$RELEASE_SHA" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          validation_args=()
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            validation_args+=(--authorization-file evidence/release-authorization.json --consumption-file evidence/consumption-tuple.json)
+          fi
           npm run --silent release:validate -- mutation-lease \
             --file evidence/mutation-lease/production-mutation-lease.json \
             --sha "$RELEASE_SHA" \
@@ -532,7 +786,8 @@ jobs:
             --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
             --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
             --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
-            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            "${validation_args[@]}"
 
       - name: Verify signed provider artifact bindings
         env:
@@ -1112,6 +1367,10 @@ jobs:
           SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
+          lease_args=()
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            lease_args+=(--authorization-file evidence/release-authorization.json --consumption-file evidence/consumption-tuple.json)
+          fi
           current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
           if [ "$current_main" != "$RELEASE_SHA" ]; then
             echo "::error::Release SHA is no longer current main."
@@ -1141,7 +1400,8 @@ jobs:
             --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
             --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
             --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
-            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            "${lease_args[@]}"
           npm run --silent release:validate -- supabase-target \
             > production-supabase-target-pre-apply.json
           psql "$SUPABASE_PRODUCTION_DB_URL" \
@@ -1216,6 +1476,10 @@ jobs:
           SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
+          lease_args=()
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            lease_args+=(--authorization-file evidence/release-authorization.json --consumption-file evidence/consumption-tuple.json)
+          fi
           current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
           if [ "$current_main" != "$RELEASE_SHA" ]; then
             echo "::error::Release SHA is no longer current main."
@@ -1245,7 +1509,8 @@ jobs:
             --stripe-readiness-run-attempt "$STRIPE_READINESS_RUN_ATTEMPT" \
             --stripe-readiness-sha256 "$STRIPE_READINESS_SHA256" \
             --stripe-readiness-artifact-id "$STRIPE_READINESS_ARTIFACT_ID" \
-            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST"
+            --stripe-readiness-artifact-digest "$STRIPE_READINESS_ARTIFACT_DIGEST" \
+            "${lease_args[@]}"
           npm run --silent release:validate -- supabase-target \
             > production-supabase-target-mutation-boundary.json
           psql "$SUPABASE_PRODUCTION_DB_URL" \
@@ -1349,7 +1614,32 @@ jobs:
             exit 1
           fi
           "$RUNNER_TEMP/verify-production-provider-bindings.sh"
+          lease_expires_at="$(jq -er '.expires_at' evidence/mutation-lease/production-mutation-lease.json)"
+          lease_expires_epoch_ms="$(date -u --date="$lease_expires_at" +'%s%3N')"
+          authorization_expires_epoch_ms=""
+          if [ "$AUTHORIZATION_MODE" = "break_glass" ]; then
+            authorization_expires_at="$(jq -er '.authorized_expires_at' evidence/release-authorization.json)"
+            authorization_expires_epoch_ms="$(date -u --date="$authorization_expires_at" +'%s%3N')"
+          fi
+          if ! [[ "$lease_expires_epoch_ms" =~ ^[1-9][0-9]{12,}$ ]] ||
+             { [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+               ! [[ "$authorization_expires_epoch_ms" =~ ^[1-9][0-9]{12,}$ ]]; }; then
+            echo "::error::Production database mutation deadline is not canonical."
+            exit 1
+          fi
           if [ "$pending_count" != "0" ]; then
+            provider_boundary_epoch_real="$EPOCHREALTIME"
+            if ! [[ "$provider_boundary_epoch_real" =~ ^[1-9][0-9]{9,}\.[0-9]{6}$ ]]; then
+              echo "::error::Production database mutation boundary clock is not canonical."
+              exit 1
+            fi
+            provider_boundary_epoch_us="${provider_boundary_epoch_real/./}"
+            if (( 10#$provider_boundary_epoch_us >= 10#$lease_expires_epoch_ms * 1000 )) ||
+               { [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+                 (( 10#$provider_boundary_epoch_us >= 10#$authorization_expires_epoch_ms * 1000 )); }; then
+              echo "::error::Production database mutation authorization expired before db push."
+              exit 1
+            fi
             npx --no-install supabase --workdir release-candidate db push \
               --db-url "$SUPABASE_PRODUCTION_DB_URL" \
               --yes
@@ -1362,6 +1652,18 @@ jobs:
           grep -F "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_role_switch_history_reconciliation_due" "$online_sql"
           grep -F "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_agent_data_inputs_user_discount_invoice" "$online_sql"
           grep -F "VALIDATE CONSTRAINT profiles_role_switch_audit_id_fkey" "$online_sql"
+          provider_boundary_epoch_real="$EPOCHREALTIME"
+          if ! [[ "$provider_boundary_epoch_real" =~ ^[1-9][0-9]{9,}\.[0-9]{6}$ ]]; then
+            echo "::error::Production online SQL mutation boundary clock is not canonical."
+            exit 1
+          fi
+          provider_boundary_epoch_us="${provider_boundary_epoch_real/./}"
+          if (( 10#$provider_boundary_epoch_us >= 10#$lease_expires_epoch_ms * 1000 )) ||
+             { [ "$AUTHORIZATION_MODE" = "break_glass" ] &&
+               (( 10#$provider_boundary_epoch_us >= 10#$authorization_expires_epoch_ms * 1000 )); }; then
+            echo "::error::Production database mutation authorization expired before online SQL."
+            exit 1
+          fi
           psql "$SUPABASE_PRODUCTION_DB_URL" \
             --no-psqlrc \
             --set ON_ERROR_STOP=1 \
@@ -1714,6 +2016,11 @@ jobs:
           const attestation = {
             schema_version: 1,
             evidence_type: "maiprop-production-database-promotion",
+            authorization_mode: process.env.AUTHORIZATION_MODE,
+            authorization_sha256: process.env.AUTHORIZATION_SHA256,
+            consumption_sha256: process.env.AUTHORIZATION_MODE === "break_glass"
+              ? process.env.CONSUMPTION_PAYLOAD_SHA256
+              : null,
             repository: process.env.GITHUB_REPOSITORY,
             release_sha: process.env.RELEASE_SHA,
             source_tree: process.env.SOURCE_TREE,

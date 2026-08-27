@@ -110,6 +110,7 @@ describe("production mutation boundaries", () => {
 
     expect(Object.keys(jobs)).toEqual([
       "validate",
+      "consume-break-glass-authorization",
       "cloudflare-production-preflight",
       "archive-production-source",
       "deploy-production-database",
