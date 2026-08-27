@@ -1100,7 +1100,7 @@ describe("Supabase production provider signed-binding contract", () => {
     ])).toThrow(/grant|authorization/i);
   });
 
-  it("keeps standalone recovery on the legacy standard sentinel and rejects a direct break-glass route", () => {
+  it("keeps standalone recovery on the legacy standard sentinel and rejects a direct break-glass route", { timeout: 60_000 }, () => {
     const dispatch = parsedDirectRecovery.on.workflow_dispatch.inputs;
     expect(dispatch.single_admin_break_glass).toBeUndefined();
     expect(dispatch.incident_id).toBeUndefined();

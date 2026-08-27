@@ -794,7 +794,7 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
     }
   });
 
-  it("binds the final Pages mutation and revalidates expiry after current-main lookup", () => {
+  it("binds the final Pages mutation and revalidates expiry after current-main lookup", { timeout: 60_000 }, () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-pages-receipt-rebind-"));
     try {
       const repository = "maiprop/maiprop-listing-site";

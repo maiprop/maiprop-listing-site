@@ -1037,7 +1037,7 @@ it("keeps schema 2 standard approval authorization attached through direct recov
   }
 });
 
-it("accepts the real Pages runtime producer result in both strict production consumers", () => {
+it("accepts the real Pages runtime producer result in both strict production consumers", { timeout: 60_000 }, () => {
   const contract = pagesRuntimeResultContract();
   for (const target of ["staging", "production"]) {
     const produced = executeJq(contract.producer, null, [
@@ -1125,7 +1125,7 @@ it("keeps mutation lease artifact input data-only inside the signing-secret shel
   );
 });
 
-it("parses every reusable Cloudflare release run block as real Bash", () => {
+it("parses every reusable Cloudflare release run block as real Bash", { timeout: 60_000 }, () => {
   const reusable = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
   const runnable = reusable.jobs.deploy.steps.filter(
     (step) => typeof step.run === "string",

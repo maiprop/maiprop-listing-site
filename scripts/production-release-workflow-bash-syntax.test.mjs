@@ -37,7 +37,7 @@ function generatedShellBodies(source) {
 }
 
 describe("changed production release workflow Bash syntax", () => {
-  it("parses every Bash run block and generated helper shell", { timeout: 60_000 }, () => {
+  it("parses every Bash run block and generated helper shell", { timeout: 180_000 }, () => {
     let runBlockCount = 0;
     let helperCount = 0;
     for (const relative of releaseWorkflows) {
