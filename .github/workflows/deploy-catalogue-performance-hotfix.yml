@@ -39,8 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ]; then echo "::error::Manual main, first attempt, and triggering actor are required."; exit 1; fi
-          git fetch --no-tags origin main
-          export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
+          export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
           if ! [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [ "$RELEASE_SHA" != "$GITHUB_SHA" ] || [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CHECKOUT_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CURRENT_MAIN_SHA" ]; then echo "::error::Exact current main SHA is required."; exit 1; fi
           node scripts/production-break-glass-validation.mjs validate-workflow --out "$RUNNER_TEMP/catalogue-hotfix-authorization.json"
           if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
@@ -68,10 +67,11 @@ jobs:
         with: { node-version-file: .node-version, cache: npm }
       - run: npm ci --ignore-scripts --prefer-offline --no-audit
       - name: Revalidate staging identity immediately before mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin main
-          export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
+          export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
           if [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ] || [ "$RELEASE_SHA" != "$GITHUB_SHA" ] || [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CHECKOUT_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CURRENT_MAIN_SHA" ]; then echo "::error::Staging control changed."; exit 1; fi
           node scripts/assert-staging-mutation-target.mjs --project-ref "$TARGET_PROJECT_REF" --database-url "$TARGET_DB_URL" --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
           if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
@@ -182,7 +182,7 @@ jobs:
           PRODUCTION_BREAK_GLASS_EXPIRES_AT: ${{ vars.PRODUCTION_BREAK_GLASS_EXPIRES_AT }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin main; export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
+          export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
           if [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ] || [ "$RELEASE_SHA" != "$GITHUB_SHA" ] || [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CHECKOUT_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CURRENT_MAIN_SHA" ]; then exit 1; fi
           node scripts/production-break-glass-validation.mjs validate-workflow --out "$RUNNER_TEMP/catalogue-hotfix-authorization.json"
           if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi

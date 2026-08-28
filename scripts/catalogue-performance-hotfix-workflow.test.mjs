@@ -73,13 +73,28 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.equal(authorizationStep.env.RELEASE_STANDARD_CONFIRMATION, "DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX");
   assert.match(validation, /production-break-glass-validation\.mjs validate-workflow/);
   assert.equal(authorizationStep.env.PRODUCTION_RELEASE_DEPLOYERS, "${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}");
-  assert.match(validation, /git fetch --no-tags origin main/);
   assert.match(validation, /RELEASE_CURRENT_MAIN_SHA/);
   assert.match(validation, /GITHUB_SHA/);
   assert.match(validation, /GITHUB_WORKFLOW_SHA/);
   assert.match(validation, /GITHUB_REF/);
   assert.match(validation, /GITHUB_RUN_ATTEMPT/);
   assert.match(validation, /GITHUB_TRIGGERING_ACTOR/);
+  const currentMainSteps = [
+    authorizationStep,
+    steps(staging).find((step) => step.name === "Revalidate staging identity immediately before mutation"),
+    steps(production).find((step) => step.name === "Revalidate production control and authorization immediately before mutation"),
+  ];
+  for (const step of currentMainSteps) {
+    assert.ok(step, "every mutation gate has a current-main verification step");
+    assert.equal(step.env.GH_TOKEN, "${{ github.token }}");
+    assert.match(step.run, /gh api --method GET "repos\/\$\{GITHUB_REPOSITORY\}\/commits\/main" --jq '\.sha'/);
+    assert.match(step.run, /RELEASE_CURRENT_MAIN_SHA/);
+    assert.doesNotMatch(step.run, /git fetch|git config|x-access-token|Authorization:/i);
+  }
+  for (const job of [validate, staging, production]) {
+    const checkout = steps(job).find((step) => String(step.uses ?? "").startsWith("actions/checkout@"));
+    assert.equal(checkout.with["persist-credentials"], false);
+  }
   const helpers = readFileSync(
     resolve(process.cwd(), "scripts/catalogue-hotfix-workflow-helpers.mjs"),
     "utf8",
@@ -119,7 +134,6 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /30/);
     assert.match(helpers, /p95_ms/i);
     assert.match(helpers, /completed_at|timestamp/i);
-    assert.match(body, /git fetch --no-tags origin main/);
     assert.match(body, /RELEASE_CURRENT_MAIN_SHA/);
     assert.match(body, /elapsed_seconds/);
     assert.match(body, /successful_runs/);
