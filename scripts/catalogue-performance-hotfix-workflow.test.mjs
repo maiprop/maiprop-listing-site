@@ -159,6 +159,13 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   );
 
   const productionBody = stepText(production);
+  for (const body of [stagingBody, productionBody]) {
+    assert.match(body, /Refuse recorded hotfix drift before/);
+    assert.match(body, /location_search_text=ilike/);
+    assert.match(body, /query_public_catalogue/);
+    assert.match(body, /get_public_catalogue_publication/);
+    assert.match(body, /PRODUCTION_RELEASE_DEPLOYERS/);
+  }
   assert.match(productionBody, /release:verify-live-marker/);
   assert.match(productionBody, /https:\/\/portal\.maiprop\.co\/api\/public\/listings/);
   assert.match(productionBody, /get_public_listing_catalogue/);

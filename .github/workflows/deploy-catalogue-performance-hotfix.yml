@@ -58,6 +58,8 @@ jobs:
       TARGET_API_URL: ${{ secrets.STAGING_SUPABASE_URL }}
       TARGET_ANON_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
       STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+      PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+      RELEASE_SINGLE_ADMIN_BREAK_GLASS: ${{ inputs.single_admin_break_glass }}
       RELEASE_SHA: ${{ inputs.release_sha }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -72,6 +74,7 @@ jobs:
           export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
           if [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ] || [ "$RELEASE_SHA" != "$GITHUB_SHA" ] || [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CHECKOUT_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CURRENT_MAIN_SHA" ]; then echo "::error::Staging control changed."; exit 1; fi
           node scripts/assert-staging-mutation-target.mjs --project-ref "$TARGET_PROJECT_REF" --database-url "$TARGET_DB_URL" --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
+          if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
           code="$(curl -sS -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/rest/v1/" -H "apikey: $TARGET_ANON_KEY")"; [ "$code" = 200 ] || exit 1
       - name: Capture manifest-bound frontend marker for staging evidence
@@ -195,6 +198,7 @@ jobs:
           git fetch --no-tags origin main; export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
           if [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ] || [ "$RELEASE_SHA" != "$GITHUB_SHA" ] || [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CHECKOUT_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CURRENT_MAIN_SHA" ]; then exit 1; fi
           node scripts/production-break-glass-validation.mjs validate-workflow --out "$RUNNER_TEMP/catalogue-hotfix-authorization.json"
+          if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
           code="$(curl -sS -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/rest/v1/" -H "apikey: $TARGET_ANON_KEY")"; [ "$code" = 200 ] || exit 1
       - name: Capture fixed live frontend marker
