@@ -411,6 +411,16 @@ VALUES
     '72000000-0000-4000-8000-000000000001',
     'https://fixtures.invalid/catalogue-athens-2.jpg',
     2
+  ),
+  (
+    '72000000-0000-4000-8000-000000000001',
+    'https://fixtures.invalid/catalogue-athens-3.jpg',
+    3
+  ),
+  (
+    '72000000-0000-4000-8000-000000000001',
+    'https://fixtures.invalid/catalogue-athens-4.jpg',
+    4
   );
 
 INSERT INTO public.listing_promotion_allocations (

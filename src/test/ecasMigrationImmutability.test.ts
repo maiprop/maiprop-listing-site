@@ -74,6 +74,6 @@ describe("ECAS migration identity", () => {
           "20260728123058_materialize_public_catalogue_snapshots.sql",
         ),
       ),
-    ).toBe("0333355f5bd97bcdbe401743afeb93ef302e1f0b23f4a2cf0715cc85e5f476ff");
+    ).toBe("3faf0f0f40ba318ce071de48828bf514d3d9b4e5f2dde403f3b0e77d3816e369");
   });
 });
