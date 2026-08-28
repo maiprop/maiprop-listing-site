@@ -7,6 +7,7 @@ const databaseUrl = "postgresql://postgres:password@db.xsiehskfgeoqyazcgauv.supa
 const key = "sb_publishable_safe_key";
 const id = "00000000-0000-4000-8000-000000000001";
 const auctionId = "00000000-0000-4000-8000-000000000099";
+const missingAuctionId = "00000000-0000-0000-0000-000000000000";
 const firstVersion = "20260728123058";
 const secondVersion = "20260729120405";
 
@@ -49,7 +50,9 @@ function dependencies(overrides = {}) {
       typed_shape: true,
       homepage_call_rows: recordedVersions.includes(secondVersion) ? 1 : 0,
       homepage_shape: recordedVersions.includes(secondVersion),
-      auction_call_rows: recordedVersions.includes(secondVersion) ? 1 : 0,
+      auction_seed_rows: recordedVersions.includes(secondVersion) && !overrides.zeroAuctions ? 1 : 0,
+      auction_invocation_completed: recordedVersions.includes(secondVersion),
+      auction_call_rows: recordedVersions.includes(secondVersion) && !overrides.zeroAuctions ? 1 : 0,
       auction_shape: recordedVersions.includes(secondVersion),
       ...overrides.invocationPatch,
     });
@@ -66,11 +69,11 @@ function dependencies(overrides = {}) {
     if (parsed.pathname.endsWith("/get_public_catalogue_publication")) return jsonResponse([{ publication_id: 42, snapshot_minute: "2026-08-28T12:00:00Z", published_at: "2026-08-28T12:00:01Z", retain_until: "2026-08-28T13:00:00Z", row_count: 12 }]);
     if (parsed.pathname.endsWith("/query_public_catalogue")) {
       const body = JSON.parse(options.body ?? "{}");
-      if (body.p_listing_type === "auction") return jsonResponse([{ publication_id: 42, listing_id: auctionId, card_payload: { id: auctionId, listing_type: "auction" } }]);
+      if (body.p_listing_type === "auction") return jsonResponse(overrides.zeroAuctions ? [] : [{ publication_id: 42, listing_id: auctionId, card_payload: { id: auctionId, listing_type: "auction" } }]);
       return jsonResponse([{ publication_id: 42, listing_id: id, card_payload: { id } }]);
     }
     if (parsed.pathname.endsWith("/get_public_catalogue_homepage")) return jsonResponse([{ publication_id: 42, published_at: "2026-08-28T12:00:01Z", retain_until: "2026-08-28T13:00:00Z", payload: { featured: [] } }]);
-    if (parsed.pathname.endsWith("/get_public_catalogue_auctions")) return jsonResponse([{ publication_id: 42, published_at: "2026-08-28T12:00:01Z", listing_id: auctionId, detail_payload: { id: auctionId, listing_type: "auction" } }]);
+    if (parsed.pathname.endsWith("/get_public_catalogue_auctions")) return jsonResponse(overrides.zeroAuctions ? [] : [{ publication_id: 42, published_at: "2026-08-28T12:00:01Z", listing_id: auctionId, detail_payload: { id: auctionId, listing_type: "auction" } }]);
     throw new Error(`Unexpected request: ${parsed}`);
   };
   return { requests, sql, psql, fetchImpl, ...overrides };
@@ -108,6 +111,23 @@ test("runner applies location filter, exact ID binding, and invokes typed/public
   assert.equal(JSON.stringify(result).includes(auctionId), false);
 });
 
+test("runner certifies a publication with zero auctions using a deterministic sentinel", async () => {
+  const deps = dependencies({ zeroAuctions: true });
+  const result = await runCatalogueBehavioralProbe({ mode: "postapply", apiUrl, databaseUrl, key }, deps);
+  const auctions = deps.requests.find(({ url }) => url.pathname.endsWith("/get_public_catalogue_auctions"));
+  assert.deepEqual(JSON.parse(auctions.options.body), {
+    p_publication_id: 42,
+    p_listing_ids: [missingAuctionId],
+    p_os_tag: null,
+  });
+  assert.equal(result.anon_database_invocations.auction_seed_rows, 0);
+  assert.equal(result.anon_database_invocations.auction_call_rows, 0);
+  assert.equal(result.anon_database_invocations.auction_invocation_completed, true);
+  assert.equal(result.rest_behavior.auction_seed_rows, 0);
+  assert.equal(result.rest_behavior.auction_call_rows, 0);
+  assert.equal(result.rest_behavior.auction_invocation_completed, true);
+});
+
 test("recorded-mode runner supports safe first-only recovery and rejects drift or dependency inversion", async () => {
   const noVersions = dependencies({ recordedVersions: [] });
   assert.deepEqual(
@@ -121,6 +141,10 @@ test("recorded-mode runner supports safe first-only recovery and rejects drift o
   assert.deepEqual(partial.recorded_versions, [firstVersion]);
   assert.equal(firstOnly.requests.some(({ url }) => url.pathname.endsWith("/get_public_catalogue_homepage")), false);
   assert.equal(firstOnly.requests.some(({ url }) => url.pathname.endsWith("/get_public_catalogue_auctions")), false);
+  const metadataQuery = firstOnly.sql.find((query) => query.includes("anon_auction_execute"));
+  assert.match(metadataQuery, /COALESCE\(has_function_privilege\('anon',\s*to_regprocedure\('public\.get_public_catalogue_auctions\(bigint,uuid\[\],text\)'\),\s*'EXECUTE'\),\s*false\)/);
+  assert.match(metadataQuery, /COALESCE\(has_function_privilege\('anon',\s*to_regprocedure\('public\.get_public_catalogue_homepage\(bigint\)'\),\s*'EXECUTE'\),\s*false\)/);
+  assert.doesNotMatch(metadataQuery, /has_function_privilege\('anon','public\.get_public_catalogue_(?:auctions|homepage)/);
 
   const firstDrift = dependencies({ recordedVersions: [firstVersion], metadataPatch: { first_indexes: false } });
   await assert.rejects(
@@ -202,7 +226,8 @@ test("full contract rejects second-migration function, retain-until, index, RLS,
   for (const invocationPatch of [
     { homepage_call_rows: 0 },
     { homepage_shape: false },
-    { auction_call_rows: 0 },
+    { auction_seed_rows: 1, auction_call_rows: 0 },
+    { auction_invocation_completed: false },
     { auction_shape: false },
   ]) {
     const deps = dependencies({ invocationPatch });

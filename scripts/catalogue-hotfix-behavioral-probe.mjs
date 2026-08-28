@@ -9,6 +9,7 @@ import {
 const HOTFIX_VERSIONS = ["20260728123058", "20260729120405"];
 const TYPED_SIGNATURE = "public.query_public_catalogue(bigint,text,text,text,text,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,integer,integer,text[],text,text,text,text,text[],numeric,numeric,numeric,numeric,numeric,numeric,text,text,text,timestamp with time zone,numeric,uuid,boolean,integer,integer,jsonb)";
 const AUCTION_SIGNATURE = "public.get_public_catalogue_auctions(bigint,uuid[],text)";
+const MISSING_AUCTION_ID = "00000000-0000-0000-0000-000000000000";
 
 function fail(message) {
   throw new Error(message);
@@ -81,8 +82,8 @@ SELECT json_build_object(
   'auction_rpc', to_regprocedure('${AUCTION_SIGNATURE}') IS NOT NULL,
   'homepage_rpc', to_regprocedure('public.get_public_catalogue_homepage(bigint)') IS NOT NULL,
   'homepage_retain_until_contract', COALESCE(pg_get_function_result(to_regprocedure('public.get_public_catalogue_homepage(bigint)')) = 'TABLE(publication_id bigint, published_at timestamp with time zone, retain_until timestamp with time zone, payload jsonb)', false),
-  'anon_auction_execute', has_function_privilege('anon','${AUCTION_SIGNATURE}','EXECUTE'),
-  'anon_homepage_execute', has_function_privilege('anon','public.get_public_catalogue_homepage(bigint)','EXECUTE'),
+  'anon_auction_execute', COALESCE(has_function_privilege('anon', to_regprocedure('${AUCTION_SIGNATURE}'), 'EXECUTE'), false),
+  'anon_homepage_execute', COALESCE(has_function_privilege('anon', to_regprocedure('public.get_public_catalogue_homepage(bigint)'), 'EXECUTE'), false),
   'auction_index', to_regclass('private.idx_public_catalogue_versions_auction_listing_publication') IS NOT NULL
 );`;
 }
@@ -130,7 +131,7 @@ WITH publication AS MATERIALIZED (
 ), auction_reader AS MATERIALIZED (
   SELECT * FROM public.get_public_catalogue_auctions(
     (SELECT publication_id FROM publication),
-    ARRAY(SELECT listing_id FROM auction_seed)::uuid[],
+    ARRAY[COALESCE((SELECT listing_id FROM auction_seed), '${MISSING_AUCTION_ID}'::uuid)],
     NULL
   )
 )
@@ -141,8 +142,13 @@ SELECT json_build_object(
   'typed_shape', COALESCE((SELECT bool_and(publication_id = (SELECT publication_id FROM publication) AND listing_id IS NOT NULL AND jsonb_typeof(card_payload) = 'object') FROM typed), false),
   'homepage_call_rows', (SELECT count(*) FROM homepage),
   'homepage_shape', COALESCE((SELECT bool_and(publication_id = (SELECT publication_id FROM publication) AND published_at IS NOT NULL AND retain_until = (SELECT retain_until FROM publication) AND jsonb_typeof(payload) = 'object') FROM homepage), false),
+  'auction_seed_rows', (SELECT count(*) FROM auction_seed),
+  'auction_invocation_completed', true,
   'auction_call_rows', (SELECT count(*) FROM auction_reader),
-  'auction_shape', COALESCE((SELECT bool_and(publication_id = (SELECT publication_id FROM publication) AND listing_id = (SELECT listing_id FROM auction_seed) AND published_at IS NOT NULL AND jsonb_typeof(detail_payload) = 'object') FROM auction_reader), false)
+  'auction_shape', CASE
+    WHEN (SELECT count(*) FROM auction_seed) = 0 THEN (SELECT count(*) FROM auction_reader) = 0
+    ELSE (SELECT count(*) FROM auction_reader) = 1 AND COALESCE((SELECT bool_and(publication_id = (SELECT publication_id FROM publication) AND listing_id = (SELECT listing_id FROM auction_seed) AND published_at IS NOT NULL AND jsonb_typeof(detail_payload) = 'object') FROM auction_reader), false)
+  END
 );
 COMMIT;`;
 }
@@ -268,7 +274,7 @@ export async function runCatalogueBehavioralProbe(
         headers: anonHeaders(key, true),
         body: JSON.stringify({
           p_publication_id: publicationId,
-          p_listing_ids: [auctionSeedRows?.[0]?.listing_id],
+          p_listing_ids: [auctionSeedRows?.[0]?.listing_id ?? MISSING_AUCTION_ID],
           p_os_tag: null,
         }),
       },

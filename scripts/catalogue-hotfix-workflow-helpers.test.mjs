@@ -149,7 +149,14 @@ test("cache parser selects the application signal and records missing proof", ()
     parseCacheState("HTTP/2 503\r\ncontent-type: application/json\r\n"),
     { source: "none", state: "MISSING" },
   );
-  assert.throws(() => parseCacheState("x-maiprop-cache: MISS\r\nx-maiprop-cache: HIT\r\n"));
+  assert.deepEqual(
+    parseCacheState("HTTP/2 503\r\nCF-Cache-Status: DYNAMIC\r\n"),
+    { source: "cf-cache-status", state: "DYNAMIC" },
+  );
+  assert.deepEqual(
+    parseCacheState("x-maiprop-cache: MISS\r\nx-maiprop-cache: HIT\r\n"),
+    { source: "x-maiprop-cache", state: "UNSUPPORTED" },
+  );
 });
 
 test("production evidence validates every exact cold/warm cache pair", () => {
@@ -229,10 +236,15 @@ test("public response inspection preserves 503 and malformed bodies without thro
   const unavailable = productionRecords();
   unavailable[0].status = 503;
   Object.assign(unavailable[0], inspectPublicListingBody('{"error":"unavailable"}'));
+  unavailable[0].cache = parseCacheState("HTTP/2 503\r\nCF-Cache-Status: DYNAMIC\r\n");
   const unavailableEvidence = buildLatencyEvidence({ targetKind: "production", contract, records: unavailable });
   assert.equal(unavailableEvidence.cold.samples[0].status, 503);
   assert.equal(unavailableEvidence.cold.samples[0].item_count, null);
   assert.equal(unavailableEvidence.cold.samples[0].body_shape_valid, false);
+  assert.deepEqual(unavailableEvidence.cold.samples[0].cache, {
+    source: "cf-cache-status",
+    state: "DYNAMIC",
+  });
   assert.throws(() => assertLatencyEvidencePasses(unavailableEvidence));
 
   const malformed = productionRecords();

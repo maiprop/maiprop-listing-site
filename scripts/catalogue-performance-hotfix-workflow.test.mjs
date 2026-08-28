@@ -210,9 +210,19 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     "evidence/production-frontend-marker.json",
     "evidence/production-http-latency.json",
   ]);
+  const productionSampleStep = steps(production).findIndex(
+    (step) => step.name === "Verify production legacy worker, cron, and public API pairs",
+  );
+  const productionUploadStep = steps(production).findIndex(
+    (step) => String(step.uses ?? "").startsWith("actions/upload-artifact@"),
+  );
+  assert.ok(
+    productionSampleStep >= 0 && productionSampleStep < productionUploadStep,
+    "production writes the sanitized sample evidence before artifact upload",
+  );
   assert.ok(
     steps(production).findIndex((step) => step.name === "Enforce production latency evidence gate") >
-      steps(production).findIndex((step) => String(step.uses ?? "").startsWith("actions/upload-artifact@")),
+      productionUploadStep,
     "production preserves and uploads all sample/cache states before failing its latency gate",
   );
   assert.match(text, /actions\/upload-artifact@[0-9a-f]{40}/);

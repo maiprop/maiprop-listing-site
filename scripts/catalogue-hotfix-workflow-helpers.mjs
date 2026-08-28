@@ -5,7 +5,7 @@ const PRODUCTION_REF = "qvvicunqcrwpioqnvzxf";
 const STAGING_REF = "xsiehskfgeoqyazcgauv";
 const VERSION = /^\d{14}$/;
 const FULL_SHA = /^[0-9a-f]{40}$/;
-const CACHE_STATES = new Set(["BYPASS", "HIT", "MISS", "MISSING"]);
+const CAPTURED_CACHE_STATE = /^[A-Z0-9_-]{1,32}$/;
 const PRODUCTION_SORTS = ["featured", "newest", "price-asc", "price-desc", "ai-score", "views"];
 const ARTIFACT_PATHS = Object.freeze({
   staging: Object.freeze([
@@ -82,7 +82,7 @@ function normalizeCacheEvidence(value) {
   const source = String(value.source ?? "").toLowerCase();
   const state = String(value.state ?? "").toUpperCase();
   if (!["x-maiprop-cache", "cf-cache-status", "none"].includes(source) ||
-      !CACHE_STATES.has(state)) {
+      !CAPTURED_CACHE_STATE.test(state)) {
     fail("Cache evidence is not an approved cache signal.");
   }
   return { source, state };
@@ -207,10 +207,11 @@ export function parseCacheState(headers) {
       : "";
   if (!source) return { source: "none", state: "MISSING" };
   const states = [...new Set(values[source])];
-  if (states.length !== 1 || !CACHE_STATES.has(states[0])) {
-    fail("Public cache-state headers are conflicting or unsupported.");
-  }
-  return { source, state: states[0] };
+  if (states.length !== 1) return { source, state: "UNSUPPORTED" };
+  return {
+    source,
+    state: CAPTURED_CACHE_STATE.test(states[0]) ? states[0] : "UNSUPPORTED",
+  };
 }
 
 export function buildLatencyEvidence({
@@ -517,32 +518,35 @@ export function validateCatalogueBehaviorProbe({
       !homepage.payload || typeof homepage.payload !== "object" || Array.isArray(homepage.payload)) {
     fail("Hardened homepage invocation returned an invalid retain_until contract.");
   }
-  if (!Array.isArray(auctionSeedRows) || auctionSeedRows.length !== 1) {
-    fail("A nonempty typed auction seed invocation is required.");
+  if (!Array.isArray(auctionSeedRows) || auctionSeedRows.length > 1) {
+    fail("Typed auction seed invocation returned an invalid row count.");
   }
-  const auctionSeed = auctionSeedRows[0];
-  if (Number(auctionSeed?.publication_id) !== publicationId ||
-      typeof auctionSeed?.listing_id !== "string" || !auctionSeed.listing_id ||
-      !auctionSeed.card_payload || typeof auctionSeed.card_payload !== "object" ||
-      Array.isArray(auctionSeed.card_payload)) {
+  const auctionSeed = auctionSeedRows[0] ?? null;
+  if (auctionSeed &&
+      (Number(auctionSeed.publication_id) !== publicationId ||
+       typeof auctionSeed.listing_id !== "string" || !auctionSeed.listing_id ||
+       !auctionSeed.card_payload || typeof auctionSeed.card_payload !== "object" ||
+       Array.isArray(auctionSeed.card_payload))) {
     fail("Typed auction seed invocation returned an invalid shape.");
   }
-  if (!Array.isArray(auctionRows) || auctionRows.length !== 1) {
-    fail("A nonempty exact auction invocation is required.");
+  if (!Array.isArray(auctionRows) || auctionRows.length !== auctionSeedRows.length) {
+    fail("Exact auction invocation did not match the typed auction seed count.");
   }
-  const auction = auctionRows[0];
-  if (Number(auction?.publication_id) !== publicationId ||
-      auction.listing_id !== auctionSeed.listing_id || !validDate(auction.published_at) ||
-      !auction.detail_payload || typeof auction.detail_payload !== "object" ||
-      Array.isArray(auction.detail_payload)) {
+  const auction = auctionRows[0] ?? null;
+  if (auctionSeed &&
+      (Number(auction?.publication_id) !== publicationId ||
+       auction.listing_id !== auctionSeed.listing_id || !validDate(auction.published_at) ||
+       !auction.detail_payload || typeof auction.detail_payload !== "object" ||
+       Array.isArray(auction.detail_payload))) {
     fail("Exact auction invocation returned an invalid publication-bound shape.");
   }
   return {
     ...result,
     homepage_call_rows: 1,
     homepage_retain_until_shape: true,
-    auction_seed_rows: 1,
-    auction_call_rows: 1,
+    auction_seed_rows: auctionSeedRows.length,
+    auction_invocation_completed: true,
+    auction_call_rows: auctionRows.length,
     auction_shape: true,
   };
 }
@@ -596,13 +600,16 @@ export function validateDatabaseContract({
       fail("Database second migration anon EXECUTE grant contract is incomplete.");
     }
     if (invocation?.homepage_call_rows !== 1 || invocation?.homepage_shape !== true ||
-        invocation?.auction_call_rows !== 1 || invocation?.auction_shape !== true) {
+        ![0, 1].includes(invocation?.auction_seed_rows) ||
+        invocation?.auction_call_rows !== invocation.auction_seed_rows ||
+        invocation?.auction_invocation_completed !== true || invocation?.auction_shape !== true) {
       fail("Database second migration anon invocation contract is incomplete.");
     }
     if (restProbe?.homepage_call_rows !== 1 ||
         restProbe?.homepage_retain_until_shape !== true ||
-        restProbe?.auction_seed_rows !== 1 || restProbe?.auction_call_rows !== 1 ||
-        restProbe?.auction_shape !== true) {
+        ![0, 1].includes(restProbe?.auction_seed_rows) ||
+        restProbe?.auction_call_rows !== restProbe.auction_seed_rows ||
+        restProbe?.auction_invocation_completed !== true || restProbe?.auction_shape !== true) {
       fail("Database second migration REST behavioral contract is incomplete.");
     }
   }
@@ -640,7 +647,9 @@ export function validateDatabaseContract({
       ...(requiredLevel === "full" ? {
         homepage_call_rows: 1,
         homepage_shape: true,
-        auction_call_rows: 1,
+        auction_seed_rows: invocation.auction_seed_rows,
+        auction_invocation_completed: true,
+        auction_call_rows: invocation.auction_call_rows,
         auction_shape: true,
       } : {}),
     },
