@@ -6,7 +6,7 @@ const APPROVED_MIGRATIONS = [
   {
     version: "20260728123058",
     path: "supabase/migrations/20260728123058_materialize_public_catalogue_snapshots.sql",
-    sha256: "0333355f5bd97bcdbe401743afeb93ef302e1f0b23f4a2cf0715cc85e5f476ff",
+    sha256: "3faf0f0f40ba318ce071de48828bf514d3d9b4e5f2dde403f3b0e77d3816e369",
   },
   {
     version: "20260729120405",

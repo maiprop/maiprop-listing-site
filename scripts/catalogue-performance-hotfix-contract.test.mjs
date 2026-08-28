@@ -3,6 +3,7 @@ import {
   copyFileSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -14,13 +15,14 @@ import { validateCataloguePerformanceHotfix } from "./catalogue-performance-hotf
 const MIGRATIONS = [
   {
     path: "supabase/migrations/20260728123058_materialize_public_catalogue_snapshots.sql",
-    sha256: "0333355f5bd97bcdbe401743afeb93ef302e1f0b23f4a2cf0715cc85e5f476ff",
+    sha256: "3faf0f0f40ba318ce071de48828bf514d3d9b4e5f2dde403f3b0e77d3816e369",
   },
   {
     path: "supabase/migrations/20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql",
     sha256: "f20d21b6c1368d0406e607a308ddd68ff1deaaf98a7d2a73927d857ddf7d85aa",
   },
 ];
+const FIRST_MIGRATION_PATH = MIGRATIONS[0].path;
 
 const manifest = () => ({
   version: 1,
@@ -69,7 +71,7 @@ test("accepts only the exact materialized catalogue migration contract", () => {
         {
           version: "20260728123058",
           path: "supabase/migrations/20260728123058_materialize_public_catalogue_snapshots.sql",
-          sha256: "0333355f5bd97bcdbe401743afeb93ef302e1f0b23f4a2cf0715cc85e5f476ff",
+          sha256: "3faf0f0f40ba318ce071de48828bf514d3d9b4e5f2dde403f3b0e77d3816e369",
         },
         {
           version: "20260729120405",
@@ -79,6 +81,22 @@ test("accepts only the exact materialized catalogue migration contract", () => {
       ],
     });
   });
+});
+
+test("preserves the complete live-worker compatibility payload", () => {
+  const migration = readFileSync(resolve(process.cwd(), FIRST_MIGRATION_PATH), "utf8");
+  const detailPayload = migration.match(
+    /\(\s*to_jsonb\(detail\)([\s\S]*?)\)\s*AS detail_payload/,
+  )?.[1];
+
+  assert.ok(detailPayload, "the publication source must construct detail_payload from detail");
+  assert.match(migration, /jsonb_populate_record\([\s\S]*?version\.detail_payload/);
+  assert.doesNotMatch(detailPayload, /-\s*'is_off_market'/);
+  assert.doesNotMatch(detailPayload, /-\s*'location_search_text'/);
+  assert.match(
+    migration,
+    /version\.detail_payload\s*\|\|\s*jsonb_build_object\([\s\S]*?'project',\s*version\.card_payload\s*->\s*'project',[\s\S]*?'listing_images',\s*version\.card_payload\s*->\s*'listing_images',[\s\S]*?'project_detail',\s*version\.detail_payload\s*->\s*'project',[\s\S]*?'listing_images_detail',\s*version\.detail_payload\s*->\s*'listing_images'/,
+  );
 });
 
 test("rejects catalogue hotfix scope, digest, and SQL safety drift", async (t) => {

@@ -76,6 +76,12 @@ The contract is versioned and stored in a JSON manifest. It binds:
 - the production and staging Supabase project references;
 - the release ceiling for a 12-card public catalogue request.
 
+The first migration's approved digest is
+`3faf0f0f40ba318ce071de48828bf514d3d9b4e5f2dde403f3b0e77d3816e369`.
+Its compatibility payload preserves the live worker's `is_off_market` and
+`location_search_text` filters, plus the legacy card/detail project and image
+fields, while the typed catalogue path remains unchanged.
+
 The validator rejects duplicate paths, unknown fields, missing files, digest
 mismatches, non-SQL files, and any SQL containing Stripe secret names or writes
 to billing/subscription/payment tables. Exact hashes remain the authoritative

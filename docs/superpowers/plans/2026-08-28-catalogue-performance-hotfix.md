@@ -52,7 +52,7 @@ Expected: failure because `catalogue-performance-hotfix-contract.mjs` does not e
 Use `node:crypto`, `node:fs`, and `node:path` only. Canonicalize separators to `/`, reject paths outside `supabase/migrations/`, calculate file hashes from bytes, and emit JSON without secret or connection data. The authoritative migration hashes are:
 
 ```text
-0333355f5bd97bcdbe401743afeb93ef302e1f0b23f4a2cf0715cc85e5f476ff
+3faf0f0f40ba318ce071de48828bf514d3d9b4e5f2dde403f3b0e77d3816e369
 f20d21b6c1368d0406e607a308ddd68ff1deaaf98a7d2a73927d857ddf7d85aa
 ```
 
