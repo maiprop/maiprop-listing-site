@@ -22,16 +22,22 @@ describe("release safety inventory", () => {
     );
     const text = readFileSync(path, "utf8");
     const parsed = yaml.load(text);
+    const supportText = [
+      "scripts/catalogue-hotfix-behavioral-probe.mjs",
+      "scripts/catalogue-hotfix-workflow-helpers.mjs",
+    ].map((file) => readFileSync(resolve(process.cwd(), file), "utf8")).join("\n");
 
-    expect(cataloguePerformanceHotfixWorkflowViolations({ text, parsed }))
+    expect(cataloguePerformanceHotfixWorkflowViolations({ text, parsed, supportText }))
       .toEqual([]);
     expect(cataloguePerformanceHotfixWorkflowViolations({
       text: text.replace("needs: [validate, staging]", "needs: [validate]"),
       parsed: yaml.load(text.replace("needs: [validate, staging]", "needs: [validate]")),
+      supportText,
     })).not.toEqual([]);
     expect(cataloguePerformanceHotfixWorkflowViolations({
       text: `${text}\n# forbidden scope\nstripe verify`,
       parsed,
+      supportText,
     })).not.toEqual([]);
   });
 

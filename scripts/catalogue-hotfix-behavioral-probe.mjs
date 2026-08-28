@@ -1,0 +1,212 @@
+import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import {
+  selectCatalogueProbeContext,
+  validateCatalogueBehaviorProbe,
+  validateDatabaseContract,
+} from "./catalogue-hotfix-workflow-helpers.mjs";
+
+const HOTFIX_VERSIONS = ["20260728123058", "20260729120405"];
+const TYPED_SIGNATURE = "public.query_public_catalogue(bigint,text,text,text,text,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,integer,integer,text[],text,text,text,text,text[],numeric,numeric,numeric,numeric,numeric,numeric,text,text,text,timestamp with time zone,numeric,uuid,boolean,integer,integer,jsonb)";
+
+function fail(message) {
+  throw new Error(message);
+}
+
+function parseJson(text, label) {
+  try {
+    return JSON.parse(String(text).trim());
+  } catch {
+    fail(`${label} did not return valid JSON.`);
+  }
+}
+
+async function defaultPsql(query, databaseUrl) {
+  const result = spawnSync(
+    "psql",
+    [databaseUrl, "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "-qAtc", query],
+    { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 },
+  );
+  if (result.status !== 0) {
+    fail(`Database behavioral contract query failed with exit ${result.status ?? "unknown"}.`);
+  }
+  return result.stdout.trim();
+}
+
+async function fetchJson(fetchImpl, url, options, label) {
+  const response = await fetchImpl(url, options);
+  if (![200, 206].includes(response.status)) {
+    fail(`${label} returned HTTP ${response.status}.`);
+  }
+  try {
+    return await response.json();
+  } catch {
+    fail(`${label} did not return JSON.`);
+  }
+}
+
+function rpcUrl(apiUrl, name, params = null) {
+  const url = new URL(`/rest/v1/rpc/${name}`, apiUrl);
+  if (params) {
+    for (const [key, value] of params) url.searchParams.append(key, value);
+  }
+  return url;
+}
+
+function anonHeaders(key, json = false) {
+  return {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    Accept: "application/json",
+    ...(json ? { "Content-Type": "application/json" } : {}),
+  };
+}
+
+function metadataSql() {
+  return `
+SELECT json_build_object(
+  'migration_versions', COALESCE((SELECT json_agg(version ORDER BY version) FROM supabase_migrations.schema_migrations WHERE version IN ('${HOTFIX_VERSIONS[0]}','${HOTFIX_VERSIONS[1]}')), '[]'::json),
+  'legacy_rpc', to_regprocedure('public.get_public_listing_catalogue(timestamp with time zone)') IS NOT NULL,
+  'publication_rpc', to_regprocedure('public.get_public_catalogue_publication(bigint)') IS NOT NULL,
+  'typed_rpc', to_regprocedure('${TYPED_SIGNATURE}') IS NOT NULL,
+  'anon_legacy_execute', has_function_privilege('anon','public.get_public_listing_catalogue(timestamp with time zone)','EXECUTE'),
+  'anon_publication_execute', has_function_privilege('anon','public.get_public_catalogue_publication(bigint)','EXECUTE'),
+  'anon_typed_execute', has_function_privilege('anon','${TYPED_SIGNATURE}','EXECUTE')
+);`;
+}
+
+function anonInvocationSql() {
+  return `
+BEGIN;
+SET LOCAL ROLE anon;
+WITH publication AS MATERIALIZED (
+  SELECT * FROM public.get_public_catalogue_publication(NULL)
+), typed AS MATERIALIZED (
+  SELECT * FROM public.query_public_catalogue(
+    p_publication_id => (SELECT publication_id FROM publication),
+    p_limit => 1,
+    p_offset => 0
+  )
+)
+SELECT json_build_object(
+  'publication_call_rows', (SELECT count(*) FROM publication),
+  'publication_shape', COALESCE((SELECT bool_and(publication_id > 0 AND snapshot_minute IS NOT NULL AND published_at IS NOT NULL AND retain_until IS NOT NULL AND row_count > 0) FROM publication), false),
+  'typed_call_rows', (SELECT count(*) FROM typed),
+  'typed_shape', COALESCE((SELECT bool_and(publication_id = (SELECT publication_id FROM publication) AND listing_id IS NOT NULL AND jsonb_typeof(card_payload) = 'object') FROM typed), false)
+);
+COMMIT;`;
+}
+
+export async function runCatalogueBehavioralProbe(
+  { mode, apiUrl, databaseUrl, key, outputPath },
+  dependencies = {},
+) {
+  if (!["recorded", "postapply"].includes(mode)) fail("Behavioral probe mode is invalid.");
+  if (!apiUrl || !databaseUrl || !key) fail("Behavioral probe target is incomplete.");
+  const psql = dependencies.psql ?? ((query) => defaultPsql(query, databaseUrl));
+  const fetchImpl = dependencies.fetchImpl ?? globalThis.fetch;
+
+  const recorded = Number(await psql(
+    `SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version IN ('${HOTFIX_VERSIONS[0]}','${HOTFIX_VERSIONS[1]}')`,
+  ));
+  if (!Number.isSafeInteger(recorded) || recorded < 0 || recorded > 2) {
+    fail("Recorded hotfix migration count is invalid.");
+  }
+  if (mode === "recorded" && recorded === 0) return { skipped: true };
+  if (recorded !== 2) {
+    fail("Both manifest-bound migrations must be recorded before behavioral certification.");
+  }
+
+  const metadata = parseJson(await psql(metadataSql()), "Database metadata contract");
+  const invocation = parseJson(await psql(anonInvocationSql()), "Anon database invocation contract");
+
+  const seedRows = await fetchJson(
+    fetchImpl,
+    rpcUrl(apiUrl, "get_public_listing_catalogue", [
+      ["select", "id,status,is_off_market,city,location_search_text,project,listing_images"],
+      ["status", "eq.active"],
+      ["is_off_market", "eq.false"],
+      ["order", "id.asc"],
+      ["limit", "200"],
+    ]),
+    { method: "GET", headers: anonHeaders(key) },
+    "Legacy catalogue seed probe",
+  );
+  const context = selectCatalogueProbeContext(seedRows);
+
+  const cardRows = await fetchJson(
+    fetchImpl,
+    rpcUrl(apiUrl, "get_public_listing_catalogue", [
+      ["select", "id,status,is_off_market,city,location_search_text,project,listing_images"],
+      ["status", "eq.active"],
+      ["is_off_market", "eq.false"],
+      ["location_search_text", `ilike.*${context.locationToken}*`],
+      ["id", `eq.${context.id}`],
+      ["limit", "1"],
+    ]),
+    { method: "GET", headers: anonHeaders(key) },
+    "Legacy filtered card probe",
+  );
+  const detailRows = await fetchJson(
+    fetchImpl,
+    rpcUrl(apiUrl, "get_public_listing_catalogue", [
+      ["select", "id,status,is_off_market,project:project_detail,listing_images:listing_images_detail"],
+      ["status", "eq.active"],
+      ["is_off_market", "eq.false"],
+      ["id", `eq.${context.id}`],
+      ["limit", "1"],
+    ]),
+    { method: "GET", headers: anonHeaders(key) },
+    "Legacy exact detail probe",
+  );
+  const publicationRows = await fetchJson(
+    fetchImpl,
+    rpcUrl(apiUrl, "get_public_catalogue_publication"),
+    {
+      method: "POST",
+      headers: anonHeaders(key, true),
+      body: JSON.stringify({ p_publication_id: null }),
+    },
+    "Public catalogue publication RPC",
+  );
+  const publicationId = Number(publicationRows?.[0]?.publication_id);
+  const typedRows = await fetchJson(
+    fetchImpl,
+    rpcUrl(apiUrl, "query_public_catalogue"),
+    {
+      method: "POST",
+      headers: anonHeaders(key, true),
+      body: JSON.stringify({ p_publication_id: publicationId, p_limit: 1, p_offset: 0 }),
+    },
+    "Typed public catalogue RPC",
+  );
+
+  const restProbe = validateCatalogueBehaviorProbe({
+    context,
+    cardRows,
+    detailRows,
+    typedRows,
+    publicationRows,
+  });
+  const contract = validateDatabaseContract({ metadata, invocation, restProbe });
+  if (outputPath) writeFileSync(outputPath, `${JSON.stringify(contract, null, 2)}\n`);
+  return contract;
+}
+
+async function main() {
+  const [mode, outputPath] = process.argv.slice(2);
+  await runCatalogueBehavioralProbe({
+    mode,
+    apiUrl: process.env.TARGET_API_URL,
+    databaseUrl: process.env.TARGET_DB_URL,
+    key: process.env.TARGET_ANON_KEY,
+    outputPath,
+  });
+}
+
+if (process.argv[1]?.endsWith("catalogue-hotfix-behavioral-probe.mjs")) {
+  main().catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

@@ -3,10 +3,14 @@ import test from "node:test";
 import {
   artifactPathsForTarget,
   assertLatencyEvidencePasses,
+  buildCronProof,
   buildLatencyEvidence,
   buildReleaseSummary,
   parseCacheState,
+  selectCatalogueProbeContext,
   summarizeLatencySamples,
+  validateCatalogueBehaviorProbe,
+  validateDatabaseContract,
   validateDryRun,
   validateTarget,
 } from "./catalogue-hotfix-workflow-helpers.mjs";
@@ -67,28 +71,39 @@ const contract = {
   },
 };
 
-function productionRecords() {
+function productionRecords(run_bucket = 0) {
+  const sorts = ["featured", "newest", "price-asc", "price-desc", "ai-score", "views"];
   return Array.from({ length: 30 }, (_, index) => {
-    const pair = index + 301;
-    const key = `page=${pair}&pageSize=12&offset=0&sort=relevant`;
+    const pair = index + 1;
+    const page = 301 + (run_bucket % 6) * 30 + index;
+    const sort = sorts[Math.floor(run_bucket / 6)];
+    const key = `page=${page}&pageSize=12&offset=0&sort=${sort}`;
     const url = `https://portal.maiprop.co/api/public/listings?${key}`;
     return [
       {
         pair,
+        run_bucket,
+        page,
+        sort,
         phase: "cold",
         normalized_url: url,
         normalized_cache_key: key,
         status: 200,
         duration_ms: index + 1,
+        item_count: 12,
         cache: { source: "x-maiprop-cache", state: index === 0 ? "BYPASS" : "MISS" },
       },
       {
         pair,
+        run_bucket,
+        page,
+        sort,
         phase: "warm",
         normalized_url: url,
         normalized_cache_key: key,
         status: 200,
         duration_ms: index + 101,
+        item_count: 12,
         cache: { source: "x-maiprop-cache", state: "HIT" },
       },
     ];
@@ -162,7 +177,7 @@ test("production evidence validates every exact cold/warm cache pair", () => {
       warm_p95: 130,
     },
   );
-  assert.equal(result.cold.samples[0].normalized_url, "https://portal.maiprop.co/api/public/listings?page=301&pageSize=12&offset=0&sort=relevant");
+  assert.equal(result.cold.samples[0].normalized_url, "https://portal.maiprop.co/api/public/listings?page=301&pageSize=12&offset=0&sort=featured");
 
   const wrongState = productionRecords();
   wrongState.at(-2).cache.state = "HIT";
@@ -175,6 +190,186 @@ test("production evidence validates every exact cold/warm cache pair", () => {
   const slowOutlier = productionRecords();
   slowOutlier.at(-2).duration_ms = 1801;
   assert.throws(() => summarizeLatencySamples({ targetKind: "production", contract, records: slowOutlier }));
+
+  const emptySuccess = productionRecords();
+  emptySuccess[0].item_count = 0;
+  assert.throws(() => summarizeLatencySamples({ targetKind: "production", contract, records: emptySuccess }));
+
+  const shortPage = productionRecords();
+  shortPage[0].item_count = 11;
+  assert.throws(() => summarizeLatencySamples({ targetKind: "production", contract, records: shortPage }));
+
+  const retryBucket = summarizeLatencySamples({
+    targetKind: "production",
+    contract,
+    records: productionRecords(35),
+  });
+  assert.equal(retryBucket.cold.samples[0].normalized_cache_key, "page=451&pageSize=12&offset=0&sort=views");
+  assert.equal(retryBucket.cold.samples.at(-1).normalized_cache_key, "page=480&pageSize=12&offset=0&sort=views");
+});
+
+const projectFixtures = {
+  nullProject: {
+    id: "00000000-0000-4000-8000-000000000001",
+    status: "active",
+    is_off_market: false,
+    city: "Athens",
+    location_search_text: "athens attica",
+    project: null,
+    listing_images: [{ id: "one" }],
+  },
+  objectProject: {
+    id: "00000000-0000-4000-8000-000000000002",
+    status: "active",
+    is_off_market: false,
+    city: "Piraeus",
+    location_search_text: "piraeus attica",
+    project: { id: "project" },
+    listing_images: [{ id: "one" }, { id: "two" }],
+  },
+};
+
+function validBehaviourFixture() {
+  const context = selectCatalogueProbeContext([
+    projectFixtures.objectProject,
+    projectFixtures.nullProject,
+  ]);
+  return {
+    context,
+    cardRows: [{ ...projectFixtures.nullProject }],
+    detailRows: [{
+      id: projectFixtures.nullProject.id,
+      status: "active",
+      is_off_market: false,
+      project: null,
+      listing_images: [{ id: "one" }, { id: "two" }],
+    }],
+    publicationRows: [{
+      publication_id: 42,
+      snapshot_minute: "2026-08-28T12:00:00.000Z",
+      published_at: "2026-08-28T12:00:01.000Z",
+      retain_until: "2026-08-28T13:00:00.000Z",
+      row_count: 12,
+    }],
+    typedRows: [{
+      publication_id: 42,
+      listing_id: projectFixtures.nullProject.id,
+      card_payload: { id: projectFixtures.nullProject.id },
+    }],
+  };
+}
+
+test("catalogue behavioural proof accepts null project but rejects missing or wrong project fields", () => {
+  const fixture = validBehaviourFixture();
+  assert.equal(fixture.context.id, projectFixtures.nullProject.id, "seed selection is deterministic by id");
+  assert.doesNotThrow(() => validateCatalogueBehaviorProbe(fixture));
+
+  const missing = validBehaviourFixture();
+  delete missing.cardRows[0].project;
+  assert.throws(() => validateCatalogueBehaviorProbe(missing), /project/i);
+
+  const arrayProject = validBehaviourFixture();
+  arrayProject.detailRows[0].project = [];
+  assert.throws(() => validateCatalogueBehaviorProbe(arrayProject), /project/i);
+
+  const scalarProject = validBehaviourFixture();
+  scalarProject.cardRows[0].project = "wrong";
+  assert.throws(() => validateCatalogueBehaviorProbe(scalarProject), /project/i);
+});
+
+test("catalogue behavioural proof rejects empty 200 bodies and enforces exact card/detail binding", () => {
+  const emptyCard = validBehaviourFixture();
+  emptyCard.cardRows = [];
+  assert.throws(() => validateCatalogueBehaviorProbe(emptyCard), /nonempty/i);
+
+  const emptyDetail = validBehaviourFixture();
+  emptyDetail.detailRows = [];
+  assert.throws(() => validateCatalogueBehaviorProbe(emptyDetail), /nonempty/i);
+
+  const wrongCardId = validBehaviourFixture();
+  wrongCardId.cardRows[0].id = projectFixtures.objectProject.id;
+  assert.throws(() => validateCatalogueBehaviorProbe(wrongCardId), /id/i);
+
+  const wrongDetailId = validBehaviourFixture();
+  wrongDetailId.detailRows[0].id = projectFixtures.objectProject.id;
+  assert.throws(() => validateCatalogueBehaviorProbe(wrongDetailId), /id/i);
+
+  const wrongLocation = validBehaviourFixture();
+  wrongLocation.cardRows[0].location_search_text = "Thessaloniki";
+  assert.throws(() => validateCatalogueBehaviorProbe(wrongLocation), /location_search_text/i);
+});
+
+test("catalogue behavioural proof requires real typed and publication results", () => {
+  const emptyTyped = validBehaviourFixture();
+  emptyTyped.typedRows = [];
+  assert.throws(() => validateCatalogueBehaviorProbe(emptyTyped), /typed/i);
+
+  const emptyPublication = validBehaviourFixture();
+  emptyPublication.publicationRows = [];
+  assert.throws(() => validateCatalogueBehaviorProbe(emptyPublication), /publication/i);
+
+  const wrongPublication = validBehaviourFixture();
+  wrongPublication.typedRows[0].publication_id = 99;
+  assert.throws(() => validateCatalogueBehaviorProbe(wrongPublication), /publication/i);
+});
+
+test("database contract requires anon grants and actual typed/publication invocations", () => {
+  const metadata = {
+    migration_versions: ["20260728123058", "20260729120405"],
+    legacy_rpc: true,
+    publication_rpc: true,
+    typed_rpc: true,
+    anon_legacy_execute: true,
+    anon_publication_execute: true,
+    anon_typed_execute: true,
+  };
+  const invocation = {
+    publication_call_rows: 1,
+    publication_shape: true,
+    typed_call_rows: 1,
+    typed_shape: true,
+  };
+  const restProbe = validateCatalogueBehaviorProbe(validBehaviourFixture());
+  assert.doesNotThrow(() => validateDatabaseContract({ metadata, invocation, restProbe }));
+  assert.equal(JSON.stringify(validateDatabaseContract({ metadata, invocation, restProbe })).includes(projectFixtures.nullProject.id), false);
+  assert.throws(() => validateDatabaseContract({ metadata: { ...metadata, anon_typed_execute: false }, invocation, restProbe }), /grant/i);
+  assert.throws(() => validateDatabaseContract({ metadata, invocation: { ...invocation, typed_call_rows: 0 }, restProbe }), /invocation/i);
+});
+
+test("cron proof derives both count and minute boundaries only from post-baseline runs", () => {
+  const baseline = {
+    schedule: "* * * * *",
+    command: "SELECT private.publish_public_catalogue();",
+    active: true,
+    publication_id: 10,
+    successful_runs: [
+      { runid: 1, start_time: "2026-08-28T12:00:05Z" },
+      { runid: 2, start_time: "2026-08-28T12:01:05Z" },
+    ],
+  };
+  const current = {
+    ...baseline,
+    publication_id: 12,
+    successful_runs: [
+      ...baseline.successful_runs,
+      { runid: 3, start_time: "2026-08-28T12:02:05Z" },
+      { runid: 4, start_time: "2026-08-28T12:03:05Z" },
+    ],
+  };
+  const proof = buildCronProof({ baseline, current, elapsedSeconds: 125 });
+  assert.equal(proof.new_successful_runs, 2);
+  assert.equal(proof.distinct_run_minutes, 2);
+  assert.deepEqual(proof.new_run_minutes, ["2026-08-28T12:02", "2026-08-28T12:03"]);
+
+  const oldMinutesOnly = {
+    ...current,
+    successful_runs: [
+      ...baseline.successful_runs,
+      { runid: 3, start_time: "2026-08-28T12:01:15Z" },
+      { runid: 4, start_time: "2026-08-28T12:01:45Z" },
+    ],
+  };
+  assert.throws(() => buildCronProof({ baseline, current: oldMinutesOnly, elapsedSeconds: 125 }), /minute/i);
 });
 
 test("staging evidence retains 30 direct RPC first/second pairs and gates both distributions", () => {

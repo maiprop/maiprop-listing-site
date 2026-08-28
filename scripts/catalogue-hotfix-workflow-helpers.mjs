@@ -6,6 +6,7 @@ const STAGING_REF = "xsiehskfgeoqyazcgauv";
 const VERSION = /^\d{14}$/;
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const CACHE_STATES = new Set(["BYPASS", "HIT", "MISS", "MISSING"]);
+const PRODUCTION_SORTS = ["featured", "newest", "price-asc", "price-desc", "ai-score", "views"];
 const ARTIFACT_PATHS = Object.freeze({
   staging: Object.freeze([
     "evidence/catalogue-performance-hotfix-staging.json",
@@ -91,27 +92,45 @@ function normalizeProductionRecord(record) {
   assertExactKeys(record, [
     "cache",
     "duration_ms",
+    "item_count",
     "normalized_cache_key",
     "normalized_url",
+    "page",
     "pair",
     "phase",
+    "run_bucket",
+    "sort",
     "status",
   ], "Production sample");
   const pair = positiveInteger(record.pair, "Production pair");
   const phase = record.phase;
   if (!["cold", "warm"].includes(phase)) fail("Production sample phase is invalid.");
-  const expectedKey = `page=${pair}&pageSize=12&offset=0&sort=relevant`;
+  const runBucket = positiveInteger(record.run_bucket, "Production run bucket");
+  if (pair < 1 || pair > 30 || runBucket > 35) {
+    fail("Production pair/run bucket is outside the release-bound range.");
+  }
+  const expectedSort = PRODUCTION_SORTS[Math.floor(runBucket / 6)];
+  const expectedPage = 301 + (runBucket % 6) * 30 + pair - 1;
+  const expectedKey = `page=${expectedPage}&pageSize=12&offset=0&sort=${expectedSort}`;
   const expectedUrl = `https://portal.maiprop.co/api/public/listings?${expectedKey}`;
-  if (record.normalized_cache_key !== expectedKey || record.normalized_url !== expectedUrl) {
+  if (record.page !== expectedPage || record.sort !== expectedSort ||
+      record.normalized_cache_key !== expectedKey || record.normalized_url !== expectedUrl) {
     fail("Production sample URL/key is not the exact normalized public request.");
+  }
+  if (record.item_count !== 12) {
+    fail("Production sample must prove the full nonempty 12-card path.");
   }
   return {
     pair,
+    run_bucket: runBucket,
+    page: expectedPage,
+    sort: expectedSort,
     phase,
     normalized_url: expectedUrl,
     normalized_cache_key: expectedKey,
     status: positiveInteger(record.status, "Production HTTP status"),
     duration_ms: positiveInteger(record.duration_ms, "Production duration"),
+    item_count: record.item_count,
     cache: normalizeCacheEvidence(record.cache),
   };
 }
@@ -206,7 +225,7 @@ export function buildLatencyEvidence({
     : targetKind === "staging"
       ? records.map(normalizeStagingRecord)
       : fail("Target kind is not recognized.");
-  validatePairSet(normalized, targetKind === "production" ? 301 : 1);
+  validatePairSet(normalized, 1);
 
   const cold = distribution(normalized.filter(({ phase }) => phase === "cold"), coldCeiling);
   const warm = distribution(normalized.filter(({ phase }) => phase === "warm"), warmCeiling);
@@ -355,6 +374,215 @@ export function validateDryRun({ contract, remoteHistory, output }) {
   return { expected_pending_versions, pending_versions };
 }
 
+function isAllowedProject(value) {
+  return value === null || (typeof value === "object" && !Array.isArray(value));
+}
+
+function validateProject(record, label) {
+  if (!Object.hasOwn(record ?? {}, "project") || !isAllowedProject(record.project)) {
+    fail(`${label} project field must be present and either null or an object.`);
+  }
+}
+
+function validateCardRow(record, label) {
+  if (!record || typeof record !== "object" || Array.isArray(record) ||
+      typeof record.id !== "string" || !record.id || record.status !== "active" ||
+      record.is_off_market !== false) {
+    fail(`${label} has an invalid active-card identity or status.`);
+  }
+  validateProject(record, label);
+  if (!Array.isArray(record.listing_images) || record.listing_images.length > 3) {
+    fail(`${label} listing_images must be a card array capped at three entries.`);
+  }
+}
+
+export function selectCatalogueProbeContext(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    fail("A nonempty legacy catalogue seed is required.");
+  }
+  const candidates = [...rows].sort((left, right) => String(left?.id ?? "").localeCompare(String(right?.id ?? "")));
+  for (const row of candidates) {
+    try {
+      validateCardRow(row, "Catalogue seed");
+    } catch {
+      continue;
+    }
+    if (typeof row.city !== "string" || !row.city.trim() ||
+        typeof row.location_search_text !== "string" || !row.location_search_text.trim()) {
+      continue;
+    }
+    const city = row.city.trim();
+    if (!row.location_search_text.toLocaleLowerCase().includes(city.toLocaleLowerCase())) {
+      continue;
+    }
+    return { id: row.id, city, locationToken: city };
+  }
+  fail("A deterministic seed with city and matching location_search_text is required.");
+}
+
+export function validateCatalogueBehaviorProbe({
+  context,
+  cardRows,
+  detailRows,
+  typedRows,
+  publicationRows,
+}) {
+  if (!context || typeof context.id !== "string" || !context.id ||
+      typeof context.locationToken !== "string" || !context.locationToken) {
+    fail("Catalogue probe context is invalid.");
+  }
+  if (!Array.isArray(cardRows) || cardRows.length !== 1) {
+    fail("A nonempty exact legacy card result is required.");
+  }
+  const card = cardRows[0];
+  validateCardRow(card, "Catalogue card");
+  if (card.id !== context.id) fail("Catalogue card ID is not bound to the selected seed ID.");
+  if (typeof card.location_search_text !== "string" ||
+      !card.location_search_text.toLocaleLowerCase().includes(context.locationToken.toLocaleLowerCase())) {
+    fail("Catalogue card does not prove the location_search_text filter.");
+  }
+
+  if (!Array.isArray(detailRows) || detailRows.length !== 1) {
+    fail("A nonempty exact legacy detail result is required.");
+  }
+  const detail = detailRows[0];
+  if (!detail || typeof detail !== "object" || Array.isArray(detail) ||
+      detail.id !== context.id || detail.status !== "active" || detail.is_off_market !== false) {
+    fail("Catalogue detail ID/status is not bound to the selected seed ID.");
+  }
+  validateProject(detail, "Catalogue detail");
+  if (!Array.isArray(detail.listing_images) || detail.listing_images.length < card.listing_images.length) {
+    fail("Catalogue detail listing_images must expose the full alias payload.");
+  }
+
+  if (!Array.isArray(publicationRows) || publicationRows.length !== 1) {
+    fail("A nonempty catalogue publication invocation is required.");
+  }
+  const publication = publicationRows[0];
+  const publicationId = Number(publication?.publication_id);
+  const validDate = (value) => typeof value === "string" && Number.isFinite(Date.parse(value));
+  if (!Number.isSafeInteger(publicationId) || publicationId < 1 ||
+      !validDate(publication.snapshot_minute) || !validDate(publication.published_at) ||
+      !validDate(publication.retain_until) || !Number.isSafeInteger(Number(publication.row_count)) ||
+      Number(publication.row_count) < 1) {
+    fail("Catalogue publication invocation returned an invalid shape.");
+  }
+
+  if (!Array.isArray(typedRows) || typedRows.length < 1) {
+    fail("A nonempty typed catalogue invocation is required.");
+  }
+  for (const row of typedRows) {
+    if (Number(row?.publication_id) !== publicationId || typeof row?.listing_id !== "string" ||
+        !row.listing_id || !row.card_payload || typeof row.card_payload !== "object" ||
+        Array.isArray(row.card_payload)) {
+      fail("Typed catalogue invocation returned an invalid publication-bound shape.");
+    }
+  }
+
+  return {
+    legacy_card_rows: 1,
+    legacy_detail_rows: 1,
+    location_filter_matched: true,
+    exact_id_binding: true,
+    card_project_shape: card.project === null ? "null" : "object",
+    detail_project_shape: detail.project === null ? "null" : "object",
+    card_image_count: card.listing_images.length,
+    detail_image_count: detail.listing_images.length,
+    publication_call_rows: 1,
+    publication_row_count_positive: true,
+    typed_call_rows: typedRows.length,
+    typed_shape: true,
+  };
+}
+
+export function validateDatabaseContract({ metadata, invocation, restProbe }) {
+  const expectedVersions = ["20260728123058", "20260729120405"];
+  if (JSON.stringify([...(metadata?.migration_versions ?? [])].sort()) !== JSON.stringify(expectedVersions) ||
+      !metadata?.legacy_rpc || !metadata?.publication_rpc || !metadata?.typed_rpc) {
+    fail("Database function/version contract is incomplete.");
+  }
+  if (!metadata.anon_legacy_execute || !metadata.anon_publication_execute || !metadata.anon_typed_execute) {
+    fail("Database anon EXECUTE grant contract is incomplete.");
+  }
+  if (invocation?.publication_call_rows !== 1 || invocation?.publication_shape !== true ||
+      !Number.isSafeInteger(invocation?.typed_call_rows) || invocation.typed_call_rows < 1 ||
+      invocation.typed_shape !== true) {
+    fail("Database anon typed/publication invocation contract is incomplete.");
+  }
+  if (restProbe?.legacy_card_rows !== 1 || restProbe?.legacy_detail_rows !== 1 ||
+      restProbe?.location_filter_matched !== true || restProbe?.exact_id_binding !== true ||
+      restProbe?.publication_call_rows !== 1 || !Number.isSafeInteger(restProbe?.typed_call_rows) ||
+      restProbe.typed_call_rows < 1 || restProbe.typed_shape !== true) {
+    fail("Database REST behavioral contract is incomplete.");
+  }
+  return {
+    schema_version: 1,
+    migration_versions: expectedVersions,
+    functions: {
+      legacy_rpc: true,
+      publication_rpc: true,
+      typed_rpc: true,
+    },
+    anon_execute_grants: {
+      legacy_rpc: true,
+      publication_rpc: true,
+      typed_rpc: true,
+    },
+    anon_database_invocations: {
+      publication_call_rows: 1,
+      publication_shape: true,
+      typed_call_rows: invocation.typed_call_rows,
+      typed_shape: true,
+    },
+    rest_behavior: { ...restProbe },
+    completed_at: completedTimestamp(),
+  };
+}
+
+export function buildCronProof({ baseline, current, elapsedSeconds, completedAt }) {
+  const baselinePublicationId = positiveInteger(Number(baseline?.publication_id), "Baseline publication ID");
+  const finalPublicationId = positiveInteger(Number(current?.publication_id), "Final publication ID");
+  const baselineRunIds = new Set((baseline?.successful_runs ?? []).map(({ runid }) => String(runid)));
+  const newRuns = (current?.successful_runs ?? []).filter(({ runid }) => !baselineRunIds.has(String(runid)));
+  const newMinutes = [...new Set(newRuns.map(({ start_time: startTime }) => {
+    if (typeof startTime !== "string" || !Number.isFinite(Date.parse(startTime))) {
+      fail("Cron run start_time is invalid.");
+    }
+    return startTime.slice(0, 16);
+  }))].sort();
+  if (baseline?.schedule !== "* * * * *" || current?.schedule !== "* * * * *" ||
+      baseline?.command !== "SELECT private.publish_public_catalogue();" ||
+      current?.command !== "SELECT private.publish_public_catalogue();" ||
+      baseline?.active !== true || current?.active !== true) {
+    fail("Catalogue cron definition is invalid.");
+  }
+  if (!Number.isSafeInteger(elapsedSeconds) || elapsedSeconds < 120 ||
+      finalPublicationId < baselinePublicationId + 2 || newRuns.length < 2 || newMinutes.length < 2) {
+    fail("Catalogue cron did not prove two new successful minute boundaries.");
+  }
+  return {
+    schema_version: 1,
+    schedule: "* * * * *",
+    command: "SELECT private.publish_public_catalogue();",
+    active: true,
+    minute_boundaries: 2,
+    elapsed_seconds: elapsedSeconds,
+    baseline_publication_id: baselinePublicationId,
+    final_publication_id: finalPublicationId,
+    new_successful_runs: newRuns.length,
+    distinct_run_minutes: newMinutes.length,
+    new_run_minutes: newMinutes,
+    verified_at: completedTimestamp(completedAt),
+  };
+}
+
+export function publicListingItemCount(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body) || !Array.isArray(body.data)) {
+    fail("Production public response body does not contain a data array.");
+  }
+  return body.data.length;
+}
+
 function main() {
   const [command, ...args] = process.argv.slice(2);
   if (command === "validate-target") {
@@ -370,6 +598,21 @@ function main() {
   if (command === "parse-cache-headers") {
     const [headersPath] = args;
     process.stdout.write(`${JSON.stringify(parseCacheState(readFileSync(headersPath, "utf8")))}\n`);
+    return;
+  }
+  if (command === "count-public-items") {
+    const [bodyPath] = args;
+    process.stdout.write(`${publicListingItemCount(JSON.parse(readFileSync(bodyPath, "utf8")))}\n`);
+    return;
+  }
+  if (command === "cron-proof") {
+    const [baselinePath, currentPath, elapsedSeconds, evidencePath] = args;
+    const result = buildCronProof({
+      baseline: JSON.parse(readFileSync(baselinePath, "utf8")),
+      current: JSON.parse(readFileSync(currentPath, "utf8")),
+      elapsedSeconds: Number(elapsedSeconds),
+    });
+    writeFileSync(evidencePath, `${JSON.stringify(result, null, 2)}\n`);
     return;
   }
   if (command === "summarize-samples") {
@@ -407,7 +650,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: validate-target | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: validate-target | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | count-public-items <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {

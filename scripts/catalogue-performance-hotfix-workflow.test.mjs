@@ -84,6 +84,10 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     resolve(process.cwd(), "scripts/catalogue-hotfix-workflow-helpers.mjs"),
     "utf8",
   );
+  const behaviouralProbe = readFileSync(
+    resolve(process.cwd(), "scripts/catalogue-hotfix-behavioral-probe.mjs"),
+    "utf8",
+  );
 
   for (const [target, job] of Object.entries({ staging, production })) {
     const body = stepText(job);
@@ -105,11 +109,13 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /pending/i);
     assert.match(body, /validate-dry-run/);
     assert.match(body, /db push --include-all/);
-    assert.match(body, /20260728123058/);
-    assert.match(body, /20260729120405/);
-    assert.match(body, /get_public_listing_catalogue/);
-    assert.match(body, /get_public_catalogue_publication/);
-    assert.match(body, /anon|anonymous/i);
+    assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs recorded/);
+    assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs postapply evidence\/database-contract\.json/);
+    assert.match(behaviouralProbe, /20260728123058/);
+    assert.match(behaviouralProbe, /20260729120405/);
+    assert.match(behaviouralProbe, /get_public_listing_catalogue/);
+    assert.match(behaviouralProbe, /get_public_catalogue_publication/);
+    assert.match(behaviouralProbe, /SET LOCAL ROLE anon/);
     assert.match(body, /30/);
     assert.match(helpers, /p95_ms/i);
     assert.match(helpers, /completed_at|timestamp/i);
@@ -124,13 +130,12 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.match(stagingBody, /90/);
   assert.match(stagingBody, /status=eq\.active/);
   assert.match(stagingBody, /is_off_market=eq\.false/);
-  assert.match(stagingBody, /location_search_text=ilike/i);
-  assert.match(stagingBody, /project_detail/);
-  assert.match(stagingBody, /listing_images_detail/);
+  assert.match(behaviouralProbe, /location_search_text/);
+  assert.match(behaviouralProbe, /project:project_detail/);
+  assert.match(behaviouralProbe, /listing_images:listing_images_detail/);
   assert.match(stagingBody, /-X GET|--request GET/);
-  assert.match(stagingBody, /-X HEAD|--request HEAD/);
   assert.match(stagingBody, /publish-public-catalogue/);
-  assert.match(stagingBody, /minute/i);
+  assert.match(helpers, /new_run_minutes/);
   assert.match(stagingBody, /publication_id/);
   assert.match(stagingBody, /STAGING_MUTATION_ACKNOWLEDGEMENT/);
   assert.match(readFileSync(resolve(process.cwd(), "scripts/assert-staging-mutation-target.mjs"), "utf8"), /MUTATE_STAGING_xsiehskfgeoqyazcgauv/);
@@ -161,14 +166,13 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   const productionBody = stepText(production);
   for (const body of [stagingBody, productionBody]) {
     assert.match(body, /Refuse recorded hotfix drift before/);
-    assert.match(body, /location_search_text=ilike/);
-    assert.match(body, /query_public_catalogue/);
-    assert.match(body, /get_public_catalogue_publication/);
+    assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs recorded/);
+    assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs postapply/);
     assert.match(body, /PRODUCTION_RELEASE_DEPLOYERS/);
   }
   assert.match(productionBody, /release:verify-live-marker/);
   assert.match(productionBody, /https:\/\/portal\.maiprop\.co\/api\/public\/listings/);
-  assert.match(productionBody, /get_public_listing_catalogue/);
+  assert.match(behaviouralProbe, /get_public_listing_catalogue/);
   assert.match(helpers, /cold_sample_count/);
   assert.match(helpers, /warm_sample_count/);
   assert.match(helpers, /cold_p50_ms/);
@@ -186,6 +190,9 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.match(productionBody, /summarize-samples production/);
   assert.match(productionBody, /normalized_url/);
   assert.match(productionBody, /normalized_cache_key/);
+  assert.match(productionBody, /count-public-items/);
+  assert.match(productionBody, /item_count/);
+  assert.match(helpers, /item_count !== 12/);
   assert.doesNotMatch(productionBody, /first\("cold"\)|-301\.headers/);
   assert.doesNotMatch(productionBody, /public-api-cache-headers\.txt/);
   assert.doesNotMatch(productionBody, /evidence\/probe-context\.json/);

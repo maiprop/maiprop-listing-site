@@ -121,7 +121,7 @@ export function productionAuthorizationInputContractViolations(
   return violations;
 }
 
-export function cataloguePerformanceHotfixWorkflowViolations({ text, parsed }) {
+export function cataloguePerformanceHotfixWorkflowViolations({ text, parsed, supportText = "" }) {
   const violations = [];
   const inputs = parsed?.on?.workflow_dispatch?.inputs ?? {};
   const expectedInputs = [
@@ -179,18 +179,29 @@ export function cataloguePerformanceHotfixWorkflowViolations({ text, parsed }) {
     "--expected-plan 90",
     "status=eq.active",
     "is_off_market=eq.false",
-    "location_search_text",
-    "project:project_detail",
-    "listing_images:listing_images_detail",
     "publish-public-catalogue",
-    "minute_boundaries:2",
     "seq 1 30",
+    "catalogue-hotfix-behavioral-probe.mjs recorded",
+    "catalogue-hotfix-behavioral-probe.mjs postapply evidence/database-contract.json",
+    "catalogue-hotfix-workflow-helpers.mjs cron-proof",
     "release:verify-live-marker",
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
   ];
   for (const marker of required) {
     if (!String(text ?? "").includes(marker)) {
       violations.push(`catalogue hotfix is missing ${marker}`);
+    }
+  }
+  for (const marker of [
+    "location_search_text",
+    "project:project_detail",
+    "listing_images:listing_images_detail",
+    "SET LOCAL ROLE anon",
+    "minute_boundaries: 2",
+    "new_run_minutes",
+  ]) {
+    if (!String(supportText).includes(marker)) {
+      violations.push(`catalogue hotfix support is missing ${marker}`);
     }
   }
 
@@ -560,6 +571,10 @@ export function scanWorkflows() {
     for (const violation of cataloguePerformanceHotfixWorkflowViolations({
       text: catalogueHotfixText,
       parsed: workflowYaml[catalogueHotfixWorkflow],
+      supportText: [
+        read(join(root, "scripts/catalogue-hotfix-behavioral-probe.mjs")),
+        read(join(root, "scripts/catalogue-hotfix-workflow-helpers.mjs")),
+      ].join("\n"),
     })) {
       violations.push(`${catalogueHotfixWorkflow} ${violation}`);
     }
