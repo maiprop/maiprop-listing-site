@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "live_pages_sha": "db53d1b9adae41edae93fbeb3e612b42dd8fec0b",
+  "targets": {
+    "staging_project_ref": "xsiehskfgeoqyazcgauv",
+    "production_project_ref": "qvvicunqcrwpioqnvzxf"
+  },
+  "latency_ceilings_ms": {
+    "cold_12_card_p95": 1800,
+    "warm_12_card_p95": 1000
+  },
+  "migrations": [
+    {
+      "path": "supabase/migrations/20260728123058_materialize_public_catalogue_snapshots.sql",
+      "sha256": "0333355f5bd97bcdbe401743afeb93ef302e1f0b23f4a2cf0715cc85e5f476ff"
+    },
+    {
+      "path": "supabase/migrations/20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql",
+      "sha256": "f20d21b6c1368d0406e607a308ddd68ff1deaaf98a7d2a73927d857ddf7d85aa"
+    }
+  ]
+}
