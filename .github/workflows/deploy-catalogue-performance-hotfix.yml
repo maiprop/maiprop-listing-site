@@ -74,6 +74,13 @@ jobs:
           node scripts/assert-staging-mutation-target.mjs --project-ref "$TARGET_PROJECT_REF" --database-url "$TARGET_DB_URL" --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
           code="$(curl -sS -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/rest/v1/" -H "apikey: $TARGET_ANON_KEY")"; [ "$code" = 200 ] || exit 1
+      - name: Refuse recorded hotfix drift before staging push
+        run: |
+          set -euo pipefail
+          recorded="$(psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version IN ('20260728123058','20260729120405')")"
+          [ "$recorded" = 0 ] && exit 0
+          psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc "SELECT to_regprocedure('public.get_public_listing_catalogue(timestamp with time zone)') IS NOT NULL AND to_regproc('public.query_public_catalogue') IS NOT NULL AND to_regprocedure('public.get_public_catalogue_publication(bigint)') IS NOT NULL AND has_function_privilege('anon','public.get_public_listing_catalogue(timestamp with time zone)','EXECUTE')" | grep -qx t
+          api="${TARGET_API_URL%/}/rest/v1/rpc/get_public_listing_catalogue"; curl -fsS -G "$api" -H "apikey: $TARGET_ANON_KEY" --data-urlencode 'select=id,status,is_off_market,location_search_text,project,listing_images' --data-urlencode 'status=eq.active' --data-urlencode 'is_off_market=eq.false' --data-urlencode 'limit=1' > "$RUNNER_TEMP/recorded-card.json"; curl -fsS -G "$api" -H "apikey: $TARGET_ANON_KEY" --data-urlencode 'select=id,status,is_off_market,project:project_detail,listing_images:listing_images_detail' --data-urlencode 'status=eq.active' --data-urlencode 'is_off_market=eq.false' --data-urlencode 'limit=1' > "$RUNNER_TEMP/recorded-detail.json"; node --input-type=module -e 'import{readFileSync}from"node:fs";const c=JSON.parse(readFileSync(process.argv[1])),d=JSON.parse(readFileSync(process.argv[2]));if(!c.length||!d.length||c.some(x=>x.status!=="active"||x.is_off_market!==false||!("project"in x)||!Array.isArray(x.listing_images)||x.listing_images.length>3)||d.some(x=>!("project"in x)||!Array.isArray(x.listing_images)))throw Error("Recorded hotfix compatibility drift");' "$RUNNER_TEMP/recorded-card.json" "$RUNNER_TEMP/recorded-detail.json"
       - name: Apply only manifest-bound staging migrations
         run: |
           set -euo pipefail
@@ -162,6 +169,13 @@ jobs:
           npm run --silent release:verify-live-marker -- https://portal.maiprop.co --expected-sha db53d1b9adae41edae93fbeb3e612b42dd8fec0b > "$RUNNER_TEMP/live-frontend-marker.json"
           cp "$RUNNER_TEMP/live-frontend-marker.json" evidence/live-frontend-marker.json
           node --input-type=module -e 'import{readFileSync}from"node:fs";if(JSON.parse(readFileSync("evidence/live-frontend-marker.json")).release_sha!=="db53d1b9adae41edae93fbeb3e612b42dd8fec0b")throw Error("Fixed live frontend marker changed");'
+      - name: Refuse recorded hotfix drift before production push
+        run: |
+          set -euo pipefail
+          recorded="$(psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version IN ('20260728123058','20260729120405')")"
+          [ "$recorded" = 0 ] && exit 0
+          psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc "SELECT to_regprocedure('public.get_public_listing_catalogue(timestamp with time zone)') IS NOT NULL AND to_regproc('public.query_public_catalogue') IS NOT NULL AND to_regprocedure('public.get_public_catalogue_publication(bigint)') IS NOT NULL AND has_function_privilege('anon','public.get_public_listing_catalogue(timestamp with time zone)','EXECUTE')" | grep -qx t
+          api="${TARGET_API_URL%/}/rest/v1/rpc/get_public_listing_catalogue"; curl -fsS -G "$api" -H "apikey: $TARGET_ANON_KEY" --data-urlencode 'select=id,status,is_off_market,location_search_text,project,listing_images' --data-urlencode 'status=eq.active' --data-urlencode 'is_off_market=eq.false' --data-urlencode 'limit=1' > "$RUNNER_TEMP/recorded-card.json"; curl -fsS -G "$api" -H "apikey: $TARGET_ANON_KEY" --data-urlencode 'select=id,status,is_off_market,project:project_detail,listing_images:listing_images_detail' --data-urlencode 'status=eq.active' --data-urlencode 'is_off_market=eq.false' --data-urlencode 'limit=1' > "$RUNNER_TEMP/recorded-detail.json"; node --input-type=module -e 'import{readFileSync}from"node:fs";const c=JSON.parse(readFileSync(process.argv[1])),d=JSON.parse(readFileSync(process.argv[2]));if(!c.length||!d.length||c.some(x=>x.status!=="active"||x.is_off_market!==false||!("project"in x)||!Array.isArray(x.listing_images)||x.listing_images.length>3)||d.some(x=>!("project"in x)||!Array.isArray(x.listing_images)))throw Error("Recorded hotfix compatibility drift");' "$RUNNER_TEMP/recorded-card.json" "$RUNNER_TEMP/recorded-detail.json"
       - name: Apply only manifest-bound production migrations
         run: |
           set -euo pipefail

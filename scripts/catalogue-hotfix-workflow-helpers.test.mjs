@@ -15,10 +15,16 @@ test("catalogue hotfix target validator requires exact Supabase identities", () 
   assert.doesNotThrow(() => validateTarget(valid));
   assert.throws(() => validateTarget({ ...valid, apiUrl: `https://user@${ref}.supabase.co/` }));
   assert.throws(() => validateTarget({ ...valid, databaseUrl: `postgresql://postgres:password@db.${ref}.supabase.co:5432/postgres?sslmode=disable` }));
+  assert.throws(() => validateTarget({ ...valid, apiUrl: `https://${ref}.supabase.co/?x=1` }));
+  assert.throws(() => validateTarget({ ...valid, apiUrl: `https://${ref}.supabase.co/not-root` }));
+  assert.throws(() => validateTarget({ ...valid, kind: "preview" }));
   assert.throws(() => validateTarget({ ...valid, key: "sb_secret_not_allowed" }));
   assert.throws(() => validateTarget({ ...valid, ref: "qvvicunqcrwpioqnvzxf" }));
   assert.throws(() => validateTarget({ ...valid, kind: "production" }));
   assert.doesNotThrow(() => validateTarget({ ...valid, kind: "production", ref: "qvvicunqcrwpioqnvzxf", apiUrl: "https://qvvicunqcrwpioqnvzxf.supabase.co/", databaseUrl: "postgresql://postgres:password@db.qvvicunqcrwpioqnvzxf.supabase.co:5432/postgres?sslmode=require" }));
+  assert.doesNotThrow(() => validateTarget({ ...valid, databaseUrl: `postgresql://postgres.${ref}:password@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require` }));
+  const jwt = `x.${Buffer.from(JSON.stringify({ role: "anon", ref })).toString("base64url")}.x`;
+  assert.doesNotThrow(() => validateTarget({ ...valid, key: jwt }));
 });
 
 test("dry-run proof requires the exact approved missing set", () => {
@@ -26,4 +32,6 @@ test("dry-run proof requires the exact approved missing set", () => {
   assert.deepEqual(validateDryRun({ contract, remoteHistory: "20260728123058\n", output: "Would push 20260729120405 migration" }).pending_versions, ["20260729120405"]);
   assert.throws(() => validateDryRun({ contract, remoteHistory: "", output: "" }));
   assert.throws(() => validateDryRun({ contract, remoteHistory: "", output: "Would push 20260728123058" }));
+  assert.throws(() => validateDryRun({ contract, remoteHistory: "", output: "Would push 20260728123058 and 20260729120405 and 20990101010101" }));
+  assert.deepEqual(validateDryRun({ contract, remoteHistory: "20260728123058\n20260729120405\n", output: "No migrations pending" }).pending_versions, []);
 });
