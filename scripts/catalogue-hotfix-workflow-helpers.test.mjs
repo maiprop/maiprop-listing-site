@@ -17,6 +17,8 @@ test("catalogue hotfix target validator requires exact Supabase identities", () 
   assert.throws(() => validateTarget({ ...valid, databaseUrl: `postgresql://postgres:password@db.${ref}.supabase.co:5432/postgres?sslmode=disable` }));
   assert.throws(() => validateTarget({ ...valid, key: "sb_secret_not_allowed" }));
   assert.throws(() => validateTarget({ ...valid, ref: "qvvicunqcrwpioqnvzxf" }));
+  assert.throws(() => validateTarget({ ...valid, kind: "production" }));
+  assert.doesNotThrow(() => validateTarget({ ...valid, kind: "production", ref: "qvvicunqcrwpioqnvzxf", apiUrl: "https://qvvicunqcrwpioqnvzxf.supabase.co/", databaseUrl: "postgresql://postgres:password@db.qvvicunqcrwpioqnvzxf.supabase.co:5432/postgres?sslmode=require" }));
 });
 
 test("dry-run proof requires the exact approved missing set", () => {

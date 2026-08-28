@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 const PRODUCTION_REF = "qvvicunqcrwpioqnvzxf";
+const STAGING_REF = "xsiehskfgeoqyazcgauv";
 const VERSION = /^\d{14}$/;
 
 function fail(message) {
@@ -27,7 +28,10 @@ function validateKey(key, ref) {
 
 export function validateTarget({ kind, ref, apiUrl, databaseUrl, key }) {
   if (!ref || !apiUrl || !databaseUrl || !key) fail("Target credentials are incomplete.");
-  if (kind === "staging" && ref === PRODUCTION_REF) fail("Staging may not use production.");
+  if ((kind === "staging" && ref !== STAGING_REF) ||
+      (kind === "production" && ref !== PRODUCTION_REF)) {
+    fail("Target kind does not match the manifest-bound project ref.");
+  }
   const api = new URL(apiUrl);
   if (api.protocol !== "https:" || api.hostname !== `${ref}.supabase.co` || api.port ||
       api.username || api.password || api.pathname !== "/" || api.search || api.hash) {
