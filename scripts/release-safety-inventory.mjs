@@ -121,6 +121,110 @@ export function productionAuthorizationInputContractViolations(
   return violations;
 }
 
+export function cataloguePerformanceHotfixWorkflowViolations({ text, parsed, supportText = "" }) {
+  const violations = [];
+  const inputs = parsed?.on?.workflow_dispatch?.inputs ?? {};
+  const expectedInputs = [
+    "confirm",
+    "incident_id",
+    "reason",
+    "release_sha",
+    "single_admin_break_glass",
+  ];
+  if (
+    Object.keys(inputs).sort().join("\n") !== expectedInputs.join("\n") ||
+    inputs.release_sha?.required !== true ||
+    inputs.release_sha?.type !== "string" ||
+    inputs.confirm?.required !== true ||
+    inputs.confirm?.type !== "string" ||
+    inputs.single_admin_break_glass?.required !== true ||
+    inputs.single_admin_break_glass?.default !== false ||
+    inputs.single_admin_break_glass?.type !== "boolean"
+  ) {
+    violations.push("catalogue hotfix dispatch inputs must stay exact");
+  }
+
+  const jobs = parsed?.jobs ?? {};
+  const stagingNeeds = Array.isArray(jobs.staging?.needs)
+    ? jobs.staging.needs
+    : [jobs.staging?.needs].filter(Boolean);
+  const productionNeeds = Array.isArray(jobs.production?.needs)
+    ? jobs.production.needs
+    : [jobs.production?.needs].filter(Boolean);
+  if (
+    !jobs.validate ||
+    stagingNeeds.join("\n") !== "validate" ||
+    productionNeeds.join("\n") !== ["validate", "staging"].join("\n") ||
+    jobs.staging?.environment !== "staging" ||
+    jobs.production?.environment !== "production"
+  ) {
+    violations.push("catalogue hotfix must validate, then stage, then promote to production");
+  }
+
+  const required = [
+    "catalogue-performance-hotfix-contract.mjs verify --json",
+    "RELEASE_AUTHORIZATION_ACTION: production-deploy",
+    "RELEASE_STANDARD_CONFIRMATION: DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX",
+    "production-break-glass-validation.mjs validate-workflow",
+    "PRODUCTION_RELEASE_DEPLOYERS",
+    "RUNNER_TEMP",
+    "remote-numeric-history",
+    "placeholder",
+    "db push --include-all --dry-run --db-url \"$TARGET_DB_URL\"",
+    "db push --include-all --yes --db-url \"$TARGET_DB_URL\"",
+    "catalogue-hotfix-workflow-helpers.mjs validate-dry-run",
+    "validate-target",
+    "cd \"$work\"",
+    "public_catalogue_snapshot_test.sql",
+    "--expected-plan 90",
+    "status=eq.active",
+    "is_off_market=eq.false",
+    "publish-public-catalogue",
+    "seq 1 30",
+    "catalogue-hotfix-behavioral-probe.mjs recorded",
+    "catalogue-hotfix-behavioral-probe.mjs postapply evidence/database-contract.json",
+    "catalogue-hotfix-workflow-helpers.mjs cron-proof",
+    "catalogue-hotfix-workflow-helpers.mjs inspect-public-body",
+    "body_shape_valid",
+    "release:verify-live-marker",
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+  ];
+  for (const marker of required) {
+    if (!String(text ?? "").includes(marker)) {
+      violations.push(`catalogue hotfix is missing ${marker}`);
+    }
+  }
+  for (const marker of [
+    "location_search_text",
+    "project:project_detail",
+    "listing_images:listing_images_detail",
+    "SET LOCAL ROLE anon",
+    "minute_boundaries: 2",
+    "new_run_minutes",
+    "get_public_catalogue_auctions",
+    "get_public_catalogue_homepage",
+    "homepage_retain_until_contract",
+    "idx_public_catalogue_versions_auction_listing_publication",
+    "private_catalogue_rls_enabled",
+    "private_catalogue_rls_forced",
+    "private_catalogue_no_direct_privileges",
+  ]) {
+    if (!String(supportText).includes(marker)) {
+      violations.push(`catalogue hotfix support is missing ${marker}`);
+    }
+  }
+
+  if (
+    /stripe|functions\s+deploy|edge\s+deploy|pages\s+deploy|cloudflare|migration\s+repair/i.test(text) ||
+    /supabase\s+db\s+push\s*(?:\n|$)/i.test(text) ||
+    /supabase\s+db\s+push\s+--workdir\s+supabase/i.test(text) ||
+    /echo[^\n]*(?:DB_URL|RELEASE_REASON|reason)/i.test(text)
+  ) {
+    violations.push("catalogue hotfix contains a forbidden provider, migration, or secret surface");
+  }
+  return violations;
+}
+
 function read(path) {
   return readFileSync(path, "utf8");
 }
@@ -434,6 +538,7 @@ export function scanWorkflows() {
   }
 
   const authorizedMutationWorkflows = new Set([
+    ".github/workflows/deploy-catalogue-performance-hotfix.yml",
     ".github/workflows/deploy-edge-functions.yml",
     ".github/workflows/deploy-supabase-production-db.yml",
     ".github/workflows/bootstrap-cloudflare-staging-pages.yml",
@@ -463,6 +568,24 @@ export function scanWorkflows() {
       violations.push(
         `${workflowPath} contains release mutation wiring outside the exact-SHA staging workflows`,
       );
+    }
+  }
+
+  const catalogueHotfixWorkflow =
+    ".github/workflows/deploy-catalogue-performance-hotfix.yml";
+  const catalogueHotfixText = workflowText[catalogueHotfixWorkflow] ?? "";
+  if (!catalogueHotfixText) {
+    violations.push(`${catalogueHotfixWorkflow} is missing`);
+  } else {
+    for (const violation of cataloguePerformanceHotfixWorkflowViolations({
+      text: catalogueHotfixText,
+      parsed: workflowYaml[catalogueHotfixWorkflow],
+      supportText: [
+        read(join(root, "scripts/catalogue-hotfix-behavioral-probe.mjs")),
+        read(join(root, "scripts/catalogue-hotfix-workflow-helpers.mjs")),
+      ].join("\n"),
+    })) {
+      violations.push(`${catalogueHotfixWorkflow} ${violation}`);
     }
   }
 

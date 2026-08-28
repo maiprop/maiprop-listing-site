@@ -598,8 +598,6 @@ BEGIN
         to_jsonb(detail)
         - 'listing_images_detail'
         - 'project_detail'
-        - 'location_search_text'
-        - 'is_off_market'
       ) || jsonb_build_object(
         'status', 'active',
         'listing_images', detail.listing_images_detail,
@@ -1484,7 +1482,12 @@ BEGIN
   FROM private.public_catalogue_versions AS version
   CROSS JOIN LATERAL jsonb_populate_record(
     NULL::public.public_listing_catalogue,
-    version.detail_payload
+    version.detail_payload || jsonb_build_object(
+      'project', version.card_payload -> 'project',
+      'listing_images', version.card_payload -> 'listing_images',
+      'project_detail', version.detail_payload -> 'project',
+      'listing_images_detail', version.detail_payload -> 'listing_images'
+    )
   ) AS populated
   WHERE version.valid_from_publication <= v_publication_id
     AND (

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import {
+  cataloguePerformanceHotfixWorkflowViolations,
   cloudflareHttpMutationViolation,
   findCloudflareHttpMutations,
   isAuthorizedCloudflareHttpMutationWorkflow,
@@ -14,6 +15,32 @@ import {
 } from "./release-safety-inventory.mjs";
 
 describe("release safety inventory", () => {
+  it("fails closed unless the catalogue database hotfix stays manifest-bound and staged", () => {
+    const path = resolve(
+      process.cwd(),
+      ".github/workflows/deploy-catalogue-performance-hotfix.yml",
+    );
+    const text = readFileSync(path, "utf8");
+    const parsed = yaml.load(text);
+    const supportText = [
+      "scripts/catalogue-hotfix-behavioral-probe.mjs",
+      "scripts/catalogue-hotfix-workflow-helpers.mjs",
+    ].map((file) => readFileSync(resolve(process.cwd(), file), "utf8")).join("\n");
+
+    expect(cataloguePerformanceHotfixWorkflowViolations({ text, parsed, supportText }))
+      .toEqual([]);
+    expect(cataloguePerformanceHotfixWorkflowViolations({
+      text: text.replace("needs: [validate, staging]", "needs: [validate]"),
+      parsed: yaml.load(text.replace("needs: [validate, staging]", "needs: [validate]")),
+      supportText,
+    })).not.toEqual([]);
+    expect(cataloguePerformanceHotfixWorkflowViolations({
+      text: `${text}\n# forbidden scope\nstripe verify`,
+      parsed,
+      supportText,
+    })).not.toEqual([]);
+  });
+
   it("enforces the exact production authorization workflow-call contract", () => {
     const loadInputs = (name) => yaml.load(readFileSync(
       resolve(process.cwd(), `.github/workflows/${name}`),

@@ -73,6 +73,7 @@
     "check:stripe-live-migration": "node scripts/check-stripe-live-migration.mjs",
     "verify:stripe-live-migration-evidence": "node scripts/verify-stripe-live-migration-evidence.mjs",
     "check:production-deploy": "node scripts/check-production-deploy.mjs",
+    "check:catalogue-performance-hotfix": "node scripts/catalogue-performance-hotfix-contract.mjs verify --json",
     "release:artifact:create": "node scripts/production-release-artifact.mjs create",
     "release:artifact:verify": "node scripts/production-release-artifact.mjs verify",
     "release:authorization:validate": "node scripts/production-break-glass-validation.mjs validate-workflow",

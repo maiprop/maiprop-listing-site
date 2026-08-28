@@ -1,0 +1,253 @@
+name: Deploy Catalogue Performance Database Hotfix
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha: { description: "Full 40-character current main SHA", required: true, type: string }
+      confirm: { description: "Type DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX", required: true, type: string }
+      single_admin_break_glass: { description: "Use configured production authorization", required: true, default: false, type: boolean }
+      incident_id: { description: "Configured incident ID", required: false, type: string }
+      reason: { description: "Operator-held authorization reason", required: false, type: string }
+
+permissions: { contents: read }
+concurrency: { group: maiprop-production-release, cancel-in-progress: false }
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with: { ref: "${{ inputs.release_sha }}", fetch-depth: 0, persist-credentials: false }
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with: { node-version-file: .node-version, cache: npm }
+      - run: npm ci --ignore-scripts --prefer-offline --no-audit
+      - name: Validate exact current-main control and authorization
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_AUTHORIZATION_ACTION: production-deploy
+          RELEASE_STANDARD_CONFIRMATION: DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX
+          RELEASE_SINGLE_ADMIN_BREAK_GLASS: ${{ inputs.single_admin_break_glass }}
+          RELEASE_INCIDENT_ID: ${{ inputs.incident_id }}
+          RELEASE_REASON: ${{ inputs.reason }}
+          RELEASE_CONFIRM: ${{ inputs.confirm }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+          PRODUCTION_BREAK_GLASS_ACTOR: ${{ vars.PRODUCTION_BREAK_GLASS_ACTOR }}
+          PRODUCTION_BREAK_GLASS_RELEASE_SHA: ${{ vars.PRODUCTION_BREAK_GLASS_RELEASE_SHA }}
+          PRODUCTION_BREAK_GLASS_INCIDENT_ID: ${{ vars.PRODUCTION_BREAK_GLASS_INCIDENT_ID }}
+          PRODUCTION_BREAK_GLASS_EXPIRES_AT: ${{ vars.PRODUCTION_BREAK_GLASS_EXPIRES_AT }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ]; then echo "::error::Manual main, first attempt, and triggering actor are required."; exit 1; fi
+          git fetch --no-tags origin main
+          export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
+          if ! [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [ "$RELEASE_SHA" != "$GITHUB_SHA" ] || [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CHECKOUT_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CURRENT_MAIN_SHA" ]; then echo "::error::Exact current main SHA is required."; exit 1; fi
+          node scripts/production-break-glass-validation.mjs validate-workflow --out "$RUNNER_TEMP/catalogue-hotfix-authorization.json"
+          if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
+          node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"
+
+  staging:
+    needs: [validate]
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TARGET_KIND: staging
+      TARGET_PROJECT_REF: xsiehskfgeoqyazcgauv
+      TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+      TARGET_API_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      TARGET_ANON_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+      STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+      PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+      RELEASE_SINGLE_ADMIN_BREAK_GLASS: ${{ inputs.single_admin_break_glass }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with: { ref: "${{ inputs.release_sha }}", fetch-depth: 0, persist-credentials: false }
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with: { node-version-file: .node-version, cache: npm }
+      - run: npm ci --ignore-scripts --prefer-offline --no-audit
+      - name: Revalidate staging identity immediately before mutation
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
+          if [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ] || [ "$RELEASE_SHA" != "$GITHUB_SHA" ] || [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CHECKOUT_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CURRENT_MAIN_SHA" ]; then echo "::error::Staging control changed."; exit 1; fi
+          node scripts/assert-staging-mutation-target.mjs --project-ref "$TARGET_PROJECT_REF" --database-url "$TARGET_DB_URL" --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
+          if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
+          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
+          code="$(curl -sS -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/rest/v1/" -H "apikey: $TARGET_ANON_KEY")"; [ "$code" = 200 ] || exit 1
+      - name: Capture manifest-bound frontend marker for staging evidence
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"
+          fixed_sha="$(jq -r '.hotfix.livePagesSha' "$RUNNER_TEMP/catalogue-hotfix-contract.json")"
+          npm run --silent release:verify-live-marker -- https://portal.maiprop.co --expected-sha "$fixed_sha" > evidence/staging-frontend-marker.json
+          jq -e --arg sha "$fixed_sha" '.release_sha==$sha' evidence/staging-frontend-marker.json >/dev/null
+      - name: Refuse recorded hotfix drift before staging push
+        run: |
+          set -euo pipefail
+          node scripts/catalogue-hotfix-behavioral-probe.mjs recorded "$RUNNER_TEMP/recorded-database-contract.json"
+      - name: Apply only manifest-bound staging migrations
+        run: |
+          set -euo pipefail
+          umask 077
+          node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"
+          work="$RUNNER_TEMP/catalogue-hotfix-staging"; cli="$GITHUB_WORKSPACE/node_modules/.bin/supabase"; rm -rf "$work"; mkdir -p "$work/supabase/migrations" evidence
+          printf '[api]\nenabled = false\n' > "$work/supabase/config.toml"
+          psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc 'SELECT version FROM supabase_migrations.schema_migrations ORDER BY version' > "$work/remote-numeric-history.txt"
+          while IFS= read -r v; do [ -z "$v" ] && continue; [[ "$v" =~ ^[0-9]+$ ]] || exit 1; jq -e --arg v "$v" '.hotfix.migrations[]|select(.version==$v)' "$RUNNER_TEMP/catalogue-hotfix-contract.json" >/dev/null || printf '%s\n' '-- remote numeric history placeholder; never pending SQL' > "$work/supabase/migrations/${v}_remote_history_placeholder.sql"; done < "$work/remote-numeric-history.txt"
+          jq -r '.hotfix.migrations[].path' "$RUNNER_TEMP/catalogue-hotfix-contract.json" | while IFS= read -r p; do case "$p" in supabase/migrations/*.sql) cp "$p" "$work/supabase/migrations/$(basename "$p")";; *) exit 1;; esac; done
+          ( cd "$work"; "$cli" db push --include-all --dry-run --db-url "$TARGET_DB_URL" > dry-run-output.txt 2>&1 )
+          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-dry-run "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$work/remote-numeric-history.txt" "$work/dry-run-output.txt" evidence/dry-run-pending.json
+          ( cd "$work"; "$cli" db push --include-all --yes --db-url "$TARGET_DB_URL" > push-output.txt 2>&1 )
+      - name: Verify staging database, pgTAP, legacy PostgREST, and direct samples
+        run: |
+          set -euo pipefail
+          node scripts/catalogue-hotfix-behavioral-probe.mjs postapply evidence/database-contract.json
+          psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file supabase/tests/public_catalogue_snapshot_test.sql > "$RUNNER_TEMP/public_catalogue_snapshot_test.txt"
+          node scripts/parse-tap-proof.mjs --file "$RUNNER_TEMP/public_catalogue_snapshot_test.txt" --expected-plan 90 > evidence/public-catalogue-pgtap-proof.json
+          api="${TARGET_API_URL%/}/rest/v1/rpc/get_public_listing_catalogue"
+          samples="$RUNNER_TEMP/staging-http-samples.ndjson"; : > "$samples"
+          for pair in $(seq 1 30); do
+            offset="$(( (pair-1)*12 ))"; key="status=active&is_off_market=false&offset=${offset}&limit=12"
+            first_start="$(date +%s%3N)"; first_status="$(curl -sS -o /dev/null -w '%{http_code}' -X GET -G "$api" -H "apikey: $TARGET_ANON_KEY" --data-urlencode 'select=id,status,is_off_market,project,listing_images' --data-urlencode 'status=eq.active' --data-urlencode 'is_off_market=eq.false' --data-urlencode "offset=$offset" --data-urlencode 'limit=12')"; first_end="$(date +%s%3N)"
+            jq -cn --argjson pair "$pair" --arg phase cold --arg request_role direct_rpc_first --arg normalized_request_key "$key" --argjson status "$first_status" --argjson duration_ms "$((first_end-first_start))" '{pair:$pair,phase:$phase,request_role:$request_role,normalized_request_key:$normalized_request_key,status:$status,duration_ms:$duration_ms}' >> "$samples"
+            second_start="$(date +%s%3N)"; second_status="$(curl -sS -o /dev/null -w '%{http_code}' -X GET -G "$api" -H "apikey: $TARGET_ANON_KEY" --data-urlencode 'select=id,status,is_off_market,project,listing_images' --data-urlencode 'status=eq.active' --data-urlencode 'is_off_market=eq.false' --data-urlencode "offset=$offset" --data-urlencode 'limit=12')"; second_end="$(date +%s%3N)"
+            jq -cn --argjson pair "$pair" --arg phase warm --arg request_role direct_rpc_second --arg normalized_request_key "$key" --argjson status "$second_status" --argjson duration_ms "$((second_end-second_start))" '{pair:$pair,phase:$phase,request_role:$request_role,normalized_request_key:$normalized_request_key,status:$status,duration_ms:$duration_ms}' >> "$samples"
+          done
+          gate_status=0
+          node scripts/catalogue-hotfix-workflow-helpers.mjs summarize-samples staging "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$samples" evidence/staging-http-latency.json || gate_status="$?"
+          printf '%s\n' "$gate_status" > "$RUNNER_TEMP/staging-latency-gate-status"
+      - name: Prove staging publish-public-catalogue cron liveness
+        run: |
+          set -euo pipefail
+          started="$(date +%s)"; state(){ psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc "WITH j AS (SELECT jobid,schedule,command,active FROM cron.job WHERE jobname='publish-public-catalogue'), r AS (SELECT runid,start_time,end_time FROM cron.job_run_details WHERE jobid=(SELECT jobid FROM j) AND status='succeeded' ORDER BY runid DESC LIMIT 20) SELECT json_build_object('schedule',(SELECT schedule FROM j),'command',(SELECT command FROM j),'active',(SELECT active FROM j),'successful_runs',(SELECT coalesce(json_agg(r),'[]'::json) FROM r),'publication_id',(SELECT publication_id FROM private.public_catalogue_current WHERE singleton))"; }
+          baseline="$RUNNER_TEMP/staging-cron-baseline.json"; current="$RUNNER_TEMP/staging-cron-current.json"
+          state > "$baseline"; ok=false
+          for n in $(seq 1 48); do state > "$current"; elapsed_seconds="$(( $(date +%s)-started ))"; if node scripts/catalogue-hotfix-workflow-helpers.mjs cron-proof "$baseline" "$current" "$elapsed_seconds" evidence/catalogue-cron-proof.json; then ok=true; break; fi; sleep 10; done; [ "$ok" = true ] || exit 1
+      - name: Write and validate sanitized staging artifact allowlist
+        run: |
+          set -euo pipefail
+          node scripts/catalogue-hotfix-workflow-helpers.mjs write-summary staging "$RELEASE_SHA" "$RUNNER_TEMP/catalogue-hotfix-contract.json" evidence/staging-frontend-marker.json evidence/staging-http-latency.json evidence/catalogue-performance-hotfix-staging.json
+          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-artifacts staging
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: "catalogue-performance-hotfix-staging-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: |
+            evidence/catalogue-performance-hotfix-staging.json
+            evidence/database-contract.json
+            evidence/dry-run-pending.json
+            evidence/public-catalogue-pgtap-proof.json
+            evidence/catalogue-cron-proof.json
+            evidence/staging-frontend-marker.json
+            evidence/staging-http-latency.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce staging latency evidence gate
+        run: test "$(cat "$RUNNER_TEMP/staging-latency-gate-status")" -eq 0
+
+  production:
+    needs: [validate, staging]
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TARGET_KIND: production
+      TARGET_PROJECT_REF: qvvicunqcrwpioqnvzxf
+      TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+      TARGET_API_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      TARGET_ANON_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with: { ref: "${{ inputs.release_sha }}", fetch-depth: 0, persist-credentials: false }
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with: { node-version-file: .node-version, cache: npm }
+      - run: npm ci --ignore-scripts --prefer-offline --no-audit
+      - name: Revalidate production control and authorization immediately before mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_AUTHORIZATION_ACTION: production-deploy
+          RELEASE_STANDARD_CONFIRMATION: DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX
+          RELEASE_SINGLE_ADMIN_BREAK_GLASS: ${{ inputs.single_admin_break_glass }}
+          RELEASE_INCIDENT_ID: ${{ inputs.incident_id }}
+          RELEASE_REASON: ${{ inputs.reason }}
+          RELEASE_CONFIRM: ${{ inputs.confirm }}
+          PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+          PRODUCTION_BREAK_GLASS_ACTOR: ${{ vars.PRODUCTION_BREAK_GLASS_ACTOR }}
+          PRODUCTION_BREAK_GLASS_RELEASE_SHA: ${{ vars.PRODUCTION_BREAK_GLASS_RELEASE_SHA }}
+          PRODUCTION_BREAK_GLASS_INCIDENT_ID: ${{ vars.PRODUCTION_BREAK_GLASS_INCIDENT_ID }}
+          PRODUCTION_BREAK_GLASS_EXPIRES_AT: ${{ vars.PRODUCTION_BREAK_GLASS_EXPIRES_AT }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main; export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
+          if [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ] || [ "$RELEASE_SHA" != "$GITHUB_SHA" ] || [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CHECKOUT_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CURRENT_MAIN_SHA" ]; then exit 1; fi
+          node scripts/production-break-glass-validation.mjs validate-workflow --out "$RUNNER_TEMP/catalogue-hotfix-authorization.json"
+          if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
+          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
+          code="$(curl -sS -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/rest/v1/" -H "apikey: $TARGET_ANON_KEY")"; [ "$code" = 200 ] || exit 1
+      - name: Capture fixed live frontend marker
+        run: |
+          set -euo pipefail
+          mkdir -p evidence; node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"
+          fixed_sha="$(jq -r '.hotfix.livePagesSha' "$RUNNER_TEMP/catalogue-hotfix-contract.json")"
+          npm run --silent release:verify-live-marker -- https://portal.maiprop.co --expected-sha "$fixed_sha" > evidence/production-frontend-marker.json
+          jq -e --arg sha "$fixed_sha" '.release_sha==$sha' evidence/production-frontend-marker.json >/dev/null
+      - name: Refuse recorded hotfix drift before production push
+        run: |
+          set -euo pipefail
+          node scripts/catalogue-hotfix-behavioral-probe.mjs recorded "$RUNNER_TEMP/recorded-database-contract.json"
+      - name: Apply only manifest-bound production migrations
+        run: |
+          set -euo pipefail
+          # Only manifest versions 20260728123058 and 20260729120405 may become pending SQL.
+          node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"; work="$RUNNER_TEMP/catalogue-hotfix-production"; cli="$GITHUB_WORKSPACE/node_modules/.bin/supabase"; rm -rf "$work"; mkdir -p "$work/supabase/migrations"
+          printf '[api]\nenabled = false\n' > "$work/supabase/config.toml"; psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc 'SELECT version FROM supabase_migrations.schema_migrations ORDER BY version' > "$work/remote-numeric-history.txt"
+          while IFS= read -r v; do [ -z "$v" ]&&continue; [[ "$v" =~ ^[0-9]+$ ]]||exit 1; jq -e --arg v "$v" '.hotfix.migrations[]|select(.version==$v)' "$RUNNER_TEMP/catalogue-hotfix-contract.json" >/dev/null || printf '%s\n' '-- remote numeric history placeholder; never pending SQL' > "$work/supabase/migrations/${v}_remote_history_placeholder.sql"; done < "$work/remote-numeric-history.txt"; jq -r '.hotfix.migrations[].path' "$RUNNER_TEMP/catalogue-hotfix-contract.json" | while IFS= read -r p; do case "$p" in supabase/migrations/*.sql)cp "$p" "$work/supabase/migrations/$(basename "$p")";;*)exit 1;;esac;done
+          (cd "$work"; "$cli" db push --include-all --dry-run --db-url "$TARGET_DB_URL" > dry-run-output.txt 2>&1); node scripts/catalogue-hotfix-workflow-helpers.mjs validate-dry-run "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$work/remote-numeric-history.txt" "$work/dry-run-output.txt" evidence/dry-run-pending.json; (cd "$work"; "$cli" db push --include-all --yes --db-url "$TARGET_DB_URL" > push-output.txt 2>&1)
+      - name: Verify production legacy worker, cron, and public API pairs
+        run: |
+          set -euo pipefail
+          node scripts/catalogue-hotfix-behavioral-probe.mjs postapply evidence/database-contract.json
+          started="$(date +%s)"
+          state(){ psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc "WITH j AS (SELECT jobid,schedule,command,active FROM cron.job WHERE jobname='publish-public-catalogue'),r AS (SELECT runid,start_time,end_time FROM cron.job_run_details WHERE jobid=(SELECT jobid FROM j) AND status='succeeded' ORDER BY runid DESC LIMIT 20) SELECT json_build_object('schedule',(SELECT schedule FROM j),'command',(SELECT command FROM j),'active',(SELECT active FROM j),'successful_runs',(SELECT coalesce(json_agg(r),'[]'::json)FROM r),'publication_id',(SELECT publication_id FROM private.public_catalogue_current WHERE singleton))"; }
+          baseline="$RUNNER_TEMP/production-cron-baseline.json"; current="$RUNNER_TEMP/production-cron-current.json"
+          state > "$baseline"; ok=false
+          for n in $(seq 1 48); do state > "$current"; elapsed_seconds="$(( $(date +%s)-started ))"; if node scripts/catalogue-hotfix-workflow-helpers.mjs cron-proof "$baseline" "$current" "$elapsed_seconds" evidence/catalogue-cron-proof.json; then ok=true; break; fi; sleep 10; done; [ "$ok" = true ] || exit 1
+          public_api="https://portal.maiprop.co/api/public/listings"; samples="$RUNNER_TEMP/production-http-samples.ndjson"; : > "$samples"
+          run_bucket="$((GITHUB_RUN_ID % 36))"; sorts=(featured newest price-asc price-desc ai-score views); sort="${sorts[$((run_bucket / 6))]}"; page_start="$((301 + (run_bucket % 6) * 30))"
+          for pair in $(seq 1 30); do
+            page="$((page_start + pair - 1))"; key="page=${page}&pageSize=12&offset=0&sort=${sort}"; url="${public_api}?${key}"
+            cold_start="$(date +%s%3N)"; cold_status="$(curl -sS -D "$RUNNER_TEMP/cold-$pair.headers" -o "$RUNNER_TEMP/cold-$pair.json" -w '%{http_code}' "$url")"; cold_end="$(date +%s%3N)"
+            cold_cache="$(node scripts/catalogue-hotfix-workflow-helpers.mjs parse-cache-headers "$RUNNER_TEMP/cold-$pair.headers")"
+            cold_body="$(node scripts/catalogue-hotfix-workflow-helpers.mjs inspect-public-body "$RUNNER_TEMP/cold-$pair.json")"
+            jq -cn --argjson pair "$pair" --argjson run_bucket "$run_bucket" --argjson page "$page" --arg sort "$sort" --arg phase cold --arg normalized_url "$url" --arg normalized_cache_key "$key" --argjson status "$cold_status" --argjson duration_ms "$((cold_end-cold_start))" --argjson body "$cold_body" --argjson cache "$cold_cache" '{pair:$pair,run_bucket:$run_bucket,page:$page,sort:$sort,phase:$phase,normalized_url:$normalized_url,normalized_cache_key:$normalized_cache_key,status:$status,duration_ms:$duration_ms,item_count:$body.item_count,body_shape_valid:$body.body_shape_valid,cache:$cache}' >> "$samples"
+            warm_start="$(date +%s%3N)"; warm_status="$(curl -sS -D "$RUNNER_TEMP/warm-$pair.headers" -o "$RUNNER_TEMP/warm-$pair.json" -w '%{http_code}' "$url")"; warm_end="$(date +%s%3N)"
+            warm_cache="$(node scripts/catalogue-hotfix-workflow-helpers.mjs parse-cache-headers "$RUNNER_TEMP/warm-$pair.headers")"
+            warm_body="$(node scripts/catalogue-hotfix-workflow-helpers.mjs inspect-public-body "$RUNNER_TEMP/warm-$pair.json")"
+            jq -cn --argjson pair "$pair" --argjson run_bucket "$run_bucket" --argjson page "$page" --arg sort "$sort" --arg phase warm --arg normalized_url "$url" --arg normalized_cache_key "$key" --argjson status "$warm_status" --argjson duration_ms "$((warm_end-warm_start))" --argjson body "$warm_body" --argjson cache "$warm_cache" '{pair:$pair,run_bucket:$run_bucket,page:$page,sort:$sort,phase:$phase,normalized_url:$normalized_url,normalized_cache_key:$normalized_cache_key,status:$status,duration_ms:$duration_ms,item_count:$body.item_count,body_shape_valid:$body.body_shape_valid,cache:$cache}' >> "$samples"
+          done
+          gate_status=0
+          node scripts/catalogue-hotfix-workflow-helpers.mjs summarize-samples production "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$samples" evidence/production-http-latency.json || gate_status="$?"
+          printf '%s\n' "$gate_status" > "$RUNNER_TEMP/production-latency-gate-status"
+      - name: Write and validate sanitized production artifact allowlist
+        run: |
+          set -euo pipefail
+          node scripts/catalogue-hotfix-workflow-helpers.mjs write-summary production "$RELEASE_SHA" "$RUNNER_TEMP/catalogue-hotfix-contract.json" evidence/production-frontend-marker.json evidence/production-http-latency.json evidence/catalogue-performance-hotfix-production.json
+          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-artifacts production
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: "catalogue-performance-hotfix-production-${{ inputs.release_sha }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: |
+            evidence/catalogue-performance-hotfix-production.json
+            evidence/database-contract.json
+            evidence/dry-run-pending.json
+            evidence/catalogue-cron-proof.json
+            evidence/production-frontend-marker.json
+            evidence/production-http-latency.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce production latency evidence gate
+        run: test "$(cat "$RUNNER_TEMP/production-latency-gate-status")" -eq 0

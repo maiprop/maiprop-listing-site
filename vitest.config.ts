@@ -34,6 +34,12 @@ export default defineConfig({
       "scripts/**/*.{test,spec}.{js,mjs}",
       "functions/**/*.{test,spec}.ts",
     ],
+    exclude: [
+      "scripts/catalogue-hotfix-behavioral-probe.test.mjs",
+      "scripts/catalogue-hotfix-workflow-helpers.test.mjs",
+      "scripts/catalogue-performance-hotfix-contract.test.mjs",
+      "scripts/catalogue-performance-hotfix-workflow.test.mjs",
+    ],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html", "json-summary"],

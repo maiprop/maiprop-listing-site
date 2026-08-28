@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(84);
+SELECT plan(90);
 
 SELECT ok(
   to_regclass('private.public_catalogue_publications') IS NOT NULL,
@@ -304,9 +304,25 @@ VALUES
   ('71000000-0000-4000-8000-000000000001', 'seller', false),
   ('71000000-0000-4000-8000-000000000002', 'admin', true);
 
+INSERT INTO public.projects (
+  id,
+  owner_id,
+  name,
+  city,
+  status
+)
+VALUES (
+  '73000000-0000-4000-8000-000000000001',
+  '71000000-0000-4000-8000-000000000001',
+  'Athens compatibility project',
+  'Athens',
+  'active'
+);
+
 INSERT INTO public.listings (
   id,
   owner_id,
+  project_id,
   title,
   city,
   price,
@@ -322,6 +338,7 @@ VALUES
   (
     '72000000-0000-4000-8000-000000000001',
     '71000000-0000-4000-8000-000000000001',
+    '73000000-0000-4000-8000-000000000001',
     'Temporal catalogue changed fixture',
     'Athens',
     123456,
@@ -336,6 +353,7 @@ VALUES
   (
     '72000000-0000-4000-8000-000000000002',
     '71000000-0000-4000-8000-000000000001',
+    NULL,
     'Temporal catalogue unchanged fixture',
     'Athens',
     234567,
@@ -350,6 +368,7 @@ VALUES
   (
     '72000000-0000-4000-8000-000000000003',
     '71000000-0000-4000-8000-000000000001',
+    NULL,
     'Supervisor-991 fixture must stay private',
     'Athens',
     654321,
@@ -364,6 +383,7 @@ VALUES
   (
     '72000000-0000-4000-8000-000000000004',
     '71000000-0000-4000-8000-000000000001',
+    NULL,
     'Spotlight auction excluded from Featured Properties',
     'Athens',
     345678,
@@ -374,6 +394,33 @@ VALUES
     ARRAY['os_auction:catalogue-old-tag']::text[],
     date_trunc('minute', now()) - interval '1 minute',
     date_trunc('minute', now()) - interval '1 minute'
+  );
+
+INSERT INTO public.listing_images (
+  listing_id,
+  url,
+  sort_order
+)
+VALUES
+  (
+    '72000000-0000-4000-8000-000000000001',
+    'https://fixtures.invalid/catalogue-athens-1.jpg',
+    1
+  ),
+  (
+    '72000000-0000-4000-8000-000000000001',
+    'https://fixtures.invalid/catalogue-athens-2.jpg',
+    2
+  ),
+  (
+    '72000000-0000-4000-8000-000000000001',
+    'https://fixtures.invalid/catalogue-athens-3.jpg',
+    3
+  ),
+  (
+    '72000000-0000-4000-8000-000000000001',
+    'https://fixtures.invalid/catalogue-athens-4.jpg',
+    4
   );
 
 INSERT INTO public.listing_promotion_allocations (
@@ -569,6 +616,76 @@ SELECT ok(
 SELECT lives_ok(
   $$SELECT * FROM public.get_public_listing_catalogue(NULL) LIMIT 1$$,
   'anon can use the read-only one-release compatibility reader'
+);
+SELECT is(
+  (
+    SELECT is_off_market
+    FROM public.get_public_listing_catalogue(NULL)
+    WHERE id = '72000000-0000-4000-8000-000000000001'
+  ),
+  false,
+  'anon legacy compatibility rows preserve false is_off_market for the Athens fixture'
+);
+SELECT ok(
+  (
+    SELECT location_search_text IS NOT NULL
+      AND location_search_text ~* 'athens'
+    FROM public.get_public_listing_catalogue(NULL)
+    WHERE id = '72000000-0000-4000-8000-000000000001'
+  ),
+  'anon legacy compatibility rows preserve Athens location search text'
+);
+SELECT is(
+  (
+    SELECT legacy.project::text
+    FROM public.get_public_listing_catalogue(NULL) AS legacy
+    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  (
+    SELECT source.project::text
+    FROM public.public_listing_catalogue AS source
+    WHERE source.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  'anon legacy compatibility rows preserve the source card project'
+);
+SELECT is(
+  (
+    SELECT legacy.listing_images::text
+    FROM public.get_public_listing_catalogue(NULL) AS legacy
+    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  (
+    SELECT source.listing_images::text
+    FROM public.public_listing_catalogue AS source
+    WHERE source.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  'anon legacy compatibility rows preserve the source card listing images'
+);
+SELECT is(
+  (
+    SELECT legacy.project_detail::text
+    FROM public.get_public_listing_catalogue(NULL) AS legacy
+    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  (
+    SELECT source.project_detail::text
+    FROM public.public_listing_catalogue AS source
+    WHERE source.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  'anon legacy compatibility rows preserve the source detail project'
+);
+SELECT is(
+  (
+    SELECT legacy.listing_images_detail::text
+    FROM public.get_public_listing_catalogue(NULL) AS legacy
+    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  (
+    SELECT source.listing_images_detail::text
+    FROM public.public_listing_catalogue AS source
+    WHERE source.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  'anon legacy compatibility rows preserve the source detail listing images'
 );
 SELECT throws_ok(
   $$
