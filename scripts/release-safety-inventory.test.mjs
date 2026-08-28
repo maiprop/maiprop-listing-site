@@ -26,46 +26,51 @@ describe("release safety inventory", () => {
       "scripts/catalogue-hotfix-behavioral-probe.mjs",
       "scripts/catalogue-hotfix-workflow-helpers.mjs",
     ].map((file) => readFileSync(resolve(process.cwd(), file), "utf8")).join("\n");
-
-    expect(cataloguePerformanceHotfixWorkflowViolations({ text, parsed, supportText }))
-      .toEqual([]);
-    const leakedAccessToken = structuredClone(parsed);
-    leakedAccessToken.jobs.staging.env.SUPABASE_ACCESS_TOKEN = "${{ secrets.SUPABASE_ACCESS_TOKEN }}";
-    expect(cataloguePerformanceHotfixWorkflowViolations({
+    const probeScriptText = readFileSync(
+      resolve(process.cwd(), "scripts/catalogue-hotfix-staging-key-probe.sh"),
+      "utf8",
+    );
+    const violations = (overrides = {}) => cataloguePerformanceHotfixWorkflowViolations({
       text,
-      parsed: leakedAccessToken,
-      supportText,
-    })).not.toEqual([]);
-    const staleStagingKey = structuredClone(parsed);
-    staleStagingKey.jobs.staging.env.TARGET_ANON_KEY = "${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}";
-    expect(cataloguePerformanceHotfixWorkflowViolations({
-      text,
-      parsed: staleStagingKey,
-      supportText,
-    })).not.toEqual([]);
-    for (const unsafeText of [
-      text.replace(
-        'probe_url="https://${TARGET_PROJECT_REF}.supabase.co/rest/v1/"',
-        'probe_url="${TARGET_API_URL%/}/rest/v1/"',
-      ),
-      text.replace('[ "$publishable_status" = "401" ]', '[ "$publishable_status" != "401" ]'),
-      text.replace("--retry-max-time 90", ""),
-    ]) {
-      expect(cataloguePerformanceHotfixWorkflowViolations({
-        text: unsafeText,
-        parsed: yaml.load(unsafeText),
-        supportText,
-      })).not.toEqual([]);
-    }
-    expect(cataloguePerformanceHotfixWorkflowViolations({
-      text: text.replace("needs: [validate, staging]", "needs: [validate]"),
-      parsed: yaml.load(text.replace("needs: [validate, staging]", "needs: [validate]")),
-      supportText,
-    })).not.toEqual([]);
-    expect(cataloguePerformanceHotfixWorkflowViolations({
-      text: `${text}\n# forbidden scope\nstripe verify`,
       parsed,
       supportText,
+      probeScriptText,
+      ...overrides,
+    });
+
+    expect(violations()).toEqual([]);
+    const leakedAccessToken = structuredClone(parsed);
+    leakedAccessToken.jobs.staging.env.SUPABASE_ACCESS_TOKEN = "${{ secrets.SUPABASE_ACCESS_TOKEN }}";
+    expect(violations({ parsed: leakedAccessToken })).not.toEqual([]);
+    const staleStagingKey = structuredClone(parsed);
+    staleStagingKey.jobs.staging.env.TARGET_ANON_KEY = "${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}";
+    expect(violations({ parsed: staleStagingKey })).not.toEqual([]);
+    for (const unsafeText of [
+      text.replaceAll('${TARGET_API_URL%/}/auth/v1/settings', '${TARGET_API_URL%/}/rest/v1/'),
+      text.replace("--retry-max-time 90", ""),
+    ]) {
+      expect(violations({
+        text: unsafeText,
+        parsed: yaml.load(unsafeText),
+      })).not.toEqual([]);
+    }
+    for (const unsafeProbe of [
+      probeScriptText.replace(
+        'probe_url="https://${TARGET_PROJECT_REF}.supabase.co/auth/v1/settings"',
+        'probe_url="${TARGET_API_URL%/}/auth/v1/settings"',
+      ),
+      probeScriptText.replace('[ "$publishable_status" = "401" ]', '[ "$publishable_status" != "401" ]'),
+      probeScriptText.replace("probe_max_attempts=3", "probe_max_attempts=4"),
+      probeScriptText.replace("000|408|429|5??)", "000|401|408|429|5??)"),
+    ]) {
+      expect(violations({ probeScriptText: unsafeProbe })).not.toEqual([]);
+    }
+    expect(violations({
+      text: text.replace("needs: [validate, staging]", "needs: [validate]"),
+      parsed: yaml.load(text.replace("needs: [validate, staging]", "needs: [validate]")),
+    })).not.toEqual([]);
+    expect(violations({
+      text: `${text}\n# forbidden scope\nstripe verify`,
     })).not.toEqual([]);
   });
 
