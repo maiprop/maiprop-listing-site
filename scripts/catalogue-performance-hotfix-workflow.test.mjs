@@ -157,6 +157,16 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /RELEASE_CURRENT_MAIN_SHA/);
     assert.match(body, /elapsed_seconds/);
     assert.match(body, /successful_runs/);
+    const identityStep = steps(job)[identityStepIndex];
+    assert.match(identityStep.run, /\/rest\/v1\//);
+    assert.match(identityStep.run, /Accept: application\/openapi\+json/);
+    assert.match(identityStep.run, /apikey: \$TARGET_ANON_KEY/);
+    assert.match(identityStep.run, /validate-api-readiness "\$readiness_status"/);
+    assert.match(identityStep.run, /-o \/dev\/null/);
+    assert.match(identityStep.run, /--connect-timeout 10/);
+    assert.match(identityStep.run, /--max-time 30/);
+    assert.match(identityStep.run, /readiness_status="000"/);
+    assert.doesNotMatch(identityStep.run, /-D |--dump-header|response_body|cat .*readiness/i);
   }
 
   const stagingBody = stepText(staging);
