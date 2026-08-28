@@ -75,15 +75,35 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          keys_file="$(mktemp "$RUNNER_TEMP/catalogue-hotfix-staging-api-keys.XXXXXX.json")"
-          chmod 600 "$keys_file"
-          trap 'rm -f -- "$keys_file"' EXIT
-          if ! curl -s --fail --request GET --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 90 -o "$keys_file" -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/api-keys?reveal=true"; then
+          response_file="$(mktemp "$RUNNER_TEMP/catalogue-hotfix-staging-api-keys.XXXXXX.json")"
+          candidates_file="$(mktemp "$RUNNER_TEMP/catalogue-hotfix-staging-api-key-candidates.XXXXXX.json")"
+          chmod 600 "$response_file" "$candidates_file"
+          trap 'rm -f -- "$response_file" "$candidates_file"' EXIT
+          if ! curl -s --fail --request GET --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 90 -o "$response_file" -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/api-keys?reveal=true"; then
             echo "::error::Could not fetch the current staging public API key."
             exit 1
           fi
-          node scripts/catalogue-hotfix-workflow-helpers.mjs resolve-staging-public-key-env "$keys_file"
-          rm -f -- "$keys_file"
+          node scripts/catalogue-hotfix-workflow-helpers.mjs write-staging-public-key-candidates "$response_file" "$candidates_file"
+          rm -f -- "$response_file"
+          probe_url="https://${TARGET_PROJECT_REF}.supabase.co/rest/v1/"
+          probe_candidate() {
+            local candidate="$1" status="000"
+            if ! status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "$probe_url" -H "Accept: application/openapi+json" -H "apikey: $candidate")"; then status="000"; fi
+            printf '%s' "$status"
+          }
+          publishable_key="$(jq -r '.publishable // empty' "$candidates_file")"
+          legacy_anon_key="$(jq -r '.legacy_anon // empty' "$candidates_file")"
+          publishable_status="not-probed"; legacy_anon_status="not-probed"
+          if [ -n "$publishable_key" ]; then
+            publishable_status="$(probe_candidate "$publishable_key")"
+            if [ "$publishable_status" = "401" ] && [ -n "$legacy_anon_key" ]; then
+              legacy_anon_status="$(probe_candidate "$legacy_anon_key")"
+            fi
+          elif [ -n "$legacy_anon_key" ]; then
+            legacy_anon_status="$(probe_candidate "$legacy_anon_key")"
+          fi
+          node scripts/catalogue-hotfix-workflow-helpers.mjs select-live-staging-public-key-env "$candidates_file" "$publishable_status" "$legacy_anon_status"
+          rm -f -- "$response_file" "$candidates_file"
           trap - EXIT
       - name: Revalidate staging identity immediately before mutation
         env:

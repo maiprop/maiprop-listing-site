@@ -176,21 +176,31 @@ export function cataloguePerformanceHotfixWorkflowViolations({ text, parsed, sup
     (job?.steps ?? []).filter((step) => Object.hasOwn(step?.env ?? {}, "SUPABASE_ACCESS_TOKEN"))
   );
   const resolverMarkers = [
-    "mktemp \"$RUNNER_TEMP/",
-    "chmod 600 \"$keys_file\"",
-    "trap 'rm -f -- \"$keys_file\"' EXIT",
+    "response_file=\"$(mktemp \"$RUNNER_TEMP/",
+    "candidates_file=\"$(mktemp \"$RUNNER_TEMP/",
+    "chmod 600 \"$response_file\" \"$candidates_file\"",
+    "trap 'rm -f -- \"$response_file\" \"$candidates_file\"' EXIT",
     "--request GET",
     "--connect-timeout 10",
     "--max-time 30",
     "--retry 3",
     "--retry-all-errors",
     "--retry-max-time 90",
-    "-o \"$keys_file\"",
+    "-o \"$response_file\"",
     "Authorization: Bearer $SUPABASE_ACCESS_TOKEN",
     "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/api-keys?reveal=true",
-    "resolve-staging-public-key-env \"$keys_file\"",
+    "write-staging-public-key-candidates \"$response_file\" \"$candidates_file\"",
+    "probe_url=\"https://${TARGET_PROJECT_REF}.supabase.co/rest/v1/\"",
+    "-H \"Accept: application/openapi+json\"",
+    "-H \"apikey: $candidate\"",
+    "[ \"$publishable_status\" = \"401\" ] && [ -n \"$legacy_anon_key\" ]",
+    "select-live-staging-public-key-env \"$candidates_file\" \"$publishable_status\" \"$legacy_anon_status\"",
   ];
   const resolverText = String(resolver?.run ?? "");
+  const support = String(supportText);
+  const maskIndex = support.indexOf("process.stdout.write(`::add-mask::${key}");
+  const candidatesWriteIndex = support.indexOf("writeFileSync(candidatesPath");
+  const selectedAppendIndex = support.indexOf("appendFileSync(envPath, `TARGET_ANON_KEY=${key}");
   if (
     Object.hasOwn(stagingEnv, "TARGET_ANON_KEY") ||
     Object.hasOwn(stagingEnv, "SUPABASE_ACCESS_TOKEN") ||
@@ -202,10 +212,12 @@ export function cataloguePerformanceHotfixWorkflowViolations({ text, parsed, sup
     resolver?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
     tokenSteps.length !== 1 || tokenSteps[0] !== resolver ||
     resolverMarkers.some((marker) => !resolverText.includes(marker)) ||
+    resolverText.includes("TARGET_API_URL") ||
     /-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/.test(resolverText) ||
-    !String(supportText).includes("selectStagingPublicApiKey") ||
-    !String(supportText).includes("process.stdout.write(`::add-mask::${key}") ||
-    !String(supportText).includes("appendFileSync(envPath, `TARGET_ANON_KEY=${key}")
+    !support.includes("parseStagingPublicApiKeyCandidates") ||
+    !support.includes("selectLiveStagingPublicApiKey") ||
+    maskIndex < 0 || candidatesWriteIndex < 0 || selectedAppendIndex < 0 ||
+    maskIndex >= candidatesWriteIndex || candidatesWriteIndex >= selectedAppendIndex
   ) {
     violations.push("catalogue hotfix staging public key resolution is not isolated and fail closed");
   }

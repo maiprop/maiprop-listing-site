@@ -43,6 +43,20 @@ describe("release safety inventory", () => {
       parsed: staleStagingKey,
       supportText,
     })).not.toEqual([]);
+    for (const unsafeText of [
+      text.replace(
+        'probe_url="https://${TARGET_PROJECT_REF}.supabase.co/rest/v1/"',
+        'probe_url="${TARGET_API_URL%/}/rest/v1/"',
+      ),
+      text.replace('[ "$publishable_status" = "401" ]', '[ "$publishable_status" != "401" ]'),
+      text.replace("--retry-max-time 90", ""),
+    ]) {
+      expect(cataloguePerformanceHotfixWorkflowViolations({
+        text: unsafeText,
+        parsed: yaml.load(unsafeText),
+        supportText,
+      })).not.toEqual([]);
+    }
     expect(cataloguePerformanceHotfixWorkflowViolations({
       text: text.replace("needs: [validate, staging]", "needs: [validate]"),
       parsed: yaml.load(text.replace("needs: [validate, staging]", "needs: [validate]")),
