@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -157,18 +157,16 @@ test("staging key parser rejects malformed, ambiguous, elevated, and wrong-ref c
 
 test("live staging key selector prefers a ready publishable key and falls back only on its 401", () => {
   const candidates = { publishable: currentPublishable, legacy_anon: currentAnon };
-  for (const status of ["200", "403"]) {
-    assert.equal(workflowHelpers.selectLiveStagingPublicApiKey({
-      candidates,
-      publishableStatus: status,
-      legacyAnonStatus: "not-probed",
-      projectRef: ref,
-    }), currentPublishable);
-  }
+  assert.equal(workflowHelpers.selectLiveStagingPublicApiKey({
+    candidates,
+    publishableStatus: "200",
+    legacyAnonStatus: "not-probed",
+    projectRef: ref,
+  }), currentPublishable);
   assert.equal(workflowHelpers.selectLiveStagingPublicApiKey({
     candidates,
     publishableStatus: "401",
-    legacyAnonStatus: "403",
+    legacyAnonStatus: "200",
     projectRef: ref,
   }), currentAnon);
   assert.equal(workflowHelpers.selectLiveStagingPublicApiKey({
@@ -187,11 +185,11 @@ test("live staging key selector rejects both-inactive and every indeterminate pu
     legacyAnonStatus: "401",
     projectRef: ref,
   }), /live staging public API key/i);
-  for (const status of ["000", "301", "400", "404", "408", "409", "429", "500", "invalid"]) {
+  for (const status of ["000", "301", "400", "403", "404", "408", "409", "429", "500", "invalid"]) {
     assert.throws(() => workflowHelpers.selectLiveStagingPublicApiKey({
       candidates,
       publishableStatus: status,
-      legacyAnonStatus: "403",
+      legacyAnonStatus: "not-probed",
       projectRef: ref,
     }), /live staging public API key/i);
   }
@@ -229,7 +227,7 @@ test("staging candidate CLI masks all candidates before selection persists only 
 
     const selected = spawnSync(
       process.execPath,
-      ["scripts/catalogue-hotfix-workflow-helpers.mjs", "select-live-staging-public-key-env", candidatesPath, "401", "403"],
+      ["scripts/catalogue-hotfix-workflow-helpers.mjs", "select-live-staging-public-key-env", candidatesPath, "401", "1", "200", "1"],
       {
         cwd: process.cwd(),
         encoding: "utf8",
@@ -237,8 +235,17 @@ test("staging candidate CLI masks all candidates before selection persists only 
       },
     );
     assert.equal(selected.status, 0, selected.stderr);
-    assert.equal(selected.stdout, "");
     assert.equal(selected.stderr, "");
+    assert.deepEqual(JSON.parse(selected.stdout), {
+      schema_version: 1,
+      publishable_present: true,
+      legacy_anon_present: true,
+      publishable_status: "401",
+      publishable_attempts: 1,
+      legacy_anon_status: "200",
+      legacy_anon_attempts: 1,
+      selected_tier: "legacy_anon",
+    });
     assert.equal(readFileSync(envPath, "utf8"), `TARGET_ANON_KEY=${currentAnon}\n`);
 
     writeFileSync(responsePath, JSON.stringify([
@@ -266,11 +273,189 @@ test("staging candidate CLI masks all candidates before selection persists only 
   }
 });
 
-test("Supabase OpenAPI readiness accepts only reachable public discovery outcomes", () => {
-  for (const status of [200, "200", 403, "403"]) {
+test("staging resolver shell retries only transient statuses and never probes fallback after indeterminate publishable", () => {
+  const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-probe-"));
+  const fakeBin = join(directory, "bin");
+  const fakeCurl = join(fakeBin, "curl");
+  const scenarios = [
+    {
+      name: "publishable-ready",
+      candidates: { publishable: currentPublishable, legacy_anon: currentAnon },
+      statuses: ["200"],
+      exit: 0,
+      calls: ["publishable"],
+      expected: ["200", 1, "not-probed", 0, "publishable"],
+      selected: currentPublishable,
+    },
+    {
+      name: "explicit-401-fallback",
+      candidates: { publishable: currentPublishable, legacy_anon: currentAnon },
+      statuses: ["401", "200"],
+      exit: 0,
+      calls: ["publishable", "legacy_anon"],
+      expected: ["401", 1, "200", 1, "legacy_anon"],
+      selected: currentAnon,
+    },
+    {
+      name: "both-inactive",
+      candidates: { publishable: currentPublishable, legacy_anon: currentAnon },
+      statuses: ["401", "401"],
+      exit: 1,
+      calls: ["publishable", "legacy_anon"],
+      expected: ["401", 1, "401", 1, "none"],
+    },
+    {
+      name: "fallback-absent",
+      candidates: { publishable: currentPublishable, legacy_anon: null },
+      statuses: ["401"],
+      exit: 1,
+      calls: ["publishable"],
+      expected: ["401", 1, "not-probed", 0, "none"],
+    },
+    ...[
+      ["transport-retry", "000"],
+      ["timeout-retry", "408"],
+      ["rate-limit-retry", "429"],
+      ["server-retry", "503"],
+    ].map(([name, firstStatus]) => ({
+      name,
+      candidates: { publishable: currentPublishable, legacy_anon: currentAnon },
+      statuses: [firstStatus, "200"],
+      exit: 0,
+      calls: ["publishable", "publishable"],
+      expected: ["200", 2, "not-probed", 0, "publishable"],
+      selected: currentPublishable,
+    })),
+    {
+      name: "indeterminate-never-falls-back",
+      candidates: { publishable: currentPublishable, legacy_anon: currentAnon },
+      statuses: ["503", "503", "503"],
+      exit: 1,
+      calls: ["publishable", "publishable", "publishable"],
+      expected: ["503", 3, "not-probed", 0, "none"],
+    },
+    {
+      name: "redirect-never-falls-back",
+      candidates: { publishable: currentPublishable, legacy_anon: currentAnon },
+      statuses: ["301"],
+      exit: 1,
+      calls: ["publishable"],
+      expected: ["301", 1, "not-probed", 0, "none"],
+    },
+  ];
+  try {
+    mkdirSync(fakeBin);
+    writeFileSync(fakeCurl, `#!/usr/bin/env bash
+set -euo pipefail
+: "${"${TEST_COUNT_FILE:?missing count file}"}"
+: "${"${TEST_STATUS_PLAN:?missing status plan}"}"
+: "${"${TEST_CALL_LOG:?missing call log}"}"
+index="$(( $(<"$TEST_COUNT_FILE") + 1 ))"
+printf '%s' "$index" > "$TEST_COUNT_FILE"
+status="$(sed -n "${"${index}"}p" "$TEST_STATUS_PLAN")"
+[ -n "$status" ] || exit 97
+tier=unknown
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = -H ] && [ "$#" -ge 2 ]; then
+    shift
+    if [ "$1" = "apikey: $TEST_PUBLISHABLE" ]; then tier=publishable; fi
+    if [ "$1" = "apikey: $TEST_LEGACY_ANON" ]; then tier=legacy_anon; fi
+  fi
+  shift
+done
+printf '%s\n' "$tier" >> "$TEST_CALL_LOG"
+if [ "$status" = 000 ]; then exit 28; fi
+printf '%s' "$status"
+`);
+    chmodSync(fakeCurl, 0o700);
+    const bashExecutable = spawnSync("where.exe", ["bash"], { encoding: "utf8" })
+      .stdout.trim().split(/\r?\n/)[0];
+
+    for (const scenario of scenarios) {
+      const scenarioDirectory = join(directory, scenario.name);
+      mkdirSync(scenarioDirectory);
+      const candidatesPath = join(scenarioDirectory, "candidates.json");
+      const statusPath = join(scenarioDirectory, "statuses.txt");
+      const countPath = join(scenarioDirectory, "count.txt");
+      const callLogPath = join(scenarioDirectory, "calls.txt");
+      const envPath = join(scenarioDirectory, "github-env");
+      writeFileSync(candidatesPath, `${JSON.stringify(scenario.candidates)}\n`);
+      writeFileSync(statusPath, `${scenario.statuses.join("\n")}\n`);
+      writeFileSync(countPath, "0");
+      writeFileSync(callLogPath, "");
+      const result = spawnSync(
+        bashExecutable,
+        [
+          "-c",
+          'export PATH="$TEST_FAKE_BIN:$PATH"; exec bash "$TEST_PROBE_SCRIPT" "$TEST_CANDIDATES_FILE"',
+        ],
+        {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            GITHUB_ENV: envPath,
+            TARGET_KIND: "staging",
+            TARGET_PROJECT_REF: ref,
+            TEST_STATUS_PLAN: statusPath,
+            TEST_COUNT_FILE: countPath,
+            TEST_CALL_LOG: callLogPath,
+            TEST_PUBLISHABLE: currentPublishable,
+            TEST_LEGACY_ANON: currentAnon,
+            TEST_FAKE_BIN: fakeBin,
+            TEST_PROBE_SCRIPT: join(process.cwd(), "scripts/catalogue-hotfix-staging-key-probe.sh"),
+            TEST_CANDIDATES_FILE: candidatesPath,
+            WSLENV: [
+              process.env.WSLENV,
+              "GITHUB_ENV/p",
+              "TARGET_KIND",
+              "TARGET_PROJECT_REF",
+              "TEST_STATUS_PLAN/p",
+              "TEST_COUNT_FILE/p",
+              "TEST_CALL_LOG/p",
+              "TEST_PUBLISHABLE",
+              "TEST_LEGACY_ANON",
+              "TEST_FAKE_BIN/p",
+              "TEST_PROBE_SCRIPT/p",
+              "TEST_CANDIDATES_FILE/p",
+            ].filter(Boolean).join(":"),
+          },
+        },
+      );
+      assert.equal(result.status, scenario.exit, `${scenario.name}: ${result.stderr || result.error?.message}`);
+      const diagnostic = JSON.parse(result.stdout.trim().split(/\r?\n/).at(-1));
+      assert.deepEqual(diagnostic, {
+        schema_version: 1,
+        publishable_present: scenario.candidates.publishable !== null,
+        legacy_anon_present: scenario.candidates.legacy_anon !== null,
+        publishable_status: scenario.expected[0],
+        publishable_attempts: scenario.expected[1],
+        legacy_anon_status: scenario.expected[2],
+        legacy_anon_attempts: scenario.expected[3],
+        selected_tier: scenario.expected[4],
+      }, scenario.name);
+      assert.deepEqual(
+        readFileSync(callLogPath, "utf8").trim().split(/\r?\n/).filter(Boolean),
+        scenario.calls,
+        scenario.name,
+      );
+      assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(`${currentPublishable}|${currentAnon}`));
+      if (scenario.selected) {
+        assert.equal(readFileSync(envPath, "utf8"), `TARGET_ANON_KEY=${scenario.selected}\n`);
+      } else {
+        assert.equal(existsSync(envPath), false);
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Supabase Auth settings readiness accepts only an exact successful response", () => {
+  for (const status of [200, "200"]) {
     assert.doesNotThrow(() => workflowHelpers.validateSupabaseApiReadinessStatus(status));
   }
-  for (const status of [0, "000", 201, 301, 400, 401, 404, 429, 500, "not-a-status"]) {
+  for (const status of [0, "000", 201, 301, 400, 401, 403, 404, 429, 500, "not-a-status"]) {
     assert.throws(
       () => workflowHelpers.validateSupabaseApiReadinessStatus(status),
       /Supabase API readiness failed with HTTP (?:\d{3}|invalid)\./,

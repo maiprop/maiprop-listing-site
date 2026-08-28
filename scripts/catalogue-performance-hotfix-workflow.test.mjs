@@ -9,6 +9,10 @@ const workflowPath = resolve(
   process.cwd(),
   ".github/workflows/deploy-catalogue-performance-hotfix.yml",
 );
+const stagingKeyProbePath = resolve(
+  process.cwd(),
+  "scripts/catalogue-hotfix-staging-key-probe.sh",
+);
 
 function workflow() {
   assert.ok(existsSync(workflowPath), "the database-only hotfix workflow exists");
@@ -93,24 +97,32 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.match(stagingKeyStep.run, /--retry-max-time 90/);
   assert.match(stagingKeyStep.run, /-o "\$response_file"/);
   assert.match(stagingKeyStep.run, /write-staging-public-key-candidates "\$response_file" "\$candidates_file"/);
-  assert.match(stagingKeyStep.run, /select-live-staging-public-key-env "\$candidates_file" "\$publishable_status" "\$legacy_anon_status"/);
-  assert.match(stagingKeyStep.run, /probe_url="https:\/\/\$\{TARGET_PROJECT_REF\}\.supabase\.co\/rest\/v1\/"/);
+  assert.match(stagingKeyStep.run, /bash scripts\/catalogue-hotfix-staging-key-probe\.sh "\$candidates_file"/);
   assert.doesNotMatch(stagingKeyStep.run, /TARGET_API_URL/);
-  const probeFunction = /probe_candidate\(\) \{([\s\S]*?)\n\s*\}/.exec(stagingKeyStep.run)?.[1] ?? "";
+  const stagingKeyProbe = readFileSync(stagingKeyProbePath, "utf8");
+  const probeFunction = /probe_candidate\(\) \{([\s\S]*?)\n\}/.exec(stagingKeyProbe)?.[1] ?? "";
+  assert.match(stagingKeyProbe, /TARGET_PROJECT_REF:-\}" != xsiehskfgeoqyazcgauv/);
+  assert.match(stagingKeyProbe, /probe_url="https:\/\/\$\{TARGET_PROJECT_REF\}\.supabase\.co\/auth\/v1\/settings"/);
+  assert.match(stagingKeyProbe, /probe_max_attempts=3/);
+  assert.match(probeFunction, /while \[ "\$attempts" -lt "\$probe_max_attempts" \]/);
+  assert.match(probeFunction, /000\|408\|429\|5\?\?/);
   assert.match(probeFunction, /--connect-timeout 10/);
   assert.match(probeFunction, /--max-time 30/);
   assert.match(probeFunction, /-o \/dev\/null/);
   assert.match(probeFunction, /-w '%\{http_code\}'/);
   assert.match(probeFunction, /-H "apikey: \$candidate"/);
-  assert.match(probeFunction, /-H "Accept: application\/openapi\+json"/);
+  assert.match(probeFunction, /-H "Accept: application\/json"/);
+  assert.doesNotMatch(probeFunction, /\/rest\/v1\/|openapi/i);
   assert.doesNotMatch(probeFunction, /Authorization:|-sS|--show-error|--verbose|--trace/);
-  assert.match(stagingKeyStep.run, /if \[ "\$publishable_status" = "401" \] && \[ -n "\$legacy_anon_key" \]/);
+  assert.match(stagingKeyProbe, /if \[ "\$publishable_status" = "401" \] && \[ -n "\$legacy_anon_key" \]/);
+  assert.match(stagingKeyProbe, /select-live-staging-public-key-env[\s\\\n]+"\$candidates_file"[\s\\\n]+"\$publishable_status" "\$publishable_attempts"[\s\\\n]+"\$legacy_anon_status" "\$legacy_anon_attempts"/);
   assert.ok(
     stagingKeyStep.run.indexOf("write-staging-public-key-candidates") <
-      stagingKeyStep.run.indexOf("publishable_key=\"$(jq"),
+      stagingKeyStep.run.indexOf("catalogue-hotfix-staging-key-probe.sh"),
     "every candidate is masked before either candidate is loaded for a live probe",
   );
   assert.doesNotMatch(stagingKeyStep.run, /-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/);
+  assert.doesNotMatch(stagingKeyProbe, /TARGET_API_URL|\/rest\/v1\/|openapi|Authorization:|-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/i);
   assert.doesNotMatch(text, /STAGING_SUPABASE_PUBLISHABLE_KEY/);
   const accessTokenSteps = Object.values(value.jobs).flatMap((job) =>
     steps(job).filter((step) => Object.hasOwn(step.env ?? {}, "SUPABASE_ACCESS_TOKEN"))
@@ -211,15 +223,15 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /elapsed_seconds/);
     assert.match(body, /successful_runs/);
     const identityStep = steps(job)[identityStepIndex];
-    assert.match(identityStep.run, /\/rest\/v1\//);
-    assert.match(identityStep.run, /Accept: application\/openapi\+json/);
+    assert.match(identityStep.run, /\$\{TARGET_API_URL%\/\}\/auth\/v1\/settings/);
+    assert.match(identityStep.run, /Accept: application\/json/);
     assert.match(identityStep.run, /apikey: \$TARGET_ANON_KEY/);
     assert.match(identityStep.run, /validate-api-readiness "\$readiness_status"/);
     assert.match(identityStep.run, /-o \/dev\/null/);
     assert.match(identityStep.run, /--connect-timeout 10/);
     assert.match(identityStep.run, /--max-time 30/);
     assert.match(identityStep.run, /readiness_status="000"/);
-    assert.doesNotMatch(identityStep.run, /-D |--dump-header|response_body|cat .*readiness/i);
+    assert.doesNotMatch(identityStep.run, /\/rest\/v1\/|openapi|-D |--dump-header|response_body|cat .*readiness/i);
   }
 
   const stagingBody = stepText(staging);

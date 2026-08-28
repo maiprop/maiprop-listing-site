@@ -411,7 +411,7 @@ export function selectLiveStagingPublicApiKey({
     reject();
   }
 
-  const live = new Set(["200", "403"]);
+  const live = new Set(["200"]);
   if (publishable) {
     if (live.has(publishableStatus)) {
       if (legacyAnonStatus !== "not-probed") reject();
@@ -472,7 +472,7 @@ export function validateTarget({ kind, ref, apiUrl, databaseUrl, key }) {
 export function validateSupabaseApiReadinessStatus(status) {
   const normalized = String(status ?? "");
   const safeStatus = /^\d{3}$/.test(normalized) ? normalized : "invalid";
-  if (!["200", "403"].includes(safeStatus)) {
+  if (safeStatus !== "200") {
     fail(`Supabase API readiness failed with HTTP ${safeStatus}.`);
   }
 }
@@ -864,12 +864,53 @@ function main() {
     } catch {
       fail("Could not parse private staging public API key candidates.");
     }
-    const key = selectLiveStagingPublicApiKey({
-      candidates,
-      publishableStatus: args[1],
-      legacyAnonStatus: args[2],
-      projectRef: process.env.TARGET_PROJECT_REF,
-    });
+    const normalizeStatus = (value) => value === "not-probed" || /^\d{3}$/.test(value ?? "")
+      ? value
+      : "invalid";
+    const normalizeAttempts = (value, status) => {
+      const attempts = Number(value);
+      if (!Number.isInteger(attempts) || attempts < 0 || attempts > 3 ||
+          (status === "not-probed" ? attempts !== 0 : attempts === 0)) {
+        fail("Staging public API key probe attempts are invalid.");
+      }
+      return attempts;
+    };
+    const publishableStatus = normalizeStatus(args[1]);
+    const publishableAttempts = normalizeAttempts(args[2], publishableStatus);
+    const legacyAnonStatus = normalizeStatus(args[3]);
+    const legacyAnonAttempts = normalizeAttempts(args[4], legacyAnonStatus);
+    let key;
+    let selectionError;
+    try {
+      key = selectLiveStagingPublicApiKey({
+        candidates,
+        publishableStatus,
+        legacyAnonStatus,
+        projectRef: process.env.TARGET_PROJECT_REF,
+      });
+    } catch (error) {
+      selectionError = error;
+    }
+    const publishablePresent = typeof candidates?.publishable === "string" &&
+      candidates.publishable.length > 0;
+    const legacyAnonPresent = typeof candidates?.legacy_anon === "string" &&
+      candidates.legacy_anon.length > 0;
+    const selectedTier = key && key === candidates.publishable
+      ? "publishable"
+      : key && key === candidates.legacy_anon
+        ? "legacy_anon"
+        : "none";
+    process.stdout.write(`${JSON.stringify({
+      schema_version: 1,
+      publishable_present: publishablePresent,
+      legacy_anon_present: legacyAnonPresent,
+      publishable_status: publishableStatus,
+      publishable_attempts: publishableAttempts,
+      legacy_anon_status: legacyAnonStatus,
+      legacy_anon_attempts: legacyAnonAttempts,
+      selected_tier: selectedTier,
+    })}\n`);
+    if (selectionError) throw selectionError;
     appendFileSync(envPath, `TARGET_ANON_KEY=${key}\n`, "utf8");
     return;
   }
@@ -942,7 +983,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: normalize-db-url-env | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <legacy-anon-status> | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: normalize-db-url-env | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <publishable-attempts> <legacy-anon-status> <legacy-anon-attempts> | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {
