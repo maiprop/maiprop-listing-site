@@ -80,7 +80,9 @@ jobs:
           node scripts/assert-staging-mutation-target.mjs --project-ref "$TARGET_PROJECT_REF" --database-url "$TARGET_DB_URL" --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
           if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
-          code="$(curl -sS -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/rest/v1/" -H "apikey: $TARGET_ANON_KEY")"; [ "$code" = 200 ] || exit 1
+          readiness_status="000"
+          if ! readiness_status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/rest/v1/" -H "Accept: application/openapi+json" -H "apikey: $TARGET_ANON_KEY")"; then readiness_status="000"; fi
+          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-api-readiness "$readiness_status"
       - name: Capture manifest-bound frontend marker for staging evidence
         run: |
           set -euo pipefail
@@ -195,7 +197,9 @@ jobs:
           node scripts/production-break-glass-validation.mjs validate-workflow --out "$RUNNER_TEMP/catalogue-hotfix-authorization.json"
           if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
-          code="$(curl -sS -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/rest/v1/" -H "apikey: $TARGET_ANON_KEY")"; [ "$code" = 200 ] || exit 1
+          readiness_status="000"
+          if ! readiness_status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/rest/v1/" -H "Accept: application/openapi+json" -H "apikey: $TARGET_ANON_KEY")"; then readiness_status="000"; fi
+          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-api-readiness "$readiness_status"
       - name: Capture fixed live frontend marker
         run: |
           set -euo pipefail

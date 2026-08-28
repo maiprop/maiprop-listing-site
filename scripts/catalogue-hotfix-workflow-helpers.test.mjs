@@ -97,6 +97,31 @@ test("database URL normalization CLI masks and persists only the normalized job 
   }
 });
 
+test("Supabase OpenAPI readiness accepts only reachable public discovery outcomes", () => {
+  for (const status of [200, "200", 403, "403"]) {
+    assert.doesNotThrow(() => workflowHelpers.validateSupabaseApiReadinessStatus(status));
+  }
+  for (const status of [0, "000", 201, 301, 400, 401, 404, 429, 500, "not-a-status"]) {
+    assert.throws(
+      () => workflowHelpers.validateSupabaseApiReadinessStatus(status),
+      /Supabase API readiness failed with HTTP (?:\d{3}|invalid)\./,
+    );
+  }
+});
+
+test("Supabase readiness CLI reports only a sanitized HTTP status", () => {
+  const secret = "sb_publishable_must_not_be_logged";
+  const result = spawnSync(
+    process.execPath,
+    ["scripts/catalogue-hotfix-workflow-helpers.mjs", "validate-api-readiness", `401-${secret}`],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, "");
+  assert.equal(result.stderr, "Supabase API readiness failed with HTTP invalid.\n");
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(secret));
+});
+
 test("dry-run proof requires the exact approved missing set", () => {
   const contract = { hotfix: { migrations: [{ version: "20260728123058" }, { version: "20260729120405" }] } };
   assert.deepEqual(validateDryRun({ contract, remoteHistory: "20260728123058\n", output: "Would push 20260729120405 migration" }).pending_versions, ["20260729120405"]);

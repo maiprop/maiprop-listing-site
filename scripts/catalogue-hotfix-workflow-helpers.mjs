@@ -386,6 +386,14 @@ export function validateTarget({ kind, ref, apiUrl, databaseUrl, key }) {
   validateKey(key, ref);
 }
 
+export function validateSupabaseApiReadinessStatus(status) {
+  const normalized = String(status ?? "");
+  const safeStatus = /^\d{3}$/.test(normalized) ? normalized : "invalid";
+  if (!["200", "403"].includes(safeStatus)) {
+    fail(`Supabase API readiness failed with HTTP ${safeStatus}.`);
+  }
+}
+
 export function validateDryRun({ contract, remoteHistory, output }) {
   if (!output.trim() || !/(?:migration|push|pending|\d{14})/i.test(output)) {
     fail("Dry-run output is empty or unrecognized.");
@@ -742,6 +750,10 @@ function main() {
     validateTarget({ kind: process.env.TARGET_KIND, ref: process.env.TARGET_PROJECT_REF, apiUrl: process.env.TARGET_API_URL, databaseUrl: process.env.TARGET_DB_URL, key: process.env.TARGET_ANON_KEY });
     return;
   }
+  if (command === "validate-api-readiness") {
+    validateSupabaseApiReadinessStatus(args[0]);
+    return;
+  }
   if (command === "validate-dry-run") {
     const [contractPath, historyPath, outputPath, evidencePath] = args;
     const result = validateDryRun({ contract: JSON.parse(readFileSync(contractPath, "utf8")), remoteHistory: readFileSync(historyPath, "utf8"), output: readFileSync(outputPath, "utf8") });
@@ -803,7 +815,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: normalize-db-url-env | validate-target | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: normalize-db-url-env | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {
