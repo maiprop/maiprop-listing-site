@@ -33,11 +33,11 @@
 - Consumes: repository root, manifest path, and the two migration files.
 - Produces: `validateCataloguePerformanceHotfix(root, manifest)` returning a canonical versioned record with normalized paths, lowercase SHA-256 values, fixed live SHA, target project refs, and latency ceilings; CLI command `node scripts/catalogue-performance-hotfix-contract.mjs verify --json`.
 
-- [ ] **Step 1: Write failing contract tests**
+- [x] **Step 1: Write failing contract tests**
 
 Cover the real validator with temporary fixture files and literal SHA-256 values. Require acceptance of the exact two-file manifest and rejection of an unknown path, duplicate path, digest mismatch, malformed SHA, non-SQL file, extra manifest field, Stripe secret token, and billing/subscription/payment table mutation.
 
-- [ ] **Step 2: Verify the tests fail for the missing validator**
+- [x] **Step 2: Verify the tests fail for the missing validator**
 
 Run:
 
@@ -47,7 +47,7 @@ npm run runtime -- node --test scripts/catalogue-performance-hotfix-contract.tes
 
 Expected: failure because `catalogue-performance-hotfix-contract.mjs` does not exist.
 
-- [ ] **Step 3: Implement the minimal pure validator and CLI**
+- [x] **Step 3: Implement the minimal pure validator and CLI**
 
 Use `node:crypto`, `node:fs`, and `node:path` only. Canonicalize separators to `/`, reject paths outside `supabase/migrations/`, calculate file hashes from bytes, and emit JSON without secret or connection data. The authoritative migration hashes are:
 
@@ -56,7 +56,7 @@ Use `node:crypto`, `node:fs`, and `node:path` only. Canonicalize separators to `
 f20d21b6c1368d0406e607a308ddd68ff1deaaf98a7d2a73927d857ddf7d85aa
 ```
 
-- [ ] **Step 4: Verify focused tests and the real manifest**
+- [x] **Step 4: Verify focused tests and the real manifest**
 
 Run:
 
@@ -67,7 +67,7 @@ npm run runtime -- node scripts/catalogue-performance-hotfix-contract.mjs verify
 
 Expected: all focused tests pass and the CLI emits `ok: true` with exactly two migrations.
 
-- [ ] **Step 5: Commit the contract**
+- [x] **Step 5: Commit the contract**
 
 ```powershell
 git add package.json scripts/catalogue-performance-hotfix-manifest.json scripts/catalogue-performance-hotfix-contract.mjs scripts/catalogue-performance-hotfix-contract.test.mjs
