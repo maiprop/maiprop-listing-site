@@ -13,6 +13,10 @@ const stagingKeyProbePath = resolve(
   process.cwd(),
   "scripts/catalogue-hotfix-staging-key-probe.sh",
 );
+const staticMarkerPath = resolve(
+  process.cwd(),
+  "scripts/catalogue-hotfix-static-marker.sh",
+);
 
 function workflow() {
   assert.ok(existsSync(workflowPath), "the database-only hotfix workflow exists");
@@ -168,6 +172,8 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     resolve(process.cwd(), "scripts/catalogue-hotfix-behavioral-probe.mjs"),
     "utf8",
   );
+  assert.ok(existsSync(staticMarkerPath), "the database-only static marker capture exists");
+  const staticMarker = readFileSync(staticMarkerPath, "utf8");
 
   for (const [target, job] of Object.entries({ staging, production })) {
     const body = stepText(job);
@@ -235,6 +241,31 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   }
 
   const stagingBody = stepText(staging);
+  const markerSteps = [
+    steps(staging).find((step) => step.name === "Capture manifest-bound frontend marker for staging evidence"),
+    steps(production).find((step) => step.name === "Capture fixed live frontend marker"),
+  ];
+  for (const [index, markerStep] of markerSteps.entries()) {
+    assert.ok(markerStep, "both database targets capture the static deploy marker");
+    const evidence = index === 0
+      ? "evidence/staging-frontend-marker.json"
+      : "evidence/production-frontend-marker.json";
+    assert.match(markerStep.run, new RegExp(`bash scripts/catalogue-hotfix-static-marker\\.sh "\\$fixed_sha" ${evidence.replaceAll("/", "\\/")}`));
+    assert.doesNotMatch(markerStep.run, /release:verify-live-marker|\/api\/release/);
+  }
+  assert.match(staticMarker, /marker_url="https:\/\/portal\.maiprop\.co\/deploy-version\.json"/);
+  assert.match(staticMarker, /mktemp "\$RUNNER_TEMP\/catalogue-hotfix-static-marker\./);
+  assert.match(staticMarker, /chmod 600 "\$body_file"/);
+  assert.match(staticMarker, /trap .*rm -f -- "\$body_file".* EXIT/);
+  assert.match(staticMarker, /--connect-timeout 10/);
+  assert.match(staticMarker, /--max-time 30/);
+  assert.match(staticMarker, /--retry 2/);
+  assert.match(staticMarker, /--retry-max-time 90/);
+  assert.match(staticMarker, /-o "\$body_file"/);
+  assert.match(staticMarker, /-w '%\{http_code\}'/);
+  assert.match(staticMarker, /write-static-marker-evidence/);
+  assert.doesNotMatch(staticMarker, /\/api\/release|--location|-L\b|-sS|--show-error|\bcat\b|\btee\b/);
+  assert.doesNotMatch(text, /release:verify-live-marker|\/api\/release/);
   assert.match(stagingBody, /public_catalogue_snapshot_test\.sql/);
   assert.match(stagingBody, /90/);
   assert.match(stagingBody, /status=eq\.active/);
@@ -280,7 +311,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs postapply/);
     assert.match(body, /PRODUCTION_RELEASE_DEPLOYERS/);
   }
-  assert.match(productionBody, /release:verify-live-marker/);
+  assert.match(productionBody, /catalogue-hotfix-static-marker\.sh/);
   assert.match(productionBody, /https:\/\/portal\.maiprop\.co\/api\/public\/listings/);
   assert.match(behaviouralProbe, /get_public_listing_catalogue/);
   assert.match(behaviouralProbe, /get_public_catalogue_auctions/);

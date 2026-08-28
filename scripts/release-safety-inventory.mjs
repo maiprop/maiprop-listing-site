@@ -127,6 +127,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   parsed,
   supportText = "",
   probeScriptText = "",
+  markerScriptText = "",
 }) {
   const violations = [];
   const inputs = parsed?.on?.workflow_dispatch?.inputs ?? {};
@@ -179,6 +180,12 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const productionSteps = jobs.production?.steps ?? [];
   const productionIdentityIndex = productionSteps.findIndex(
     (step) => step?.name === "Revalidate production control and authorization immediately before mutation",
+  );
+  const stagingMarker = stagingSteps.find(
+    (step) => step?.name === "Capture manifest-bound frontend marker for staging evidence",
+  );
+  const productionMarker = productionSteps.find(
+    (step) => step?.name === "Capture fixed live frontend marker",
   );
   const resolver = stagingSteps[resolverIndex];
   const tokenSteps = Object.values(jobs).flatMap((job) =>
@@ -236,6 +243,12 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   ];
   const support = String(supportText);
   const probeScript = String(probeScriptText);
+  const markerScript = String(markerScriptText);
+  const staticValidatorStart = support.indexOf("export function buildCatalogueHotfixStaticMarkerEvidence");
+  const staticValidatorEnd = support.indexOf("\nfunction validateKey", staticValidatorStart);
+  const staticValidator = staticValidatorStart >= 0 && staticValidatorEnd > staticValidatorStart
+    ? support.slice(staticValidatorStart, staticValidatorEnd)
+    : "";
   const maskIndex = support.indexOf("process.stdout.write(`::add-mask::${key}");
   const candidatesWriteIndex = support.indexOf("writeFileSync(candidatesPath");
   const diagnosticStartIndex = support.indexOf("const selectedTier = key === candidates.publishable");
@@ -283,6 +296,54 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     violations.push("catalogue hotfix staging public key resolution is not isolated and fail closed");
   }
 
+  const markerScriptMarkers = [
+    "marker_url=\"https://portal.maiprop.co/deploy-version.json\"",
+    "body_file=\"$(mktemp \"$RUNNER_TEMP/catalogue-hotfix-static-marker.",
+    "chmod 600 \"$body_file\"",
+    "trap 'rm -f -- \"$body_file\"' EXIT",
+    "--connect-timeout 10",
+    "--max-time 30",
+    "--retry 2",
+    "--retry-max-time 90",
+    "--max-redirs 0",
+    "-o \"$body_file\"",
+    "-w '%{http_code}'",
+    "-H \"Accept: application/json\"",
+    "-H \"Cache-Control: no-cache\"",
+    "write-static-marker-evidence",
+  ];
+  const markerSteps = [
+    [stagingMarker, "evidence/staging-frontend-marker.json"],
+    [productionMarker, "evidence/production-frontend-marker.json"],
+  ];
+  const staticValidatorMarkers = [
+    '"sha"',
+    '"run_id"',
+    '"run_attempt"',
+    '"created_at"',
+    "typeof marker.sha !== \"string\"",
+    "typeof marker.run_id !== \"string\"",
+    "typeof marker.run_attempt !== \"string\"",
+    "Date.parse(marker.created_at)",
+    "toISOString()",
+    "marker.sha !== expectedSha",
+    "return { release_sha: expectedSha }",
+  ];
+  if (
+    markerSteps.some(([step, evidencePath]) => {
+      const run = String(step?.run ?? "");
+      return !run.includes(`bash scripts/catalogue-hotfix-static-marker.sh \"$fixed_sha\" ${evidencePath}`) ||
+        /release:verify-live-marker|\/api\/release/.test(run);
+    }) ||
+    markerScriptMarkers.some((marker) => !markerScript.includes(marker)) ||
+    /TARGET_API_URL|\/api\/release|--location|-L\b|-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/.test(markerScript) ||
+    staticValidatorMarkers.some((marker) => !staticValidator.includes(marker)) ||
+    /schema_version|source_tree|source_run_id|source_run_attempt|payload_sha256/.test(staticValidator) ||
+    !support.includes("write-static-marker-evidence")
+  ) {
+    violations.push("catalogue hotfix static deploy marker proof is not private and fail closed");
+  }
+
   const required = [
     "catalogue-performance-hotfix-contract.mjs verify --json",
     "RELEASE_AUTHORIZATION_ACTION: production-deploy",
@@ -308,7 +369,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "catalogue-hotfix-workflow-helpers.mjs cron-proof",
     "catalogue-hotfix-workflow-helpers.mjs inspect-public-body",
     "body_shape_valid",
-    "release:verify-live-marker",
+    "catalogue-hotfix-static-marker.sh",
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
   ];
   for (const marker of required) {
@@ -707,6 +768,7 @@ export function scanWorkflows() {
         read(join(root, "scripts/catalogue-hotfix-workflow-helpers.mjs")),
       ].join("\n"),
       probeScriptText: read(join(root, "scripts/catalogue-hotfix-staging-key-probe.sh")),
+      markerScriptText: read(join(root, "scripts/catalogue-hotfix-static-marker.sh")),
     })) {
       violations.push(`${catalogueHotfixWorkflow} ${violation}`);
     }

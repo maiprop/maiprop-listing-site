@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -474,6 +474,137 @@ test("Supabase readiness CLI reports only a sanitized HTTP status", () => {
   assert.equal(result.stdout, "");
   assert.equal(result.stderr, "Supabase API readiness failed with HTTP invalid.\n");
   assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(secret));
+});
+
+test("database hotfix static marker evidence accepts only the exact immutable marker contract", () => {
+  const expectedSha = "db53d1b9adae41edae93fbeb3e612b42dd8fec0b";
+  const marker = {
+    sha: expectedSha,
+    run_id: "123",
+    run_attempt: "1",
+    created_at: "2026-07-22T12:41:06Z",
+  };
+  assert.deepEqual(
+    workflowHelpers.buildCatalogueHotfixStaticMarkerEvidence({ expectedSha, marker }),
+    { release_sha: expectedSha },
+  );
+  for (const invalid of [
+    { ...marker, unexpected: true },
+    Object.fromEntries(Object.entries(marker).filter(([key]) => key !== "created_at")),
+    { ...marker, sha: "c".repeat(40) },
+    { ...marker, run_id: 123 },
+    { ...marker, created_at: "2026-02-30T12:41:06Z" },
+    { ...marker, created_at: "2026-07-22T12:41:06+00:00" },
+    {
+      schema_version: 1,
+      release_sha: expectedSha,
+      source_tree: "a".repeat(40),
+      source_run_id: "123",
+      source_run_attempt: "1",
+      payload_sha256: "b".repeat(64),
+    },
+  ]) {
+    assert.throws(
+      () => workflowHelpers.buildCatalogueHotfixStaticMarkerEvidence({ expectedSha, marker: invalid }),
+      /static deploy marker/i,
+    );
+  }
+});
+
+test("database hotfix static marker capture keeps the body private and rejects redirects or malformed bodies", () => {
+  const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-marker-"));
+  const fakeBin = join(directory, "bin");
+  const fakeCurl = join(fakeBin, "curl");
+  const expectedSha = "db53d1b9adae41edae93fbeb3e612b42dd8fec0b";
+  const marker = {
+    sha: expectedSha,
+    run_id: "123",
+    run_attempt: "1",
+    created_at: "2026-07-22T12:41:06Z",
+  };
+  const scenarios = [
+    { name: "valid", status: "200", body: marker, exit: 0, evidence: { release_sha: expectedSha } },
+    { name: "redirect", status: "302", body: marker, exit: 1 },
+    { name: "wrong-sha", status: "200", body: { ...marker, sha: "c".repeat(40) }, exit: 1 },
+    { name: "extra-field", status: "200", body: { ...marker, private_value: "must-not-leak" }, exit: 1 },
+    { name: "malformed", status: "200", body: "not-json-must-not-leak", raw: true, exit: 1 },
+    { name: "transport", status: "000", body: marker, transport: true, exit: 1 },
+  ];
+  try {
+    mkdirSync(fakeBin);
+    writeFileSync(fakeCurl, `#!/usr/bin/env bash
+set -euo pipefail
+output=""; url=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) shift; output="$1" ;;
+    https://*) url="$1" ;;
+  esac
+  shift
+done
+printf '%s\n' "$url" > "$TEST_URL_LOG"
+cp "$TEST_RESPONSE_BODY" "$output"
+if [ "$TEST_TRANSPORT" = true ]; then exit 28; fi
+printf '%s' "$TEST_RESPONSE_STATUS"
+`);
+    chmodSync(fakeCurl, 0o700);
+    const bashExecutable = spawnSync("where.exe", ["bash"], { encoding: "utf8" })
+      .stdout.trim().split(/\r?\n/)[0];
+    for (const scenario of scenarios) {
+      const scenarioDirectory = join(directory, scenario.name);
+      mkdirSync(scenarioDirectory);
+      const bodyPath = join(scenarioDirectory, "response-fixture");
+      const evidencePath = join(scenarioDirectory, "evidence.json");
+      const urlLogPath = join(scenarioDirectory, "url.txt");
+      writeFileSync(bodyPath, scenario.raw ? scenario.body : `${JSON.stringify(scenario.body)}\n`);
+      const result = spawnSync(
+        bashExecutable,
+        ["-c", 'export PATH="$TEST_FAKE_BIN:$PATH"; exec bash "$TEST_MARKER_SCRIPT" "$TEST_EXPECTED_SHA" "$TEST_EVIDENCE_PATH"'],
+        {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            RUNNER_TEMP: scenarioDirectory,
+            TEST_FAKE_BIN: fakeBin,
+            TEST_MARKER_SCRIPT: join(process.cwd(), "scripts/catalogue-hotfix-static-marker.sh"),
+            TEST_EXPECTED_SHA: expectedSha,
+            TEST_EVIDENCE_PATH: evidencePath,
+            TEST_RESPONSE_BODY: bodyPath,
+            TEST_RESPONSE_STATUS: scenario.status,
+            TEST_TRANSPORT: String(Boolean(scenario.transport)),
+            TEST_URL_LOG: urlLogPath,
+            WSLENV: [
+              process.env.WSLENV,
+              "RUNNER_TEMP/p",
+              "TEST_FAKE_BIN/p",
+              "TEST_MARKER_SCRIPT/p",
+              "TEST_EXPECTED_SHA",
+              "TEST_EVIDENCE_PATH/p",
+              "TEST_RESPONSE_BODY/p",
+              "TEST_RESPONSE_STATUS",
+              "TEST_TRANSPORT",
+              "TEST_URL_LOG/p",
+            ].filter(Boolean).join(":"),
+          },
+        },
+      );
+      assert.equal(result.status, scenario.exit, `${scenario.name}: ${result.stderr || result.error?.message}`);
+      assert.equal(readFileSync(urlLogPath, "utf8"), "https://portal.maiprop.co/deploy-version.json\n");
+      assert.doesNotMatch(`${result.stdout}${result.stderr}`, /must-not-leak|run_id|created_at|not-json/);
+      assert.deepEqual(
+        readdirSync(scenarioDirectory).filter((name) => name.startsWith("catalogue-hotfix-static-marker.")),
+        [],
+      );
+      if (scenario.evidence) {
+        assert.deepEqual(JSON.parse(readFileSync(evidencePath, "utf8")), scenario.evidence);
+      } else {
+        assert.equal(existsSync(evidencePath), false);
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("dry-run proof requires the exact approved missing set", () => {
