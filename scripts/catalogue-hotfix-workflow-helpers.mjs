@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 
 const PRODUCTION_REF = "qvvicunqcrwpioqnvzxf";
@@ -341,45 +341,87 @@ function validateKey(key, ref) {
   }
 }
 
-export function selectStagingPublicApiKey(response, projectRef) {
-  const reject = () => fail("Could not resolve exactly one current staging public API key.");
-  if (projectRef !== STAGING_REF || !response || typeof response !== "object") reject();
-
-  let rows;
-  if (Array.isArray(response)) {
-    rows = response;
-  } else {
-    const wrapped = [response.keys, response.result].filter(Array.isArray);
-    if (wrapped.length !== 1) reject();
-    [rows] = wrapped;
+function validatePublishableKey(key) {
+  if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) {
+    fail("A Supabase publishable key is required.");
   }
-  if (!rows.length || rows.some((row) => !row || typeof row !== "object" || Array.isArray(row))) {
+}
+
+function validateLegacyAnonKey(key, ref) {
+  if (/^sb_publishable_/.test(key)) fail("A legacy anonymous JWT is required.");
+  validateKey(key, ref);
+}
+
+export function parseStagingPublicApiKeyCandidates(response, projectRef) {
+  const reject = () => fail("Could not resolve unambiguous staging public API key candidates.");
+  if (projectRef !== STAGING_REF || !Array.isArray(response)) reject();
+
+  const rows = response;
+  if (!rows.length || rows.some((row) => !row || typeof row !== "object" || Array.isArray(row) ||
+      typeof row.api_key !== "string" || !row.api_key || /[\r\n]/.test(row.api_key))) {
     reject();
   }
 
   const publishable = rows.filter((row) => String(row.type ?? "").toLowerCase() === "publishable");
-  let selected;
-  if (publishable.length > 0) {
-    if (publishable.length !== 1) reject();
-    [selected] = publishable;
-  } else {
-    const legacyAnon = rows.filter((row) => {
-      const type = String(row.type ?? "").toLowerCase();
-      const identities = [row.name, row.role, row.id].map((value) => String(value ?? "").toLowerCase());
-      return ["", "legacy", "anon"].includes(type) && identities.includes("anon");
-    });
-    if (legacyAnon.length !== 1) reject();
-    [selected] = legacyAnon;
+  const legacyAnon = rows.filter((row) => {
+    const type = String(row.type ?? "").toLowerCase();
+    const name = String(row.name ?? "").toLowerCase();
+    return type === "legacy" && name === "anon";
+  });
+  if (publishable.length > 1 || legacyAnon.length > 1 ||
+      (publishable.length === 0 && legacyAnon.length === 0)) {
+    reject();
   }
-
-  const key = selected.api_key;
-  if (typeof key !== "string" || !key || /[\r\n]/.test(key)) reject();
+  const candidates = {
+    publishable: publishable[0]?.api_key ?? null,
+    legacy_anon: legacyAnon[0]?.api_key ?? null,
+  };
   try {
-    validateKey(key, projectRef);
+    if (candidates.publishable) validatePublishableKey(candidates.publishable);
+    if (candidates.legacy_anon) validateLegacyAnonKey(candidates.legacy_anon, projectRef);
   } catch {
     reject();
   }
-  return key;
+  return candidates;
+}
+
+export function selectLiveStagingPublicApiKey({
+  candidates,
+  publishableStatus,
+  legacyAnonStatus,
+  projectRef,
+}) {
+  const reject = () => fail("Could not resolve a live staging public API key.");
+  if (projectRef !== STAGING_REF || !candidates || typeof candidates !== "object" ||
+      Array.isArray(candidates) ||
+      JSON.stringify(Object.keys(candidates).sort()) !== JSON.stringify(["legacy_anon", "publishable"])) {
+    reject();
+  }
+  const publishable = candidates.publishable;
+  const legacyAnon = candidates.legacy_anon;
+  if ((publishable !== null && typeof publishable !== "string") ||
+      (legacyAnon !== null && typeof legacyAnon !== "string") ||
+      (!publishable && !legacyAnon)) {
+    reject();
+  }
+  try {
+    if (publishable) validatePublishableKey(publishable);
+    if (legacyAnon) validateLegacyAnonKey(legacyAnon, projectRef);
+  } catch {
+    reject();
+  }
+
+  const live = new Set(["200", "403"]);
+  if (publishable) {
+    if (live.has(publishableStatus)) {
+      if (legacyAnonStatus !== "not-probed") reject();
+      return publishable;
+    }
+    if (publishableStatus !== "401" || !legacyAnon || !live.has(legacyAnonStatus)) reject();
+    return legacyAnon;
+  }
+  if (publishableStatus !== "not-probed" || !legacyAnon || !live.has(legacyAnonStatus)) reject();
+  return legacyAnon;
 }
 
 export function normalizeDatabaseUrlTls(databaseUrl) {
@@ -787,20 +829,47 @@ function main() {
     appendFileSync(envPath, `TARGET_DB_URL=${normalized}\n`, "utf8");
     return;
   }
-  if (command === "resolve-staging-public-key-env") {
+  if (command === "write-staging-public-key-candidates") {
+    if (process.env.TARGET_KIND !== "staging" || process.env.TARGET_PROJECT_REF !== STAGING_REF) {
+      fail("Staging public API key environment is not exact.");
+    }
+    const [responsePath, candidatesPath] = args;
+    let response;
+    try {
+      response = JSON.parse(readFileSync(responsePath, "utf8"));
+    } catch {
+      fail("Could not parse the current staging public API key response.");
+    }
+    const candidates = parseStagingPublicApiKeyCandidates(response, process.env.TARGET_PROJECT_REF);
+    for (const key of [candidates.publishable, candidates.legacy_anon].filter(Boolean)) {
+      process.stdout.write(`::add-mask::${key}\n`);
+    }
+    try {
+      chmodSync(candidatesPath, 0o600);
+      writeFileSync(candidatesPath, `${JSON.stringify(candidates)}\n`, "utf8");
+    } catch {
+      fail("Could not persist private staging public API key candidates.");
+    }
+    return;
+  }
+  if (command === "select-live-staging-public-key-env") {
     const envPath = process.env.GITHUB_ENV;
     if (!envPath || process.env.TARGET_KIND !== "staging" ||
         process.env.TARGET_PROJECT_REF !== STAGING_REF) {
       fail("Staging public API key environment is not exact.");
     }
-    let response;
+    let candidates;
     try {
-      response = JSON.parse(readFileSync(args[0], "utf8"));
+      candidates = JSON.parse(readFileSync(args[0], "utf8"));
     } catch {
-      fail("Could not parse the current staging public API key response.");
+      fail("Could not parse private staging public API key candidates.");
     }
-    const key = selectStagingPublicApiKey(response, process.env.TARGET_PROJECT_REF);
-    process.stdout.write(`::add-mask::${key}\n`);
+    const key = selectLiveStagingPublicApiKey({
+      candidates,
+      publishableStatus: args[1],
+      legacyAnonStatus: args[2],
+      projectRef: process.env.TARGET_PROJECT_REF,
+    });
     appendFileSync(envPath, `TARGET_ANON_KEY=${key}\n`, "utf8");
     return;
   }
@@ -873,7 +942,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: normalize-db-url-env | resolve-staging-public-key-env <response> | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: normalize-db-url-env | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <legacy-anon-status> | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {

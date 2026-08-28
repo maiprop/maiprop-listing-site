@@ -97,100 +97,170 @@ test("database URL normalization CLI masks and persists only the normalized job 
   }
 });
 
-test("staging public-key selection prefers one publishable key then one legacy anon key", () => {
-  const publishable = "sb_publishable_current_staging_key";
-  const anon = `x.${Buffer.from(JSON.stringify({ role: "anon", ref })).toString("base64url")}.x`;
-  assert.equal(
-    workflowHelpers.selectStagingPublicApiKey([
-      { id: "anon", type: "legacy", name: "anon", api_key: anon },
-      { id: "public", type: "publishable", name: "default", api_key: publishable },
-      { id: "private", type: "secret", name: "server", api_key: "sb_secret_not_selected" },
-      { id: "service_role", type: "legacy", name: "service_role", api_key: "not-selected" },
-    ], ref),
-    publishable,
-  );
-  assert.equal(
-    workflowHelpers.selectStagingPublicApiKey({ keys: [
-      { id: "anon", name: "anon", api_key: anon },
-      { id: "service_role", name: "service_role", api_key: "not-selected" },
-    ] }, ref),
-    anon,
-  );
-});
-
-test("staging public-key selection rejects malformed, ambiguous, elevated, and wrong-ref results", () => {
-  const publishable = (suffix) => ({
+const currentPublishable = "sb_publishable_current_staging_key";
+const currentAnon = `x.${Buffer.from(JSON.stringify({ role: "anon", ref })).toString("base64url")}.x`;
+const publishableRecord = (suffix = "current") => ({
     id: suffix,
     type: "publishable",
     name: suffix,
     api_key: `sb_publishable_${suffix}`,
   });
-  const legacy = (role, projectRef = ref) => ({
+const legacyRecord = (role, projectRef = ref) => ({
     id: role,
     type: "legacy",
     name: role,
     api_key: `x.${Buffer.from(JSON.stringify({ role, ref: projectRef })).toString("base64url")}.x`,
   });
+
+test("staging key parser retains at most one publishable and one legacy anon candidate", () => {
+  assert.deepEqual(
+    workflowHelpers.parseStagingPublicApiKeyCandidates([
+      { ...publishableRecord(), api_key: currentPublishable },
+      { ...legacyRecord("anon"), api_key: currentAnon },
+      { id: "private", type: "secret", name: "server", api_key: "sb_secret_not_selected" },
+      { id: "service_role", type: "legacy", name: "service_role", api_key: "not-selected" },
+    ], ref),
+    { publishable: currentPublishable, legacy_anon: currentAnon },
+  );
+  assert.deepEqual(
+    workflowHelpers.parseStagingPublicApiKeyCandidates([
+      { ...legacyRecord("anon"), api_key: currentAnon },
+      { id: "service_role", name: "service_role", api_key: "not-selected" },
+    ], ref),
+    { publishable: null, legacy_anon: currentAnon },
+  );
+});
+
+test("staging key parser rejects malformed, ambiguous, elevated, and wrong-ref candidates", () => {
   for (const response of [
     null,
     {},
-    [null, publishable("one")],
-    [publishable("one"), publishable("two")],
-    [legacy("anon"), { ...legacy("anon"), id: "anon-copy" }],
+    { keys: [publishableRecord("wrapped")] },
+    { result: [publishableRecord("wrapped")] },
+    [null, publishableRecord("one")],
+    [publishableRecord("one"), publishableRecord("two")],
+    [legacyRecord("anon"), { ...legacyRecord("anon"), id: "anon-copy" }],
+    [publishableRecord("one"), legacyRecord("anon"), { ...legacyRecord("anon"), id: "anon-copy" }],
     [{ id: "secret", type: "secret", name: "secret", api_key: "sb_secret_elevated" }],
-    [legacy("service_role")],
-    [{ ...publishable("mislabeled"), api_key: "sb_secret_elevated" }],
-    [legacy("anon", "qvvicunqcrwpioqnvzxf")],
+    [legacyRecord("service_role")],
+    [{ ...publishableRecord("mislabeled"), api_key: "sb_secret_elevated" }],
+    [{ ...publishableRecord("legacy-jwt"), api_key: currentAnon }],
+    [{ ...legacyRecord("anon"), api_key: currentPublishable }],
+    [legacyRecord("anon", "qvvicunqcrwpioqnvzxf")],
   ]) {
     assert.throws(
-      () => workflowHelpers.selectStagingPublicApiKey(response, ref),
-      /current staging public API key/i,
+      () => workflowHelpers.parseStagingPublicApiKeyCandidates(response, ref),
+      /staging public API key candidates/i,
     );
   }
 });
 
-test("staging key CLI masks before ephemeral persistence and leaks nothing on rejection", () => {
+test("live staging key selector prefers a ready publishable key and falls back only on its 401", () => {
+  const candidates = { publishable: currentPublishable, legacy_anon: currentAnon };
+  for (const status of ["200", "403"]) {
+    assert.equal(workflowHelpers.selectLiveStagingPublicApiKey({
+      candidates,
+      publishableStatus: status,
+      legacyAnonStatus: "not-probed",
+      projectRef: ref,
+    }), currentPublishable);
+  }
+  assert.equal(workflowHelpers.selectLiveStagingPublicApiKey({
+    candidates,
+    publishableStatus: "401",
+    legacyAnonStatus: "403",
+    projectRef: ref,
+  }), currentAnon);
+  assert.equal(workflowHelpers.selectLiveStagingPublicApiKey({
+    candidates: { publishable: null, legacy_anon: currentAnon },
+    publishableStatus: "not-probed",
+    legacyAnonStatus: "200",
+    projectRef: ref,
+  }), currentAnon);
+});
+
+test("live staging key selector rejects both-inactive and every indeterminate publishable status", () => {
+  const candidates = { publishable: currentPublishable, legacy_anon: currentAnon };
+  assert.throws(() => workflowHelpers.selectLiveStagingPublicApiKey({
+    candidates,
+    publishableStatus: "401",
+    legacyAnonStatus: "401",
+    projectRef: ref,
+  }), /live staging public API key/i);
+  for (const status of ["000", "301", "400", "404", "408", "409", "429", "500", "invalid"]) {
+    assert.throws(() => workflowHelpers.selectLiveStagingPublicApiKey({
+      candidates,
+      publishableStatus: status,
+      legacyAnonStatus: "403",
+      projectRef: ref,
+    }), /live staging public API key/i);
+  }
+});
+
+test("staging candidate CLI masks all candidates before selection persists only the live fallback", () => {
   const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-key-"));
   const responsePath = join(directory, "keys.json");
+  const candidatesPath = join(directory, "candidates.json");
   const envPath = join(directory, "github-env");
-  const publishable = "sb_publishable_current_staging_key";
   try {
     writeFileSync(responsePath, JSON.stringify([
-      { id: "public", type: "publishable", name: "default", api_key: publishable },
+      { id: "public", type: "publishable", name: "default", api_key: currentPublishable },
+      { ...legacyRecord("anon"), api_key: currentAnon },
       { id: "private", type: "secret", name: "server", api_key: "sb_secret_never_logged" },
     ]));
-    const result = spawnSync(
+    writeFileSync(candidatesPath, "");
+    const parsed = spawnSync(
       process.execPath,
-      ["scripts/catalogue-hotfix-workflow-helpers.mjs", "resolve-staging-public-key-env", responsePath],
+      ["scripts/catalogue-hotfix-workflow-helpers.mjs", "write-staging-public-key-candidates", responsePath, candidatesPath],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, TARGET_KIND: "staging", TARGET_PROJECT_REF: ref },
+      },
+    );
+    assert.equal(parsed.status, 0, parsed.stderr);
+    assert.equal(parsed.stderr, "");
+    assert.equal(parsed.stdout, `::add-mask::${currentPublishable}\n::add-mask::${currentAnon}\n`);
+    assert.deepEqual(JSON.parse(readFileSync(candidatesPath, "utf8")), {
+      publishable: currentPublishable,
+      legacy_anon: currentAnon,
+    });
+    assert.equal(existsSync(envPath), false);
+
+    const selected = spawnSync(
+      process.execPath,
+      ["scripts/catalogue-hotfix-workflow-helpers.mjs", "select-live-staging-public-key-env", candidatesPath, "401", "403"],
       {
         cwd: process.cwd(),
         encoding: "utf8",
         env: { ...process.env, GITHUB_ENV: envPath, TARGET_KIND: "staging", TARGET_PROJECT_REF: ref },
       },
     );
-    assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stderr, "");
-    assert.equal(result.stdout, `::add-mask::${publishable}\n`);
-    assert.equal(readFileSync(envPath, "utf8"), `TARGET_ANON_KEY=${publishable}\n`);
+    assert.equal(selected.status, 0, selected.stderr);
+    assert.equal(selected.stdout, "");
+    assert.equal(selected.stderr, "");
+    assert.equal(readFileSync(envPath, "utf8"), `TARGET_ANON_KEY=${currentAnon}\n`);
 
     writeFileSync(responsePath, JSON.stringify([
       { id: "private", type: "secret", name: "server", api_key: "sb_secret_never_logged" },
     ]));
+    writeFileSync(candidatesPath, "");
     rmSync(envPath, { force: true });
     const rejected = spawnSync(
       process.execPath,
-      ["scripts/catalogue-hotfix-workflow-helpers.mjs", "resolve-staging-public-key-env", responsePath],
+      ["scripts/catalogue-hotfix-workflow-helpers.mjs", "write-staging-public-key-candidates", responsePath, candidatesPath],
       {
         cwd: process.cwd(),
         encoding: "utf8",
-        env: { ...process.env, GITHUB_ENV: envPath, TARGET_KIND: "staging", TARGET_PROJECT_REF: ref },
+        env: { ...process.env, TARGET_KIND: "staging", TARGET_PROJECT_REF: ref },
       },
     );
     assert.equal(rejected.status, 1);
     assert.equal(rejected.stdout, "");
-    assert.match(rejected.stderr, /current staging public API key/i);
+    assert.match(rejected.stderr, /staging public API key candidates/i);
     assert.doesNotMatch(rejected.stderr, /sb_secret|never_logged/);
     assert.equal(existsSync(envPath), false);
+    assert.equal(readFileSync(candidatesPath, "utf8"), "");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
