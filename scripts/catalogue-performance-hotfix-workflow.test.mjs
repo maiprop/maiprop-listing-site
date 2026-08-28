@@ -106,6 +106,17 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
 
   for (const [target, job] of Object.entries({ staging, production })) {
     const body = stepText(job);
+    const normalizeStepIndex = steps(job).findIndex(
+      (step) => step.name === `Normalize ${target} database URL for required TLS`,
+    );
+    const identityStepIndex = steps(job).findIndex(
+      (step) => String(step.name ?? "").startsWith(`Revalidate ${target}`),
+    );
+    assert.ok(
+      normalizeStepIndex >= 0 && normalizeStepIndex < identityStepIndex,
+      `${target} normalizes its opaque database secret before identity validation`,
+    );
+    assert.match(steps(job)[normalizeStepIndex].run, /normalize-db-url-env/);
     assert.match(body, /catalogue-performance-hotfix-contract\.mjs verify --json/);
     assert.match(body, /RUNNER_TEMP/);
     assert.match(body, /supabase_migrations\.schema_migrations/);
@@ -134,6 +145,15 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /30/);
     assert.match(helpers, /p95_ms/i);
     assert.match(helpers, /completed_at|timestamp/i);
+    assert.match(helpers, /normalizeDatabaseUrlTls/);
+    assert.match(helpers, /process\.env\.GITHUB_ENV/);
+    assert.match(helpers, /::add-mask::/);
+    assert.match(helpers, /appendFileSync/);
+    assert.ok(
+      helpers.indexOf("process.stdout.write(`::add-mask::") <
+        helpers.indexOf("appendFileSync(envPath"),
+      "the derived database URL is masked before job-environment persistence",
+    );
     assert.match(body, /RELEASE_CURRENT_MAIN_SHA/);
     assert.match(body, /elapsed_seconds/);
     assert.match(body, /successful_runs/);

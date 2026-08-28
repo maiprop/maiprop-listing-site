@@ -54,6 +54,7 @@ const documentedEnvAllowlist = new Set([
   "CI",
   "DEV",
   "GITHUB_ACTOR",
+  "GITHUB_ENV",
   "GITHUB_EVENT_NAME",
   "GITHUB_REPOSITORY",
   "GITHUB_RUN_ATTEMPT",

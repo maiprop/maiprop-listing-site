@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 
 const PRODUCTION_REF = "qvvicunqcrwpioqnvzxf";
@@ -339,6 +339,26 @@ function validateKey(key, ref) {
   if (payload.role !== "anon" || (payload.ref !== undefined && payload.ref !== ref)) {
     fail("Anonymous key role/ref is not approved for this project.");
   }
+}
+
+export function normalizeDatabaseUrlTls(databaseUrl) {
+  if (typeof databaseUrl !== "string" || !databaseUrl || /[\r\n]/.test(databaseUrl)) {
+    fail("Database URL cannot be normalized safely.");
+  }
+  let parsed;
+  try {
+    parsed = new URL(databaseUrl);
+  } catch {
+    fail("Database URL cannot be normalized safely.");
+  }
+  const modes = parsed.searchParams.getAll("sslmode");
+  if (modes.length > 1 || (modes.length === 1 && modes[0] !== "require")) {
+    fail("Database URL must contain at most one sslmode=require value.");
+  }
+  if (modes.length === 0) {
+    parsed.searchParams.append("sslmode", "require");
+  }
+  return parsed.toString();
 }
 
 export function validateTarget({ kind, ref, apiUrl, databaseUrl, key }) {
@@ -710,6 +730,14 @@ export function inspectPublicListingBody(text) {
 
 function main() {
   const [command, ...args] = process.argv.slice(2);
+  if (command === "normalize-db-url-env") {
+    const envPath = process.env.GITHUB_ENV;
+    if (!envPath) fail("GitHub environment file is unavailable.");
+    const normalized = normalizeDatabaseUrlTls(process.env.TARGET_DB_URL);
+    process.stdout.write(`::add-mask::${normalized}\n`);
+    appendFileSync(envPath, `TARGET_DB_URL=${normalized}\n`, "utf8");
+    return;
+  }
   if (command === "validate-target") {
     validateTarget({ kind: process.env.TARGET_KIND, ref: process.env.TARGET_PROJECT_REF, apiUrl: process.env.TARGET_API_URL, databaseUrl: process.env.TARGET_DB_URL, key: process.env.TARGET_ANON_KEY });
     return;
@@ -775,7 +803,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: validate-target | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: normalize-db-url-env | validate-target | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {
