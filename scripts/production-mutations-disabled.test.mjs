@@ -170,6 +170,7 @@ describe("production mutation boundaries", () => {
 
   it("keeps every other workflow free of release mutation credentials and commands", () => {
     const authorizedMutationWorkflows = new Set([
+      "deploy-catalogue-performance-hotfix.yml",
       "deploy-edge-functions.yml",
       "deploy-supabase-production-db.yml",
       "bootstrap-cloudflare-staging-pages.yml",
