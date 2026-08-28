@@ -66,6 +66,10 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with: { node-version-file: .node-version, cache: npm }
       - run: npm ci --ignore-scripts --prefer-offline --no-audit
+      - name: Normalize staging database URL for required TLS
+        run: |
+          set -euo pipefail
+          node scripts/catalogue-hotfix-workflow-helpers.mjs normalize-db-url-env
       - name: Revalidate staging identity immediately before mutation
         env:
           GH_TOKEN: ${{ github.token }}
@@ -166,6 +170,10 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with: { node-version-file: .node-version, cache: npm }
       - run: npm ci --ignore-scripts --prefer-offline --no-audit
+      - name: Normalize production database URL for required TLS
+        run: |
+          set -euo pipefail
+          node scripts/catalogue-hotfix-workflow-helpers.mjs normalize-db-url-env
       - name: Revalidate production control and authorization immediately before mutation
         env:
           GH_TOKEN: ${{ github.token }}

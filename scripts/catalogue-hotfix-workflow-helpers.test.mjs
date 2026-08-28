@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
+import * as workflowHelpers from "./catalogue-hotfix-workflow-helpers.mjs";
 import {
   artifactPathsForTarget,
   assertLatencyEvidencePasses,
@@ -39,6 +44,57 @@ test("catalogue hotfix target validator requires exact Supabase identities", () 
   assert.doesNotThrow(() => validateTarget({ ...valid, databaseUrl: `postgresql://postgres.${ref}:password@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require` }));
   const jwt = `x.${Buffer.from(JSON.stringify({ role: "anon", ref })).toString("base64url")}.x`;
   assert.doesNotThrow(() => validateTarget({ ...valid, key: jwt }));
+});
+
+test("database URL TLS normalization appends require but rejects explicit weaker modes", () => {
+  assert.equal(
+    workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres"),
+    "postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=require",
+  );
+  assert.equal(
+    workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres?connect_timeout=10"),
+    "postgresql://postgres:secret@db.example.test:5432/postgres?connect_timeout=10&sslmode=require",
+  );
+  assert.equal(
+    workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=require"),
+    "postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=require",
+  );
+  assert.throws(
+    () => workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=disable"),
+    /sslmode=require/i,
+  );
+  assert.throws(
+    () => workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=require&sslmode=prefer"),
+    /sslmode=require/i,
+  );
+  assert.throws(
+    () => workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=require&sslmode=require"),
+    /sslmode/i,
+  );
+});
+
+test("database URL normalization CLI masks and persists only the normalized job value", () => {
+  const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-env-"));
+  const envPath = join(directory, "github-env");
+  const databaseUrl = "postgresql://postgres:secret@db.example.test:5432/postgres";
+  const normalized = `${databaseUrl}?sslmode=require`;
+  try {
+    const result = spawnSync(
+      process.execPath,
+      ["scripts/catalogue-hotfix-workflow-helpers.mjs", "normalize-db-url-env"],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, GITHUB_ENV: envPath, TARGET_DB_URL: databaseUrl },
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, "");
+    assert.equal(result.stdout, `::add-mask::${normalized}\n`);
+    assert.equal(readFileSync(envPath, "utf8"), `TARGET_DB_URL=${normalized}\n`);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("dry-run proof requires the exact approved missing set", () => {
