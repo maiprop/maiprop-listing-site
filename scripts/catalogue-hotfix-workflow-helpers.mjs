@@ -28,6 +28,7 @@ function validateKey(key, ref) {
 
 export function validateTarget({ kind, ref, apiUrl, databaseUrl, key }) {
   if (!ref || !apiUrl || !databaseUrl || !key) fail("Target credentials are incomplete.");
+  if (!["staging", "production"].includes(kind)) fail("Target kind is not recognized.");
   if ((kind === "staging" && ref !== STAGING_REF) ||
       (kind === "production" && ref !== PRODUCTION_REF)) {
     fail("Target kind does not match the manifest-bound project ref.");
