@@ -89,11 +89,11 @@ git commit -m "ci: bind catalogue performance hotfix scope"
 - Consumes: Task 1's validated canonical record, exact current `main` SHA, staging and production database URLs, GitHub actor, and input confirmation `DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX`.
 - Produces: staging and production evidence JSON artifacts containing target kind, release SHA, frontend SHA, migration versions/digests, database contract, HTTP sample status/durations, p50/p95, and UTC timestamps.
 
-- [ ] **Step 1: Write failing workflow behavior tests**
+- [x] **Step 1: Write failing workflow behavior tests**
 
 Parse the workflow YAML as data and assert observable job behavior: exact `workflow_dispatch` inputs; validate → staging → production dependency chain; `environment: staging` and `environment: production`; contract CLI execution before either mutation; temporary migration-directory construction from validated remote numeric history; dry-run allowlist validation; Supabase CLI push by database URL; post-apply migration/RPC/publication checks; actual live-worker legacy REST filter and card/detail response-shape checks; proof that the publication cron exists and advances across at least two minute boundaries; 30 live samples; artifact upload; exact frontend marker check; and absence of Stripe secrets, Stripe commands, Edge deployment, Pages deployment, `migration repair`, and unrestricted `supabase db push` against the repository migration directory.
 
-- [ ] **Step 2: Verify the workflow tests fail**
+- [x] **Step 2: Verify the workflow tests fail**
 
 Run:
 
@@ -103,11 +103,11 @@ npm run runtime -- node --test scripts/catalogue-performance-hotfix-workflow.tes
 
 Expected: failure because the workflow does not exist.
 
-- [ ] **Step 3: Implement the workflow and release-safety inventory rule**
+- [x] **Step 3: Implement the workflow and release-safety inventory rule**
 
 Pin all third-party actions to full commit SHAs already used by the repository. Require `release_sha` to equal both current `main` and checked-out `HEAD`; require the live marker to equal the manifest's fixed SHA. Build the temporary migration project under `$RUNNER_TEMP`, copy only the validated paths, and prove the dry-run pending set is a subset of the manifest before applying. A remotely recorded approved version may continue only if the corrected full legacy database contract already passes; never repair or silently reapply migration history. Exercise the exact live worker's `status=eq.active`, `is_off_market=eq.false`, city-search, card-project/image, and detail-project/image-alias REST shapes on staging before production. Require the `publish-public-catalogue` cron job and prove publication identity advances while polling across at least two minute boundaries. Use the existing release deployer allowlist and the repository's single-admin break-glass validation without emitting the reason or credentials.
 
-- [ ] **Step 4: Verify focused and release-safety tests**
+- [x] **Step 4: Verify focused and release-safety tests**
 
 Run:
 
@@ -119,7 +119,7 @@ npm run runtime -- npm run check:release-safety
 
 Expected: all commands pass with no inventory drift.
 
-- [ ] **Step 5: Commit the workflow**
+- [x] **Step 5: Commit the workflow**
 
 ```powershell
 git add .github/workflows/deploy-catalogue-performance-hotfix.yml scripts/catalogue-performance-hotfix-workflow.test.mjs scripts/release-safety-inventory.mjs scripts/release-safety-inventory.test.mjs docs/PRODUCTION_RELEASE_RUNBOOK.md

@@ -39,7 +39,8 @@ then to `production`:
 For each database target the workflow reads the remote numeric migration
 history, builds an isolated temporary migration project with empty placeholders
 for recorded history, copies only those two verified SQL files, and proves the
-dry-run pending set is a subset of the manifest before the normal CLI push.
+captured dry-run pending set exactly equals the approved versions missing remotely
+before the normal `--include-all --yes` CLI push.
 It never repairs history or applies migrations from the repository migration
 directory. A version already present remotely may proceed only after the full
 corrected runtime contract passes; otherwise stop and prepare a reviewed
@@ -50,9 +51,11 @@ legacy live-worker PostgREST filters and card/detail shapes, anonymous GET and
 HEAD probes, and a publication-cron proof that advances across two minute
 boundaries. Production starts only after those checks, confirms that the fixed
 frontend marker is still `db53d1b9adae41edae93fbeb3e612b42dd8fec0b`, and
-records 30 anonymous catalogue latency samples. Both target artifacts contain
-only target kind, release and frontend SHAs, migration identities, database
-contract facts, HTTP statuses/durations, percentiles, and UTC timestamps.
+records 30 cold/warm public API pairs with normal requests, distinct normalized
+cache keys, raw cache-header evidence, and nearest-rank p50/p95 values. Both
+target artifacts contain distinct database-hotfix and frontend-marker SHAs,
+migration identities, database/cron contract facts, raw durations, percentiles,
+and UTC timestamps.
 
 CI retains each attempt-1 release candidate, signed binding, staging bootstrap
 evidence, and captured N-1 evidence for **90 days**, matching the repository's
