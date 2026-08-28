@@ -21,6 +21,39 @@ That job proves the signed static candidate only; it is not production approval.
 All production entry points share the `maiprop-production-release` concurrency
 lease. A release is never cancelled after it starts.
 
+## Catalogue Performance Database Hotfix
+
+`Deploy Catalogue Performance Database Hotfix` is a separate, manual,
+database-only emergency lane. It accepts only the exact current `main` SHA and
+the `DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX` confirmation, then uses the existing
+production deployer and single-admin authorization validation. The operator
+must not copy the authorization reason into an artifact, summary, terminal
+transcript, or runbook record.
+
+The lane can apply only these manifest-bound migrations, first to `staging` and
+then to `production`:
+
+- `20260728123058_materialize_public_catalogue_snapshots.sql`
+- `20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql`
+
+For each database target the workflow reads the remote numeric migration
+history, builds an isolated temporary migration project with empty placeholders
+for recorded history, copies only those two verified SQL files, and proves the
+dry-run pending set is a subset of the manifest before the normal CLI push.
+It never repairs history or applies migrations from the repository migration
+directory. A version already present remotely may proceed only after the full
+corrected runtime contract passes; otherwise stop and prepare a reviewed
+additive forward migration.
+
+Staging is mandatory and must pass the 90-assertion catalogue pgTAP suite, the
+legacy live-worker PostgREST filters and card/detail shapes, anonymous GET and
+HEAD probes, and a publication-cron proof that advances across two minute
+boundaries. Production starts only after those checks, confirms that the fixed
+frontend marker is still `db53d1b9adae41edae93fbeb3e612b42dd8fec0b`, and
+records 30 anonymous catalogue latency samples. Both target artifacts contain
+only target kind, release and frontend SHAs, migration identities, database
+contract facts, HTTP statuses/durations, percentiles, and UTC timestamps.
+
 CI retains each attempt-1 release candidate, signed binding, staging bootstrap
 evidence, and captured N-1 evidence for **90 days**, matching the repository's
 organization-enforced Actions artifact cap. Transient Actions retention is not
