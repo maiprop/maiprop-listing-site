@@ -341,6 +341,47 @@ function validateKey(key, ref) {
   }
 }
 
+export function selectStagingPublicApiKey(response, projectRef) {
+  const reject = () => fail("Could not resolve exactly one current staging public API key.");
+  if (projectRef !== STAGING_REF || !response || typeof response !== "object") reject();
+
+  let rows;
+  if (Array.isArray(response)) {
+    rows = response;
+  } else {
+    const wrapped = [response.keys, response.result].filter(Array.isArray);
+    if (wrapped.length !== 1) reject();
+    [rows] = wrapped;
+  }
+  if (!rows.length || rows.some((row) => !row || typeof row !== "object" || Array.isArray(row))) {
+    reject();
+  }
+
+  const publishable = rows.filter((row) => String(row.type ?? "").toLowerCase() === "publishable");
+  let selected;
+  if (publishable.length > 0) {
+    if (publishable.length !== 1) reject();
+    [selected] = publishable;
+  } else {
+    const legacyAnon = rows.filter((row) => {
+      const type = String(row.type ?? "").toLowerCase();
+      const identities = [row.name, row.role, row.id].map((value) => String(value ?? "").toLowerCase());
+      return ["", "legacy", "anon"].includes(type) && identities.includes("anon");
+    });
+    if (legacyAnon.length !== 1) reject();
+    [selected] = legacyAnon;
+  }
+
+  const key = selected.api_key;
+  if (typeof key !== "string" || !key || /[\r\n]/.test(key)) reject();
+  try {
+    validateKey(key, projectRef);
+  } catch {
+    reject();
+  }
+  return key;
+}
+
 export function normalizeDatabaseUrlTls(databaseUrl) {
   if (typeof databaseUrl !== "string" || !databaseUrl || /[\r\n]/.test(databaseUrl)) {
     fail("Database URL cannot be normalized safely.");
@@ -746,6 +787,23 @@ function main() {
     appendFileSync(envPath, `TARGET_DB_URL=${normalized}\n`, "utf8");
     return;
   }
+  if (command === "resolve-staging-public-key-env") {
+    const envPath = process.env.GITHUB_ENV;
+    if (!envPath || process.env.TARGET_KIND !== "staging" ||
+        process.env.TARGET_PROJECT_REF !== STAGING_REF) {
+      fail("Staging public API key environment is not exact.");
+    }
+    let response;
+    try {
+      response = JSON.parse(readFileSync(args[0], "utf8"));
+    } catch {
+      fail("Could not parse the current staging public API key response.");
+    }
+    const key = selectStagingPublicApiKey(response, process.env.TARGET_PROJECT_REF);
+    process.stdout.write(`::add-mask::${key}\n`);
+    appendFileSync(envPath, `TARGET_ANON_KEY=${key}\n`, "utf8");
+    return;
+  }
   if (command === "validate-target") {
     validateTarget({ kind: process.env.TARGET_KIND, ref: process.env.TARGET_PROJECT_REF, apiUrl: process.env.TARGET_API_URL, databaseUrl: process.env.TARGET_DB_URL, key: process.env.TARGET_ANON_KEY });
     return;
@@ -815,7 +873,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: normalize-db-url-env | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: normalize-db-url-env | resolve-staging-public-key-env <response> | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {

@@ -63,6 +63,41 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.equal(production.environment, "production");
   assert.equal(value.concurrency.group, "maiprop-production-release");
   assert.equal(Object.hasOwn(validate, "if"), false, "validation must fail visibly, not skip");
+  assert.equal(Object.hasOwn(staging.env, "TARGET_ANON_KEY"), false);
+  assert.equal(Object.hasOwn(staging.env, "SUPABASE_ACCESS_TOKEN"), false);
+  assert.equal(production.env.TARGET_ANON_KEY, "${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}");
+  assert.equal(Object.hasOwn(production.env, "SUPABASE_ACCESS_TOKEN"), false);
+
+  const stagingKeyStepIndex = steps(staging).findIndex(
+    (step) => step.name === "Resolve current staging public API key",
+  );
+  const stagingIdentityStepIndex = steps(staging).findIndex(
+    (step) => step.name === "Revalidate staging identity immediately before mutation",
+  );
+  assert.ok(stagingKeyStepIndex >= 0 && stagingKeyStepIndex < stagingIdentityStepIndex);
+  const stagingKeyStep = steps(staging)[stagingKeyStepIndex];
+  assert.deepEqual(stagingKeyStep.env, {
+    SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+  });
+  assert.match(stagingKeyStep.run, /--request GET/);
+  assert.match(stagingKeyStep.run, /https:\/\/api\.supabase\.com\/v1\/projects\/\$TARGET_PROJECT_REF\/api-keys\?reveal=true/);
+  assert.match(stagingKeyStep.run, /Authorization: Bearer \$SUPABASE_ACCESS_TOKEN/);
+  assert.match(stagingKeyStep.run, /mktemp "\$RUNNER_TEMP\//);
+  assert.match(stagingKeyStep.run, /chmod 600 "\$keys_file"/);
+  assert.match(stagingKeyStep.run, /trap 'rm -f -- "\$keys_file"' EXIT/);
+  assert.match(stagingKeyStep.run, /--connect-timeout 10/);
+  assert.match(stagingKeyStep.run, /--max-time 30/);
+  assert.match(stagingKeyStep.run, /--retry 3/);
+  assert.match(stagingKeyStep.run, /--retry-all-errors/);
+  assert.match(stagingKeyStep.run, /--retry-max-time 90/);
+  assert.match(stagingKeyStep.run, /-o "\$keys_file"/);
+  assert.match(stagingKeyStep.run, /resolve-staging-public-key-env "\$keys_file"/);
+  assert.doesNotMatch(stagingKeyStep.run, /-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/);
+  assert.doesNotMatch(text, /STAGING_SUPABASE_PUBLISHABLE_KEY/);
+  const accessTokenSteps = Object.values(value.jobs).flatMap((job) =>
+    steps(job).filter((step) => Object.hasOwn(step.env ?? {}, "SUPABASE_ACCESS_TOKEN"))
+  );
+  assert.deepEqual(accessTokenSteps.map((step) => step.name), ["Resolve current staging public API key"]);
 
   const validation = `${stepText(validate)}\n${JSON.stringify(validate)}`;
   const authorizationStep = steps(validate).find(
@@ -208,6 +243,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   );
 
   const productionBody = stepText(production);
+  assert.doesNotMatch(productionBody, /api\.supabase\.com|SUPABASE_ACCESS_TOKEN|resolve-staging-public-key-env/);
   for (const body of [stagingBody, productionBody]) {
     assert.match(body, /Refuse recorded hotfix drift before/);
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs recorded/);

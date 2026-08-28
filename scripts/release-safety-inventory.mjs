@@ -162,6 +162,54 @@ export function cataloguePerformanceHotfixWorkflowViolations({ text, parsed, sup
     violations.push("catalogue hotfix must validate, then stage, then promote to production");
   }
 
+  const stagingEnv = jobs.staging?.env ?? {};
+  const productionEnv = jobs.production?.env ?? {};
+  const stagingSteps = jobs.staging?.steps ?? [];
+  const resolverIndex = stagingSteps.findIndex(
+    (step) => step?.name === "Resolve current staging public API key",
+  );
+  const identityIndex = stagingSteps.findIndex(
+    (step) => step?.name === "Revalidate staging identity immediately before mutation",
+  );
+  const resolver = stagingSteps[resolverIndex];
+  const tokenSteps = Object.values(jobs).flatMap((job) =>
+    (job?.steps ?? []).filter((step) => Object.hasOwn(step?.env ?? {}, "SUPABASE_ACCESS_TOKEN"))
+  );
+  const resolverMarkers = [
+    "mktemp \"$RUNNER_TEMP/",
+    "chmod 600 \"$keys_file\"",
+    "trap 'rm -f -- \"$keys_file\"' EXIT",
+    "--request GET",
+    "--connect-timeout 10",
+    "--max-time 30",
+    "--retry 3",
+    "--retry-all-errors",
+    "--retry-max-time 90",
+    "-o \"$keys_file\"",
+    "Authorization: Bearer $SUPABASE_ACCESS_TOKEN",
+    "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/api-keys?reveal=true",
+    "resolve-staging-public-key-env \"$keys_file\"",
+  ];
+  const resolverText = String(resolver?.run ?? "");
+  if (
+    Object.hasOwn(stagingEnv, "TARGET_ANON_KEY") ||
+    Object.hasOwn(stagingEnv, "SUPABASE_ACCESS_TOKEN") ||
+    productionEnv.TARGET_ANON_KEY !== "${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}" ||
+    Object.hasOwn(productionEnv, "SUPABASE_ACCESS_TOKEN") ||
+    String(text ?? "").includes("STAGING_SUPABASE_PUBLISHABLE_KEY") ||
+    resolverIndex < 0 || resolverIndex >= identityIndex ||
+    Object.keys(resolver?.env ?? {}).join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
+    resolver?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
+    tokenSteps.length !== 1 || tokenSteps[0] !== resolver ||
+    resolverMarkers.some((marker) => !resolverText.includes(marker)) ||
+    /-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/.test(resolverText) ||
+    !String(supportText).includes("selectStagingPublicApiKey") ||
+    !String(supportText).includes("process.stdout.write(`::add-mask::${key}") ||
+    !String(supportText).includes("appendFileSync(envPath, `TARGET_ANON_KEY=${key}")
+  ) {
+    violations.push("catalogue hotfix staging public key resolution is not isolated and fail closed");
+  }
+
   const required = [
     "catalogue-performance-hotfix-contract.mjs verify --json",
     "RELEASE_AUTHORIZATION_ACTION: production-deploy",
