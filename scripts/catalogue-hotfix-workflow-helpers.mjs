@@ -90,6 +90,7 @@ function normalizeCacheEvidence(value) {
 
 function normalizeProductionRecord(record) {
   assertExactKeys(record, [
+    "body_shape_valid",
     "cache",
     "duration_ms",
     "item_count",
@@ -117,8 +118,11 @@ function normalizeProductionRecord(record) {
       record.normalized_cache_key !== expectedKey || record.normalized_url !== expectedUrl) {
     fail("Production sample URL/key is not the exact normalized public request.");
   }
-  if (record.item_count !== 12) {
-    fail("Production sample must prove the full nonempty 12-card path.");
+  if (record.body_shape_valid !== true && record.body_shape_valid !== false) {
+    fail("Production sample body-shape flag is invalid.");
+  }
+  if (record.item_count !== null && (!Number.isSafeInteger(record.item_count) || record.item_count < 0)) {
+    fail("Production sample item count is invalid.");
   }
   return {
     pair,
@@ -131,6 +135,7 @@ function normalizeProductionRecord(record) {
     status: positiveInteger(record.status, "Production HTTP status"),
     duration_ms: positiveInteger(record.duration_ms, "Production duration"),
     item_count: record.item_count,
+    body_shape_valid: record.body_shape_valid,
     cache: normalizeCacheEvidence(record.cache),
   };
 }
@@ -251,6 +256,9 @@ export function assertLatencyEvidencePasses(evidence) {
       const allowed = record.phase === "cold" ? ["MISS", "BYPASS"] : ["HIT"];
       if (!allowed.includes(record.cache.state)) {
         fail(`Production ${record.phase} cache state is not approved.`);
+      }
+      if (record.body_shape_valid !== true || record.item_count !== 12) {
+        fail("Production sample must prove the full nonempty 12-card response body.");
       }
     }
   }
@@ -426,6 +434,10 @@ export function validateCatalogueBehaviorProbe({
   detailRows,
   typedRows,
   publicationRows,
+  homepageRows,
+  auctionSeedRows,
+  auctionRows,
+  requireSecond = false,
 }) {
   if (!context || typeof context.id !== "string" || !context.id ||
       typeof context.locationToken !== "string" || !context.locationToken) {
@@ -479,7 +491,7 @@ export function validateCatalogueBehaviorProbe({
     }
   }
 
-  return {
+  const result = {
     legacy_card_rows: 1,
     legacy_detail_rows: 1,
     location_filter_matched: true,
@@ -493,13 +505,73 @@ export function validateCatalogueBehaviorProbe({
     typed_call_rows: typedRows.length,
     typed_shape: true,
   };
+  if (!requireSecond) return result;
+
+  if (!Array.isArray(homepageRows) || homepageRows.length !== 1) {
+    fail("A nonempty hardened homepage invocation is required.");
+  }
+  const homepage = homepageRows[0];
+  if (Number(homepage?.publication_id) !== publicationId ||
+      !validDate(homepage.published_at) || !validDate(homepage.retain_until) ||
+      Date.parse(homepage.retain_until) !== Date.parse(publication.retain_until) ||
+      !homepage.payload || typeof homepage.payload !== "object" || Array.isArray(homepage.payload)) {
+    fail("Hardened homepage invocation returned an invalid retain_until contract.");
+  }
+  if (!Array.isArray(auctionSeedRows) || auctionSeedRows.length !== 1) {
+    fail("A nonempty typed auction seed invocation is required.");
+  }
+  const auctionSeed = auctionSeedRows[0];
+  if (Number(auctionSeed?.publication_id) !== publicationId ||
+      typeof auctionSeed?.listing_id !== "string" || !auctionSeed.listing_id ||
+      !auctionSeed.card_payload || typeof auctionSeed.card_payload !== "object" ||
+      Array.isArray(auctionSeed.card_payload)) {
+    fail("Typed auction seed invocation returned an invalid shape.");
+  }
+  if (!Array.isArray(auctionRows) || auctionRows.length !== 1) {
+    fail("A nonempty exact auction invocation is required.");
+  }
+  const auction = auctionRows[0];
+  if (Number(auction?.publication_id) !== publicationId ||
+      auction.listing_id !== auctionSeed.listing_id || !validDate(auction.published_at) ||
+      !auction.detail_payload || typeof auction.detail_payload !== "object" ||
+      Array.isArray(auction.detail_payload)) {
+    fail("Exact auction invocation returned an invalid publication-bound shape.");
+  }
+  return {
+    ...result,
+    homepage_call_rows: 1,
+    homepage_retain_until_shape: true,
+    auction_seed_rows: 1,
+    auction_call_rows: 1,
+    auction_shape: true,
+  };
 }
 
-export function validateDatabaseContract({ metadata, invocation, restProbe }) {
-  const expectedVersions = ["20260728123058", "20260729120405"];
-  if (JSON.stringify([...(metadata?.migration_versions ?? [])].sort()) !== JSON.stringify(expectedVersions) ||
-      !metadata?.legacy_rpc || !metadata?.publication_rpc || !metadata?.typed_rpc) {
-    fail("Database function/version contract is incomplete.");
+export function validateDatabaseContract({
+  metadata,
+  invocation,
+  restProbe,
+  recordedVersions = metadata?.migration_versions,
+  requiredLevel = "first_migration",
+}) {
+  const firstVersion = "20260728123058";
+  const secondVersion = "20260729120405";
+  const normalizedVersions = [...(recordedVersions ?? [])].sort();
+  const expectedVersions = requiredLevel === "full"
+    ? [firstVersion, secondVersion]
+    : [firstVersion];
+  if (!["first_migration", "full"].includes(requiredLevel) ||
+      JSON.stringify(normalizedVersions) !== JSON.stringify(expectedVersions) ||
+      JSON.stringify([...(metadata?.migration_versions ?? [])].sort()) !== JSON.stringify(expectedVersions)) {
+    fail("Database recorded-version contract is incomplete.");
+  }
+  if (!metadata?.private_catalogue_tables || !metadata?.private_catalogue_rls_enabled ||
+      metadata?.private_catalogue_rls_forced !== false ||
+      !metadata?.private_catalogue_no_direct_privileges || !metadata?.first_indexes) {
+    fail("Database first migration table, RLS, privilege, or index contract is incomplete.");
+  }
+  if (!metadata?.legacy_rpc || !metadata?.publication_rpc || !metadata?.typed_rpc) {
+    fail("Database first migration function contract is incomplete.");
   }
   if (!metadata.anon_legacy_execute || !metadata.anon_publication_execute || !metadata.anon_typed_execute) {
     fail("Database anon EXECUTE grant contract is incomplete.");
@@ -515,28 +587,67 @@ export function validateDatabaseContract({ metadata, invocation, restProbe }) {
       restProbe.typed_call_rows < 1 || restProbe.typed_shape !== true) {
     fail("Database REST behavioral contract is incomplete.");
   }
-  return {
+  if (requiredLevel === "full") {
+    if (!metadata.auction_rpc || !metadata.homepage_rpc ||
+        !metadata.homepage_retain_until_contract || !metadata.auction_index) {
+      fail("Database second migration function, homepage return, or index contract is incomplete.");
+    }
+    if (!metadata.anon_auction_execute || !metadata.anon_homepage_execute) {
+      fail("Database second migration anon EXECUTE grant contract is incomplete.");
+    }
+    if (invocation?.homepage_call_rows !== 1 || invocation?.homepage_shape !== true ||
+        invocation?.auction_call_rows !== 1 || invocation?.auction_shape !== true) {
+      fail("Database second migration anon invocation contract is incomplete.");
+    }
+    if (restProbe?.homepage_call_rows !== 1 ||
+        restProbe?.homepage_retain_until_shape !== true ||
+        restProbe?.auction_seed_rows !== 1 || restProbe?.auction_call_rows !== 1 ||
+        restProbe?.auction_shape !== true) {
+      fail("Database second migration REST behavioral contract is incomplete.");
+    }
+  }
+  const evidence = {
     schema_version: 1,
-    migration_versions: expectedVersions,
+    contract_level: requiredLevel,
+    recorded_versions: normalizedVersions,
+    private_tables: {
+      exist: true,
+      rls_enabled: true,
+      rls_forced: false,
+      no_public_anon_authenticated_privileges: true,
+    },
+    indexes: {
+      first_migration: true,
+      ...(requiredLevel === "full" ? { auction_lookup: true } : {}),
+    },
     functions: {
       legacy_rpc: true,
       publication_rpc: true,
       typed_rpc: true,
+      ...(requiredLevel === "full" ? { auction_rpc: true, homepage_rpc: true, homepage_retain_until_contract: true } : {}),
     },
     anon_execute_grants: {
       legacy_rpc: true,
       publication_rpc: true,
       typed_rpc: true,
+      ...(requiredLevel === "full" ? { auction_rpc: true, homepage_rpc: true } : {}),
     },
     anon_database_invocations: {
       publication_call_rows: 1,
       publication_shape: true,
       typed_call_rows: invocation.typed_call_rows,
       typed_shape: true,
+      ...(requiredLevel === "full" ? {
+        homepage_call_rows: 1,
+        homepage_shape: true,
+        auction_call_rows: 1,
+        auction_shape: true,
+      } : {}),
     },
     rest_behavior: { ...restProbe },
     completed_at: completedTimestamp(),
   };
+  return evidence;
 }
 
 export function buildCronProof({ baseline, current, elapsedSeconds, completedAt }) {
@@ -576,11 +687,16 @@ export function buildCronProof({ baseline, current, elapsedSeconds, completedAt 
   };
 }
 
-export function publicListingItemCount(body) {
-  if (!body || typeof body !== "object" || Array.isArray(body) || !Array.isArray(body.data)) {
-    fail("Production public response body does not contain a data array.");
+export function inspectPublicListingBody(text) {
+  try {
+    const body = JSON.parse(String(text));
+    if (!body || typeof body !== "object" || Array.isArray(body) || !Array.isArray(body.data)) {
+      return { item_count: null, body_shape_valid: false };
+    }
+    return { item_count: body.data.length, body_shape_valid: true };
+  } catch {
+    return { item_count: null, body_shape_valid: false };
   }
-  return body.data.length;
 }
 
 function main() {
@@ -600,9 +716,9 @@ function main() {
     process.stdout.write(`${JSON.stringify(parseCacheState(readFileSync(headersPath, "utf8")))}\n`);
     return;
   }
-  if (command === "count-public-items") {
+  if (command === "inspect-public-body") {
     const [bodyPath] = args;
-    process.stdout.write(`${publicListingItemCount(JSON.parse(readFileSync(bodyPath, "utf8")))}\n`);
+    process.stdout.write(`${JSON.stringify(inspectPublicListingBody(readFileSync(bodyPath, "utf8")))}\n`);
     return;
   }
   if (command === "cron-proof") {
@@ -650,7 +766,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: validate-target | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | count-public-items <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: validate-target | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {

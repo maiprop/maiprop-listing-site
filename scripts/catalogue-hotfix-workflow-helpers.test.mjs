@@ -6,6 +6,7 @@ import {
   buildCronProof,
   buildLatencyEvidence,
   buildReleaseSummary,
+  inspectPublicListingBody,
   parseCacheState,
   selectCatalogueProbeContext,
   summarizeLatencySamples,
@@ -90,7 +91,7 @@ function productionRecords(run_bucket = 0) {
         normalized_cache_key: key,
         status: 200,
         duration_ms: index + 1,
-        item_count: 12,
+        ...inspectPublicListingBody(JSON.stringify({ data: Array.from({ length: 12 }, () => ({ id: "card" })) })),
         cache: { source: "x-maiprop-cache", state: index === 0 ? "BYPASS" : "MISS" },
       },
       {
@@ -103,7 +104,7 @@ function productionRecords(run_bucket = 0) {
         normalized_cache_key: key,
         status: 200,
         duration_ms: index + 101,
-        item_count: 12,
+        ...inspectPublicListingBody(JSON.stringify({ data: Array.from({ length: 12 }, () => ({ id: "card" })) })),
         cache: { source: "x-maiprop-cache", state: "HIT" },
       },
     ];
@@ -192,12 +193,15 @@ test("production evidence validates every exact cold/warm cache pair", () => {
   assert.throws(() => summarizeLatencySamples({ targetKind: "production", contract, records: slowOutlier }));
 
   const emptySuccess = productionRecords();
-  emptySuccess[0].item_count = 0;
-  assert.throws(() => summarizeLatencySamples({ targetKind: "production", contract, records: emptySuccess }));
+  Object.assign(emptySuccess[0], inspectPublicListingBody('{"data":[]}'));
+  const emptyEvidence = buildLatencyEvidence({ targetKind: "production", contract, records: emptySuccess });
+  assert.equal(emptyEvidence.cold.samples[0].item_count, 0);
+  assert.equal(emptyEvidence.cold.samples[0].body_shape_valid, true);
+  assert.throws(() => assertLatencyEvidencePasses(emptyEvidence));
 
   const shortPage = productionRecords();
   shortPage[0].item_count = 11;
-  assert.throws(() => summarizeLatencySamples({ targetKind: "production", contract, records: shortPage }));
+  assert.throws(() => assertLatencyEvidencePasses(buildLatencyEvidence({ targetKind: "production", contract, records: shortPage })));
 
   const retryBucket = summarizeLatencySamples({
     targetKind: "production",
@@ -206,6 +210,37 @@ test("production evidence validates every exact cold/warm cache pair", () => {
   });
   assert.equal(retryBucket.cold.samples[0].normalized_cache_key, "page=451&pageSize=12&offset=0&sort=views");
   assert.equal(retryBucket.cold.samples.at(-1).normalized_cache_key, "page=480&pageSize=12&offset=0&sort=views");
+});
+
+test("public response inspection preserves 503 and malformed bodies without throwing", () => {
+  assert.deepEqual(inspectPublicListingBody('{"error":"unavailable"}'), {
+    item_count: null,
+    body_shape_valid: false,
+  });
+  assert.deepEqual(inspectPublicListingBody('<html>upstream failed</html>'), {
+    item_count: null,
+    body_shape_valid: false,
+  });
+  assert.deepEqual(inspectPublicListingBody('{"data":[]}'), {
+    item_count: 0,
+    body_shape_valid: true,
+  });
+
+  const unavailable = productionRecords();
+  unavailable[0].status = 503;
+  Object.assign(unavailable[0], inspectPublicListingBody('{"error":"unavailable"}'));
+  const unavailableEvidence = buildLatencyEvidence({ targetKind: "production", contract, records: unavailable });
+  assert.equal(unavailableEvidence.cold.samples[0].status, 503);
+  assert.equal(unavailableEvidence.cold.samples[0].item_count, null);
+  assert.equal(unavailableEvidence.cold.samples[0].body_shape_valid, false);
+  assert.throws(() => assertLatencyEvidencePasses(unavailableEvidence));
+
+  const malformed = productionRecords();
+  Object.assign(malformed[1], inspectPublicListingBody('not-json'));
+  const malformedEvidence = buildLatencyEvidence({ targetKind: "production", contract, records: malformed });
+  assert.equal(malformedEvidence.warm.samples[0].item_count, null);
+  assert.equal(malformedEvidence.warm.samples[0].body_shape_valid, false);
+  assert.throws(() => assertLatencyEvidencePasses(malformedEvidence));
 });
 
 const projectFixtures = {
@@ -316,6 +351,11 @@ test("catalogue behavioural proof requires real typed and publication results", 
 test("database contract requires anon grants and actual typed/publication invocations", () => {
   const metadata = {
     migration_versions: ["20260728123058", "20260729120405"],
+    private_catalogue_tables: true,
+    private_catalogue_rls_enabled: true,
+    private_catalogue_rls_forced: false,
+    private_catalogue_no_direct_privileges: true,
+    first_indexes: true,
     legacy_rpc: true,
     publication_rpc: true,
     typed_rpc: true,
@@ -330,10 +370,11 @@ test("database contract requires anon grants and actual typed/publication invoca
     typed_shape: true,
   };
   const restProbe = validateCatalogueBehaviorProbe(validBehaviourFixture());
-  assert.doesNotThrow(() => validateDatabaseContract({ metadata, invocation, restProbe }));
-  assert.equal(JSON.stringify(validateDatabaseContract({ metadata, invocation, restProbe })).includes(projectFixtures.nullProject.id), false);
-  assert.throws(() => validateDatabaseContract({ metadata: { ...metadata, anon_typed_execute: false }, invocation, restProbe }), /grant/i);
-  assert.throws(() => validateDatabaseContract({ metadata, invocation: { ...invocation, typed_call_rows: 0 }, restProbe }), /invocation/i);
+  const firstMetadata = { ...metadata, migration_versions: ["20260728123058"] };
+  assert.doesNotThrow(() => validateDatabaseContract({ metadata: firstMetadata, invocation, restProbe }));
+  assert.equal(JSON.stringify(validateDatabaseContract({ metadata: firstMetadata, invocation, restProbe })).includes(projectFixtures.nullProject.id), false);
+  assert.throws(() => validateDatabaseContract({ metadata: { ...firstMetadata, anon_typed_execute: false }, invocation, restProbe }), /grant/i);
+  assert.throws(() => validateDatabaseContract({ metadata: firstMetadata, invocation: { ...invocation, typed_call_rows: 0 }, restProbe }), /invocation/i);
 });
 
 test("cron proof derives both count and minute boundaries only from post-baseline runs", () => {

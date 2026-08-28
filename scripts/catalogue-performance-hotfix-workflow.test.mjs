@@ -173,6 +173,10 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.match(productionBody, /release:verify-live-marker/);
   assert.match(productionBody, /https:\/\/portal\.maiprop\.co\/api\/public\/listings/);
   assert.match(behaviouralProbe, /get_public_listing_catalogue/);
+  assert.match(behaviouralProbe, /get_public_catalogue_auctions/);
+  assert.match(behaviouralProbe, /get_public_catalogue_homepage/);
+  assert.match(behaviouralProbe, /homepage_retain_until_contract/);
+  assert.match(behaviouralProbe, /idx_public_catalogue_versions_auction_listing_publication/);
   assert.match(helpers, /cold_sample_count/);
   assert.match(helpers, /warm_sample_count/);
   assert.match(helpers, /cold_p50_ms/);
@@ -190,8 +194,9 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.match(productionBody, /summarize-samples production/);
   assert.match(productionBody, /normalized_url/);
   assert.match(productionBody, /normalized_cache_key/);
-  assert.match(productionBody, /count-public-items/);
+  assert.match(productionBody, /inspect-public-body/);
   assert.match(productionBody, /item_count/);
+  assert.match(productionBody, /body_shape_valid/);
   assert.match(helpers, /item_count !== 12/);
   assert.doesNotMatch(productionBody, /first\("cold"\)|-301\.headers/);
   assert.doesNotMatch(productionBody, /public-api-cache-headers\.txt/);

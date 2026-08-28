@@ -184,6 +184,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({ text, parsed, sup
     "catalogue-hotfix-behavioral-probe.mjs recorded",
     "catalogue-hotfix-behavioral-probe.mjs postapply evidence/database-contract.json",
     "catalogue-hotfix-workflow-helpers.mjs cron-proof",
+    "catalogue-hotfix-workflow-helpers.mjs inspect-public-body",
+    "body_shape_valid",
     "release:verify-live-marker",
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
   ];
@@ -199,6 +201,13 @@ export function cataloguePerformanceHotfixWorkflowViolations({ text, parsed, sup
     "SET LOCAL ROLE anon",
     "minute_boundaries: 2",
     "new_run_minutes",
+    "get_public_catalogue_auctions",
+    "get_public_catalogue_homepage",
+    "homepage_retain_until_contract",
+    "idx_public_catalogue_versions_auction_listing_publication",
+    "private_catalogue_rls_enabled",
+    "private_catalogue_rls_forced",
+    "private_catalogue_no_direct_privileges",
   ]) {
     if (!String(supportText).includes(marker)) {
       violations.push(`catalogue hotfix support is missing ${marker}`);
