@@ -26,6 +26,17 @@ function stepText(job) {
     .join("\n");
 }
 
+function artifactPaths(job) {
+  const upload = steps(job).find((step) =>
+    String(step.uses ?? "").startsWith("actions/upload-artifact@")
+  );
+  assert.ok(upload, "artifact upload step exists");
+  return String(upload.with.path)
+    .split(/\r?\n/)
+    .map((path) => path.trim())
+    .filter(Boolean);
+}
+
 test("catalogue hotfix deploys the manifest-bound database subset staging before production", () => {
   const { text, value } = workflow();
   const inputs = value.on.workflow_dispatch.inputs;
@@ -69,6 +80,10 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.match(validation, /GITHUB_REF/);
   assert.match(validation, /GITHUB_RUN_ATTEMPT/);
   assert.match(validation, /GITHUB_TRIGGERING_ACTOR/);
+  const helpers = readFileSync(
+    resolve(process.cwd(), "scripts/catalogue-hotfix-workflow-helpers.mjs"),
+    "utf8",
+  );
 
   for (const [target, job] of Object.entries({ staging, production })) {
     const body = stepText(job);
@@ -82,7 +97,6 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /db push --include-all --yes --db-url "\$TARGET_DB_URL"/);
     assert.match(body, /dry-run-output\.txt.*2>&1|2>&1.*dry-run-output\.txt/);
     assert.match(body, /catalogue-hotfix-workflow-helpers\.mjs validate-dry-run/);
-    const helpers = readFileSync(resolve(process.cwd(), "scripts/catalogue-hotfix-workflow-helpers.mjs"), "utf8");
     assert.match(helpers, /expected_pending_versions/);
     assert.match(helpers, /pending_versions/);
     assert.match(helpers, /new URL/);
@@ -97,8 +111,8 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /get_public_catalogue_publication/);
     assert.match(body, /anon|anonymous/i);
     assert.match(body, /30/);
-    assert.match(body, /p95/i);
-    assert.match(body, /completed_at|timestamp/i);
+    assert.match(helpers, /p95_ms/i);
+    assert.match(helpers, /completed_at|timestamp/i);
     assert.match(body, /git fetch --no-tags origin main/);
     assert.match(body, /RELEASE_CURRENT_MAIN_SHA/);
     assert.match(body, /elapsed_seconds/);
@@ -120,21 +134,68 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.match(stagingBody, /publication_id/);
   assert.match(stagingBody, /STAGING_MUTATION_ACKNOWLEDGEMENT/);
   assert.match(readFileSync(resolve(process.cwd(), "scripts/assert-staging-mutation-target.mjs"), "utf8"), /MUTATE_STAGING_xsiehskfgeoqyazcgauv/);
-  assert.match(stagingBody, /p50_ms/);
-  assert.match(stagingBody, /p95_ms/);
-  assert.doesNotMatch(stagingBody, /cold_p95_ms/);
+  assert.match(helpers, /p50_ms/);
+  assert.match(helpers, /p95_ms/);
+  assert.match(stagingBody, /direct_rpc_first/);
+  assert.match(stagingBody, /direct_rpc_second/);
+  assert.match(stagingBody, /summarize-samples staging/);
+  assert.match(stagingBody, /staging-http-latency\.json/);
+  assert.match(stagingBody, /staging-frontend-marker\.json/);
+  assert.doesNotMatch(stagingBody, /evidence\/probe-context\.json/);
+  assert.doesNotMatch(stagingBody, /evidence\/http-samples\.ndjson/);
+  assert.deepEqual(artifactPaths(staging), [
+    "evidence/catalogue-performance-hotfix-staging.json",
+    "evidence/database-contract.json",
+    "evidence/dry-run-pending.json",
+    "evidence/public-catalogue-pgtap-proof.json",
+    "evidence/catalogue-cron-proof.json",
+    "evidence/staging-frontend-marker.json",
+    "evidence/staging-http-latency.json",
+  ]);
+  assert.ok(
+    steps(staging).findIndex((step) => step.name === "Enforce staging latency evidence gate") >
+      steps(staging).findIndex((step) => String(step.uses ?? "").startsWith("actions/upload-artifact@")),
+    "staging preserves and uploads all sample statuses before failing its latency gate",
+  );
 
   const productionBody = stepText(production);
   assert.match(productionBody, /release:verify-live-marker/);
   assert.match(productionBody, /https:\/\/portal\.maiprop\.co\/api\/public\/listings/);
   assert.match(productionBody, /get_public_listing_catalogue/);
-  assert.match(productionBody, /cold_samples/);
-  assert.match(productionBody, /warm_samples/);
-  assert.match(productionBody, /cold_p50_ms/);
-  assert.match(productionBody, /warm_p95_ms/);
-  assert.match(productionBody, /live-frontend-marker\.json/);
-  assert.match(productionBody, /database_hotfix_sha/);
-  assert.match(productionBody, /db53d1b9adae41edae93fbeb3e612b42dd8fec0b/);
+  assert.match(helpers, /cold_sample_count/);
+  assert.match(helpers, /warm_sample_count/);
+  assert.match(helpers, /cold_p50_ms/);
+  assert.match(helpers, /warm_p95_ms/);
+  assert.match(productionBody, /production-frontend-marker\.json/);
+  assert.match(helpers, /database_hotfix_sha/);
+  assert.match(
+    readFileSync(
+      resolve(process.cwd(), "scripts/catalogue-performance-hotfix-manifest.json"),
+      "utf8",
+    ),
+    /db53d1b9adae41edae93fbeb3e612b42dd8fec0b/,
+  );
+  assert.match(productionBody, /parse-cache-headers/);
+  assert.match(productionBody, /summarize-samples production/);
+  assert.match(productionBody, /normalized_url/);
+  assert.match(productionBody, /normalized_cache_key/);
+  assert.doesNotMatch(productionBody, /first\("cold"\)|-301\.headers/);
+  assert.doesNotMatch(productionBody, /public-api-cache-headers\.txt/);
+  assert.doesNotMatch(productionBody, /evidence\/probe-context\.json/);
+  assert.doesNotMatch(productionBody, /evidence\/http-samples\.ndjson/);
+  assert.deepEqual(artifactPaths(production), [
+    "evidence/catalogue-performance-hotfix-production.json",
+    "evidence/database-contract.json",
+    "evidence/dry-run-pending.json",
+    "evidence/catalogue-cron-proof.json",
+    "evidence/production-frontend-marker.json",
+    "evidence/production-http-latency.json",
+  ]);
+  assert.ok(
+    steps(production).findIndex((step) => step.name === "Enforce production latency evidence gate") >
+      steps(production).findIndex((step) => String(step.uses ?? "").startsWith("actions/upload-artifact@")),
+    "production preserves and uploads all sample/cache states before failing its latency gate",
+  );
   assert.match(text, /actions\/upload-artifact@[0-9a-f]{40}/);
   assert.match(text, /actions\/checkout@[0-9a-f]{40}/);
   assert.match(text, /actions\/setup-node@[0-9a-f]{40}/);
