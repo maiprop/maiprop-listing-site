@@ -55,7 +55,6 @@ jobs:
       TARGET_PROJECT_REF: xsiehskfgeoqyazcgauv
       TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
       TARGET_API_URL: ${{ secrets.STAGING_SUPABASE_URL }}
-      TARGET_ANON_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
       STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
       PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
       RELEASE_SINGLE_ADMIN_BREAK_GLASS: ${{ inputs.single_admin_break_glass }}
@@ -70,6 +69,22 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/catalogue-hotfix-workflow-helpers.mjs normalize-db-url-env
+      - name: Resolve current staging public API key
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keys_file="$(mktemp "$RUNNER_TEMP/catalogue-hotfix-staging-api-keys.XXXXXX.json")"
+          chmod 600 "$keys_file"
+          trap 'rm -f -- "$keys_file"' EXIT
+          if ! curl -s --fail --request GET --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 90 -o "$keys_file" -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/api-keys?reveal=true"; then
+            echo "::error::Could not fetch the current staging public API key."
+            exit 1
+          fi
+          node scripts/catalogue-hotfix-workflow-helpers.mjs resolve-staging-public-key-env "$keys_file"
+          rm -f -- "$keys_file"
+          trap - EXIT
       - name: Revalidate staging identity immediately before mutation
         env:
           GH_TOKEN: ${{ github.token }}

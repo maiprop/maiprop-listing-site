@@ -29,6 +29,20 @@ describe("release safety inventory", () => {
 
     expect(cataloguePerformanceHotfixWorkflowViolations({ text, parsed, supportText }))
       .toEqual([]);
+    const leakedAccessToken = structuredClone(parsed);
+    leakedAccessToken.jobs.staging.env.SUPABASE_ACCESS_TOKEN = "${{ secrets.SUPABASE_ACCESS_TOKEN }}";
+    expect(cataloguePerformanceHotfixWorkflowViolations({
+      text,
+      parsed: leakedAccessToken,
+      supportText,
+    })).not.toEqual([]);
+    const staleStagingKey = structuredClone(parsed);
+    staleStagingKey.jobs.staging.env.TARGET_ANON_KEY = "${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}";
+    expect(cataloguePerformanceHotfixWorkflowViolations({
+      text,
+      parsed: staleStagingKey,
+      supportText,
+    })).not.toEqual([]);
     expect(cataloguePerformanceHotfixWorkflowViolations({
       text: text.replace("needs: [validate, staging]", "needs: [validate]"),
       parsed: yaml.load(text.replace("needs: [validate, staging]", "needs: [validate]")),
