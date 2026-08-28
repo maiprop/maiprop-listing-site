@@ -323,6 +323,38 @@ export function buildReleaseSummary({
   };
 }
 
+export function buildCatalogueHotfixStaticMarkerEvidence({ expectedSha, marker }) {
+  const markerKeys = [
+    "sha",
+    "run_id",
+    "run_attempt",
+    "created_at",
+  ];
+  const invalid = () => fail("Database hotfix static deploy marker is invalid.");
+  if (typeof expectedSha !== "string" || !FULL_SHA.test(expectedSha) ||
+      !marker || typeof marker !== "object" || Array.isArray(marker)) {
+    invalid();
+  }
+  try {
+    assertExactKeys(marker, markerKeys, "Database hotfix static deploy marker");
+  } catch {
+    invalid();
+  }
+  const canonicalCreatedAt = typeof marker.created_at === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(marker.created_at) &&
+    !Number.isNaN(Date.parse(marker.created_at)) &&
+    new Date(marker.created_at).toISOString() === `${marker.created_at.slice(0, -1)}.000Z`;
+  if (
+    typeof marker.sha !== "string" || !FULL_SHA.test(marker.sha) ||
+    typeof marker.run_id !== "string" || !/^[1-9][0-9]*$/.test(marker.run_id) ||
+    typeof marker.run_attempt !== "string" || !/^[1-9][0-9]*$/.test(marker.run_attempt) ||
+    !canonicalCreatedAt || marker.sha !== expectedSha
+  ) {
+    invalid();
+  }
+  return { release_sha: expectedSha };
+}
+
 function validateKey(key, ref) {
   if (/(service_role|service|secret|sb_secret|sk_)/i.test(key)) {
     fail("A service or secret key is not permitted for catalogue verification.");
@@ -973,6 +1005,18 @@ function main() {
     writeFileSync(outputPath, `${JSON.stringify(result, null, 2)}\n`);
     return;
   }
+  if (command === "write-static-marker-evidence") {
+    const [expectedSha, markerPath, outputPath] = args;
+    let marker;
+    try {
+      marker = JSON.parse(readFileSync(markerPath, "utf8"));
+    } catch {
+      fail("Database hotfix static deploy marker is invalid.");
+    }
+    const result = buildCatalogueHotfixStaticMarkerEvidence({ expectedSha, marker });
+    writeFileSync(outputPath, `${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
   if (command === "validate-artifacts") {
     const [targetKind] = args;
     for (const path of artifactPathsForTarget(targetKind)) {
@@ -983,7 +1027,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: normalize-db-url-env | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <publishable-attempts> <legacy-anon-status> <legacy-anon-attempts> | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: normalize-db-url-env | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <publishable-attempts> <legacy-anon-status> <legacy-anon-attempts> | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-static-marker-evidence <expected-sha> <marker> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {

@@ -30,11 +30,16 @@ describe("release safety inventory", () => {
       resolve(process.cwd(), "scripts/catalogue-hotfix-staging-key-probe.sh"),
       "utf8",
     );
+    const markerScriptText = readFileSync(
+      resolve(process.cwd(), "scripts/catalogue-hotfix-static-marker.sh"),
+      "utf8",
+    );
     const violations = (overrides = {}) => cataloguePerformanceHotfixWorkflowViolations({
       text,
       parsed,
       supportText,
       probeScriptText,
+      markerScriptText,
       ...overrides,
     });
 
@@ -65,6 +70,19 @@ describe("release safety inventory", () => {
     ]) {
       expect(violations({ probeScriptText: unsafeProbe })).not.toEqual([]);
     }
+    for (const unsafeMarker of [
+      markerScriptText.replace(
+        'marker_url="https://portal.maiprop.co/deploy-version.json"',
+        'marker_url="${TARGET_API_URL%/}/deploy-version.json"',
+      ),
+      markerScriptText.replace("--retry 2", ""),
+      `${markerScriptText}\ncurl https://portal.maiprop.co/api/release\n`,
+    ]) {
+      expect(violations({ markerScriptText: unsafeMarker })).not.toEqual([]);
+    }
+    expect(violations({
+      supportText: supportText.replace('    "created_at",', '    "source_tree",'),
+    })).not.toEqual([]);
     expect(violations({
       text: text.replace("needs: [validate, staging]", "needs: [validate]"),
       parsed: yaml.load(text.replace("needs: [validate, staging]", "needs: [validate]")),
