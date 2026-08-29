@@ -419,18 +419,24 @@ test("database phase wrapper keeps a fresh credential private to one validated c
     writeFileSync(realEnvPath, "UNCHANGED=1\n");
     writeFileSync(fakeCurl, `#!/usr/bin/env bash
 set -euo pipefail
-output=""
+output=""; auth=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -o) shift; output="$1" ;;
+    -H) shift; if [ "$1" = "Authorization: Bearer $TEST_ACCESS_TOKEN" ]; then auth=true; fi ;;
   esac
   shift
 done
+[ "$auth" = true ]
 cp "$TEST_RESPONSE" "$output"
 printf '201'
 `);
     writeFileSync(phaseScript, `#!/usr/bin/env bash
 set -euo pipefail
+if [ -n "\${SUPABASE_ACCESS_TOKEN+x}" ]; then
+  printf 'management-token-visible' > "$TEST_PHASE_RESULT"
+  exit 17
+fi
 [ "$TARGET_DB_EPHEMERAL_ROLE" = "$TEST_ROLE" ]
 [ "$GITHUB_ENV" != "$TEST_REAL_GITHUB_ENV" ]
 node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
@@ -457,6 +463,7 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
         TARGET_API_URL: valid.apiUrl,
         TARGET_ANON_KEY: valid.key,
         TARGET_DB_URL: valid.databaseUrl,
+        TEST_ACCESS_TOKEN: accessToken,
         TEST_FAKE_BIN: fakeBin,
         TEST_PHASE_RESULT: phaseResult,
         TEST_PHASE_SCRIPT: phaseScript,
@@ -474,6 +481,7 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
           "TARGET_API_URL",
           "TARGET_ANON_KEY",
           "TARGET_DB_URL",
+          "TEST_ACCESS_TOKEN",
           "TEST_FAKE_BIN/p",
           "TEST_PHASE_RESULT/p",
           "TEST_PHASE_SCRIPT/p",
@@ -484,8 +492,8 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
         ].filter(Boolean).join(":"),
       },
     });
-    assert.equal(result.status, 0, result.stderr);
     assert.equal(readFileSync(phaseResult, "utf8"), "phase-ok");
+    assert.equal(result.status, 0, result.stderr);
     assert.equal(readFileSync(realEnvPath, "utf8"), "UNCHANGED=1\n");
     assert.equal(readdirSync(runnerTemp).length, 0, "all private credential files are removed");
     assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(accessToken));

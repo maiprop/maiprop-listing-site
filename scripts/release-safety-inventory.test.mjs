@@ -112,6 +112,28 @@ describe("release safety inventory", () => {
     });
     expect(violations({ parsed: oldJobWideLogin })).not.toEqual([]);
     expect(violations({ databaseLoginWrapperText: "" })).not.toEqual([]);
+    const postMintPrint = databaseLoginWrapperText.replace(
+      '\n"$@"',
+      '\nprintf \'%s\\n\' "$SUPABASE_ACCESS_TOKEN"\n"$@"',
+    );
+    expect(violations({ databaseLoginWrapperText: postMintPrint })).not.toEqual([]);
+    const missingTokenUnset = databaseLoginWrapperText.replace(
+      "unset SUPABASE_ACCESS_TOKEN\n",
+      "",
+    );
+    expect(violations({ databaseLoginWrapperText: missingTokenUnset })).not.toEqual([]);
+    const lateTokenUnset = databaseLoginWrapperText
+      .replace("unset SUPABASE_ACCESS_TOKEN\n", "")
+      .replace(
+        "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target\n",
+        "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target\nunset SUPABASE_ACCESS_TOKEN\n",
+      );
+    expect(violations({ databaseLoginWrapperText: lateTokenUnset })).not.toEqual([]);
+    const postUnsetExport = databaseLoginWrapperText.replace(
+      '\n"$@"',
+      '\nexport SUPABASE_ACCESS_TOKEN\n"$@"',
+    );
+    expect(violations({ databaseLoginWrapperText: postUnsetExport })).not.toEqual([]);
     for (const unsafeText of [
       text.replaceAll('${TARGET_API_URL%/}/auth/v1/settings', '${TARGET_API_URL%/}/rest/v1/'),
       text.replace("--retry-max-time 90", ""),

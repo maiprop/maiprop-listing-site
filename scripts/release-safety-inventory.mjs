@@ -368,6 +368,41 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target",
     '"$@"',
   ];
+  const executableShellLines = (source) => String(source)
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      return trimmed && !trimmed.startsWith("#");
+    });
+  const databaseWrapperTokenScopeViolation = (() => {
+    const mintPattern = /^[ \t]*GITHUB_ENV="\$database_env" bash scripts\/catalogue-hotfix-database-login\.sh[ \t]*$/gm;
+    const unsetPattern = /^[ \t]*unset[ \t]+SUPABASE_ACCESS_TOKEN[ \t]*$/gm;
+    const validationPattern = /^[ \t]*node scripts\/catalogue-hotfix-workflow-helpers\.mjs validate-target[ \t]*$/gm;
+    const phasePattern = /^[ \t]*"\$@"[ \t]*$/gm;
+    const matches = (pattern) => [...databaseLoginWrapper.matchAll(pattern)];
+    const mint = matches(mintPattern);
+    const unset = matches(unsetPattern);
+    const validation = matches(validationPattern);
+    const phase = matches(phasePattern);
+    if ([mint, unset, validation, phase].some((items) => items.length !== 1)) {
+      return true;
+    }
+    const mintEnd = databaseLoginWrapper.indexOf("\n", mint[0].index) + 1;
+    const unsetEnd = databaseLoginWrapper.indexOf("\n", unset[0].index) + 1;
+    if (!(mint[0].index < unset[0].index &&
+        unset[0].index < validation[0].index &&
+        validation[0].index < phase[0].index) ||
+        mintEnd <= 0 || unsetEnd <= 0) {
+      return true;
+    }
+    if (executableShellLines(
+      databaseLoginWrapper.slice(mintEnd, unset[0].index),
+    ).length > 0) {
+      return true;
+    }
+    return executableShellLines(databaseLoginWrapper.slice(unsetEnd))
+      .some((line) => /\bSUPABASE_ACCESS_TOKEN\b/.test(line));
+  })();
   const wrapperCommand = "bash scripts/catalogue-hotfix-with-database-login.sh bash -s";
   const databaseCommandPattern = /(?:\bpsql\b|\bdb\s+push\b|catalogue-hotfix-behavioral-probe\.mjs\s+(?:recorded|postapply)\b)/;
   const phaseProblems = [];
@@ -421,6 +456,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     databaseLoginMarkers.some((marker) => !databaseLoginScript.includes(marker)) ||
     databaseSupportMarkers.some((marker) => !support.includes(marker)) ||
     databaseWrapperMarkers.some((marker) => !databaseLoginWrapper.includes(marker)) ||
+    databaseWrapperTokenScopeViolation ||
     /\beval\b|\bsource\b|(?:^|\s)\.\s/.test(databaseLoginWrapper) ||
     String(text ?? "").includes("bash scripts/catalogue-hotfix-database-login.sh") ||
     /--retry|-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/.test(databaseLoginScript)

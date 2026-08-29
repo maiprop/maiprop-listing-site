@@ -29,6 +29,7 @@ fi
 export TARGET_DB_URL="$normalized_db_url"
 : > "$database_env"
 GITHUB_ENV="$database_env" bash scripts/catalogue-hotfix-database-login.sh
+unset SUPABASE_ACCESS_TOKEN
 
 target_db_url=""
 target_db_ephemeral_role=""
