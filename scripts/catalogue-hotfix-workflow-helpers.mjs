@@ -569,6 +569,75 @@ export function buildTemporaryDatabaseCredential({ kind, ref, databaseUrl, respo
   return { databaseUrl: db.toString(), role, ttlSeconds: response.ttl_seconds };
 }
 
+export function buildTemporaryPoolerDatabaseCredential({
+  kind,
+  ref,
+  databaseUrl,
+  response,
+  poolerResponse,
+}) {
+  const validated = buildTemporaryDatabaseCredential({ kind, ref, databaseUrl, response });
+  if (!Array.isArray(poolerResponse)) {
+    fail("Temporary database pooler configuration is invalid.");
+  }
+  const primaryRecords = poolerResponse.filter((record) =>
+    record && typeof record === "object" && !Array.isArray(record) &&
+    record.database_type === "PRIMARY"
+  );
+  if (primaryRecords.length !== 1) {
+    fail("Temporary database pooler configuration is ambiguous.");
+  }
+  const primary = primaryRecords[0];
+  const host = primary.db_host;
+  const transactionPooler = primary.db_port === 6543 && primary.pool_mode === "transaction";
+  const sessionPooler = primary.db_port === 5432 && primary.pool_mode === "session";
+  if (
+    primary.identifier !== ref ||
+    primary.db_user !== `postgres.${ref}` ||
+    typeof host !== "string" ||
+    !/^(?:[a-z0-9-]+\.)+pooler\.supabase\.com$/.test(host) ||
+    !(transactionPooler || sessionPooler) ||
+    primary.db_name !== "postgres" ||
+    primary.is_using_scram_auth !== true ||
+    typeof primary.connection_string !== "string" ||
+    /[\r\n]/.test(primary.connection_string)
+  ) {
+    fail("Temporary database pooler configuration is not manifest-bound.");
+  }
+  let advertised;
+  let advertisedUsername;
+  let advertisedPassword;
+  try {
+    advertised = new URL(primary.connection_string);
+    advertisedUsername = decodeURIComponent(advertised.username);
+    advertisedPassword = decodeURIComponent(advertised.password);
+  } catch {
+    fail("Temporary database pooler connection string is invalid.");
+  }
+  if (
+    !["postgres:", "postgresql:"].includes(advertised.protocol) ||
+    advertisedUsername !== primary.db_user ||
+    advertisedPassword !== "[YOUR-PASSWORD]" ||
+    advertised.hostname !== host ||
+    advertised.port !== String(primary.db_port) ||
+    advertised.pathname !== "/postgres" ||
+    advertised.search ||
+    advertised.hash
+  ) {
+    fail("Temporary database pooler connection string is contradictory.");
+  }
+
+  const pooler = new URL(`postgresql://placeholder:placeholder@${host}:5432/postgres`);
+  pooler.username = `${validated.role}.${ref}`;
+  pooler.password = response.password;
+  pooler.search = "?sslmode=require&options=-c%20role%3Dpostgres";
+  const endpoint = classifyDatabaseEndpoint(pooler, ref, validated.role);
+  if (!endpoint.pooler || !validateDatabaseSearchParameters(pooler, true)) {
+    fail("Temporary database pooler credential could not be constructed safely.");
+  }
+  return { ...validated, databaseUrl: pooler.toString() };
+}
+
 export function validateTarget({ kind, ref, apiUrl, databaseUrl, key, ephemeralRole = null }) {
   if (!ref || !apiUrl || !databaseUrl || !key) fail("Target credentials are incomplete.");
   if (typeof apiUrl !== "string" || typeof databaseUrl !== "string" ||
@@ -959,17 +1028,25 @@ function main() {
   if (command === "write-temporary-db-env") {
     const envPath = process.env.GITHUB_ENV;
     if (!envPath) fail("GitHub environment file is unavailable.");
+    if (args.length !== 2) fail("Temporary database provider responses are incomplete.");
     let response;
+    let poolerResponse;
     try {
       response = JSON.parse(readFileSync(args[0], "utf8"));
     } catch {
       fail("Could not parse the temporary database login response.");
     }
-    const temporary = buildTemporaryDatabaseCredential({
+    try {
+      poolerResponse = JSON.parse(readFileSync(args[1], "utf8"));
+    } catch {
+      fail("Could not parse the temporary database pooler response.");
+    }
+    const temporary = buildTemporaryPoolerDatabaseCredential({
       kind: process.env.TARGET_KIND,
       ref: process.env.TARGET_PROJECT_REF,
       databaseUrl: process.env.TARGET_DB_URL,
       response,
+      poolerResponse,
     });
     process.stdout.write(`::add-mask::${temporary.role}\n`);
     process.stdout.write(`::add-mask::${response.password}\n`);

@@ -197,12 +197,19 @@ describe("release safety inventory", () => {
     }
     for (const unsafeDatabaseLogin of [
       databaseLoginScriptText.replace("--request POST", "--request GET"),
+      databaseLoginScriptText.replace("--request GET --connect-timeout 5 --max-time 10", "--request GET"),
       databaseLoginScriptText.replace("--max-time 30", ""),
       databaseLoginScriptText.replace("$status\" != \"201", "$status\" != \"200"),
+      databaseLoginScriptText.replace("$pooler_status\" != \"200", "$pooler_status\" != \"201"),
+      databaseLoginScriptText.replace(' "$pooler_response_file"', ""),
       `${databaseLoginScriptText}\ncat "$response_file"\n`,
       databaseLoginScriptText.replace(
         "https://api.supabase.com/v1/projects/xsiehskfgeoqyazcgauv/cli/login-role",
         "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/cli/login-role",
+      ),
+      databaseLoginScriptText.replace(
+        "https://api.supabase.com/v1/projects/xsiehskfgeoqyazcgauv/config/database/pooler",
+        "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/config/database/pooler",
       ),
     ]) {
       expect(violations({ databaseLoginScriptText: unsafeDatabaseLogin })).not.toEqual([]);

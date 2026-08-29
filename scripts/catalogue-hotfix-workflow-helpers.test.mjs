@@ -8,6 +8,7 @@ import * as workflowHelpers from "./catalogue-hotfix-workflow-helpers.mjs";
 import {
   artifactPathsForTarget,
   assertLatencyEvidencePasses,
+  buildTemporaryPoolerDatabaseCredential,
   buildTemporaryDatabaseCredential,
   buildCronProof,
   buildLatencyEvidence,
@@ -39,6 +40,24 @@ const valid = {
   databaseUrl: `postgresql://postgres:password@db.${ref}.supabase.co:5432/postgres?sslmode=require`,
   key: "sb_publishable_safe_key",
 };
+
+function poolerConfiguration(projectRef = ref, changed = {}) {
+  const host = "aws-0-eu-central-1.pooler.supabase.com";
+  return [{
+    identifier: projectRef,
+    database_type: "PRIMARY",
+    db_user: `postgres.${projectRef}`,
+    db_host: host,
+    db_port: 6543,
+    db_name: "postgres",
+    connection_string: `postgresql://postgres.${projectRef}:[YOUR-PASSWORD]@${host}:6543/postgres`,
+    pool_mode: "transaction",
+    default_pool_size: null,
+    max_client_conn: null,
+    is_using_scram_auth: true,
+    ...changed,
+  }];
+}
 
 test("catalogue hotfix target validator requires exact Supabase identities", () => {
   assert.doesNotThrow(() => validateTarget(valid));
@@ -152,6 +171,75 @@ test("temporary database credentials preserve the exact target and assume postgr
   assert.doesNotMatch(direct.databaseUrl, /options=-c\+role/);
 });
 
+test("temporary database credentials use the manifest-bound PRIMARY IPv4 pooler", () => {
+  const response = { role: "cli_login_postgres", password: "temporary:p@ss", ttl_seconds: 300 };
+  const sessionConnection = `postgresql://postgres.${ref}:[YOUR-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:5432/postgres`;
+  for (const poolerResponse of [
+    poolerConfiguration(),
+    poolerConfiguration(ref, {
+      db_port: 5432,
+      pool_mode: "session",
+      connection_string: sessionConnection,
+    }),
+  ]) {
+    const temporary = buildTemporaryPoolerDatabaseCredential({
+      kind: "staging",
+      ref,
+      databaseUrl: valid.databaseUrl,
+      response,
+      poolerResponse,
+    });
+    const url = new URL(temporary.databaseUrl);
+    assert.equal(url.hostname, "aws-0-eu-central-1.pooler.supabase.com");
+    assert.equal(url.port, "5432");
+    assert.equal(decodeURIComponent(url.username), `${response.role}.${ref}`);
+    assert.equal(decodeURIComponent(url.password), response.password);
+    assert.equal(url.pathname, "/postgres");
+    assert.equal(url.searchParams.get("sslmode"), "require");
+    assert.equal(url.searchParams.get("options"), "-c role=postgres");
+    assert.match(temporary.databaseUrl, /options=-c%20role%3Dpostgres/);
+    assert.doesNotMatch(temporary.databaseUrl, /options=-c\+role/);
+    assert.equal(temporary.role, response.role);
+    assert.equal(temporary.ttlSeconds, 300);
+  }
+});
+
+test("temporary pooler credentials reject ambiguous or cross-project provider configuration", () => {
+  const response = { role: "cli_login_postgres", password: "temporary", ttl_seconds: 300 };
+  const input = {
+    kind: "staging",
+    ref,
+    databaseUrl: valid.databaseUrl,
+    response,
+    poolerResponse: poolerConfiguration(),
+  };
+  for (const poolerResponse of [
+    [],
+    [...poolerConfiguration(), ...poolerConfiguration()],
+    poolerConfiguration("qvvicunqcrwpioqnvzxf"),
+    poolerConfiguration(ref, { identifier: "qvvicunqcrwpioqnvzxf" }),
+    poolerConfiguration(ref, { database_type: "READ_REPLICA" }),
+    poolerConfiguration(ref, { db_user: "postgres.attacker" }),
+    poolerConfiguration(ref, { db_host: "attacker.example" }),
+    poolerConfiguration(ref, { db_host: `aws-0-eu-central-1.pooler.supabase.com.attacker.example` }),
+    poolerConfiguration(ref, { db_port: 5432 }),
+    poolerConfiguration(ref, { db_port: 6432 }),
+    poolerConfiguration(ref, { db_name: "template1" }),
+    poolerConfiguration(ref, { pool_mode: "session" }),
+    poolerConfiguration(ref, { is_using_scram_auth: false }),
+    poolerConfiguration(ref, { connection_string: `postgresql://postgres.${ref}:[YOUR-PASSWORD]@attacker.example:6543/postgres` }),
+    poolerConfiguration(ref, { connection_string: `postgresql://postgres.attacker:[YOUR-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres` }),
+    poolerConfiguration(ref, { connection_string: `postgresql://postgres.${ref}:real-password@aws-0-eu-central-1.pooler.supabase.com:6543/postgres` }),
+    poolerConfiguration(ref, { connection_string: `postgresql://postgres.${ref}:[YOUR-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:5432/postgres` }),
+    poolerConfiguration(ref, { connection_string: `postgresql://postgres.${ref}:[YOUR-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/template1` }),
+    poolerConfiguration(ref, { connection_string: `postgresql://postgres.${ref}:[YOUR-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?host=attacker.example` }),
+    poolerConfiguration(ref, { connection_string: `postgresql://postgres.${ref}:[YOUR-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres#fragment` }),
+    { data: poolerConfiguration() },
+  ]) {
+    assert.throws(() => buildTemporaryPoolerDatabaseCredential({ ...input, poolerResponse }));
+  }
+});
+
 test("temporary database credentials reject unsafe responses and target drift", () => {
   const response = { role: "cli_login_01234567", password: "temporary", ttl_seconds: 3600 };
   const input = { kind: "staging", ref, databaseUrl: valid.databaseUrl, response };
@@ -231,12 +319,14 @@ test("target validator rejects libpq authority overrides for stored and temporar
 test("database workflow CLIs reject authority overrides without persisting derived state", () => {
   const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-db-authority-"));
   const responsePath = join(directory, "response.json");
+  const poolerResponsePath = join(directory, "pooler-response.json");
   const envPath = join(directory, "github-env");
   writeFileSync(responsePath, JSON.stringify({
     role: "cli_login_01234567",
     password: "temporary",
     ttl_seconds: 3600,
   }));
+  writeFileSync(poolerResponsePath, JSON.stringify(poolerConfiguration()));
   try {
     const commonEnv = {
       ...process.env,
@@ -251,6 +341,7 @@ test("database workflow CLIs reject authority overrides without persisting deriv
       "scripts/catalogue-hotfix-workflow-helpers.mjs",
       "write-temporary-db-env",
       responsePath,
+      poolerResponsePath,
     ], { cwd: process.cwd(), encoding: "utf8", env: commonEnv });
     assert.equal(mint.status, 1);
     assert.equal(mint.stdout, "");
@@ -271,14 +362,17 @@ test("database workflow CLIs reject authority overrides without persisting deriv
 test("temporary database credential CLI masks before persisting the ephemeral values", () => {
   const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-db-login-"));
   const responsePath = join(directory, "response.json");
+  const poolerResponsePath = join(directory, "pooler-response.json");
   const envPath = join(directory, "github-env");
   const response = { role: "cli_login_01234567", password: "temporary-secret", ttl_seconds: 7200 };
   writeFileSync(responsePath, JSON.stringify(response));
+  writeFileSync(poolerResponsePath, JSON.stringify(poolerConfiguration()));
   try {
     const result = spawnSync(process.execPath, [
       "scripts/catalogue-hotfix-workflow-helpers.mjs",
       "write-temporary-db-env",
       responsePath,
+      poolerResponsePath,
     ], {
       cwd: process.cwd(),
       encoding: "utf8",
@@ -306,12 +400,13 @@ test("temporary database credential CLI masks before persisting the ephemeral va
   }
 });
 
-test("temporary database login shell uses one exact private bounded request and fails closed", () => {
+test("temporary database login shell uses exact private pooler and login requests and fails closed", () => {
   const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-db-login-shell-"));
   const fakeBin = join(directory, "bin");
   const fakeCurl = join(fakeBin, "curl");
   const runnerTemp = join(directory, "runner-temp");
   const responsePath = join(directory, "response.json");
+  const poolerResponsePath = join(directory, "pooler-response.json");
   const envPath = join(directory, "github-env");
   const resultPath = join(directory, "curl-result");
   const role = "cli_login_01234567";
@@ -333,17 +428,26 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
-[ "$method" = POST ]
-[ "$data" = '{"read_only":false}' ]
-[ "$url" = "$TEST_EXPECTED_ENDPOINT" ]
 [ "$auth" = true ]
-cp "$TEST_RESPONSE" "$output"
-printf '%s' ok > "$TEST_RESULT"
-printf '%s' "$TEST_STATUS"
+if [ "$url" = "$TEST_EXPECTED_POOLER_ENDPOINT" ]; then
+  [ "$method" = GET ]
+  [ -z "$data" ]
+  cp "$TEST_POOLER_RESPONSE" "$output"
+  printf 'pooler\n' >> "$TEST_RESULT"
+  printf '%s' "$TEST_POOLER_STATUS"
+else
+  [ "$method" = POST ]
+  [ "$data" = '{"read_only":false}' ]
+  [ "$url" = "$TEST_EXPECTED_ENDPOINT" ]
+  cp "$TEST_RESPONSE" "$output"
+  printf 'login\n' >> "$TEST_RESULT"
+  printf '%s' "$TEST_STATUS"
+fi
 `);
     chmodSync(fakeCurl, 0o700);
-    const run = ({ status, response }) => {
+    const run = ({ status, response, poolerStatus = "200", poolerResponse = poolerConfiguration() }) => {
       writeFileSync(responsePath, typeof response === "string" ? response : JSON.stringify(response));
+      writeFileSync(poolerResponsePath, typeof poolerResponse === "string" ? poolerResponse : JSON.stringify(poolerResponse));
       rmSync(envPath, { force: true });
       rmSync(resultPath, { force: true });
       const result = spawnSync(bashExecutable, [
@@ -362,8 +466,11 @@ printf '%s' "$TEST_STATUS"
           TARGET_DB_URL: valid.databaseUrl,
           TEST_ACCESS_TOKEN: accessToken,
           TEST_EXPECTED_ENDPOINT: `https://api.supabase.com/v1/projects/${ref}/cli/login-role`,
+          TEST_EXPECTED_POOLER_ENDPOINT: `https://api.supabase.com/v1/projects/${ref}/config/database/pooler`,
           TEST_FAKE_BIN: fakeBin,
           TEST_LOGIN_SCRIPT: join(process.cwd(), "scripts/catalogue-hotfix-database-login.sh"),
+          TEST_POOLER_RESPONSE: poolerResponsePath,
+          TEST_POOLER_STATUS: poolerStatus,
           TEST_RESPONSE: responsePath,
           TEST_RESULT: resultPath,
           TEST_STATUS: status,
@@ -377,15 +484,21 @@ printf '%s' "$TEST_STATUS"
             "TARGET_DB_URL",
             "TEST_ACCESS_TOKEN",
             "TEST_EXPECTED_ENDPOINT",
+            "TEST_EXPECTED_POOLER_ENDPOINT",
             "TEST_FAKE_BIN/p",
             "TEST_LOGIN_SCRIPT/p",
+            "TEST_POOLER_RESPONSE/p",
+            "TEST_POOLER_STATUS",
             "TEST_RESPONSE/p",
             "TEST_RESULT/p",
             "TEST_STATUS",
           ].filter(Boolean).join(":"),
         },
       });
-      assert.equal(readFileSync(resultPath, "utf8"), "ok");
+      assert.equal(
+        readFileSync(resultPath, "utf8"),
+        poolerStatus === "200" ? "pooler\nlogin\n" : "pooler\n",
+      );
       assert.equal(readdirSync(runnerTemp).length, 0, "private response is removed on every exit");
       assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(accessToken));
       return result;
@@ -403,6 +516,7 @@ printf '%s' "$TEST_STATUS"
     assert.match(readFileSync(envPath, "utf8"), new RegExp(`^TARGET_DB_EPHEMERAL_ROLE=${role}$`, "m"));
 
     for (const scenario of [
+      { status: "201", response: { role, password, ttl_seconds: 300 }, poolerStatus: "403", poolerResponse: { private: "pooler-body-must-not-log" } },
       { status: "401", response: { private: "body-must-not-log" } },
       { status: "201", response: { role, password, ttl_seconds: 299 } },
       { status: "201", response: "malformed-private-body" },
@@ -410,7 +524,7 @@ printf '%s' "$TEST_STATUS"
       const rejected = run(scenario);
       assert.equal(rejected.status, 1);
       assert.equal(existsSync(envPath), false);
-      assert.doesNotMatch(`${rejected.stdout}${rejected.stderr}`, /body-must-not-log|malformed-private-body|temporary-shell-secret/);
+      assert.doesNotMatch(`${rejected.stdout}${rejected.stderr}`, /body-must-not-log|pooler-body-must-not-log|malformed-private-body|temporary-shell-secret/);
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -426,6 +540,7 @@ test("database phase wrapper keeps a fresh credential private to one validated c
   const fakeTimeout = join(fakeBin, "timeout");
   const runnerTemp = join(directory, "runner-temp");
   const responsePath = join(directory, "response.json");
+  const poolerResponsePath = join(directory, "pooler-response.json");
   const realEnvPath = join(directory, "github-env");
   const phaseScript = join(directory, "phase.sh");
   const phaseResult = join(directory, "phase-result");
@@ -437,20 +552,27 @@ test("database phase wrapper keeps a fresh credential private to one validated c
     mkdirSync(fakeBin);
     mkdirSync(runnerTemp);
     writeFileSync(responsePath, JSON.stringify({ role, password, ttl_seconds: 300 }));
+    writeFileSync(poolerResponsePath, JSON.stringify(poolerConfiguration()));
     writeFileSync(realEnvPath, "UNCHANGED=1\n");
     writeFileSync(fakeCurl, `#!/usr/bin/env bash
 set -euo pipefail
-output=""; auth=false
+output=""; url=""; auth=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -o) shift; output="$1" ;;
     -H) shift; if [ "$1" = "Authorization: Bearer $TEST_ACCESS_TOKEN" ]; then auth=true; fi ;;
+    https://*) url="$1" ;;
   esac
   shift
 done
 [ "$auth" = true ]
-cp "$TEST_RESPONSE" "$output"
-printf '201'
+if [[ "$url" == */config/database/pooler ]]; then
+  cp "$TEST_POOLER_RESPONSE" "$output"
+  printf '200'
+else
+  cp "$TEST_RESPONSE" "$output"
+  printf '201'
+fi
 `);
     writeFileSync(fakePsql, `#!/usr/bin/env bash
 set -euo pipefail
@@ -464,6 +586,12 @@ fi
 [ "$5" = "-qAtc" ]
 [ "$6" = "SELECT 1" ]
 [ "\${PGCONNECT_TIMEOUT:-}" = "4" ]
+node --input-type=module -e '
+  const url = new URL(process.env.TARGET_DB_URL);
+  if (url.hostname !== "aws-0-eu-central-1.pooler.supabase.com" ||
+      url.port !== "5432" ||
+      decodeURIComponent(url.username) !== process.env.TEST_ROLE + "." + process.env.TARGET_PROJECT_REF) process.exit(1);
+'
 attempts=0
 if [ -f "$TEST_READINESS_ATTEMPTS" ]; then attempts="$(cat "$TEST_READINESS_ATTEMPTS")"; fi
 attempts=$((attempts + 1))
@@ -522,6 +650,7 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
         TEST_PHASE_RESULT: phaseResult,
         TEST_READINESS_ATTEMPTS: readinessAttempts,
         TEST_PHASE_SCRIPT: phaseScript,
+        TEST_POOLER_RESPONSE: poolerResponsePath,
         TEST_REAL_GITHUB_ENV: realEnvPath,
         TEST_RESPONSE: responsePath,
         TEST_ROLE: role,
@@ -542,6 +671,7 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
           "TEST_PSQL_HANG",
           "TEST_READINESS_ATTEMPTS/p",
           "TEST_PHASE_SCRIPT/p",
+          "TEST_POOLER_RESPONSE/p",
           "TEST_REAL_GITHUB_ENV/p",
           "TEST_RESPONSE/p",
           "TEST_ROLE",
