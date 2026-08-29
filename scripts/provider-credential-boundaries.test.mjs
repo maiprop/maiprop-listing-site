@@ -10,21 +10,39 @@ const parsedWorkflow = (name) => yaml.load(workflow(name));
 const source = (path) => readFileSync(resolve(root, path), "utf8");
 
 describe("provider credential boundaries", () => {
-  it("scopes hotfix Management credentials to the exact ephemeral resolver steps", () => {
+  it("scopes hotfix Management credentials to public-key resolution and bounded database phases", () => {
     const hotfix = parsedWorkflow("deploy-catalogue-performance-hotfix.yml");
     expect(hotfix.jobs.staging.env.SUPABASE_ACCESS_TOKEN).toBeUndefined();
     expect(hotfix.jobs.production.env.SUPABASE_ACCESS_TOKEN).toBeUndefined();
+    expect(hotfix.jobs.staging.env.TARGET_DB_URL).toBeUndefined();
+    expect(hotfix.jobs.production.env.TARGET_DB_URL).toBeUndefined();
     const scoped = Object.values(hotfix.jobs).flatMap((job) =>
       (job.steps ?? []).filter((step) => Object.hasOwn(step.env ?? {}, "SUPABASE_ACCESS_TOKEN")),
     );
     expect(scoped.map((step) => step.name)).toEqual([
       "Resolve current staging public API key",
-      "Mint temporary staging database login",
-      "Mint temporary production database login",
+      "Prove recorded staging database state",
+      "Apply only manifest-bound staging migrations",
+      "Verify staging database and pgTAP",
+      "Prove staging publish-public-catalogue cron liveness",
+      "Prove recorded production database state",
+      "Apply only manifest-bound production migrations",
+      "Verify production database",
+      "Prove production publish-public-catalogue cron liveness",
     ]);
-    for (const step of scoped) {
+    expect(scoped[0].env).toEqual({
+      SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+    });
+    for (const step of scoped.slice(1, 5)) {
       expect(step.env).toEqual({
         SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+        TARGET_DB_URL: "${{ secrets.SUPABASE_STAGING_DB_URL }}",
+      });
+    }
+    for (const step of scoped.slice(5)) {
+      expect(step.env).toEqual({
+        SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+        TARGET_DB_URL: "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
       });
     }
   });

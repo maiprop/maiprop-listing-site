@@ -137,7 +137,7 @@ test("temporary database credentials reject unsafe responses and target drift", 
   const response = { role: "cli_login_01234567", password: "temporary", ttl_seconds: 3600 };
   const input = { kind: "staging", ref, databaseUrl: valid.databaseUrl, response };
   for (const changed of [
-    { response: { ...response, ttl_seconds: 2999 } },
+    { response: { ...response, ttl_seconds: 299 } },
     { response: { ...response, ttl_seconds: "3600" } },
     { response: { ...response, ttl_seconds: 3000.5 } },
     { response: { ...response, ttl_seconds: null } },
@@ -155,9 +155,9 @@ test("temporary database credentials reject unsafe responses and target drift", 
     kind: "production",
     ref: "qvvicunqcrwpioqnvzxf",
     databaseUrl: "postgresql://postgres:old@db.qvvicunqcrwpioqnvzxf.supabase.co:5432/postgres?sslmode=require",
-    response: { ...response, ttl_seconds: 3000 },
+    response: { ...response, ttl_seconds: 300 },
   }));
-  for (const ttl_seconds of [3000, 3599, 3600]) {
+  for (const ttl_seconds of [300, 301, 3600]) {
     assert.doesNotThrow(() => buildTemporaryDatabaseCredential({
       ...input,
       response: { ...response, ttl_seconds },
@@ -277,7 +277,7 @@ test("temporary database credential CLI masks before persisting the ephemeral va
     assert.equal(lines[0], `::add-mask::${response.role}`);
     assert.equal(lines[1], `::add-mask::${response.password}`);
     assert.match(lines[2], /^::add-mask::postgresql:/);
-    assert.equal(lines[3], "::notice::Temporary database login TTL accepted: 7200s (minimum 3000s).");
+    assert.equal(lines[3], "::notice::Temporary database login TTL accepted: 7200s (minimum 300s).");
     const persisted = readFileSync(envPath, "utf8");
     assert.match(persisted, /^TARGET_DB_URL=postgresql:/m);
     assert.match(persisted, new RegExp(`^TARGET_DB_EPHEMERAL_ROLE=${response.role}$`, "m"));
@@ -376,18 +376,18 @@ printf '%s' "$TEST_STATUS"
 
     const success = run({
       status: "201",
-      response: { role, password, ttl_seconds: 3000 },
+      response: { role, password, ttl_seconds: 300 },
     });
     assert.equal(success.status, 0, success.stderr);
     assert.equal(success.stderr, "");
     const successLines = success.stdout.trim().split(/\r?\n/);
     assert.equal(successLines.filter((line) => line.startsWith("::add-mask::")).length, 3);
-    assert.ok(successLines.includes("::notice::Temporary database login TTL accepted: 3000s (minimum 3000s)."));
+    assert.ok(successLines.includes("::notice::Temporary database login TTL accepted: 300s (minimum 300s)."));
     assert.match(readFileSync(envPath, "utf8"), new RegExp(`^TARGET_DB_EPHEMERAL_ROLE=${role}$`, "m"));
 
     for (const scenario of [
       { status: "401", response: { private: "body-must-not-log" } },
-      { status: "201", response: { role, password, ttl_seconds: 2999 } },
+      { status: "201", response: { role, password, ttl_seconds: 299 } },
       { status: "201", response: "malformed-private-body" },
     ]) {
       const rejected = run(scenario);
@@ -395,6 +395,100 @@ printf '%s' "$TEST_STATUS"
       assert.equal(existsSync(envPath), false);
       assert.doesNotMatch(`${rejected.stdout}${rejected.stderr}`, /body-must-not-log|malformed-private-body|temporary-shell-secret/);
     }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("database phase wrapper keeps a fresh credential private to one validated command", () => {
+  const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-db-phase-"));
+  const fakeBin = join(directory, "bin");
+  const fakeCurl = join(fakeBin, "curl");
+  const runnerTemp = join(directory, "runner-temp");
+  const responsePath = join(directory, "response.json");
+  const realEnvPath = join(directory, "github-env");
+  const phaseScript = join(directory, "phase.sh");
+  const phaseResult = join(directory, "phase-result");
+  const role = "cli_login_01234567";
+  const password = "phase-only-secret";
+  const accessToken = "phase-management-token-never-log";
+  try {
+    mkdirSync(fakeBin);
+    mkdirSync(runnerTemp);
+    writeFileSync(responsePath, JSON.stringify({ role, password, ttl_seconds: 300 }));
+    writeFileSync(realEnvPath, "UNCHANGED=1\n");
+    writeFileSync(fakeCurl, `#!/usr/bin/env bash
+set -euo pipefail
+output=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) shift; output="$1" ;;
+  esac
+  shift
+done
+cp "$TEST_RESPONSE" "$output"
+printf '201'
+`);
+    writeFileSync(phaseScript, `#!/usr/bin/env bash
+set -euo pipefail
+[ "$TARGET_DB_EPHEMERAL_ROLE" = "$TEST_ROLE" ]
+[ "$GITHUB_ENV" != "$TEST_REAL_GITHUB_ENV" ]
+node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
+printf 'MUST_NOT_PERSIST=1\\n' >> "$GITHUB_ENV"
+printf 'phase-ok' > "$TEST_PHASE_RESULT"
+`);
+    chmodSync(fakeCurl, 0o700);
+    chmodSync(phaseScript, 0o700);
+    const bashExecutable = spawnSync("where.exe", ["bash"], { encoding: "utf8" })
+      .stdout.trim().split(/\r?\n/)[0];
+    const result = spawnSync(bashExecutable, [
+      "-c",
+      'export PATH="$TEST_FAKE_BIN:$PATH"; exec bash "$TEST_WRAPPER" bash "$TEST_PHASE_SCRIPT"',
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_ENV: realEnvPath,
+        RUNNER_TEMP: runnerTemp,
+        SUPABASE_ACCESS_TOKEN: accessToken,
+        TARGET_KIND: "staging",
+        TARGET_PROJECT_REF: ref,
+        TARGET_API_URL: valid.apiUrl,
+        TARGET_ANON_KEY: valid.key,
+        TARGET_DB_URL: valid.databaseUrl,
+        TEST_FAKE_BIN: fakeBin,
+        TEST_PHASE_RESULT: phaseResult,
+        TEST_PHASE_SCRIPT: phaseScript,
+        TEST_REAL_GITHUB_ENV: realEnvPath,
+        TEST_RESPONSE: responsePath,
+        TEST_ROLE: role,
+        TEST_WRAPPER: join(process.cwd(), "scripts/catalogue-hotfix-with-database-login.sh"),
+        WSLENV: [
+          process.env.WSLENV,
+          "GITHUB_ENV/p",
+          "RUNNER_TEMP/p",
+          "SUPABASE_ACCESS_TOKEN",
+          "TARGET_KIND",
+          "TARGET_PROJECT_REF",
+          "TARGET_API_URL",
+          "TARGET_ANON_KEY",
+          "TARGET_DB_URL",
+          "TEST_FAKE_BIN/p",
+          "TEST_PHASE_RESULT/p",
+          "TEST_PHASE_SCRIPT/p",
+          "TEST_REAL_GITHUB_ENV/p",
+          "TEST_RESPONSE/p",
+          "TEST_ROLE",
+          "TEST_WRAPPER/p",
+        ].filter(Boolean).join(":"),
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readFileSync(phaseResult, "utf8"), "phase-ok");
+    assert.equal(readFileSync(realEnvPath, "utf8"), "UNCHANGED=1\n");
+    assert.equal(readdirSync(runnerTemp).length, 0, "all private credential files are removed");
+    assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(accessToken));
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

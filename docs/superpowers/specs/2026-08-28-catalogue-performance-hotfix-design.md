@@ -51,6 +51,16 @@ The workflow performs three ordered phases:
 No Cloudflare Pages deployment, Edge Function deployment, Stripe readiness
 proof, payment test, or unrelated pending migration is part of this hotfix.
 
+The official database login-role endpoint has been observed issuing
+300-second credentials and provides no TTL request control. Database access is
+therefore just in time rather than job-scoped: staging and production each mint
+a fresh login inside every recorded-drift, migration-apply, postapply/pgTAP,
+and cron-proof phase. Each phase is capped at four minutes, leaving a one-minute
+expiry margin. The derived URL and role are imported only from an allowlisted,
+mode-600 runner-temp file, validated against the exact target, and deleted at
+phase exit. HTTP sampling and artifact handling run in separate steps without
+database credentials; both jobs retain their 45-minute overall timeout.
+
 ## Migration application
 
 The workflow constructs a temporary Supabase project at runtime. It reads the

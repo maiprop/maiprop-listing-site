@@ -46,10 +46,21 @@ directory. A version already present remotely may proceed only after the full
 corrected runtime contract passes; otherwise stop and prepare a reviewed
 additive forward migration.
 
+The provider's official CLI login-role endpoint has been observed returning a
+300-second `ttl_seconds` value and does not expose a TTL request parameter. The
+workflow therefore never creates a database login for the 45-minute job. It
+mints a fresh login just in time inside each recorded-drift, migration-apply,
+postapply/pgTAP, and cron-proof phase. Every such phase has a four-minute step
+timeout, with the remaining minute reserved as credential-expiry margin. The
+derived URL and role exist only in a mode-600 runner-temp environment file,
+are allowlist-imported without shell evaluation, and are deleted when the
+phase exits. HTTP sampling and artifact steps receive no database credential.
+
 Staging is mandatory and must pass the 90-assertion catalogue pgTAP suite, the
 legacy live-worker PostgREST filters and card/detail shapes, anonymous GET and
 HEAD probes, and a publication-cron proof that advances across two minute
-boundaries. Production starts only after those checks, confirms that the fixed
+boundaries within a polling window below three minutes. Production starts only
+after those checks, confirms that the fixed
 frontend marker is still `db53d1b9adae41edae93fbeb3e612b42dd8fec0b`, and
 records 30 cold/warm public API pairs with normal requests, distinct normalized
 cache keys, raw cache-header evidence, and nearest-rank p50/p95 values. Both
