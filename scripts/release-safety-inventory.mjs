@@ -381,6 +381,11 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "TARGET_DB_URL)",
     "TARGET_DB_EPHEMERAL_ROLE)",
     "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target",
+    "database_ready=false",
+    "database_max_attempts=4",
+    "timeout --signal=TERM --kill-after=1s 6s env PGCONNECT_TIMEOUT=4 psql \"$TARGET_DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 -qAtc 'SELECT 1' >/dev/null 2>&1",
+    "sleep 2",
+    "Temporary database login did not become ready within the bounded propagation window.",
     '"$@"',
   ];
   const canonicalDatabaseUrlWrapperMarkers = [
@@ -423,20 +428,23 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     const mintPattern = /^[ \t]*GITHUB_ENV="\$database_env" bash scripts\/catalogue-hotfix-database-login\.sh[ \t]*$/gm;
     const unsetPattern = /^[ \t]*unset[ \t]+SUPABASE_ACCESS_TOKEN[ \t]*$/gm;
     const validationPattern = /^[ \t]*node scripts\/catalogue-hotfix-workflow-helpers\.mjs validate-target[ \t]*$/gm;
+    const readinessPattern = /^[ \t]*database_ready=false[ \t]*$/gm;
     const phasePattern = /^[ \t]*"\$@"[ \t]*$/gm;
     const matches = (pattern) => [...databaseLoginWrapper.matchAll(pattern)];
     const mint = matches(mintPattern);
     const unset = matches(unsetPattern);
     const validation = matches(validationPattern);
+    const readiness = matches(readinessPattern);
     const phase = matches(phasePattern);
-    if ([mint, unset, validation, phase].some((items) => items.length !== 1)) {
+    if ([mint, unset, validation, readiness, phase].some((items) => items.length !== 1)) {
       return true;
     }
     const mintEnd = databaseLoginWrapper.indexOf("\n", mint[0].index) + 1;
     const unsetEnd = databaseLoginWrapper.indexOf("\n", unset[0].index) + 1;
     if (!(mint[0].index < unset[0].index &&
         unset[0].index < validation[0].index &&
-        validation[0].index < phase[0].index) ||
+        validation[0].index < readiness[0].index &&
+        readiness[0].index < phase[0].index) ||
         mintEnd <= 0 || unsetEnd <= 0) {
       return true;
     }
@@ -598,6 +606,14 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     if (!String(text ?? "").includes(marker)) {
       violations.push(`catalogue hotfix is missing ${marker}`);
     }
+  }
+  const workflowText = String(text ?? "");
+  if (
+    workflowText.split("for n in $(seq 1 15); do").length - 1 !== 2 ||
+    workflowText.split('[ "$n" -eq 15 ] || sleep 10').length - 1 !== 2 ||
+    /for n in \$\(seq 1 1[6-9]\); do/.test(workflowText)
+  ) {
+    violations.push("catalogue hotfix cron proof exceeds its bounded phase budget");
   }
   for (const marker of [
     "location_search_text",

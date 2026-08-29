@@ -214,7 +214,12 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.match(databaseLoginWrapper, /TARGET_DB_URL/);
   assert.match(databaseLoginWrapper, /TARGET_DB_EPHEMERAL_ROLE/);
   assert.match(databaseLoginWrapper, /catalogue-hotfix-workflow-helpers\.mjs validate-target/);
+  assert.match(databaseLoginWrapper, /database_max_attempts=4/);
+  assert.match(databaseLoginWrapper, /timeout --signal=TERM --kill-after=1s 6s env PGCONNECT_TIMEOUT=4 psql "\$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -qAtc 'SELECT 1' >\/dev\/null 2>&1/);
+  assert.match(databaseLoginWrapper, /Temporary database login did not become ready within the bounded propagation window/);
   assert.doesNotMatch(databaseLoginWrapper, /\beval\b|\bsource\b|(?:^|\s)\.\s/);
+  assert.equal((text.match(/for n in \$\(seq 1 15\); do/g) ?? []).length, 2);
+  assert.equal((text.match(/\[ "\$n" -eq 15 \] \|\| sleep 10/g) ?? []).length, 2);
   assert.ok(existsSync(canonicalDatabaseUrlWrapperPath), "the private canonical database URL wrapper exists");
   const canonicalDatabaseUrlWrapper = readFileSync(canonicalDatabaseUrlWrapperPath, "utf8");
   assert.match(canonicalDatabaseUrlWrapper, /chmod 600 "\$database_env"/);
