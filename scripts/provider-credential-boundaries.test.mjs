@@ -22,10 +22,12 @@ describe("provider credential boundaries", () => {
     expect(scoped.map((step) => step.name)).toEqual([
       "Resolve current staging public API key",
       "Prove recorded staging database state",
+      "Prepare manifest-bound staging migration dry-run",
       "Apply only manifest-bound staging migrations",
       "Verify staging database and pgTAP",
       "Prove staging publish-public-catalogue cron liveness",
       "Prove recorded production database state",
+      "Prepare manifest-bound production migration dry-run",
       "Apply only manifest-bound production migrations",
       "Verify production database",
       "Prove production publish-public-catalogue cron liveness",
@@ -33,18 +35,24 @@ describe("provider credential boundaries", () => {
     expect(scoped[0].env).toEqual({
       SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
     });
-    for (const step of scoped.slice(1, 5)) {
+    for (const step of [scoped[1], scoped[2], scoped[4], scoped[5]]) {
       expect(step.env).toEqual({
         SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
         TARGET_DB_URL: "${{ secrets.SUPABASE_STAGING_DB_URL }}",
       });
     }
-    for (const step of scoped.slice(5)) {
+    expect(scoped[3].env).toEqual({
+      SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+    });
+    for (const step of [scoped[6], scoped[7], scoped[9], scoped[10]]) {
       expect(step.env).toEqual({
         SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
         TARGET_DB_URL: "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
       });
     }
+    expect(scoped[8].env).toEqual({
+      SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+    });
   });
 
   it("keeps the scheduled live smoke unauthenticated and read-only", () => {

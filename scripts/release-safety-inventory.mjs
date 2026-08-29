@@ -131,6 +131,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   databaseLoginScriptText = "",
   databaseLoginWrapperText = "",
   canonicalDatabaseUrlWrapperText = "",
+  linkedDatabasePushText = "",
 }) {
   const violations = [];
   const inputs = parsed?.on?.workflow_dispatch?.inputs ?? {};
@@ -190,20 +191,35 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const productionIdentityIndex = productionSteps.findIndex(
     (step) => step?.name === "Revalidate production identity immediately before mutation",
   );
-  const requiredDatabasePhases = {
+  const temporaryDatabasePhases = {
     staging: [
       "Prove recorded staging database state",
-      "Apply only manifest-bound staging migrations",
+      "Prepare manifest-bound staging migration dry-run",
       "Verify staging database and pgTAP",
       "Prove staging publish-public-catalogue cron liveness",
     ],
     production: [
       "Prove recorded production database state",
-      "Apply only manifest-bound production migrations",
+      "Prepare manifest-bound production migration dry-run",
       "Verify production database",
       "Prove production publish-public-catalogue cron liveness",
     ],
   };
+  const linkedMigrationPhases = {
+    staging: ["Apply only manifest-bound staging migrations"],
+    production: ["Apply only manifest-bound production migrations"],
+  };
+  const requiredDatabasePhases = Object.fromEntries(
+    Object.keys(temporaryDatabasePhases).map((target) => [
+      target,
+      [
+        temporaryDatabasePhases[target][0],
+        temporaryDatabasePhases[target][1],
+        ...linkedMigrationPhases[target],
+        ...temporaryDatabasePhases[target].slice(2),
+      ],
+    ]),
+  );
   const stagingMarker = stagingSteps.find(
     (step) => step?.name === "Capture manifest-bound frontend marker for staging evidence",
   );
@@ -215,6 +231,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     (job?.steps ?? []).filter((step) => Object.hasOwn(step?.env ?? {}, "SUPABASE_ACCESS_TOKEN"))
   );
   const resolverMarkers = [
+    "management_token=\"$SUPABASE_ACCESS_TOKEN\"",
+    "unset SUPABASE_ACCESS_TOKEN",
     "response_file=\"$(mktemp \"$RUNNER_TEMP/",
     "candidates_file=\"$(mktemp \"$RUNNER_TEMP/",
     "chmod 600 \"$response_file\" \"$candidates_file\"",
@@ -226,7 +244,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "--retry-all-errors",
     "--retry-max-time 90",
     "-o \"$response_file\"",
-    "Authorization: Bearer $SUPABASE_ACCESS_TOKEN",
+    "Authorization: Bearer $management_token",
     "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/api-keys?reveal=true",
     "write-staging-public-key-candidates \"$response_file\" \"$candidates_file\"",
     "bash scripts/catalogue-hotfix-staging-key-probe.sh \"$candidates_file\"",
@@ -274,6 +292,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const databaseLoginScript = String(databaseLoginScriptText);
   const databaseLoginWrapper = String(databaseLoginWrapperText);
   const canonicalDatabaseUrlWrapper = String(canonicalDatabaseUrlWrapperText);
+  const linkedDatabasePush = String(linkedDatabasePushText);
   const staticValidatorStart = support.indexOf("export function buildCatalogueHotfixStaticMarkerEvidence");
   const staticValidatorEnd = support.indexOf("\nfunction validateKey", staticValidatorStart);
   const staticValidator = staticValidatorStart >= 0 && staticValidatorEnd > staticValidatorStart
@@ -305,7 +324,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     resolverIndex >= stagingControlIndex || stagingControlIndex >= identityIndex ||
     Object.keys(resolver?.env ?? {}).join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
     resolver?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
-    tokenSteps.length !== 9 ||
+    tokenSteps.length !== 11 ||
     tokenSteps.map((step) => step?.name).join("\n") !== [
       "Resolve current staging public API key",
       ...requiredDatabasePhases.staging,
@@ -361,6 +380,10 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const databaseSupportMarkers = [
     "buildTemporaryDatabaseCredential",
     "buildTemporaryPoolerDatabaseCredential",
+    "validateLinkedProjectState",
+    'username !== `postgres.${ref}`',
+    'pooler.port !== "5432"',
+    'pooler.pathname !== "/postgres"',
     'record.database_type === "PRIMARY"',
     'primary.identifier !== ref',
     'primary.db_user !== `postgres.${ref}`',
@@ -427,6 +450,23 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "export GITHUB_ENV=\"$database_env\"",
     '"$@"',
   ];
+  const linkedDatabasePushMarkers = [
+    "set +x",
+    "staging:xsiehskfgeoqyazcgauv|production:qvvicunqcrwpioqnvzxf)",
+    'management_token="$SUPABASE_ACCESS_TOKEN"',
+    "unset SUPABASE_ACCESS_TOKEN",
+    'work="$RUNNER_TEMP/catalogue-hotfix-$TARGET_KIND"',
+    'cli="$GITHUB_WORKSPACE/node_modules/.bin/supabase"',
+    'temporary="$work/supabase/.temp"',
+    'project_ref_file="$temporary/project-ref"',
+    'pooler_url_file="$temporary/pooler-url"',
+    'SUPABASE_ACCESS_TOKEN="$management_token" "$cli" --workdir "$work" --yes link --project-ref "$TARGET_PROJECT_REF"',
+    'node scripts/catalogue-hotfix-workflow-helpers.mjs validate-linked-state "$project_ref_file" "$pooler_url_file"',
+    'SUPABASE_ACCESS_TOKEN="$management_token" "$cli" --workdir "$work" --yes db push --linked --include-all "$mode_flag"',
+    'mode_flag="--dry-run"',
+    'mode_flag="--yes"',
+    "Official linked database push failed",
+  ];
   const canonicalIdentityCommand =
     "bash scripts/catalogue-hotfix-with-canonical-database-url.sh bash -s <<'IDENTITY_PHASE'";
   const expectedIdentityRuns = [
@@ -484,6 +524,33 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     return executableShellLines(databaseLoginWrapper.slice(unsetEnd))
       .some((line) => /\bSUPABASE_ACCESS_TOKEN\b/.test(line));
   })();
+  const workflowTokenScopeViolation = tokenSteps.some((step) => {
+    const run = String(step?.run ?? "");
+    const assignment = 'management_token="$SUPABASE_ACCESS_TOKEN"';
+    const accessUnset = "unset SUPABASE_ACCESS_TOKEN";
+    const managementUnset = "unset management_token";
+    const assignmentIndex = run.indexOf(assignment);
+    const accessUnsetIndex = run.indexOf(accessUnset);
+    const managementUnsetIndex = run.lastIndexOf(managementUnset);
+    if (assignmentIndex < 0 || run.indexOf(assignment, assignmentIndex + 1) >= 0 ||
+        accessUnsetIndex < assignmentIndex || run.indexOf(accessUnset, accessUnsetIndex + 1) >= 0 ||
+        managementUnsetIndex < accessUnsetIndex || /export[ \t]+management_token/.test(run)) {
+      return true;
+    }
+    const preUnsetCommands = executableShellLines(run.slice(0, accessUnsetIndex));
+    if (preUnsetCommands.some((line) =>
+      !/^set -euo pipefail$/.test(line.trim()) &&
+      !/^umask 077$/.test(line.trim()) &&
+      line.trim() !== assignment
+    )) {
+      return true;
+    }
+    return executableShellLines(run.slice(accessUnsetIndex + accessUnset.length))
+      .some((line) => {
+        if (!/\bSUPABASE_ACCESS_TOKEN\b/.test(line)) return false;
+        return !/^SUPABASE_ACCESS_TOKEN="\$management_token" bash scripts\/catalogue-hotfix-(?:with-database-login|linked-db-push)\.sh\b/.test(line.trim());
+      });
+  });
   const wrapperCommand = "bash scripts/catalogue-hotfix-with-database-login.sh bash -s";
   const databaseCommandPattern = /(?:\bpsql\b|\bdb\s+push\b|catalogue-hotfix-behavioral-probe\.mjs\s+(?:recorded|postapply)\b)/;
   const phaseProblems = [];
@@ -507,7 +574,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     if (jobSteps.some((step) => /Mint temporary .* database login|Validate temporary .* database binding/.test(step?.name ?? ""))) {
       phaseProblems.push(`${target} job-wide login`);
     }
-    for (const phaseName of requiredDatabasePhases[target]) {
+    for (const phaseName of temporaryDatabasePhases[target]) {
       const matches = jobSteps.filter((step) => step?.name === phaseName);
       const phase = matches[0];
       const run = String(phase?.run ?? "");
@@ -520,6 +587,25 @@ export function cataloguePerformanceHotfixWorkflowViolations({
           phase?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
           phase?.env?.TARGET_DB_URL !== expectedDatabaseUrl ||
           wrapperCount !== 1 || !run.includes("<<'DATABASE_PHASE'")) {
+        phaseProblems.push(`${target} ${phaseName}`);
+      }
+      if (phaseName.startsWith("Prepare manifest-bound") &&
+          (!run.includes('work="$RUNNER_TEMP/catalogue-hotfix-') ||
+           !run.includes('SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-linked-db-push.sh prepare') ||
+           /db push .*--db-url/.test(run))) {
+        phaseProblems.push(`${target} linked migration preparation`);
+      }
+    }
+    for (const phaseName of linkedMigrationPhases[target]) {
+      const matches = jobSteps.filter((step) => step?.name === phaseName);
+      const phase = matches[0];
+      const run = String(phase?.run ?? "");
+      const envNames = Object.keys(phase?.env ?? {});
+      if (matches.length !== 1 || phase?.["timeout-minutes"] !== 4 ||
+          envNames.join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
+          phase?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
+          !run.includes('SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-linked-db-push.sh apply') ||
+          /TARGET_DB_URL|catalogue-hotfix-with-database-login|--db-url/.test(run)) {
         phaseProblems.push(`${target} ${phaseName}`);
       }
     }
@@ -538,16 +624,32 @@ export function cataloguePerformanceHotfixWorkflowViolations({
       }
     }
   }
+  const rawWorkflowDatabaseLines = String(text ?? "").split(/\r?\n/).filter((line) =>
+    line.includes('psql "$TARGET_DB_URL"')
+  );
+  const rawWorkflowDatabaseRoleViolation = rawWorkflowDatabaseLines.length !== 5 ||
+    rawWorkflowDatabaseLines.some((line) => {
+      const roleMarker = "--command 'SET ROLE postgres'";
+      const roleIndex = line.indexOf(roleMarker);
+      const roleCount = line.split(roleMarker).length - 1;
+      const nextCommandIndex = line.indexOf("--command ", roleIndex + roleMarker.length);
+      const fileIndex = line.indexOf("--file ", roleIndex + roleMarker.length);
+      return roleCount !== 1 || roleIndex < 0 || (nextCommandIndex < 0 && fileIndex < 0);
+    });
   if (
     phaseProblems.length > 0 ||
+    rawWorkflowDatabaseRoleViolation ||
     databaseLoginMarkers.some((marker) => !databaseLoginScript.includes(marker)) ||
     databaseSupportMarkers.some((marker) => !support.includes(marker)) ||
     databaseWrapperMarkers.some((marker) => !databaseLoginWrapper.includes(marker)) ||
     canonicalDatabaseUrlWrapperMarkers.some((marker) => !canonicalDatabaseUrlWrapper.includes(marker)) ||
+    linkedDatabasePushMarkers.some((marker) => !linkedDatabasePush.includes(marker)) ||
     identityTexts.some((identityText, index) => identityText.trim() !== expectedIdentityRuns[index]) ||
     databaseWrapperTokenScopeViolation ||
+    workflowTokenScopeViolation ||
     /\beval\b|\bsource\b|(?:^|\s)\.\s/.test(databaseLoginWrapper) ||
     /\beval\b|\bsource\b|(?:^|\s)\.\s/.test(canonicalDatabaseUrlWrapper) ||
+    /--db-url|\beval\b|\bsource\b|(?:^|\s)\.\s|-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/.test(linkedDatabasePush) ||
     String(text ?? "").includes("bash scripts/catalogue-hotfix-database-login.sh") ||
     /--retry|-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/.test(databaseLoginScript)
   ) {
@@ -611,11 +713,10 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "RUNNER_TEMP",
     "remote-numeric-history",
     "placeholder",
-    "db push --include-all --dry-run --db-url \"$TARGET_DB_URL\"",
-    "db push --include-all --yes --db-url \"$TARGET_DB_URL\"",
+    "bash scripts/catalogue-hotfix-linked-db-push.sh prepare",
+    "bash scripts/catalogue-hotfix-linked-db-push.sh apply",
     "catalogue-hotfix-workflow-helpers.mjs validate-dry-run",
     "validate-target",
-    "cd \"$work\"",
     "public_catalogue_snapshot_test.sql",
     "--expected-plan 90",
     "status=eq.active",
@@ -1038,6 +1139,7 @@ export function scanWorkflows() {
       databaseLoginScriptText: read(join(root, "scripts/catalogue-hotfix-database-login.sh")),
       databaseLoginWrapperText: read(join(root, "scripts/catalogue-hotfix-with-database-login.sh")),
       canonicalDatabaseUrlWrapperText: read(join(root, "scripts/catalogue-hotfix-with-canonical-database-url.sh")),
+      linkedDatabasePushText: read(join(root, "scripts/catalogue-hotfix-linked-db-push.sh")),
     })) {
       violations.push(`${catalogueHotfixWorkflow} ${violation}`);
     }
