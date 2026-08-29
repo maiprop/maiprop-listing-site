@@ -169,6 +169,9 @@ jobs:
           # vitest.config.ts so other files run in fresh processes.
           NODE_OPTIONS: --max-old-space-size=4096
 
+      - name: Test catalogue hotfix release contracts
+        run: npm run test:catalogue-hotfix
+
       - name: Coverage
         run: npm run test:coverage
         env:

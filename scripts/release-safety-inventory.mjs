@@ -130,6 +130,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   markerScriptText = "",
   databaseLoginScriptText = "",
   databaseLoginWrapperText = "",
+  canonicalDatabaseUrlWrapperText = "",
 }) {
   const violations = [];
   const inputs = parsed?.on?.workflow_dispatch?.inputs ?? {};
@@ -176,12 +177,18 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const resolverIndex = stagingSteps.findIndex(
     (step) => step?.name === "Resolve current staging public API key",
   );
+  const stagingControlIndex = stagingSteps.findIndex(
+    (step) => step?.name === "Revalidate staging control and API readiness",
+  );
   const identityIndex = stagingSteps.findIndex(
     (step) => step?.name === "Revalidate staging identity immediately before mutation",
   );
   const productionSteps = jobs.production?.steps ?? [];
+  const productionControlIndex = productionSteps.findIndex(
+    (step) => step?.name === "Revalidate production control, authorization, and API readiness",
+  );
   const productionIdentityIndex = productionSteps.findIndex(
-    (step) => step?.name === "Revalidate production control and authorization immediately before mutation",
+    (step) => step?.name === "Revalidate production identity immediately before mutation",
   );
   const requiredDatabasePhases = {
     staging: [
@@ -246,6 +253,10 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     String(stagingSteps[identityIndex]?.run ?? ""),
     String(productionSteps[productionIdentityIndex]?.run ?? ""),
   ];
+  const controlTexts = [
+    String(stagingSteps[stagingControlIndex]?.run ?? ""),
+    String(productionSteps[productionControlIndex]?.run ?? ""),
+  ];
   const readinessMarkers = [
     "readiness_status=\"000\"",
     "--connect-timeout 10",
@@ -262,6 +273,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const markerScript = String(markerScriptText);
   const databaseLoginScript = String(databaseLoginScriptText);
   const databaseLoginWrapper = String(databaseLoginWrapperText);
+  const canonicalDatabaseUrlWrapper = String(canonicalDatabaseUrlWrapperText);
   const staticValidatorStart = support.indexOf("export function buildCatalogueHotfixStaticMarkerEvidence");
   const staticValidatorEnd = support.indexOf("\nfunction validateKey", staticValidatorStart);
   const staticValidator = staticValidatorStart >= 0 && staticValidatorEnd > staticValidatorStart
@@ -289,7 +301,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     productionEnv.TARGET_ANON_KEY !== "${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}" ||
     Object.hasOwn(productionEnv, "SUPABASE_ACCESS_TOKEN") ||
     String(text ?? "").includes("STAGING_SUPABASE_PUBLISHABLE_KEY") ||
-    resolverIndex < 0 || resolverIndex >= identityIndex ||
+    resolverIndex < 0 || stagingControlIndex < 0 || productionControlIndex < 0 ||
+    resolverIndex >= stagingControlIndex || stagingControlIndex >= identityIndex ||
     Object.keys(resolver?.env ?? {}).join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
     resolver?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
     tokenSteps.length !== 9 ||
@@ -304,9 +317,9 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     probeScriptMarkers.some((marker) => !probeScript.includes(marker)) ||
     /TARGET_API_URL|\/rest\/v1\/|openapi|Authorization:|-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/i.test(probeScript) ||
     productionIdentityIndex < 0 ||
-    identityTexts.some((identityText) =>
-      readinessMarkers.some((marker) => !identityText.includes(marker)) ||
-      /\/rest\/v1\/|openapi|-D |--dump-header|response_body/i.test(identityText)
+    controlTexts.some((controlText) =>
+      readinessMarkers.some((marker) => !controlText.includes(marker)) ||
+      /\/rest\/v1\/|openapi|-D |--dump-header|response_body/i.test(controlText)
     ) ||
     !support.includes("parseStagingPublicApiKeyCandidates") ||
     !support.includes("selectLiveStagingPublicApiKey") ||
@@ -342,6 +355,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const databaseSupportMarkers = [
     "buildTemporaryDatabaseCredential",
     "validateDatabaseSearchParameters",
+    'parsed.search = "";',
+    'parsed.searchParams.set("sslmode", "require");',
     'const expectedKeys = temporary ? ["options", "sslmode"] : ["sslmode"];',
     "const actualKeys = [...db.searchParams.keys()].sort();",
     "JSON.stringify(actualKeys) === JSON.stringify(expectedKeys)",
@@ -367,6 +382,36 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "TARGET_DB_EPHEMERAL_ROLE)",
     "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target",
     '"$@"',
+  ];
+  const canonicalDatabaseUrlWrapperMarkers = [
+    "set +x",
+    "database_env=\"$(mktemp \"$RUNNER_TEMP/catalogue-hotfix-canonical-database.",
+    "chmod 600 \"$database_env\"",
+    "trap 'rm -f -- \"$database_env\"' EXIT",
+    "GITHUB_ENV=\"$database_env\" node scripts/catalogue-hotfix-workflow-helpers.mjs normalize-db-url-env",
+    "canonical_db_url_count",
+    "export TARGET_DB_URL=\"$canonical_db_url\"",
+    "export GITHUB_ENV=\"$database_env\"",
+    '"$@"',
+  ];
+  const canonicalIdentityCommand =
+    "bash scripts/catalogue-hotfix-with-canonical-database-url.sh bash -s <<'IDENTITY_PHASE'";
+  const expectedIdentityRuns = [
+    [
+      "set -euo pipefail",
+      canonicalIdentityCommand,
+      "set -euo pipefail",
+      "node scripts/assert-staging-mutation-target.mjs --project-ref \"$TARGET_PROJECT_REF\" --database-url \"$TARGET_DB_URL\" --acknowledgement \"$STAGING_MUTATION_ACKNOWLEDGEMENT\"",
+      "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target",
+      "IDENTITY_PHASE",
+    ].join("\n"),
+    [
+      "set -euo pipefail",
+      canonicalIdentityCommand,
+      "set -euo pipefail",
+      "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target",
+      "IDENTITY_PHASE",
+    ].join("\n"),
   ];
   const executableShellLines = (source) => String(source)
     .split(/\r?\n/)
@@ -411,10 +456,16 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     const expectedDatabaseUrl = target === "staging"
       ? "${{ secrets.SUPABASE_STAGING_DB_URL }}"
       : "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}";
+    const identityStepName = `Revalidate ${target} identity immediately before mutation`;
+    const identityMatches = jobSteps.filter((step) => step?.name === identityStepName);
+    const identityEnvNames = Object.keys(identityMatches[0]?.env ?? {});
     if (job?.["timeout-minutes"] !== 45 ||
         Object.hasOwn(job?.env ?? {}, "TARGET_DB_URL") ||
         Object.hasOwn(job?.env ?? {}, "TARGET_DB_EPHEMERAL_ROLE") ||
-        Object.hasOwn(job?.env ?? {}, "SUPABASE_ACCESS_TOKEN")) {
+        Object.hasOwn(job?.env ?? {}, "SUPABASE_ACCESS_TOKEN") ||
+        identityMatches.length !== 1 ||
+        identityEnvNames.join("\n") !== "TARGET_DB_URL" ||
+        identityMatches[0]?.env?.TARGET_DB_URL !== expectedDatabaseUrl) {
       phaseProblems.push(`${target} job credential scope`);
     }
     if (jobSteps.some((step) => /Mint temporary .* database login|Validate temporary .* database binding/.test(step?.name ?? ""))) {
@@ -443,7 +494,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
         phaseProblems.push(`${target} raw database command in ${step?.name ?? "unnamed step"}`);
       }
       if (!isDatabasePhase && Object.hasOwn(step?.env ?? {}, "TARGET_DB_URL") &&
-          !String(step?.name ?? "").startsWith(`Revalidate ${target}`)) {
+          step?.name !== identityStepName) {
         phaseProblems.push(`${target} database URL outside a database phase`);
       }
       if (!isDatabasePhase && /TARGET_DB_EPHEMERAL_ROLE|catalogue-hotfix-with-database-login/.test(run)) {
@@ -456,8 +507,11 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     databaseLoginMarkers.some((marker) => !databaseLoginScript.includes(marker)) ||
     databaseSupportMarkers.some((marker) => !support.includes(marker)) ||
     databaseWrapperMarkers.some((marker) => !databaseLoginWrapper.includes(marker)) ||
+    canonicalDatabaseUrlWrapperMarkers.some((marker) => !canonicalDatabaseUrlWrapper.includes(marker)) ||
+    identityTexts.some((identityText, index) => identityText.trim() !== expectedIdentityRuns[index]) ||
     databaseWrapperTokenScopeViolation ||
     /\beval\b|\bsource\b|(?:^|\s)\.\s/.test(databaseLoginWrapper) ||
+    /\beval\b|\bsource\b|(?:^|\s)\.\s/.test(canonicalDatabaseUrlWrapper) ||
     String(text ?? "").includes("bash scripts/catalogue-hotfix-database-login.sh") ||
     /--retry|-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/.test(databaseLoginScript)
   ) {
@@ -939,6 +993,7 @@ export function scanWorkflows() {
       markerScriptText: read(join(root, "scripts/catalogue-hotfix-static-marker.sh")),
       databaseLoginScriptText: read(join(root, "scripts/catalogue-hotfix-database-login.sh")),
       databaseLoginWrapperText: read(join(root, "scripts/catalogue-hotfix-with-database-login.sh")),
+      canonicalDatabaseUrlWrapperText: read(join(root, "scripts/catalogue-hotfix-with-canonical-database-url.sh")),
     })) {
       violations.push(`${catalogueHotfixWorkflow} ${violation}`);
     }

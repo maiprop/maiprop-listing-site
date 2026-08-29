@@ -466,13 +466,16 @@ export function normalizeDatabaseUrlTls(databaseUrl) {
   } catch {
     fail("Database URL cannot be normalized safely.");
   }
+  if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname ||
+      !parsed.username || !parsed.password || parsed.pathname !== "/postgres" || parsed.hash) {
+    fail("Database URL cannot be normalized safely.");
+  }
   const modes = parsed.searchParams.getAll("sslmode");
   if (modes.length > 1 || (modes.length === 1 && modes[0] !== "require")) {
     fail("Database URL must contain at most one sslmode=require value.");
   }
-  if (modes.length === 0) {
-    parsed.searchParams.append("sslmode", "require");
-  }
+  parsed.search = "";
+  parsed.searchParams.set("sslmode", "require");
   return parsed.toString();
 }
 
@@ -543,6 +546,9 @@ export function buildTemporaryDatabaseCredential({ kind, ref, databaseUrl, respo
     fail(`Temporary database login TTL ${response.ttl_seconds}s is below the required ${MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS}s.`);
   }
 
+  if (typeof databaseUrl !== "string" || /[\r\n]/.test(databaseUrl)) {
+    fail("Temporary database login cannot replace an invalid database URL.");
+  }
   let db;
   try {
     db = new URL(databaseUrl);
@@ -565,6 +571,10 @@ export function buildTemporaryDatabaseCredential({ kind, ref, databaseUrl, respo
 
 export function validateTarget({ kind, ref, apiUrl, databaseUrl, key, ephemeralRole = null }) {
   if (!ref || !apiUrl || !databaseUrl || !key) fail("Target credentials are incomplete.");
+  if (typeof apiUrl !== "string" || typeof databaseUrl !== "string" ||
+      /[\r\n]/.test(apiUrl) || /[\r\n]/.test(databaseUrl)) {
+    fail("Target credentials contain an unsafe URL.");
+  }
   if (ref !== expectedProjectRef(kind)) {
     fail("Target kind does not match the manifest-bound project ref.");
   }
