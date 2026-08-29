@@ -145,7 +145,8 @@ test.describe("AI Assistant page", () => {
   test("ai-assistant page loads without crashing", async ({ page }) => {
     await page.goto("/ai-assistant");
     await page.waitForLoadState("load", { timeout: 15_000 });
-    await expect(page.locator("main, body").first()).toBeVisible();
+    await expect(page.locator("main#main-content")).toBeVisible();
+    await expect(page.getByRole("button", { name: "mAI prop AI", exact: true })).toBeVisible();
   });
 
   test("chat input is visible on ai-assistant page", async ({ page }) => {
