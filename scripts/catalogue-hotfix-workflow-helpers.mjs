@@ -708,25 +708,39 @@ export function validateDryRun({ contract, remoteHistory, output }) {
   if (!output.trim() || !/(?:migration|push|pending|\d{14})/i.test(output)) {
     fail("Dry-run output is empty or unrecognized.");
   }
+  const outputLines = output
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trim());
   const remote = new Set(remoteHistory.trim().split(/\s+/).filter(Boolean));
   const expected_pending_versions = contract.hotfix.migrations
     .map((migration) => migration.version)
     .filter((version) => !remote.has(version))
     .sort();
-  const pending_versions = [...new Set([...output.matchAll(/\b(\d{14})\b/g)].map((match) => match[1]))].sort();
-  const outputLines = output
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((line) => line.trim());
+  const pendingHeaderIndex = outputLines.indexOf("Would push these migrations:");
+  const parsedPendingVersions = [];
+  if (pendingHeaderIndex >= 0) {
+    for (const line of outputLines.slice(pendingHeaderIndex + 1)) {
+      const match = /^• (\d{14})_[A-Za-z0-9][A-Za-z0-9_-]*\.sql$/.exec(line);
+      if (!match) {
+        break;
+      }
+      parsedPendingVersions.push(match[1]);
+    }
+  }
+  const pending_versions = [...new Set(parsedPendingVersions)].sort();
   const dryRunState = outputLines.some((line) =>
     /^Skipping migrations because it is disabled in config\.toml(?: for project: [^\r\n]+)?\.?$/.test(line))
     ? "migrations-disabled"
     : outputLines.includes("Remote database is up to date.")
       ? "remote-up-to-date"
-      : outputLines.includes("Would push these migrations:")
+      : pendingHeaderIndex >= 0
         ? "pending-listed"
         : "unknown";
-  if (pending_versions.some((version) => !VERSION.test(version)) ||
+  const stateMatchesExpected = expected_pending_versions.length > 0
+    ? dryRunState === "pending-listed"
+    : dryRunState === "remote-up-to-date";
+  if (!stateMatchesExpected || pending_versions.some((version) => !VERSION.test(version)) ||
       JSON.stringify(pending_versions) !== JSON.stringify(expected_pending_versions)) {
     fail(`Dry-run pending versions differ: state=${dryRunState} expected=${JSON.stringify(expected_pending_versions)} observed=${JSON.stringify(pending_versions)}.`);
   }
