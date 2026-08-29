@@ -421,11 +421,15 @@ test("database phase wrapper keeps a fresh credential private to one validated c
   const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-db-phase-"));
   const fakeBin = join(directory, "bin");
   const fakeCurl = join(fakeBin, "curl");
+  const fakePsql = join(fakeBin, "psql");
+  const fakeSleep = join(fakeBin, "sleep");
+  const fakeTimeout = join(fakeBin, "timeout");
   const runnerTemp = join(directory, "runner-temp");
   const responsePath = join(directory, "response.json");
   const realEnvPath = join(directory, "github-env");
   const phaseScript = join(directory, "phase.sh");
   const phaseResult = join(directory, "phase-result");
+  const readinessAttempts = join(directory, "readiness-attempts");
   const role = "cli_login_01234567";
   const password = "phase-only-secret";
   const accessToken = "phase-management-token-never-log";
@@ -448,6 +452,38 @@ done
 cp "$TEST_RESPONSE" "$output"
 printf '201'
 `);
+    writeFileSync(fakePsql, `#!/usr/bin/env bash
+set -euo pipefail
+if [ -n "\${SUPABASE_ACCESS_TOKEN+x}" ]; then
+  exit 31
+fi
+[ "$1" = "$TARGET_DB_URL" ]
+[ "$2" = "--no-psqlrc" ]
+[ "$3" = "--set" ]
+[ "$4" = "ON_ERROR_STOP=1" ]
+[ "$5" = "-qAtc" ]
+[ "$6" = "SELECT 1" ]
+[ "\${PGCONNECT_TIMEOUT:-}" = "4" ]
+attempts=0
+if [ -f "$TEST_READINESS_ATTEMPTS" ]; then attempts="$(cat "$TEST_READINESS_ATTEMPTS")"; fi
+attempts=$((attempts + 1))
+printf '%s' "$attempts" > "$TEST_READINESS_ATTEMPTS"
+if [ "\${TEST_PSQL_HANG:-}" = "1" ]; then exec /bin/sleep 30; fi
+if [ "$attempts" -lt 3 ]; then exit 2; fi
+printf '1\n'
+`);
+    writeFileSync(fakeSleep, `#!/usr/bin/env bash
+set -euo pipefail
+[ "$#" -eq 1 ]
+[ "$1" = "2" ]
+`);
+    writeFileSync(fakeTimeout, `#!/usr/bin/env bash
+set -euo pipefail
+[ "$1" = "--signal=TERM" ]; shift
+[ "$1" = "--kill-after=1s" ]; shift
+[ "$1" = "6s" ]; shift
+exec /usr/bin/timeout --signal=TERM --kill-after=0.1s 0.1s "$@"
+`);
     writeFileSync(phaseScript, `#!/usr/bin/env bash
 set -euo pipefail
 if [ -n "\${SUPABASE_ACCESS_TOKEN+x}" ]; then
@@ -461,8 +497,11 @@ printf 'MUST_NOT_PERSIST=1\\n' >> "$GITHUB_ENV"
 printf 'phase-ok' > "$TEST_PHASE_RESULT"
 `);
     chmodSync(fakeCurl, 0o700);
+    chmodSync(fakePsql, 0o700);
+    chmodSync(fakeSleep, 0o700);
+    chmodSync(fakeTimeout, 0o700);
     chmodSync(phaseScript, 0o700);
-    const result = spawnSync(bashExecutable, [
+    const runWrapper = (extraEnv = {}) => spawnSync(bashExecutable, [
       "-c",
       'export PATH="$TEST_FAKE_BIN:$PATH"; exec bash "$TEST_WRAPPER" bash "$TEST_PHASE_SCRIPT"',
     ], {
@@ -481,6 +520,7 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
         TEST_ACCESS_TOKEN: accessToken,
         TEST_FAKE_BIN: fakeBin,
         TEST_PHASE_RESULT: phaseResult,
+        TEST_READINESS_ATTEMPTS: readinessAttempts,
         TEST_PHASE_SCRIPT: phaseScript,
         TEST_REAL_GITHUB_ENV: realEnvPath,
         TEST_RESPONSE: responsePath,
@@ -499,19 +539,39 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
           "TEST_ACCESS_TOKEN",
           "TEST_FAKE_BIN/p",
           "TEST_PHASE_RESULT/p",
+          "TEST_PSQL_HANG",
+          "TEST_READINESS_ATTEMPTS/p",
           "TEST_PHASE_SCRIPT/p",
           "TEST_REAL_GITHUB_ENV/p",
           "TEST_RESPONSE/p",
           "TEST_ROLE",
           "TEST_WRAPPER/p",
         ].filter(Boolean).join(":"),
+        ...extraEnv,
       },
     });
+    const result = runWrapper();
     assert.equal(readFileSync(phaseResult, "utf8"), "phase-ok");
+    assert.equal(readFileSync(readinessAttempts, "utf8"), "3");
     assert.equal(result.status, 0, result.stderr);
     assert.equal(readFileSync(realEnvPath, "utf8"), "UNCHANGED=1\n");
     assert.equal(readdirSync(runnerTemp).length, 0, "all private credential files are removed");
     assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(accessToken));
+
+    rmSync(phaseResult);
+    rmSync(readinessAttempts);
+    const notReady = runWrapper({ TEST_PSQL_HANG: "1" });
+    assert.equal(notReady.status, 1);
+    assert.equal(existsSync(phaseResult), false, "the database phase never starts before readiness");
+    assert.equal(readFileSync(readinessAttempts, "utf8"), "4");
+    assert.equal(readdirSync(runnerTemp).length, 0, "private credentials are removed after readiness failure");
+    const notReadyOutput = `${notReady.stdout}${notReady.stderr}`;
+    assert.match(notReadyOutput, /Temporary database login did not become ready within the bounded propagation window/);
+    assert.doesNotMatch(notReadyOutput, new RegExp(accessToken));
+    assert.doesNotMatch(
+      notReadyOutput.split(/\r?\n/).filter((line) => !line.startsWith("::add-mask::")).join("\n"),
+      new RegExp(password),
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

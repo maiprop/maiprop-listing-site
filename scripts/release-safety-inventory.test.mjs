@@ -151,6 +151,20 @@ describe("release safety inventory", () => {
       '\nexport SUPABASE_ACCESS_TOKEN\n"$@"',
     );
     expect(violations({ databaseLoginWrapperText: postUnsetExport })).not.toEqual([]);
+    const missingReadinessProbe = databaseLoginWrapperText.replace("database_max_attempts=4\n", "");
+    expect(violations({ databaseLoginWrapperText: missingReadinessProbe })).not.toEqual([]);
+    const unboundedReadinessProbe = databaseLoginWrapperText.replace(
+      "timeout --signal=TERM --kill-after=1s 6s env ",
+      "env ",
+    );
+    expect(violations({ databaseLoginWrapperText: unboundedReadinessProbe })).not.toEqual([]);
+    const readinessBeforeValidation = databaseLoginWrapperText.replace(
+      "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target\n\ndatabase_ready=false",
+      "database_ready=false\nnode scripts/catalogue-hotfix-workflow-helpers.mjs validate-target",
+    );
+    expect(violations({ databaseLoginWrapperText: readinessBeforeValidation })).not.toEqual([]);
+    const oversizedCronBudget = text.replace("for n in $(seq 1 15); do", "for n in $(seq 1 17); do");
+    expect(violations({ text: oversizedCronBudget, parsed: yaml.load(oversizedCronBudget) })).not.toEqual([]);
     for (const unsafeText of [
       text.replaceAll('${TARGET_API_URL%/}/auth/v1/settings', '${TARGET_API_URL%/}/rest/v1/'),
       text.replace("--retry-max-time 90", ""),

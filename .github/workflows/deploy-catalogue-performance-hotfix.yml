@@ -182,7 +182,7 @@ jobs:
           started="$(date +%s)"; state(){ psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc "WITH j AS (SELECT jobid,schedule,command,active FROM cron.job WHERE jobname='publish-public-catalogue'), r AS (SELECT runid,start_time,end_time FROM cron.job_run_details WHERE jobid=(SELECT jobid FROM j) AND status='succeeded' ORDER BY runid DESC LIMIT 20) SELECT json_build_object('schedule',(SELECT schedule FROM j),'command',(SELECT command FROM j),'active',(SELECT active FROM j),'successful_runs',(SELECT coalesce(json_agg(r),'[]'::json) FROM r),'publication_id',(SELECT publication_id FROM private.public_catalogue_current WHERE singleton))"; }
           baseline="$RUNNER_TEMP/staging-cron-baseline.json"; current="$RUNNER_TEMP/staging-cron-current.json"
           state > "$baseline"; ok=false
-          for n in $(seq 1 17); do state > "$current"; elapsed_seconds="$(( $(date +%s)-started ))"; if node scripts/catalogue-hotfix-workflow-helpers.mjs cron-proof "$baseline" "$current" "$elapsed_seconds" evidence/catalogue-cron-proof.json; then ok=true; break; fi; sleep 10; done; [ "$ok" = true ] || exit 1
+          for n in $(seq 1 15); do state > "$current"; elapsed_seconds="$(( $(date +%s)-started ))"; if node scripts/catalogue-hotfix-workflow-helpers.mjs cron-proof "$baseline" "$current" "$elapsed_seconds" evidence/catalogue-cron-proof.json; then ok=true; break; fi; [ "$n" -eq 15 ] || sleep 10; done; [ "$ok" = true ] || exit 1
           DATABASE_PHASE
       - name: Write and validate sanitized staging artifact allowlist
         run: |
@@ -310,7 +310,7 @@ jobs:
           state(){ psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc "WITH j AS (SELECT jobid,schedule,command,active FROM cron.job WHERE jobname='publish-public-catalogue'),r AS (SELECT runid,start_time,end_time FROM cron.job_run_details WHERE jobid=(SELECT jobid FROM j) AND status='succeeded' ORDER BY runid DESC LIMIT 20) SELECT json_build_object('schedule',(SELECT schedule FROM j),'command',(SELECT command FROM j),'active',(SELECT active FROM j),'successful_runs',(SELECT coalesce(json_agg(r),'[]'::json)FROM r),'publication_id',(SELECT publication_id FROM private.public_catalogue_current WHERE singleton))"; }
           baseline="$RUNNER_TEMP/production-cron-baseline.json"; current="$RUNNER_TEMP/production-cron-current.json"
           state > "$baseline"; ok=false
-          for n in $(seq 1 17); do state > "$current"; elapsed_seconds="$(( $(date +%s)-started ))"; if node scripts/catalogue-hotfix-workflow-helpers.mjs cron-proof "$baseline" "$current" "$elapsed_seconds" evidence/catalogue-cron-proof.json; then ok=true; break; fi; sleep 10; done; [ "$ok" = true ] || exit 1
+          for n in $(seq 1 15); do state > "$current"; elapsed_seconds="$(( $(date +%s)-started ))"; if node scripts/catalogue-hotfix-workflow-helpers.mjs cron-proof "$baseline" "$current" "$elapsed_seconds" evidence/catalogue-cron-proof.json; then ok=true; break; fi; [ "$n" -eq 15 ] || sleep 10; done; [ "$ok" = true ] || exit 1
           DATABASE_PHASE
       - name: Sample production public API pairs
         run: |

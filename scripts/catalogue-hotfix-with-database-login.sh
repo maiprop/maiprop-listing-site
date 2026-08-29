@@ -63,6 +63,24 @@ export TARGET_DB_EPHEMERAL_ROLE="$target_db_ephemeral_role"
 export GITHUB_ENV="$database_env"
 node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
 
+database_ready=false
+database_attempt=0
+database_max_attempts=4
+while [ "$database_attempt" -lt "$database_max_attempts" ]; do
+  database_attempt="$((database_attempt + 1))"
+  if timeout --signal=TERM --kill-after=1s 6s env PGCONNECT_TIMEOUT=4 psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -qAtc 'SELECT 1' >/dev/null 2>&1; then
+    database_ready=true
+    break
+  fi
+  if [ "$database_attempt" -lt "$database_max_attempts" ]; then
+    sleep 2
+  fi
+done
+if [ "$database_ready" != true ]; then
+  echo "::error::Temporary database login did not become ready within the bounded propagation window."
+  exit 1
+fi
+
 "$@"
 phase_status="$?"
 export GITHUB_ENV="$real_github_env"
