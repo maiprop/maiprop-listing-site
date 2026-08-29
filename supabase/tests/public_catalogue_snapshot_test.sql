@@ -651,16 +651,15 @@ SET LOCAL ROLE postgres;
 
 SELECT is(
   (
-    SELECT legacy.project::text
+    SELECT legacy.project
     FROM public.get_public_listing_catalogue(NULL) AS legacy
     WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
   ),
-  (
-    SELECT source.project::text
-    FROM public.public_listing_catalogue AS source
-    WHERE source.id = '72000000-0000-4000-8000-000000000001'
+  jsonb_build_object(
+    'name', 'Athens compatibility project',
+    'delivery_date', NULL
   ),
-  'legacy compatibility rows preserve the source card project'
+  'legacy compatibility rows retain the bounded card project payload'
 );
 SELECT is(
   (
