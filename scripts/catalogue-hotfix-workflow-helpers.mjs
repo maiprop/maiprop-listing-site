@@ -484,7 +484,10 @@ const FORBIDDEN_TEMPORARY_DATABASE_ROLES = new Set([
   "service_role",
   "supabase_admin",
 ]);
-const MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS = 3600;
+const DATABASE_JOB_TIMEOUT_SECONDS = 45 * 60;
+const DATABASE_CREDENTIAL_MARGIN_SECONDS = 5 * 60;
+const MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS =
+  DATABASE_JOB_TIMEOUT_SECONDS + DATABASE_CREDENTIAL_MARGIN_SECONDS;
 
 function validateTemporaryDatabaseRole(role) {
   if (typeof role !== "string" || !TEMPORARY_DATABASE_ROLE.test(role) ||
@@ -533,9 +536,11 @@ export function buildTemporaryDatabaseCredential({ kind, ref, databaseUrl, respo
       response.password.length > 4096 || /[\0\r\n]/.test(response.password)) {
     fail("Temporary database login password is invalid.");
   }
-  if (!Number.isSafeInteger(response.ttl_seconds) ||
-      response.ttl_seconds < MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS) {
-    fail("Temporary database login TTL is too short for the bounded deployment job.");
+  if (!Number.isSafeInteger(response.ttl_seconds)) {
+    fail("Temporary database login TTL is invalid.");
+  }
+  if (response.ttl_seconds < MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS) {
+    fail(`Temporary database login TTL ${response.ttl_seconds}s is below the required ${MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS}s.`);
   }
 
   let db;
@@ -959,6 +964,7 @@ function main() {
     process.stdout.write(`::add-mask::${temporary.role}\n`);
     process.stdout.write(`::add-mask::${response.password}\n`);
     process.stdout.write(`::add-mask::${temporary.databaseUrl}\n`);
+    process.stdout.write(`::notice::Temporary database login TTL accepted: ${temporary.ttlSeconds}s (minimum ${MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS}s).\n`);
     appendFileSync(envPath, `TARGET_DB_URL=${temporary.databaseUrl}\n`, "utf8");
     appendFileSync(envPath, `TARGET_DB_EPHEMERAL_ROLE=${temporary.role}\n`, "utf8");
     return;

@@ -345,7 +345,10 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     'const expectedKeys = temporary ? ["options", "sslmode"] : ["sslmode"];',
     "const actualKeys = [...db.searchParams.keys()].sort();",
     "JSON.stringify(actualKeys) === JSON.stringify(expectedKeys)",
-    "MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS = 3600",
+    "const DATABASE_JOB_TIMEOUT_SECONDS = 45 * 60;",
+    "const DATABASE_CREDENTIAL_MARGIN_SECONDS = 5 * 60;",
+    "DATABASE_JOB_TIMEOUT_SECONDS + DATABASE_CREDENTIAL_MARGIN_SECONDS",
+    "Temporary database login TTL accepted:",
     "`${role}.${ref}`",
     "-c role=postgres",
     "TARGET_DB_EPHEMERAL_ROLE",
@@ -354,6 +357,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "::add-mask::${temporary.databaseUrl}",
   ];
   if (
+    jobs.staging?.["timeout-minutes"] !== 45 ||
+    jobs.production?.["timeout-minutes"] !== 45 ||
     stagingLoginIndex !== identityIndex + 1 || stagingBindingIndex !== stagingLoginIndex + 1 ||
     productionLoginIndex !== productionIdentityIndex + 1 || productionBindingIndex !== productionLoginIndex + 1 ||
     loginSteps.some(([login, binding]) =>
