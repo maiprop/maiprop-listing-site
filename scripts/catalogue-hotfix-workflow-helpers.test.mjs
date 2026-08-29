@@ -13,6 +13,7 @@ import {
   buildCronProof,
   buildLatencyEvidence,
   buildReleaseSummary,
+  classifyLinkedPushFailure,
   inspectPublicListingBody,
   parseCacheState,
   selectCatalogueProbeContext,
@@ -788,6 +789,12 @@ case "$4" in
     [ "$8" = "$TEST_EXPECTED_MODE" ]
     [ "$(cat "$TEST_WORK/supabase/.temp/project-ref")" = "$TARGET_PROJECT_REF" ]
     printf 'push %s\n' "$*" >> "$TEST_INVOCATION"
+    if [ "\${TEST_PUSH_FAILURE:-false}" = true ]; then
+      printf 'Applying migration 20260728123058_materialize_public_catalogue_snapshots.sql...\n'
+      printf 'ERROR: public_catalogue_duplicate_os_tag (SQLSTATE P0001)\n'
+      printf 'At statement: 12\n%s\n' "$TEST_PROVIDER_SECRET"
+      exit 1
+    fi
     printf 'Would push manifest migration\n'
     ;;
   *) exit 1 ;;
@@ -798,10 +805,20 @@ esac
     writeFileSync(join(fakeBin, "node"), `#!/usr/bin/env bash
 set -euo pipefail
 [ -z "\${SUPABASE_ACCESS_TOKEN:-}" ]
-[ "$2" = "validate-linked-state" ]
-[ "$(cat "$3")" = "$TARGET_PROJECT_REF" ]
-grep -q "postgres.$TARGET_PROJECT_REF@.*pooler.supabase.com:5432/postgres" "$4"
-printf 'token-absent\n' >> "$TEST_SENTINEL"
+case "$2" in
+  validate-linked-state)
+    [ "$(cat "$3")" = "$TARGET_PROJECT_REF" ]
+    grep -q "postgres.$TARGET_PROJECT_REF@.*pooler.supabase.com:5432/postgres" "$4"
+    printf 'token-absent\n' >> "$TEST_SENTINEL"
+    ;;
+  classify-push-failure)
+    grep -q '^Applying migration 20260728123058_materialize_public_catalogue_snapshots.sql\.\.\.$' "$3"
+    grep -q '^ERROR: public_catalogue_duplicate_os_tag (SQLSTATE P0001)$' "$3"
+    grep -q "$TEST_PROVIDER_SECRET" "$3"
+    printf '%s\n' '{"schema_version":1,"kind":"maiprop-linked-push-failure","migration_filename":"20260728123058_materialize_public_catalogue_snapshots.sql","migration_version":"20260728123058","sqlstate":"P0001","category":"catalogue-duplicate-os-tag","message":"Catalogue bootstrap rejected duplicate OS auction tags."}'
+    ;;
+  *) exit 1 ;;
+esac
 `);
     chmodSync(join(fakeBin, "node"), 0o700);
 
@@ -824,6 +841,8 @@ printf 'token-absent\n' >> "$TEST_SENTINEL"
         TEST_INVOCATION: invocationPath,
         TEST_LINKED_MODE: mode,
         TEST_LINKED_SCRIPT: join(process.cwd(), "scripts/catalogue-hotfix-linked-db-push.sh"),
+        TEST_PROVIDER_SECRET: "provider-secret-must-not-log",
+        TEST_PUSH_FAILURE: "false",
         TEST_SENTINEL: sentinelPath,
         TEST_WORK: work,
         WSLENV: [
@@ -839,6 +858,8 @@ printf 'token-absent\n' >> "$TEST_SENTINEL"
           "TEST_INVOCATION/p",
           "TEST_LINKED_MODE",
           "TEST_LINKED_SCRIPT/p",
+          "TEST_PROVIDER_SECRET",
+          "TEST_PUSH_FAILURE",
           "TEST_SENTINEL/p",
           "TEST_WORK/p",
         ].filter(Boolean).join(":"),
@@ -858,7 +879,7 @@ printf 'token-absent\n' >> "$TEST_SENTINEL"
     const apply = run("apply");
     assert.equal(apply.status, 0, apply.stderr);
     assert.match(readFileSync(invocationPath, "utf8"), /db push --linked --include-all --yes/);
-    assert.match(readFileSync(join(work, "push-output.txt"), "utf8"), /Would push/);
+    assert.equal(existsSync(join(work, "push-output.txt")), false, "private apply output is removed after success");
     assert.equal(existsSync(join(work, "supabase", ".temp")), false);
 
     rmSync(invocationPath);
@@ -877,6 +898,14 @@ printf 'token-absent\n' >> "$TEST_SENTINEL"
     const corruptedState = run("apply");
     assert.equal(corruptedState.status, 1);
     assert.equal(existsSync(invocationPath), false, "the CLI never runs with corrupted linked state");
+
+    const thirdPrepare = run("prepare");
+    assert.equal(thirdPrepare.status, 0, thirdPrepare.stderr);
+    const failedApply = run("apply", { TEST_PUSH_FAILURE: "true" });
+    assert.equal(failedApply.status, 1);
+    assert.match(`${failedApply.stdout}${failedApply.stderr}`, /Linked database push diagnostic: .*catalogue-duplicate-os-tag/);
+    assert.doesNotMatch(`${failedApply.stdout}${failedApply.stderr}`, /provider-secret-must-not-log|postgresql:\/\//);
+    assert.equal(existsSync(join(work, "push-output.txt")), false, "private failed apply output is removed");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -1528,6 +1557,89 @@ test("dry-run proof requires the exact approved missing set", () => {
     remoteHistory: "20260728123058\n20260729120405\n",
     output: "DRY RUN: migrations will not be pushed.\nRemote database is up to date.",
   }).pending_versions, []);
+});
+
+test("linked push failure classifier exposes only bounded operational fields", () => {
+  const credential = "postgresql://postgres.secret:password@private.example/postgres";
+  assert.deepEqual(classifyLinkedPushFailure([
+    "Applying migration 20260728123058_materialize_public_catalogue_snapshots.sql...",
+    "ERROR: public_catalogue_duplicate_os_tag (SQLSTATE P0001)",
+    `DETAIL: ${credential} customer-payload-must-not-log`,
+  ].join("\n")), {
+    schema_version: 1,
+    kind: "maiprop-linked-push-failure",
+    migration_filename: "20260728123058_materialize_public_catalogue_snapshots.sql",
+    migration_version: "20260728123058",
+    sqlstate: "P0001",
+    category: "catalogue-duplicate-os-tag",
+    message: "Catalogue bootstrap rejected duplicate OS auction tags.",
+  });
+  const safe = JSON.stringify(classifyLinkedPushFailure([
+    "Applying migration 20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql...",
+    "ERROR: connection failed (SQLSTATE 08006)",
+    `DETAIL: ${credential} customer-payload-must-not-log`,
+  ].join("\n")));
+  assert.deepEqual(JSON.parse(safe), {
+    schema_version: 1,
+    kind: "maiprop-linked-push-failure",
+    migration_filename: "20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql",
+    migration_version: "20260729120405",
+    sqlstate: "08006",
+    category: "connection",
+    message: "The database connection failed.",
+  });
+  assert.doesNotMatch(safe, /password|private\.example|customer-payload/);
+  assert.deepEqual(classifyLinkedPushFailure([
+    "migration 20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql",
+    "ERROR: opaque failure containing SQLSTATE P0001",
+    "At statement: 1",
+    "Applying migration 20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql...",
+    "ERROR: public_catalogue_duplicate_os_tag (SQLSTATE P0001)",
+  ].join("\n")), {
+    schema_version: 1,
+    kind: "maiprop-linked-push-failure",
+    migration_filename: null,
+    migration_version: null,
+    sqlstate: null,
+    category: "unknown",
+    message: "Linked database push failed without a recognized safe diagnostic.",
+  });
+  assert.deepEqual(classifyLinkedPushFailure("ERROR: opaque secret-specific failure"), {
+    schema_version: 1,
+    kind: "maiprop-linked-push-failure",
+    migration_filename: null,
+    migration_version: null,
+    sqlstate: null,
+    category: "unknown",
+    message: "Linked database push failed without a recognized safe diagnostic.",
+  });
+  assert.deepEqual(classifyLinkedPushFailure("x".repeat(1024 * 1024 + 1)), {
+    schema_version: 1,
+    kind: "maiprop-linked-push-failure",
+    migration_filename: null,
+    migration_version: null,
+    sqlstate: null,
+    category: "unknown",
+    message: "Linked database push failed without a recognized safe diagnostic.",
+  });
+  for (const [sqlstate, category] of [
+    ["57014", "query-cancelled"],
+    ["55P03", "lock-unavailable"],
+    ["40P01", "deadlock"],
+    ["23505", "unique-violation"],
+    ["42501", "permission"],
+    ["42601", "syntax"],
+    ["28P01", "authentication"],
+    ["22023", "data-exception"],
+    ["23503", "integrity-constraint"],
+    ["42P07", "schema-definition"],
+    ["P0002", "database-error"],
+  ]) {
+    assert.equal(classifyLinkedPushFailure([
+      "Applying migration 20260728123058_materialize_public_catalogue_snapshots.sql...",
+      `ERROR: provider-controlled text must not escape (SQLSTATE ${sqlstate})`,
+    ].join("\n")).category, category);
+  }
 });
 
 const contract = {

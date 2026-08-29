@@ -4,6 +4,11 @@ import { basename } from "node:path";
 const PRODUCTION_REF = "qvvicunqcrwpioqnvzxf";
 const STAGING_REF = "xsiehskfgeoqyazcgauv";
 const VERSION = /^\d{14}$/;
+const CATALOGUE_HOTFIX_MIGRATIONS = new Map([
+  ["20260728123058_materialize_public_catalogue_snapshots.sql", "20260728123058"],
+  ["20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql", "20260729120405"],
+]);
+const MAXIMUM_LINKED_PUSH_FAILURE_BYTES = 1024 * 1024;
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const CAPTURED_CACHE_STATE = /^[A-Z0-9_-]{1,32}$/;
 const PRODUCTION_SORTS = ["featured", "newest", "price-asc", "price-desc", "ai-score", "views"];
@@ -747,6 +752,83 @@ export function validateDryRun({ contract, remoteHistory, output }) {
   return { expected_pending_versions, pending_versions };
 }
 
+export function classifyLinkedPushFailure(output) {
+  const source = String(output ?? "");
+  if (Buffer.byteLength(source, "utf8") > MAXIMUM_LINKED_PUSH_FAILURE_BYTES) {
+    return {
+      schema_version: 1,
+      kind: "maiprop-linked-push-failure",
+      migration_filename: null,
+      migration_version: null,
+      sqlstate: null,
+      category: "unknown",
+      message: "Linked database push failed without a recognized safe diagnostic.",
+    };
+  }
+  const normalized = source
+    .replace(/\x1b\[[0-9;]*m/g, "")
+    .replace(/\r\n?/g, "\n");
+  const lines = normalized.split("\n").map((line) => line.trim());
+  const statementIndex = lines.findIndex((line) => /^At statement: [0-9]+$/.test(line));
+  const prefix = lines.slice(0, statementIndex >= 0 ? statementIndex : lines.length);
+  const migrationMarkers = prefix
+    .map((line, index) => ({
+      index,
+      filename: /^Applying migration ([0-9]{14}_[a-z0-9][a-z0-9_-]*\.sql)\.\.\.$/.exec(line)?.[1] ?? null,
+    }))
+    .filter(({ filename }) => CATALOGUE_HOTFIX_MIGRATIONS.has(filename));
+  const marker = migrationMarkers.at(-1) ?? null;
+  const migrationFilename = marker?.filename ?? null;
+  const migrationVersion = migrationFilename === null
+    ? null
+    : CATALOGUE_HOTFIX_MIGRATIONS.get(migrationFilename);
+  const errorLine = prefix
+    .slice(marker === null ? 0 : marker.index + 1)
+    .find((line) => /^ERROR: .+ \(SQLSTATE [0-9A-Z]{5}\)$/.test(line)) ?? null;
+  const sqlstateMatch = errorLine === null
+    ? null
+    : /\(SQLSTATE ([0-9A-Z]{5})\)$/.exec(errorLine);
+  const sqlstate = sqlstateMatch?.[1]?.toUpperCase() ?? null;
+  let category = "unknown";
+  let message = "Linked database push failed without a recognized safe diagnostic.";
+  if (errorLine === "ERROR: public_catalogue_duplicate_os_tag (SQLSTATE P0001)") {
+    category = "catalogue-duplicate-os-tag";
+    message = "Catalogue bootstrap rejected duplicate OS auction tags.";
+  } else if (errorLine === "ERROR: public_catalogue_invalid_os_tag (SQLSTATE P0001)") {
+    category = "catalogue-invalid-os-tag";
+    message = "Catalogue bootstrap rejected an invalid OS auction tag.";
+  } else if (sqlstate !== null) {
+    const exact = new Map([
+      ["57014", ["query-cancelled", "Database execution was cancelled or exceeded its statement timeout."]],
+      ["55P03", ["lock-unavailable", "Database execution could not acquire a required lock."]],
+      ["40P01", ["deadlock", "Database execution detected a deadlock."]],
+      ["23505", ["unique-violation", "Database execution violated a uniqueness constraint."]],
+      ["42501", ["permission", "Database execution lacked a required privilege."]],
+      ["42601", ["syntax", "Database execution rejected SQL syntax."]],
+      ["28P01", ["authentication", "Database authentication failed."]],
+    ]);
+    const byClass = sqlstate.startsWith("08")
+      ? ["connection", "The database connection failed."]
+      : sqlstate.startsWith("22")
+        ? ["data-exception", "Database execution rejected input data."]
+        : sqlstate.startsWith("23")
+          ? ["integrity-constraint", "Database execution violated an integrity constraint."]
+          : sqlstate.startsWith("42")
+            ? ["schema-definition", "Database execution rejected a schema definition or access rule."]
+            : ["database-error", "Database execution returned an unclassified SQLSTATE."];
+    [category, message] = exact.get(sqlstate) ?? byClass;
+  }
+  return {
+    schema_version: 1,
+    kind: "maiprop-linked-push-failure",
+    migration_filename: migrationFilename,
+    migration_version: migrationVersion,
+    sqlstate,
+    category,
+    message,
+  };
+}
+
 function isAllowedProject(value) {
   return value === null || (typeof value === "object" && !Array.isArray(value));
 }
@@ -1222,6 +1304,17 @@ function main() {
     writeFileSync(evidencePath, JSON.stringify({ target_kind: process.env.TARGET_KIND, ...result }, null, 2) + "\n");
     return;
   }
+  if (command === "classify-push-failure") {
+    if (args.length !== 1) fail("Linked push failure output path is incomplete.");
+    const outputPath = args[0];
+    const outputStat = statSync(outputPath);
+    if (!outputStat.isFile() || outputStat.size > MAXIMUM_LINKED_PUSH_FAILURE_BYTES ||
+        (process.platform !== "win32" && (outputStat.mode & 0o077) !== 0)) {
+      fail("Linked push failure output is not a private bounded file.");
+    }
+    process.stdout.write(`${JSON.stringify(classifyLinkedPushFailure(readFileSync(outputPath, "utf8")))}\n`);
+    return;
+  }
   if (command === "parse-cache-headers") {
     const [headersPath] = args;
     process.stdout.write(`${JSON.stringify(parseCacheState(readFileSync(headersPath, "utf8")))}\n`);
@@ -1289,7 +1382,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: normalize-db-url-env | write-temporary-db-env <response> | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <publishable-attempts> <legacy-anon-status> <legacy-anon-attempts> | validate-target | validate-linked-state <project-ref> <pooler-url> | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-static-marker-evidence <expected-sha> <marker> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: normalize-db-url-env | write-temporary-db-env <response> | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <publishable-attempts> <legacy-anon-status> <legacy-anon-attempts> | validate-target | validate-linked-state <project-ref> <pooler-url> | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | classify-push-failure <output> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-static-marker-evidence <expected-sha> <marker> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {
