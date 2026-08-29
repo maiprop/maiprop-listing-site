@@ -664,16 +664,25 @@ SELECT is(
 );
 SELECT is(
   (
-    SELECT legacy.listing_images::text
+    SELECT legacy.listing_images
     FROM public.get_public_listing_catalogue(NULL) AS legacy
     WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
   ),
-  (
-    SELECT source.listing_images::text
-    FROM public.public_listing_catalogue AS source
-    WHERE source.id = '72000000-0000-4000-8000-000000000001'
+  jsonb_build_array(
+    jsonb_build_object(
+      'url', 'https://fixtures.invalid/catalogue-athens-1.jpg',
+      'sort_order', 1
+    ),
+    jsonb_build_object(
+      'url', 'https://fixtures.invalid/catalogue-athens-2.jpg',
+      'sort_order', 2
+    ),
+    jsonb_build_object(
+      'url', 'https://fixtures.invalid/catalogue-athens-3.jpg',
+      'sort_order', 3
+    )
   ),
-  'legacy compatibility rows preserve the source card listing images'
+  'legacy compatibility rows retain the ordered three-image card payload'
 );
 SELECT is(
   (
