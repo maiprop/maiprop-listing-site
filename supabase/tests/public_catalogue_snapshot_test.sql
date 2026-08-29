@@ -344,7 +344,7 @@ VALUES
     123456,
     82,
     'apartment',
-    'sale',
+    'new_build',
     'active',
     '{}'::text[],
     date_trunc('minute', now()) - interval '1 minute',
@@ -563,7 +563,7 @@ SELECT ok(
       )
     FROM public.get_public_catalogue_homepage(NULL)
   ),
-  'Featured Properties includes spotlight sale inventory and excludes spotlight auctions'
+  'Featured Properties includes spotlight non-auction inventory and excludes spotlight auctions'
 );
 SELECT is(
   (
@@ -606,7 +606,7 @@ SELECT ok(
     SELECT ai_score IS NULL AND open_house_date IS NULL
     FROM public.query_public_catalogue(
       p_publication_id => NULL,
-      p_listing_type => 'sale',
+      p_listing_type => 'new_build',
       p_limit => 200
     )
     WHERE listing_id = '72000000-0000-4000-8000-000000000001'
@@ -730,7 +730,7 @@ SELECT is(
     SELECT count(*)::integer
     FROM public.query_public_catalogue(
       p_publication_id => NULL,
-      p_listing_type => 'sale',
+      p_listing_type => 'sale,new_build',
       p_limit => 1,
       p_offset => 1
     )
@@ -1033,11 +1033,11 @@ SELECT throws_ok(
 SET LOCAL session_replication_role = replica;
 UPDATE private.public_catalogue_versions
 SET
-  listing_type = 'sale',
+  listing_type = 'new_build',
   os_tag = NULL,
   tags = '{}'::text[],
   detail_payload = detail_payload || jsonb_build_object(
-    'listing_type', 'sale',
+    'listing_type', 'new_build',
     'tags', '[]'::jsonb
   )
 WHERE listing_id = '72000000-0000-4000-8000-000000000001'
