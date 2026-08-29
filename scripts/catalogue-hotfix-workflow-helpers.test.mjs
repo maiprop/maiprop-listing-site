@@ -1451,7 +1451,21 @@ test("dry-run proof requires the exact approved missing set", () => {
   const contract = { hotfix: { migrations: [{ version: "20260728123058" }, { version: "20260729120405" }] } };
   assert.deepEqual(validateDryRun({ contract, remoteHistory: "20260728123058\n", output: "Would push 20260729120405 migration" }).pending_versions, ["20260729120405"]);
   assert.throws(() => validateDryRun({ contract, remoteHistory: "", output: "" }));
-  assert.throws(() => validateDryRun({ contract, remoteHistory: "", output: "Would push 20260728123058" }));
+  assert.throws(
+    () => validateDryRun({
+      contract,
+      remoteHistory: "",
+      output: "Would push 20260728123058; secret-output-must-not-appear",
+    }),
+    (error) => {
+      assert.equal(
+        error.message,
+        'Dry-run pending versions differ: expected=["20260728123058","20260729120405"] observed=["20260728123058"].',
+      );
+      assert.doesNotMatch(error.message, /secret-output-must-not-appear/);
+      return true;
+    },
+  );
   assert.throws(() => validateDryRun({ contract, remoteHistory: "", output: "Would push 20260728123058 and 20260729120405 and 20990101010101" }));
   assert.deepEqual(validateDryRun({ contract, remoteHistory: "20260728123058\n20260729120405\n", output: "No migrations pending" }).pending_versions, []);
 });

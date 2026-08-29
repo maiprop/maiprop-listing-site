@@ -716,7 +716,7 @@ export function validateDryRun({ contract, remoteHistory, output }) {
   const pending_versions = [...new Set([...output.matchAll(/\b(\d{14})\b/g)].map((match) => match[1]))].sort();
   if (pending_versions.some((version) => !VERSION.test(version)) ||
       JSON.stringify(pending_versions) !== JSON.stringify(expected_pending_versions)) {
-    fail("Dry-run pending versions differ from approved versions missing remotely.");
+    fail(`Dry-run pending versions differ: expected=${JSON.stringify(expected_pending_versions)} observed=${JSON.stringify(pending_versions)}.`);
   }
   return { expected_pending_versions, pending_versions };
 }
