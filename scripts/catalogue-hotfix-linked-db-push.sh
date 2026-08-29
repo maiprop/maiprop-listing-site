@@ -51,6 +51,10 @@ link_output="$work/link-output.txt"
 chmod 600 "$output"
 cleanup() {
   unset management_token
+  rm -f -- "$link_output"
+  if [ "$mode" = apply ] || [ "${completed:-false}" != true ]; then
+    rm -f -- "$output"
+  fi
   if [ "$mode" = apply ] || [ "${completed:-false}" != true ]; then
     rm -rf -- "$temporary"
   fi
@@ -76,6 +80,13 @@ chmod 600 "$project_ref_file" "$pooler_url_file"
 node scripts/catalogue-hotfix-workflow-helpers.mjs validate-linked-state "$project_ref_file" "$pooler_url_file"
 
 if ! SUPABASE_ACCESS_TOKEN="$management_token" "$cli" --workdir "$work" --yes db push --linked --include-all "$mode_flag" > "$output" 2>&1; then
+  if [ "$mode" = apply ]; then
+    if diagnostic="$(node scripts/catalogue-hotfix-workflow-helpers.mjs classify-push-failure "$output" 2>/dev/null)"; then
+      printf '::error::Linked database push diagnostic: %s\n' "$diagnostic"
+    else
+      echo "::error::Linked database push diagnostic is unavailable."
+    fi
+  fi
   echo "::error::Official linked database push failed in ${mode} mode."
   exit 1
 fi
