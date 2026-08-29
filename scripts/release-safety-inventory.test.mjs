@@ -46,6 +46,10 @@ describe("release safety inventory", () => {
       resolve(process.cwd(), "scripts/catalogue-hotfix-with-canonical-database-url.sh"),
       "utf8",
     );
+    const linkedDatabasePushText = readFileSync(
+      resolve(process.cwd(), "scripts/catalogue-hotfix-linked-db-push.sh"),
+      "utf8",
+    );
     const violations = (overrides = {}) => cataloguePerformanceHotfixWorkflowViolations({
       text,
       parsed,
@@ -55,6 +59,7 @@ describe("release safety inventory", () => {
       databaseLoginScriptText,
       databaseLoginWrapperText,
       canonicalDatabaseUrlWrapperText,
+      linkedDatabasePushText,
       ...overrides,
     });
 
@@ -73,13 +78,13 @@ describe("release safety inventory", () => {
     const requiredDatabasePhases = {
       staging: [
         "Prove recorded staging database state",
-        "Apply only manifest-bound staging migrations",
+        "Prepare manifest-bound staging migration dry-run",
         "Verify staging database and pgTAP",
         "Prove staging publish-public-catalogue cron liveness",
       ],
       production: [
         "Prove recorded production database state",
-        "Apply only manifest-bound production migrations",
+        "Prepare manifest-bound production migration dry-run",
         "Verify production database",
         "Prove production publish-public-catalogue cron liveness",
       ],
@@ -95,6 +100,14 @@ describe("release safety inventory", () => {
         expect(violations({ parsed: missingMint })).not.toEqual([]);
       }
     }
+    for (const target of ["staging", "production"]) {
+      const missingLinkedApply = structuredClone(parsed);
+      const phase = missingLinkedApply.jobs[target].steps.find((step) =>
+        step.name === `Apply only manifest-bound ${target} migrations`
+      );
+      phase.run = phase.run.replace("catalogue-hotfix-linked-db-push.sh apply", "true");
+      expect(violations({ parsed: missingLinkedApply })).not.toEqual([]);
+    }
     const longDatabasePhase = structuredClone(parsed);
     longDatabasePhase.jobs.staging.steps.find(
       (step) => step.name === "Verify staging database and pgTAP",
@@ -105,6 +118,17 @@ describe("release safety inventory", () => {
       (step) => step.name === "Sample staging legacy PostgREST directly",
     ).run += '\npsql "$TARGET_DB_URL" -c "select 1"';
     expect(violations({ parsed: rawDatabaseCommand })).not.toEqual([]);
+    const rawRoleMarker = "--command 'SET ROLE postgres'";
+    const rawRoleOccurrences = [...text.matchAll(new RegExp(rawRoleMarker, "g"))];
+    expect(rawRoleOccurrences).toHaveLength(5);
+    for (const occurrence of rawRoleOccurrences) {
+      const missingSameSessionRole =
+        text.slice(0, occurrence.index) + text.slice(occurrence.index + rawRoleMarker.length);
+      expect(violations({
+        text: missingSameSessionRole,
+        parsed: yaml.load(missingSameSessionRole),
+      })).not.toEqual([]);
+    }
     const databaseUrlInHttp = structuredClone(parsed);
     databaseUrlInHttp.jobs.production.steps.find(
       (step) => step.name === "Sample production public API pairs",
@@ -118,6 +142,15 @@ describe("release safety inventory", () => {
     expect(violations({ parsed: oldJobWideLogin })).not.toEqual([]);
     expect(violations({ databaseLoginWrapperText: "" })).not.toEqual([]);
     expect(violations({ canonicalDatabaseUrlWrapperText: "" })).not.toEqual([]);
+    expect(violations({ linkedDatabasePushText: "" })).not.toEqual([]);
+    for (const target of ["staging", "production"]) {
+      const leakedParentToken = structuredClone(parsed);
+      const phase = leakedParentToken.jobs[target].steps.find((step) =>
+        step.name === `Prepare manifest-bound ${target} migration dry-run`
+      );
+      phase.run = phase.run.replace("unset SUPABASE_ACCESS_TOKEN\n", "");
+      expect(violations({ parsed: leakedParentToken })).not.toEqual([]);
+    }
     for (const target of ["staging", "production"]) {
       const missingCanonicalIdentity = structuredClone(parsed);
       const identity = missingCanonicalIdentity.jobs[target].steps.find((step) =>
@@ -163,6 +196,20 @@ describe("release safety inventory", () => {
       "database_ready=false\nnode scripts/catalogue-hotfix-workflow-helpers.mjs validate-target",
     );
     expect(violations({ databaseLoginWrapperText: readinessBeforeValidation })).not.toEqual([]);
+    for (const unsafeLinkedPush of [
+      linkedDatabasePushText.replace("db push --linked", 'db push --db-url "$TARGET_DB_URL"'),
+      linkedDatabasePushText.replace('pooler_url_file="$temporary/pooler-url"\n', ""),
+      linkedDatabasePushText.replace('--yes link --project-ref "$TARGET_PROJECT_REF"', "--yes link"),
+      linkedDatabasePushText.replace("unset SUPABASE_ACCESS_TOKEN\n", ""),
+      linkedDatabasePushText.replace(
+        "staging:xsiehskfgeoqyazcgauv|production:qvvicunqcrwpioqnvzxf)",
+        "staging:*|production:*)",
+      ),
+      `${linkedDatabasePushText}\ncat "$output"\n`,
+      linkedDatabasePushText.replace('mode_flag="--dry-run"', 'mode_flag="--yes"'),
+    ]) {
+      expect(violations({ linkedDatabasePushText: unsafeLinkedPush })).not.toEqual([]);
+    }
     for (const unsafeSupportText of [
       supportText.replace('"VERBOSITY=sqlstate"', '"VERBOSITY=default"'),
       supportText.replace('"SET ROLE postgres"', '"SET ROLE anon"'),

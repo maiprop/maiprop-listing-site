@@ -20,6 +20,7 @@ import {
   validateCatalogueBehaviorProbe,
   validateDatabaseContract,
   validateDryRun,
+  validateLinkedProjectState,
   validateTarget,
 } from "./catalogue-hotfix-workflow-helpers.mjs";
 
@@ -713,6 +714,169 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
     assert.equal(existsSync(phaseResult), false, "the database phase rejects a non-postgres effective role");
     assert.equal(readFileSync(readinessAttempts, "utf8"), "4");
     assert.doesNotMatch(`${wrongIdentity.stdout}${wrongIdentity.stderr}`, new RegExp(accessToken));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("linked project state is exact, passwordless, session-pooled, and manifest-bound", () => {
+  const poolerUrl = `postgresql://postgres.${ref}@aws-0-eu-central-1.pooler.supabase.com:5432/postgres`;
+  assert.deepEqual(validateLinkedProjectState({
+    kind: "staging",
+    ref,
+    projectRefText: ref,
+    poolerUrlText: poolerUrl,
+  }), {
+    projectRef: ref,
+    poolerHost: "aws-0-eu-central-1.pooler.supabase.com",
+  });
+
+  for (const changed of [
+    { projectRefText: `${ref}\n` },
+    { poolerUrlText: poolerUrl.replace(ref, "qvvicunqcrwpioqnvzxf") },
+    { poolerUrlText: poolerUrl.replace("@", ":password@") },
+    { poolerUrlText: poolerUrl.replace(":5432/", ":6543/") },
+    { poolerUrlText: poolerUrl.replace("pooler.supabase.com", "attacker.example") },
+    { poolerUrlText: `${poolerUrl}?sslmode=disable` },
+  ]) {
+    assert.throws(() => validateLinkedProjectState({
+      kind: "staging",
+      ref,
+      projectRefText: ref,
+      poolerUrlText: poolerUrl,
+      ...changed,
+    }));
+  }
+});
+
+test("linked migration push exposes the management token only to the exact official CLI command", () => {
+  const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-linked-push-"));
+  const runnerTemp = join(directory, "runner-temp");
+  const workspace = join(directory, "workspace");
+  const fakeBin = join(directory, "fake-bin");
+  const fakeCli = join(workspace, "node_modules", ".bin", "supabase");
+  const work = join(runnerTemp, "catalogue-hotfix-staging");
+  const invocationPath = join(directory, "invocation");
+  const sentinelPath = join(directory, "sentinel");
+  const token = "management-token-must-not-log";
+  try {
+    mkdirSync(join(work, "supabase", "migrations"), { recursive: true });
+    mkdirSync(join(workspace, "node_modules", ".bin"), { recursive: true });
+    mkdirSync(fakeBin);
+    writeFileSync(join(work, "supabase", "config.toml"), "[api]\nenabled = false\n");
+    writeFileSync(join(work, "supabase", "migrations", "20260728123058_test.sql"), "select 1;\n");
+    writeFileSync(fakeCli, `#!/usr/bin/env bash
+set -euo pipefail
+[ "$SUPABASE_ACCESS_TOKEN" = "$TEST_ACCESS_TOKEN" ]
+[ "$1" = "--workdir" ]
+[ "$2" = "$TEST_WORK" ]
+[ "$3" = "--yes" ]
+case "$4" in
+  link)
+    [ "$5" = "--project-ref" ]
+    [ "$6" = "$TARGET_PROJECT_REF" ]
+    mkdir -p "$TEST_WORK/supabase/.temp"
+    printf '%s' "$TARGET_PROJECT_REF" > "$TEST_WORK/supabase/.temp/project-ref"
+    printf 'postgresql://postgres.%s@aws-0-eu-central-1.pooler.supabase.com:5432/postgres' "$TARGET_PROJECT_REF" > "$TEST_WORK/supabase/.temp/pooler-url"
+    printf 'link %s\n' "$*" >> "$TEST_INVOCATION"
+    printf 'Linked project\n'
+    ;;
+  db)
+    [ "$5" = "push" ]
+    [ "$6" = "--linked" ]
+    [ "$7" = "--include-all" ]
+    [ "$8" = "$TEST_EXPECTED_MODE" ]
+    [ "$(cat "$TEST_WORK/supabase/.temp/project-ref")" = "$TARGET_PROJECT_REF" ]
+    printf 'push %s\n' "$*" >> "$TEST_INVOCATION"
+    printf 'Would push manifest migration\n'
+    ;;
+  *) exit 1 ;;
+esac
+`);
+    chmodSync(fakeCli, 0o700);
+
+    writeFileSync(join(fakeBin, "node"), `#!/usr/bin/env bash
+set -euo pipefail
+[ -z "\${SUPABASE_ACCESS_TOKEN:-}" ]
+[ "$2" = "validate-linked-state" ]
+[ "$(cat "$3")" = "$TARGET_PROJECT_REF" ]
+grep -q "postgres.$TARGET_PROJECT_REF@.*pooler.supabase.com:5432/postgres" "$4"
+printf 'token-absent\n' >> "$TEST_SENTINEL"
+`);
+    chmodSync(join(fakeBin, "node"), 0o700);
+
+    const run = (mode, overrides = {}) => spawnSync(bashExecutable, [
+      "-c",
+      'export PATH="$TEST_FAKE_BIN:$PATH"; exec bash "$TEST_LINKED_SCRIPT" "$TEST_LINKED_MODE"',
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_WORKSPACE: workspace,
+        RUNNER_TEMP: runnerTemp,
+        SUPABASE_ACCESS_TOKEN: token,
+        TARGET_KIND: "staging",
+        TARGET_PROJECT_REF: ref,
+        TEST_ACCESS_TOKEN: token,
+        TEST_EXPECTED_MODE: mode === "prepare" ? "--dry-run" : "--yes",
+        TEST_FAKE_BIN: fakeBin,
+        TEST_INVOCATION: invocationPath,
+        TEST_LINKED_MODE: mode,
+        TEST_LINKED_SCRIPT: join(process.cwd(), "scripts/catalogue-hotfix-linked-db-push.sh"),
+        TEST_SENTINEL: sentinelPath,
+        TEST_WORK: work,
+        WSLENV: [
+          process.env.WSLENV,
+          "GITHUB_WORKSPACE/p",
+          "RUNNER_TEMP/p",
+          "SUPABASE_ACCESS_TOKEN",
+          "TARGET_KIND",
+          "TARGET_PROJECT_REF",
+          "TEST_ACCESS_TOKEN",
+          "TEST_EXPECTED_MODE",
+          "TEST_FAKE_BIN/p",
+          "TEST_INVOCATION/p",
+          "TEST_LINKED_MODE",
+          "TEST_LINKED_SCRIPT/p",
+          "TEST_SENTINEL/p",
+          "TEST_WORK/p",
+        ].filter(Boolean).join(":"),
+        ...overrides,
+      },
+    });
+
+    const dryRun = run("prepare");
+    assert.equal(dryRun.status, 0, dryRun.stderr);
+    assert.match(readFileSync(invocationPath, "utf8"), /link .* --yes link --project-ref/);
+    assert.match(readFileSync(invocationPath, "utf8"), /db push --linked --include-all --dry-run/);
+    assert.match(readFileSync(join(work, "dry-run-output.txt"), "utf8"), /Would push/);
+    assert.equal(existsSync(join(work, "supabase", ".temp", "project-ref")), true);
+    assert.equal(readFileSync(sentinelPath, "utf8"), "token-absent\n");
+    assert.doesNotMatch(`${dryRun.stdout}${dryRun.stderr}`, new RegExp(token));
+
+    const apply = run("apply");
+    assert.equal(apply.status, 0, apply.stderr);
+    assert.match(readFileSync(invocationPath, "utf8"), /db push --linked --include-all --yes/);
+    assert.match(readFileSync(join(work, "push-output.txt"), "utf8"), /Would push/);
+    assert.equal(existsSync(join(work, "supabase", ".temp")), false);
+
+    rmSync(invocationPath);
+    const wrongTarget = run("apply", { TARGET_PROJECT_REF: "qvvicunqcrwpioqnvzxf" });
+    assert.equal(wrongTarget.status, 1);
+    assert.equal(existsSync(invocationPath), false, "the CLI never runs for a cross-target binding");
+    assert.doesNotMatch(`${wrongTarget.stdout}${wrongTarget.stderr}`, new RegExp(token));
+
+    const secondPrepare = run("prepare");
+    assert.equal(secondPrepare.status, 0, secondPrepare.stderr);
+    writeFileSync(
+      join(work, "supabase", ".temp", "pooler-url"),
+      `postgresql://postgres.${ref}@attacker.example:5432/postgres`,
+    );
+    rmSync(invocationPath);
+    const corruptedState = run("apply");
+    assert.equal(corruptedState.status, 1);
+    assert.equal(existsSync(invocationPath), false, "the CLI never runs with corrupted linked state");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

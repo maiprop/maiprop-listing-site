@@ -29,21 +29,40 @@ const canonicalDatabaseUrlWrapperPath = resolve(
   process.cwd(),
   "scripts/catalogue-hotfix-with-canonical-database-url.sh",
 );
+const linkedDatabasePushPath = resolve(
+  process.cwd(),
+  "scripts/catalogue-hotfix-linked-db-push.sh",
+);
 
-const requiredDatabasePhases = {
+const temporaryDatabasePhases = {
   staging: [
     "Prove recorded staging database state",
-    "Apply only manifest-bound staging migrations",
+    "Prepare manifest-bound staging migration dry-run",
     "Verify staging database and pgTAP",
     "Prove staging publish-public-catalogue cron liveness",
   ],
   production: [
     "Prove recorded production database state",
-    "Apply only manifest-bound production migrations",
+    "Prepare manifest-bound production migration dry-run",
     "Verify production database",
     "Prove production publish-public-catalogue cron liveness",
   ],
 };
+const linkedMigrationPhases = {
+  staging: ["Apply only manifest-bound staging migrations"],
+  production: ["Apply only manifest-bound production migrations"],
+};
+const requiredDatabasePhases = Object.fromEntries(
+  Object.keys(temporaryDatabasePhases).map((target) => [
+    target,
+    [
+      temporaryDatabasePhases[target][0],
+      temporaryDatabasePhases[target][1],
+      ...linkedMigrationPhases[target],
+      ...temporaryDatabasePhases[target].slice(2),
+    ],
+  ]),
+);
 
 function workflow() {
   assert.ok(existsSync(workflowPath), "the database-only hotfix workflow exists");
@@ -116,7 +135,9 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   });
   assert.match(stagingKeyStep.run, /--request GET/);
   assert.match(stagingKeyStep.run, /https:\/\/api\.supabase\.com\/v1\/projects\/\$TARGET_PROJECT_REF\/api-keys\?reveal=true/);
-  assert.match(stagingKeyStep.run, /Authorization: Bearer \$SUPABASE_ACCESS_TOKEN/);
+  assert.match(stagingKeyStep.run, /management_token="\$SUPABASE_ACCESS_TOKEN"/);
+  assert.match(stagingKeyStep.run, /unset SUPABASE_ACCESS_TOKEN/);
+  assert.match(stagingKeyStep.run, /Authorization: Bearer \$management_token/);
   assert.match(stagingKeyStep.run, /response_file="\$\(mktemp "\$RUNNER_TEMP\//);
   assert.match(stagingKeyStep.run, /candidates_file="\$\(mktemp "\$RUNNER_TEMP\//);
   assert.match(stagingKeyStep.run, /chmod 600 "\$response_file" "\$candidates_file"/);
@@ -172,7 +193,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
       /bash scripts\/catalogue-hotfix-with-canonical-database-url\.sh bash -s <<'IDENTITY_PHASE'/,
     );
     assert.equal(job["timeout-minutes"], 45);
-    for (const phaseName of requiredDatabasePhases[target]) {
+    for (const phaseName of temporaryDatabasePhases[target]) {
       const phase = steps(job).find((step) => step.name === phaseName);
       assert.ok(phase, `${target} has the ${phaseName} phase`);
       assert.equal(phase["timeout-minutes"], 4);
@@ -184,8 +205,26 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
       });
       assert.match(
         phase.run,
-        /bash scripts\/catalogue-hotfix-with-database-login\.sh bash -s <<'DATABASE_PHASE'/,
+        /SUPABASE_ACCESS_TOKEN="\$management_token" bash scripts\/catalogue-hotfix-with-database-login\.sh bash -s <<'DATABASE_PHASE'/,
       );
+      assert.ok(
+        phase.run.indexOf('unset SUPABASE_ACCESS_TOKEN') <
+          phase.run.indexOf('catalogue-hotfix-with-database-login.sh'),
+        `${phaseName} removes the inherited token before any database setup child runs`,
+      );
+    }
+    for (const phaseName of linkedMigrationPhases[target]) {
+      const phase = steps(job).find((step) => step.name === phaseName);
+      assert.ok(phase, `${target} has the ${phaseName} phase`);
+      assert.equal(phase["timeout-minutes"], 4);
+      assert.deepEqual(phase.env, {
+        SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+      });
+      assert.match(
+        phase.run,
+        /SUPABASE_ACCESS_TOKEN="\$management_token" bash scripts\/catalogue-hotfix-linked-db-push\.sh apply/,
+      );
+      assert.doesNotMatch(phase.run, /TARGET_DB_URL|catalogue-hotfix-with-database-login/);
     }
     assert.equal(
       steps(job).some((step) => /Mint temporary .* database login|Validate temporary .* database binding/.test(step.name ?? "")),
@@ -224,12 +263,34 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.doesNotMatch(databaseLoginWrapper, /\beval\b|\bsource\b|(?:^|\s)\.\s/);
   assert.equal((text.match(/for n in \$\(seq 1 15\); do/g) ?? []).length, 2);
   assert.equal((text.match(/\[ "\$n" -eq 15 \] \|\| sleep 10/g) ?? []).length, 2);
+  const rawDatabaseLines = text.split(/\r?\n/).filter((line) =>
+    line.includes('psql "$TARGET_DB_URL"')
+  );
+  assert.equal(rawDatabaseLines.length, 5);
+  for (const line of rawDatabaseLines) {
+    assert.equal((line.match(/--command 'SET ROLE postgres'/g) ?? []).length, 1);
+    const roleIndex = line.indexOf("--command 'SET ROLE postgres'");
+    const queryIndex = Math.max(line.lastIndexOf("--command "), line.indexOf("--file "));
+    assert.ok(roleIndex >= 0 && queryIndex > roleIndex, "SET ROLE precedes the same-session query/file");
+  }
   assert.ok(existsSync(canonicalDatabaseUrlWrapperPath), "the private canonical database URL wrapper exists");
   const canonicalDatabaseUrlWrapper = readFileSync(canonicalDatabaseUrlWrapperPath, "utf8");
   assert.match(canonicalDatabaseUrlWrapper, /chmod 600 "\$database_env"/);
   assert.match(canonicalDatabaseUrlWrapper, /trap .*rm -f -- "\$database_env".* EXIT/);
   assert.match(canonicalDatabaseUrlWrapper, /GITHUB_ENV="\$database_env" node scripts\/catalogue-hotfix-workflow-helpers\.mjs normalize-db-url-env/);
   assert.doesNotMatch(canonicalDatabaseUrlWrapper, /\beval\b|\bsource\b|(?:^|\s)\.\s/);
+  assert.ok(existsSync(linkedDatabasePushPath), "the exact linked CLI migration wrapper exists");
+  const linkedDatabasePush = readFileSync(linkedDatabasePushPath, "utf8");
+  assert.match(linkedDatabasePush, /db push --linked --include-all/);
+  assert.match(linkedDatabasePush, /--dry-run/);
+  assert.match(linkedDatabasePush, /--yes/);
+  assert.match(linkedDatabasePush, /project_ref_file="\$temporary\/project-ref"/);
+  assert.match(linkedDatabasePush, /pooler_url_file="\$temporary\/pooler-url"/);
+  assert.match(linkedDatabasePush, /--yes link --project-ref "\$TARGET_PROJECT_REF"/);
+  assert.match(linkedDatabasePush, /validate-linked-state "\$project_ref_file" "\$pooler_url_file"/);
+  assert.match(linkedDatabasePush, /management_token="\$SUPABASE_ACCESS_TOKEN"[\s\S]*unset SUPABASE_ACCESS_TOKEN/);
+  assert.match(linkedDatabasePush, /> "\$output" 2>&1/);
+  assert.doesNotMatch(linkedDatabasePush, /--db-url|\bcat\b|\btee\b|-sS|--show-error|--verbose|--trace/);
 
   const validation = `${stepText(validate)}\n${JSON.stringify(validate)}`;
   const authorizationStep = steps(validate).find(
@@ -288,10 +349,9 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /supabase_migrations\.schema_migrations/);
     assert.match(body, /numeric/i);
     assert.match(body, /placeholder/i);
-    assert.match(body, /--dry-run/);
-    assert.match(body, /db push --include-all --dry-run --db-url "\$TARGET_DB_URL"/);
-    assert.match(body, /db push --include-all --yes --db-url "\$TARGET_DB_URL"/);
-    assert.match(body, /dry-run-output\.txt.*2>&1|2>&1.*dry-run-output\.txt/);
+    assert.match(body, /bash scripts\/catalogue-hotfix-linked-db-push\.sh prepare/);
+    assert.match(body, /bash scripts\/catalogue-hotfix-linked-db-push\.sh apply/);
+    assert.doesNotMatch(body, /db push .*--db-url/);
     assert.match(body, /catalogue-hotfix-workflow-helpers\.mjs validate-dry-run/);
     assert.match(helpers, /expected_pending_versions/);
     assert.match(helpers, /pending_versions/);
@@ -300,7 +360,6 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(helpers, /sb_publishable_|role !== "anon"/);
     assert.match(body, /pending/i);
     assert.match(body, /validate-dry-run/);
-    assert.match(body, /db push --include-all/);
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs recorded/);
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs postapply evidence\/database-contract\.json/);
     assert.match(behaviouralProbe, /20260728123058/);
@@ -493,6 +552,6 @@ test("catalogue hotfix workflow rejects unrelated mutation and secret surfaces",
   assert.doesNotMatch(text, /migration\s+repair/i);
   assert.doesNotMatch(text, /supabase\s+db\s+push\s*(?:\n|$)/i);
   assert.doesNotMatch(text, /supabase\s+db\s+push\s+--workdir\s+supabase/i);
-  assert.match(text, /cd "\$work"/);
+  assert.match(text, /catalogue-hotfix-linked-db-push\.sh/);
   assert.doesNotMatch(text, /echo[^\n]*(?:DB_URL|RELEASE_REASON|reason)/i);
 });

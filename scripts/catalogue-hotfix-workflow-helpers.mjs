@@ -638,6 +638,37 @@ export function buildTemporaryPoolerDatabaseCredential({
   return { ...validated, databaseUrl: pooler.toString() };
 }
 
+export function validateLinkedProjectState({
+  kind,
+  ref,
+  projectRefText,
+  poolerUrlText,
+}) {
+  if (ref !== expectedProjectRef(kind) || projectRefText !== ref) {
+    fail("Linked project reference is not manifest-bound.");
+  }
+  if (typeof poolerUrlText !== "string" || !poolerUrlText ||
+      poolerUrlText.length > 4096 || /[\0\r\n]/.test(poolerUrlText)) {
+    fail("Linked pooler URL is invalid.");
+  }
+  let pooler;
+  let username;
+  try {
+    pooler = new URL(poolerUrlText);
+    username = decodeURIComponent(pooler.username);
+  } catch {
+    fail("Linked pooler URL cannot be parsed safely.");
+  }
+  if (!['postgres:', 'postgresql:'].includes(pooler.protocol) ||
+      username !== `postgres.${ref}` || pooler.password ||
+      !/^(?:[a-z0-9-]+\.)+pooler\.supabase\.com$/.test(pooler.hostname) ||
+      pooler.port !== "5432" || pooler.pathname !== "/postgres" ||
+      pooler.search || pooler.hash) {
+    fail("Linked pooler URL is not an exact passwordless session endpoint.");
+  }
+  return { projectRef: ref, poolerHost: pooler.hostname };
+}
+
 export function validateTarget({ kind, ref, apiUrl, databaseUrl, key, ephemeralRole = null }) {
   if (!ref || !apiUrl || !databaseUrl || !key) fail("Target credentials are incomplete.");
   if (typeof apiUrl !== "string" || typeof databaseUrl !== "string" ||
@@ -1145,6 +1176,16 @@ function main() {
     validateTarget({ kind: process.env.TARGET_KIND, ref: process.env.TARGET_PROJECT_REF, apiUrl: process.env.TARGET_API_URL, databaseUrl: process.env.TARGET_DB_URL, key: process.env.TARGET_ANON_KEY, ephemeralRole: process.env.TARGET_DB_EPHEMERAL_ROLE });
     return;
   }
+  if (command === "validate-linked-state") {
+    if (args.length !== 2) fail("Linked project state paths are incomplete.");
+    validateLinkedProjectState({
+      kind: process.env.TARGET_KIND,
+      ref: process.env.TARGET_PROJECT_REF,
+      projectRefText: readFileSync(args[0], "utf8"),
+      poolerUrlText: readFileSync(args[1], "utf8"),
+    });
+    return;
+  }
   if (command === "validate-api-readiness") {
     validateSupabaseApiReadinessStatus(args[0]);
     return;
@@ -1222,7 +1263,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: normalize-db-url-env | write-temporary-db-env <response> | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <publishable-attempts> <legacy-anon-status> <legacy-anon-attempts> | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-static-marker-evidence <expected-sha> <marker> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: normalize-db-url-env | write-temporary-db-env <response> | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <publishable-attempts> <legacy-anon-status> <legacy-anon-attempts> | validate-target | validate-linked-state <project-ref> <pooler-url> | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-static-marker-evidence <expected-sha> <marker> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {
