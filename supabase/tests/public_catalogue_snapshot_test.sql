@@ -635,58 +635,6 @@ SELECT ok(
   ),
   'anon legacy compatibility rows preserve Athens location search text'
 );
-SELECT is(
-  (
-    SELECT legacy.project::text
-    FROM public.get_public_listing_catalogue(NULL) AS legacy
-    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
-  ),
-  (
-    SELECT source.project::text
-    FROM public.public_listing_catalogue AS source
-    WHERE source.id = '72000000-0000-4000-8000-000000000001'
-  ),
-  'anon legacy compatibility rows preserve the source card project'
-);
-SELECT is(
-  (
-    SELECT legacy.listing_images::text
-    FROM public.get_public_listing_catalogue(NULL) AS legacy
-    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
-  ),
-  (
-    SELECT source.listing_images::text
-    FROM public.public_listing_catalogue AS source
-    WHERE source.id = '72000000-0000-4000-8000-000000000001'
-  ),
-  'anon legacy compatibility rows preserve the source card listing images'
-);
-SELECT is(
-  (
-    SELECT legacy.project_detail::text
-    FROM public.get_public_listing_catalogue(NULL) AS legacy
-    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
-  ),
-  (
-    SELECT source.project_detail::text
-    FROM public.public_listing_catalogue AS source
-    WHERE source.id = '72000000-0000-4000-8000-000000000001'
-  ),
-  'anon legacy compatibility rows preserve the source detail project'
-);
-SELECT is(
-  (
-    SELECT legacy.listing_images_detail::text
-    FROM public.get_public_listing_catalogue(NULL) AS legacy
-    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
-  ),
-  (
-    SELECT source.listing_images_detail::text
-    FROM public.public_listing_catalogue AS source
-    WHERE source.id = '72000000-0000-4000-8000-000000000001'
-  ),
-  'anon legacy compatibility rows preserve the source detail listing images'
-);
 SELECT throws_ok(
   $$
     SELECT *
@@ -700,6 +648,59 @@ SELECT throws_ok(
   'anon cannot bypass the catalogue response cap with a null limit'
 );
 SET LOCAL ROLE postgres;
+
+SELECT is(
+  (
+    SELECT legacy.project::text
+    FROM public.get_public_listing_catalogue(NULL) AS legacy
+    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  (
+    SELECT source.project::text
+    FROM public.public_listing_catalogue AS source
+    WHERE source.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  'legacy compatibility rows preserve the source card project'
+);
+SELECT is(
+  (
+    SELECT legacy.listing_images::text
+    FROM public.get_public_listing_catalogue(NULL) AS legacy
+    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  (
+    SELECT source.listing_images::text
+    FROM public.public_listing_catalogue AS source
+    WHERE source.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  'legacy compatibility rows preserve the source card listing images'
+);
+SELECT is(
+  (
+    SELECT legacy.project_detail::text
+    FROM public.get_public_listing_catalogue(NULL) AS legacy
+    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  (
+    SELECT source.project_detail::text
+    FROM public.public_listing_catalogue AS source
+    WHERE source.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  'legacy compatibility rows preserve the source detail project'
+);
+SELECT is(
+  (
+    SELECT legacy.listing_images_detail::text
+    FROM public.get_public_listing_catalogue(NULL) AS legacy
+    WHERE legacy.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  (
+    SELECT source.listing_images_detail::text
+    FROM public.public_listing_catalogue AS source
+    WHERE source.id = '72000000-0000-4000-8000-000000000001'
+  ),
+  'legacy compatibility rows preserve the source detail listing images'
+);
 
 SET LOCAL ROLE authenticated;
 SELECT lives_ok(
