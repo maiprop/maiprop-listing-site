@@ -714,9 +714,21 @@ export function validateDryRun({ contract, remoteHistory, output }) {
     .filter((version) => !remote.has(version))
     .sort();
   const pending_versions = [...new Set([...output.matchAll(/\b(\d{14})\b/g)].map((match) => match[1]))].sort();
+  const outputLines = output
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim());
+  const dryRunState = outputLines.some((line) =>
+    /^Skipping migrations because it is disabled in config\.toml(?: for project: [^\r\n]+)?\.?$/.test(line))
+    ? "migrations-disabled"
+    : outputLines.includes("Remote database is up to date.")
+      ? "remote-up-to-date"
+      : outputLines.includes("Would push these migrations:")
+        ? "pending-listed"
+        : "unknown";
   if (pending_versions.some((version) => !VERSION.test(version)) ||
       JSON.stringify(pending_versions) !== JSON.stringify(expected_pending_versions)) {
-    fail(`Dry-run pending versions differ: expected=${JSON.stringify(expected_pending_versions)} observed=${JSON.stringify(pending_versions)}.`);
+    fail(`Dry-run pending versions differ: state=${dryRunState} expected=${JSON.stringify(expected_pending_versions)} observed=${JSON.stringify(pending_versions)}.`);
   }
   return { expected_pending_versions, pending_versions };
 }

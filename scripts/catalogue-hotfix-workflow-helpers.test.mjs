@@ -1455,17 +1455,31 @@ test("dry-run proof requires the exact approved missing set", () => {
     () => validateDryRun({
       contract,
       remoteHistory: "",
-      output: "Would push 20260728123058; secret-output-must-not-appear",
+      output: "Would push these migrations:\n20260728123058; secret-output-must-not-appear",
     }),
     (error) => {
       assert.equal(
         error.message,
-        'Dry-run pending versions differ: expected=["20260728123058","20260729120405"] observed=["20260728123058"].',
+        'Dry-run pending versions differ: state=pending-listed expected=["20260728123058","20260729120405"] observed=["20260728123058"].',
       );
       assert.doesNotMatch(error.message, /secret-output-must-not-appear/);
       return true;
     },
   );
+  for (const [output, state] of [
+    ["Skipping migrations because it is disabled in config.toml for project: ref", "migrations-disabled"],
+    ["DRY RUN: migrations will not be pushed.\nRemote database is up to date.", "remote-up-to-date"],
+    ["DRY RUN: migrations will not be pushed.\nWould push these migrations:\n20260728123058", "pending-listed"],
+    ["unrelated migration warning 20990101010101", "unknown"],
+    ["migration warning: Remote database is up to date. retrying", "unknown"],
+    ["migration warning: Would push these migrations: maybe", "unknown"],
+    ["Skipping migrations because it is disabled in config.toml but retrying", "unknown"],
+  ]) {
+    assert.throws(
+      () => validateDryRun({ contract, remoteHistory: "", output }),
+      new RegExp(`state=${state}`),
+    );
+  }
   assert.throws(() => validateDryRun({ contract, remoteHistory: "", output: "Would push 20260728123058 and 20260729120405 and 20990101010101" }));
   assert.deepEqual(validateDryRun({ contract, remoteHistory: "20260728123058\n20260729120405\n", output: "No migrations pending" }).pending_versions, []);
 });
