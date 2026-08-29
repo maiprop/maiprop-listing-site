@@ -393,6 +393,10 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "::add-mask::${temporary.role}",
     "::add-mask::${response.password}",
     "::add-mask::${temporary.databaseUrl}",
+    '"VERBOSITY=sqlstate"',
+    '"SET ROLE postgres"',
+    'String(result.stderr ?? "").match(/\\b(?:ERROR|FATAL):\\s+([0-9A-Z]{5})\\b/)',
+    'Database behavioral contract query failed with SQLSTATE ${sqlstate}.',
   ];
   const databaseWrapperMarkers = [
     "set +x",
@@ -406,7 +410,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target",
     "database_ready=false",
     "database_max_attempts=4",
-    "timeout --signal=TERM --kill-after=1s 6s env PGCONNECT_TIMEOUT=4 psql \"$TARGET_DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 -qAtc 'SELECT 1' >/dev/null 2>&1",
+    "timeout --signal=TERM --kill-after=1s 6s env PGCONNECT_TIMEOUT=4 psql \"$TARGET_DB_URL\" --no-psqlrc --set ON_ERROR_STOP=1 -qAt --command 'SET ROLE postgres' --command \"SELECT current_user = 'postgres'\" 2>/dev/null",
+    "[ \"$database_identity\" = t ]",
     "sleep 2",
     "Temporary database login did not become ready within the bounded propagation window.",
     '"$@"',
