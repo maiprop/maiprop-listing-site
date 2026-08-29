@@ -137,7 +137,10 @@ test("temporary database credentials reject unsafe responses and target drift", 
   const response = { role: "cli_login_01234567", password: "temporary", ttl_seconds: 3600 };
   const input = { kind: "staging", ref, databaseUrl: valid.databaseUrl, response };
   for (const changed of [
-    { response: { ...response, ttl_seconds: 3599 } },
+    { response: { ...response, ttl_seconds: 2999 } },
+    { response: { ...response, ttl_seconds: "3600" } },
+    { response: { ...response, ttl_seconds: 3000.5 } },
+    { response: { ...response, ttl_seconds: null } },
     { response: { ...response, extra: true } },
     { response: { ...response, role: "postgres" } },
     { response: { ...response, role: "cli\nlogin" } },
@@ -152,8 +155,14 @@ test("temporary database credentials reject unsafe responses and target drift", 
     kind: "production",
     ref: "qvvicunqcrwpioqnvzxf",
     databaseUrl: "postgresql://postgres:old@db.qvvicunqcrwpioqnvzxf.supabase.co:5432/postgres?sslmode=require",
-    response,
+    response: { ...response, ttl_seconds: 3000 },
   }));
+  for (const ttl_seconds of [3000, 3599, 3600]) {
+    assert.doesNotThrow(() => buildTemporaryDatabaseCredential({
+      ...input,
+      response: { ...response, ttl_seconds },
+    }));
+  }
 });
 
 const forbiddenLibpqConnectionParameters = [
@@ -264,10 +273,11 @@ test("temporary database credential CLI masks before persisting the ephemeral va
     });
     assert.equal(result.status, 0, result.stderr);
     const lines = result.stdout.trim().split("\n");
-    assert.equal(lines.length, 3);
+    assert.equal(lines.length, 4);
     assert.equal(lines[0], `::add-mask::${response.role}`);
     assert.equal(lines[1], `::add-mask::${response.password}`);
     assert.match(lines[2], /^::add-mask::postgresql:/);
+    assert.equal(lines[3], "::notice::Temporary database login TTL accepted: 7200s (minimum 3000s).");
     const persisted = readFileSync(envPath, "utf8");
     assert.match(persisted, /^TARGET_DB_URL=postgresql:/m);
     assert.match(persisted, new RegExp(`^TARGET_DB_EPHEMERAL_ROLE=${response.role}$`, "m"));
@@ -366,16 +376,18 @@ printf '%s' "$TEST_STATUS"
 
     const success = run({
       status: "201",
-      response: { role, password, ttl_seconds: 7200 },
+      response: { role, password, ttl_seconds: 3000 },
     });
     assert.equal(success.status, 0, success.stderr);
     assert.equal(success.stderr, "");
-    assert.ok(success.stdout.trim().split(/\r?\n/).every((line) => line.startsWith("::add-mask::")));
+    const successLines = success.stdout.trim().split(/\r?\n/);
+    assert.equal(successLines.filter((line) => line.startsWith("::add-mask::")).length, 3);
+    assert.ok(successLines.includes("::notice::Temporary database login TTL accepted: 3000s (minimum 3000s)."));
     assert.match(readFileSync(envPath, "utf8"), new RegExp(`^TARGET_DB_EPHEMERAL_ROLE=${role}$`, "m"));
 
     for (const scenario of [
       { status: "401", response: { private: "body-must-not-log" } },
-      { status: "201", response: { role, password, ttl_seconds: 60 } },
+      { status: "201", response: { role, password, ttl_seconds: 2999 } },
       { status: "201", response: "malformed-private-body" },
     ]) {
       const rejected = run(scenario);

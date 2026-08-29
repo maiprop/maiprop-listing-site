@@ -55,6 +55,11 @@ describe("release safety inventory", () => {
     const staleStagingKey = structuredClone(parsed);
     staleStagingKey.jobs.staging.env.TARGET_ANON_KEY = "${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}";
     expect(violations({ parsed: staleStagingKey })).not.toEqual([]);
+    for (const [target, timeout] of [["staging", 46], ["production", 60]]) {
+      const unsafeTimeout = structuredClone(parsed);
+      unsafeTimeout.jobs[target]["timeout-minutes"] = timeout;
+      expect(violations({ parsed: unsafeTimeout })).not.toEqual([]);
+    }
     for (const unsafeText of [
       text.replaceAll('${TARGET_API_URL%/}/auth/v1/settings', '${TARGET_API_URL%/}/rest/v1/'),
       text.replace("--retry-max-time 90", ""),
@@ -104,6 +109,18 @@ describe("release safety inventory", () => {
       supportText: supportText.replaceAll(
         "validateDatabaseSearchParameters",
         "uncheckedDatabaseSearchParameters",
+      ),
+    })).not.toEqual([]);
+    expect(violations({
+      supportText: supportText.replace(
+        "const DATABASE_JOB_TIMEOUT_SECONDS = 45 * 60;",
+        "const DATABASE_JOB_TIMEOUT_SECONDS = 46 * 60;",
+      ),
+    })).not.toEqual([]);
+    expect(violations({
+      supportText: supportText.replace(
+        "const DATABASE_CREDENTIAL_MARGIN_SECONDS = 5 * 60;",
+        "const DATABASE_CREDENTIAL_MARGIN_SECONDS = 0;",
       ),
     })).not.toEqual([]);
     expect(violations({
