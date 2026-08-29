@@ -25,6 +25,10 @@ const databaseLoginWrapperPath = resolve(
   process.cwd(),
   "scripts/catalogue-hotfix-with-database-login.sh",
 );
+const canonicalDatabaseUrlWrapperPath = resolve(
+  process.cwd(),
+  "scripts/catalogue-hotfix-with-canonical-database-url.sh",
+);
 
 const requiredDatabasePhases = {
   staging: [
@@ -160,9 +164,13 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     ...requiredDatabasePhases.production,
   ]);
   for (const [target, job] of Object.entries({ staging, production })) {
-    const normalizeIndex = steps(job).findIndex((step) => /Normalize .* database URL/.test(step.name ?? ""));
-    const identityIndex = steps(job).findIndex((step) => /Revalidate .* immediately before mutation/.test(step.name ?? ""));
-    assert.ok(normalizeIndex < identityIndex);
+    const identityIndex = steps(job).findIndex((step) => new RegExp(`Revalidate ${target} identity immediately before mutation`).test(step.name ?? ""));
+    assert.ok(identityIndex >= 0);
+    assert.deepEqual(Object.keys(steps(job)[identityIndex].env ?? {}), ["TARGET_DB_URL"]);
+    assert.match(
+      steps(job)[identityIndex].run,
+      /bash scripts\/catalogue-hotfix-with-canonical-database-url\.sh bash -s <<'IDENTITY_PHASE'/,
+    );
     assert.equal(job["timeout-minutes"], 45);
     for (const phaseName of requiredDatabasePhases[target]) {
       const phase = steps(job).find((step) => step.name === phaseName);
@@ -207,6 +215,12 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.match(databaseLoginWrapper, /TARGET_DB_EPHEMERAL_ROLE/);
   assert.match(databaseLoginWrapper, /catalogue-hotfix-workflow-helpers\.mjs validate-target/);
   assert.doesNotMatch(databaseLoginWrapper, /\beval\b|\bsource\b|(?:^|\s)\.\s/);
+  assert.ok(existsSync(canonicalDatabaseUrlWrapperPath), "the private canonical database URL wrapper exists");
+  const canonicalDatabaseUrlWrapper = readFileSync(canonicalDatabaseUrlWrapperPath, "utf8");
+  assert.match(canonicalDatabaseUrlWrapper, /chmod 600 "\$database_env"/);
+  assert.match(canonicalDatabaseUrlWrapper, /trap .*rm -f -- "\$database_env".* EXIT/);
+  assert.match(canonicalDatabaseUrlWrapper, /GITHUB_ENV="\$database_env" node scripts\/catalogue-hotfix-workflow-helpers\.mjs normalize-db-url-env/);
+  assert.doesNotMatch(canonicalDatabaseUrlWrapper, /\beval\b|\bsource\b|(?:^|\s)\.\s/);
 
   const validation = `${stepText(validate)}\n${JSON.stringify(validate)}`;
   const authorizationStep = steps(validate).find(
@@ -225,8 +239,8 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.match(validation, /GITHUB_TRIGGERING_ACTOR/);
   const currentMainSteps = [
     authorizationStep,
-    steps(staging).find((step) => step.name === "Revalidate staging identity immediately before mutation"),
-    steps(production).find((step) => step.name === "Revalidate production control and authorization immediately before mutation"),
+    steps(staging).find((step) => step.name === "Revalidate staging control and API readiness"),
+    steps(production).find((step) => step.name === "Revalidate production control, authorization, and API readiness"),
   ];
   for (const step of currentMainSteps) {
     assert.ok(step, "every mutation gate has a current-main verification step");
@@ -253,7 +267,10 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   for (const [target, job] of Object.entries({ staging, production })) {
     const body = stepText(job);
     const identityStepIndex = steps(job).findIndex(
-      (step) => String(step.name ?? "").startsWith(`Revalidate ${target}`),
+      (step) => step.name === `Revalidate ${target} identity immediately before mutation`,
+    );
+    const controlStep = steps(job).find((step) =>
+      String(step.name ?? "").startsWith(`Revalidate ${target} control`)
     );
     assert.equal(Object.hasOwn(job.env, "TARGET_DB_URL"), false);
     assert.match(steps(job)[identityStepIndex].env.TARGET_DB_URL, /SUPABASE_(?:STAGING|PRODUCTION)_DB_URL/);
@@ -297,16 +314,17 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /RELEASE_CURRENT_MAIN_SHA/);
     assert.match(body, /elapsed_seconds/);
     assert.match(body, /successful_runs/);
-    const identityStep = steps(job)[identityStepIndex];
-    assert.match(identityStep.run, /\$\{TARGET_API_URL%\/\}\/auth\/v1\/settings/);
-    assert.match(identityStep.run, /Accept: application\/json/);
-    assert.match(identityStep.run, /apikey: \$TARGET_ANON_KEY/);
-    assert.match(identityStep.run, /validate-api-readiness "\$readiness_status"/);
-    assert.match(identityStep.run, /-o \/dev\/null/);
-    assert.match(identityStep.run, /--connect-timeout 10/);
-    assert.match(identityStep.run, /--max-time 30/);
-    assert.match(identityStep.run, /readiness_status="000"/);
-    assert.doesNotMatch(identityStep.run, /\/rest\/v1\/|openapi|-D |--dump-header|response_body|cat .*readiness/i);
+    assert.ok(controlStep);
+    assert.match(controlStep.run, /\$\{TARGET_API_URL%\/\}\/auth\/v1\/settings/);
+    assert.match(controlStep.run, /Accept: application\/json/);
+    assert.match(controlStep.run, /apikey: \$TARGET_ANON_KEY/);
+    assert.match(controlStep.run, /validate-api-readiness "\$readiness_status"/);
+    assert.match(controlStep.run, /-o \/dev\/null/);
+    assert.match(controlStep.run, /--connect-timeout 10/);
+    assert.match(controlStep.run, /--max-time 30/);
+    assert.match(controlStep.run, /readiness_status="000"/);
+    assert.doesNotMatch(controlStep.run, /\/rest\/v1\/|openapi|-D |--dump-header|response_body|cat .*readiness/i);
+    assert.equal(Object.hasOwn(controlStep.env ?? {}, "TARGET_DB_URL"), false);
   }
 
   const stagingBody = stepText(staging);

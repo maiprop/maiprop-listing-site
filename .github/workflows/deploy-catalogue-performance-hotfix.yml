@@ -83,17 +83,14 @@ jobs:
           bash scripts/catalogue-hotfix-staging-key-probe.sh "$candidates_file"
           rm -f -- "$response_file" "$candidates_file"
           trap - EXIT
-      - name: Revalidate staging identity immediately before mutation
+      - name: Revalidate staging control and API readiness
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
         run: |
           set -euo pipefail
           export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
           if [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ] || [ "$RELEASE_SHA" != "$GITHUB_SHA" ] || [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CHECKOUT_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CURRENT_MAIN_SHA" ]; then echo "::error::Staging control changed."; exit 1; fi
-          node scripts/assert-staging-mutation-target.mjs --project-ref "$TARGET_PROJECT_REF" --database-url "$TARGET_DB_URL" --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
           if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
-          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
           readiness_status="000"
           if ! readiness_status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/auth/v1/settings" -H "Accept: application/json" -H "apikey: $TARGET_ANON_KEY")"; then readiness_status="000"; fi
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-api-readiness "$readiness_status"
@@ -104,6 +101,16 @@ jobs:
           node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"
           fixed_sha="$(jq -r '.hotfix.livePagesSha' "$RUNNER_TEMP/catalogue-hotfix-contract.json")"
           bash scripts/catalogue-hotfix-static-marker.sh "$fixed_sha" evidence/staging-frontend-marker.json
+      - name: Revalidate staging identity immediately before mutation
+        env:
+          TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+        run: |
+          set -euo pipefail
+          bash scripts/catalogue-hotfix-with-canonical-database-url.sh bash -s <<'IDENTITY_PHASE'
+          set -euo pipefail
+          node scripts/assert-staging-mutation-target.mjs --project-ref "$TARGET_PROJECT_REF" --database-url "$TARGET_DB_URL" --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
+          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
+          IDENTITY_PHASE
       - name: Prove recorded staging database state
         timeout-minutes: 4
         env:
@@ -215,10 +222,9 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with: { node-version-file: .node-version, cache: npm }
       - run: npm ci --ignore-scripts --prefer-offline --no-audit
-      - name: Revalidate production control and authorization immediately before mutation
+      - name: Revalidate production control, authorization, and API readiness
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
           RELEASE_AUTHORIZATION_ACTION: production-deploy
           RELEASE_STANDARD_CONFIRMATION: DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX
           RELEASE_SINGLE_ADMIN_BREAK_GLASS: ${{ inputs.single_admin_break_glass }}
@@ -236,7 +242,6 @@ jobs:
           if [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$GITHUB_ACTOR" != "$GITHUB_TRIGGERING_ACTOR" ] || [ "$RELEASE_SHA" != "$GITHUB_SHA" ] || [ "$RELEASE_SHA" != "$GITHUB_WORKFLOW_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CHECKOUT_SHA" ] || [ "$RELEASE_SHA" != "$RELEASE_CURRENT_MAIN_SHA" ]; then exit 1; fi
           node scripts/production-break-glass-validation.mjs validate-workflow --out "$RUNNER_TEMP/catalogue-hotfix-authorization.json"
           if [ "$RELEASE_SINGLE_ADMIN_BREAK_GLASS" = false ]; then node --input-type=module -e 'const a=String(process.env.GITHUB_ACTOR??"").toLowerCase(),d=String(process.env.PRODUCTION_RELEASE_DEPLOYERS??"").split(/[\s,]+/).map(x=>x.toLowerCase()).filter(Boolean);if(!new Set(d).has(a))throw Error("Production actor is not allowlisted");'; fi
-          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
           readiness_status="000"
           if ! readiness_status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/auth/v1/settings" -H "Accept: application/json" -H "apikey: $TARGET_ANON_KEY")"; then readiness_status="000"; fi
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-api-readiness "$readiness_status"
@@ -246,6 +251,15 @@ jobs:
           mkdir -p evidence; node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"
           fixed_sha="$(jq -r '.hotfix.livePagesSha' "$RUNNER_TEMP/catalogue-hotfix-contract.json")"
           bash scripts/catalogue-hotfix-static-marker.sh "$fixed_sha" evidence/production-frontend-marker.json
+      - name: Revalidate production identity immediately before mutation
+        env:
+          TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+        run: |
+          set -euo pipefail
+          bash scripts/catalogue-hotfix-with-canonical-database-url.sh bash -s <<'IDENTITY_PHASE'
+          set -euo pipefail
+          node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
+          IDENTITY_PHASE
       - name: Prove recorded production database state
         timeout-minutes: 4
         env:

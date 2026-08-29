@@ -22,6 +22,15 @@ import {
   validateTarget,
 } from "./catalogue-hotfix-workflow-helpers.mjs";
 
+function resolveBashExecutable() {
+  if (process.platform !== "win32") return "bash";
+  const result = spawnSync("where.exe", ["bash"], { encoding: "utf8" });
+  assert.equal(result.status, 0, "Bash must be available for shell-contract tests");
+  return result.stdout.trim().split(/\r?\n/)[0];
+}
+
+const bashExecutable = resolveBashExecutable();
+
 const ref = "xsiehskfgeoqyazcgauv";
 const valid = {
   kind: "staging",
@@ -37,6 +46,8 @@ test("catalogue hotfix target validator requires exact Supabase identities", () 
   assert.throws(() => validateTarget({ ...valid, databaseUrl: `postgresql://postgres:password@db.${ref}.supabase.co:5432/postgres?sslmode=disable` }));
   assert.throws(() => validateTarget({ ...valid, apiUrl: `https://${ref}.supabase.co/?x=1` }));
   assert.throws(() => validateTarget({ ...valid, apiUrl: `https://${ref}.supabase.co/not-root` }));
+  assert.throws(() => validateTarget({ ...valid, apiUrl: `https://${ref}.supabase.co/\n` }));
+  assert.throws(() => validateTarget({ ...valid, databaseUrl: `${valid.databaseUrl}\n` }));
   assert.throws(() => validateTarget({ ...valid, kind: "preview" }));
   assert.throws(() => validateTarget({ ...valid, key: "sb_secret_not_allowed" }));
   assert.throws(() => validateTarget({ ...valid, ref: "qvvicunqcrwpioqnvzxf" }));
@@ -47,14 +58,18 @@ test("catalogue hotfix target validator requires exact Supabase identities", () 
   assert.doesNotThrow(() => validateTarget({ ...valid, key: jwt }));
 });
 
-test("database URL TLS normalization appends require but rejects explicit weaker modes", () => {
+test("database URL TLS normalization discards preexisting options and requires TLS", () => {
   assert.equal(
     workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres"),
     "postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=require",
   );
   assert.equal(
     workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres?connect_timeout=10"),
-    "postgresql://postgres:secret@db.example.test:5432/postgres?connect_timeout=10&sslmode=require",
+    "postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=require",
+  );
+  assert.equal(
+    workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres?host=attacker.example&options=-c%20role%3Dattacker&sslmode=require"),
+    "postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=require",
   );
   assert.equal(
     workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=require"),
@@ -71,6 +86,10 @@ test("database URL TLS normalization appends require but rejects explicit weaker
   assert.throws(
     () => workflowHelpers.normalizeDatabaseUrlTls("postgresql://postgres:secret@db.example.test:5432/postgres?sslmode=require&sslmode=require"),
     /sslmode/i,
+  );
+  assert.throws(
+    () => workflowHelpers.normalizeDatabaseUrlTls("postgresql://"),
+    /normalized safely/i,
   );
 });
 
@@ -323,8 +342,6 @@ printf '%s' ok > "$TEST_RESULT"
 printf '%s' "$TEST_STATUS"
 `);
     chmodSync(fakeCurl, 0o700);
-    const bashExecutable = spawnSync("where.exe", ["bash"], { encoding: "utf8" })
-      .stdout.trim().split(/\r?\n/)[0];
     const run = ({ status, response }) => {
       writeFileSync(responsePath, typeof response === "string" ? response : JSON.stringify(response));
       rmSync(envPath, { force: true });
@@ -445,8 +462,6 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
 `);
     chmodSync(fakeCurl, 0o700);
     chmodSync(phaseScript, 0o700);
-    const bashExecutable = spawnSync("where.exe", ["bash"], { encoding: "utf8" })
-      .stdout.trim().split(/\r?\n/)[0];
     const result = spawnSync(bashExecutable, [
       "-c",
       'export PATH="$TEST_FAKE_BIN:$PATH"; exec bash "$TEST_WRAPPER" bash "$TEST_PHASE_SCRIPT"',
@@ -497,6 +512,65 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
     assert.equal(readFileSync(realEnvPath, "utf8"), "UNCHANGED=1\n");
     assert.equal(readdirSync(runnerTemp).length, 0, "all private credential files are removed");
     assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(accessToken));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("canonical database URL wrapper strips every preexisting connection option privately", () => {
+  const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-canonical-db-"));
+  const runnerTemp = join(directory, "runner-temp");
+  const realEnvPath = join(directory, "github-env");
+  const identityScript = join(directory, "identity.sh");
+  const identityResult = join(directory, "identity-result");
+  const unsafeDatabaseUrl = `postgresql://postgres:password@db.${ref}.supabase.co:5432/postgres?host=attacker.example&options=-c%20role%3Dattacker&connect_timeout=10&sslmode=require`;
+  try {
+    mkdirSync(runnerTemp);
+    writeFileSync(realEnvPath, "UNCHANGED=1\n");
+    writeFileSync(identityScript, `#!/usr/bin/env bash
+set -euo pipefail
+[ "$GITHUB_ENV" != "$TEST_REAL_GITHUB_ENV" ]
+node --input-type=module -e '
+  const url = new URL(process.env.TARGET_DB_URL);
+  const keys = [...url.searchParams.keys()];
+  if (keys.length !== 1 || keys[0] !== "sslmode" || url.searchParams.get("sslmode") !== "require") process.exit(1);
+'
+printf 'MUST_NOT_PERSIST=1\\n' >> "$GITHUB_ENV"
+printf 'identity-ok' > "$TEST_IDENTITY_RESULT"
+`);
+    chmodSync(identityScript, 0o700);
+    const result = spawnSync(bashExecutable, [
+      "-c",
+      'exec bash "$TEST_WRAPPER" bash "$TEST_IDENTITY_SCRIPT"',
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_ENV: realEnvPath,
+        RUNNER_TEMP: runnerTemp,
+        TARGET_DB_URL: unsafeDatabaseUrl,
+        TEST_IDENTITY_RESULT: identityResult,
+        TEST_IDENTITY_SCRIPT: identityScript,
+        TEST_REAL_GITHUB_ENV: realEnvPath,
+        TEST_WRAPPER: join(process.cwd(), "scripts/catalogue-hotfix-with-canonical-database-url.sh"),
+        WSLENV: [
+          process.env.WSLENV,
+          "GITHUB_ENV/p",
+          "RUNNER_TEMP/p",
+          "TARGET_DB_URL",
+          "TEST_IDENTITY_RESULT/p",
+          "TEST_IDENTITY_SCRIPT/p",
+          "TEST_REAL_GITHUB_ENV/p",
+          "TEST_WRAPPER/p",
+        ].filter(Boolean).join(":"),
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readFileSync(identityResult, "utf8"), "identity-ok");
+    assert.equal(readFileSync(realEnvPath, "utf8"), "UNCHANGED=1\n");
+    assert.equal(readdirSync(runnerTemp).length, 0, "the private canonical environment is removed");
+    assert.doesNotMatch(`${result.stdout}${result.stderr}`, /attacker|connect_timeout|options=/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -773,8 +847,6 @@ if [ "$status" = 000 ]; then exit 28; fi
 printf '%s' "$status"
 `);
     chmodSync(fakeCurl, 0o700);
-    const bashExecutable = spawnSync("where.exe", ["bash"], { encoding: "utf8" })
-      .stdout.trim().split(/\r?\n/)[0];
 
     for (const scenario of scenarios) {
       const scenarioDirectory = join(directory, scenario.name);
@@ -953,8 +1025,6 @@ if [ "$TEST_TRANSPORT" = true ]; then exit 28; fi
 printf '%s' "$TEST_RESPONSE_STATUS"
 `);
     chmodSync(fakeCurl, 0o700);
-    const bashExecutable = spawnSync("where.exe", ["bash"], { encoding: "utf8" })
-      .stdout.trim().split(/\r?\n/)[0];
     for (const scenario of scenarios) {
       const scenarioDirectory = join(directory, scenario.name);
       mkdirSync(scenarioDirectory);

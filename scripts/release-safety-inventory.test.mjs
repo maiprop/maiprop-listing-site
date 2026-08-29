@@ -42,6 +42,10 @@ describe("release safety inventory", () => {
       resolve(process.cwd(), "scripts/catalogue-hotfix-with-database-login.sh"),
       "utf8",
     );
+    const canonicalDatabaseUrlWrapperText = readFileSync(
+      resolve(process.cwd(), "scripts/catalogue-hotfix-with-canonical-database-url.sh"),
+      "utf8",
+    );
     const violations = (overrides = {}) => cataloguePerformanceHotfixWorkflowViolations({
       text,
       parsed,
@@ -50,6 +54,7 @@ describe("release safety inventory", () => {
       markerScriptText,
       databaseLoginScriptText,
       databaseLoginWrapperText,
+      canonicalDatabaseUrlWrapperText,
       ...overrides,
     });
 
@@ -112,6 +117,18 @@ describe("release safety inventory", () => {
     });
     expect(violations({ parsed: oldJobWideLogin })).not.toEqual([]);
     expect(violations({ databaseLoginWrapperText: "" })).not.toEqual([]);
+    expect(violations({ canonicalDatabaseUrlWrapperText: "" })).not.toEqual([]);
+    for (const target of ["staging", "production"]) {
+      const missingCanonicalIdentity = structuredClone(parsed);
+      const identity = missingCanonicalIdentity.jobs[target].steps.find((step) =>
+        step.name === `Revalidate ${target} identity immediately before mutation`
+      );
+      identity.run = identity.run.replace(
+        "bash scripts/catalogue-hotfix-with-canonical-database-url.sh bash -s <<'IDENTITY_PHASE'",
+        "bash -s <<'IDENTITY_PHASE'",
+      );
+      expect(violations({ parsed: missingCanonicalIdentity })).not.toEqual([]);
+    }
     const postMintPrint = databaseLoginWrapperText.replace(
       '\n"$@"',
       '\nprintf \'%s\\n\' "$SUPABASE_ACCESS_TOKEN"\n"$@"',
@@ -183,6 +200,15 @@ describe("release safety inventory", () => {
       supportText: supportText.replaceAll(
         "validateDatabaseSearchParameters",
         "uncheckedDatabaseSearchParameters",
+      ),
+    })).not.toEqual([]);
+    expect(violations({
+      supportText: supportText.replace('  parsed.search = "";\n', ""),
+    })).not.toEqual([]);
+    expect(violations({
+      supportText: supportText.replace(
+        'parsed.searchParams.set("sslmode", "require");',
+        'parsed.searchParams.append("sslmode", "require");',
       ),
     })).not.toEqual([]);
     expect(violations({
