@@ -128,6 +128,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   supportText = "",
   probeScriptText = "",
   markerScriptText = "",
+  databaseLoginScriptText = "",
 }) {
   const violations = [];
   const inputs = parsed?.on?.workflow_dispatch?.inputs ?? {};
@@ -180,6 +181,18 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const productionSteps = jobs.production?.steps ?? [];
   const productionIdentityIndex = productionSteps.findIndex(
     (step) => step?.name === "Revalidate production control and authorization immediately before mutation",
+  );
+  const stagingLoginIndex = stagingSteps.findIndex(
+    (step) => step?.name === "Mint temporary staging database login",
+  );
+  const stagingBindingIndex = stagingSteps.findIndex(
+    (step) => step?.name === "Validate temporary staging database binding",
+  );
+  const productionLoginIndex = productionSteps.findIndex(
+    (step) => step?.name === "Mint temporary production database login",
+  );
+  const productionBindingIndex = productionSteps.findIndex(
+    (step) => step?.name === "Validate temporary production database binding",
   );
   const stagingMarker = stagingSteps.find(
     (step) => step?.name === "Capture manifest-bound frontend marker for staging evidence",
@@ -244,6 +257,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const support = String(supportText);
   const probeScript = String(probeScriptText);
   const markerScript = String(markerScriptText);
+  const databaseLoginScript = String(databaseLoginScriptText);
   const staticValidatorStart = support.indexOf("export function buildCatalogueHotfixStaticMarkerEvidence");
   const staticValidatorEnd = support.indexOf("\nfunction validateKey", staticValidatorStart);
   const staticValidator = staticValidatorStart >= 0 && staticValidatorEnd > staticValidatorStart
@@ -274,7 +288,12 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     resolverIndex < 0 || resolverIndex >= identityIndex ||
     Object.keys(resolver?.env ?? {}).join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
     resolver?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
-    tokenSteps.length !== 1 || tokenSteps[0] !== resolver ||
+    tokenSteps.length !== 3 ||
+    tokenSteps.map((step) => step?.name).join("\n") !== [
+      "Resolve current staging public API key",
+      "Mint temporary staging database login",
+      "Mint temporary production database login",
+    ].join("\n") ||
     resolverMarkers.some((marker) => !resolverText.includes(marker)) ||
     resolverText.includes("TARGET_API_URL") ||
     /-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/.test(resolverText) ||
@@ -294,6 +313,60 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     diagnosticIndex >= selectionFailureIndex || selectionFailureIndex >= selectedAppendIndex
   ) {
     violations.push("catalogue hotfix staging public key resolution is not isolated and fail closed");
+  }
+
+  const loginSteps = [
+    [stagingSteps[stagingLoginIndex], stagingSteps[stagingBindingIndex]],
+    [productionSteps[productionLoginIndex], productionSteps[productionBindingIndex]],
+  ];
+  const databaseLoginMarkers = [
+    "staging:xsiehskfgeoqyazcgauv)",
+    "production:qvvicunqcrwpioqnvzxf)",
+    "https://api.supabase.com/v1/projects/xsiehskfgeoqyazcgauv/cli/login-role",
+    "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf/cli/login-role",
+    "response_file=\"$(mktemp \"$RUNNER_TEMP/catalogue-hotfix-database-login.",
+    "chmod 600 \"$response_file\"",
+    "trap 'rm -f -- \"$response_file\"' EXIT",
+    "--request POST",
+    "--connect-timeout 10",
+    "--max-time 30",
+    "--max-filesize 65536",
+    "--max-redirs 0",
+    "-o \"$response_file\"",
+    "-w '%{http_code}'",
+    "Authorization: Bearer $SUPABASE_ACCESS_TOKEN",
+    "--data '{\"read_only\":false}'",
+    "[ \"$status\" != \"201\" ]",
+    "write-temporary-db-env \"$response_file\"",
+  ];
+  const databaseSupportMarkers = [
+    "buildTemporaryDatabaseCredential",
+    "validateDatabaseSearchParameters",
+    'const expectedKeys = temporary ? ["options", "sslmode"] : ["sslmode"];',
+    "const actualKeys = [...db.searchParams.keys()].sort();",
+    "JSON.stringify(actualKeys) === JSON.stringify(expectedKeys)",
+    "MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS = 3600",
+    "`${role}.${ref}`",
+    "-c role=postgres",
+    "TARGET_DB_EPHEMERAL_ROLE",
+    "::add-mask::${temporary.role}",
+    "::add-mask::${response.password}",
+    "::add-mask::${temporary.databaseUrl}",
+  ];
+  if (
+    stagingLoginIndex !== identityIndex + 1 || stagingBindingIndex !== stagingLoginIndex + 1 ||
+    productionLoginIndex !== productionIdentityIndex + 1 || productionBindingIndex !== productionLoginIndex + 1 ||
+    loginSteps.some(([login, binding]) =>
+      Object.keys(login?.env ?? {}).join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
+      login?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
+      String(login?.run ?? "").trim() !== "bash scripts/catalogue-hotfix-database-login.sh" ||
+      String(binding?.run ?? "").trim() !== "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target"
+    ) ||
+    databaseLoginMarkers.some((marker) => !databaseLoginScript.includes(marker)) ||
+    databaseSupportMarkers.some((marker) => !support.includes(marker)) ||
+    /--retry|-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/.test(databaseLoginScript)
+  ) {
+    violations.push("catalogue hotfix temporary database logins are not isolated and fail closed");
   }
 
   const markerScriptMarkers = [
@@ -769,6 +842,7 @@ export function scanWorkflows() {
       ].join("\n"),
       probeScriptText: read(join(root, "scripts/catalogue-hotfix-staging-key-probe.sh")),
       markerScriptText: read(join(root, "scripts/catalogue-hotfix-static-marker.sh")),
+      databaseLoginScriptText: read(join(root, "scripts/catalogue-hotfix-database-login.sh")),
     })) {
       violations.push(`${catalogueHotfixWorkflow} ${violation}`);
     }

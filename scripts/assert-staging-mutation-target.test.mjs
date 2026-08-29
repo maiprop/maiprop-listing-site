@@ -69,6 +69,27 @@ describe("assertStagingMutationTarget", () => {
     );
   });
 
+  it("accepts only an exactly-bound temporary login role that assumes postgres", () => {
+    const role = "cli_login_01234567";
+    for (const username of [role, `${role}.${MAIPROP_STAGING_SUPABASE_PROJECT_REF}`]) {
+      const host = username === role
+        ? `db.${MAIPROP_STAGING_SUPABASE_PROJECT_REF}.supabase.co`
+        : "aws-0-eu-central-1.pooler.supabase.com";
+      expect(assertStagingMutationTarget({
+        ...validTarget,
+        ephemeralRole: role,
+        databaseUrl: `postgresql://${username}:temporary@${host}:5432/postgres?sslmode=require&options=-c+role%3Dpostgres`,
+      }).databaseProjectRef).toBe(MAIPROP_STAGING_SUPABASE_PROJECT_REF);
+    }
+    for (const ephemeralRole of [undefined, "cli_login_other", "postgres"]) {
+      expect(() => assertStagingMutationTarget({
+        ...validTarget,
+        ephemeralRole,
+        databaseUrl: `postgresql://${role}:temporary@db.${MAIPROP_STAGING_SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require&options=-c+role%3Dpostgres`,
+      })).toThrow();
+    }
+  });
+
   it("rejects a database URL whose embedded project differs", () => {
     expect(() =>
       assertStagingMutationTarget({
@@ -109,5 +130,35 @@ describe("assertStagingMutationTarget", () => {
           "@aws-0-eu-central-1.pooler.supabase.com:5432/template1?sslmode=require",
       }),
     ).toThrow(/postgres database/);
+  });
+
+  it("rejects every libpq query parameter that could override the inspected authority", () => {
+    const role = "cli_login_01234567";
+    const overrides = [
+      "host=attacker.example",
+      "hostaddr=127.0.0.1",
+      "port=6543",
+      "user=postgres",
+      "password=override",
+      "dbname=template1",
+      "service=attacker",
+      "servicefile=%2Ftmp%2Fservice.conf",
+      "target_session_attrs=read-write",
+      "connect_timeout=10",
+      "unknown_key=value",
+      "sslmode=require&sslmode=require",
+      "options=-c%20role%3Dpostgres",
+    ];
+    for (const parameter of overrides) {
+      expect(() => assertStagingMutationTarget({
+        ...validTarget,
+        databaseUrl: `postgresql://postgres:password@db.${MAIPROP_STAGING_SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require&${parameter}`,
+      })).toThrow(/database|parameter|option|TLS/i);
+      expect(() => assertStagingMutationTarget({
+        ...validTarget,
+        ephemeralRole: role,
+        databaseUrl: `postgresql://${role}:temporary@db.${MAIPROP_STAGING_SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require&options=-c%20role%3Dpostgres&${parameter}`,
+      })).toThrow(/database|parameter|option|TLS/i);
+    }
   });
 });

@@ -17,6 +17,10 @@ const staticMarkerPath = resolve(
   process.cwd(),
   "scripts/catalogue-hotfix-static-marker.sh",
 );
+const databaseLoginPath = resolve(
+  process.cwd(),
+  "scripts/catalogue-hotfix-database-login.sh",
+);
 
 function workflow() {
   assert.ok(existsSync(workflowPath), "the database-only hotfix workflow exists");
@@ -131,7 +135,39 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   const accessTokenSteps = Object.values(value.jobs).flatMap((job) =>
     steps(job).filter((step) => Object.hasOwn(step.env ?? {}, "SUPABASE_ACCESS_TOKEN"))
   );
-  assert.deepEqual(accessTokenSteps.map((step) => step.name), ["Resolve current staging public API key"]);
+  assert.deepEqual(accessTokenSteps.map((step) => step.name), [
+    "Resolve current staging public API key",
+    "Mint temporary staging database login",
+    "Mint temporary production database login",
+  ]);
+  for (const [job, name] of [
+    [staging, "Mint temporary staging database login"],
+    [production, "Mint temporary production database login"],
+  ]) {
+    const loginIndex = steps(job).findIndex((step) => step.name === name);
+    const normalizeIndex = steps(job).findIndex((step) => /Normalize .* database URL/.test(step.name ?? ""));
+    const identityIndex = steps(job).findIndex((step) => /Revalidate .* immediately before mutation/.test(step.name ?? ""));
+    const bindingIndex = steps(job).findIndex((step) => /Validate temporary .* database binding/.test(step.name ?? ""));
+    assert.ok(normalizeIndex < identityIndex && loginIndex === identityIndex + 1 && bindingIndex === loginIndex + 1);
+    assert.deepEqual(steps(job)[loginIndex].env, {
+      SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+    });
+    assert.equal(steps(job)[loginIndex].run.trim(), "bash scripts/catalogue-hotfix-database-login.sh");
+    assert.equal(steps(job)[bindingIndex].run.trim(), "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target");
+  }
+  const databaseLogin = readFileSync(databaseLoginPath, "utf8");
+  assert.match(databaseLogin, /https:\/\/api\.supabase\.com\/v1\/projects\/xsiehskfgeoqyazcgauv\/cli\/login-role/);
+  assert.match(databaseLogin, /https:\/\/api\.supabase\.com\/v1\/projects\/qvvicunqcrwpioqnvzxf\/cli\/login-role/);
+  assert.match(databaseLogin, /--request POST/);
+  assert.match(databaseLogin, /--data '\{"read_only":false\}'/);
+  assert.match(databaseLogin, /--connect-timeout 10/);
+  assert.match(databaseLogin, /--max-time 30/);
+  assert.match(databaseLogin, /--max-filesize 65536/);
+  assert.doesNotMatch(databaseLogin, /--retry|--retry-all-errors/);
+  assert.match(databaseLogin, /chmod 600 "\$response_file"/);
+  assert.match(databaseLogin, /trap 'rm -f -- "\$response_file"' EXIT/);
+  assert.match(databaseLogin, /write-temporary-db-env "\$response_file"/);
+  assert.doesNotMatch(databaseLogin, /-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/);
 
   const validation = `${stepText(validate)}\n${JSON.stringify(validate)}`;
   const authorizationStep = steps(validate).find(
@@ -304,7 +340,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   );
 
   const productionBody = stepText(production);
-  assert.doesNotMatch(productionBody, /api\.supabase\.com|SUPABASE_ACCESS_TOKEN|write-staging-public-key-candidates|select-live-staging-public-key-env/);
+  assert.doesNotMatch(productionBody, /write-staging-public-key-candidates|select-live-staging-public-key-env/);
   for (const body of [stagingBody, productionBody]) {
     assert.match(body, /Refuse recorded hotfix drift before/);
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs recorded/);

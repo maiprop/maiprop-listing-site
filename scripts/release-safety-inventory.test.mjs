@@ -34,12 +34,17 @@ describe("release safety inventory", () => {
       resolve(process.cwd(), "scripts/catalogue-hotfix-static-marker.sh"),
       "utf8",
     );
+    const databaseLoginScriptText = readFileSync(
+      resolve(process.cwd(), "scripts/catalogue-hotfix-database-login.sh"),
+      "utf8",
+    );
     const violations = (overrides = {}) => cataloguePerformanceHotfixWorkflowViolations({
       text,
       parsed,
       supportText,
       probeScriptText,
       markerScriptText,
+      databaseLoginScriptText,
       ...overrides,
     });
 
@@ -80,8 +85,32 @@ describe("release safety inventory", () => {
     ]) {
       expect(violations({ markerScriptText: unsafeMarker })).not.toEqual([]);
     }
+    for (const unsafeDatabaseLogin of [
+      databaseLoginScriptText.replace("--request POST", "--request GET"),
+      databaseLoginScriptText.replace("--max-time 30", ""),
+      databaseLoginScriptText.replace("$status\" != \"201", "$status\" != \"200"),
+      `${databaseLoginScriptText}\ncat "$response_file"\n`,
+      databaseLoginScriptText.replace(
+        "https://api.supabase.com/v1/projects/xsiehskfgeoqyazcgauv/cli/login-role",
+        "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/cli/login-role",
+      ),
+    ]) {
+      expect(violations({ databaseLoginScriptText: unsafeDatabaseLogin })).not.toEqual([]);
+    }
     expect(violations({
       supportText: supportText.replace('    "created_at",', '    "source_tree",'),
+    })).not.toEqual([]);
+    expect(violations({
+      supportText: supportText.replaceAll(
+        "validateDatabaseSearchParameters",
+        "uncheckedDatabaseSearchParameters",
+      ),
+    })).not.toEqual([]);
+    expect(violations({
+      supportText: supportText.replace(
+        'const expectedKeys = temporary ? ["options", "sslmode"] : ["sslmode"];',
+        "const expectedKeys = [...db.searchParams.keys()].sort();",
+      ),
     })).not.toEqual([]);
     expect(violations({
       text: text.replace("needs: [validate, staging]", "needs: [validate]"),

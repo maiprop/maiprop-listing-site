@@ -7,7 +7,25 @@ export const MAIPROP_STAGING_SUPABASE_PROJECT_REF = "xsiehskfgeoqyazcgauv";
 export const MAIPROP_STAGING_MUTATION_ACKNOWLEDGEMENT =
   "MUTATE_STAGING_xsiehskfgeoqyazcgauv";
 
-function databaseProjectRef(databaseUrl) {
+function validTemporaryRole(role) {
+  return typeof role === "string" && /^[A-Za-z_][A-Za-z0-9_-]{0,62}$/.test(role) &&
+    !new Set(["anon", "authenticated", "postgres", "service_role", "supabase_admin"])
+      .has(role.toLowerCase());
+}
+
+function hasExactDatabaseSearchParameters(parsed, temporary) {
+  const expectedKeys = temporary ? ["options", "sslmode"] : ["sslmode"];
+  const actualKeys = [...parsed.searchParams.keys()].sort();
+  return JSON.stringify(actualKeys) === JSON.stringify(expectedKeys) &&
+    parsed.searchParams.getAll("sslmode").length === 1 &&
+    parsed.searchParams.get("sslmode") === "require" &&
+    (!temporary || (
+      parsed.searchParams.getAll("options").length === 1 &&
+      parsed.searchParams.get("options") === "-c role=postgres"
+    ));
+}
+
+function databaseProjectRef(databaseUrl, ephemeralRole = null) {
   if (!databaseUrl) return null;
 
   const parsed = new URL(databaseUrl);
@@ -24,18 +42,20 @@ function databaseProjectRef(databaseUrl) {
 
   let projectRef = null;
   if (directMatch) {
-    if (username !== "postgres") {
+    if (username !== "postgres" && (!validTemporaryRole(ephemeralRole) || username !== ephemeralRole)) {
       throw new Error("Direct staging database URL must use the postgres user");
     }
     projectRef = directMatch[1];
   } else if (poolerHost) {
     const poolerUser = /^postgres\.([a-z0-9]{20})$/.exec(username);
-    if (!poolerUser) {
+    const temporaryPoolerUser = validTemporaryRole(ephemeralRole) &&
+      username === `${ephemeralRole}.${MAIPROP_STAGING_SUPABASE_PROJECT_REF}`;
+    if (!poolerUser && !temporaryPoolerUser) {
       throw new Error(
         "Staging pooler URL must use the postgres.<project-ref> user",
       );
     }
-    projectRef = poolerUser[1];
+    projectRef = poolerUser ? poolerUser[1] : MAIPROP_STAGING_SUPABASE_PROJECT_REF;
   } else {
     throw new Error(
       "Staging database URL must use a Supabase direct or pooler hostname",
@@ -48,8 +68,8 @@ function databaseProjectRef(databaseUrl) {
   if (parsed.port && !["5432", "6543"].includes(parsed.port)) {
     throw new Error("Staging database URL uses an unsupported port");
   }
-  if (parsed.searchParams.get("sslmode") !== "require") {
-    throw new Error("Staging database URL must require TLS with sslmode=require");
+  if (!hasExactDatabaseSearchParameters(parsed, validTemporaryRole(ephemeralRole))) {
+    throw new Error("Staging database URL query parameters must be exactly sslmode=require plus the bound temporary role option");
   }
 
   return projectRef;
@@ -59,6 +79,7 @@ export function assertStagingMutationTarget({
   projectRef,
   databaseUrl = null,
   acknowledgement,
+  ephemeralRole = null,
 }) {
   if (projectRef === MAIPROP_PRODUCTION_SUPABASE_PROJECT_REF) {
     throw new Error("Refusing to mutate the MaiProp production Supabase project");
@@ -74,7 +95,7 @@ export function assertStagingMutationTarget({
     );
   }
 
-  const databaseRef = databaseProjectRef(databaseUrl);
+  const databaseRef = databaseProjectRef(databaseUrl, ephemeralRole);
   if (databaseUrl && databaseRef !== projectRef) {
     throw new Error(
       `Database target ${databaseRef ?? "unknown"} does not match staging ${projectRef}`,
@@ -103,6 +124,7 @@ function main() {
     acknowledgement:
       readFlag("--acknowledgement") ??
       process.env.STAGING_MUTATION_ACKNOWLEDGEMENT,
+    ephemeralRole: process.env.TARGET_DB_EPHEMERAL_ROLE ?? null,
   });
   process.stdout.write(
     `Verified isolated staging mutation target: ${result.projectRef}\n`,
