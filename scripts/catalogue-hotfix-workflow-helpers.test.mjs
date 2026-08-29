@@ -1449,13 +1449,30 @@ printf '%s' "$TEST_RESPONSE_STATUS"
 
 test("dry-run proof requires the exact approved missing set", () => {
   const contract = { hotfix: { migrations: [{ version: "20260728123058" }, { version: "20260729120405" }] } };
-  assert.deepEqual(validateDryRun({ contract, remoteHistory: "20260728123058\n", output: "Would push 20260729120405 migration" }).pending_versions, ["20260729120405"]);
+  assert.deepEqual(validateDryRun({
+    contract,
+    remoteHistory: "20260728123058\n",
+    output: "Would push these migrations:\n • 20260729120405_harden_public_catalogue.sql",
+  }).pending_versions, ["20260729120405"]);
+  assert.deepEqual(
+    validateDryRun({
+      contract,
+      remoteHistory: "",
+      output: [
+        "DRY RUN: migrations will not be pushed.",
+        "Would push these migrations:",
+        " • \u001b[1m20260728123058_materialize_public_catalogue_snapshots.sql\u001b[0m",
+        " • \u001b[1m20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql\u001b[0m",
+      ].join("\n"),
+    }).pending_versions,
+    ["20260728123058", "20260729120405"],
+  );
   assert.throws(() => validateDryRun({ contract, remoteHistory: "", output: "" }));
   assert.throws(
     () => validateDryRun({
       contract,
       remoteHistory: "",
-      output: "Would push these migrations:\n20260728123058; secret-output-must-not-appear",
+      output: "Would push these migrations:\n • 20260728123058_materialize_catalogue.sql\nsecret-output-must-not-appear",
     }),
     (error) => {
       assert.equal(
@@ -1469,7 +1486,7 @@ test("dry-run proof requires the exact approved missing set", () => {
   for (const [output, state] of [
     ["Skipping migrations because it is disabled in config.toml for project: ref", "migrations-disabled"],
     ["DRY RUN: migrations will not be pushed.\nRemote database is up to date.", "remote-up-to-date"],
-    ["DRY RUN: migrations will not be pushed.\nWould push these migrations:\n20260728123058", "pending-listed"],
+    ["DRY RUN: migrations will not be pushed.\nWould push these migrations:\n • 20260728123058_one.sql", "pending-listed"],
     ["unrelated migration warning 20990101010101", "unknown"],
     ["migration warning: Remote database is up to date. retrying", "unknown"],
     ["migration warning: Would push these migrations: maybe", "unknown"],
@@ -1480,8 +1497,37 @@ test("dry-run proof requires the exact approved missing set", () => {
       new RegExp(`state=${state}`),
     );
   }
-  assert.throws(() => validateDryRun({ contract, remoteHistory: "", output: "Would push 20260728123058 and 20260729120405 and 20990101010101" }));
-  assert.deepEqual(validateDryRun({ contract, remoteHistory: "20260728123058\n20260729120405\n", output: "No migrations pending" }).pending_versions, []);
+  assert.throws(() => validateDryRun({
+    contract,
+    remoteHistory: "",
+    output: [
+      "Would push these migrations:",
+      " • 20260728123058_one.sql",
+      " • 20260729120405_two.sql",
+      " • 20990101010101_unapproved.sql",
+    ].join("\n"),
+  }));
+  for (const output of [
+    "migration warning: foo20260728123058_bar and x20260729120405_y",
+    "Would push these migrations:\n • 202607281230580_too_long.sql\n • 2026072912040500_too_long.sql",
+  ]) {
+    assert.throws(() => validateDryRun({ contract, remoteHistory: "", output }));
+  }
+  assert.throws(() => validateDryRun({
+    contract,
+    remoteHistory: "20260728123058\n20260729120405\n",
+    output: "No migrations pending",
+  }));
+  assert.throws(() => validateDryRun({
+    contract,
+    remoteHistory: "20260728123058\n20260729120405\n",
+    output: "Skipping migrations because it is disabled in config.toml for project: ref",
+  }));
+  assert.deepEqual(validateDryRun({
+    contract,
+    remoteHistory: "20260728123058\n20260729120405\n",
+    output: "DRY RUN: migrations will not be pushed.\nRemote database is up to date.",
+  }).pending_versions, []);
 });
 
 const contract = {
