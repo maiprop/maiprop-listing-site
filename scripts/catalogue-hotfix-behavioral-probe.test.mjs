@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runCatalogueBehavioralProbe } from "./catalogue-hotfix-behavioral-probe.mjs";
+import {
+  runCatalogueBehavioralProbe,
+  runCatalogueSql,
+} from "./catalogue-hotfix-behavioral-probe.mjs";
 
 const apiUrl = "https://xsiehskfgeoqyazcgauv.supabase.co/";
 const databaseUrl = "postgresql://postgres:password@db.xsiehskfgeoqyazcgauv.supabase.co:5432/postgres?sslmode=require";
@@ -10,6 +13,46 @@ const auctionId = "00000000-0000-4000-8000-000000000099";
 const missingAuctionId = "00000000-0000-0000-0000-000000000000";
 const firstVersion = "20260728123058";
 const secondVersion = "20260729120405";
+
+test("database SQL explicitly assumes postgres before running contract queries", async () => {
+  const calls = [];
+  const output = await runCatalogueSql("SELECT 42", databaseUrl, (...args) => {
+    calls.push(args);
+    return { status: 0, stdout: "42\n", stderr: "" };
+  });
+
+  assert.equal(output, "42");
+  assert.equal(calls.length, 1);
+  const [, args] = calls[0];
+  assert.deepEqual(args, [
+    databaseUrl,
+    "--no-psqlrc",
+    "--set",
+    "ON_ERROR_STOP=1",
+    "--set",
+    "VERBOSITY=sqlstate",
+    "-qAt",
+    "--command",
+    "SET ROLE postgres",
+    "--command",
+    "SELECT 42",
+  ]);
+});
+
+test("database SQL reports only a safe SQLSTATE classification", async () => {
+  await assert.rejects(
+    runCatalogueSql("SELECT secret", databaseUrl, () => ({
+      status: 1,
+      stdout: "",
+      stderr: "ERROR:  42501 super-secret-provider-detail\n",
+    })),
+    (error) => {
+      assert.match(error.message, /SQLSTATE 42501/);
+      assert.doesNotMatch(error.message, /super-secret|SELECT secret|password/);
+      return true;
+    },
+  );
+});
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });

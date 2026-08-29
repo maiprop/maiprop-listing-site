@@ -163,6 +163,20 @@ describe("release safety inventory", () => {
       "database_ready=false\nnode scripts/catalogue-hotfix-workflow-helpers.mjs validate-target",
     );
     expect(violations({ databaseLoginWrapperText: readinessBeforeValidation })).not.toEqual([]);
+    for (const unsafeSupportText of [
+      supportText.replace('"VERBOSITY=sqlstate"', '"VERBOSITY=default"'),
+      supportText.replace('"SET ROLE postgres"', '"SET ROLE anon"'),
+      supportText.replace(
+        'String(result.stderr ?? "").match(/\\b(?:ERROR|FATAL):\\s+([0-9A-Z]{5})\\b/)',
+        'String(result.stderr ?? "")',
+      ),
+      supportText.replace(
+        'Database behavioral contract query failed with SQLSTATE ${sqlstate}.',
+        "Database behavioral contract query failed with provider output.",
+      ),
+    ]) {
+      expect(violations({ supportText: unsafeSupportText })).not.toEqual([]);
+    }
     const oversizedCronBudget = text.replace("for n in $(seq 1 15); do", "for n in $(seq 1 17); do");
     expect(violations({ text: oversizedCronBudget, parsed: yaml.load(oversizedCronBudget) })).not.toEqual([]);
     for (const unsafeText of [

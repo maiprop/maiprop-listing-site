@@ -68,7 +68,9 @@ database_attempt=0
 database_max_attempts=4
 while [ "$database_attempt" -lt "$database_max_attempts" ]; do
   database_attempt="$((database_attempt + 1))"
-  if timeout --signal=TERM --kill-after=1s 6s env PGCONNECT_TIMEOUT=4 psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -qAtc 'SELECT 1' >/dev/null 2>&1; then
+  database_identity=""
+  if database_identity="$(timeout --signal=TERM --kill-after=1s 6s env PGCONNECT_TIMEOUT=4 psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -qAt --command 'SET ROLE postgres' --command "SELECT current_user = 'postgres'" 2>/dev/null)" &&
+     [ "$database_identity" = t ]; then
     database_ready=true
     break
   fi

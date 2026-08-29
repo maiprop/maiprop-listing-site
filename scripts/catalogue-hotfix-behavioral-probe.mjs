@@ -23,14 +23,29 @@ function parseJson(text, label) {
   }
 }
 
-async function defaultPsql(query, databaseUrl) {
-  const result = spawnSync(
+export async function runCatalogueSql(query, databaseUrl, spawnImpl = spawnSync) {
+  const result = spawnImpl(
     "psql",
-    [databaseUrl, "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "-qAtc", query],
+    [
+      databaseUrl,
+      "--no-psqlrc",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "--set",
+      "VERBOSITY=sqlstate",
+      "-qAt",
+      "--command",
+      "SET ROLE postgres",
+      "--command",
+      query,
+    ],
     { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 },
   );
   if (result.status !== 0) {
-    fail(`Database behavioral contract query failed with exit ${result.status ?? "unknown"}.`);
+    const sqlstate = String(result.stderr ?? "").match(/\b(?:ERROR|FATAL):\s+([0-9A-Z]{5})\b/)?.[1];
+    fail(sqlstate
+      ? `Database behavioral contract query failed with SQLSTATE ${sqlstate}.`
+      : `Database behavioral contract query failed with exit ${result.status ?? "unknown"}.`);
   }
   return result.stdout.trim();
 }
@@ -159,7 +174,7 @@ export async function runCatalogueBehavioralProbe(
 ) {
   if (!["recorded", "postapply"].includes(mode)) fail("Behavioral probe mode is invalid.");
   if (!apiUrl || !databaseUrl || !key) fail("Behavioral probe target is incomplete.");
-  const psql = dependencies.psql ?? ((query) => defaultPsql(query, databaseUrl));
+  const psql = dependencies.psql ?? ((query) => runCatalogueSql(query, databaseUrl));
   const fetchImpl = dependencies.fetchImpl ?? globalThis.fetch;
 
   const recordedVersions = parseJson(await psql(

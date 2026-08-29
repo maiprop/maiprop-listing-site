@@ -583,8 +583,11 @@ fi
 [ "$2" = "--no-psqlrc" ]
 [ "$3" = "--set" ]
 [ "$4" = "ON_ERROR_STOP=1" ]
-[ "$5" = "-qAtc" ]
-[ "$6" = "SELECT 1" ]
+[ "$5" = "-qAt" ]
+[ "$6" = "--command" ]
+[ "$7" = "SET ROLE postgres" ]
+[ "$8" = "--command" ]
+[ "$9" = "SELECT current_user = 'postgres'" ]
 [ "\${PGCONNECT_TIMEOUT:-}" = "4" ]
 node --input-type=module -e '
   const url = new URL(process.env.TARGET_DB_URL);
@@ -598,7 +601,7 @@ attempts=$((attempts + 1))
 printf '%s' "$attempts" > "$TEST_READINESS_ATTEMPTS"
 if [ "\${TEST_PSQL_HANG:-}" = "1" ]; then exec /bin/sleep 30; fi
 if [ "$attempts" -lt 3 ]; then exit 2; fi
-printf '1\n'
+if [ "\${TEST_PSQL_IDENTITY:-true}" = "true" ]; then printf 't\n'; else printf 'f\n'; fi
 `);
     writeFileSync(fakeSleep, `#!/usr/bin/env bash
 set -euo pipefail
@@ -668,6 +671,7 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
           "TEST_ACCESS_TOKEN",
           "TEST_FAKE_BIN/p",
           "TEST_PHASE_RESULT/p",
+          "TEST_PSQL_IDENTITY",
           "TEST_PSQL_HANG",
           "TEST_READINESS_ATTEMPTS/p",
           "TEST_PHASE_SCRIPT/p",
@@ -702,6 +706,13 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
       notReadyOutput.split(/\r?\n/).filter((line) => !line.startsWith("::add-mask::")).join("\n"),
       new RegExp(password),
     );
+
+    rmSync(readinessAttempts);
+    const wrongIdentity = runWrapper({ TEST_PSQL_IDENTITY: "false" });
+    assert.equal(wrongIdentity.status, 1);
+    assert.equal(existsSync(phaseResult), false, "the database phase rejects a non-postgres effective role");
+    assert.equal(readFileSync(readinessAttempts, "utf8"), "4");
+    assert.doesNotMatch(`${wrongIdentity.stdout}${wrongIdentity.stderr}`, new RegExp(accessToken));
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

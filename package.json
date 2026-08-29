@@ -96,7 +96,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:catalogue-hotfix": "node --test scripts/catalogue-hotfix-workflow-helpers.test.mjs scripts/catalogue-performance-hotfix-workflow.test.mjs",
+    "test:catalogue-hotfix": "node --test scripts/catalogue-hotfix-behavioral-probe.test.mjs scripts/catalogue-hotfix-workflow-helpers.test.mjs scripts/catalogue-performance-hotfix-workflow.test.mjs",
     "test:coverage": "node scripts/run-vitest-coverage.mjs",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
