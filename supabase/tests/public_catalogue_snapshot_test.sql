@@ -461,7 +461,7 @@ SELECT throws_ok(
   'permission denied for function publish_public_catalogue',
   'anon is actually denied when invoking the publisher'
 );
-RESET ROLE;
+SET LOCAL ROLE postgres;
 
 SET LOCAL ROLE authenticated;
 SELECT throws_ok(
@@ -470,14 +470,14 @@ SELECT throws_ok(
   'permission denied for function publish_public_catalogue',
   'authenticated is actually denied when invoking the publisher'
 );
-RESET ROLE;
+SET LOCAL ROLE postgres;
 
 SET LOCAL ROLE service_role;
 SELECT lives_ok(
   $$SELECT * FROM public.publish_public_catalogue()$$,
   'service role can actually publish the current catalogue'
 );
-RESET ROLE;
+SET LOCAL ROLE postgres;
 
 SELECT is(
   (SELECT count(*)::integer FROM private.public_catalogue_current),
@@ -699,7 +699,7 @@ SELECT throws_ok(
   'public_catalogue_invalid_limit',
   'anon cannot bypass the catalogue response cap with a null limit'
 );
-RESET ROLE;
+SET LOCAL ROLE postgres;
 
 SET LOCAL ROLE authenticated;
 SELECT lives_ok(
@@ -712,7 +712,7 @@ SELECT lives_ok(
   $$,
   'authenticated can actually execute the typed catalogue reader'
 );
-RESET ROLE;
+SET LOCAL ROLE postgres;
 
 SELECT lives_ok(
   $$
@@ -813,7 +813,7 @@ SELECT throws_ok(
   'public_catalogue_duplicate_os_tag',
   'the publisher rejects duplicate OS tags within one publication'
 );
-RESET ROLE;
+SET LOCAL ROLE postgres;
 
 SET LOCAL session_replication_role = replica;
 DELETE FROM public.listings
@@ -833,7 +833,7 @@ SELECT lives_ok(
   $$SELECT * FROM public.publish_public_catalogue()$$,
   'a later service publication writes the changed delta'
 );
-RESET ROLE;
+SET LOCAL ROLE postgres;
 
 SELECT is(
   (
