@@ -8,6 +8,7 @@ import * as workflowHelpers from "./catalogue-hotfix-workflow-helpers.mjs";
 import {
   artifactPathsForTarget,
   assertLatencyEvidencePasses,
+  buildTemporaryDatabaseCredential,
   buildCronProof,
   buildLatencyEvidence,
   buildReleaseSummary,
@@ -92,6 +93,296 @@ test("database URL normalization CLI masks and persists only the normalized job 
     assert.equal(result.stderr, "");
     assert.equal(result.stdout, `::add-mask::${normalized}\n`);
     assert.equal(readFileSync(envPath, "utf8"), `TARGET_DB_URL=${normalized}\n`);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("temporary database credentials preserve the exact target and assume postgres", () => {
+  const response = { role: "cli_login_01234567", password: "temporary:p@ss", ttl_seconds: 3600 };
+  const direct = buildTemporaryDatabaseCredential({
+    kind: "staging",
+    ref,
+    databaseUrl: valid.databaseUrl,
+    response,
+  });
+  const pooler = buildTemporaryDatabaseCredential({
+    kind: "staging",
+    ref,
+    databaseUrl: `postgresql://postgres.${ref}:old@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require`,
+    response,
+  });
+  const directUrl = new URL(direct.databaseUrl);
+  const poolerUrl = new URL(pooler.databaseUrl);
+
+  assert.equal(decodeURIComponent(directUrl.username), response.role);
+  assert.equal(decodeURIComponent(poolerUrl.username), `${response.role}.${ref}`);
+  for (const [url, host] of [
+    [directUrl, `db.${ref}.supabase.co`],
+    [poolerUrl, "aws-0-eu-central-1.pooler.supabase.com"],
+  ]) {
+    assert.equal(url.hostname, host);
+    assert.equal(url.pathname, "/postgres");
+    assert.equal(url.searchParams.get("sslmode"), "require");
+    assert.equal(url.searchParams.get("options"), "-c role=postgres");
+    assert.equal(decodeURIComponent(url.password), response.password);
+  }
+  assert.equal(direct.role, response.role);
+  assert.equal(direct.ttlSeconds, 3600);
+  assert.match(direct.databaseUrl, /options=-c%20role%3Dpostgres/);
+  assert.doesNotMatch(direct.databaseUrl, /options=-c\+role/);
+});
+
+test("temporary database credentials reject unsafe responses and target drift", () => {
+  const response = { role: "cli_login_01234567", password: "temporary", ttl_seconds: 3600 };
+  const input = { kind: "staging", ref, databaseUrl: valid.databaseUrl, response };
+  for (const changed of [
+    { response: { ...response, ttl_seconds: 3599 } },
+    { response: { ...response, extra: true } },
+    { response: { ...response, role: "postgres" } },
+    { response: { ...response, role: "cli\nlogin" } },
+    { response: { ...response, password: "" } },
+    { databaseUrl: `postgresql://postgres:old@db.qvvicunqcrwpioqnvzxf.supabase.co:5432/postgres?sslmode=require` },
+    { databaseUrl: `postgresql://postgres:old@db.${ref}.supabase.co:5432/postgres?sslmode=require&options=-c+statement_timeout%3D0` },
+    { kind: "production" },
+  ]) {
+    assert.throws(() => buildTemporaryDatabaseCredential({ ...input, ...changed }));
+  }
+  assert.doesNotThrow(() => buildTemporaryDatabaseCredential({
+    kind: "production",
+    ref: "qvvicunqcrwpioqnvzxf",
+    databaseUrl: "postgresql://postgres:old@db.qvvicunqcrwpioqnvzxf.supabase.co:5432/postgres?sslmode=require",
+    response,
+  }));
+});
+
+const forbiddenLibpqConnectionParameters = [
+  "host=attacker.example",
+  "hostaddr=127.0.0.1",
+  "port=6543",
+  "user=postgres",
+  "password=override",
+  "dbname=template1",
+  "service=attacker",
+  "servicefile=%2Ftmp%2Fservice.conf",
+  "target_session_attrs=read-write",
+  "connect_timeout=10",
+  "unknown_key=value",
+  "sslmode=require&sslmode=require",
+  "options=-c%20role%3Dpostgres",
+];
+
+test("database credential builder rejects every preexisting libpq authority override", () => {
+  const response = { role: "cli_login_01234567", password: "temporary", ttl_seconds: 3600 };
+  for (const parameter of forbiddenLibpqConnectionParameters) {
+    assert.throws(() => buildTemporaryDatabaseCredential({
+      kind: "staging",
+      ref,
+      databaseUrl: `${valid.databaseUrl}&${parameter}`,
+      response,
+    }), /database|Supabase target/i, parameter);
+  }
+});
+
+test("target validator rejects libpq authority overrides for stored and temporary logins", () => {
+  const role = "cli_login_01234567";
+  const temporaryBase = `postgresql://${role}:temporary@db.${ref}.supabase.co:5432/postgres?sslmode=require&options=-c%20role%3Dpostgres`;
+  for (const parameter of forbiddenLibpqConnectionParameters) {
+    assert.throws(() => validateTarget({
+      ...valid,
+      databaseUrl: `${valid.databaseUrl}&${parameter}`,
+    }), /database URL/i, `stored: ${parameter}`);
+    assert.throws(() => validateTarget({
+      ...valid,
+      ephemeralRole: role,
+      databaseUrl: `${temporaryBase}&${parameter}`,
+    }), /database URL/i, `temporary: ${parameter}`);
+  }
+});
+
+test("database workflow CLIs reject authority overrides without persisting derived state", () => {
+  const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-db-authority-"));
+  const responsePath = join(directory, "response.json");
+  const envPath = join(directory, "github-env");
+  writeFileSync(responsePath, JSON.stringify({
+    role: "cli_login_01234567",
+    password: "temporary",
+    ttl_seconds: 3600,
+  }));
+  try {
+    const commonEnv = {
+      ...process.env,
+      GITHUB_ENV: envPath,
+      TARGET_KIND: "staging",
+      TARGET_PROJECT_REF: ref,
+      TARGET_API_URL: valid.apiUrl,
+      TARGET_ANON_KEY: valid.key,
+      TARGET_DB_URL: `${valid.databaseUrl}&hostaddr=127.0.0.1`,
+    };
+    const mint = spawnSync(process.execPath, [
+      "scripts/catalogue-hotfix-workflow-helpers.mjs",
+      "write-temporary-db-env",
+      responsePath,
+    ], { cwd: process.cwd(), encoding: "utf8", env: commonEnv });
+    assert.equal(mint.status, 1);
+    assert.equal(mint.stdout, "");
+    assert.equal(existsSync(envPath), false);
+
+    const validate = spawnSync(process.execPath, [
+      "scripts/catalogue-hotfix-workflow-helpers.mjs",
+      "validate-target",
+    ], { cwd: process.cwd(), encoding: "utf8", env: commonEnv });
+    assert.equal(validate.status, 1);
+    assert.equal(validate.stdout, "");
+    assert.equal(existsSync(envPath), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("temporary database credential CLI masks before persisting the ephemeral values", () => {
+  const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-db-login-"));
+  const responsePath = join(directory, "response.json");
+  const envPath = join(directory, "github-env");
+  const response = { role: "cli_login_01234567", password: "temporary-secret", ttl_seconds: 7200 };
+  writeFileSync(responsePath, JSON.stringify(response));
+  try {
+    const result = spawnSync(process.execPath, [
+      "scripts/catalogue-hotfix-workflow-helpers.mjs",
+      "write-temporary-db-env",
+      responsePath,
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_ENV: envPath,
+        TARGET_KIND: "staging",
+        TARGET_PROJECT_REF: ref,
+        TARGET_DB_URL: valid.databaseUrl,
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const lines = result.stdout.trim().split("\n");
+    assert.equal(lines.length, 3);
+    assert.equal(lines[0], `::add-mask::${response.role}`);
+    assert.equal(lines[1], `::add-mask::${response.password}`);
+    assert.match(lines[2], /^::add-mask::postgresql:/);
+    const persisted = readFileSync(envPath, "utf8");
+    assert.match(persisted, /^TARGET_DB_URL=postgresql:/m);
+    assert.match(persisted, new RegExp(`^TARGET_DB_EPHEMERAL_ROLE=${response.role}$`, "m"));
+    assert.doesNotMatch(result.stderr, /temporary-secret|cli_login/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("temporary database login shell uses one exact private bounded request and fails closed", () => {
+  const directory = mkdtempSync(join(tmpdir(), "catalogue-hotfix-db-login-shell-"));
+  const fakeBin = join(directory, "bin");
+  const fakeCurl = join(fakeBin, "curl");
+  const runnerTemp = join(directory, "runner-temp");
+  const responsePath = join(directory, "response.json");
+  const envPath = join(directory, "github-env");
+  const resultPath = join(directory, "curl-result");
+  const role = "cli_login_01234567";
+  const password = "temporary-shell-secret";
+  const accessToken = "management-token-never-log";
+  try {
+    mkdirSync(fakeBin);
+    mkdirSync(runnerTemp);
+    writeFileSync(fakeCurl, `#!/usr/bin/env bash
+set -euo pipefail
+method=""; output=""; data=""; url=""; auth=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --request) shift; method="$1" ;;
+    -o) shift; output="$1" ;;
+    --data) shift; data="$1" ;;
+    -H) shift; if [ "$1" = "Authorization: Bearer $TEST_ACCESS_TOKEN" ]; then auth=true; fi ;;
+    https://*) url="$1" ;;
+  esac
+  shift
+done
+[ "$method" = POST ]
+[ "$data" = '{"read_only":false}' ]
+[ "$url" = "$TEST_EXPECTED_ENDPOINT" ]
+[ "$auth" = true ]
+cp "$TEST_RESPONSE" "$output"
+printf '%s' ok > "$TEST_RESULT"
+printf '%s' "$TEST_STATUS"
+`);
+    chmodSync(fakeCurl, 0o700);
+    const bashExecutable = spawnSync("where.exe", ["bash"], { encoding: "utf8" })
+      .stdout.trim().split(/\r?\n/)[0];
+    const run = ({ status, response }) => {
+      writeFileSync(responsePath, typeof response === "string" ? response : JSON.stringify(response));
+      rmSync(envPath, { force: true });
+      rmSync(resultPath, { force: true });
+      const result = spawnSync(bashExecutable, [
+        "-c",
+        'export PATH="$TEST_FAKE_BIN:$PATH"; exec bash "$TEST_LOGIN_SCRIPT"',
+      ], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          GITHUB_ENV: envPath,
+          RUNNER_TEMP: runnerTemp,
+          SUPABASE_ACCESS_TOKEN: accessToken,
+          TARGET_KIND: "staging",
+          TARGET_PROJECT_REF: ref,
+          TARGET_DB_URL: valid.databaseUrl,
+          TEST_ACCESS_TOKEN: accessToken,
+          TEST_EXPECTED_ENDPOINT: `https://api.supabase.com/v1/projects/${ref}/cli/login-role`,
+          TEST_FAKE_BIN: fakeBin,
+          TEST_LOGIN_SCRIPT: join(process.cwd(), "scripts/catalogue-hotfix-database-login.sh"),
+          TEST_RESPONSE: responsePath,
+          TEST_RESULT: resultPath,
+          TEST_STATUS: status,
+          WSLENV: [
+            process.env.WSLENV,
+            "GITHUB_ENV/p",
+            "RUNNER_TEMP/p",
+            "SUPABASE_ACCESS_TOKEN",
+            "TARGET_KIND",
+            "TARGET_PROJECT_REF",
+            "TARGET_DB_URL",
+            "TEST_ACCESS_TOKEN",
+            "TEST_EXPECTED_ENDPOINT",
+            "TEST_FAKE_BIN/p",
+            "TEST_LOGIN_SCRIPT/p",
+            "TEST_RESPONSE/p",
+            "TEST_RESULT/p",
+            "TEST_STATUS",
+          ].filter(Boolean).join(":"),
+        },
+      });
+      assert.equal(readFileSync(resultPath, "utf8"), "ok");
+      assert.equal(readdirSync(runnerTemp).length, 0, "private response is removed on every exit");
+      assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(accessToken));
+      return result;
+    };
+
+    const success = run({
+      status: "201",
+      response: { role, password, ttl_seconds: 7200 },
+    });
+    assert.equal(success.status, 0, success.stderr);
+    assert.equal(success.stderr, "");
+    assert.ok(success.stdout.trim().split(/\r?\n/).every((line) => line.startsWith("::add-mask::")));
+    assert.match(readFileSync(envPath, "utf8"), new RegExp(`^TARGET_DB_EPHEMERAL_ROLE=${role}$`, "m"));
+
+    for (const scenario of [
+      { status: "401", response: { private: "body-must-not-log" } },
+      { status: "201", response: { role, password, ttl_seconds: 60 } },
+      { status: "201", response: "malformed-private-body" },
+    ]) {
+      const rejected = run(scenario);
+      assert.equal(rejected.status, 1);
+      assert.equal(existsSync(envPath), false);
+      assert.doesNotMatch(`${rejected.stdout}${rejected.stderr}`, /body-must-not-log|malformed-private-body|temporary-shell-secret/);
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

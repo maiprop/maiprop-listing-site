@@ -101,6 +101,12 @@ jobs:
           readiness_status="000"
           if ! readiness_status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/auth/v1/settings" -H "Accept: application/json" -H "apikey: $TARGET_ANON_KEY")"; then readiness_status="000"; fi
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-api-readiness "$readiness_status"
+      - name: Mint temporary staging database login
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: bash scripts/catalogue-hotfix-database-login.sh
+      - name: Validate temporary staging database binding
+        run: node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
       - name: Capture manifest-bound frontend marker for staging evidence
         run: |
           set -euo pipefail
@@ -217,6 +223,12 @@ jobs:
           readiness_status="000"
           if ! readiness_status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/auth/v1/settings" -H "Accept: application/json" -H "apikey: $TARGET_ANON_KEY")"; then readiness_status="000"; fi
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-api-readiness "$readiness_status"
+      - name: Mint temporary production database login
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: bash scripts/catalogue-hotfix-database-login.sh
+      - name: Validate temporary production database binding
+        run: node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
       - name: Capture fixed live frontend marker
         run: |
           set -euo pipefail

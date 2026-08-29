@@ -476,11 +476,91 @@ export function normalizeDatabaseUrlTls(databaseUrl) {
   return parsed.toString();
 }
 
-export function validateTarget({ kind, ref, apiUrl, databaseUrl, key }) {
+const TEMPORARY_DATABASE_ROLE = /^[A-Za-z_][A-Za-z0-9_-]{0,62}$/;
+const FORBIDDEN_TEMPORARY_DATABASE_ROLES = new Set([
+  "anon",
+  "authenticated",
+  "postgres",
+  "service_role",
+  "supabase_admin",
+]);
+const MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS = 3600;
+
+function validateTemporaryDatabaseRole(role) {
+  if (typeof role !== "string" || !TEMPORARY_DATABASE_ROLE.test(role) ||
+      FORBIDDEN_TEMPORARY_DATABASE_ROLES.has(role.toLowerCase())) {
+    fail("Temporary database login role is invalid or privileged.");
+  }
+  return role;
+}
+
+function expectedProjectRef(kind) {
+  if (kind === "staging") return STAGING_REF;
+  if (kind === "production") return PRODUCTION_REF;
+  fail("Target kind is not recognized.");
+}
+
+function classifyDatabaseEndpoint(db, ref, expectedRole = null) {
+  const username = decodeURIComponent(db.username);
+  const directRole = expectedRole ?? "postgres";
+  const poolerRole = expectedRole ? `${expectedRole}.${ref}` : `postgres.${ref}`;
+  const direct = db.hostname === `db.${ref}.supabase.co` &&
+    username === directRole && db.port === "5432";
+  const pooler = /^(?:[a-z0-9-]+\.)+pooler\.supabase\.com$/.test(db.hostname) &&
+    username === poolerRole && ["5432", "6543"].includes(db.port);
+  return { direct, pooler };
+}
+
+function validateDatabaseSearchParameters(db, temporary) {
+  const expectedKeys = temporary ? ["options", "sslmode"] : ["sslmode"];
+  const actualKeys = [...db.searchParams.keys()].sort();
+  return JSON.stringify(actualKeys) === JSON.stringify(expectedKeys) &&
+    db.searchParams.getAll("sslmode").length === 1 &&
+    db.searchParams.get("sslmode") === "require" &&
+    (!temporary || (
+      db.searchParams.getAll("options").length === 1 &&
+      db.searchParams.get("options") === "-c role=postgres"
+    ));
+}
+
+export function buildTemporaryDatabaseCredential({ kind, ref, databaseUrl, response }) {
+  if (ref !== expectedProjectRef(kind)) {
+    fail("Temporary database login target is not manifest-bound.");
+  }
+  assertExactKeys(response, ["role", "password", "ttl_seconds"], "Temporary database login response");
+  const role = validateTemporaryDatabaseRole(response?.role);
+  if (typeof response.password !== "string" || !response.password ||
+      response.password.length > 4096 || /[\0\r\n]/.test(response.password)) {
+    fail("Temporary database login password is invalid.");
+  }
+  if (!Number.isSafeInteger(response.ttl_seconds) ||
+      response.ttl_seconds < MINIMUM_TEMPORARY_DATABASE_TTL_SECONDS) {
+    fail("Temporary database login TTL is too short for the bounded deployment job.");
+  }
+
+  let db;
+  try {
+    db = new URL(databaseUrl);
+  } catch {
+    fail("Temporary database login cannot replace an invalid database URL.");
+  }
+  const endpoint = classifyDatabaseEndpoint(db, ref);
+  if (!["postgres:", "postgresql:"].includes(db.protocol) ||
+      db.pathname !== "/postgres" || !db.password ||
+      !(endpoint.direct || endpoint.pooler) ||
+      !validateDatabaseSearchParameters(db, false) || db.hash) {
+    fail("Temporary database login cannot replace a non-exact Supabase target.");
+  }
+
+  db.username = endpoint.pooler ? `${role}.${ref}` : role;
+  db.password = response.password;
+  db.search = `${db.search}${db.search ? "&" : "?"}options=-c%20role%3Dpostgres`;
+  return { databaseUrl: db.toString(), role, ttlSeconds: response.ttl_seconds };
+}
+
+export function validateTarget({ kind, ref, apiUrl, databaseUrl, key, ephemeralRole = null }) {
   if (!ref || !apiUrl || !databaseUrl || !key) fail("Target credentials are incomplete.");
-  if (!["staging", "production"].includes(kind)) fail("Target kind is not recognized.");
-  if ((kind === "staging" && ref !== STAGING_REF) ||
-      (kind === "production" && ref !== PRODUCTION_REF)) {
+  if (ref !== expectedProjectRef(kind)) {
     fail("Target kind does not match the manifest-bound project ref.");
   }
   const api = new URL(apiUrl);
@@ -489,13 +569,13 @@ export function validateTarget({ kind, ref, apiUrl, databaseUrl, key }) {
     fail("API URL is not the exact HTTPS project origin.");
   }
   const db = new URL(databaseUrl);
-  const username = decodeURIComponent(db.username);
-  const direct = db.hostname === `db.${ref}.supabase.co` && username === "postgres" && db.port === "5432";
-  const pooler = /^(?:[a-z0-9-]+\.)+pooler\.supabase\.com$/.test(db.hostname) &&
-    username === `postgres.${ref}` && ["5432", "6543"].includes(db.port);
+  const boundRole = ephemeralRole === null || ephemeralRole === undefined || ephemeralRole === ""
+    ? null
+    : validateTemporaryDatabaseRole(ephemeralRole);
+  const { direct, pooler } = classifyDatabaseEndpoint(db, ref, boundRole);
   if (!['postgres:', 'postgresql:'].includes(db.protocol) || db.pathname !== "/postgres" ||
-      !db.password || !(direct || pooler) || db.searchParams.getAll("sslmode").length !== 1 ||
-      db.searchParams.get("sslmode") !== "require") {
+      !db.password || !(direct || pooler) ||
+      !validateDatabaseSearchParameters(db, Boolean(boundRole))) {
     fail("Database URL is not an exact TLS-required Supabase target.");
   }
   validateKey(key, ref);
@@ -861,6 +941,28 @@ function main() {
     appendFileSync(envPath, `TARGET_DB_URL=${normalized}\n`, "utf8");
     return;
   }
+  if (command === "write-temporary-db-env") {
+    const envPath = process.env.GITHUB_ENV;
+    if (!envPath) fail("GitHub environment file is unavailable.");
+    let response;
+    try {
+      response = JSON.parse(readFileSync(args[0], "utf8"));
+    } catch {
+      fail("Could not parse the temporary database login response.");
+    }
+    const temporary = buildTemporaryDatabaseCredential({
+      kind: process.env.TARGET_KIND,
+      ref: process.env.TARGET_PROJECT_REF,
+      databaseUrl: process.env.TARGET_DB_URL,
+      response,
+    });
+    process.stdout.write(`::add-mask::${temporary.role}\n`);
+    process.stdout.write(`::add-mask::${response.password}\n`);
+    process.stdout.write(`::add-mask::${temporary.databaseUrl}\n`);
+    appendFileSync(envPath, `TARGET_DB_URL=${temporary.databaseUrl}\n`, "utf8");
+    appendFileSync(envPath, `TARGET_DB_EPHEMERAL_ROLE=${temporary.role}\n`, "utf8");
+    return;
+  }
   if (command === "write-staging-public-key-candidates") {
     if (process.env.TARGET_KIND !== "staging" || process.env.TARGET_PROJECT_REF !== STAGING_REF) {
       fail("Staging public API key environment is not exact.");
@@ -947,7 +1049,7 @@ function main() {
     return;
   }
   if (command === "validate-target") {
-    validateTarget({ kind: process.env.TARGET_KIND, ref: process.env.TARGET_PROJECT_REF, apiUrl: process.env.TARGET_API_URL, databaseUrl: process.env.TARGET_DB_URL, key: process.env.TARGET_ANON_KEY });
+    validateTarget({ kind: process.env.TARGET_KIND, ref: process.env.TARGET_PROJECT_REF, apiUrl: process.env.TARGET_API_URL, databaseUrl: process.env.TARGET_DB_URL, key: process.env.TARGET_ANON_KEY, ephemeralRole: process.env.TARGET_DB_EPHEMERAL_ROLE });
     return;
   }
   if (command === "validate-api-readiness") {
@@ -1027,7 +1129,7 @@ function main() {
     }
     return;
   }
-  fail("Usage: normalize-db-url-env | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <publishable-attempts> <legacy-anon-status> <legacy-anon-attempts> | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-static-marker-evidence <expected-sha> <marker> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
+  fail("Usage: normalize-db-url-env | write-temporary-db-env <response> | write-staging-public-key-candidates <response> <candidates> | select-live-staging-public-key-env <candidates> <publishable-status> <publishable-attempts> <legacy-anon-status> <legacy-anon-attempts> | validate-target | validate-api-readiness <status> | validate-dry-run <contract> <history> <output> <evidence> | parse-cache-headers <headers> | inspect-public-body <body> | cron-proof <baseline> <current> <elapsed> <evidence> | summarize-samples <target> <contract> <samples> <evidence> | write-static-marker-evidence <expected-sha> <marker> <evidence> | write-summary <target> <release-sha> <contract> <marker> <latency> <summary> | validate-artifacts <target>");
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-workflow-helpers.mjs")) {
