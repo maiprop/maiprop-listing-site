@@ -129,6 +129,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   probeScriptText = "",
   markerScriptText = "",
   databaseLoginScriptText = "",
+  databaseLoginWrapperText = "",
 }) {
   const violations = [];
   const inputs = parsed?.on?.workflow_dispatch?.inputs ?? {};
@@ -182,18 +183,20 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const productionIdentityIndex = productionSteps.findIndex(
     (step) => step?.name === "Revalidate production control and authorization immediately before mutation",
   );
-  const stagingLoginIndex = stagingSteps.findIndex(
-    (step) => step?.name === "Mint temporary staging database login",
-  );
-  const stagingBindingIndex = stagingSteps.findIndex(
-    (step) => step?.name === "Validate temporary staging database binding",
-  );
-  const productionLoginIndex = productionSteps.findIndex(
-    (step) => step?.name === "Mint temporary production database login",
-  );
-  const productionBindingIndex = productionSteps.findIndex(
-    (step) => step?.name === "Validate temporary production database binding",
-  );
+  const requiredDatabasePhases = {
+    staging: [
+      "Prove recorded staging database state",
+      "Apply only manifest-bound staging migrations",
+      "Verify staging database and pgTAP",
+      "Prove staging publish-public-catalogue cron liveness",
+    ],
+    production: [
+      "Prove recorded production database state",
+      "Apply only manifest-bound production migrations",
+      "Verify production database",
+      "Prove production publish-public-catalogue cron liveness",
+    ],
+  };
   const stagingMarker = stagingSteps.find(
     (step) => step?.name === "Capture manifest-bound frontend marker for staging evidence",
   );
@@ -258,6 +261,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const probeScript = String(probeScriptText);
   const markerScript = String(markerScriptText);
   const databaseLoginScript = String(databaseLoginScriptText);
+  const databaseLoginWrapper = String(databaseLoginWrapperText);
   const staticValidatorStart = support.indexOf("export function buildCatalogueHotfixStaticMarkerEvidence");
   const staticValidatorEnd = support.indexOf("\nfunction validateKey", staticValidatorStart);
   const staticValidator = staticValidatorStart >= 0 && staticValidatorEnd > staticValidatorStart
@@ -288,11 +292,11 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     resolverIndex < 0 || resolverIndex >= identityIndex ||
     Object.keys(resolver?.env ?? {}).join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
     resolver?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
-    tokenSteps.length !== 3 ||
+    tokenSteps.length !== 9 ||
     tokenSteps.map((step) => step?.name).join("\n") !== [
       "Resolve current staging public API key",
-      "Mint temporary staging database login",
-      "Mint temporary production database login",
+      ...requiredDatabasePhases.staging,
+      ...requiredDatabasePhases.production,
     ].join("\n") ||
     resolverMarkers.some((marker) => !resolverText.includes(marker)) ||
     resolverText.includes("TARGET_API_URL") ||
@@ -315,10 +319,6 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     violations.push("catalogue hotfix staging public key resolution is not isolated and fail closed");
   }
 
-  const loginSteps = [
-    [stagingSteps[stagingLoginIndex], stagingSteps[stagingBindingIndex]],
-    [productionSteps[productionLoginIndex], productionSteps[productionBindingIndex]],
-  ];
   const databaseLoginMarkers = [
     "staging:xsiehskfgeoqyazcgauv)",
     "production:qvvicunqcrwpioqnvzxf)",
@@ -345,9 +345,9 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     'const expectedKeys = temporary ? ["options", "sslmode"] : ["sslmode"];',
     "const actualKeys = [...db.searchParams.keys()].sort();",
     "JSON.stringify(actualKeys) === JSON.stringify(expectedKeys)",
-    "const DATABASE_JOB_TIMEOUT_SECONDS = 45 * 60;",
-    "const DATABASE_CREDENTIAL_MARGIN_SECONDS = 5 * 60;",
-    "DATABASE_JOB_TIMEOUT_SECONDS + DATABASE_CREDENTIAL_MARGIN_SECONDS",
+    "const MAXIMUM_DATABASE_PHASE_SECONDS = 4 * 60;",
+    "const DATABASE_CREDENTIAL_MARGIN_SECONDS = 60;",
+    "MAXIMUM_DATABASE_PHASE_SECONDS + DATABASE_CREDENTIAL_MARGIN_SECONDS",
     "Temporary database login TTL accepted:",
     "`${role}.${ref}`",
     "-c role=postgres",
@@ -356,19 +356,109 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "::add-mask::${response.password}",
     "::add-mask::${temporary.databaseUrl}",
   ];
+  const databaseWrapperMarkers = [
+    "set +x",
+    "database_env=\"$(mktemp \"$RUNNER_TEMP/catalogue-hotfix-database-phase.",
+    "chmod 600 \"$database_env\"",
+    "trap 'rm -f -- \"$database_env\"' EXIT",
+    "GITHUB_ENV=\"$database_env\" node scripts/catalogue-hotfix-workflow-helpers.mjs normalize-db-url-env",
+    "GITHUB_ENV=\"$database_env\" bash scripts/catalogue-hotfix-database-login.sh",
+    "TARGET_DB_URL)",
+    "TARGET_DB_EPHEMERAL_ROLE)",
+    "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target",
+    '"$@"',
+  ];
+  const executableShellLines = (source) => String(source)
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      return trimmed && !trimmed.startsWith("#");
+    });
+  const databaseWrapperTokenScopeViolation = (() => {
+    const mintPattern = /^[ \t]*GITHUB_ENV="\$database_env" bash scripts\/catalogue-hotfix-database-login\.sh[ \t]*$/gm;
+    const unsetPattern = /^[ \t]*unset[ \t]+SUPABASE_ACCESS_TOKEN[ \t]*$/gm;
+    const validationPattern = /^[ \t]*node scripts\/catalogue-hotfix-workflow-helpers\.mjs validate-target[ \t]*$/gm;
+    const phasePattern = /^[ \t]*"\$@"[ \t]*$/gm;
+    const matches = (pattern) => [...databaseLoginWrapper.matchAll(pattern)];
+    const mint = matches(mintPattern);
+    const unset = matches(unsetPattern);
+    const validation = matches(validationPattern);
+    const phase = matches(phasePattern);
+    if ([mint, unset, validation, phase].some((items) => items.length !== 1)) {
+      return true;
+    }
+    const mintEnd = databaseLoginWrapper.indexOf("\n", mint[0].index) + 1;
+    const unsetEnd = databaseLoginWrapper.indexOf("\n", unset[0].index) + 1;
+    if (!(mint[0].index < unset[0].index &&
+        unset[0].index < validation[0].index &&
+        validation[0].index < phase[0].index) ||
+        mintEnd <= 0 || unsetEnd <= 0) {
+      return true;
+    }
+    if (executableShellLines(
+      databaseLoginWrapper.slice(mintEnd, unset[0].index),
+    ).length > 0) {
+      return true;
+    }
+    return executableShellLines(databaseLoginWrapper.slice(unsetEnd))
+      .some((line) => /\bSUPABASE_ACCESS_TOKEN\b/.test(line));
+  })();
+  const wrapperCommand = "bash scripts/catalogue-hotfix-with-database-login.sh bash -s";
+  const databaseCommandPattern = /(?:\bpsql\b|\bdb\s+push\b|catalogue-hotfix-behavioral-probe\.mjs\s+(?:recorded|postapply)\b)/;
+  const phaseProblems = [];
+  for (const [target, job] of Object.entries({ staging: jobs.staging, production: jobs.production })) {
+    const jobSteps = job?.steps ?? [];
+    const expectedDatabaseUrl = target === "staging"
+      ? "${{ secrets.SUPABASE_STAGING_DB_URL }}"
+      : "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}";
+    if (job?.["timeout-minutes"] !== 45 ||
+        Object.hasOwn(job?.env ?? {}, "TARGET_DB_URL") ||
+        Object.hasOwn(job?.env ?? {}, "TARGET_DB_EPHEMERAL_ROLE") ||
+        Object.hasOwn(job?.env ?? {}, "SUPABASE_ACCESS_TOKEN")) {
+      phaseProblems.push(`${target} job credential scope`);
+    }
+    if (jobSteps.some((step) => /Mint temporary .* database login|Validate temporary .* database binding/.test(step?.name ?? ""))) {
+      phaseProblems.push(`${target} job-wide login`);
+    }
+    for (const phaseName of requiredDatabasePhases[target]) {
+      const matches = jobSteps.filter((step) => step?.name === phaseName);
+      const phase = matches[0];
+      const run = String(phase?.run ?? "");
+      const wrapperCount = run.split(wrapperCommand).length - 1;
+      const envNames = Object.keys(phase?.env ?? {}).sort();
+      if (matches.length !== 1 ||
+          !Number.isInteger(phase?.["timeout-minutes"]) ||
+          phase["timeout-minutes"] < 1 || phase["timeout-minutes"] > 4 ||
+          envNames.join("\n") !== ["SUPABASE_ACCESS_TOKEN", "TARGET_DB_URL"].join("\n") ||
+          phase?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
+          phase?.env?.TARGET_DB_URL !== expectedDatabaseUrl ||
+          wrapperCount !== 1 || !run.includes("<<'DATABASE_PHASE'")) {
+        phaseProblems.push(`${target} ${phaseName}`);
+      }
+    }
+    for (const step of jobSteps) {
+      const run = String(step?.run ?? "");
+      const isDatabasePhase = requiredDatabasePhases[target].includes(step?.name);
+      if (databaseCommandPattern.test(run) && (!isDatabasePhase || !run.includes(wrapperCommand))) {
+        phaseProblems.push(`${target} raw database command in ${step?.name ?? "unnamed step"}`);
+      }
+      if (!isDatabasePhase && Object.hasOwn(step?.env ?? {}, "TARGET_DB_URL") &&
+          !String(step?.name ?? "").startsWith(`Revalidate ${target}`)) {
+        phaseProblems.push(`${target} database URL outside a database phase`);
+      }
+      if (!isDatabasePhase && /TARGET_DB_EPHEMERAL_ROLE|catalogue-hotfix-with-database-login/.test(run)) {
+        phaseProblems.push(`${target} temporary credential outside a database phase`);
+      }
+    }
+  }
   if (
-    jobs.staging?.["timeout-minutes"] !== 45 ||
-    jobs.production?.["timeout-minutes"] !== 45 ||
-    stagingLoginIndex !== identityIndex + 1 || stagingBindingIndex !== stagingLoginIndex + 1 ||
-    productionLoginIndex !== productionIdentityIndex + 1 || productionBindingIndex !== productionLoginIndex + 1 ||
-    loginSteps.some(([login, binding]) =>
-      Object.keys(login?.env ?? {}).join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
-      login?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
-      String(login?.run ?? "").trim() !== "bash scripts/catalogue-hotfix-database-login.sh" ||
-      String(binding?.run ?? "").trim() !== "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target"
-    ) ||
+    phaseProblems.length > 0 ||
     databaseLoginMarkers.some((marker) => !databaseLoginScript.includes(marker)) ||
     databaseSupportMarkers.some((marker) => !support.includes(marker)) ||
+    databaseWrapperMarkers.some((marker) => !databaseLoginWrapper.includes(marker)) ||
+    databaseWrapperTokenScopeViolation ||
+    /\beval\b|\bsource\b|(?:^|\s)\.\s/.test(databaseLoginWrapper) ||
+    String(text ?? "").includes("bash scripts/catalogue-hotfix-database-login.sh") ||
     /--retry|-sS|--show-error|--verbose|--trace|\bcat\b|\btee\b/.test(databaseLoginScript)
   ) {
     violations.push("catalogue hotfix temporary database logins are not isolated and fail closed");
@@ -848,6 +938,7 @@ export function scanWorkflows() {
       probeScriptText: read(join(root, "scripts/catalogue-hotfix-staging-key-probe.sh")),
       markerScriptText: read(join(root, "scripts/catalogue-hotfix-static-marker.sh")),
       databaseLoginScriptText: read(join(root, "scripts/catalogue-hotfix-database-login.sh")),
+      databaseLoginWrapperText: read(join(root, "scripts/catalogue-hotfix-with-database-login.sh")),
     })) {
       violations.push(`${catalogueHotfixWorkflow} ${violation}`);
     }

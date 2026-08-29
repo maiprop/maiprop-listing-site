@@ -38,6 +38,10 @@ describe("release safety inventory", () => {
       resolve(process.cwd(), "scripts/catalogue-hotfix-database-login.sh"),
       "utf8",
     );
+    const databaseLoginWrapperText = readFileSync(
+      resolve(process.cwd(), "scripts/catalogue-hotfix-with-database-login.sh"),
+      "utf8",
+    );
     const violations = (overrides = {}) => cataloguePerformanceHotfixWorkflowViolations({
       text,
       parsed,
@@ -45,6 +49,7 @@ describe("release safety inventory", () => {
       probeScriptText,
       markerScriptText,
       databaseLoginScriptText,
+      databaseLoginWrapperText,
       ...overrides,
     });
 
@@ -60,6 +65,75 @@ describe("release safety inventory", () => {
       unsafeTimeout.jobs[target]["timeout-minutes"] = timeout;
       expect(violations({ parsed: unsafeTimeout })).not.toEqual([]);
     }
+    const requiredDatabasePhases = {
+      staging: [
+        "Prove recorded staging database state",
+        "Apply only manifest-bound staging migrations",
+        "Verify staging database and pgTAP",
+        "Prove staging publish-public-catalogue cron liveness",
+      ],
+      production: [
+        "Prove recorded production database state",
+        "Apply only manifest-bound production migrations",
+        "Verify production database",
+        "Prove production publish-public-catalogue cron liveness",
+      ],
+    };
+    for (const [target, names] of Object.entries(requiredDatabasePhases)) {
+      for (const name of names) {
+        const missingMint = structuredClone(parsed);
+        const phase = missingMint.jobs[target].steps.find((step) => step.name === name);
+        phase.run = phase.run.replace(
+          "bash scripts/catalogue-hotfix-with-database-login.sh bash -s",
+          "bash -s",
+        );
+        expect(violations({ parsed: missingMint })).not.toEqual([]);
+      }
+    }
+    const longDatabasePhase = structuredClone(parsed);
+    longDatabasePhase.jobs.staging.steps.find(
+      (step) => step.name === "Verify staging database and pgTAP",
+    )["timeout-minutes"] = 5;
+    expect(violations({ parsed: longDatabasePhase })).not.toEqual([]);
+    const rawDatabaseCommand = structuredClone(parsed);
+    rawDatabaseCommand.jobs.staging.steps.find(
+      (step) => step.name === "Sample staging legacy PostgREST directly",
+    ).run += '\npsql "$TARGET_DB_URL" -c "select 1"';
+    expect(violations({ parsed: rawDatabaseCommand })).not.toEqual([]);
+    const databaseUrlInHttp = structuredClone(parsed);
+    databaseUrlInHttp.jobs.production.steps.find(
+      (step) => step.name === "Sample production public API pairs",
+    ).env = { TARGET_DB_URL: "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}" };
+    expect(violations({ parsed: databaseUrlInHttp })).not.toEqual([]);
+    const oldJobWideLogin = structuredClone(parsed);
+    oldJobWideLogin.jobs.staging.steps.push({
+      name: "Mint temporary staging database login",
+      run: "bash scripts/catalogue-hotfix-database-login.sh",
+    });
+    expect(violations({ parsed: oldJobWideLogin })).not.toEqual([]);
+    expect(violations({ databaseLoginWrapperText: "" })).not.toEqual([]);
+    const postMintPrint = databaseLoginWrapperText.replace(
+      '\n"$@"',
+      '\nprintf \'%s\\n\' "$SUPABASE_ACCESS_TOKEN"\n"$@"',
+    );
+    expect(violations({ databaseLoginWrapperText: postMintPrint })).not.toEqual([]);
+    const missingTokenUnset = databaseLoginWrapperText.replace(
+      "unset SUPABASE_ACCESS_TOKEN\n",
+      "",
+    );
+    expect(violations({ databaseLoginWrapperText: missingTokenUnset })).not.toEqual([]);
+    const lateTokenUnset = databaseLoginWrapperText
+      .replace("unset SUPABASE_ACCESS_TOKEN\n", "")
+      .replace(
+        "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target\n",
+        "node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target\nunset SUPABASE_ACCESS_TOKEN\n",
+      );
+    expect(violations({ databaseLoginWrapperText: lateTokenUnset })).not.toEqual([]);
+    const postUnsetExport = databaseLoginWrapperText.replace(
+      '\n"$@"',
+      '\nexport SUPABASE_ACCESS_TOKEN\n"$@"',
+    );
+    expect(violations({ databaseLoginWrapperText: postUnsetExport })).not.toEqual([]);
     for (const unsafeText of [
       text.replaceAll('${TARGET_API_URL%/}/auth/v1/settings', '${TARGET_API_URL%/}/rest/v1/'),
       text.replace("--retry-max-time 90", ""),
@@ -113,13 +187,13 @@ describe("release safety inventory", () => {
     })).not.toEqual([]);
     expect(violations({
       supportText: supportText.replace(
-        "const DATABASE_JOB_TIMEOUT_SECONDS = 45 * 60;",
-        "const DATABASE_JOB_TIMEOUT_SECONDS = 46 * 60;",
+        "const MAXIMUM_DATABASE_PHASE_SECONDS = 4 * 60;",
+        "const MAXIMUM_DATABASE_PHASE_SECONDS = 5 * 60;",
       ),
     })).not.toEqual([]);
     expect(violations({
       supportText: supportText.replace(
-        "const DATABASE_CREDENTIAL_MARGIN_SECONDS = 5 * 60;",
+        "const DATABASE_CREDENTIAL_MARGIN_SECONDS = 60;",
         "const DATABASE_CREDENTIAL_MARGIN_SECONDS = 0;",
       ),
     })).not.toEqual([]);

@@ -53,7 +53,6 @@ jobs:
     env:
       TARGET_KIND: staging
       TARGET_PROJECT_REF: xsiehskfgeoqyazcgauv
-      TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
       TARGET_API_URL: ${{ secrets.STAGING_SUPABASE_URL }}
       STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
       PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
@@ -65,10 +64,6 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with: { node-version-file: .node-version, cache: npm }
       - run: npm ci --ignore-scripts --prefer-offline --no-audit
-      - name: Normalize staging database URL for required TLS
-        run: |
-          set -euo pipefail
-          node scripts/catalogue-hotfix-workflow-helpers.mjs normalize-db-url-env
       - name: Resolve current staging public API key
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -91,6 +86,7 @@ jobs:
       - name: Revalidate staging identity immediately before mutation
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
         run: |
           set -euo pipefail
           export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)" RELEASE_CURRENT_MAIN_SHA="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
@@ -101,12 +97,6 @@ jobs:
           readiness_status="000"
           if ! readiness_status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/auth/v1/settings" -H "Accept: application/json" -H "apikey: $TARGET_ANON_KEY")"; then readiness_status="000"; fi
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-api-readiness "$readiness_status"
-      - name: Mint temporary staging database login
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: bash scripts/catalogue-hotfix-database-login.sh
-      - name: Validate temporary staging database binding
-        run: node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
       - name: Capture manifest-bound frontend marker for staging evidence
         run: |
           set -euo pipefail
@@ -114,12 +104,25 @@ jobs:
           node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"
           fixed_sha="$(jq -r '.hotfix.livePagesSha' "$RUNNER_TEMP/catalogue-hotfix-contract.json")"
           bash scripts/catalogue-hotfix-static-marker.sh "$fixed_sha" evidence/staging-frontend-marker.json
-      - name: Refuse recorded hotfix drift before staging push
+      - name: Prove recorded staging database state
+        timeout-minutes: 4
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
         run: |
           set -euo pipefail
+          bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
+          set -euo pipefail
           node scripts/catalogue-hotfix-behavioral-probe.mjs recorded "$RUNNER_TEMP/recorded-database-contract.json"
+          DATABASE_PHASE
       - name: Apply only manifest-bound staging migrations
+        timeout-minutes: 4
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
         run: |
+          set -euo pipefail
+          bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
           set -euo pipefail
           umask 077
           node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"
@@ -131,12 +134,23 @@ jobs:
           ( cd "$work"; "$cli" db push --include-all --dry-run --db-url "$TARGET_DB_URL" > dry-run-output.txt 2>&1 )
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-dry-run "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$work/remote-numeric-history.txt" "$work/dry-run-output.txt" evidence/dry-run-pending.json
           ( cd "$work"; "$cli" db push --include-all --yes --db-url "$TARGET_DB_URL" > push-output.txt 2>&1 )
-      - name: Verify staging database, pgTAP, legacy PostgREST, and direct samples
+          DATABASE_PHASE
+      - name: Verify staging database and pgTAP
+        timeout-minutes: 4
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
         run: |
+          set -euo pipefail
+          bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
           set -euo pipefail
           node scripts/catalogue-hotfix-behavioral-probe.mjs postapply evidence/database-contract.json
           psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file supabase/tests/public_catalogue_snapshot_test.sql > "$RUNNER_TEMP/public_catalogue_snapshot_test.txt"
           node scripts/parse-tap-proof.mjs --file "$RUNNER_TEMP/public_catalogue_snapshot_test.txt" --expected-plan 90 > evidence/public-catalogue-pgtap-proof.json
+          DATABASE_PHASE
+      - name: Sample staging legacy PostgREST directly
+        run: |
+          set -euo pipefail
           api="${TARGET_API_URL%/}/rest/v1/rpc/get_public_listing_catalogue"
           samples="$RUNNER_TEMP/staging-http-samples.ndjson"; : > "$samples"
           for pair in $(seq 1 30); do
@@ -150,12 +164,19 @@ jobs:
           node scripts/catalogue-hotfix-workflow-helpers.mjs summarize-samples staging "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$samples" evidence/staging-http-latency.json || gate_status="$?"
           printf '%s\n' "$gate_status" > "$RUNNER_TEMP/staging-latency-gate-status"
       - name: Prove staging publish-public-catalogue cron liveness
+        timeout-minutes: 4
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
         run: |
+          set -euo pipefail
+          bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
           set -euo pipefail
           started="$(date +%s)"; state(){ psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc "WITH j AS (SELECT jobid,schedule,command,active FROM cron.job WHERE jobname='publish-public-catalogue'), r AS (SELECT runid,start_time,end_time FROM cron.job_run_details WHERE jobid=(SELECT jobid FROM j) AND status='succeeded' ORDER BY runid DESC LIMIT 20) SELECT json_build_object('schedule',(SELECT schedule FROM j),'command',(SELECT command FROM j),'active',(SELECT active FROM j),'successful_runs',(SELECT coalesce(json_agg(r),'[]'::json) FROM r),'publication_id',(SELECT publication_id FROM private.public_catalogue_current WHERE singleton))"; }
           baseline="$RUNNER_TEMP/staging-cron-baseline.json"; current="$RUNNER_TEMP/staging-cron-current.json"
           state > "$baseline"; ok=false
-          for n in $(seq 1 48); do state > "$current"; elapsed_seconds="$(( $(date +%s)-started ))"; if node scripts/catalogue-hotfix-workflow-helpers.mjs cron-proof "$baseline" "$current" "$elapsed_seconds" evidence/catalogue-cron-proof.json; then ok=true; break; fi; sleep 10; done; [ "$ok" = true ] || exit 1
+          for n in $(seq 1 17); do state > "$current"; elapsed_seconds="$(( $(date +%s)-started ))"; if node scripts/catalogue-hotfix-workflow-helpers.mjs cron-proof "$baseline" "$current" "$elapsed_seconds" evidence/catalogue-cron-proof.json; then ok=true; break; fi; sleep 10; done; [ "$ok" = true ] || exit 1
+          DATABASE_PHASE
       - name: Write and validate sanitized staging artifact allowlist
         run: |
           set -euo pipefail
@@ -185,7 +206,6 @@ jobs:
     env:
       TARGET_KIND: production
       TARGET_PROJECT_REF: qvvicunqcrwpioqnvzxf
-      TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
       TARGET_API_URL: ${{ secrets.VITE_SUPABASE_URL }}
       TARGET_ANON_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
       RELEASE_SHA: ${{ inputs.release_sha }}
@@ -195,13 +215,10 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with: { node-version-file: .node-version, cache: npm }
       - run: npm ci --ignore-scripts --prefer-offline --no-audit
-      - name: Normalize production database URL for required TLS
-        run: |
-          set -euo pipefail
-          node scripts/catalogue-hotfix-workflow-helpers.mjs normalize-db-url-env
       - name: Revalidate production control and authorization immediately before mutation
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
           RELEASE_AUTHORIZATION_ACTION: production-deploy
           RELEASE_STANDARD_CONFIRMATION: DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX
           RELEASE_SINGLE_ADMIN_BREAK_GLASS: ${{ inputs.single_admin_break_glass }}
@@ -223,39 +240,67 @@ jobs:
           readiness_status="000"
           if ! readiness_status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${TARGET_API_URL%/}/auth/v1/settings" -H "Accept: application/json" -H "apikey: $TARGET_ANON_KEY")"; then readiness_status="000"; fi
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-api-readiness "$readiness_status"
-      - name: Mint temporary production database login
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: bash scripts/catalogue-hotfix-database-login.sh
-      - name: Validate temporary production database binding
-        run: node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
       - name: Capture fixed live frontend marker
         run: |
           set -euo pipefail
           mkdir -p evidence; node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"
           fixed_sha="$(jq -r '.hotfix.livePagesSha' "$RUNNER_TEMP/catalogue-hotfix-contract.json")"
           bash scripts/catalogue-hotfix-static-marker.sh "$fixed_sha" evidence/production-frontend-marker.json
-      - name: Refuse recorded hotfix drift before production push
+      - name: Prove recorded production database state
+        timeout-minutes: 4
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
+          bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
+          set -euo pipefail
           node scripts/catalogue-hotfix-behavioral-probe.mjs recorded "$RUNNER_TEMP/recorded-database-contract.json"
+          DATABASE_PHASE
       - name: Apply only manifest-bound production migrations
+        timeout-minutes: 4
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
+          set -euo pipefail
+          bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
           set -euo pipefail
           # Only manifest versions 20260728123058 and 20260729120405 may become pending SQL.
           node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"; work="$RUNNER_TEMP/catalogue-hotfix-production"; cli="$GITHUB_WORKSPACE/node_modules/.bin/supabase"; rm -rf "$work"; mkdir -p "$work/supabase/migrations"
           printf '[api]\nenabled = false\n' > "$work/supabase/config.toml"; psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc 'SELECT version FROM supabase_migrations.schema_migrations ORDER BY version' > "$work/remote-numeric-history.txt"
           while IFS= read -r v; do [ -z "$v" ]&&continue; [[ "$v" =~ ^[0-9]+$ ]]||exit 1; jq -e --arg v "$v" '.hotfix.migrations[]|select(.version==$v)' "$RUNNER_TEMP/catalogue-hotfix-contract.json" >/dev/null || printf '%s\n' '-- remote numeric history placeholder; never pending SQL' > "$work/supabase/migrations/${v}_remote_history_placeholder.sql"; done < "$work/remote-numeric-history.txt"; jq -r '.hotfix.migrations[].path' "$RUNNER_TEMP/catalogue-hotfix-contract.json" | while IFS= read -r p; do case "$p" in supabase/migrations/*.sql)cp "$p" "$work/supabase/migrations/$(basename "$p")";;*)exit 1;;esac;done
           (cd "$work"; "$cli" db push --include-all --dry-run --db-url "$TARGET_DB_URL" > dry-run-output.txt 2>&1); node scripts/catalogue-hotfix-workflow-helpers.mjs validate-dry-run "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$work/remote-numeric-history.txt" "$work/dry-run-output.txt" evidence/dry-run-pending.json; (cd "$work"; "$cli" db push --include-all --yes --db-url "$TARGET_DB_URL" > push-output.txt 2>&1)
-      - name: Verify production legacy worker, cron, and public API pairs
+          DATABASE_PHASE
+      - name: Verify production database
+        timeout-minutes: 4
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
+          bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
+          set -euo pipefail
           node scripts/catalogue-hotfix-behavioral-probe.mjs postapply evidence/database-contract.json
+          DATABASE_PHASE
+      - name: Prove production publish-public-catalogue cron liveness
+        timeout-minutes: 4
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+        run: |
+          set -euo pipefail
+          bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
+          set -euo pipefail
           started="$(date +%s)"
           state(){ psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -Atc "WITH j AS (SELECT jobid,schedule,command,active FROM cron.job WHERE jobname='publish-public-catalogue'),r AS (SELECT runid,start_time,end_time FROM cron.job_run_details WHERE jobid=(SELECT jobid FROM j) AND status='succeeded' ORDER BY runid DESC LIMIT 20) SELECT json_build_object('schedule',(SELECT schedule FROM j),'command',(SELECT command FROM j),'active',(SELECT active FROM j),'successful_runs',(SELECT coalesce(json_agg(r),'[]'::json)FROM r),'publication_id',(SELECT publication_id FROM private.public_catalogue_current WHERE singleton))"; }
           baseline="$RUNNER_TEMP/production-cron-baseline.json"; current="$RUNNER_TEMP/production-cron-current.json"
           state > "$baseline"; ok=false
-          for n in $(seq 1 48); do state > "$current"; elapsed_seconds="$(( $(date +%s)-started ))"; if node scripts/catalogue-hotfix-workflow-helpers.mjs cron-proof "$baseline" "$current" "$elapsed_seconds" evidence/catalogue-cron-proof.json; then ok=true; break; fi; sleep 10; done; [ "$ok" = true ] || exit 1
+          for n in $(seq 1 17); do state > "$current"; elapsed_seconds="$(( $(date +%s)-started ))"; if node scripts/catalogue-hotfix-workflow-helpers.mjs cron-proof "$baseline" "$current" "$elapsed_seconds" evidence/catalogue-cron-proof.json; then ok=true; break; fi; sleep 10; done; [ "$ok" = true ] || exit 1
+          DATABASE_PHASE
+      - name: Sample production public API pairs
+        run: |
+          set -euo pipefail
           public_api="https://portal.maiprop.co/api/public/listings"; samples="$RUNNER_TEMP/production-http-samples.ndjson"; : > "$samples"
           run_bucket="$((GITHUB_RUN_ID % 36))"; sorts=(featured newest price-asc price-desc ai-score views); sort="${sorts[$((run_bucket / 6))]}"; page_start="$((301 + (run_bucket % 6) * 30))"
           for pair in $(seq 1 30); do
