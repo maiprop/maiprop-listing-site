@@ -27,6 +27,7 @@ describe("provider credential boundaries", () => {
       "Verify staging database and pgTAP",
       "Prove staging publish-public-catalogue cron liveness",
       "Prove recorded production database state",
+      "Measure production catalogue bootstrap source quality",
       "Prepare manifest-bound production migration dry-run",
       "Apply only manifest-bound production migrations",
       "Verify production database",
@@ -44,13 +45,13 @@ describe("provider credential boundaries", () => {
     expect(scoped[3].env).toEqual({
       SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
     });
-    for (const step of [scoped[6], scoped[7], scoped[9], scoped[10]]) {
+    for (const step of [scoped[6], scoped[7], scoped[8], scoped[10], scoped[11]]) {
       expect(step.env).toEqual({
         SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
         TARGET_DB_URL: "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
       });
     }
-    expect(scoped[8].env).toEqual({
+    expect(scoped[9].env).toEqual({
       SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
     });
   });

@@ -50,6 +50,10 @@ describe("release safety inventory", () => {
       resolve(process.cwd(), "scripts/catalogue-hotfix-linked-db-push.sh"),
       "utf8",
     );
+    const sourceQualityProbeText = readFileSync(
+      resolve(process.cwd(), "scripts/catalogue-hotfix-source-quality-probe.mjs"),
+      "utf8",
+    );
     const violations = (overrides = {}) => cataloguePerformanceHotfixWorkflowViolations({
       text,
       parsed,
@@ -60,6 +64,7 @@ describe("release safety inventory", () => {
       databaseLoginWrapperText,
       canonicalDatabaseUrlWrapperText,
       linkedDatabasePushText,
+      sourceQualityProbeText,
       ...overrides,
     });
 
@@ -84,6 +89,7 @@ describe("release safety inventory", () => {
       ],
       production: [
         "Prove recorded production database state",
+        "Measure production catalogue bootstrap source quality",
         "Prepare manifest-bound production migration dry-run",
         "Verify production database",
         "Prove production publish-public-catalogue cron liveness",
@@ -118,6 +124,11 @@ describe("release safety inventory", () => {
       (step) => step.name === "Sample staging legacy PostgREST directly",
     ).run += '\npsql "$TARGET_DB_URL" -c "select 1"';
     expect(violations({ parsed: rawDatabaseCommand })).not.toEqual([]);
+    const rawSourceQualityProbe = structuredClone(parsed);
+    rawSourceQualityProbe.jobs.production.steps.find(
+      (step) => step.name === "Sample production public API pairs",
+    ).run += "\nnode scripts/catalogue-hotfix-source-quality-probe.mjs";
+    expect(violations({ parsed: rawSourceQualityProbe })).not.toEqual([]);
     const rawRoleMarker = "--command 'SET ROLE postgres'";
     const rawRoleOccurrences = [...text.matchAll(new RegExp(rawRoleMarker, "g"))];
     expect(rawRoleOccurrences).toHaveLength(5);

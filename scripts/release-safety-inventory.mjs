@@ -132,6 +132,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   databaseLoginWrapperText = "",
   canonicalDatabaseUrlWrapperText = "",
   linkedDatabasePushText = "",
+  sourceQualityProbeText = "",
 }) {
   const violations = [];
   const inputs = parsed?.on?.workflow_dispatch?.inputs ?? {};
@@ -200,6 +201,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     ],
     production: [
       "Prove recorded production database state",
+      "Measure production catalogue bootstrap source quality",
       "Prepare manifest-bound production migration dry-run",
       "Verify production database",
       "Prove production publish-public-catalogue cron liveness",
@@ -212,12 +214,17 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const requiredDatabasePhases = Object.fromEntries(
     Object.keys(temporaryDatabasePhases).map((target) => [
       target,
-      [
-        temporaryDatabasePhases[target][0],
-        temporaryDatabasePhases[target][1],
+      target === "production"
+        ? [
+        ...temporaryDatabasePhases[target].slice(0, 3),
+        ...linkedMigrationPhases[target],
+        ...temporaryDatabasePhases[target].slice(3),
+        ]
+        : [
+        ...temporaryDatabasePhases[target].slice(0, 2),
         ...linkedMigrationPhases[target],
         ...temporaryDatabasePhases[target].slice(2),
-      ],
+        ],
     ]),
   );
   const stagingMarker = stagingSteps.find(
@@ -293,6 +300,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const databaseLoginWrapper = String(databaseLoginWrapperText);
   const canonicalDatabaseUrlWrapper = String(canonicalDatabaseUrlWrapperText);
   const linkedDatabasePush = String(linkedDatabasePushText);
+  const sourceQualityProbe = String(sourceQualityProbeText);
   const staticValidatorStart = support.indexOf("export function buildCatalogueHotfixStaticMarkerEvidence");
   const staticValidatorEnd = support.indexOf("\nfunction validateKey", staticValidatorStart);
   const staticValidator = staticValidatorStart >= 0 && staticValidatorEnd > staticValidatorStart
@@ -324,7 +332,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     resolverIndex >= stagingControlIndex || stagingControlIndex >= identityIndex ||
     Object.keys(resolver?.env ?? {}).join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
     resolver?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
-    tokenSteps.length !== 11 ||
+    tokenSteps.length !== 12 ||
     tokenSteps.map((step) => step?.name).join("\n") !== [
       "Resolve current staging public API key",
       ...requiredDatabasePhases.staging,
@@ -552,7 +560,17 @@ export function cataloguePerformanceHotfixWorkflowViolations({
       });
   });
   const wrapperCommand = "bash scripts/catalogue-hotfix-with-database-login.sh bash -s";
-  const databaseCommandPattern = /(?:\bpsql\b|\bdb\s+push\b|catalogue-hotfix-behavioral-probe\.mjs\s+(?:recorded|postapply)\b)/;
+  const databaseCommandPattern = /(?:\bpsql\b|\bdb\s+push\b|catalogue-hotfix-behavioral-probe\.mjs\s+(?:recorded|postapply)\b|catalogue-hotfix-source-quality-probe\.mjs\b)/;
+  const sourceQualityProbeMarkers = [
+    '"maiprop-catalogue-source-quality"',
+    "Object.keys(value).sort()",
+    "Number.isSafeInteger(value[field])",
+    "buildCatalogueSourceQualitySql",
+    "validateCatalogueSourceQuality",
+    "invalid_tag_rows",
+    "duplicate_placeholder_groups",
+    "duplicate_nonplaceholder_groups",
+  ];
   const phaseProblems = [];
   for (const [target, job] of Object.entries({ staging: jobs.staging, production: jobs.production })) {
     const jobSteps = job?.steps ?? [];
@@ -594,6 +612,13 @@ export function cataloguePerformanceHotfixWorkflowViolations({
            !run.includes('SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-linked-db-push.sh prepare') ||
            /db push .*--db-url/.test(run))) {
         phaseProblems.push(`${target} linked migration preparation`);
+      }
+      if (phaseName === "Measure production catalogue bootstrap source quality" && (
+        !run.includes('quality_json="$(node scripts/catalogue-hotfix-source-quality-probe.mjs)"') ||
+        !run.includes("::notice::Catalogue bootstrap source quality:") ||
+        /\bcat\b|\btee\b|--verbose|--trace|-sS/.test(run)
+      )) {
+        phaseProblems.push("production source-quality output contract");
       }
     }
     for (const phaseName of linkedMigrationPhases[target]) {
@@ -644,6 +669,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     databaseWrapperMarkers.some((marker) => !databaseLoginWrapper.includes(marker)) ||
     canonicalDatabaseUrlWrapperMarkers.some((marker) => !canonicalDatabaseUrlWrapper.includes(marker)) ||
     linkedDatabasePushMarkers.some((marker) => !linkedDatabasePush.includes(marker)) ||
+    sourceQualityProbeMarkers.some((marker) => !sourceQualityProbe.includes(marker)) ||
+    /process\.env\.(?!TARGET_DB_URL)|console\.|\bfetch\b|\bcat\b|\btee\b/.test(sourceQualityProbe) ||
     identityTexts.some((identityText, index) => identityText.trim() !== expectedIdentityRuns[index]) ||
     databaseWrapperTokenScopeViolation ||
     workflowTokenScopeViolation ||
@@ -1140,6 +1167,7 @@ export function scanWorkflows() {
       databaseLoginWrapperText: read(join(root, "scripts/catalogue-hotfix-with-database-login.sh")),
       canonicalDatabaseUrlWrapperText: read(join(root, "scripts/catalogue-hotfix-with-canonical-database-url.sh")),
       linkedDatabasePushText: read(join(root, "scripts/catalogue-hotfix-linked-db-push.sh")),
+      sourceQualityProbeText: read(join(root, "scripts/catalogue-hotfix-source-quality-probe.mjs")),
     })) {
       violations.push(`${catalogueHotfixWorkflow} ${violation}`);
     }

@@ -299,6 +299,21 @@ jobs:
           node scripts/catalogue-hotfix-behavioral-probe.mjs recorded "$RUNNER_TEMP/recorded-database-contract.json"
           DATABASE_PHASE
           unset management_token
+      - name: Measure production catalogue bootstrap source quality
+        timeout-minutes: 4
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+        run: |
+          set -euo pipefail
+          management_token="$SUPABASE_ACCESS_TOKEN"
+          unset SUPABASE_ACCESS_TOKEN
+          SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
+          set -euo pipefail
+          quality_json="$(node scripts/catalogue-hotfix-source-quality-probe.mjs)"
+          printf '::notice::Catalogue bootstrap source quality: %s\n' "$quality_json"
+          DATABASE_PHASE
+          unset management_token
       - name: Prepare manifest-bound production migration dry-run
         timeout-minutes: 4
         env:
