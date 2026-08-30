@@ -239,6 +239,14 @@ test("recorded-mode runner supports safe first-only recovery and rejects drift o
   );
   assert.equal(resumableContract.contract_level, "bridge_and_first");
 
+  const allThree = dependencies({ recordedVersions: [bridgeVersion, firstVersion, secondVersion] });
+  const fullContract = await runCatalogueBehavioralProbe(
+    { mode: "recorded", apiUrl, databaseUrl, key },
+    allThree,
+  );
+  assert.equal(fullContract.contract_level, "full");
+  assert.deepEqual(fullContract.recorded_versions, [bridgeVersion, firstVersion, secondVersion]);
+
   const postapplyPartial = dependencies({ recordedVersions: [firstVersion] });
   await assert.rejects(
     runCatalogueBehavioralProbe({ mode: "postapply", apiUrl, databaseUrl, key }, postapplyPartial),
