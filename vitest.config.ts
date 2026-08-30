@@ -36,6 +36,7 @@ export default defineConfig({
     ],
     exclude: [
       "scripts/catalogue-hotfix-behavioral-probe.test.mjs",
+      "scripts/catalogue-hotfix-source-quality-probe.test.mjs",
       "scripts/catalogue-hotfix-workflow-helpers.test.mjs",
       "scripts/catalogue-performance-hotfix-contract.test.mjs",
       "scripts/catalogue-performance-hotfix-workflow.test.mjs",

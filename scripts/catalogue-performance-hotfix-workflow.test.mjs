@@ -43,6 +43,7 @@ const temporaryDatabasePhases = {
   ],
   production: [
     "Prove recorded production database state",
+    "Measure production catalogue bootstrap source quality",
     "Prepare manifest-bound production migration dry-run",
     "Verify production database",
     "Prove production publish-public-catalogue cron liveness",
@@ -55,12 +56,17 @@ const linkedMigrationPhases = {
 const requiredDatabasePhases = Object.fromEntries(
   Object.keys(temporaryDatabasePhases).map((target) => [
     target,
-    [
-      temporaryDatabasePhases[target][0],
-      temporaryDatabasePhases[target][1],
+    target === "production"
+      ? [
+      ...temporaryDatabasePhases[target].slice(0, 3),
+      ...linkedMigrationPhases[target],
+      ...temporaryDatabasePhases[target].slice(3),
+      ]
+      : [
+      ...temporaryDatabasePhases[target].slice(0, 2),
       ...linkedMigrationPhases[target],
       ...temporaryDatabasePhases[target].slice(2),
-    ],
+      ],
   ]),
 );
 
@@ -184,6 +190,13 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     ...requiredDatabasePhases.staging,
     ...requiredDatabasePhases.production,
   ]);
+  const productionQualityStep = steps(production).find((step) =>
+    step.name === "Measure production catalogue bootstrap source quality"
+  );
+  assert.ok(productionQualityStep, "production measures aggregate-only bootstrap source quality");
+  assert.match(productionQualityStep.run, /catalogue-hotfix-source-quality-probe\.mjs/);
+  assert.match(productionQualityStep.run, /::notice::Catalogue bootstrap source quality:/);
+  assert.doesNotMatch(productionQualityStep.run, /\bcat\b|\btee\b|--verbose|--trace|-sS/);
   for (const [target, job] of Object.entries({ staging, production })) {
     const identityIndex = steps(job).findIndex((step) => new RegExp(`Revalidate ${target} identity immediately before mutation`).test(step.name ?? ""));
     assert.ok(identityIndex >= 0);
