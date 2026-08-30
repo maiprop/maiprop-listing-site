@@ -229,6 +229,18 @@ describe("materialized public catalogue snapshot migration", () => {
     expect(promotionGuard).toBeGreaterThan(plan);
   });
 
+  it("runs the lock-based OS identity repair in one explicit transaction", () => {
+    const transactionStart = osAuctionIdentityMigration.indexOf("BEGIN;");
+    const lock = osAuctionIdentityMigration.indexOf(
+      "LOCK TABLE public.listings IN ACCESS EXCLUSIVE MODE",
+    );
+    const transactionEnd = osAuctionIdentityMigration.lastIndexOf("COMMIT;");
+
+    expect(transactionStart).toBeGreaterThanOrEqual(0);
+    expect(lock).toBeGreaterThan(transactionStart);
+    expect(transactionEnd).toBeGreaterThan(lock);
+  });
+
   it("rejects an owner-linked OS identity even without an OS source marker", () => {
     const ownerGuard = osAuctionIdentityMigration.match(
       /IF EXISTS \(\s*SELECT 1\s*FROM public\.listings AS listing\s*WHERE listing\.listing_type = 'auction'::public\.listing_type[\s\S]*?RAISE EXCEPTION 'os_auction_identity_has_owner'[\s\S]*?END IF;/,

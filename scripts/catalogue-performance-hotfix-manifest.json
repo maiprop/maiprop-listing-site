@@ -12,7 +12,7 @@
   "migrations": [
     {
       "path": "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
-      "sha256": "15b9b8be9adb121effbed80449300f834ed638c06c0b54bd0af0d2611760a41a"
+      "sha256": "fe10e9437bd057e3c7efb6fa0f2d9f123279841b963fe6cd4f24a46b2d76f9f7"
     },
     {
       "path": "supabase/migrations/20260728123058_materialize_public_catalogue_snapshots.sql",

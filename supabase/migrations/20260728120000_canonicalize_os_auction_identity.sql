@@ -1,6 +1,8 @@
 -- Repair the historical OS importer race without deleting listings or breaking
 -- listing foreign keys, then enforce one durable Hub row per provider auction.
 
+BEGIN;
+
 CREATE OR REPLACE FUNCTION private.extract_os_auction_id(p_tags text[])
 RETURNS text
 LANGUAGE sql
@@ -232,3 +234,5 @@ COMMENT ON COLUMN public.listings.os_auction_id IS
   'Canonical provider identity derived from one valid os_auction tag; unique across Hub listings.';
 COMMENT ON TABLE private.os_auction_duplicate_quarantine IS
   'Recoverable map from corrupt historical OS duplicate rows to the retained canonical listing UUID.';
+
+COMMIT;
