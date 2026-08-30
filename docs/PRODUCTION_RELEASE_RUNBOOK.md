@@ -33,13 +33,16 @@ transcript, or runbook record.
 The lane can apply only these manifest-bound migrations, first to `staging` and
 then to `production`:
 
+- `20260728115959_quarantine_invalid_os_auction_identity.sql`
+- `20260728115960_prepare_batched_os_duplicate_quarantine.sql`
 - `20260728120000_canonicalize_os_auction_identity.sql`
+- `20260728121500_repair_exact_os_auction_identity_prefix.sql`
 - `20260728123058_materialize_public_catalogue_snapshots.sql`
 - `20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql`
 
 For each database target the workflow reads the remote numeric migration
 history, builds an isolated temporary migration project with empty placeholders
-for recorded history, copies only those three verified SQL files in the order
+for recorded history, copies only those six verified SQL files in the order
 above, and proves the captured dry-run pending set exactly equals the approved
 versions missing remotely before the normal `--include-all --yes` CLI push.
 It never repairs history or applies migrations from the repository migration

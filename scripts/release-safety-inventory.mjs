@@ -639,7 +639,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
       const phase = matches[0];
       const run = String(phase?.run ?? "");
       const envNames = Object.keys(phase?.env ?? {});
-      if (matches.length !== 1 || phase?.["timeout-minutes"] !== 4 ||
+      if (matches.length !== 1 || phase?.["timeout-minutes"] !== 15 ||
           envNames.join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
           phase?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
           !run.includes('SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-linked-db-push.sh apply') ||
@@ -747,6 +747,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const required = [
     "catalogue-performance-hotfix-contract.mjs verify --json",
     "20260728115959",
+    "20260728115960",
+    "20260728120000",
     "20260728121500",
     "RELEASE_AUTHORIZATION_ACTION: production-deploy",
     "RELEASE_STANDARD_CONFIRMATION: DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX",

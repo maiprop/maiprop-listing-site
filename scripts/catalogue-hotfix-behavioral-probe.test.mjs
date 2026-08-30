@@ -12,6 +12,7 @@ const id = "00000000-0000-4000-8000-000000000001";
 const auctionId = "00000000-0000-4000-8000-000000000099";
 const missingAuctionId = "00000000-0000-0000-0000-000000000000";
 const quarantineVersion = "20260728115959";
+const preparationVersion = "20260728115960";
 const bridgeVersion = "20260728120000";
 const repairVersion = "20260728121500";
 const firstVersion = "20260728123058";
@@ -77,7 +78,14 @@ function jsonResponse(body, status = 200) {
 }
 
 function dependencies(overrides = {}) {
-  const recordedVersions = overrides.recordedVersions ?? [quarantineVersion, bridgeVersion, repairVersion, firstVersion, secondVersion];
+  const recordedVersions = overrides.recordedVersions ?? [
+    quarantineVersion,
+    preparationVersion,
+    bridgeVersion,
+    repairVersion,
+    firstVersion,
+    secondVersion,
+  ];
   const requests = [];
   const sql = [];
   const psql = async (query) => {
@@ -107,6 +115,23 @@ function dependencies(overrides = {}) {
       invalid_identity_quarantine_rows: 1,
       invalid_identity_quarantine_marked_rows: 1,
       invalid_identity_quarantine_live_contract: true,
+      bridge_residue_duplicate_quarantine_relation: false,
+      bridge_residue_generated_column: false,
+      bridge_residue_unique_index: false,
+      bridge_residue_source_check: false,
+      bridge_residue_duplicate_marker_rows: 0,
+      duplicate_preparation_contract: recordedVersions.includes(preparationVersion),
+      duplicate_preparation_ledger_contract: recordedVersions.includes(preparationVersion),
+      duplicate_preparation_acl_contract: recordedVersions.includes(preparationVersion),
+      duplicate_preparation_generated_column: false,
+      duplicate_preparation_unique_index: false,
+      duplicate_preparation_source_check: false,
+      duplicate_preparation_remaining_candidates: 0,
+      duplicate_preparation_owner_guard_rows: 0,
+      duplicate_preparation_active_promotion_rows: 0,
+      duplicate_preparation_ledger_rows: 3,
+      duplicate_preparation_live_marker_rows: 3,
+      duplicate_preparation_live_recoverable_contract: recordedVersions.includes(preparationVersion),
       os_identity_contract: recordedVersions.includes(bridgeVersion),
       os_identity_components: recordedVersions.includes(bridgeVersion)
         ? validIdentityComponents
@@ -120,6 +145,23 @@ function dependencies(overrides = {}) {
       invalid_identity_quarantine_rows: 1,
       invalid_identity_quarantine_marked_rows: 1,
       invalid_identity_quarantine_live_contract: true,
+      bridge_residue_duplicate_quarantine_relation: false,
+      bridge_residue_generated_column: false,
+      bridge_residue_unique_index: false,
+      bridge_residue_source_check: false,
+      bridge_residue_duplicate_marker_rows: 0,
+      duplicate_preparation_contract: recordedVersions.includes(preparationVersion),
+      duplicate_preparation_ledger_contract: recordedVersions.includes(preparationVersion),
+      duplicate_preparation_acl_contract: recordedVersions.includes(preparationVersion),
+      duplicate_preparation_generated_column: false,
+      duplicate_preparation_unique_index: false,
+      duplicate_preparation_source_check: false,
+      duplicate_preparation_remaining_candidates: 0,
+      duplicate_preparation_owner_guard_rows: 0,
+      duplicate_preparation_active_promotion_rows: 0,
+      duplicate_preparation_ledger_rows: 3,
+      duplicate_preparation_live_marker_rows: 3,
+      duplicate_preparation_live_recoverable_contract: recordedVersions.includes(preparationVersion),
       os_identity_contract: recordedVersions.includes(bridgeVersion),
       os_identity_components: recordedVersions.includes(bridgeVersion)
         ? validIdentityComponents
@@ -133,6 +175,23 @@ function dependencies(overrides = {}) {
       invalid_identity_quarantine_rows: 1,
       invalid_identity_quarantine_marked_rows: 1,
       invalid_identity_quarantine_live_contract: true,
+      bridge_residue_duplicate_quarantine_relation: false,
+      bridge_residue_generated_column: false,
+      bridge_residue_unique_index: false,
+      bridge_residue_source_check: false,
+      bridge_residue_duplicate_marker_rows: 0,
+      duplicate_preparation_contract: recordedVersions.includes(preparationVersion),
+      duplicate_preparation_ledger_contract: recordedVersions.includes(preparationVersion),
+      duplicate_preparation_acl_contract: recordedVersions.includes(preparationVersion),
+      duplicate_preparation_generated_column: false,
+      duplicate_preparation_unique_index: false,
+      duplicate_preparation_source_check: false,
+      duplicate_preparation_remaining_candidates: 0,
+      duplicate_preparation_owner_guard_rows: 0,
+      duplicate_preparation_active_promotion_rows: 0,
+      duplicate_preparation_ledger_rows: 3,
+      duplicate_preparation_live_marker_rows: 3,
+      duplicate_preparation_live_recoverable_contract: recordedVersions.includes(preparationVersion),
       ...overrides.metadataPatch,
     });
     if (query.includes("SET LOCAL ROLE anon")) return JSON.stringify({
@@ -175,6 +234,14 @@ test("runner applies location filter, exact ID binding, and invokes typed/public
   const deps = dependencies();
   const result = await runCatalogueBehavioralProbe({ mode: "postapply", apiUrl, databaseUrl, key }, deps);
   assert.equal(result.skipped, undefined);
+  assert.deepEqual(result.recorded_versions, [
+    quarantineVersion,
+    preparationVersion,
+    bridgeVersion,
+    repairVersion,
+    firstVersion,
+    secondVersion,
+  ]);
 
   const legacy = deps.requests.filter(({ url }) => url.pathname.endsWith("/get_public_listing_catalogue"));
   const card = legacy.find(({ url }) => url.searchParams.has("location_search_text") && !String(url.searchParams.get("select")).includes("project:project_detail"));
@@ -272,6 +339,15 @@ test("recorded-mode runner supports safe first-only recovery and rejects drift o
   );
   assert.equal(quarantineProof.contract_level, "invalid_identity_quarantine");
   assert.deepEqual(quarantineProof.recorded_versions, [quarantineVersion]);
+
+  const prepared = dependencies({ recordedVersions: [quarantineVersion, preparationVersion] });
+  const preparationProof = await runCatalogueBehavioralProbe(
+    { mode: "recorded", apiUrl, databaseUrl, key },
+    prepared,
+  );
+  assert.equal(preparationProof.contract_level, "duplicate_identity_preparation");
+  assert.deepEqual(preparationProof.recorded_versions, [quarantineVersion, preparationVersion]);
+  assert.equal(JSON.stringify(preparationProof).includes("provider"), false);
 
   const bridgeDrift = dependencies({
     recordedVersions: [bridgeVersion],
@@ -405,6 +481,151 @@ test("recorded-mode runner supports safe first-only recovery and rejects drift o
       mode: "postapply", apiUrl, databaseUrl, key,
     }, dependencies({ recordedVersions: [bridgeVersion, firstVersion, secondVersion] })),
     /all manifest-bound migrations/i,
+  );
+  await assert.rejects(
+    runCatalogueBehavioralProbe({
+      mode: "postapply", apiUrl, databaseUrl, key,
+    }, dependencies({
+      recordedVersions: [quarantineVersion, bridgeVersion, repairVersion, firstVersion, secondVersion],
+    })),
+    /all manifest-bound migrations/i,
+  );
+});
+
+test("Q-only recorded certification rejects every B-only residue aggregate", async () => {
+  const residueCases = [
+    { bridge_residue_duplicate_quarantine_relation: true },
+    { bridge_residue_generated_column: true },
+    { bridge_residue_unique_index: true },
+    { bridge_residue_source_check: true },
+    { bridge_residue_duplicate_marker_rows: 1 },
+  ];
+  for (const metadataPatch of residueCases) {
+    await assert.rejects(
+      runCatalogueBehavioralProbe(
+        { mode: "recorded", apiUrl, databaseUrl, key },
+        dependencies({ recordedVersions: [quarantineVersion], metadataPatch }),
+      ),
+      /bridge residue/i,
+    );
+  }
+});
+
+test("Q,P certification fails closed on preparation contract and parity drift", async () => {
+  const invalidCases = [
+    { duplicate_preparation_contract: false },
+    { duplicate_preparation_ledger_contract: false },
+    { duplicate_preparation_acl_contract: false },
+    { duplicate_preparation_generated_column: true },
+    { duplicate_preparation_unique_index: true },
+    { duplicate_preparation_source_check: true },
+    { duplicate_preparation_remaining_candidates: 1 },
+    { duplicate_preparation_owner_guard_rows: 1 },
+    { duplicate_preparation_active_promotion_rows: 1 },
+    { duplicate_preparation_ledger_rows: 3, duplicate_preparation_live_marker_rows: 2 },
+    { duplicate_preparation_live_recoverable_contract: false },
+  ];
+  for (const metadataPatch of invalidCases) {
+    await assert.rejects(
+      runCatalogueBehavioralProbe(
+        { mode: "recorded", apiUrl, databaseUrl, key },
+        dependencies({
+          recordedVersions: [quarantineVersion, preparationVersion],
+          metadataPatch,
+        }),
+      ),
+      /duplicate identity preparation/i,
+    );
+  }
+});
+
+test("Q,P preparation SQL exposes only fixed aggregate evidence and exact safety predicates", async () => {
+  const deps = dependencies({ recordedVersions: [quarantineVersion, preparationVersion] });
+  await runCatalogueBehavioralProbe({ mode: "recorded", apiUrl, databaseUrl, key }, deps);
+  const metadataSql = deps.sql.find((query) => query.includes("'duplicate_preparation_contract'"));
+  assert.ok(metadataSql);
+  for (const marker of [
+    "duplicate_preparation_ledger_contract",
+    "duplicate_preparation_acl_contract",
+    "duplicate_preparation_generated_column",
+    "duplicate_preparation_unique_index",
+    "duplicate_preparation_source_check",
+    "duplicate_preparation_remaining_candidates",
+    "duplicate_preparation_owner_guard_rows",
+    "duplicate_preparation_active_promotion_rows",
+    "duplicate_preparation_ledger_rows",
+    "duplicate_preparation_live_marker_rows",
+    "duplicate_preparation_live_recoverable_contract",
+    "constraint_definition.confdeltype = 'r'",
+    "listing.status IS DISTINCT FROM CASE",
+    "listing.tags IS DISTINCT FROM",
+    "allocation.ends_at > statement_timestamp()",
+  ]) {
+    assert.match(metadataSql, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  const ledgerContractSql = metadataSql.slice(
+    metadataSql.indexOf("WITH preparation AS MATERIALIZED"),
+    metadataSql.indexOf("AS acl_contract"),
+  );
+  assert.match(ledgerContractSql, /AND 7 = \(/);
+  assert.match(ledgerContractSql, /AND 5 = \(/);
+  assert.doesNotMatch(metadataSql, /^\s{2}'(?:listing_id|provider_id|previous_tags|previous_status)',/m);
+});
+
+test("recorded mode accepts every path-reachable P state and rejects arbitrary P subsets", async () => {
+  const reachableStates = [
+    [quarantineVersion, preparationVersion],
+    [quarantineVersion, preparationVersion, bridgeVersion],
+    [quarantineVersion, preparationVersion, bridgeVersion, repairVersion],
+    [quarantineVersion, preparationVersion, bridgeVersion, repairVersion, firstVersion],
+    [quarantineVersion, preparationVersion, bridgeVersion, repairVersion, firstVersion, secondVersion],
+    [quarantineVersion, preparationVersion, firstVersion],
+    [quarantineVersion, preparationVersion, firstVersion, secondVersion],
+    [quarantineVersion, preparationVersion, bridgeVersion, firstVersion],
+    [quarantineVersion, preparationVersion, bridgeVersion, firstVersion, secondVersion],
+  ];
+  for (const recordedVersions of reachableStates) {
+    const deps = dependencies({ recordedVersions });
+    const result = await runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      deps,
+    );
+    assert.deepEqual(result.recorded_versions, recordedVersions);
+    assert.ok(
+      deps.sql.some((query) => query.includes("'duplicate_preparation_contract'")),
+      `${recordedVersions.join(",")} must certify the preparation ledger`,
+    );
+  }
+  for (const recordedVersions of [
+    [preparationVersion],
+    [quarantineVersion, preparationVersion, repairVersion],
+    [quarantineVersion, preparationVersion, bridgeVersion, repairVersion, secondVersion],
+  ]) {
+    await assert.rejects(
+      runCatalogueBehavioralProbe(
+        { mode: "recorded", apiUrl, databaseUrl, key },
+        dependencies({ recordedVersions }),
+      ),
+      /dependency|approved/i,
+    );
+  }
+});
+
+test("P-augmented legacy recovery states fail closed on ledger drift", async () => {
+  await assert.rejects(
+    runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      dependencies({
+        recordedVersions: [
+          quarantineVersion,
+          preparationVersion,
+          bridgeVersion,
+          firstVersion,
+        ],
+        metadataPatch: { duplicate_preparation_ledger_contract: false },
+      }),
+    ),
+    /duplicate identity preparation/i,
   );
 });
 

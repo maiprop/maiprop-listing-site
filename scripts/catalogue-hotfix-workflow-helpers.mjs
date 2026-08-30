@@ -6,6 +6,7 @@ const STAGING_REF = "xsiehskfgeoqyazcgauv";
 const VERSION = /^\d{14}$/;
 const CATALOGUE_HOTFIX_MIGRATIONS = new Map([
   ["20260728115959_quarantine_invalid_os_auction_identity.sql", "20260728115959"],
+  ["20260728115960_prepare_batched_os_duplicate_quarantine.sql", "20260728115960"],
   ["20260728120000_canonicalize_os_auction_identity.sql", "20260728120000"],
   ["20260728121500_repair_exact_os_auction_identity_prefix.sql", "20260728121500"],
   ["20260728123058_materialize_public_catalogue_snapshots.sql", "20260728123058"],
@@ -776,6 +777,7 @@ export function classifyLinkedPushFailure(output) {
       kind: "maiprop-linked-push-failure",
       migration_filename: null,
       migration_version: null,
+      statement_index: null,
       sqlstate: null,
       category: "unknown",
       message: "Linked database push failed without a recognized safe diagnostic.",
@@ -786,6 +788,13 @@ export function classifyLinkedPushFailure(output) {
     .replace(/\r\n?/g, "\n");
   const lines = normalized.split("\n").map((line) => line.trim());
   const statementIndex = lines.findIndex((line) => /^At statement: [0-9]+$/.test(line));
+  const statementNumber = statementIndex >= 0
+    ? Number(/^At statement: ([0-9]+)$/.exec(lines[statementIndex])?.[1])
+    : null;
+  const safeStatementIndex = Number.isSafeInteger(statementNumber) &&
+      statementNumber >= 0 && statementNumber <= 100_000
+    ? statementNumber
+    : null;
   const prefix = lines.slice(0, statementIndex >= 0 ? statementIndex : lines.length);
   const migrationMarkers = prefix
     .map((line, index) => ({
@@ -839,6 +848,7 @@ export function classifyLinkedPushFailure(output) {
     kind: "maiprop-linked-push-failure",
     migration_filename: migrationFilename,
     migration_version: migrationVersion,
+    statement_index: safeStatementIndex,
     sqlstate,
     category,
     message,

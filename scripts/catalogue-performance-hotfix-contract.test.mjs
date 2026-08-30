@@ -18,8 +18,12 @@ const MIGRATIONS = [
     sha256: "59a7a65e25c0cb076052de9534301ec5aa16efadf6396e7634b820dd2234bde0",
   },
   {
+    path: "supabase/migrations/20260728115960_prepare_batched_os_duplicate_quarantine.sql",
+    sha256: "a35a4f6390937a04202e81ef67d2bd6d98e00c0118b9d7bff7b85544f6ed7a5b",
+  },
+  {
     path: "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
-    sha256: "b5e54300adac18727afec6591a671b35a0d85cdadc95c5ba943d19f5c4c7c708",
+    sha256: "24bc2c875fdab6e5c4320ecf7e2f0d3063f163b006d789be54d3c16b95270266",
   },
   {
     path: "supabase/migrations/20260728121500_repair_exact_os_auction_identity_prefix.sql",
@@ -34,7 +38,7 @@ const MIGRATIONS = [
     sha256: "f20d21b6c1368d0406e607a308ddd68ff1deaaf98a7d2a73927d857ddf7d85aa",
   },
 ];
-const FIRST_MIGRATION_PATH = MIGRATIONS[3].path;
+const FIRST_MIGRATION_PATH = MIGRATIONS[4].path;
 
 const manifest = () => ({
   version: 1,
@@ -86,9 +90,14 @@ test("accepts only the exact materialized catalogue migration contract", () => {
           sha256: "59a7a65e25c0cb076052de9534301ec5aa16efadf6396e7634b820dd2234bde0",
         },
         {
+          version: "20260728115960",
+          path: "supabase/migrations/20260728115960_prepare_batched_os_duplicate_quarantine.sql",
+          sha256: "a35a4f6390937a04202e81ef67d2bd6d98e00c0118b9d7bff7b85544f6ed7a5b",
+        },
+        {
           version: "20260728120000",
           path: "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
-          sha256: "b5e54300adac18727afec6591a671b35a0d85cdadc95c5ba943d19f5c4c7c708",
+          sha256: "24bc2c875fdab6e5c4320ecf7e2f0d3063f163b006d789be54d3c16b95270266",
         },
         {
           version: "20260728121500",

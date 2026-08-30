@@ -226,7 +226,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     for (const phaseName of linkedMigrationPhases[target]) {
       const phase = steps(job).find((step) => step.name === phaseName);
       assert.ok(phase, `${target} has the ${phaseName} phase`);
-      assert.equal(phase["timeout-minutes"], 4);
+      assert.equal(phase["timeout-minutes"], 15);
       assert.deepEqual(phase.env, {
         SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
       });
@@ -376,6 +376,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(behaviouralProbe, /20260729120405/);
     assert.match(behaviouralProbe, /20260728120000/);
     assert.match(behaviouralProbe, /20260728115959/);
+    assert.match(behaviouralProbe, /20260728115960/);
     assert.match(behaviouralProbe, /20260728121500/);
     assert.match(behaviouralProbe, /get_public_listing_catalogue/);
     assert.match(behaviouralProbe, /get_public_catalogue_publication/);

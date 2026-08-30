@@ -9,9 +9,14 @@ const APPROVED_MIGRATIONS = [
     sha256: "59a7a65e25c0cb076052de9534301ec5aa16efadf6396e7634b820dd2234bde0",
   },
   {
+    version: "20260728115960",
+    path: "supabase/migrations/20260728115960_prepare_batched_os_duplicate_quarantine.sql",
+    sha256: "a35a4f6390937a04202e81ef67d2bd6d98e00c0118b9d7bff7b85544f6ed7a5b",
+  },
+  {
     version: "20260728120000",
     path: "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
-    sha256: "b5e54300adac18727afec6591a671b35a0d85cdadc95c5ba943d19f5c4c7c708",
+    sha256: "24bc2c875fdab6e5c4320ecf7e2f0d3063f163b006d789be54d3c16b95270266",
   },
   {
     version: "20260728121500",
@@ -122,7 +127,7 @@ export function validateCataloguePerformanceHotfix(root, manifest) {
   }
 
   if (!Array.isArray(input.migrations) || input.migrations.length !== APPROVED_MIGRATIONS.length) {
-    throw new Error("Manifest must contain exactly five approved migrations.");
+    throw new Error("Manifest must contain exactly six approved migrations.");
   }
 
   const migrationDirectory = resolve(root, "supabase/migrations");

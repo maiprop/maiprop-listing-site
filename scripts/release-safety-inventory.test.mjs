@@ -113,6 +113,12 @@ describe("release safety inventory", () => {
       );
       phase.run = phase.run.replace("catalogue-hotfix-linked-db-push.sh apply", "true");
       expect(violations({ parsed: missingLinkedApply })).not.toEqual([]);
+
+      const shortenedLinkedApply = structuredClone(parsed);
+      shortenedLinkedApply.jobs[target].steps.find((step) =>
+        step.name === `Apply only manifest-bound ${target} migrations`
+      )["timeout-minutes"] = 14;
+      expect(violations({ parsed: shortenedLinkedApply })).not.toEqual([]);
     }
     const longDatabasePhase = structuredClone(parsed);
     longDatabasePhase.jobs.staging.steps.find(
