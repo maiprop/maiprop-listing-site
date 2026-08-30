@@ -129,6 +129,19 @@ describe("release safety inventory", () => {
       (step) => step.name === "Sample production public API pairs",
     ).run += "\nnode scripts/catalogue-hotfix-source-quality-probe.mjs";
     expect(violations({ parsed: rawSourceQualityProbe })).not.toEqual([]);
+    const sourceQualityWithoutInvalidDiagnostics = sourceQualityProbeText.replaceAll(
+      "all_os_source_invalid_non_auction_rows",
+      "removed_invalid_source_diagnostic",
+    );
+    expect(violations({
+      sourceQualityProbeText: sourceQualityWithoutInvalidDiagnostics,
+    })).not.toEqual([]);
+    const downgradedSourceQualitySchema = sourceQualityProbeText
+      .replace("'schema_version', 2", "'schema_version', 1")
+      .replace("value.schema_version !== 2", "value.schema_version !== 1");
+    expect(violations({
+      sourceQualityProbeText: downgradedSourceQualitySchema,
+    })).not.toEqual([]);
     const rawRoleMarker = "--command 'SET ROLE postgres'";
     const rawRoleOccurrences = [...text.matchAll(new RegExp(rawRoleMarker, "g"))];
     expect(rawRoleOccurrences).toHaveLength(5);

@@ -563,6 +563,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const databaseCommandPattern = /(?:\bpsql\b|\bdb\s+push\b|catalogue-hotfix-behavioral-probe\.mjs\s+(?:recorded|postapply)\b|catalogue-hotfix-source-quality-probe\.mjs\b)/;
   const sourceQualityProbeMarkers = [
     '"maiprop-catalogue-source-quality"',
+    "'schema_version', 2",
+    "value.schema_version !== 2",
     "Object.keys(value).sort()",
     "Number.isSafeInteger(value[field])",
     "buildCatalogueSourceQualitySql",
@@ -572,6 +574,13 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "duplicate_nonplaceholder_groups",
     "quarantine_candidates_with_owner",
     "quarantine_candidates_with_active_promotion",
+    "all_os_source_invalid_non_auction_rows",
+    "all_os_source_invalid_auction_rows_without_identity",
+    "all_os_source_invalid_auction_rows_with_multiple_identities",
+    "all_os_source_invalid_auction_rows_with_placeholder_identity",
+    "all_os_source_invalid_auction_rows_with_malformed_identity",
+    "all_os_source_invalid_rows_with_owner",
+    "all_os_source_invalid_rows_with_active_promotion",
     "manual ownership or promotion review",
   ];
   const phaseProblems = [];

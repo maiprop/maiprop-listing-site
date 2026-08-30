@@ -15,6 +15,13 @@ const INTEGER_FIELDS = [
   "max_duplicate_multiplicity",
   "all_os_source_rows",
   "all_os_source_rows_with_invalid_identity",
+  "all_os_source_invalid_non_auction_rows",
+  "all_os_source_invalid_auction_rows_without_identity",
+  "all_os_source_invalid_auction_rows_with_multiple_identities",
+  "all_os_source_invalid_auction_rows_with_placeholder_identity",
+  "all_os_source_invalid_auction_rows_with_malformed_identity",
+  "all_os_source_invalid_rows_with_owner",
+  "all_os_source_invalid_rows_with_active_promotion",
   "all_os_identity_rows",
   "all_os_identity_rows_with_owner",
   "quarantine_candidate_rows",
@@ -89,6 +96,8 @@ WITH source AS (
     listing.updated_at,
     listing.created_at,
     COALESCE(listing.tags, '{}'::text[]) AS tags,
+    identity.tag_count AS provider_tag_count,
+    identity.provider_id AS observed_provider_id,
     CASE
       WHEN identity.tag_count = 1
         AND identity.provider_id ~ '^[a-z0-9:_-]{1,120}$'
@@ -112,10 +121,34 @@ WITH source AS (
     identity.listing_id,
     identity.owner_id,
     identity.listing_type,
+    identity.provider_tag_count,
+    identity.observed_provider_id,
     identity.provider_id,
     identity.tags @> ARRAY['source:maiprop-os-duplicate-quarantine']::text[] AS quarantined
   FROM listing_identity AS identity
   WHERE identity.tags @> ARRAY['source:maiprop-os']::text[]
+), invalid_os_source_rows AS (
+  SELECT
+    os_source.listing_id,
+    os_source.owner_id,
+    CASE
+      WHEN os_source.listing_type <> 'auction'::public.listing_type
+        THEN 'non_auction'
+      WHEN os_source.provider_tag_count = 0
+        THEN 'missing_identity'
+      WHEN os_source.provider_tag_count > 1
+        THEN 'multiple_identities'
+      WHEN os_source.observed_provider_id IN (
+        'unknown', 'null', 'undefined', 'none', 'na', 'n/a'
+      ) THEN 'placeholder_identity'
+      ELSE 'malformed_identity'
+    END AS invalid_reason
+  FROM all_os_source_rows AS os_source
+  WHERE NOT os_source.quarantined
+    AND (
+      os_source.listing_type <> 'auction'::public.listing_type
+      OR os_source.provider_id IS NULL
+    )
 ), ranked_os_rows AS (
   SELECT
     identity.listing_id,
@@ -137,7 +170,7 @@ WITH source AS (
   WHERE ranked.identity_rank > 1
 )
 SELECT json_build_object(
-  'schema_version', 1,
+  'schema_version', 2,
   'kind', 'maiprop-catalogue-source-quality',
   'eligible_active_listings', (SELECT count(*) FROM source),
   'auction_listings', (SELECT count(*) FROM source WHERE listing_type = 'auction'),
@@ -160,14 +193,36 @@ SELECT json_build_object(
   'duplicate_nonplaceholder_groups', (SELECT count(*) FROM duplicate_groups WHERE NOT placeholder),
   'max_duplicate_multiplicity', COALESCE((SELECT max(multiplicity) FROM duplicate_groups), 0),
   'all_os_source_rows', (SELECT count(*) FROM all_os_source_rows),
-  'all_os_source_rows_with_invalid_identity', (
+  'all_os_source_rows_with_invalid_identity', (SELECT count(*) FROM invalid_os_source_rows),
+  'all_os_source_invalid_non_auction_rows', (
+    SELECT count(*) FROM invalid_os_source_rows WHERE invalid_reason = 'non_auction'
+  ),
+  'all_os_source_invalid_auction_rows_without_identity', (
+    SELECT count(*) FROM invalid_os_source_rows WHERE invalid_reason = 'missing_identity'
+  ),
+  'all_os_source_invalid_auction_rows_with_multiple_identities', (
+    SELECT count(*) FROM invalid_os_source_rows WHERE invalid_reason = 'multiple_identities'
+  ),
+  'all_os_source_invalid_auction_rows_with_placeholder_identity', (
+    SELECT count(*) FROM invalid_os_source_rows WHERE invalid_reason = 'placeholder_identity'
+  ),
+  'all_os_source_invalid_auction_rows_with_malformed_identity', (
+    SELECT count(*) FROM invalid_os_source_rows WHERE invalid_reason = 'malformed_identity'
+  ),
+  'all_os_source_invalid_rows_with_owner', (
+    SELECT count(*) FROM invalid_os_source_rows WHERE owner_id IS NOT NULL
+  ),
+  'all_os_source_invalid_rows_with_active_promotion', (
     SELECT count(*)
-    FROM all_os_source_rows AS os_source
-    WHERE NOT os_source.quarantined
-      AND (
-        os_source.listing_type <> 'auction'::public.listing_type
-        OR os_source.provider_id IS NULL
-      )
+    FROM invalid_os_source_rows AS invalid_source
+    WHERE EXISTS (
+      SELECT 1
+      FROM public.listing_promotion_allocations AS allocation
+      WHERE allocation.listing_id = invalid_source.listing_id
+        AND allocation.starts_at <= statement_timestamp()
+        AND allocation.ends_at > statement_timestamp()
+        AND allocation.revoked_at IS NULL
+    )
   ),
   'all_os_identity_rows', (SELECT count(*) FROM ranked_os_rows),
   'all_os_identity_rows_with_owner', (
@@ -202,7 +257,7 @@ export function validateCatalogueSourceQuality(value) {
   if (keys.length !== REQUIRED_KEYS.length || keys.some((key, index) => key !== REQUIRED_KEYS[index])) {
     fail("Catalogue source-quality result has an invalid schema.");
   }
-  if (value.schema_version !== 1 || value.kind !== "maiprop-catalogue-source-quality") {
+  if (value.schema_version !== 2 || value.kind !== "maiprop-catalogue-source-quality") {
     fail("Catalogue source-quality result has an invalid schema.");
   }
   for (const field of INTEGER_FIELDS) {
@@ -219,6 +274,14 @@ export function validateCatalogueSourceQuality(value) {
     value.duplicate_placeholder_groups + value.duplicate_nonplaceholder_groups !== value.duplicate_tag_groups ||
     (value.duplicate_tag_groups === 0 && (value.duplicate_tag_rows !== 0 || value.max_duplicate_multiplicity !== 0)) ||
     value.all_os_source_rows_with_invalid_identity > value.all_os_source_rows ||
+    value.all_os_source_invalid_non_auction_rows +
+      value.all_os_source_invalid_auction_rows_without_identity +
+      value.all_os_source_invalid_auction_rows_with_multiple_identities +
+      value.all_os_source_invalid_auction_rows_with_placeholder_identity +
+      value.all_os_source_invalid_auction_rows_with_malformed_identity !==
+        value.all_os_source_rows_with_invalid_identity ||
+    value.all_os_source_invalid_rows_with_owner > value.all_os_source_rows_with_invalid_identity ||
+    value.all_os_source_invalid_rows_with_active_promotion > value.all_os_source_rows_with_invalid_identity ||
     value.quarantine_candidate_rows > value.all_os_identity_rows ||
     value.all_os_identity_rows_with_owner > value.all_os_identity_rows ||
     value.quarantine_candidates_with_owner > value.quarantine_candidate_rows ||
@@ -232,7 +295,23 @@ export function validateCatalogueSourceQuality(value) {
     fail("Catalogue source-quality aggregate counts are inconsistent.");
   }
   if (value.all_os_source_rows_with_invalid_identity > 0) {
-    fail("Catalogue all-status OS source identity contract is invalid.");
+    fail(
+      "Catalogue all-status OS source identity contract is invalid: " +
+        JSON.stringify({
+          non_auction_rows: value.all_os_source_invalid_non_auction_rows,
+          auction_rows_without_identity:
+            value.all_os_source_invalid_auction_rows_without_identity,
+          auction_rows_with_multiple_identities:
+            value.all_os_source_invalid_auction_rows_with_multiple_identities,
+          auction_rows_with_placeholder_identity:
+            value.all_os_source_invalid_auction_rows_with_placeholder_identity,
+          auction_rows_with_malformed_identity:
+            value.all_os_source_invalid_auction_rows_with_malformed_identity,
+          rows_with_owner: value.all_os_source_invalid_rows_with_owner,
+          rows_with_active_promotion:
+            value.all_os_source_invalid_rows_with_active_promotion,
+        }),
+    );
   }
   if (value.all_os_identity_rows_with_owner > 0) {
     fail("OS identity rows must not have owners.");
