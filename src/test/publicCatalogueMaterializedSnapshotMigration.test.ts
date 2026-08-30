@@ -13,6 +13,10 @@ const scaleProof = readFileSync(
   resolve(process.cwd(), "supabase/tests/public_catalogue_20k_scale_test.sql"),
   "utf8",
 );
+const snapshotPgTap = readFileSync(
+  resolve(process.cwd(), "supabase/tests/public_catalogue_snapshot_test.sql"),
+  "utf8",
+);
 const exactLookupMigration = readFileSync(
   resolve(
     process.cwd(),
@@ -164,6 +168,18 @@ describe("materialized public catalogue snapshot migration", () => {
     expect(migration).toContain("public_catalogue_duplicate_os_tag");
     expect(migration).toContain(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_public_catalogue_versions_current_os_tag",
+    );
+  });
+
+  it("expects the listings identity index to reject duplicate OS auctions before publication", () => {
+    expect(snapshotPgTap).toContain(
+      'duplicate key value violates unique constraint "idx_listings_os_auction_id_unique"',
+    );
+    expect(snapshotPgTap).toContain(
+      "database rejects duplicate OS auction identity before publication",
+    );
+    expect(snapshotPgTap).not.toContain(
+      "the publisher rejects duplicate OS tags within one publication",
     );
   });
 

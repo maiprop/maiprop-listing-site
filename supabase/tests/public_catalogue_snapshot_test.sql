@@ -785,48 +785,41 @@ WHERE publication_id = (
 );
 
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.listings (
-  id,
-  owner_id,
-  title,
-  city,
-  price,
-  sqm,
-  property_type,
-  listing_type,
-  status,
-  tags,
-  created_at,
-  updated_at
-)
-VALUES (
-  '72000000-0000-4000-8000-000000000005',
-  '71000000-0000-4000-8000-000000000001',
-  'Duplicate OS tag must block publication',
-  'Athens',
-  456789,
-  88,
-  'apartment',
-  'auction',
-  'active',
-  ARRAY['os_auction:catalogue-old-tag']::text[],
-  date_trunc('minute', now()) - interval '1 minute',
-  date_trunc('minute', now()) - interval '1 minute'
-);
-SET LOCAL session_replication_role = origin;
-
-SET LOCAL ROLE service_role;
 SELECT throws_ok(
-  $$SELECT * FROM public.publish_public_catalogue()$$,
+  $$
+    INSERT INTO public.listings (
+      id,
+      owner_id,
+      title,
+      city,
+      price,
+      sqm,
+      property_type,
+      listing_type,
+      status,
+      tags,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      '72000000-0000-4000-8000-000000000005',
+      '71000000-0000-4000-8000-000000000001',
+      'Duplicate OS tag must be rejected before publication',
+      'Athens',
+      456789,
+      88,
+      'apartment',
+      'auction',
+      'active',
+      ARRAY['os_auction:catalogue-old-tag']::text[],
+      date_trunc('minute', now()) - interval '1 minute',
+      date_trunc('minute', now()) - interval '1 minute'
+    )
+  $$,
   '23505',
-  'public_catalogue_duplicate_os_tag',
-  'the publisher rejects duplicate OS tags within one publication'
+  'duplicate key value violates unique constraint "idx_listings_os_auction_id_unique"',
+  'database rejects duplicate OS auction identity before publication'
 );
-SET LOCAL ROLE postgres;
-
-SET LOCAL session_replication_role = replica;
-DELETE FROM public.listings
-WHERE id = '72000000-0000-4000-8000-000000000005';
 SET LOCAL session_replication_role = origin;
 
 UPDATE public.listings
