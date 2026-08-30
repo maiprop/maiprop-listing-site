@@ -128,6 +128,21 @@ jobs:
           node scripts/catalogue-hotfix-behavioral-probe.mjs recorded "$RUNNER_TEMP/recorded-database-contract.json"
           DATABASE_PHASE
           unset management_token
+      - name: Measure staging catalogue bootstrap source quality
+        timeout-minutes: 4
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+        run: |
+          set -euo pipefail
+          management_token="$SUPABASE_ACCESS_TOKEN"
+          unset SUPABASE_ACCESS_TOKEN
+          SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
+          set -euo pipefail
+          quality_json="$(node scripts/catalogue-hotfix-source-quality-probe.mjs)"
+          printf '::notice::Catalogue bootstrap source quality: %s\n' "$quality_json"
+          DATABASE_PHASE
+          unset management_token
       - name: Prepare manifest-bound staging migration dry-run
         timeout-minutes: 4
         env:
@@ -173,8 +188,12 @@ jobs:
           SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
           set -euo pipefail
           node scripts/catalogue-hotfix-behavioral-probe.mjs postapply evidence/database-contract.json
+          postapply_quality_json="$(node scripts/catalogue-hotfix-source-quality-probe.mjs --require-zero-invalid)"
+          printf '::notice::Catalogue postapply source quality: %s\n' "$postapply_quality_json"
           psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --command 'SET ROLE postgres' --file supabase/tests/public_catalogue_snapshot_test.sql > "$RUNNER_TEMP/public_catalogue_snapshot_test.txt"
           node scripts/parse-tap-proof.mjs --file "$RUNNER_TEMP/public_catalogue_snapshot_test.txt" --expected-plan 90 > evidence/public-catalogue-pgtap-proof.json
+          psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --command 'SET ROLE postgres' --file supabase/tests/catalogue_invalid_os_identity_quarantine_test.sql > "$RUNNER_TEMP/catalogue_invalid_os_identity_quarantine_test.txt"
+          node scripts/parse-tap-proof.mjs --file "$RUNNER_TEMP/catalogue_invalid_os_identity_quarantine_test.txt" --expected-plan 49 > evidence/invalid-os-quarantine-pgtap-proof.json
           DATABASE_PHASE
           unset management_token
       - name: Sample staging legacy PostgREST directly
@@ -222,6 +241,7 @@ jobs:
             evidence/database-contract.json
             evidence/dry-run-pending.json
             evidence/public-catalogue-pgtap-proof.json
+            evidence/invalid-os-quarantine-pgtap-proof.json
             evidence/catalogue-cron-proof.json
             evidence/staging-frontend-marker.json
             evidence/staging-http-latency.json
@@ -326,7 +346,7 @@ jobs:
           work="$RUNNER_TEMP/catalogue-hotfix-production"
           SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
           set -euo pipefail
-          # Only manifest versions 20260728120000, 20260728123058, and 20260729120405 may become pending SQL.
+          # Only manifest versions 20260728115959, 20260728120000, 20260728121500, 20260728123058, and 20260729120405 may become pending SQL.
           node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"; work="$RUNNER_TEMP/catalogue-hotfix-production"; rm -rf "$work"; mkdir -p "$work/supabase/migrations"
           printf '[api]\nenabled = false\n' > "$work/supabase/config.toml"; psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -qAt --command 'SET ROLE postgres' --command 'SELECT version FROM supabase_migrations.schema_migrations ORDER BY version' > "$work/remote-numeric-history.txt"
           while IFS= read -r v; do [ -z "$v" ]&&continue; [[ "$v" =~ ^[0-9]+$ ]]||exit 1; jq -e --arg v "$v" '.hotfix.migrations[]|select(.version==$v)' "$RUNNER_TEMP/catalogue-hotfix-contract.json" >/dev/null || printf '%s\n' '-- remote numeric history placeholder; never pending SQL' > "$work/supabase/migrations/${v}_remote_history_placeholder.sql"; done < "$work/remote-numeric-history.txt"; jq -r '.hotfix.migrations[].path' "$RUNNER_TEMP/catalogue-hotfix-contract.json" | while IFS= read -r p; do case "$p" in supabase/migrations/*.sql)cp "$p" "$work/supabase/migrations/$(basename "$p")";;*)exit 1;;esac;done
@@ -356,6 +376,8 @@ jobs:
           SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
           set -euo pipefail
           node scripts/catalogue-hotfix-behavioral-probe.mjs postapply evidence/database-contract.json
+          postapply_quality_json="$(node scripts/catalogue-hotfix-source-quality-probe.mjs --require-zero-invalid)"
+          printf '::notice::Catalogue postapply source quality: %s\n' "$postapply_quality_json"
           DATABASE_PHASE
           unset management_token
       - name: Prove production publish-public-catalogue cron liveness

@@ -5,7 +5,9 @@ const PRODUCTION_REF = "qvvicunqcrwpioqnvzxf";
 const STAGING_REF = "xsiehskfgeoqyazcgauv";
 const VERSION = /^\d{14}$/;
 const CATALOGUE_HOTFIX_MIGRATIONS = new Map([
+  ["20260728115959_quarantine_invalid_os_auction_identity.sql", "20260728115959"],
   ["20260728120000_canonicalize_os_auction_identity.sql", "20260728120000"],
+  ["20260728121500_repair_exact_os_auction_identity_prefix.sql", "20260728121500"],
   ["20260728123058_materialize_public_catalogue_snapshots.sql", "20260728123058"],
   ["20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql", "20260729120405"],
 ]);
@@ -19,6 +21,7 @@ const ARTIFACT_PATHS = Object.freeze({
     "evidence/database-contract.json",
     "evidence/dry-run-pending.json",
     "evidence/public-catalogue-pgtap-proof.json",
+    "evidence/invalid-os-quarantine-pgtap-proof.json",
     "evidence/catalogue-cron-proof.json",
     "evidence/staging-frontend-marker.json",
     "evidence/staging-http-latency.json",
@@ -1005,12 +1008,26 @@ export function validateDatabaseContract({
   recordedVersions = metadata?.migration_versions,
   requiredLevel = "first_migration",
 }) {
+  const quarantineVersion = "20260728115959";
   const bridgeVersion = "20260728120000";
+  const repairVersion = "20260728121500";
   const firstVersion = "20260728123058";
   const secondVersion = "20260729120405";
   const normalizedVersions = [...(recordedVersions ?? [])].sort();
-  const expectedVersions = requiredLevel === "full"
+  const baseExpectedVersions = requiredLevel === "full"
+    ? [quarantineVersion, bridgeVersion, firstVersion, secondVersion]
+    : requiredLevel === "legacy_full"
     ? [bridgeVersion, firstVersion, secondVersion]
+    : requiredLevel === "quarantine_bridge_and_first"
+    ? [quarantineVersion, bridgeVersion, firstVersion]
+    : requiredLevel === "quarantine_catalogue_contract"
+    ? [quarantineVersion, firstVersion, secondVersion]
+    : requiredLevel === "quarantine_and_first"
+    ? [quarantineVersion, firstVersion]
+    : requiredLevel === "quarantine_and_identity_bridge"
+    ? [quarantineVersion, bridgeVersion]
+    : requiredLevel === "invalid_identity_quarantine"
+    ? [quarantineVersion]
     : requiredLevel === "bridge_and_first"
     ? [bridgeVersion, firstVersion]
     : requiredLevel === "identity_bridge"
@@ -1018,21 +1035,68 @@ export function validateDatabaseContract({
     : requiredLevel === "catalogue_contract"
     ? [firstVersion, secondVersion]
     : [firstVersion];
-  if (!["identity_bridge", "first_migration", "bridge_and_first", "catalogue_contract", "full"].includes(requiredLevel) ||
+  const hasRepair = normalizedVersions.includes(repairVersion);
+  const expectedVersions = hasRepair
+    ? [...baseExpectedVersions, repairVersion].sort()
+    : baseExpectedVersions;
+  if (![
+    "invalid_identity_quarantine",
+    "identity_bridge",
+    "quarantine_and_identity_bridge",
+    "first_migration",
+    "bridge_and_first",
+    "quarantine_and_first",
+    "quarantine_bridge_and_first",
+    "catalogue_contract",
+    "quarantine_catalogue_contract",
+    "legacy_full",
+    "full",
+  ].includes(requiredLevel) ||
+      (hasRepair && (!normalizedVersions.includes(quarantineVersion) ||
+        !normalizedVersions.includes(bridgeVersion))) ||
       JSON.stringify(normalizedVersions) !== JSON.stringify(expectedVersions) ||
       JSON.stringify([...(metadata?.migration_versions ?? [])].sort()) !== JSON.stringify(expectedVersions)) {
     fail("Database recorded-version contract is incomplete.");
   }
-  const hasIdentityContract = ["identity_bridge", "bridge_and_first", "full"].includes(requiredLevel);
+  const hasQuarantineContract = [
+    "invalid_identity_quarantine",
+    "quarantine_and_identity_bridge",
+    "quarantine_and_first",
+    "quarantine_bridge_and_first",
+    "quarantine_catalogue_contract",
+    "full",
+  ].includes(requiredLevel);
+  if (hasQuarantineContract && (
+    !metadata.invalid_identity_quarantine_contract ||
+    metadata.eligible_invalid_os_source_rows !== 0 ||
+    !Number.isSafeInteger(metadata.invalid_identity_quarantine_rows) ||
+    metadata.invalid_identity_quarantine_rows < 0 ||
+    metadata.invalid_identity_quarantine_rows !== metadata.invalid_identity_quarantine_marked_rows ||
+    metadata.invalid_identity_quarantine_live_contract !== true
+  )) {
+    fail("Database invalid OS auction identity quarantine contract is incomplete.");
+  }
+  const hasIdentityContract = [
+    "identity_bridge",
+    "quarantine_and_identity_bridge",
+    "bridge_and_first",
+    "quarantine_bridge_and_first",
+    "legacy_full",
+    "full",
+  ].includes(requiredLevel);
   if (hasIdentityContract && !metadata.os_identity_contract) {
     fail("Database OS auction identity contract is incomplete.");
   }
-  if (requiredLevel === "identity_bridge") {
+  if (["invalid_identity_quarantine", "identity_bridge", "quarantine_and_identity_bridge"].includes(requiredLevel)) {
     return {
       schema_version: 1,
       contract_level: requiredLevel,
       recorded_versions: normalizedVersions,
-      indexes: { os_auction_identity: true },
+      indexes: {
+        ...(hasQuarantineContract ? { invalid_identity_quarantine: true } : {}),
+        ...(hasIdentityContract ? { os_auction_identity: true } : {}),
+        ...(hasRepair ? { os_auction_exact_prefix_repair: true } : {}),
+      },
       completed_at: completedTimestamp(),
     };
   }
@@ -1058,7 +1122,7 @@ export function validateDatabaseContract({
       restProbe.typed_call_rows < 1 || restProbe.typed_shape !== true) {
     fail("Database REST behavioral contract is incomplete.");
   }
-  if (["catalogue_contract", "full"].includes(requiredLevel)) {
+  if (["catalogue_contract", "quarantine_catalogue_contract", "legacy_full", "full"].includes(requiredLevel)) {
     if (!metadata.auction_rpc || !metadata.homepage_rpc ||
         !metadata.homepage_retain_until_contract || !metadata.auction_index) {
       fail("Database second migration function, homepage return, or index contract is incomplete.");
@@ -1080,7 +1144,7 @@ export function validateDatabaseContract({
       fail("Database second migration REST behavioral contract is incomplete.");
     }
   }
-  const hasCatalogueContract = ["catalogue_contract", "full"].includes(requiredLevel);
+  const hasCatalogueContract = ["catalogue_contract", "quarantine_catalogue_contract", "legacy_full", "full"].includes(requiredLevel);
   const evidence = {
     schema_version: 1,
     contract_level: requiredLevel,
@@ -1093,8 +1157,10 @@ export function validateDatabaseContract({
     },
     indexes: {
       first_migration: true,
+      ...(hasQuarantineContract ? { invalid_identity_quarantine: true } : {}),
       ...(hasCatalogueContract ? { auction_lookup: true } : {}),
       ...(hasIdentityContract ? { os_auction_identity: true } : {}),
+      ...(hasRepair ? { os_auction_exact_prefix_repair: true } : {}),
     },
     functions: {
       legacy_rpc: true,

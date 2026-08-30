@@ -1559,6 +1559,57 @@ test("dry-run proof requires the exact approved missing set", () => {
   }).pending_versions, []);
 });
 
+test("dry-run proof preserves legacy staging, retry, and empty production five-version states", () => {
+  const fiveVersionContract = {
+    hotfix: {
+      migrations: [
+        { version: "20260728115959" },
+        { version: "20260728120000" },
+        { version: "20260728121500" },
+        { version: "20260728123058" },
+        { version: "20260729120405" },
+      ],
+    },
+  };
+  assert.deepEqual(validateDryRun({
+    contract: fiveVersionContract,
+    remoteHistory: "20260728120000\n20260728123058\n20260729120405\n",
+    output: [
+      "Would push these migrations:",
+      " • 20260728115959_quarantine_invalid_os_auction_identity.sql",
+      " • 20260728121500_repair_exact_os_auction_identity_prefix.sql",
+    ].join("\n"),
+  }).pending_versions, ["20260728115959", "20260728121500"]);
+  assert.deepEqual(validateDryRun({
+    contract: fiveVersionContract,
+    remoteHistory: "",
+    output: [
+      "Would push these migrations:",
+      " • 20260728115959_quarantine_invalid_os_auction_identity.sql",
+      " • 20260728120000_canonicalize_os_auction_identity.sql",
+      " • 20260728121500_repair_exact_os_auction_identity_prefix.sql",
+      " • 20260728123058_materialize_public_catalogue_snapshots.sql",
+      " • 20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql",
+    ].join("\n"),
+  }).pending_versions, [
+    "20260728115959",
+    "20260728120000",
+    "20260728121500",
+    "20260728123058",
+    "20260729120405",
+  ]);
+  assert.deepEqual(validateDryRun({
+    contract: fiveVersionContract,
+    remoteHistory: "20260728115959\n20260728120000\n",
+    output: [
+      "Would push these migrations:",
+      " • 20260728121500_repair_exact_os_auction_identity_prefix.sql",
+      " • 20260728123058_materialize_public_catalogue_snapshots.sql",
+      " • 20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql",
+    ].join("\n"),
+  }).pending_versions, ["20260728121500", "20260728123058", "20260729120405"]);
+});
+
 test("linked push failure classifier exposes only bounded operational fields", () => {
   const credential = "postgresql://postgres.secret:password@private.example/postgres";
   assert.deepEqual(classifyLinkedPushFailure([
@@ -1573,6 +1624,18 @@ test("linked push failure classifier exposes only bounded operational fields", (
     sqlstate: "P0001",
     category: "catalogue-duplicate-os-tag",
     message: "Catalogue bootstrap rejected duplicate OS auction tags.",
+  });
+  assert.deepEqual(classifyLinkedPushFailure([
+    "Applying migration 20260728121500_repair_exact_os_auction_identity_prefix.sql...",
+    "ERROR: final exact provider identity collides (SQLSTATE 23505)",
+  ].join("\n")), {
+    schema_version: 1,
+    kind: "maiprop-linked-push-failure",
+    migration_filename: "20260728121500_repair_exact_os_auction_identity_prefix.sql",
+    migration_version: "20260728121500",
+    sqlstate: "23505",
+    category: "unique-violation",
+    message: "Database execution violated a uniqueness constraint.",
   });
   const safe = JSON.stringify(classifyLinkedPushFailure([
     "Applying migration 20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql...",
@@ -2063,6 +2126,7 @@ test("artifact allowlists contain only sanitized, non-duplicated evidence files"
     "evidence/database-contract.json",
     "evidence/dry-run-pending.json",
     "evidence/public-catalogue-pgtap-proof.json",
+    "evidence/invalid-os-quarantine-pgtap-proof.json",
     "evidence/catalogue-cron-proof.json",
     "evidence/staging-frontend-marker.json",
     "evidence/staging-http-latency.json",

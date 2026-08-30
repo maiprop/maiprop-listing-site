@@ -5,7 +5,7 @@
  * itself separately via `npm run lint:migrations`.
  */
 import { describe, test, expect } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -50,6 +50,30 @@ CREATE OR REPLACE VIEW my_v AS SELECT 1;
     expect(out[0].rule).toMatch(/CREATE TABLE/);
     expect(out[0].file).toBe("a.sql");
     expect(out[0].line).toBeGreaterThanOrEqual(1);
+  });
+
+  test("accepts the exact fail-closed quarantine migration's deliberate strict table creation", () => {
+    const file = "20260728115959_quarantine_invalid_os_auction_identity.sql";
+    const sql = readFileSync(join(process.cwd(), "supabase", "migrations", file), "utf8");
+
+    expect(lintMigration(file, sql)).toHaveLength(0);
+  });
+
+  test("does not extend the strict-table exception to renamed or weakened quarantine migrations", () => {
+    const file = "20260728115959_quarantine_invalid_os_auction_identity.sql";
+    const sql = readFileSync(join(process.cwd(), "supabase", "migrations", file), "utf8");
+    const weakened = sql.replace("IF v_candidate_count > 1 THEN", "IF v_candidate_count > 100 THEN");
+
+    for (const [candidateFile, candidateSql] of [
+      [`${file}.renamed`, sql],
+      [file, weakened],
+    ]) {
+      expect(lintMigration(candidateFile, candidateSql)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ rule: "CREATE TABLE without IF NOT EXISTS" }),
+        ]),
+      );
+    }
   });
 
   test("flags CREATE INDEX without IF NOT EXISTS", () => {

@@ -14,8 +14,16 @@ import { validateCataloguePerformanceHotfix } from "./catalogue-performance-hotf
 
 const MIGRATIONS = [
   {
+    path: "supabase/migrations/20260728115959_quarantine_invalid_os_auction_identity.sql",
+    sha256: "59a7a65e25c0cb076052de9534301ec5aa16efadf6396e7634b820dd2234bde0",
+  },
+  {
     path: "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
-    sha256: "fe10e9437bd057e3c7efb6fa0f2d9f123279841b963fe6cd4f24a46b2d76f9f7",
+    sha256: "b5e54300adac18727afec6591a671b35a0d85cdadc95c5ba943d19f5c4c7c708",
+  },
+  {
+    path: "supabase/migrations/20260728121500_repair_exact_os_auction_identity_prefix.sql",
+    sha256: "4d41001fb4729043f43b2ca1d083d1bf835875bf51c9a59c750e13db9e32f860",
   },
   {
     path: "supabase/migrations/20260728123058_materialize_public_catalogue_snapshots.sql",
@@ -26,7 +34,7 @@ const MIGRATIONS = [
     sha256: "f20d21b6c1368d0406e607a308ddd68ff1deaaf98a7d2a73927d857ddf7d85aa",
   },
 ];
-const FIRST_MIGRATION_PATH = MIGRATIONS[1].path;
+const FIRST_MIGRATION_PATH = MIGRATIONS[3].path;
 
 const manifest = () => ({
   version: 1,
@@ -73,9 +81,19 @@ test("accepts only the exact materialized catalogue migration contract", () => {
       },
       migrations: [
         {
+          version: "20260728115959",
+          path: "supabase/migrations/20260728115959_quarantine_invalid_os_auction_identity.sql",
+          sha256: "59a7a65e25c0cb076052de9534301ec5aa16efadf6396e7634b820dd2234bde0",
+        },
+        {
           version: "20260728120000",
           path: "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
-          sha256: "fe10e9437bd057e3c7efb6fa0f2d9f123279841b963fe6cd4f24a46b2d76f9f7",
+          sha256: "b5e54300adac18727afec6591a671b35a0d85cdadc95c5ba943d19f5c4c7c708",
+        },
+        {
+          version: "20260728121500",
+          path: "supabase/migrations/20260728121500_repair_exact_os_auction_identity_prefix.sql",
+          sha256: "4d41001fb4729043f43b2ca1d083d1bf835875bf51c9a59c750e13db9e32f860",
         },
         {
           version: "20260728123058",

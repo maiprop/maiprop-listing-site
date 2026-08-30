@@ -37,6 +37,7 @@ const linkedDatabasePushPath = resolve(
 const temporaryDatabasePhases = {
   staging: [
     "Prove recorded staging database state",
+    "Measure staging catalogue bootstrap source quality",
     "Prepare manifest-bound staging migration dry-run",
     "Verify staging database and pgTAP",
     "Prove staging publish-public-catalogue cron liveness",
@@ -56,17 +57,11 @@ const linkedMigrationPhases = {
 const requiredDatabasePhases = Object.fromEntries(
   Object.keys(temporaryDatabasePhases).map((target) => [
     target,
-    target === "production"
-      ? [
+    [
       ...temporaryDatabasePhases[target].slice(0, 3),
       ...linkedMigrationPhases[target],
       ...temporaryDatabasePhases[target].slice(3),
-      ]
-      : [
-      ...temporaryDatabasePhases[target].slice(0, 2),
-      ...linkedMigrationPhases[target],
-      ...temporaryDatabasePhases[target].slice(2),
-      ],
+    ],
   ]),
 );
 
@@ -190,13 +185,15 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     ...requiredDatabasePhases.staging,
     ...requiredDatabasePhases.production,
   ]);
-  const productionQualityStep = steps(production).find((step) =>
-    step.name === "Measure production catalogue bootstrap source quality"
-  );
-  assert.ok(productionQualityStep, "production measures aggregate-only bootstrap source quality");
-  assert.match(productionQualityStep.run, /catalogue-hotfix-source-quality-probe\.mjs/);
-  assert.match(productionQualityStep.run, /::notice::Catalogue bootstrap source quality:/);
-  assert.doesNotMatch(productionQualityStep.run, /\bcat\b|\btee\b|--verbose|--trace|-sS/);
+  for (const [target, job] of Object.entries({ staging, production })) {
+    const qualityStep = steps(job).find((step) =>
+      step.name === `Measure ${target} catalogue bootstrap source quality`
+    );
+    assert.ok(qualityStep, `${target} measures aggregate-only bootstrap source quality`);
+    assert.match(qualityStep.run, /catalogue-hotfix-source-quality-probe\.mjs/);
+    assert.match(qualityStep.run, /::notice::Catalogue bootstrap source quality:/);
+    assert.doesNotMatch(qualityStep.run, /\bcat\b|\btee\b|--verbose|--trace|-sS/);
+  }
   for (const [target, job] of Object.entries({ staging, production })) {
     const identityIndex = steps(job).findIndex((step) => new RegExp(`Revalidate ${target} identity immediately before mutation`).test(step.name ?? ""));
     assert.ok(identityIndex >= 0);
@@ -279,7 +276,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   const rawDatabaseLines = text.split(/\r?\n/).filter((line) =>
     line.includes('psql "$TARGET_DB_URL"')
   );
-  assert.equal(rawDatabaseLines.length, 5);
+  assert.equal(rawDatabaseLines.length, 6);
   for (const line of rawDatabaseLines) {
     assert.equal((line.match(/--command 'SET ROLE postgres'/g) ?? []).length, 1);
     const roleIndex = line.indexOf("--command 'SET ROLE postgres'");
@@ -378,6 +375,8 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(behaviouralProbe, /20260728123058/);
     assert.match(behaviouralProbe, /20260729120405/);
     assert.match(behaviouralProbe, /20260728120000/);
+    assert.match(behaviouralProbe, /20260728115959/);
+    assert.match(behaviouralProbe, /20260728121500/);
     assert.match(behaviouralProbe, /get_public_listing_catalogue/);
     assert.match(behaviouralProbe, /get_public_catalogue_publication/);
     assert.match(behaviouralProbe, /SET LOCAL ROLE anon/);
@@ -437,6 +436,8 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.doesNotMatch(text, /release:verify-live-marker|\/api\/release/);
   assert.match(stagingBody, /public_catalogue_snapshot_test\.sql/);
   assert.match(stagingBody, /90/);
+  assert.match(stagingBody, /catalogue_invalid_os_identity_quarantine_test\.sql/);
+  assert.match(stagingBody, /--expected-plan 49/);
   assert.match(stagingBody, /status=eq\.active/);
   assert.match(stagingBody, /is_off_market=eq\.false/);
   assert.match(behaviouralProbe, /location_search_text/);
@@ -462,6 +463,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     "evidence/database-contract.json",
     "evidence/dry-run-pending.json",
     "evidence/public-catalogue-pgtap-proof.json",
+    "evidence/invalid-os-quarantine-pgtap-proof.json",
     "evidence/catalogue-cron-proof.json",
     "evidence/staging-frontend-marker.json",
     "evidence/staging-http-latency.json",
@@ -478,6 +480,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /Prove recorded .* database state/);
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs recorded/);
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs postapply/);
+    assert.match(body, /catalogue-hotfix-source-quality-probe\.mjs --require-zero-invalid/);
     assert.match(body, /PRODUCTION_RELEASE_DEPLOYERS/);
   }
   assert.match(productionBody, /catalogue-hotfix-static-marker\.sh/);

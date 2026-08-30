@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildCatalogueSourceQualitySql,
   runCatalogueSourceQualityProbe,
+  requireZeroInvalidCatalogueSourceQuality,
   validateCatalogueSourceQuality,
 } from "./catalogue-hotfix-source-quality-probe.mjs";
 
@@ -44,10 +45,21 @@ test("source-quality SQL emits only aggregate counts for the catalogue bootstrap
   assert.match(sql, /COALESCE\(listing\.is_off_market, false\) = false/);
   assert.match(sql, /listing\.created_at <= date_trunc\('minute', clock_timestamp\(\)\)/);
   assert.match(sql, /supervisor-\[0-9\]\+/);
-  assert.match(sql, /os_auction:%/);
+  assert.match(sql, /left\(tag\.value, length\('os_auction:'\)\) = 'os_auction:'/);
+  assert.doesNotMatch(sql, /LIKE 'os_auction:%'/);
   assert.match(sql, /GROUP BY source\.os_tag/);
   assert.match(sql, /listing\.owner_id/);
   assert.match(sql, /listing_promotion_allocations/);
+  const invalidPromotionSection = sql.match(
+    /'all_os_source_invalid_rows_with_active_promotion',[\s\S]*?'all_os_identity_rows'/,
+  )?.[0] ?? "";
+  assert.match(invalidPromotionSection, /allocation\.ends_at > statement_timestamp\(\)/);
+  assert.doesNotMatch(invalidPromotionSection, /allocation\.starts_at <= statement_timestamp\(\)/);
+  const duplicatePromotionSection = sql.match(
+    /'quarantine_candidates_with_active_promotion',[\s\S]*?\n  \)\n\);/,
+  )?.[0] ?? "";
+  assert.match(duplicatePromotionSection, /allocation\.ends_at > statement_timestamp\(\)/);
+  assert.doesNotMatch(duplicatePromotionSection, /allocation\.starts_at <= statement_timestamp\(\)/);
   assert.match(sql, /all_os_source_rows/);
   assert.match(sql, /source:maiprop-os/);
   assert.match(sql, /source:maiprop-os-duplicate-quarantine/);
@@ -67,29 +79,46 @@ test("source-quality SQL emits only aggregate counts for the catalogue bootstrap
   assert.doesNotMatch(sql, /listing\.title\s+AS|listing\.address\s+AS|listing\.owner_id\s+AS/);
 });
 
-test("source-quality validation exposes only aggregate invalid-source diagnostics", () => {
-  const invalidQuality = {
+test("source-quality validation permits safe repair candidates and exposes only aggregate blocker diagnostics", () => {
+  const safeInvalidQuality = {
     ...validQuality,
-    all_os_source_rows_with_invalid_identity: 15,
-    all_os_source_invalid_non_auction_rows: 1,
-    all_os_source_invalid_auction_rows_without_identity: 2,
-    all_os_source_invalid_auction_rows_with_multiple_identities: 3,
-    all_os_source_invalid_auction_rows_with_placeholder_identity: 4,
-    all_os_source_invalid_auction_rows_with_malformed_identity: 5,
-    all_os_source_invalid_rows_with_owner: 6,
-    all_os_source_invalid_rows_with_active_promotion: 7,
+    all_os_source_rows_with_invalid_identity: 1,
+    all_os_source_invalid_non_auction_rows: 0,
+    all_os_source_invalid_auction_rows_without_identity: 0,
+    all_os_source_invalid_auction_rows_with_multiple_identities: 0,
+    all_os_source_invalid_auction_rows_with_placeholder_identity: 0,
+    all_os_source_invalid_auction_rows_with_malformed_identity: 1,
+    all_os_source_invalid_rows_with_owner: 0,
+    all_os_source_invalid_rows_with_active_promotion: 0,
+  };
+
+  assert.deepEqual(validateCatalogueSourceQuality(safeInvalidQuality), safeInvalidQuality);
+
+  const blockedInvalidQuality = {
+    ...safeInvalidQuality,
+    all_os_source_invalid_rows_with_owner: 1,
+    all_os_source_invalid_rows_with_active_promotion: 1,
   };
 
   assert.throws(
-    () => validateCatalogueSourceQuality(invalidQuality),
+    () => validateCatalogueSourceQuality(blockedInvalidQuality),
     (error) => {
       assert.equal(
         error.message,
-        "Catalogue all-status OS source identity contract is invalid: " +
-          '{"non_auction_rows":1,"auction_rows_without_identity":2,"auction_rows_with_multiple_identities":3,"auction_rows_with_placeholder_identity":4,"auction_rows_with_malformed_identity":5,"rows_with_owner":6,"rows_with_active_promotion":7}',
+        "Catalogue all-status OS source identity contract is invalid or exceeds the one-row remediation cap: " +
+          '{"non_auction_rows":0,"auction_rows_without_identity":0,"auction_rows_with_multiple_identities":0,"auction_rows_with_placeholder_identity":0,"auction_rows_with_malformed_identity":1,"rows_with_owner":1,"rows_with_active_promotion":1}',
       );
       return true;
     },
+  );
+
+  assert.throws(
+    () => validateCatalogueSourceQuality({
+      ...safeInvalidQuality,
+      all_os_source_rows_with_invalid_identity: 2,
+      all_os_source_invalid_auction_rows_with_malformed_identity: 2,
+    }),
+    /one-row remediation cap/i,
   );
 });
 
@@ -110,6 +139,18 @@ test("source-quality runner returns and writes the validated fixed-schema aggreg
   assert.deepEqual(result, validQuality);
   assert.equal(queries.length, 1);
   assert.deepEqual(writes, [["quality.json", `${JSON.stringify(validQuality, null, 2)}\n`]]);
+});
+
+test("postapply source-quality certification requires exactly zero invalid rows", () => {
+  assert.deepEqual(requireZeroInvalidCatalogueSourceQuality(validQuality), validQuality);
+  assert.throws(
+    () => requireZeroInvalidCatalogueSourceQuality({
+      ...validQuality,
+      all_os_source_rows_with_invalid_identity: 1,
+      all_os_source_invalid_auction_rows_with_malformed_identity: 1,
+    }),
+    /postapply.*eligible invalid/i,
+  );
 });
 
 test("source-quality validation fails closed on extra, nonnumeric, negative, or inconsistent fields", () => {

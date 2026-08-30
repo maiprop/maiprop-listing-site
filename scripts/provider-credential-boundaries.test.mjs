@@ -22,6 +22,7 @@ describe("provider credential boundaries", () => {
     expect(scoped.map((step) => step.name)).toEqual([
       "Resolve current staging public API key",
       "Prove recorded staging database state",
+      "Measure staging catalogue bootstrap source quality",
       "Prepare manifest-bound staging migration dry-run",
       "Apply only manifest-bound staging migrations",
       "Verify staging database and pgTAP",
@@ -36,22 +37,22 @@ describe("provider credential boundaries", () => {
     expect(scoped[0].env).toEqual({
       SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
     });
-    for (const step of [scoped[1], scoped[2], scoped[4], scoped[5]]) {
+    for (const step of [scoped[1], scoped[2], scoped[3], scoped[5], scoped[6]]) {
       expect(step.env).toEqual({
         SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
         TARGET_DB_URL: "${{ secrets.SUPABASE_STAGING_DB_URL }}",
       });
     }
-    expect(scoped[3].env).toEqual({
+    expect(scoped[4].env).toEqual({
       SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
     });
-    for (const step of [scoped[6], scoped[7], scoped[8], scoped[10], scoped[11]]) {
+    for (const step of [scoped[7], scoped[8], scoped[9], scoped[11], scoped[12]]) {
       expect(step.env).toEqual({
         SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
         TARGET_DB_URL: "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
       });
     }
-    expect(scoped[9].env).toEqual({
+    expect(scoped[10].env).toEqual({
       SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
     });
   });
