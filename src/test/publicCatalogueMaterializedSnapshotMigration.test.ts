@@ -267,6 +267,37 @@ describe("materialized public catalogue snapshot migration", () => {
     expect(transactionEnd).toBeGreaterThan(lock);
   });
 
+  it("gives only the unavoidable stored-column rewrite a bounded extended timeout", () => {
+    const duplicateUpdate = osAuctionIdentityMigration.indexOf(
+      "UPDATE public.listings AS listing",
+    );
+    const rewriteTimeout = osAuctionIdentityMigration.indexOf(
+      "SET LOCAL statement_timeout = '6min'",
+    );
+    const generatedColumn = osAuctionIdentityMigration.indexOf(
+      "ADD COLUMN os_auction_id text",
+    );
+    const rewriteTimeoutReset = osAuctionIdentityMigration.indexOf(
+      "SET LOCAL statement_timeout = DEFAULT",
+    );
+    const sourceConstraint = osAuctionIdentityMigration.indexOf(
+      "ADD CONSTRAINT listings_os_auction_source_identity_valid",
+    );
+
+    expect(duplicateUpdate).toBeGreaterThanOrEqual(0);
+    expect(rewriteTimeout).toBeGreaterThan(duplicateUpdate);
+    expect(generatedColumn).toBeGreaterThan(rewriteTimeout);
+    expect(rewriteTimeoutReset).toBeGreaterThan(generatedColumn);
+    expect(sourceConstraint).toBeGreaterThan(rewriteTimeoutReset);
+    expect(
+      osAuctionIdentityMigration.match(/SET LOCAL statement_timeout = '6min'/g),
+    ).toHaveLength(1);
+    expect(
+      osAuctionIdentityMigration.match(/SET LOCAL statement_timeout = DEFAULT/g),
+    ).toHaveLength(1);
+    expect(osAuctionIdentityMigration).not.toContain("statement_timeout = '0'");
+  });
+
   it("rejects an owner-linked OS identity even without an OS source marker", () => {
     const ownerGuard = osAuctionIdentityMigration.match(
       /IF EXISTS \(\s*SELECT 1\s*FROM public\.listings AS listing\s*WHERE listing\.listing_type = 'auction'::public\.listing_type[\s\S]*?RAISE EXCEPTION 'os_auction_identity_has_owner'[\s\S]*?END IF;/,

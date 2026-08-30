@@ -7,11 +7,20 @@ import {
 } from "./catalogue-hotfix-workflow-helpers.mjs";
 
 const QUARANTINE_VERSION = "20260728115959";
+const PREPARATION_VERSION = "20260728115960";
 const BRIDGE_VERSION = "20260728120000";
 const REPAIR_VERSION = "20260728121500";
 const CATALOGUE_VERSION = "20260728123058";
 const HARDENING_VERSION = "20260729120405";
 const HOTFIX_VERSIONS = [
+  QUARANTINE_VERSION,
+  PREPARATION_VERSION,
+  BRIDGE_VERSION,
+  REPAIR_VERSION,
+  CATALOGUE_VERSION,
+  HARDENING_VERSION,
+];
+const LEGACY_FULL_VERSIONS = [
   QUARANTINE_VERSION,
   BRIDGE_VERSION,
   REPAIR_VERSION,
@@ -145,6 +154,332 @@ function quarantineMetadataFieldsSql(includeQuarantine) {
     WHERE COALESCE(listing.tags, '{}'::text[]) @> ARRAY['source:maiprop-os-invalid-identity-quarantine']::text[]
   ),
   'invalid_identity_quarantine_live_contract', ${invalidIdentityQuarantineLiveContractSql()}`;
+}
+
+function bridgeResidueMetadataFieldsSql() {
+  return `
+  'bridge_residue_duplicate_quarantine_relation', to_regclass('private.os_auction_duplicate_quarantine') IS NOT NULL,
+  'bridge_residue_generated_column', EXISTS (
+    SELECT 1
+    FROM pg_attribute AS attribute
+    WHERE attribute.attrelid = 'public.listings'::regclass
+      AND attribute.attname = 'os_auction_id'
+      AND attribute.attnum > 0
+      AND NOT attribute.attisdropped
+  ),
+  'bridge_residue_unique_index', to_regclass('public.idx_listings_os_auction_id_unique') IS NOT NULL,
+  'bridge_residue_source_check', EXISTS (
+    SELECT 1
+    FROM pg_constraint AS constraint_definition
+    WHERE constraint_definition.conrelid = 'public.listings'::regclass
+      AND constraint_definition.conname = 'listings_os_auction_source_identity_valid'
+  ),
+  'bridge_residue_duplicate_marker_rows', (
+    SELECT count(*)
+    FROM public.listings AS listing
+    WHERE COALESCE(listing.tags, '{}'::text[])
+      @> ARRAY['source:maiprop-os-duplicate-quarantine']::text[]
+  )`;
+}
+
+function duplicatePreparationLedgerContractSql() {
+  return `
+    to_regclass('private.os_auction_duplicate_quarantine') IS NOT NULL
+    AND COALESCE((
+      SELECT relation.relkind = 'r'
+        AND relation.relpersistence = 'p'
+        AND NOT relation.relrowsecurity
+        AND NOT relation.relforcerowsecurity
+        AND pg_get_userbyid(relation.relowner) = 'postgres'
+      FROM pg_class AS relation
+      WHERE relation.oid = to_regclass('private.os_auction_duplicate_quarantine')
+    ), false)
+    AND 7 = (
+      SELECT count(*)
+      FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND attribute.attnum > 0
+        AND NOT attribute.attisdropped
+    )
+    AND 5 = (
+      SELECT count(*)
+      FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_duplicate_quarantine')
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND attribute.attnum = 1 AND attribute.attname = 'duplicate_listing_id'
+        AND attribute.atttypid = 'uuid'::regtype AND attribute.attnotnull
+        AND NOT attribute.atthasdef
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND attribute.attnum = 2 AND attribute.attname = 'canonical_listing_id'
+        AND attribute.atttypid = 'uuid'::regtype AND attribute.attnotnull
+        AND NOT attribute.atthasdef
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND attribute.attnum = 3 AND attribute.attname = 'provider_id'
+        AND attribute.atttypid = 'text'::regtype AND attribute.attnotnull
+        AND NOT attribute.atthasdef
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND attribute.attnum = 4 AND attribute.attname = 'previous_status'
+        AND attribute.atttypid = 'public.listing_status'::regtype AND attribute.attnotnull
+        AND NOT attribute.atthasdef
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND attribute.attnum = 5 AND attribute.attname = 'previous_tags'
+        AND attribute.atttypid = 'text[]'::regtype AND attribute.attnotnull
+        AND NOT attribute.atthasdef
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM pg_attribute AS attribute
+      JOIN pg_attrdef AS definition
+        ON definition.adrelid = attribute.attrelid AND definition.adnum = attribute.attnum
+      WHERE attribute.attrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND attribute.attnum = 6 AND attribute.attname = 'quarantined_at'
+        AND attribute.atttypid = 'timestamp with time zone'::regtype AND attribute.attnotnull
+        AND pg_get_expr(definition.adbin, definition.adrelid) = 'statement_timestamp()'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM pg_attribute AS attribute
+      JOIN pg_attrdef AS definition
+        ON definition.adrelid = attribute.attrelid AND definition.adnum = attribute.attnum
+      WHERE attribute.attrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND attribute.attnum = 7 AND attribute.attname = 'reason'
+        AND attribute.atttypid = 'text'::regtype AND attribute.attnotnull
+        AND pg_get_expr(definition.adbin, definition.adrelid)
+          = '''duplicate_os_auction_identity''::text'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND constraint_definition.contype = 'p'
+        AND constraint_definition.convalidated
+        AND constraint_definition.conkey = ARRAY[1]::smallint[]
+    )
+    AND 2 = (
+      SELECT count(*)
+      FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND constraint_definition.contype = 'f'
+        AND constraint_definition.convalidated
+        AND constraint_definition.confrelid = 'public.listings'::regclass
+        AND constraint_definition.confdeltype = 'r'
+        AND constraint_definition.confupdtype = 'a'
+        AND constraint_definition.confkey = ARRAY[
+          (SELECT attribute.attnum FROM pg_attribute AS attribute
+           WHERE attribute.attrelid = 'public.listings'::regclass
+             AND attribute.attname = 'id')
+        ]::smallint[]
+        AND constraint_definition.conkey IN (ARRAY[1]::smallint[], ARRAY[2]::smallint[])
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND constraint_definition.contype = 'c'
+        AND constraint_definition.convalidated
+        AND regexp_replace(pg_get_constraintdef(constraint_definition.oid), '[[:space:]]+', ' ', 'g')
+          = 'CHECK ((reason = ''duplicate_os_auction_identity''::text))'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND constraint_definition.contype = 'c'
+        AND constraint_definition.convalidated
+        AND regexp_replace(pg_get_constraintdef(constraint_definition.oid), '[[:space:]]+', ' ', 'g')
+          = 'CHECK ((duplicate_listing_id <> canonical_listing_id))'
+    )`;
+}
+
+function duplicatePreparationAclContractSql() {
+  return `
+    NOT EXISTS (
+      SELECT 1
+      FROM pg_class AS relation
+      CROSS JOIN LATERAL aclexplode(
+        COALESCE(relation.relacl, acldefault('r', relation.relowner))
+      ) AS privilege
+      WHERE relation.oid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND privilege.grantee <> relation.relowner
+    )`;
+}
+
+function duplicatePreparationRemainingCandidatesSql() {
+  return `(
+    SELECT COALESCE(sum(identity_count - 1), 0)
+    FROM (
+      SELECT count(*) AS identity_count
+      FROM public.listings AS listing
+      WHERE listing.listing_type = 'auction'::public.listing_type
+        AND private.extract_os_auction_id(listing.tags) IS NOT NULL
+      GROUP BY private.extract_os_auction_id(listing.tags)
+      HAVING count(*) > 1
+    ) AS duplicates
+  )`;
+}
+
+function duplicatePreparationLiveRecoverableContractSql() {
+  return `
+    NOT EXISTS (
+      SELECT 1
+      FROM private.os_auction_duplicate_quarantine AS quarantine
+      LEFT JOIN public.listings AS listing
+        ON listing.id = quarantine.duplicate_listing_id
+      LEFT JOIN public.listings AS canonical
+        ON canonical.id = quarantine.canonical_listing_id
+      LEFT JOIN LATERAL (
+        SELECT tag.value AS original_os_tag
+        FROM unnest(quarantine.previous_tags) AS tag(value)
+        WHERE left(tag.value, length('os_auction:')) = 'os_auction:'
+        ORDER BY tag.value
+        LIMIT 1
+      ) AS original ON true
+      WHERE listing.id IS NULL
+        OR canonical.id IS NULL
+        OR listing.owner_id IS NOT NULL
+        OR private.extract_os_auction_id(quarantine.previous_tags)
+          IS DISTINCT FROM quarantine.provider_id
+        OR private.extract_os_auction_id(canonical.tags)
+          IS DISTINCT FROM quarantine.provider_id
+        OR listing.status IS DISTINCT FROM CASE
+          WHEN quarantine.previous_status = 'active'::public.listing_status
+            THEN 'paused'::public.listing_status
+          ELSE quarantine.previous_status
+        END
+        OR listing.tags IS DISTINCT FROM CASE
+          WHEN array_replace(
+            quarantine.previous_tags,
+            original.original_os_tag,
+            'os_auction_duplicate:' || quarantine.provider_id
+          ) @> ARRAY['source:maiprop-os-duplicate-quarantine']::text[]
+            THEN array_replace(
+              quarantine.previous_tags,
+              original.original_os_tag,
+              'os_auction_duplicate:' || quarantine.provider_id
+            )
+          ELSE array_replace(
+            quarantine.previous_tags,
+            original.original_os_tag,
+            'os_auction_duplicate:' || quarantine.provider_id
+          ) || ARRAY['source:maiprop-os-duplicate-quarantine']::text[]
+        END
+        OR (
+          SELECT count(*)
+          FROM unnest(COALESCE(listing.tags, '{}'::text[])) AS marker(value)
+          WHERE marker.value = 'source:maiprop-os-duplicate-quarantine'
+        ) <> 1
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.listings AS listing
+      WHERE COALESCE(listing.tags, '{}'::text[])
+        @> ARRAY['source:maiprop-os-duplicate-quarantine']::text[]
+        AND NOT EXISTS (
+          SELECT 1
+          FROM private.os_auction_duplicate_quarantine AS quarantine
+          WHERE quarantine.duplicate_listing_id = listing.id
+        )
+    )`;
+}
+
+function preparationMetadataSql(allowBridgeArtifacts = false) {
+  const ledgerContract = duplicatePreparationLedgerContractSql();
+  const aclContract = duplicatePreparationAclContractSql();
+  const remainingCandidates = duplicatePreparationRemainingCandidatesSql();
+  const ownerGuardRows = `(
+    SELECT count(*)
+    FROM public.listings AS listing
+    WHERE listing.listing_type = 'auction'::public.listing_type
+      AND private.extract_os_auction_id(listing.tags) IS NOT NULL
+      AND listing.owner_id IS NOT NULL
+  )`;
+  const activePromotionRows = `(
+    SELECT count(*)
+    FROM private.os_auction_duplicate_quarantine AS quarantine
+    JOIN public.listing_promotion_allocations AS allocation
+      ON allocation.listing_id = quarantine.duplicate_listing_id
+    WHERE allocation.ends_at > statement_timestamp()
+      AND allocation.revoked_at IS NULL
+  )`;
+  const ledgerRows = `(SELECT count(*) FROM private.os_auction_duplicate_quarantine)`;
+  const markerRows = `(
+    SELECT count(*)
+    FROM public.listings AS listing
+    WHERE COALESCE(listing.tags, '{}'::text[])
+      @> ARRAY['source:maiprop-os-duplicate-quarantine']::text[]
+  )`;
+  const liveContract = duplicatePreparationLiveRecoverableContractSql();
+  const noGeneratedColumn = `NOT EXISTS (
+    SELECT 1 FROM pg_attribute AS attribute
+    WHERE attribute.attrelid = 'public.listings'::regclass
+      AND attribute.attname = 'os_auction_id'
+      AND attribute.attnum > 0
+      AND NOT attribute.attisdropped
+  )`;
+  const noUniqueIndex = `to_regclass('public.idx_listings_os_auction_id_unique') IS NULL`;
+  const noSourceCheck = `NOT EXISTS (
+    SELECT 1 FROM pg_constraint AS constraint_definition
+    WHERE constraint_definition.conrelid = 'public.listings'::regclass
+      AND constraint_definition.conname = 'listings_os_auction_source_identity_valid'
+  )`;
+  const bridgeArtifactContract = allowBridgeArtifacts
+    ? "true"
+    : `(${noGeneratedColumn}) AND (${noUniqueIndex}) AND (${noSourceCheck})`;
+  return `
+WITH preparation AS MATERIALIZED (
+  SELECT
+    COALESCE((${ledgerContract}), false) AS ledger_contract,
+    COALESCE((${aclContract}), false) AS acl_contract,
+    COALESCE((${noGeneratedColumn}), false) AS no_generated_column,
+    COALESCE((${noUniqueIndex}), false) AS no_unique_index,
+    COALESCE((${noSourceCheck}), false) AS no_source_check,
+    ${remainingCandidates} AS remaining_candidates,
+    ${ownerGuardRows} AS owner_guard_rows,
+    ${activePromotionRows} AS active_promotion_rows,
+    ${ledgerRows} AS ledger_rows,
+    ${markerRows} AS live_marker_rows,
+    COALESCE((${liveContract}), false) AS live_recoverable_contract
+)
+SELECT json_build_object(
+  'migration_versions', COALESCE((SELECT json_agg(version ORDER BY version) FROM supabase_migrations.schema_migrations WHERE version IN (${HOTFIX_VERSION_SQL})), '[]'::json),
+  ${quarantineMetadataFieldsSql(true)},
+  'duplicate_preparation_contract',
+    preparation.ledger_contract
+    AND preparation.acl_contract
+    AND (${bridgeArtifactContract})
+    AND preparation.remaining_candidates = 0
+    AND preparation.owner_guard_rows = 0
+    AND preparation.active_promotion_rows = 0
+    AND preparation.ledger_rows = preparation.live_marker_rows
+    AND preparation.live_recoverable_contract,
+  'duplicate_preparation_ledger_contract', preparation.ledger_contract,
+  'duplicate_preparation_acl_contract', preparation.acl_contract,
+  'duplicate_preparation_generated_column', NOT preparation.no_generated_column,
+  'duplicate_preparation_unique_index', NOT preparation.no_unique_index,
+  'duplicate_preparation_source_check', NOT preparation.no_source_check,
+  'duplicate_preparation_remaining_candidates', preparation.remaining_candidates,
+  'duplicate_preparation_owner_guard_rows', preparation.owner_guard_rows,
+  'duplicate_preparation_active_promotion_rows', preparation.active_promotion_rows,
+  'duplicate_preparation_ledger_rows', preparation.ledger_rows,
+  'duplicate_preparation_live_marker_rows', preparation.live_marker_rows,
+  'duplicate_preparation_live_recoverable_contract', preparation.live_recoverable_contract
+)
+FROM preparation;`;
 }
 
 function invalidIdentityQuarantineContractSql() {
@@ -506,8 +841,111 @@ function quarantineMetadataSql() {
   return `
 SELECT json_build_object(
   'migration_versions', COALESCE((SELECT json_agg(version ORDER BY version) FROM supabase_migrations.schema_migrations WHERE version IN (${HOTFIX_VERSION_SQL})), '[]'::json),
-  ${quarantineMetadataFieldsSql(true)}
+  ${quarantineMetadataFieldsSql(true)},
+  ${bridgeResidueMetadataFieldsSql()}
 );`;
+}
+
+function validateNoBridgeResidue(metadata) {
+  const booleanFields = [
+    "bridge_residue_duplicate_quarantine_relation",
+    "bridge_residue_generated_column",
+    "bridge_residue_unique_index",
+    "bridge_residue_source_check",
+  ];
+  if (booleanFields.some((field) => typeof metadata?.[field] !== "boolean") ||
+      !Number.isSafeInteger(metadata?.bridge_residue_duplicate_marker_rows) ||
+      metadata.bridge_residue_duplicate_marker_rows < 0) {
+    fail("Database OS auction bridge residue evidence is invalid.");
+  }
+  if (booleanFields.some((field) => metadata[field]) ||
+      metadata.bridge_residue_duplicate_marker_rows !== 0) {
+    fail("Database OS auction bridge residue is present after quarantine-only recovery.");
+  }
+}
+
+function validatePreparationContract(
+  metadata,
+  recordedVersions,
+  { allowBridgeArtifacts = false } = {},
+) {
+  const booleanFields = [
+    "duplicate_preparation_contract",
+    "duplicate_preparation_ledger_contract",
+    "duplicate_preparation_acl_contract",
+    "duplicate_preparation_generated_column",
+    "duplicate_preparation_unique_index",
+    "duplicate_preparation_source_check",
+    "duplicate_preparation_live_recoverable_contract",
+  ];
+  const countFields = [
+    "duplicate_preparation_remaining_candidates",
+    "duplicate_preparation_owner_guard_rows",
+    "duplicate_preparation_active_promotion_rows",
+    "duplicate_preparation_ledger_rows",
+    "duplicate_preparation_live_marker_rows",
+  ];
+  if (booleanFields.some((field) => typeof metadata?.[field] !== "boolean") ||
+      countFields.some((field) => !Number.isSafeInteger(metadata?.[field]) || metadata[field] < 0)) {
+    fail("Database duplicate identity preparation evidence is invalid.");
+  }
+  if (!metadata.duplicate_preparation_contract ||
+      !metadata.duplicate_preparation_ledger_contract ||
+      !metadata.duplicate_preparation_acl_contract ||
+      (!allowBridgeArtifacts && (
+        metadata.duplicate_preparation_generated_column ||
+        metadata.duplicate_preparation_unique_index ||
+        metadata.duplicate_preparation_source_check
+      )) ||
+      metadata.duplicate_preparation_remaining_candidates !== 0 ||
+      metadata.duplicate_preparation_owner_guard_rows !== 0 ||
+      metadata.duplicate_preparation_active_promotion_rows !== 0 ||
+      metadata.duplicate_preparation_ledger_rows !== metadata.duplicate_preparation_live_marker_rows ||
+      !metadata.duplicate_preparation_live_recoverable_contract) {
+    fail("Database duplicate identity preparation contract is incomplete.");
+  }
+  const quarantineContract = validateDatabaseContract({
+    metadata: {
+      ...metadata,
+      migration_versions: [QUARANTINE_VERSION],
+    },
+    invocation: {},
+    restProbe: {},
+    recordedVersions: [QUARANTINE_VERSION],
+    requiredLevel: "invalid_identity_quarantine",
+  });
+  return {
+    ...quarantineContract,
+    contract_level: "duplicate_identity_preparation",
+    recorded_versions: recordedVersions,
+    indexes: {
+      ...quarantineContract.indexes,
+      duplicate_identity_preparation: true,
+    },
+  };
+}
+
+function validateDatabaseContractForRecordedState({
+  metadata,
+  invocation,
+  restProbe,
+  recordedVersions,
+  requiredLevel,
+}) {
+  const projectedVersions = recordedVersions.filter((version) => version !== PREPARATION_VERSION);
+  const contract = validateDatabaseContract({
+    metadata: {
+      ...metadata,
+      migration_versions: projectedVersions,
+    },
+    invocation,
+    restProbe,
+    recordedVersions: projectedVersions,
+    requiredLevel,
+  });
+  return recordedVersions.includes(PREPARATION_VERSION)
+    ? { ...contract, recorded_versions: recordedVersions }
+    : contract;
 }
 
 function anonInvocationSql(requireSecond) {
@@ -603,11 +1041,20 @@ export async function runCatalogueBehavioralProbe(
     [QUARANTINE_VERSION, BRIDGE_VERSION],
     [QUARANTINE_VERSION, BRIDGE_VERSION, REPAIR_VERSION],
     [QUARANTINE_VERSION, BRIDGE_VERSION, REPAIR_VERSION, CATALOGUE_VERSION],
-    HOTFIX_VERSIONS,
+    LEGACY_FULL_VERSIONS,
     [QUARANTINE_VERSION, CATALOGUE_VERSION],
     [QUARANTINE_VERSION, BRIDGE_VERSION, CATALOGUE_VERSION],
     [QUARANTINE_VERSION, CATALOGUE_VERSION, HARDENING_VERSION],
     [QUARANTINE_VERSION, BRIDGE_VERSION, CATALOGUE_VERSION, HARDENING_VERSION],
+    [QUARANTINE_VERSION, PREPARATION_VERSION],
+    [QUARANTINE_VERSION, PREPARATION_VERSION, BRIDGE_VERSION],
+    [QUARANTINE_VERSION, PREPARATION_VERSION, BRIDGE_VERSION, REPAIR_VERSION],
+    [QUARANTINE_VERSION, PREPARATION_VERSION, BRIDGE_VERSION, REPAIR_VERSION, CATALOGUE_VERSION],
+    HOTFIX_VERSIONS,
+    [QUARANTINE_VERSION, PREPARATION_VERSION, CATALOGUE_VERSION],
+    [QUARANTINE_VERSION, PREPARATION_VERSION, CATALOGUE_VERSION, HARDENING_VERSION],
+    [QUARANTINE_VERSION, PREPARATION_VERSION, BRIDGE_VERSION, CATALOGUE_VERSION],
+    [QUARANTINE_VERSION, PREPARATION_VERSION, BRIDGE_VERSION, CATALOGUE_VERSION, HARDENING_VERSION],
   ];
   if (!approvedRecordedStates.some(
     (state) => JSON.stringify(state) === JSON.stringify(recordedVersions)
@@ -619,7 +1066,8 @@ export async function runCatalogueBehavioralProbe(
   }
   if (mode === "recorded" && recordedVersions.length === 1 && recordedVersions[0] === QUARANTINE_VERSION) {
     const metadata = parseJson(await psql(quarantineMetadataSql()), "Database invalid OS identity quarantine contract");
-    return validateDatabaseContract({
+    validateNoBridgeResidue(metadata);
+    return validateDatabaseContractForRecordedState({
       metadata,
       invocation: {},
       restProbe: {},
@@ -627,16 +1075,36 @@ export async function runCatalogueBehavioralProbe(
       requiredLevel: "invalid_identity_quarantine",
     });
   }
+  if (mode === "recorded" &&
+      JSON.stringify(recordedVersions) === JSON.stringify([QUARANTINE_VERSION, PREPARATION_VERSION])) {
+    const metadata = parseJson(
+      await psql(preparationMetadataSql()),
+      "Database duplicate identity preparation contract",
+    );
+    return validatePreparationContract(metadata, recordedVersions);
+  }
   const hasQuarantine = recordedVersions.includes(QUARANTINE_VERSION);
+  const hasPreparation = recordedVersions.includes(PREPARATION_VERSION);
   const hasBridge = recordedVersions.includes(BRIDGE_VERSION);
   const hasFirst = recordedVersions.includes(CATALOGUE_VERSION);
   const requireSecond = recordedVersions.includes(HARDENING_VERSION);
+  if (hasPreparation) {
+    const preparationMetadata = parseJson(
+      await psql(preparationMetadataSql(hasBridge)),
+      "Database duplicate identity preparation attestation",
+    );
+    validatePreparationContract(
+      preparationMetadata,
+      recordedVersions,
+      { allowBridgeArtifacts: hasBridge },
+    );
+  }
   if (mode === "recorded" && hasBridge && !hasFirst) {
     const metadata = parseJson(
       await psql(bridgeMetadataSql(hasQuarantine, recordedVersions.includes(REPAIR_VERSION))),
       "Database OS identity bridge contract",
     );
-    return validateDatabaseContract({
+    return validateDatabaseContractForRecordedState({
       metadata,
       invocation: {},
       restProbe: {},
@@ -781,7 +1249,7 @@ export async function runCatalogueBehavioralProbe(
     auctionRows,
     requireSecond,
   });
-  const contract = validateDatabaseContract({
+  const contract = validateDatabaseContractForRecordedState({
     metadata,
     invocation,
     restProbe,

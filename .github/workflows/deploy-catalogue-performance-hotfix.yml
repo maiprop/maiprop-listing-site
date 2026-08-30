@@ -167,7 +167,7 @@ jobs:
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-dry-run "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$work/remote-numeric-history.txt" "$work/dry-run-output.txt" evidence/dry-run-pending.json
           unset management_token
       - name: Apply only manifest-bound staging migrations
-        timeout-minutes: 4
+        timeout-minutes: 15
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -346,7 +346,7 @@ jobs:
           work="$RUNNER_TEMP/catalogue-hotfix-production"
           SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
           set -euo pipefail
-          # Only manifest versions 20260728115959, 20260728120000, 20260728121500, 20260728123058, and 20260729120405 may become pending SQL.
+          # Only manifest versions 20260728115959, 20260728115960, 20260728120000, 20260728121500, 20260728123058, and 20260729120405 may become pending SQL.
           node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"; work="$RUNNER_TEMP/catalogue-hotfix-production"; rm -rf "$work"; mkdir -p "$work/supabase/migrations"
           printf '[api]\nenabled = false\n' > "$work/supabase/config.toml"; psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 -qAt --command 'SET ROLE postgres' --command 'SELECT version FROM supabase_migrations.schema_migrations ORDER BY version' > "$work/remote-numeric-history.txt"
           while IFS= read -r v; do [ -z "$v" ]&&continue; [[ "$v" =~ ^[0-9]+$ ]]||exit 1; jq -e --arg v "$v" '.hotfix.migrations[]|select(.version==$v)' "$RUNNER_TEMP/catalogue-hotfix-contract.json" >/dev/null || printf '%s\n' '-- remote numeric history placeholder; never pending SQL' > "$work/supabase/migrations/${v}_remote_history_placeholder.sql"; done < "$work/remote-numeric-history.txt"; jq -r '.hotfix.migrations[].path' "$RUNNER_TEMP/catalogue-hotfix-contract.json" | while IFS= read -r p; do case "$p" in supabase/migrations/*.sql)cp "$p" "$work/supabase/migrations/$(basename "$p")";;*)exit 1;;esac;done
@@ -355,7 +355,7 @@ jobs:
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-dry-run "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$work/remote-numeric-history.txt" "$work/dry-run-output.txt" evidence/dry-run-pending.json
           unset management_token
       - name: Apply only manifest-bound production migrations
-        timeout-minutes: 4
+        timeout-minutes: 15
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |

@@ -203,6 +203,12 @@ SET
 FROM pg_temp.os_auction_duplicate_plan AS plan
 WHERE listing.id = plan.duplicate_listing_id;
 
+-- PostgreSQL must rewrite the listings heap and its indexes for a STORED
+-- generated column. Bound that one unavoidable operation above the provider's
+-- default statement timeout without changing any role- or database-wide
+-- setting. The workflow retains a separate outer timeout.
+SET LOCAL statement_timeout = '6min';
+
 ALTER TABLE public.listings
   ADD COLUMN os_auction_id text
   GENERATED ALWAYS AS (
@@ -212,6 +218,10 @@ ALTER TABLE public.listings
       ELSE NULL
     END
   ) STORED;
+
+-- Restore the database/role default immediately so later validation and index
+-- statements retain the provider's normal bounded statement timeout.
+SET LOCAL statement_timeout = DEFAULT;
 
 ALTER TABLE public.listings
   ADD CONSTRAINT listings_os_auction_source_identity_valid
