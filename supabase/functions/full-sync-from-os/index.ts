@@ -558,26 +558,12 @@ Deno.serve(async (req) => {
         }
       }
       for (const u of toUpdate) {
-        try {
-          const didUpdate = await updateCanonicalOsListing(
-            sb.from("listings") as unknown as OsAuctionListingTable,
-            { id: u.id, osId: u.osId, data: u.data },
-          );
-          if (didUpdate) {
-            totalUpdated++;
-            continue;
-          }
-          log.error("update failed", {
-            err: "canonical_os_listing_changed",
-            listing_id: u.id,
-          });
-        } catch (error) {
-          log.error("update failed", {
-            err: error instanceof Error ? error.message : String(error),
-            listing_id: u.id,
-          });
-        }
-        totalErrors++;
+        const didUpdate = await updateCanonicalOsListing(
+          sb.from("listings") as unknown as OsAuctionListingTable,
+          { id: u.id, osId: u.osId, data: u.data },
+        );
+        if (!didUpdate) throw new Error("canonical_os_listing_changed");
+        totalUpdated++;
       }
 
       pagesDone++;

@@ -344,5 +344,83 @@ Deno.test("invalid bodies bypass the production DB-backed limiter transport", as
   }
 });
 
+Deno.test("a guarded zero-row canonical update fails the full sync request closed", async () => {
+  const originalFetch = globalThis.fetch;
+  let updateRequests = 0;
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const request = input instanceof Request ? input : null;
+    const url = String(request?.url ?? input);
+    const method = request?.method ?? init?.method ?? "GET";
+
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        user: { id: "admin-1", email: "admin@test.local" },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("/rest/v1/profiles")) {
+      return Promise.resolve(new Response(JSON.stringify({ role: "admin" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    }
+    if (url.endsWith("/auth/login")) {
+      return Promise.resolve(new Response(JSON.stringify({ token: "os-token" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    }
+    if (url.includes("/api/v1/auctions/filter/details")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        data: [{
+          auctionListingId: "guarded-auction",
+          firstPriceOffer: 120_000,
+          propertyMunicipalityName: "Athens",
+          propertyPrefectureName: "Attica",
+        }],
+        responseMetadata: { pagination: { totalElements: 1 } },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("/rest/v1/listings") && method === "GET") {
+      return Promise.resolve(new Response(JSON.stringify([{
+        id: "listing-1",
+        os_auction_id: "guarded-auction",
+        tags: ["os_auction:guarded-auction", "source:maiprop-os"],
+      }]), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("/rest/v1/listings") && method === "PATCH") {
+      updateRequests += 1;
+      return Promise.resolve(new Response(null, {
+        status: 204,
+        headers: { "content-range": "*/0" },
+      }));
+    }
+    if (url.includes("/rest/v1/sync_log")) {
+      return Promise.resolve(new Response(null, { status: 201 }));
+    }
+    return Promise.reject(new Error(`unexpected fetch ${method} ${url}`));
+  }) as typeof fetch;
+
+  try {
+    const response = await handler(req("POST", {
+      pageSize: 1,
+      maxPages: 1,
+    }, {
+      authorization: "Bearer boundary-test-token",
+      "x-forwarded-for": "10.0.9.1",
+    }));
+    const payload = await jsonBody(response) as {
+      ok?: boolean;
+      error?: string;
+    };
+
+    assertEquals(updateRequests, 1);
+    assertEquals(response.status, 500);
+    assertEquals(payload.ok, false);
+    assertEquals(payload.error, "canonical_os_listing_changed");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 restore();
 restoreProductionBoundary();

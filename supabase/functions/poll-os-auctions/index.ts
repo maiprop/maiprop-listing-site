@@ -1027,26 +1027,12 @@ Deno.serve(async (req) => {
 
     // Update existing auctions
     for (const u of toUpdate) {
-      try {
-        const didUpdate = await updateCanonicalOsListing(
-          sb.from("listings") as unknown as OsAuctionListingTable,
-          { id: u.id, osId: u.osId, data: u.data },
-        );
-        if (didUpdate) {
-          updated++;
-          continue;
-        }
-        log.error("update failed", {
-          err: "canonical_os_listing_changed",
-          listing_id: u.id,
-        });
-      } catch (error) {
-        log.error("update failed", {
-          err: error instanceof Error ? error.message : String(error),
-          listing_id: u.id,
-        });
-      }
-      errors++;
+      const didUpdate = await updateCanonicalOsListing(
+        sb.from("listings") as unknown as OsAuctionListingTable,
+        { id: u.id, osId: u.osId, data: u.data },
+      );
+      if (!didUpdate) throw new Error("canonical_os_listing_changed");
+      updated++;
     }
 
     const prunedPoolRows = await pruneUnselectedDailyPoolRows(
@@ -1092,7 +1078,7 @@ Deno.serve(async (req) => {
     const message = err instanceof Error ? err.message : String(err);
     log.error("poll error", { err: message });
     await logSync(sb, "error", message);
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

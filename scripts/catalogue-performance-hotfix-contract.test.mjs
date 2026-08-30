@@ -15,7 +15,7 @@ import { validateCataloguePerformanceHotfix } from "./catalogue-performance-hotf
 const MIGRATIONS = [
   {
     path: "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
-    sha256: "f12bfffc972d73a279cd526ff8f028e9417cfd267fe4d1e5e79ef41831ed37cd",
+    sha256: "15b9b8be9adb121effbed80449300f834ed638c06c0b54bd0af0d2611760a41a",
   },
   {
     path: "supabase/migrations/20260728123058_materialize_public_catalogue_snapshots.sql",
@@ -75,7 +75,7 @@ test("accepts only the exact materialized catalogue migration contract", () => {
         {
           version: "20260728120000",
           path: "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
-          sha256: "f12bfffc972d73a279cd526ff8f028e9417cfd267fe4d1e5e79ef41831ed37cd",
+          sha256: "15b9b8be9adb121effbed80449300f834ed638c06c0b54bd0af0d2611760a41a",
         },
         {
           version: "20260728123058",

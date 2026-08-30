@@ -46,7 +46,12 @@ REVOKE ALL ON TABLE private.os_auction_duplicate_quarantine
   FROM PUBLIC, anon, authenticated;
 
 SET LOCAL lock_timeout = '5s';
-LOCK TABLE public.listings IN SHARE ROW EXCLUSIVE MODE;
+-- This migration later needs ACCESS EXCLUSIVE for the generated column. Take
+-- it before the promotion ledger lock so existing promotion writers (which
+-- lock the listing first) finish, and no new allocation can pass its listing
+-- lock between the promotion guard and quarantine update.
+LOCK TABLE public.listings IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE public.listing_promotion_allocations IN SHARE MODE;
 
 DO $$
 BEGIN

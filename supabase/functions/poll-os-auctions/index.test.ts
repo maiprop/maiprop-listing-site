@@ -231,6 +231,89 @@ Deno.test("invalid bodies bypass the production DB-backed limiter transport", as
   }
 });
 
+Deno.test("a guarded zero-row canonical update fails polling before pool pruning", async () => {
+  const originalFetch = globalThis.fetch;
+  let updateRequests = 0;
+  let pruneReads = 0;
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const request = input instanceof Request ? input : null;
+    const url = String(request?.url ?? input);
+    const method = request?.method ?? init?.method ?? "GET";
+
+    if (url.endsWith("/auth/login")) {
+      return Promise.resolve(new Response(JSON.stringify({ token: "os-token" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    }
+    if (url.includes("/api/v1/auctions/filter/details")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        data: [{
+          auctionListingId: "guarded-auction",
+          firstPriceOffer: 120_000,
+          propertyMunicipalityName: "Athens",
+          propertyPrefectureName: "Attica",
+        }],
+        responseMetadata: { pagination: { totalElements: 1 } },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("/rest/v1/listings") && method === "HEAD") {
+      return Promise.resolve(new Response(null, {
+        status: 200,
+        headers: { "content-range": "*/0" },
+      }));
+    }
+    if (url.includes("/rest/v1/listings") && method === "GET") {
+      if (url.includes("order=updated_at")) {
+        pruneReads += 1;
+        return Promise.resolve(new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([{
+        id: "listing-1",
+        os_auction_id: "guarded-auction",
+        tags: ["os_auction:guarded-auction", "source:maiprop-os"],
+      }]), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    if (url.includes("/rest/v1/listings") && method === "PATCH") {
+      updateRequests += 1;
+      return Promise.resolve(new Response(null, {
+        status: 204,
+        headers: { "content-range": "*/0" },
+      }));
+    }
+    if (url.includes("/rest/v1/sync_log")) {
+      return Promise.resolve(new Response(null, { status: 201 }));
+    }
+    return Promise.reject(new Error(`unexpected fetch ${method} ${url}`));
+  }) as typeof fetch;
+
+  try {
+    const response = await handler(req("POST", {
+      page: 0,
+      pageSize: 1,
+      sampleAcrossGreece: false,
+    }, {
+      authorization: `Bearer ${Deno.env.get("CRON_SECRET")}`,
+      "x-forwarded-for": "10.0.9.2",
+    }));
+    const payload = await jsonBody(response) as {
+      ok?: boolean;
+      error?: string;
+    };
+
+    assertEquals(updateRequests, 1);
+    assertEquals(pruneReads, 0);
+    assertEquals(response.status, 500);
+    assertEquals(payload.ok, false);
+    assertEquals(payload.error, "canonical_os_listing_changed");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("cron authorization requires the exact bearer secret, not spoofable headers", async () => {
   const spoofedHeader = req("POST", {}, {
     "x-forwarded-for": "127.0.0.1",

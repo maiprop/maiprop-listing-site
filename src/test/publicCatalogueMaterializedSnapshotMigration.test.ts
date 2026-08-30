@@ -207,18 +207,26 @@ describe("materialized public catalogue snapshot migration", () => {
     );
   });
 
-  it("locks listing writers with a bounded wait before planning identity repair", () => {
+  it("locks listing and promotion writers with a bounded wait before planning identity repair", () => {
     const timeout = osAuctionIdentityMigration.indexOf("SET LOCAL lock_timeout = '5s'");
-    const lock = osAuctionIdentityMigration.indexOf(
-      "LOCK TABLE public.listings IN SHARE ROW EXCLUSIVE MODE",
+    const listingLock = osAuctionIdentityMigration.indexOf(
+      "LOCK TABLE public.listings IN ACCESS EXCLUSIVE MODE",
+    );
+    const promotionLock = osAuctionIdentityMigration.indexOf(
+      "LOCK TABLE public.listing_promotion_allocations IN SHARE MODE",
     );
     const plan = osAuctionIdentityMigration.indexOf(
       "CREATE TEMP TABLE os_auction_duplicate_plan",
     );
+    const promotionGuard = osAuctionIdentityMigration.indexOf(
+      "os_auction_duplicate_has_active_promotion",
+    );
 
     expect(timeout).toBeGreaterThanOrEqual(0);
-    expect(lock).toBeGreaterThan(timeout);
-    expect(plan).toBeGreaterThan(lock);
+    expect(listingLock).toBeGreaterThan(timeout);
+    expect(promotionLock).toBeGreaterThan(listingLock);
+    expect(plan).toBeGreaterThan(promotionLock);
+    expect(promotionGuard).toBeGreaterThan(plan);
   });
 
   it("rejects an owner-linked OS identity even without an OS source marker", () => {
