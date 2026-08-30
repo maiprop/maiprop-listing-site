@@ -15,6 +15,18 @@ const MAXIMUM_LINKED_PUSH_FAILURE_BYTES = 1024 * 1024;
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const CAPTURED_CACHE_STATE = /^[A-Z0-9_-]{1,32}$/;
 const PRODUCTION_SORTS = ["featured", "newest", "price-asc", "price-desc", "ai-score", "views"];
+const OS_IDENTITY_COMPONENT_KEYS = [
+  "duplicate_quarantine_relation",
+  "duplicate_quarantine_acl",
+  "extractor_owner",
+  "extractor_posture",
+  "extractor_body",
+  "extractor_acl",
+  "generated_column",
+  "unique_index",
+  "source_check",
+  "stored_parity",
+];
 const ARTIFACT_PATHS = Object.freeze({
   staging: Object.freeze([
     "evidence/catalogue-performance-hotfix-staging.json",
@@ -1084,8 +1096,29 @@ export function validateDatabaseContract({
     "legacy_full",
     "full",
   ].includes(requiredLevel);
-  if (hasIdentityContract && !metadata.os_identity_contract) {
-    fail("Database OS auction identity contract is incomplete.");
+  if (hasIdentityContract) {
+    const components = metadata?.os_identity_components;
+    if (!components || typeof components !== "object" || Array.isArray(components)) {
+      fail("Database OS auction identity component schema is incomplete.");
+    }
+    assertExactKeys(components, OS_IDENTITY_COMPONENT_KEYS, "Database OS auction identity component schema");
+    if (OS_IDENTITY_COMPONENT_KEYS.some((component) => typeof components[component] !== "boolean") ||
+        typeof metadata.os_identity_contract !== "boolean") {
+      fail("Database OS auction identity component schema is incomplete.");
+    }
+    const overallContract = OS_IDENTITY_COMPONENT_KEYS.every((component) => components[component]);
+    const safeDiagnostic = {
+      schema_version: 1,
+      kind: "maiprop-os-identity-components",
+      overall_contract: metadata.os_identity_contract,
+      ...Object.fromEntries(OS_IDENTITY_COMPONENT_KEYS.map((component) => [component, components[component]])),
+    };
+    if (metadata.os_identity_contract !== overallContract) {
+      fail(`Database OS auction identity contract diagnostic is inconsistent. ${JSON.stringify(safeDiagnostic)}`);
+    }
+    if (!overallContract) {
+      fail(`Database OS auction identity contract is incomplete. ${JSON.stringify(safeDiagnostic)}`);
+    }
   }
   if (["invalid_identity_quarantine", "identity_bridge", "quarantine_and_identity_bridge"].includes(requiredLevel)) {
     return {

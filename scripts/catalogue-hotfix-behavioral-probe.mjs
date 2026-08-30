@@ -22,6 +22,18 @@ const HOTFIX_VERSION_SQL = HOTFIX_VERSIONS.map((version) => `'${version}'`).join
 const TYPED_SIGNATURE = "public.query_public_catalogue(bigint,text,text,text,text,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,integer,integer,text[],text,text,text,text,text[],numeric,numeric,numeric,numeric,numeric,numeric,text,text,text,timestamp with time zone,numeric,uuid,boolean,integer,integer,jsonb)";
 const AUCTION_SIGNATURE = "public.get_public_catalogue_auctions(bigint,uuid[],text)";
 const MISSING_AUCTION_ID = "00000000-0000-0000-0000-000000000000";
+const OS_IDENTITY_COMPONENT_KEYS = [
+  "duplicate_quarantine_relation",
+  "duplicate_quarantine_acl",
+  "extractor_owner",
+  "extractor_posture",
+  "extractor_body",
+  "extractor_acl",
+  "generated_column",
+  "unique_index",
+  "source_check",
+  "stored_parity",
+];
 
 function fail(message) {
   throw new Error(message);
@@ -113,7 +125,7 @@ SELECT json_build_object(
   'anon_homepage_execute', COALESCE(has_function_privilege('anon', to_regprocedure('public.get_public_catalogue_homepage(bigint)'), 'EXECUTE'), false),
   'auction_index', to_regclass('private.idx_public_catalogue_versions_auction_listing_publication') IS NOT NULL,
   ${quarantineMetadataFieldsSql(includeQuarantine)},
-  'os_identity_contract', ${includeIdentity ? osIdentityContractSql(requireExactPrefix) : "false"}
+  ${osIdentityMetadataFieldsSql(includeIdentity, requireExactPrefix)}
 );`;
 }
 
@@ -326,13 +338,128 @@ function eligibleInvalidOsSourceRowsSql() {
   )`;
 }
 
-function osIdentityContractSql(requireExactPrefix = false) {
+function osIdentityComponentSql(requireExactPrefix = false) {
   const approvedBody = requireExactPrefix
     ? "md5(procedure.prosrc) = 'b98c2a7f368c498c75e221c4064c1878'"
     : "md5(procedure.prosrc) IN ('532205de65120d3e34729a515d949f65', 'b98c2a7f368c498c75e221c4064c1878')";
-  const storedParity = requireExactPrefix
-    ? `
-    AND NOT EXISTS (
+  return {
+    duplicate_quarantine_relation: `
+      to_regclass('private.os_auction_duplicate_quarantine') IS NOT NULL`,
+    duplicate_quarantine_acl: `
+      NOT EXISTS (
+        SELECT 1
+        FROM pg_class AS relation
+        CROSS JOIN LATERAL aclexplode(COALESCE(relation.relacl, acldefault('r', relation.relowner))) AS privilege
+        WHERE relation.oid = to_regclass('private.os_auction_duplicate_quarantine')
+          AND privilege.grantee IN (0, (SELECT oid FROM pg_roles WHERE rolname = 'anon'), (SELECT oid FROM pg_roles WHERE rolname = 'authenticated'))
+      )`,
+    extractor_owner: `
+      EXISTS (
+        SELECT 1
+        FROM pg_proc AS procedure
+        WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+          AND pg_get_userbyid(procedure.proowner) = 'postgres'
+      )`,
+    extractor_posture: `
+      EXISTS (
+        SELECT 1
+        FROM pg_proc AS procedure
+        WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+          AND procedure.prokind = 'f'
+          AND procedure.prorettype = 'text'::regtype
+          AND NOT procedure.prosecdef
+          AND procedure.provolatile = 'i'
+          AND procedure.proparallel = 's'
+          AND COALESCE(procedure.proconfig, ARRAY[]::text[]) = ARRAY['search_path=""']::text[]
+      )`,
+    extractor_body: `
+      EXISTS (
+        SELECT 1
+        FROM pg_proc AS procedure
+        WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+          AND ${approvedBody}
+      )`,
+    extractor_acl: `
+      1 = (
+        SELECT count(*)
+        FROM pg_proc AS procedure
+        CROSS JOIN LATERAL aclexplode(
+          COALESCE(procedure.proacl, acldefault('f', procedure.proowner))
+        ) AS privilege
+        WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+          AND privilege.privilege_type = 'EXECUTE'
+          AND pg_get_userbyid(privilege.grantee) = 'service_role'
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM pg_proc AS procedure
+        CROSS JOIN LATERAL aclexplode(
+          COALESCE(procedure.proacl, acldefault('f', procedure.proowner))
+        ) AS privilege
+        WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+          AND (
+            privilege.privilege_type <> 'EXECUTE'
+            OR privilege.grantee NOT IN (
+              procedure.proowner,
+              (SELECT oid FROM pg_roles WHERE rolname = 'service_role')
+            )
+          )
+      )`,
+    generated_column: `
+      EXISTS (
+        SELECT 1
+        FROM pg_attribute AS attribute
+        JOIN pg_attrdef AS definition
+          ON definition.adrelid = attribute.attrelid
+         AND definition.adnum = attribute.attnum
+        WHERE attribute.attrelid = 'public.listings'::regclass
+          AND attribute.attname = 'os_auction_id'
+          AND attribute.attgenerated = 's'
+          AND format_type(attribute.atttypid, attribute.atttypmod) = 'text'
+          AND regexp_replace(
+            pg_get_expr(definition.adbin, definition.adrelid),
+            '[[:space:]]+', ' ', 'g'
+          ) IN (
+            'CASE WHEN (listing_type = ''auction''::listing_type) THEN private.extract_os_auction_id(tags) ELSE NULL::text END',
+            'CASE WHEN (listing_type = ''auction''::public.listing_type) THEN private.extract_os_auction_id(tags) ELSE NULL::text END'
+          )
+      )`,
+    unique_index: `
+      EXISTS (
+        SELECT 1
+        FROM pg_index AS index_definition
+        JOIN pg_attribute AS attribute
+          ON attribute.attrelid = index_definition.indrelid
+         AND attribute.attname = 'os_auction_id'
+        WHERE index_definition.indexrelid = to_regclass('public.idx_listings_os_auction_id_unique')
+          AND index_definition.indrelid = 'public.listings'::regclass
+          AND index_definition.indisunique
+          AND index_definition.indisvalid
+          AND index_definition.indisready
+          AND index_definition.indnkeyatts = 1
+          AND index_definition.indnatts = 1
+          AND index_definition.indpred IS NULL
+          AND index_definition.indexprs IS NULL
+          AND index_definition.indkey[0] = attribute.attnum
+      )`,
+    source_check: `
+      EXISTS (
+        SELECT 1
+        FROM pg_constraint AS constraint_definition
+        WHERE constraint_definition.conrelid = 'public.listings'::regclass
+          AND constraint_definition.conname = 'listings_os_auction_source_identity_valid'
+          AND constraint_definition.contype = 'c'
+          AND constraint_definition.convalidated
+          AND regexp_replace(
+            pg_get_constraintdef(constraint_definition.oid),
+            '[[:space:]]+', ' ', 'g'
+          ) IN (
+            'CHECK (((NOT (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os''::text])) OR (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os-duplicate-quarantine''::text]) OR ((listing_type = ''auction''::listing_type) AND (private.extract_os_auction_id(tags) IS NOT NULL))))',
+            'CHECK (((NOT (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os''::text])) OR (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os-duplicate-quarantine''::text]) OR ((listing_type = ''auction''::public.listing_type) AND (private.extract_os_auction_id(tags) IS NOT NULL))))'
+          )
+      )`,
+    stored_parity: requireExactPrefix ? `
+      NOT EXISTS (
       SELECT 1
       FROM public.listings AS listing
       WHERE listing.os_auction_id IS DISTINCT FROM CASE
@@ -340,105 +467,30 @@ function osIdentityContractSql(requireExactPrefix = false) {
           THEN private.extract_os_auction_id(listing.tags)
         ELSE NULL
       END
-    )`
-    : "";
-  return `
-    to_regclass('private.os_auction_duplicate_quarantine') IS NOT NULL
-    AND NOT EXISTS (
-      SELECT 1
-      FROM pg_class AS relation
-      CROSS JOIN LATERAL aclexplode(COALESCE(relation.relacl, acldefault('r', relation.relowner))) AS privilege
-      WHERE relation.oid = to_regclass('private.os_auction_duplicate_quarantine')
-        AND privilege.grantee IN (0, (SELECT oid FROM pg_roles WHERE rolname = 'anon'), (SELECT oid FROM pg_roles WHERE rolname = 'authenticated'))
-    )
-    AND EXISTS (
-      SELECT 1
-      FROM pg_proc AS procedure
-      WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
-        AND pg_get_userbyid(procedure.proowner) = 'postgres'
-        AND procedure.prokind = 'f'
-        AND procedure.prorettype = 'text'::regtype
-        AND NOT procedure.prosecdef
-        AND procedure.provolatile = 'i'
-        AND procedure.proparallel = 's'
-        AND COALESCE(procedure.proconfig, ARRAY[]::text[]) = ARRAY['search_path=""']::text[]
-        AND ${approvedBody}
-    )
-    AND 1 = (
-      SELECT count(*)
-      FROM pg_proc AS procedure
-      CROSS JOIN LATERAL aclexplode(
-        COALESCE(procedure.proacl, acldefault('f', procedure.proowner))
-      ) AS privilege
-      WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
-        AND privilege.privilege_type = 'EXECUTE'
-        AND pg_get_userbyid(privilege.grantee) = 'service_role'
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM pg_proc AS procedure
-      CROSS JOIN LATERAL aclexplode(
-        COALESCE(procedure.proacl, acldefault('f', procedure.proowner))
-      ) AS privilege
-      WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
-        AND (
-          privilege.privilege_type <> 'EXECUTE'
-          OR privilege.grantee NOT IN (
-            procedure.proowner,
-            (SELECT oid FROM pg_roles WHERE rolname = 'service_role')
-          )
-        )
-    )
-    AND EXISTS (
-      SELECT 1
-      FROM pg_attribute AS attribute
-      JOIN pg_attrdef AS definition
-        ON definition.adrelid = attribute.attrelid
-       AND definition.adnum = attribute.attnum
-      WHERE attribute.attrelid = 'public.listings'::regclass
-        AND attribute.attname = 'os_auction_id'
-        AND attribute.attgenerated = 's'
-        AND format_type(attribute.atttypid, attribute.atttypmod) = 'text'
-        AND regexp_replace(
-          pg_get_expr(definition.adbin, definition.adrelid),
-          '[[:space:]]+', ' ', 'g'
-        ) IN (
-          'CASE WHEN (listing_type = ''auction''::listing_type) THEN private.extract_os_auction_id(tags) ELSE NULL::text END',
-          'CASE WHEN (listing_type = ''auction''::public.listing_type) THEN private.extract_os_auction_id(tags) ELSE NULL::text END'
-        )
-    )
-    AND EXISTS (
-      SELECT 1
-      FROM pg_index AS index_definition
-      JOIN pg_attribute AS attribute
-        ON attribute.attrelid = index_definition.indrelid
-       AND attribute.attname = 'os_auction_id'
-      WHERE index_definition.indexrelid = to_regclass('public.idx_listings_os_auction_id_unique')
-        AND index_definition.indrelid = 'public.listings'::regclass
-        AND index_definition.indisunique
-        AND index_definition.indisvalid
-        AND index_definition.indisready
-        AND index_definition.indnkeyatts = 1
-        AND index_definition.indnatts = 1
-        AND index_definition.indpred IS NULL
-        AND index_definition.indexprs IS NULL
-        AND index_definition.indkey[0] = attribute.attnum
-    )
-    AND EXISTS (
-      SELECT 1
-      FROM pg_constraint AS constraint_definition
-      WHERE constraint_definition.conrelid = 'public.listings'::regclass
-        AND constraint_definition.conname = 'listings_os_auction_source_identity_valid'
-        AND constraint_definition.contype = 'c'
-        AND constraint_definition.convalidated
-        AND regexp_replace(
-          pg_get_constraintdef(constraint_definition.oid),
-          '[[:space:]]+', ' ', 'g'
-        ) IN (
-          'CHECK (((NOT (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os''::text])) OR (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os-duplicate-quarantine''::text]) OR ((listing_type = ''auction''::listing_type) AND (private.extract_os_auction_id(tags) IS NOT NULL))))',
-          'CHECK (((NOT (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os''::text])) OR (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os-duplicate-quarantine''::text]) OR ((listing_type = ''auction''::public.listing_type) AND (private.extract_os_auction_id(tags) IS NOT NULL))))'
-        )
-    )${storedParity}`;
+      )`
+      : "true",
+  };
+}
+
+function osIdentityContractSql(requireExactPrefix = false) {
+  const components = osIdentityComponentSql(requireExactPrefix);
+  return OS_IDENTITY_COMPONENT_KEYS
+    .map((component) => `COALESCE((${components[component]}), false)`)
+    .join("\n    AND ");
+}
+
+function osIdentityComponentsJsonSql(requireExactPrefix = false, includeIdentity = true) {
+  const components = includeIdentity ? osIdentityComponentSql(requireExactPrefix) : {};
+  return `json_build_object(
+${OS_IDENTITY_COMPONENT_KEYS.map((component) =>
+  `      '${component}', ${includeIdentity ? `COALESCE((${components[component]}), false)` : "false"}`
+).join(",\n")}
+    )`;
+}
+
+function osIdentityMetadataFieldsSql(includeIdentity, requireExactPrefix) {
+  return `'os_identity_contract', ${includeIdentity ? osIdentityContractSql(requireExactPrefix) : "false"},
+  'os_identity_components', ${osIdentityComponentsJsonSql(requireExactPrefix, includeIdentity)}`;
 }
 
 function bridgeMetadataSql(includeQuarantine = false, requireExactPrefix = false) {
@@ -446,7 +498,7 @@ function bridgeMetadataSql(includeQuarantine = false, requireExactPrefix = false
 SELECT json_build_object(
   'migration_versions', COALESCE((SELECT json_agg(version ORDER BY version) FROM supabase_migrations.schema_migrations WHERE version IN (${HOTFIX_VERSION_SQL})), '[]'::json),
   ${includeQuarantine ? `${quarantineMetadataFieldsSql(true)},` : ""}
-  'os_identity_contract', ${osIdentityContractSql(requireExactPrefix)}
+  ${osIdentityMetadataFieldsSql(true, requireExactPrefix)}
 );`;
 }
 

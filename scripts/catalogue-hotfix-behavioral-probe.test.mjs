@@ -16,6 +16,21 @@ const bridgeVersion = "20260728120000";
 const repairVersion = "20260728121500";
 const firstVersion = "20260728123058";
 const secondVersion = "20260729120405";
+const identityComponentKeys = [
+  "duplicate_quarantine_relation",
+  "duplicate_quarantine_acl",
+  "extractor_owner",
+  "extractor_posture",
+  "extractor_body",
+  "extractor_acl",
+  "generated_column",
+  "unique_index",
+  "source_check",
+  "stored_parity",
+];
+const validIdentityComponents = Object.fromEntries(
+  identityComponentKeys.map((component) => [component, true]),
+);
 
 test("database SQL explicitly assumes postgres before running contract queries", async () => {
   const calls = [];
@@ -93,6 +108,9 @@ function dependencies(overrides = {}) {
       invalid_identity_quarantine_marked_rows: 1,
       invalid_identity_quarantine_live_contract: true,
       os_identity_contract: recordedVersions.includes(bridgeVersion),
+      os_identity_components: recordedVersions.includes(bridgeVersion)
+        ? validIdentityComponents
+        : Object.fromEntries(identityComponentKeys.map((component) => [component, false])),
       ...overrides.metadataPatch,
     });
     if (query.includes("'os_identity_contract'")) return JSON.stringify({
@@ -103,6 +121,9 @@ function dependencies(overrides = {}) {
       invalid_identity_quarantine_marked_rows: 1,
       invalid_identity_quarantine_live_contract: true,
       os_identity_contract: recordedVersions.includes(bridgeVersion),
+      os_identity_components: recordedVersions.includes(bridgeVersion)
+        ? validIdentityComponents
+        : Object.fromEntries(identityComponentKeys.map((component) => [component, false])),
       ...overrides.metadataPatch,
     });
     if (query.includes("'invalid_identity_quarantine_contract'")) return JSON.stringify({
@@ -462,6 +483,78 @@ test("recorded probe accepts only known legacy/corrected bridge bodies until F c
   assert.match(repairedMetadata, /regexp_replace\(\s*pg_get_constraintdef\(constraint_definition\.oid\)/);
   assert.doesNotMatch(repairedMetadata, /pg_get_expr\(definition\.adbin, definition\.adrelid\) LIKE/);
   assert.doesNotMatch(repairedMetadata, /pg_get_constraintdef\(constraint_definition\.oid\) LIKE/);
+});
+
+test("recorded bridge probe emits fixed boolean-only OS identity components", async () => {
+  const deps = dependencies({ recordedVersions: [bridgeVersion] });
+  await runCatalogueBehavioralProbe({ mode: "recorded", apiUrl, databaseUrl, key }, deps);
+  const metadataSql = deps.sql.find((query) => query.includes("'os_identity_contract'"));
+
+  assert.ok(metadataSql);
+  assert.match(metadataSql, /'os_identity_components',\s*json_build_object\(/);
+  for (const component of identityComponentKeys) {
+    assert.match(metadataSql, new RegExp(`'${component}'`));
+  }
+  assert.doesNotMatch(metadataSql, /json_build_object\([\s\S]*?'(?:prosrc|proacl|proconfig|expression|tags|listing_id)'/);
+});
+
+test("recorded bridge probe reports each failed component using only a fixed aggregate diagnostic", async () => {
+  const providerSecret = "provider-row-secret-must-not-log";
+  for (const component of identityComponentKeys) {
+    const components = { ...validIdentityComponents, [component]: false };
+    const deps = dependencies({
+      recordedVersions: [bridgeVersion],
+      metadataPatch: {
+        os_identity_contract: false,
+        os_identity_components: components,
+        provider_controlled_extra: providerSecret,
+      },
+    });
+    await assert.rejects(
+      runCatalogueBehavioralProbe({ mode: "recorded", apiUrl, databaseUrl, key }, deps),
+      (error) => {
+        assert.match(error.message, /maiprop-os-identity-components/);
+        assert.match(error.message, new RegExp(`"${component}":false`));
+        assert.doesNotMatch(error.message, new RegExp(providerSecret));
+        const diagnostic = JSON.parse(error.message.slice(error.message.indexOf("{")));
+        assert.deepEqual(Object.keys(diagnostic), [
+          "schema_version",
+          "kind",
+          "overall_contract",
+          ...identityComponentKeys,
+        ]);
+        assert.equal(diagnostic.schema_version, 1);
+        assert.equal(diagnostic.kind, "maiprop-os-identity-components");
+        assert.equal(diagnostic.overall_contract, false);
+        for (const key of identityComponentKeys) assert.equal(typeof diagnostic[key], "boolean");
+        return true;
+      },
+    );
+  }
+});
+
+test("recorded bridge probe rejects component schema and overall consistency drift safely", async () => {
+  const invalidCases = [
+    { os_identity_components: { ...validIdentityComponents, private_detail: true } },
+    { os_identity_components: Object.fromEntries(Object.entries(validIdentityComponents).slice(1)) },
+    { os_identity_components: { ...validIdentityComponents, extractor_owner: "provider-secret" } },
+    { os_identity_components: validIdentityComponents, os_identity_contract: false },
+    {
+      os_identity_components: { ...validIdentityComponents, source_check: false },
+      os_identity_contract: true,
+    },
+  ];
+  for (const metadataPatch of invalidCases) {
+    const deps = dependencies({ recordedVersions: [bridgeVersion], metadataPatch });
+    await assert.rejects(
+      runCatalogueBehavioralProbe({ mode: "recorded", apiUrl, databaseUrl, key }, deps),
+      (error) => {
+        assert.match(error.message, /OS auction identity (?:component schema|contract)/i);
+        assert.doesNotMatch(error.message, /provider-secret|private_detail/);
+        return true;
+      },
+    );
+  }
 });
 
 test("runner fails closed on an HTTP 200 empty catalogue response", async () => {

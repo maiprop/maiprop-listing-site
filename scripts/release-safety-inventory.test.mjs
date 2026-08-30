@@ -149,6 +149,24 @@ describe("release safety inventory", () => {
     expect(violations({
       sourceQualityProbeText: downgradedSourceQualitySchema,
     })).not.toEqual([]);
+    for (const diagnosticMarker of [
+      "maiprop-os-identity-components",
+      "overall_contract",
+      "duplicate_quarantine_relation",
+      "duplicate_quarantine_acl",
+      "extractor_owner",
+      "extractor_posture",
+      "extractor_body",
+      "extractor_acl",
+      "generated_column",
+      "unique_index",
+      "source_check",
+      "stored_parity",
+    ]) {
+      expect(violations({
+        supportText: supportText.replaceAll(diagnosticMarker, "removed_identity_diagnostic"),
+      })).not.toEqual([]);
+    }
     const rawRoleMarker = "--command 'SET ROLE postgres'";
     const rawRoleOccurrences = [...text.matchAll(new RegExp(rawRoleMarker, "g"))];
     expect(rawRoleOccurrences).toHaveLength(6);

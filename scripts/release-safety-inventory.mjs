@@ -807,6 +807,18 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "invalid_identity_quarantine_contract",
     "eligible_invalid_os_source_rows",
     "invalid_identity_quarantine_live_contract",
+    "maiprop-os-identity-components",
+    "overall_contract",
+    "duplicate_quarantine_relation",
+    "duplicate_quarantine_acl",
+    "extractor_owner",
+    "extractor_posture",
+    "extractor_body",
+    "extractor_acl",
+    "generated_column",
+    "unique_index",
+    "source_check",
+    "stored_parity",
   ]) {
     if (!String(supportText).includes(marker)) {
       violations.push(`catalogue hotfix support is missing ${marker}`);
