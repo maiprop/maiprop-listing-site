@@ -416,10 +416,10 @@ function osIdentityComponentSql(requireExactPrefix = false) {
           AND attribute.attname = 'os_auction_id'
           AND attribute.attgenerated = 's'
           AND format_type(attribute.atttypid, attribute.atttypmod) = 'text'
-          AND regexp_replace(
+          AND btrim(regexp_replace(
             pg_get_expr(definition.adbin, definition.adrelid),
             '[[:space:]]+', ' ', 'g'
-          ) IN (
+          )) IN (
             'CASE WHEN (listing_type = ''auction''::listing_type) THEN private.extract_os_auction_id(tags) ELSE NULL::text END',
             'CASE WHEN (listing_type = ''auction''::public.listing_type) THEN private.extract_os_auction_id(tags) ELSE NULL::text END'
           )
