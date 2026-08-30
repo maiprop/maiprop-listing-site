@@ -277,6 +277,8 @@ export async function runCatalogueBehavioralProbe(
   const requireSecond = recordedVersions.includes(HOTFIX_VERSIONS[2]);
   const requiredLevel = mode === "postapply"
     ? "full"
+    : hasBridge && requireSecond
+    ? "full"
     : requireSecond
     ? "catalogue_contract"
     : hasBridge
