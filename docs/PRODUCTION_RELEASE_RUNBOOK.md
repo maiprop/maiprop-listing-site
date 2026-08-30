@@ -33,14 +33,15 @@ transcript, or runbook record.
 The lane can apply only these manifest-bound migrations, first to `staging` and
 then to `production`:
 
+- `20260728120000_canonicalize_os_auction_identity.sql`
 - `20260728123058_materialize_public_catalogue_snapshots.sql`
 - `20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql`
 
 For each database target the workflow reads the remote numeric migration
 history, builds an isolated temporary migration project with empty placeholders
-for recorded history, copies only those two verified SQL files, and proves the
-captured dry-run pending set exactly equals the approved versions missing remotely
-before the normal `--include-all --yes` CLI push.
+for recorded history, copies only those three verified SQL files in the order
+above, and proves the captured dry-run pending set exactly equals the approved
+versions missing remotely before the normal `--include-all --yes` CLI push.
 It never repairs history or applies migrations from the repository migration
 directory. A version already present remotely may proceed only after the full
 corrected runtime contract passes; otherwise stop and prepare a reviewed
@@ -105,11 +106,18 @@ workflow deletes it and fails before the database job can start.
 The repository is private on a GitHub Free organization plan. Native
 environment required reviewers, protected environment secrets, and
 prevent-self-review are unavailable and must not be claimed as release
-controls. Release jobs therefore use repository-scoped secrets and fail closed
-unless the workflow, event, checkout, and requested release all identify the
-exact current `main` SHA; the run is attempt one; and the actor equals the
-triggering actor and belongs to the relevant repository allowlist. No release
-job declares a GitHub `environment`.
+controls. Most provider secrets are repository-scoped, while
+`SUPABASE_PRODUCTION_DB_URL` is scoped to the GitHub `production` environment.
+The catalogue-hotfix production job and the coordinated production database and
+Edge jobs bind that environment. Its custom branch policy is a reachability and
+secret-scoping control, not release authorization: steady state retains only the
+`__production_disabled__` sentinel branch policy; an authorized operator adds an
+exact `main` branch policy immediately before an approved production run and
+deletes the exact policy ID returned by GitHub after the run reaches a terminal
+state. The workflows still fail closed unless the workflow, event, checkout, and
+requested release all identify the exact current `main` SHA; the run is attempt
+one; and the actor equals the triggering actor and belongs to the relevant
+repository allowlist.
 
 Production approval is a signed exact-SHA artifact created by an allowlisted
 dispatcher whose login must differ from the later deployment actor. Downstream
@@ -166,9 +174,11 @@ invoking the reusable provider boundaries:
 - `CLOUDFLARE_TURN_API_TOKEN`
 
 `SUPABASE_PRODUCTION_DB_URL` is stored only in the exact GitHub `production`
-environment. The called production database and Edge deployment jobs bind that
-environment and read the credential directly; a reusable-workflow caller cannot
-forward an environment-scoped secret. This environment binding scopes the
+environment. The catalogue-hotfix production job and the called coordinated
+production database and Edge deployment jobs bind that environment and read the
+credential directly; a reusable-workflow caller cannot forward an
+environment-scoped secret. The temporary `main` branch policy described above
+must not outlive the production run. This environment binding scopes the
 credential only and is not treated as release authorization. The signed release
 binding, mutation lease, and provider preflight remain the authorization gates.
 `secrets: inherit` is forbidden.

@@ -18,6 +18,17 @@ import {
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { fetchBufferedProviderResponse } from "../_shared/providerFetch.ts";
 import { SchemaValidationError } from "../_shared/schema.ts";
+import {
+  type CanonicalOsListing,
+  dedupeOsAuctionsById,
+  insertOsAuctionRows,
+  lookupCanonicalOsListings,
+  mergeOsAuctionTags,
+  type OsAuctionListingTable,
+  requireOsAuctionId,
+  requireValidOsAuctionBatch,
+  updateCanonicalOsListing,
+} from "../_shared/osAuctionIdentity.ts";
 import { type FullSyncRequest, parseFullSyncRequest } from "./request.ts";
 
 const log = createLogger("full-sync-from-os");
@@ -192,7 +203,7 @@ async function logSync(
 }
 
 function mapAuctionToListing(a: any) {
-  const osId = String(a.auctionListingId ?? "unknown");
+  const osId = requireOsAuctionId(a.auctionListingId);
   const tagKey = `os_auction:${osId}`;
   const catKey = mapCategory(a.propertyCategory);
   const price = Number(a.firstPriceOffer ?? 0);
@@ -215,6 +226,7 @@ function mapAuctionToListing(a: any) {
     else if (ownershipPct > 0) ownershipTag = "ownership:common";
   }
   return {
+    osId,
     tagKey,
     row: {
       title: buildTitle(a),
@@ -347,6 +359,21 @@ Deno.serve(async (req) => {
     throw err;
   }
 
+  if (body.replaceAll === true || body.replace_all === true) {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        code: "replace_all_disabled",
+        error:
+          "replaceAll requires an atomic complete-snapshot reconciliation and is temporarily disabled",
+      }),
+      {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
@@ -372,84 +399,6 @@ Deno.serve(async (req) => {
     const pageSize = body.pageSize ?? body.size ?? DEFAULT_PAGE_SIZE;
     const maxPages = body.maxPages ?? MAX_PAGES;
     const startPage = body.startPage ?? 0;
-    const replaceAll = body.replaceAll === true || body.replace_all === true;
-    let replacedCount = 0;
-
-    // When replaceAll: delete all auction listings that came from OS (tag os_auction:*) then refetch
-    if (replaceAll) {
-      const idsToDelete: string[] = [];
-      let offset = 0;
-      const pageSizeSelect = 500;
-      while (true) {
-        const { data: rows, error: selectErr } = await sb
-          .from("listings")
-          .select("id, tags")
-          .eq("listing_type", "auction")
-          .order("id", { ascending: true })
-          .range(offset, offset + pageSizeSelect - 1);
-        if (selectErr) {
-          await logSync(
-            sb,
-            "auction",
-            "error",
-            `Replace-all select failed: ${selectErr.message}`,
-          );
-          return new Response(
-            JSON.stringify({
-              ok: false,
-              error: selectErr.message,
-              sync: { auctions: {} },
-            }),
-            {
-              status: 500,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            },
-          );
-        }
-        if (!rows?.length) break;
-        for (const r of rows) {
-          if (
-            Array.isArray(r.tags) &&
-            r.tags.some((t: string) => t.startsWith("os_auction:"))
-          ) {
-            idsToDelete.push(r.id);
-          }
-        }
-        if (rows.length < pageSizeSelect) break;
-        offset += pageSizeSelect;
-      }
-      const deleteChunkSize = 100;
-      for (let i = 0; i < idsToDelete.length; i += deleteChunkSize) {
-        const chunk = idsToDelete.slice(i, i + deleteChunkSize);
-        const { error: delErr } = await sb.from("listings").delete().in(
-          "id",
-          chunk,
-        );
-        if (delErr) {
-          await logSync(
-            sb,
-            "auction",
-            "error",
-            `Replace-all delete failed: ${delErr.message}`,
-          );
-          return new Response(
-            JSON.stringify({
-              ok: false,
-              error: delErr.message,
-              sync: { auctions: { replaced: replacedCount } },
-            }),
-            {
-              status: 500,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            },
-          );
-        }
-        replacedCount += chunk.length;
-      }
-      log.info("replaceAll deleted OS auction listings", {
-        replaced_count: replacedCount,
-      });
-    }
 
     const today = new Date().toISOString().split("T")[0];
     const baseFilter: Record<string, any> = {
@@ -541,26 +490,27 @@ Deno.serve(async (req) => {
         break;
       }
 
-      const mapped = auctions.map(mapAuctionToListing);
-      const osIds = mapped.map((m) => m.tagKey);
-      const { data: existingRows } = await sb
-        .from("listings")
-        .select("id, tags")
-        .overlaps("tags", osIds);
+      const mapped = dedupeOsAuctionsById(auctions).map(mapAuctionToListing);
+      requireValidOsAuctionBatch(auctions.length, mapped.length);
+      const osIds = mapped.map((m) => m.osId);
+      const existingRows = await lookupCanonicalOsListings(
+        sb.from("listings") as unknown as OsAuctionListingTable,
+        osIds,
+      );
 
-      const existingMap: Record<string, string> = {};
-      for (const row of existingRows ?? []) {
-        for (const tag of row.tags ?? []) {
-          if (tag.startsWith("os_auction:")) existingMap[tag] = row.id;
-        }
+      const existingMap = new Map<string, CanonicalOsListing>();
+      for (const row of existingRows) {
+        existingMap.set(row.os_auction_id, row);
       }
 
       const toInsert: any[] = [];
-      const toUpdate: { id: string; data: any }[] = [];
-      for (const { tagKey, row } of mapped) {
-        if (existingMap[tagKey]) {
+      const toUpdate: { id: string; osId: string; data: any }[] = [];
+      for (const { osId, row } of mapped) {
+        const existing = existingMap.get(osId);
+        if (existing) {
           toUpdate.push({
-            id: existingMap[tagKey],
+            id: existing.id,
+            osId,
             data: {
               price: row.price,
               price_per_sqm: row.price_per_sqm,
@@ -577,7 +527,7 @@ Deno.serve(async (req) => {
               cadastre_number: row.cadastre_number,
               postal_code: row.postal_code,
               region: row.region,
-              tags: row.tags,
+              tags: mergeOsAuctionTags(existing.tags ?? [], row.tags),
               website_url: row.website_url,
               ...(row.cover_image_url
                 ? { cover_image_url: row.cover_image_url }
@@ -594,28 +544,26 @@ Deno.serve(async (req) => {
       const CHUNK = 50;
       for (let i = 0; i < toInsert.length; i += CHUNK) {
         const chunk = toInsert.slice(i, i + CHUNK);
-        const { error } = await sb.from("listings").insert(chunk);
-        if (error) {
+        try {
+          totalImported += await insertOsAuctionRows(
+            sb.from("listings") as unknown as OsAuctionListingTable,
+            chunk,
+          );
+        } catch (error) {
           log.error("insert failed", {
-            err: error.message,
+            err: error instanceof Error ? error.message : String(error),
             chunk_size: chunk.length,
           });
           totalErrors += chunk.length;
-        } else {
-          totalImported += chunk.length;
         }
       }
       for (const u of toUpdate) {
-        const { error } = await sb
-          .from("listings")
-          .update(u.data)
-          .eq("id", u.id);
-        if (error) {
-          log.error("update failed", { err: error.message, listing_id: u.id });
-          totalErrors++;
-        } else {
-          totalUpdated++;
-        }
+        const didUpdate = await updateCanonicalOsListing(
+          sb.from("listings") as unknown as OsAuctionListingTable,
+          { id: u.id, osId: u.osId, data: u.data },
+        );
+        if (!didUpdate) throw new Error("canonical_os_listing_changed");
+        totalUpdated++;
       }
 
       pagesDone++;
@@ -635,7 +583,6 @@ Deno.serve(async (req) => {
         errors: totalErrors,
         pages: pagesDone,
         totalAvailableInOS,
-        ...(replaceAll ? { replaced: replacedCount } : {}),
       },
     };
 

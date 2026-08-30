@@ -198,7 +198,7 @@ export default function AdminPanel() {
     onError: (e: Error) => toast.error("Firesale push failed: " + e.message),
   });
 
-  // ── Advanced: full sync, replace all, edge tester ───────────────────────────
+  // ── Advanced: full sync and edge tester ─────────────────────────────────────
   const [pageSize, setPageSize] = useState(100);
   const [maxPages, setMaxPages] = useState(200);
   const [fullSyncProgress, setFullSyncProgress] = useState<string | null>(null);
@@ -230,31 +230,6 @@ export default function AdminPanel() {
     onError: (e: Error) => {
       setFullSyncProgress(null);
       toast.error("Full sync failed: " + e.message);
-    },
-  });
-
-  const replaceAllMutation = useMutation({
-    mutationFn: async () => {
-      setFullSyncProgress("Replace all & sync…");
-      const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
-        body: { replaceAll: true, pageSize, maxPages },
-      });
-      setFullSyncProgress(null);
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: [SYNC_LOG_QUERY_KEY] });
-      const a = data?.sync?.auctions ?? {};
-      toast.success(
-        a.replaced != null
-          ? `Replaced ${a.replaced} · ${a.imported ?? 0} new · ${a.updated ?? 0} updated`
-          : "Replace & sync done."
-      );
-    },
-    onError: (e: Error) => {
-      setFullSyncProgress(null);
-      toast.error("Replace failed: " + e.message);
     },
   });
 
@@ -475,7 +450,7 @@ export default function AdminPanel() {
         <CollapsibleTrigger asChild>
           <button className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full py-2">
             {advancedOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            Advanced: full sync, replace all, page limits, function tester
+            Advanced: full sync, page limits, function tester
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -519,13 +494,16 @@ export default function AdminPanel() {
                 size="sm"
                 variant="outline"
                 className="gap-2 border-destructive/40 text-destructive"
-                disabled={replaceAllMutation.isPending}
-                onClick={() => replaceAllMutation.mutate()}
+                disabled
+                aria-describedby="replace-all-unavailable"
               >
-                {replaceAllMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                Replace all auctions & sync
+                <RefreshCw className="w-3.5 h-3.5" />
+                Replace all auctions — temporarily unavailable
               </Button>
             </div>
+            <p id="replace-all-unavailable" className="text-xs text-muted-foreground">
+              Atomic reconciliation is temporarily unavailable; standard full sync remains available.
+            </p>
             <div>
               <h3 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
                 <TerminalSquare className="w-3.5 h-3.5" /> Function tester

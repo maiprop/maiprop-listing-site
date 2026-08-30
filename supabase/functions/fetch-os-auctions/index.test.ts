@@ -175,7 +175,7 @@ Deno.test("invalid bearer tokens share the anonymous rate-limit bucket", async (
 
 Deno.test("mapAuction drops malformed numeric fields", () => {
   const mapped = mapAuction({
-    auctionListingId: 42,
+    auctionListingId: "42",
     propertyLatitude: "not-lat",
     propertyLongitude: "23.7",
     propertySquareMeters: "not-sqm",
@@ -199,7 +199,7 @@ Deno.test("mapAuction drops malformed numeric fields", () => {
 
 Deno.test("mapAuction forwards floor information when OS provides it", () => {
   const mapped = mapAuction({
-    auctionListingId: 43,
+    auctionListingId: "43",
     propertyFloor: "2",
     numberOfFloors: "5",
   });
@@ -480,6 +480,94 @@ Deno.test("handler caches identical anonymous auction reads by cap and filter", 
     assertEquals(secondPayload, firstPayload);
   } finally {
     globalForFetch.fetch = originalFetch;
+    clearAuctionResponseCache();
+  }
+});
+
+Deno.test("handler rejects an invalid-only upstream batch without caching it", async () => {
+  clearAuctionResponseCache();
+  const originalFetch = globalThis.fetch;
+  let detailsRequests = 0;
+  globalThis.fetch = ((input: URL | RequestInfo) => {
+    const url = String(input);
+    if (url.endsWith("/auth/login")) {
+      return Promise.resolve(new Response(JSON.stringify({ token: "os-token" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    }
+    if (url.includes("/api/v1/auctions/filter/details")) {
+      detailsRequests += 1;
+      return Promise.resolve(new Response(JSON.stringify({
+        data: [
+          { auctionListingId: "unknown", firstPriceOffer: 1 },
+          { auctionListingId: null, firstPriceOffer: 2 },
+        ],
+        responseMetadata: { pagination: { totalElements: 2 } },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.reject(new Error(`unexpected fetch ${url}`));
+  }) as typeof fetch;
+
+  const body = { page: 0, pageSize: 2, sampleAcrossGreece: false };
+  try {
+    const first = await handler(req("POST", body));
+    const second = await handler(req("POST", body));
+    const firstPayload = await jsonBody(first) as { error?: string };
+    const secondPayload = await jsonBody(second) as { error?: string };
+
+    assertEquals(first.status, 500);
+    assertEquals(second.status, 500);
+    assertEquals(firstPayload.error, "Unable to fetch auctions");
+    assertEquals(secondPayload.error, "Unable to fetch auctions");
+    assertEquals(detailsRequests, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAuctionResponseCache();
+  }
+});
+
+Deno.test("handler keeps valid auctions when an upstream batch is mixed", async () => {
+  clearAuctionResponseCache();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ((input: URL | RequestInfo) => {
+    const url = String(input);
+    if (url.endsWith("/auth/login")) {
+      return Promise.resolve(new Response(JSON.stringify({ token: "os-token" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    }
+    if (url.includes("/api/v1/auctions/filter/details")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        data: [
+          { auctionListingId: "unknown", firstPriceOffer: 1 },
+          {
+            auctionListingId: "valid-auction",
+            firstPriceOffer: 120_000,
+            propertyMunicipalityName: "Athens",
+          },
+        ],
+        responseMetadata: { pagination: { totalElements: 2 } },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return Promise.reject(new Error(`unexpected fetch ${url}`));
+  }) as typeof fetch;
+
+  try {
+    const response = await handler(req("POST", {
+      page: 0,
+      pageSize: 2,
+      sampleAcrossGreece: false,
+    }));
+    const payload = await jsonBody(response) as {
+      data?: Array<{ id?: string }>;
+    };
+
+    assertEquals(response.status, 200);
+    assertEquals(payload.data?.map((auction) => auction.id), ["valid-auction"]);
+  } finally {
+    globalThis.fetch = originalFetch;
     clearAuctionResponseCache();
   }
 });

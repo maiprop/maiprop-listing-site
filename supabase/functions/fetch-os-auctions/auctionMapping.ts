@@ -1,4 +1,5 @@
 /* global Deno:readonly */
+import { requireOsAuctionId } from "../_shared/osAuctionIdentity.ts";
 import { TRAILING_SLASH_RE } from "./constants.ts";
 import type { MappedAuction, OsAuction } from "./types.ts";
 
@@ -189,7 +190,7 @@ function buildAuctionTags(
 }
 
 export function mapAuction(auction: OsAuction): MappedAuction {
-  const osId = String(auction.auctionListingId ?? "unknown");
+  const osId = requireOsAuctionId(auction.auctionListingId);
   const tagKey = `os_auction:${osId}`;
   const catKey = mapCategory(auction.propertyCategory);
   const price = getNumberOrDefault(auction.firstPriceOffer, 0);

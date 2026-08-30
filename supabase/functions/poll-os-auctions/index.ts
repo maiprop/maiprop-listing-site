@@ -19,6 +19,17 @@ import { fetchBufferedProviderResponse } from "../_shared/providerFetch.ts";
 import { getAuctionSamplePageNumbers } from "../fetch-os-auctions/auctionSampling.ts";
 import { SchemaValidationError } from "../_shared/schema.ts";
 import {
+  type CanonicalOsListing,
+  dedupeOsAuctionsById,
+  insertOsAuctionRows,
+  lookupCanonicalOsListings,
+  mergeOsAuctionTags,
+  type OsAuctionListingTable,
+  requireOsAuctionId,
+  requireValidOsAuctionBatch,
+  updateCanonicalOsListing,
+} from "../_shared/osAuctionIdentity.ts";
+import {
   parsePollOsAuctionsRequest,
   type PollOsAuctionsRequest,
 } from "./request.ts";
@@ -49,8 +60,17 @@ type SupabaseQueryBuilder<T = unknown> = PromiseLike<SupabaseQueryResult<T>> & {
     options?: { count?: "exact"; head?: boolean },
   ) => SupabaseQueryBuilder<T>;
   insert: (values: Record<string, unknown>) => Promise<SupabaseQueryResult<T>>;
-  update: (values: Record<string, unknown>) => SupabaseQueryBuilder<T>;
+  update: (
+    values: Record<string, unknown>,
+    options?: { count?: "exact" },
+  ) => SupabaseQueryBuilder<T>;
   eq: (column: string, value: unknown) => SupabaseQueryBuilder<T>;
+  is: (column: string, value: null) => SupabaseQueryBuilder<T>;
+  not: (
+    column: string,
+    operator: string,
+    value: unknown,
+  ) => SupabaseQueryBuilder<T>;
   contains: (column: string, value: unknown[]) => SupabaseQueryBuilder<T>;
   or: (filters: string) => SupabaseQueryBuilder<T>;
   order: (
@@ -311,8 +331,12 @@ type MappedListingRow = {
   tags: string[];
 };
 
-type MappedAuction = { tagKey: string; row: MappedListingRow };
-type PoolTagRow = { id: string; tags?: string[] | null };
+type MappedAuction = { osId: string; tagKey: string; row: MappedListingRow };
+type PoolTagRow = {
+  id: string;
+  os_auction_id: string;
+  tags?: string[] | null;
+};
 
 /**
  * Map an AuctionOutputDto from the OS API to a Hub listing row.
@@ -321,7 +345,7 @@ function mapAuctionToListing(
   a: OsAuction,
   poolDate = getUtcPoolDate(),
 ): MappedAuction {
-  const osId = String(a.auctionListingId ?? "unknown");
+  const osId = requireOsAuctionId(a.auctionListingId);
   const tagKey = `os_auction:${osId}`;
   const catKey = mapCategory(a.propertyCategory);
   const price = Number(a.firstPriceOffer ?? 0);
@@ -352,6 +376,7 @@ function mapAuctionToListing(
   }
 
   return {
+    osId,
     tagKey,
     row: {
       title: buildTitle(a),
@@ -610,6 +635,8 @@ async function getActiveDailyPoolCount(
   const { count, error } = await table(sb, "listings")
     .select("id", { count: "exact", head: true })
     .eq("listing_type", "auction")
+    .is("owner_id", null)
+    .not("os_auction_id", "is", null)
     .eq("status", "active")
     .eq("is_off_market", false)
     .contains("tags", ["source:maiprop-os", getDailyPoolTag(poolDate)])
@@ -628,12 +655,20 @@ async function removeDailyPoolTagFromRows(
   const chunkSize = 25;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    const results = await Promise.all(chunk.map((row) => {
+    const results = await Promise.all(chunk.map(async (row) => {
       const tags = (row.tags ?? []).filter((tag) => tag !== poolTag);
-      return table(sb, "listings").update({ tags }).eq("id", row.id);
+      return updateCanonicalOsListing(
+        sb.from("listings") as unknown as OsAuctionListingTable,
+        {
+          id: row.id,
+          osId: row.os_auction_id,
+          data: { tags },
+          requiredTags: [poolTag],
+        },
+      );
     }));
-    for (const result of results) {
-      if (result.error) throw result.error;
+    for (const didUpdate of results) {
+      if (!didUpdate) throw new Error("canonical_os_pool_listing_changed");
       removed += 1;
     }
   }
@@ -655,6 +690,8 @@ async function fetchActiveDailyPoolRows(
     const { data, error } = await table<PoolTagRow>(sb, "listings")
       .select(selectColumns)
       .eq("listing_type", "auction")
+      .is("owner_id", null)
+      .not("os_auction_id", "is", null)
       .eq("status", "active")
       .eq("is_off_market", false)
       .contains("tags", ["source:maiprop-os", poolTag])
@@ -678,7 +715,11 @@ async function trimDailyPoolToLatest(
   limit: number,
 ): Promise<number> {
   const poolTag = getDailyPoolTag(poolDate);
-  const rows = await fetchActiveDailyPoolRows(sb, poolDate, "id, tags");
+  const rows = await fetchActiveDailyPoolRows(
+    sb,
+    poolDate,
+    "id, os_auction_id, tags",
+  );
   const staleRows = rows.slice(limit);
   return removeDailyPoolTagFromRows(sb, poolTag, staleRows);
 }
@@ -690,7 +731,11 @@ async function pruneUnselectedDailyPoolRows(
 ): Promise<number> {
   const poolTag = getDailyPoolTag(poolDate);
   const selected = new Set(selectedAuctionTags);
-  const rows = await fetchActiveDailyPoolRows(sb, poolDate, "id, tags");
+  const rows = await fetchActiveDailyPoolRows(
+    sb,
+    poolDate,
+    "id, os_auction_id, tags",
+  );
   const staleRows = rows.filter((row) =>
     !(row.tags ?? []).some((tag) => selected.has(tag))
   );
@@ -898,34 +943,35 @@ Deno.serve(async (req) => {
       );
     }
 
+    const validAuctions = dedupeOsAuctionsById(auctions);
+    requireValidOsAuctionBatch(auctions.length, validAuctions.length);
     const mapped = selectDiverseMappedAuctions(
-      auctions.map((auction) => mapAuctionToListing(auction, poolDate)),
+      validAuctions.map((auction) => mapAuctionToListing(auction, poolDate)),
       size,
     );
 
     // Fetch existing OS auction IDs in one query
-    const osIds = mapped.map((m) => m.tagKey);
-    const { data: existingRows } = await sb
-      .from("listings")
-      .select("id, tags")
-      .overlaps("tags", osIds);
+    const osIds = mapped.map((m) => m.osId);
+    const existingRows = await lookupCanonicalOsListings(
+      sb.from("listings") as unknown as OsAuctionListingTable,
+      osIds,
+    );
 
-    type ListingIdTagsRow = { id: string; tags?: string[] | null };
-    const existingMap: Record<string, string> = {};
-    for (const row of (existingRows ?? []) as ListingIdTagsRow[]) {
-      for (const tag of row.tags ?? []) {
-        if (tag.startsWith("os_auction:")) existingMap[tag] = row.id;
-      }
+    const existingMap = new Map<string, CanonicalOsListing>();
+    for (const row of existingRows) {
+      existingMap.set(row.os_auction_id, row);
     }
 
     type ListingUpdate = Partial<MappedListingRow> & { updated_at?: string };
     const toInsert: MappedListingRow[] = [];
-    const toUpdate: { id: string; data: ListingUpdate }[] = [];
+    const toUpdate: { id: string; osId: string; data: ListingUpdate }[] = [];
 
-    for (const { tagKey, row } of mapped) {
-      if (existingMap[tagKey]) {
+    for (const { osId, row } of mapped) {
+      const existing = existingMap.get(osId);
+      if (existing) {
         toUpdate.push({
-          id: existingMap[tagKey],
+          id: existing.id,
+          osId,
           data: {
             price: row.price,
             price_per_sqm: row.price_per_sqm,
@@ -942,7 +988,7 @@ Deno.serve(async (req) => {
             cadastre_number: row.cadastre_number,
             postal_code: row.postal_code,
             region: row.region,
-            tags: row.tags,
+            tags: mergeOsAuctionTags(existing.tags ?? [], row.tags),
             website_url: row.website_url,
             // Only set cover_image_url if we have a Street View URL to avoid overwriting existing photos
             ...(row.cover_image_url
@@ -965,30 +1011,28 @@ Deno.serve(async (req) => {
     // Bulk insert new auctions
     for (let i = 0; i < toInsert.length; i += CHUNK) {
       const chunk = toInsert.slice(i, i + CHUNK);
-      const { error } = await sb.from("listings").insert(chunk);
-      if (error) {
+      try {
+        imported += await insertOsAuctionRows(
+          sb.from("listings") as unknown as OsAuctionListingTable,
+          chunk,
+        );
+      } catch (error) {
         log.error("insert failed", {
-          err: error.message,
+          err: error instanceof Error ? error.message : String(error),
           chunk_size: chunk.length,
         });
         errors += chunk.length;
-      } else {
-        imported += chunk.length;
       }
     }
 
     // Update existing auctions
     for (const u of toUpdate) {
-      const { error } = await sb
-        .from("listings")
-        .update(u.data)
-        .eq("id", u.id);
-      if (error) {
-        log.error("update failed", { err: error.message, listing_id: u.id });
-        errors++;
-      } else {
-        updated++;
-      }
+      const didUpdate = await updateCanonicalOsListing(
+        sb.from("listings") as unknown as OsAuctionListingTable,
+        { id: u.id, osId: u.osId, data: u.data },
+      );
+      if (!didUpdate) throw new Error("canonical_os_listing_changed");
+      updated++;
     }
 
     const prunedPoolRows = await pruneUnselectedDailyPoolRows(
@@ -1034,7 +1078,7 @@ Deno.serve(async (req) => {
     const message = err instanceof Error ? err.message : String(err);
     log.error("poll error", { err: message });
     await logSync(sb, "error", message);
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
