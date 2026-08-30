@@ -479,7 +479,20 @@ test("recorded probe accepts only known legacy/corrected bridge bodies until F c
   ]) {
     assert.match(repairedMetadata, new RegExp(exactBridgePredicate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.match(repairedMetadata, /regexp_replace\(\s*pg_get_expr\(definition\.adbin, definition\.adrelid\)/);
+  assert.match(
+    repairedMetadata,
+    /btrim\(\s*regexp_replace\(\s*pg_get_expr\(definition\.adbin, definition\.adrelid\),\s*'\[\[:space:\]\]\+',\s*' ',\s*'g'\s*\)\s*\)\s+IN\s*\(/,
+  );
+  for (const approvedGeneratedExpression of [
+    "'CASE WHEN (listing_type = ''auction''::listing_type) THEN private.extract_os_auction_id(tags) ELSE NULL::text END'",
+    "'CASE WHEN (listing_type = ''auction''::public.listing_type) THEN private.extract_os_auction_id(tags) ELSE NULL::text END'",
+  ]) {
+    assert.ok(repairedMetadata.includes(approvedGeneratedExpression));
+  }
+  assert.doesNotMatch(
+    repairedMetadata,
+    /btrim\(\s*regexp_replace\(\s*pg_get_expr\(definition\.adbin, definition\.adrelid\),\s*'\[\[:space:\]\]\+',\s*' ',\s*'g'\s*\)\s*\)\s*(?:LIKE|ILIKE|~)/,
+  );
   assert.match(repairedMetadata, /regexp_replace\(\s*pg_get_constraintdef\(constraint_definition\.oid\)/);
   assert.doesNotMatch(repairedMetadata, /pg_get_expr\(definition\.adbin, definition\.adrelid\) LIKE/);
   assert.doesNotMatch(repairedMetadata, /pg_get_constraintdef\(constraint_definition\.oid\) LIKE/);
