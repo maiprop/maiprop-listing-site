@@ -11,6 +11,7 @@ const key = "sb_publishable_safe_key";
 const id = "00000000-0000-4000-8000-000000000001";
 const auctionId = "00000000-0000-4000-8000-000000000099";
 const missingAuctionId = "00000000-0000-0000-0000-000000000000";
+const bridgeVersion = "20260728120000";
 const firstVersion = "20260728123058";
 const secondVersion = "20260729120405";
 
@@ -59,7 +60,7 @@ function jsonResponse(body, status = 200) {
 }
 
 function dependencies(overrides = {}) {
-  const recordedVersions = overrides.recordedVersions ?? [firstVersion, secondVersion];
+  const recordedVersions = overrides.recordedVersions ?? [bridgeVersion, firstVersion, secondVersion];
   const requests = [];
   const sql = [];
   const psql = async (query) => {
@@ -84,6 +85,12 @@ function dependencies(overrides = {}) {
       anon_auction_execute: recordedVersions.includes(secondVersion),
       anon_homepage_execute: recordedVersions.includes(secondVersion),
       auction_index: recordedVersions.includes(secondVersion),
+      os_identity_contract: recordedVersions.includes(bridgeVersion),
+      ...overrides.metadataPatch,
+    });
+    if (query.includes("'os_identity_contract'")) return JSON.stringify({
+      migration_versions: recordedVersions,
+      os_identity_contract: recordedVersions.includes(bridgeVersion),
       ...overrides.metadataPatch,
     });
     if (query.includes("SET LOCAL ROLE anon")) return JSON.stringify({
@@ -178,6 +185,23 @@ test("recorded-mode runner supports safe first-only recovery and rejects drift o
     { skipped: true },
   );
 
+  const bridgeOnly = dependencies({ recordedVersions: [bridgeVersion] });
+  const bridgeProof = await runCatalogueBehavioralProbe(
+    { mode: "recorded", apiUrl, databaseUrl, key },
+    bridgeOnly,
+  );
+  assert.equal(bridgeProof.contract_level, "identity_bridge");
+  assert.deepEqual(bridgeProof.recorded_versions, [bridgeVersion]);
+
+  const bridgeDrift = dependencies({
+    recordedVersions: [bridgeVersion],
+    metadataPatch: { os_identity_contract: false },
+  });
+  await assert.rejects(
+    runCatalogueBehavioralProbe({ mode: "recorded", apiUrl, databaseUrl, key }, bridgeDrift),
+    /OS auction identity contract/i,
+  );
+
   const firstOnly = dependencies({ recordedVersions: [firstVersion] });
   const partial = await runCatalogueBehavioralProbe({ mode: "recorded", apiUrl, databaseUrl, key }, firstOnly);
   assert.equal(partial.contract_level, "first_migration");
@@ -198,13 +222,27 @@ test("recorded-mode runner supports safe first-only recovery and rejects drift o
   const secondOnly = dependencies({ recordedVersions: [secondVersion] });
   await assert.rejects(
     runCatalogueBehavioralProbe({ mode: "recorded", apiUrl, databaseUrl, key }, secondOnly),
-    /dependency|second migration/i,
+    /dependency|approved/i,
   );
+
+  const firstTwo = dependencies({ recordedVersions: [firstVersion, secondVersion] });
+  const catalogueContract = await runCatalogueBehavioralProbe(
+    { mode: "recorded", apiUrl, databaseUrl, key },
+    firstTwo,
+  );
+  assert.equal(catalogueContract.contract_level, "catalogue_contract");
+
+  const bridgeAndFirst = dependencies({ recordedVersions: [bridgeVersion, firstVersion] });
+  const resumableContract = await runCatalogueBehavioralProbe(
+    { mode: "recorded", apiUrl, databaseUrl, key },
+    bridgeAndFirst,
+  );
+  assert.equal(resumableContract.contract_level, "bridge_and_first");
 
   const postapplyPartial = dependencies({ recordedVersions: [firstVersion] });
   await assert.rejects(
     runCatalogueBehavioralProbe({ mode: "postapply", apiUrl, databaseUrl, key }, postapplyPartial),
-    /both manifest-bound migrations/i,
+    /all manifest-bound migrations/i,
   );
 });
 
@@ -258,6 +296,7 @@ test("full contract rejects second-migration function, retain-until, index, RLS,
     { private_catalogue_rls_enabled: false },
     { private_catalogue_rls_forced: true },
     { private_catalogue_no_direct_privileges: false },
+    { os_identity_contract: false },
   ]) {
     const deps = dependencies({ metadataPatch });
     await assert.rejects(

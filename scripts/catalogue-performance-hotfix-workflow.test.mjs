@@ -377,6 +377,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs postapply evidence\/database-contract\.json/);
     assert.match(behaviouralProbe, /20260728123058/);
     assert.match(behaviouralProbe, /20260729120405/);
+    assert.match(behaviouralProbe, /20260728120000/);
     assert.match(behaviouralProbe, /get_public_listing_catalogue/);
     assert.match(behaviouralProbe, /get_public_catalogue_publication/);
     assert.match(behaviouralProbe, /SET LOCAL ROLE anon/);

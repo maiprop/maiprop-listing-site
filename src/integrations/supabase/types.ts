@@ -1850,6 +1850,7 @@ export type Database = {
           min_rental_months: number | null
           monthly_expenses: number | null
           noise_score: number | null
+          os_auction_id: string | null
           open_house_date: string | null
           open_house_transaction_type: string | null
           organization_id: string | null
@@ -1973,6 +1974,7 @@ export type Database = {
           min_rental_months?: number | null
           monthly_expenses?: number | null
           noise_score?: number | null
+          os_auction_id?: never
           open_house_date?: string | null
           open_house_transaction_type?: string | null
           organization_id?: string | null
@@ -2096,6 +2098,7 @@ export type Database = {
           min_rental_months?: number | null
           monthly_expenses?: number | null
           noise_score?: number | null
+          os_auction_id?: never
           open_house_date?: string | null
           open_house_transaction_type?: string | null
           organization_id?: string | null

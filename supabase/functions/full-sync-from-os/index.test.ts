@@ -51,6 +51,54 @@ function rawPost(body: string): Request {
   });
 }
 
+Deno.test("replaceAll is rejected before listings or provider state can change", async () => {
+  const originalFetch = globalThis.fetch;
+  let listingRequests = 0;
+  let providerRequests = 0;
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            user: { id: "admin-1", email: "admin@test.local" },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    if (url.includes("/rest/v1/profiles")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ role: "admin" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+    if (url.includes("/rest/v1/listings")) listingRequests += 1;
+    else providerRequests += 1;
+    return Promise.resolve(
+      new Response(JSON.stringify({ message: "unexpected request" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  }) as typeof fetch;
+
+  try {
+    for (const body of [{ replaceAll: true }, { replace_all: true }]) {
+      const response = await handler(rawPost(JSON.stringify(body)));
+      const payload = await jsonBody(response) as { code?: string };
+      assertEquals(response.status, 409);
+      assertEquals(payload.code, "replace_all_disabled");
+    }
+    assertEquals(listingRequests, 0);
+    assertEquals(providerRequests, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 async function assertBoundaryRejection(
   request: Request,
   expectedCode: string,

@@ -4,6 +4,11 @@ import { isAbsolute, normalize, relative, resolve } from "node:path";
 
 const APPROVED_MIGRATIONS = [
   {
+    version: "20260728120000",
+    path: "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
+    sha256: "f12bfffc972d73a279cd526ff8f028e9417cfd267fe4d1e5e79ef41831ed37cd",
+  },
+  {
     version: "20260728123058",
     path: "supabase/migrations/20260728123058_materialize_public_catalogue_snapshots.sql",
     sha256: "3faf0f0f40ba318ce071de48828bf514d3d9b4e5f2dde403f3b0e77d3816e369",
@@ -107,7 +112,7 @@ export function validateCataloguePerformanceHotfix(root, manifest) {
   }
 
   if (!Array.isArray(input.migrations) || input.migrations.length !== APPROVED_MIGRATIONS.length) {
-    throw new Error("Manifest must contain exactly two approved migrations.");
+    throw new Error("Manifest must contain exactly three approved migrations.");
   }
 
   const migrationDirectory = resolve(root, "supabase/migrations");

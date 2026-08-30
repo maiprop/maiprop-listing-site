@@ -28,6 +28,7 @@ import {
 } from "../_shared/rateLimit.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { SchemaValidationError } from "../_shared/schema.ts";
+import { dedupeOsAuctionsById } from "../_shared/osAuctionIdentity.ts";
 import {
   OS_ALLOWED_HOST_SUFFIX,
   TRAILING_SLASH_RE,
@@ -319,9 +320,10 @@ async function handleAuctionRequest(
         ),
         sourcePages: [page],
       };
+    const validAuctions = dedupeOsAuctionsById(osResult.auctions);
     const mapped = sampleAcrossGreece
-      ? selectDiverseAuctionSample(osResult.auctions.map(mapAuction), size)
-      : osResult.auctions.map(mapAuction);
+      ? selectDiverseAuctionSample(validAuctions.map(mapAuction), size)
+      : validAuctions.map(mapAuction);
 
     log.info("returning auctions", {
       count: mapped.length,

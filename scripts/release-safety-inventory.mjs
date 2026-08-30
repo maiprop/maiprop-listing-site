@@ -570,6 +570,9 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "invalid_tag_rows",
     "duplicate_placeholder_groups",
     "duplicate_nonplaceholder_groups",
+    "quarantine_candidates_with_owner",
+    "quarantine_candidates_with_active_promotion",
+    "manual ownership or promotion review",
   ];
   const phaseProblems = [];
   for (const [target, job] of Object.entries({ staging: jobs.staging, production: jobs.production })) {

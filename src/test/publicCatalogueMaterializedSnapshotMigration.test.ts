@@ -20,6 +20,13 @@ const exactLookupMigration = readFileSync(
   ),
   "utf8",
 );
+const osAuctionIdentityMigration = readFileSync(
+  resolve(
+    process.cwd(),
+    "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
+  ),
+  "utf8",
+);
 const generatedTypes = readFileSync(
   resolve(
     process.cwd(),
@@ -153,6 +160,13 @@ describe("materialized public catalogue snapshot migration", () => {
     expect(exactLookupMigration).toContain("retain_until timestamptz");
   });
 
+  it("keeps the immutable catalogue uniqueness and fail-closed lookup contract", () => {
+    expect(migration).toContain("public_catalogue_duplicate_os_tag");
+    expect(migration).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_public_catalogue_versions_current_os_tag",
+    );
+  });
+
   it("keeps nullable catalogue fields explicit at the public API boundary", () => {
     const queryTypes = generatedTypes.match(
       /query_public_catalogue:\s*\{[\s\S]*?read_email_batch:/,
@@ -162,5 +176,59 @@ describe("materialized public catalogue snapshot migration", () => {
     expect(queryTypes).toContain("open_house_date: string");
     expect(publicApiTypes).toContain("ai_score: number | null");
     expect(publicApiTypes).toContain("open_house_date: string | null");
+  });
+
+  it("quarantines corrupt duplicates recoverably and enforces one OS identity", () => {
+    expect(osAuctionIdentityMigration).toContain(
+      "CREATE TABLE IF NOT EXISTS private.os_auction_duplicate_quarantine",
+    );
+    expect(osAuctionIdentityMigration).toContain("canonical_listing_id uuid NOT NULL");
+    expect(osAuctionIdentityMigration).toContain("previous_status public.listing_status NOT NULL");
+    expect(osAuctionIdentityMigration).toContain("previous_tags text[] NOT NULL");
+    expect(osAuctionIdentityMigration).toContain("listing.updated_at DESC");
+    expect(osAuctionIdentityMigration).toContain("listing.created_at DESC");
+    expect(osAuctionIdentityMigration).toContain("listing.id DESC");
+    expect(osAuctionIdentityMigration).toContain("listing.owner_id IS NOT NULL");
+    expect(osAuctionIdentityMigration).toContain("os_auction_duplicate_has_owner");
+    expect(osAuctionIdentityMigration).toContain("os_auction_identity_has_owner");
+    expect(osAuctionIdentityMigration).toContain("listing_promotion_allocations");
+    expect(osAuctionIdentityMigration).toContain("os_auction_duplicate_has_active_promotion");
+    expect(osAuctionIdentityMigration).toContain("THEN 'paused'::public.listing_status");
+    expect(osAuctionIdentityMigration).toContain("os_auction_duplicate:");
+    expect(osAuctionIdentityMigration).toContain("source:maiprop-os-duplicate-quarantine");
+    expect(osAuctionIdentityMigration).toContain("ADD COLUMN os_auction_id text");
+    expect(osAuctionIdentityMigration).toContain("GENERATED ALWAYS AS");
+    expect(osAuctionIdentityMigration).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_listings_os_auction_id_unique",
+    );
+    expect(osAuctionIdentityMigration).not.toMatch(/DELETE\s+FROM\s+public\.listings/i);
+    expect(osAuctionIdentityMigration).toContain(
+      "REVOKE ALL ON TABLE private.os_auction_duplicate_quarantine",
+    );
+  });
+
+  it("locks listing writers with a bounded wait before planning identity repair", () => {
+    const timeout = osAuctionIdentityMigration.indexOf("SET LOCAL lock_timeout = '5s'");
+    const lock = osAuctionIdentityMigration.indexOf(
+      "LOCK TABLE public.listings IN SHARE ROW EXCLUSIVE MODE",
+    );
+    const plan = osAuctionIdentityMigration.indexOf(
+      "CREATE TEMP TABLE os_auction_duplicate_plan",
+    );
+
+    expect(timeout).toBeGreaterThanOrEqual(0);
+    expect(lock).toBeGreaterThan(timeout);
+    expect(plan).toBeGreaterThan(lock);
+  });
+
+  it("rejects an owner-linked OS identity even without an OS source marker", () => {
+    const ownerGuard = osAuctionIdentityMigration.match(
+      /IF EXISTS \(\s*SELECT 1\s*FROM public\.listings AS listing\s*WHERE listing\.listing_type = 'auction'::public\.listing_type[\s\S]*?RAISE EXCEPTION 'os_auction_identity_has_owner'[\s\S]*?END IF;/,
+    )?.[0] ?? "";
+
+    expect(ownerGuard).toContain("listing.listing_type = 'auction'::public.listing_type");
+    expect(ownerGuard).toContain("private.extract_os_auction_id(listing.tags) IS NOT NULL");
+    expect(ownerGuard).toContain("listing.owner_id IS NOT NULL");
+    expect(ownerGuard).not.toContain("source:maiprop-os");
   });
 });

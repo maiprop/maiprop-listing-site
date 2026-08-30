@@ -192,17 +192,27 @@ describe("AdminPanel branch coverage", () => {
     expect(screen.queryByText("Private row")).not.toBeInTheDocument();
   });
 
-  it("runs batched full sync, clamps limits, and reports replace variants", async () => {
+  it("disables replace-all while atomic reconciliation is unavailable", async () => {
+    renderPanel();
+    openAdvanced();
+
+    const replaceAll = screen.getByRole("button", {
+      name: /Replace all auctions/i,
+    });
+    expect(replaceAll).toBeDisabled();
+    expect(
+      screen.getByText(/atomic reconciliation.*temporarily unavailable/i),
+    ).toBeInTheDocument();
+    fireEvent.click(replaceAll);
+    expect(
+      mocks.invoke.mock.calls.some(([, options]) => options?.body?.replaceAll === true),
+    ).toBe(false);
+  });
+
+  it("runs batched full sync and clamps limits", async () => {
     let fullSyncCalls = 0;
-    let replaceCalls = 0;
-    mocks.invoke.mockImplementation((name: string, options?: { body?: Record<string, unknown> }) => {
+    mocks.invoke.mockImplementation((name: string) => {
       if (name !== "full-sync-from-os") return Promise.resolve({ data: { osReachable: true }, error: null });
-      if (options?.body?.replaceAll) {
-        replaceCalls += 1;
-        return Promise.resolve(replaceCalls === 1
-          ? { data: { sync: { auctions: { replaced: 8, imported: 3, updated: 2 } } }, error: null }
-          : { data: { sync: { auctions: {} } }, error: null });
-      }
       fullSyncCalls += 1;
       return Promise.resolve({
         data: { sync: { auctions: { imported: fullSyncCalls, updated: 1, errors: 0, pages: fullSyncCalls === 1 ? 10 : 2 } } },
@@ -220,30 +230,21 @@ describe("AdminPanel branch coverage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Full sync \(OS/i }));
     await waitFor(() => expect(mocks.toast.success).toHaveBeenCalledWith(expect.stringMatching(/Full sync: 3 new.*2 updated/)));
     expect(fullSyncCalls).toBe(2);
-
-    fireEvent.click(screen.getByRole("button", { name: /Replace all auctions/i }));
-    await waitFor(() => expect(mocks.toast.success).toHaveBeenCalledWith(expect.stringMatching(/Replaced 8.*3 new.*2 updated/i)));
-    fireEvent.click(screen.getByRole("button", { name: /Replace all auctions/i }));
-    await waitFor(() => expect(mocks.toast.success).toHaveBeenCalledWith("Replace & sync done."));
   });
 
-  it("clears progress and reports full-sync and replace failures", async () => {
+  it("clears progress and reports full-sync failures", async () => {
     let syncCalls = 0;
-    mocks.invoke.mockImplementation((name: string, options?: { body?: Record<string, unknown> }) => {
+    mocks.invoke.mockImplementation((name: string) => {
       if (name !== "full-sync-from-os") return Promise.resolve({ data: { osReachable: true }, error: null });
       syncCalls += 1;
-      return Promise.resolve(options?.body?.replaceAll
-        ? { data: null, error: new Error("replace blocked") }
-        : { data: null, error: new Error("sync blocked") });
+      return Promise.resolve({ data: null, error: new Error("sync blocked") });
     });
 
     renderPanel();
     openAdvanced();
     fireEvent.click(screen.getByRole("button", { name: /Full sync \(OS/i }));
     await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith("Full sync failed: sync blocked"));
-    fireEvent.click(screen.getByRole("button", { name: /Replace all auctions/i }));
-    await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith("Replace failed: replace blocked"));
-    expect(syncCalls).toBe(2);
+    expect(syncCalls).toBe(1);
   });
 
   it("tests edge functions with success, returned errors, and thrown non-Error values", async () => {
@@ -273,10 +274,9 @@ describe("AdminPanel branch coverage", () => {
     rows.sync_log = null;
     rows.listing_management_catalogue = null;
     rows.firesale_requests = null;
-    mocks.invoke.mockImplementation((name: string, options?: { body?: Record<string, unknown> }) => {
+    mocks.invoke.mockImplementation((name: string) => {
       if (name === "os-diagnose") return Promise.resolve({ data: { osReachable: false }, error: null });
       if (name === "full-sync-from-os") {
-        if (options?.body?.replaceAll) return Promise.resolve({ data: { sync: { auctions: { replaced: 1 } } }, error: null });
         return Promise.resolve({ data: null, error: null });
       }
       return Promise.resolve({ data: null, error: null });
@@ -296,8 +296,6 @@ describe("AdminPanel branch coverage", () => {
     expect(inputs[1]).toHaveValue(1);
     fireEvent.click(screen.getByRole("button", { name: /Full sync \(OS/i }));
     await waitFor(() => expect(mocks.toast.success).toHaveBeenCalledWith(expect.stringMatching(/Full sync: 0 new.*0 updated/)));
-    fireEvent.click(screen.getByRole("button", { name: /Replace all auctions/i }));
-    await waitFor(() => expect(mocks.toast.success).toHaveBeenCalledWith(expect.stringMatching(/Replaced 1.*0 new.*0 updated/)));
   });
 
   it("surfaces the pending state for pull, listing, and firesale mutations", async () => {

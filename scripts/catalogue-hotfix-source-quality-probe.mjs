@@ -13,6 +13,13 @@ const INTEGER_FIELDS = [
   "duplicate_placeholder_groups",
   "duplicate_nonplaceholder_groups",
   "max_duplicate_multiplicity",
+  "all_os_source_rows",
+  "all_os_source_rows_with_invalid_identity",
+  "all_os_identity_rows",
+  "all_os_identity_rows_with_owner",
+  "quarantine_candidate_rows",
+  "quarantine_candidates_with_owner",
+  "quarantine_candidates_with_active_promotion",
 ];
 
 const REQUIRED_KEYS = [
@@ -73,6 +80,61 @@ WITH source AS (
     AND source.os_tag IS NOT NULL
   GROUP BY source.os_tag
   HAVING count(*) > 1
+), listing_identity AS (
+  SELECT
+    listing.id AS listing_id,
+    listing.owner_id,
+    listing.listing_type,
+    listing.status,
+    listing.updated_at,
+    listing.created_at,
+    COALESCE(listing.tags, '{}'::text[]) AS tags,
+    CASE
+      WHEN identity.tag_count = 1
+        AND identity.provider_id ~ '^[a-z0-9:_-]{1,120}$'
+        AND identity.provider_id NOT IN ('unknown', 'null', 'undefined', 'none', 'na', 'n/a')
+      THEN identity.provider_id
+      ELSE NULL
+    END AS provider_id
+  FROM public.listings AS listing
+  CROSS JOIN LATERAL (
+    SELECT
+      count(*)::integer AS tag_count,
+      min(normalized.value) AS provider_id
+    FROM (
+      SELECT lower(btrim(substr(tag.value, length('os_auction:') + 1))) AS value
+      FROM unnest(COALESCE(listing.tags, '{}'::text[])) AS tag(value)
+      WHERE tag.value LIKE 'os_auction:%'
+    ) AS normalized
+  ) AS identity
+), all_os_source_rows AS (
+  SELECT
+    identity.listing_id,
+    identity.owner_id,
+    identity.listing_type,
+    identity.provider_id,
+    identity.tags @> ARRAY['source:maiprop-os-duplicate-quarantine']::text[] AS quarantined
+  FROM listing_identity AS identity
+  WHERE identity.tags @> ARRAY['source:maiprop-os']::text[]
+), ranked_os_rows AS (
+  SELECT
+    identity.listing_id,
+    identity.owner_id,
+    row_number() OVER (
+      PARTITION BY identity.provider_id
+      ORDER BY
+        CASE WHEN identity.status = 'active'::public.listing_status THEN 1 ELSE 0 END DESC,
+        identity.updated_at DESC,
+        identity.created_at DESC,
+        identity.listing_id DESC
+    ) AS identity_rank
+  FROM listing_identity AS identity
+  WHERE identity.listing_type = 'auction'::public.listing_type
+    AND identity.provider_id IS NOT NULL
+), quarantine_candidates AS (
+  SELECT ranked.listing_id, ranked.owner_id
+  FROM ranked_os_rows AS ranked
+  WHERE ranked.identity_rank > 1
 )
 SELECT json_build_object(
   'schema_version', 1,
@@ -96,7 +158,39 @@ SELECT json_build_object(
   'duplicate_tag_rows', COALESCE((SELECT sum(multiplicity) FROM duplicate_groups), 0),
   'duplicate_placeholder_groups', (SELECT count(*) FROM duplicate_groups WHERE placeholder),
   'duplicate_nonplaceholder_groups', (SELECT count(*) FROM duplicate_groups WHERE NOT placeholder),
-  'max_duplicate_multiplicity', COALESCE((SELECT max(multiplicity) FROM duplicate_groups), 0)
+  'max_duplicate_multiplicity', COALESCE((SELECT max(multiplicity) FROM duplicate_groups), 0),
+  'all_os_source_rows', (SELECT count(*) FROM all_os_source_rows),
+  'all_os_source_rows_with_invalid_identity', (
+    SELECT count(*)
+    FROM all_os_source_rows AS os_source
+    WHERE NOT os_source.quarantined
+      AND (
+        os_source.listing_type <> 'auction'::public.listing_type
+        OR os_source.provider_id IS NULL
+      )
+  ),
+  'all_os_identity_rows', (SELECT count(*) FROM ranked_os_rows),
+  'all_os_identity_rows_with_owner', (
+    SELECT count(*)
+    FROM ranked_os_rows AS os_identity
+    WHERE os_identity.owner_id IS NOT NULL
+  ),
+  'quarantine_candidate_rows', (SELECT count(*) FROM quarantine_candidates),
+  'quarantine_candidates_with_owner', (
+    SELECT count(*) FROM quarantine_candidates WHERE owner_id IS NOT NULL
+  ),
+  'quarantine_candidates_with_active_promotion', (
+    SELECT count(*)
+    FROM quarantine_candidates AS candidate
+    WHERE EXISTS (
+      SELECT 1
+      FROM public.listing_promotion_allocations AS allocation
+      WHERE allocation.listing_id = candidate.listing_id
+        AND allocation.starts_at <= statement_timestamp()
+        AND allocation.ends_at > statement_timestamp()
+        AND allocation.revoked_at IS NULL
+    )
+  )
 );`;
 }
 
@@ -124,6 +218,11 @@ export function validateCatalogueSourceQuality(value) {
     value.placeholder_tag_rows > value.auction_listings ||
     value.duplicate_placeholder_groups + value.duplicate_nonplaceholder_groups !== value.duplicate_tag_groups ||
     (value.duplicate_tag_groups === 0 && (value.duplicate_tag_rows !== 0 || value.max_duplicate_multiplicity !== 0)) ||
+    value.all_os_source_rows_with_invalid_identity > value.all_os_source_rows ||
+    value.quarantine_candidate_rows > value.all_os_identity_rows ||
+    value.all_os_identity_rows_with_owner > value.all_os_identity_rows ||
+    value.quarantine_candidates_with_owner > value.quarantine_candidate_rows ||
+    value.quarantine_candidates_with_active_promotion > value.quarantine_candidate_rows ||
     (value.duplicate_tag_groups > 0 && (
       value.duplicate_tag_rows < value.duplicate_tag_groups * 2 ||
       value.max_duplicate_multiplicity < 2 ||
@@ -131,6 +230,18 @@ export function validateCatalogueSourceQuality(value) {
     ))
   ) {
     fail("Catalogue source-quality aggregate counts are inconsistent.");
+  }
+  if (value.all_os_source_rows_with_invalid_identity > 0) {
+    fail("Catalogue all-status OS source identity contract is invalid.");
+  }
+  if (value.all_os_identity_rows_with_owner > 0) {
+    fail("OS identity rows must not have owners.");
+  }
+  if (
+    value.quarantine_candidates_with_owner > 0 ||
+    value.quarantine_candidates_with_active_promotion > 0
+  ) {
+    fail("Catalogue source-quality repair candidates require manual ownership or promotion review.");
   }
   return Object.freeze({ ...value });
 }

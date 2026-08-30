@@ -5,6 +5,7 @@ const PRODUCTION_REF = "qvvicunqcrwpioqnvzxf";
 const STAGING_REF = "xsiehskfgeoqyazcgauv";
 const VERSION = /^\d{14}$/;
 const CATALOGUE_HOTFIX_MIGRATIONS = new Map([
+  ["20260728120000_canonicalize_os_auction_identity.sql", "20260728120000"],
   ["20260728123058_materialize_public_catalogue_snapshots.sql", "20260728123058"],
   ["20260729120405_harden_public_catalogue_exact_lookup_and_cache.sql", "20260729120405"],
 ]);
@@ -1004,16 +1005,36 @@ export function validateDatabaseContract({
   recordedVersions = metadata?.migration_versions,
   requiredLevel = "first_migration",
 }) {
+  const bridgeVersion = "20260728120000";
   const firstVersion = "20260728123058";
   const secondVersion = "20260729120405";
   const normalizedVersions = [...(recordedVersions ?? [])].sort();
   const expectedVersions = requiredLevel === "full"
+    ? [bridgeVersion, firstVersion, secondVersion]
+    : requiredLevel === "bridge_and_first"
+    ? [bridgeVersion, firstVersion]
+    : requiredLevel === "identity_bridge"
+    ? [bridgeVersion]
+    : requiredLevel === "catalogue_contract"
     ? [firstVersion, secondVersion]
     : [firstVersion];
-  if (!["first_migration", "full"].includes(requiredLevel) ||
+  if (!["identity_bridge", "first_migration", "bridge_and_first", "catalogue_contract", "full"].includes(requiredLevel) ||
       JSON.stringify(normalizedVersions) !== JSON.stringify(expectedVersions) ||
       JSON.stringify([...(metadata?.migration_versions ?? [])].sort()) !== JSON.stringify(expectedVersions)) {
     fail("Database recorded-version contract is incomplete.");
+  }
+  const hasIdentityContract = ["identity_bridge", "bridge_and_first", "full"].includes(requiredLevel);
+  if (hasIdentityContract && !metadata.os_identity_contract) {
+    fail("Database OS auction identity contract is incomplete.");
+  }
+  if (requiredLevel === "identity_bridge") {
+    return {
+      schema_version: 1,
+      contract_level: requiredLevel,
+      recorded_versions: normalizedVersions,
+      indexes: { os_auction_identity: true },
+      completed_at: completedTimestamp(),
+    };
   }
   if (!metadata?.private_catalogue_tables || !metadata?.private_catalogue_rls_enabled ||
       metadata?.private_catalogue_rls_forced !== false ||
@@ -1037,7 +1058,7 @@ export function validateDatabaseContract({
       restProbe.typed_call_rows < 1 || restProbe.typed_shape !== true) {
     fail("Database REST behavioral contract is incomplete.");
   }
-  if (requiredLevel === "full") {
+  if (["catalogue_contract", "full"].includes(requiredLevel)) {
     if (!metadata.auction_rpc || !metadata.homepage_rpc ||
         !metadata.homepage_retain_until_contract || !metadata.auction_index) {
       fail("Database second migration function, homepage return, or index contract is incomplete.");
@@ -1059,6 +1080,7 @@ export function validateDatabaseContract({
       fail("Database second migration REST behavioral contract is incomplete.");
     }
   }
+  const hasCatalogueContract = ["catalogue_contract", "full"].includes(requiredLevel);
   const evidence = {
     schema_version: 1,
     contract_level: requiredLevel,
@@ -1071,26 +1093,27 @@ export function validateDatabaseContract({
     },
     indexes: {
       first_migration: true,
-      ...(requiredLevel === "full" ? { auction_lookup: true } : {}),
+      ...(hasCatalogueContract ? { auction_lookup: true } : {}),
+      ...(hasIdentityContract ? { os_auction_identity: true } : {}),
     },
     functions: {
       legacy_rpc: true,
       publication_rpc: true,
       typed_rpc: true,
-      ...(requiredLevel === "full" ? { auction_rpc: true, homepage_rpc: true, homepage_retain_until_contract: true } : {}),
+      ...(hasCatalogueContract ? { auction_rpc: true, homepage_rpc: true, homepage_retain_until_contract: true } : {}),
     },
     anon_execute_grants: {
       legacy_rpc: true,
       publication_rpc: true,
       typed_rpc: true,
-      ...(requiredLevel === "full" ? { auction_rpc: true, homepage_rpc: true } : {}),
+      ...(hasCatalogueContract ? { auction_rpc: true, homepage_rpc: true } : {}),
     },
     anon_database_invocations: {
       publication_call_rows: 1,
       publication_shape: true,
       typed_call_rows: invocation.typed_call_rows,
       typed_shape: true,
-      ...(requiredLevel === "full" ? {
+      ...(hasCatalogueContract ? {
         homepage_call_rows: 1,
         homepage_shape: true,
         auction_seed_rows: invocation.auction_seed_rows,

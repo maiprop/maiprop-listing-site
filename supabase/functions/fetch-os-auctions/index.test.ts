@@ -175,7 +175,7 @@ Deno.test("invalid bearer tokens share the anonymous rate-limit bucket", async (
 
 Deno.test("mapAuction drops malformed numeric fields", () => {
   const mapped = mapAuction({
-    auctionListingId: 42,
+    auctionListingId: "42",
     propertyLatitude: "not-lat",
     propertyLongitude: "23.7",
     propertySquareMeters: "not-sqm",
@@ -199,7 +199,7 @@ Deno.test("mapAuction drops malformed numeric fields", () => {
 
 Deno.test("mapAuction forwards floor information when OS provides it", () => {
   const mapped = mapAuction({
-    auctionListingId: 43,
+    auctionListingId: "43",
     propertyFloor: "2",
     numberOfFloors: "5",
   });

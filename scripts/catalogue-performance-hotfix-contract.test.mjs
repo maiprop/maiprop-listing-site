@@ -14,6 +14,10 @@ import { validateCataloguePerformanceHotfix } from "./catalogue-performance-hotf
 
 const MIGRATIONS = [
   {
+    path: "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
+    sha256: "f12bfffc972d73a279cd526ff8f028e9417cfd267fe4d1e5e79ef41831ed37cd",
+  },
+  {
     path: "supabase/migrations/20260728123058_materialize_public_catalogue_snapshots.sql",
     sha256: "3faf0f0f40ba318ce071de48828bf514d3d9b4e5f2dde403f3b0e77d3816e369",
   },
@@ -22,7 +26,7 @@ const MIGRATIONS = [
     sha256: "f20d21b6c1368d0406e607a308ddd68ff1deaaf98a7d2a73927d857ddf7d85aa",
   },
 ];
-const FIRST_MIGRATION_PATH = MIGRATIONS[0].path;
+const FIRST_MIGRATION_PATH = MIGRATIONS[1].path;
 
 const manifest = () => ({
   version: 1,
@@ -68,6 +72,11 @@ test("accepts only the exact materialized catalogue migration contract", () => {
         warm12CardP95: 1000,
       },
       migrations: [
+        {
+          version: "20260728120000",
+          path: "supabase/migrations/20260728120000_canonicalize_os_auction_identity.sql",
+          sha256: "f12bfffc972d73a279cd526ff8f028e9417cfd267fe4d1e5e79ef41831ed37cd",
+        },
         {
           version: "20260728123058",
           path: "supabase/migrations/20260728123058_materialize_public_catalogue_snapshots.sql",
