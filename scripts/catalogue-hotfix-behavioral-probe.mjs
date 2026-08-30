@@ -6,7 +6,18 @@ import {
   validateDatabaseContract,
 } from "./catalogue-hotfix-workflow-helpers.mjs";
 
-const HOTFIX_VERSIONS = ["20260728120000", "20260728123058", "20260729120405"];
+const QUARANTINE_VERSION = "20260728115959";
+const BRIDGE_VERSION = "20260728120000";
+const REPAIR_VERSION = "20260728121500";
+const CATALOGUE_VERSION = "20260728123058";
+const HARDENING_VERSION = "20260729120405";
+const HOTFIX_VERSIONS = [
+  QUARANTINE_VERSION,
+  BRIDGE_VERSION,
+  REPAIR_VERSION,
+  CATALOGUE_VERSION,
+  HARDENING_VERSION,
+];
 const HOTFIX_VERSION_SQL = HOTFIX_VERSIONS.map((version) => `'${version}'`).join(",");
 const TYPED_SIGNATURE = "public.query_public_catalogue(bigint,text,text,text,text,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,integer,integer,text[],text,text,text,text,text[],numeric,numeric,numeric,numeric,numeric,numeric,text,text,text,timestamp with time zone,numeric,uuid,boolean,integer,integer,jsonb)";
 const AUCTION_SIGNATURE = "public.get_public_catalogue_auctions(bigint,uuid[],text)";
@@ -80,7 +91,7 @@ function anonHeaders(key, json = false) {
   };
 }
 
-function metadataSql() {
+function metadataSql(includeQuarantine, includeIdentity, requireExactPrefix) {
   return `
 SELECT json_build_object(
   'migration_versions', COALESCE((SELECT json_agg(version ORDER BY version) FROM supabase_migrations.schema_migrations WHERE version IN (${HOTFIX_VERSION_SQL})), '[]'::json),
@@ -101,11 +112,236 @@ SELECT json_build_object(
   'anon_auction_execute', COALESCE(has_function_privilege('anon', to_regprocedure('${AUCTION_SIGNATURE}'), 'EXECUTE'), false),
   'anon_homepage_execute', COALESCE(has_function_privilege('anon', to_regprocedure('public.get_public_catalogue_homepage(bigint)'), 'EXECUTE'), false),
   'auction_index', to_regclass('private.idx_public_catalogue_versions_auction_listing_publication') IS NOT NULL,
-  'os_identity_contract', ${osIdentityContractSql()}
+  ${quarantineMetadataFieldsSql(includeQuarantine)},
+  'os_identity_contract', ${includeIdentity ? osIdentityContractSql(requireExactPrefix) : "false"}
 );`;
 }
 
-function osIdentityContractSql() {
+function quarantineMetadataFieldsSql(includeQuarantine) {
+  if (!includeQuarantine) return `
+  'invalid_identity_quarantine_contract', false,
+  'eligible_invalid_os_source_rows', 0,
+  'invalid_identity_quarantine_rows', 0,
+  'invalid_identity_quarantine_marked_rows', 0,
+  'invalid_identity_quarantine_live_contract', false`;
+  return `
+  'invalid_identity_quarantine_contract', ${invalidIdentityQuarantineContractSql()},
+  'eligible_invalid_os_source_rows', ${eligibleInvalidOsSourceRowsSql()},
+  'invalid_identity_quarantine_rows', (SELECT count(*) FROM private.os_auction_invalid_identity_quarantine),
+  'invalid_identity_quarantine_marked_rows', (
+    SELECT count(*) FROM public.listings AS listing
+    WHERE COALESCE(listing.tags, '{}'::text[]) @> ARRAY['source:maiprop-os-invalid-identity-quarantine']::text[]
+  ),
+  'invalid_identity_quarantine_live_contract', ${invalidIdentityQuarantineLiveContractSql()}`;
+}
+
+function invalidIdentityQuarantineContractSql() {
+  return `
+    to_regclass('private.os_auction_invalid_identity_quarantine') IS NOT NULL
+    AND COALESCE((
+      SELECT relation.relrowsecurity
+        AND NOT relation.relforcerowsecurity
+        AND relation.relkind = 'r'
+        AND relation.relpersistence = 'p'
+        AND pg_get_userbyid(relation.relowner) = 'postgres'
+      FROM pg_class AS relation
+      WHERE relation.oid = to_regclass('private.os_auction_invalid_identity_quarantine')
+    ), false)
+    AND 5 = (
+      SELECT count(*)
+      FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND attribute.attnum > 0
+        AND NOT attribute.attisdropped
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND attribute.attnum = 1 AND attribute.attname = 'listing_id'
+        AND attribute.atttypid = 'uuid'::regtype AND attribute.attnotnull
+        AND NOT attribute.atthasdef
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND attribute.attnum = 2 AND attribute.attname = 'previous_status'
+        AND attribute.atttypid = 'public.listing_status'::regtype AND attribute.attnotnull
+        AND NOT attribute.atthasdef
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND attribute.attnum = 3 AND attribute.attname = 'previous_tags'
+        AND attribute.atttypid = 'text[]'::regtype AND attribute.attnotnull
+        AND NOT attribute.atthasdef
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM pg_attribute AS attribute
+      JOIN pg_attrdef AS definition
+        ON definition.adrelid = attribute.attrelid AND definition.adnum = attribute.attnum
+      WHERE attribute.attrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND attribute.attnum = 4 AND attribute.attname = 'quarantined_at'
+        AND attribute.atttypid = 'timestamp with time zone'::regtype AND attribute.attnotnull
+        AND pg_get_expr(definition.adbin, definition.adrelid) = 'statement_timestamp()'
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND attribute.attnum = 5 AND attribute.attname = 'reason'
+        AND attribute.atttypid = 'text'::regtype AND attribute.attnotnull
+        AND NOT attribute.atthasdef
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_class AS relation
+      CROSS JOIN LATERAL aclexplode(COALESCE(relation.relacl, acldefault('r', relation.relowner))) AS privilege
+      WHERE relation.oid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND privilege.grantee IN (0, (SELECT oid FROM pg_roles WHERE rolname = 'anon'), (SELECT oid FROM pg_roles WHERE rolname = 'authenticated'), (SELECT oid FROM pg_roles WHERE rolname = 'service_role'))
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND constraint_definition.contype = 'p'
+        AND constraint_definition.convalidated
+        AND constraint_definition.conkey = ARRAY[
+          (SELECT attribute.attnum FROM pg_attribute AS attribute
+           WHERE attribute.attrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+             AND attribute.attname = 'listing_id')
+        ]::smallint[]
+    )
+    AND 1 = (
+      SELECT count(*)
+      FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND constraint_definition.contype = 'f'
+        AND constraint_definition.convalidated
+        AND constraint_definition.confrelid = 'public.listings'::regclass
+        AND constraint_definition.confdeltype = 'r'
+        AND constraint_definition.confupdtype = 'a'
+        AND constraint_definition.conkey = ARRAY[
+          (SELECT attribute.attnum FROM pg_attribute AS attribute
+           WHERE attribute.attrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+             AND attribute.attname = 'listing_id')
+        ]::smallint[]
+        AND constraint_definition.confkey = ARRAY[
+          (SELECT attribute.attnum FROM pg_attribute AS attribute
+           WHERE attribute.attrelid = 'public.listings'::regclass
+             AND attribute.attname = 'id')
+        ]::smallint[]
+    )
+    AND 1 = (
+      SELECT count(*)
+      FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND constraint_definition.contype = 'c'
+        AND constraint_definition.convalidated
+        AND pg_get_constraintdef(constraint_definition.oid) = 'CHECK ((reason = ANY (ARRAY[''non_auction''::text, ''missing_identity''::text, ''multiple_identities''::text, ''placeholder_identity''::text, ''malformed_identity''::text])))'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND constraint_definition.contype = 'f'
+        AND constraint_definition.confrelid = 'public.listings'::regclass
+        AND constraint_definition.confdeltype = 'r'
+    )`;
+}
+
+function invalidIdentityQuarantineLiveContractSql() {
+  return `
+    NOT EXISTS (
+      SELECT 1
+      FROM private.os_auction_invalid_identity_quarantine AS quarantine
+      JOIN public.listings AS listing ON listing.id = quarantine.listing_id
+      WHERE listing.owner_id IS NOT NULL
+        OR listing.status IS DISTINCT FROM CASE
+          WHEN quarantine.previous_status = 'active'::public.listing_status
+            THEN 'paused'::public.listing_status
+          ELSE quarantine.previous_status
+        END
+        OR listing.tags IS DISTINCT FROM (
+          ARRAY(
+            SELECT tag.value
+            FROM unnest(quarantine.previous_tags) WITH ORDINALITY AS tag(value, ordinal)
+            WHERE tag.value <> 'source:maiprop-os'
+              AND left(tag.value, length('os_auction:')) <> 'os_auction:'
+              AND tag.value <> 'source:maiprop-os-invalid-identity-quarantine'
+            ORDER BY tag.ordinal
+          ) || ARRAY['source:maiprop-os-invalid-identity-quarantine']::text[]
+        )
+        OR (
+          SELECT count(*)
+          FROM unnest(COALESCE(listing.tags, '{}'::text[])) AS marker(value)
+          WHERE marker.value = 'source:maiprop-os-invalid-identity-quarantine'
+        ) <> 1
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM private.os_auction_invalid_identity_quarantine AS quarantine
+      LEFT JOIN public.listings AS listing ON listing.id = quarantine.listing_id
+      WHERE listing.id IS NULL
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.listings AS listing
+      WHERE COALESCE(listing.tags, '{}'::text[]) @> ARRAY['source:maiprop-os-invalid-identity-quarantine']::text[]
+        AND NOT EXISTS (
+          SELECT 1 FROM private.os_auction_invalid_identity_quarantine AS quarantine
+          WHERE quarantine.listing_id = listing.id
+        )
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM private.os_auction_invalid_identity_quarantine AS quarantine
+      JOIN public.listing_promotion_allocations AS allocation
+        ON allocation.listing_id = quarantine.listing_id
+      WHERE allocation.ends_at > statement_timestamp()
+        AND allocation.revoked_at IS NULL
+    )`;
+}
+
+function eligibleInvalidOsSourceRowsSql() {
+  return `(
+    WITH listing_identity AS (
+      SELECT
+        listing.id,
+        listing.listing_type,
+        count(tag.value) FILTER (WHERE left(tag.value, length('os_auction:')) = 'os_auction:') AS provider_tag_count,
+        min(lower(btrim(substr(tag.value, length('os_auction:') + 1))))
+          FILTER (WHERE left(tag.value, length('os_auction:')) = 'os_auction:') AS provider_id
+      FROM public.listings AS listing
+      LEFT JOIN LATERAL unnest(COALESCE(listing.tags, '{}'::text[])) AS tag(value) ON true
+      WHERE COALESCE(listing.tags, '{}'::text[]) @> ARRAY['source:maiprop-os']::text[]
+        AND NOT COALESCE(listing.tags, '{}'::text[]) @> ARRAY['source:maiprop-os-duplicate-quarantine']::text[]
+      GROUP BY listing.id
+    )
+    SELECT count(*)
+    FROM listing_identity AS identity
+    WHERE identity.listing_type <> 'auction'::public.listing_type
+      OR identity.provider_tag_count <> 1
+      OR identity.provider_id !~ '^[a-z0-9:_-]{1,120}$'
+      OR identity.provider_id IN ('unknown', 'null', 'undefined', 'none', 'na', 'n/a')
+  )`;
+}
+
+function osIdentityContractSql(requireExactPrefix = false) {
+  const approvedBody = requireExactPrefix
+    ? "md5(procedure.prosrc) = 'b98c2a7f368c498c75e221c4064c1878'"
+    : "md5(procedure.prosrc) IN ('532205de65120d3e34729a515d949f65', 'b98c2a7f368c498c75e221c4064c1878')";
+  const storedParity = requireExactPrefix
+    ? `
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.listings AS listing
+      WHERE listing.os_auction_id IS DISTINCT FROM CASE
+        WHEN listing.listing_type = 'auction'::public.listing_type
+          THEN private.extract_os_auction_id(listing.tags)
+        ELSE NULL
+      END
+    )`
+    : "";
   return `
     to_regclass('private.os_auction_duplicate_quarantine') IS NOT NULL
     AND NOT EXISTS (
@@ -119,8 +355,39 @@ function osIdentityContractSql() {
       SELECT 1
       FROM pg_proc AS procedure
       WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+        AND pg_get_userbyid(procedure.proowner) = 'postgres'
+        AND procedure.prokind = 'f'
+        AND procedure.prorettype = 'text'::regtype
+        AND NOT procedure.prosecdef
         AND procedure.provolatile = 'i'
         AND procedure.proparallel = 's'
+        AND COALESCE(procedure.proconfig, ARRAY[]::text[]) = ARRAY['search_path=""']::text[]
+        AND ${approvedBody}
+    )
+    AND 1 = (
+      SELECT count(*)
+      FROM pg_proc AS procedure
+      CROSS JOIN LATERAL aclexplode(
+        COALESCE(procedure.proacl, acldefault('f', procedure.proowner))
+      ) AS privilege
+      WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+        AND privilege.privilege_type = 'EXECUTE'
+        AND pg_get_userbyid(privilege.grantee) = 'service_role'
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_proc AS procedure
+      CROSS JOIN LATERAL aclexplode(
+        COALESCE(procedure.proacl, acldefault('f', procedure.proowner))
+      ) AS privilege
+      WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+        AND (
+          privilege.privilege_type <> 'EXECUTE'
+          OR privilege.grantee NOT IN (
+            procedure.proowner,
+            (SELECT oid FROM pg_roles WHERE rolname = 'service_role')
+          )
+        )
     )
     AND EXISTS (
       SELECT 1
@@ -132,7 +399,13 @@ function osIdentityContractSql() {
         AND attribute.attname = 'os_auction_id'
         AND attribute.attgenerated = 's'
         AND format_type(attribute.atttypid, attribute.atttypmod) = 'text'
-        AND pg_get_expr(definition.adbin, definition.adrelid) LIKE '%private.extract_os_auction_id(tags)%'
+        AND regexp_replace(
+          pg_get_expr(definition.adbin, definition.adrelid),
+          '[[:space:]]+', ' ', 'g'
+        ) IN (
+          'CASE WHEN (listing_type = ''auction''::listing_type) THEN private.extract_os_auction_id(tags) ELSE NULL::text END',
+          'CASE WHEN (listing_type = ''auction''::public.listing_type) THEN private.extract_os_auction_id(tags) ELSE NULL::text END'
+        )
     )
     AND EXISTS (
       SELECT 1
@@ -146,6 +419,9 @@ function osIdentityContractSql() {
         AND index_definition.indisvalid
         AND index_definition.indisready
         AND index_definition.indnkeyatts = 1
+        AND index_definition.indnatts = 1
+        AND index_definition.indpred IS NULL
+        AND index_definition.indexprs IS NULL
         AND index_definition.indkey[0] = attribute.attnum
     )
     AND EXISTS (
@@ -155,15 +431,30 @@ function osIdentityContractSql() {
         AND constraint_definition.conname = 'listings_os_auction_source_identity_valid'
         AND constraint_definition.contype = 'c'
         AND constraint_definition.convalidated
-        AND pg_get_constraintdef(constraint_definition.oid) LIKE '%private.extract_os_auction_id(tags)%'
-    )`;
+        AND regexp_replace(
+          pg_get_constraintdef(constraint_definition.oid),
+          '[[:space:]]+', ' ', 'g'
+        ) IN (
+          'CHECK (((NOT (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os''::text])) OR (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os-duplicate-quarantine''::text]) OR ((listing_type = ''auction''::listing_type) AND (private.extract_os_auction_id(tags) IS NOT NULL))))',
+          'CHECK (((NOT (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os''::text])) OR (COALESCE(tags, ''{}''::text[]) @> ARRAY[''source:maiprop-os-duplicate-quarantine''::text]) OR ((listing_type = ''auction''::public.listing_type) AND (private.extract_os_auction_id(tags) IS NOT NULL))))'
+        )
+    )${storedParity}`;
 }
 
-function bridgeMetadataSql() {
+function bridgeMetadataSql(includeQuarantine = false, requireExactPrefix = false) {
   return `
 SELECT json_build_object(
   'migration_versions', COALESCE((SELECT json_agg(version ORDER BY version) FROM supabase_migrations.schema_migrations WHERE version IN (${HOTFIX_VERSION_SQL})), '[]'::json),
-  'os_identity_contract', ${osIdentityContractSql()}
+  ${includeQuarantine ? `${quarantineMetadataFieldsSql(true)},` : ""}
+  'os_identity_contract', ${osIdentityContractSql(requireExactPrefix)}
+);`;
+}
+
+function quarantineMetadataSql() {
+  return `
+SELECT json_build_object(
+  'migration_versions', COALESCE((SELECT json_agg(version ORDER BY version) FROM supabase_migrations.schema_migrations WHERE version IN (${HOTFIX_VERSION_SQL})), '[]'::json),
+  ${quarantineMetadataFieldsSql(true)}
 );`;
 }
 
@@ -251,41 +542,80 @@ export async function runCatalogueBehavioralProbe(
   if (mode === "recorded" && recordedVersions.length === 0) return { skipped: true };
   const approvedRecordedStates = [
     [],
-    [HOTFIX_VERSIONS[0]],
-    [HOTFIX_VERSIONS[0], HOTFIX_VERSIONS[1]],
-    [HOTFIX_VERSIONS[1]],
-    [HOTFIX_VERSIONS[1], HOTFIX_VERSIONS[2]],
+    [BRIDGE_VERSION],
+    [CATALOGUE_VERSION],
+    [BRIDGE_VERSION, CATALOGUE_VERSION],
+    [CATALOGUE_VERSION, HARDENING_VERSION],
+    [BRIDGE_VERSION, CATALOGUE_VERSION, HARDENING_VERSION],
+    [QUARANTINE_VERSION],
+    [QUARANTINE_VERSION, BRIDGE_VERSION],
+    [QUARANTINE_VERSION, BRIDGE_VERSION, REPAIR_VERSION],
+    [QUARANTINE_VERSION, BRIDGE_VERSION, REPAIR_VERSION, CATALOGUE_VERSION],
     HOTFIX_VERSIONS,
+    [QUARANTINE_VERSION, CATALOGUE_VERSION],
+    [QUARANTINE_VERSION, BRIDGE_VERSION, CATALOGUE_VERSION],
+    [QUARANTINE_VERSION, CATALOGUE_VERSION, HARDENING_VERSION],
+    [QUARANTINE_VERSION, BRIDGE_VERSION, CATALOGUE_VERSION, HARDENING_VERSION],
   ];
-  if (!approvedRecordedStates.some((state) => JSON.stringify(recordedVersions) === JSON.stringify(state))) {
+  if (!approvedRecordedStates.some(
+    (state) => JSON.stringify(state) === JSON.stringify(recordedVersions)
+  )) {
     fail("Recorded hotfix migrations do not form the approved dependency prefix.");
   }
-  if (mode === "postapply" && recordedVersions.length !== HOTFIX_VERSIONS.length) {
+  if (mode === "postapply" && JSON.stringify(recordedVersions) !== JSON.stringify(HOTFIX_VERSIONS)) {
     fail("All manifest-bound migrations must be recorded before behavioral certification.");
   }
-  if (mode === "recorded" && recordedVersions.length === 1 && recordedVersions[0] === HOTFIX_VERSIONS[0]) {
-    const metadata = parseJson(await psql(bridgeMetadataSql()), "Database OS identity bridge contract");
+  if (mode === "recorded" && recordedVersions.length === 1 && recordedVersions[0] === QUARANTINE_VERSION) {
+    const metadata = parseJson(await psql(quarantineMetadataSql()), "Database invalid OS identity quarantine contract");
     return validateDatabaseContract({
       metadata,
       invocation: {},
       restProbe: {},
       recordedVersions,
-      requiredLevel: "identity_bridge",
+      requiredLevel: "invalid_identity_quarantine",
     });
   }
-  const hasBridge = recordedVersions.includes(HOTFIX_VERSIONS[0]);
-  const requireSecond = recordedVersions.includes(HOTFIX_VERSIONS[2]);
+  const hasQuarantine = recordedVersions.includes(QUARANTINE_VERSION);
+  const hasBridge = recordedVersions.includes(BRIDGE_VERSION);
+  const hasFirst = recordedVersions.includes(CATALOGUE_VERSION);
+  const requireSecond = recordedVersions.includes(HARDENING_VERSION);
+  if (mode === "recorded" && hasBridge && !hasFirst) {
+    const metadata = parseJson(
+      await psql(bridgeMetadataSql(hasQuarantine, recordedVersions.includes(REPAIR_VERSION))),
+      "Database OS identity bridge contract",
+    );
+    return validateDatabaseContract({
+      metadata,
+      invocation: {},
+      restProbe: {},
+      recordedVersions,
+      requiredLevel: hasQuarantine
+        ? "quarantine_and_identity_bridge"
+        : "identity_bridge",
+    });
+  }
   const requiredLevel = mode === "postapply"
     ? "full"
-    : hasBridge && requireSecond
+    : hasQuarantine && hasBridge && requireSecond
     ? "full"
+    : hasBridge && requireSecond
+    ? "legacy_full"
+    : hasQuarantine && requireSecond
+    ? "quarantine_catalogue_contract"
+    : hasQuarantine && hasBridge
+    ? "quarantine_bridge_and_first"
     : requireSecond
     ? "catalogue_contract"
+    : hasQuarantine
+    ? "quarantine_and_first"
     : hasBridge
     ? "bridge_and_first"
     : "first_migration";
 
-  const metadata = parseJson(await psql(metadataSql()), "Database metadata contract");
+  const metadata = parseJson(
+    await psql(metadataSql(hasQuarantine, hasBridge, recordedVersions.includes(REPAIR_VERSION))),
+    "Database metadata contract",
+  );
   const invocation = parseJson(await psql(anonInvocationSql(requireSecond)), "Anon database invocation contract");
 
   const seedRows = await fetchJson(

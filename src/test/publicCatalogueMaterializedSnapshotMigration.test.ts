@@ -209,6 +209,16 @@ describe("materialized public catalogue snapshot migration", () => {
     expect(osAuctionIdentityMigration).toContain("os_auction_identity_has_owner");
     expect(osAuctionIdentityMigration).toContain("listing_promotion_allocations");
     expect(osAuctionIdentityMigration).toContain("os_auction_duplicate_has_active_promotion");
+    expect(osAuctionIdentityMigration).toContain(
+      "left(tag.value, length('os_auction:')) = 'os_auction:'",
+    );
+    expect(osAuctionIdentityMigration).not.toContain("LIKE 'os_auction:%'");
+    expect(osAuctionIdentityMigration).toContain(
+      "allocation.ends_at > statement_timestamp()",
+    );
+    expect(osAuctionIdentityMigration).not.toContain(
+      "allocation.starts_at <= statement_timestamp()",
+    );
     expect(osAuctionIdentityMigration).toContain("THEN 'paused'::public.listing_status");
     expect(osAuctionIdentityMigration).toContain("os_auction_duplicate:");
     expect(osAuctionIdentityMigration).toContain("source:maiprop-os-duplicate-quarantine");

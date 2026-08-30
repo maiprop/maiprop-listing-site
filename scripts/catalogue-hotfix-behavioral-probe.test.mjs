@@ -11,7 +11,9 @@ const key = "sb_publishable_safe_key";
 const id = "00000000-0000-4000-8000-000000000001";
 const auctionId = "00000000-0000-4000-8000-000000000099";
 const missingAuctionId = "00000000-0000-0000-0000-000000000000";
+const quarantineVersion = "20260728115959";
 const bridgeVersion = "20260728120000";
+const repairVersion = "20260728121500";
 const firstVersion = "20260728123058";
 const secondVersion = "20260729120405";
 
@@ -60,7 +62,7 @@ function jsonResponse(body, status = 200) {
 }
 
 function dependencies(overrides = {}) {
-  const recordedVersions = overrides.recordedVersions ?? [bridgeVersion, firstVersion, secondVersion];
+  const recordedVersions = overrides.recordedVersions ?? [quarantineVersion, bridgeVersion, repairVersion, firstVersion, secondVersion];
   const requests = [];
   const sql = [];
   const psql = async (query) => {
@@ -85,12 +87,31 @@ function dependencies(overrides = {}) {
       anon_auction_execute: recordedVersions.includes(secondVersion),
       anon_homepage_execute: recordedVersions.includes(secondVersion),
       auction_index: recordedVersions.includes(secondVersion),
+      invalid_identity_quarantine_contract: recordedVersions.includes(quarantineVersion),
+      eligible_invalid_os_source_rows: 0,
+      invalid_identity_quarantine_rows: 1,
+      invalid_identity_quarantine_marked_rows: 1,
+      invalid_identity_quarantine_live_contract: true,
       os_identity_contract: recordedVersions.includes(bridgeVersion),
       ...overrides.metadataPatch,
     });
     if (query.includes("'os_identity_contract'")) return JSON.stringify({
       migration_versions: recordedVersions,
+      invalid_identity_quarantine_contract: recordedVersions.includes(quarantineVersion),
+      eligible_invalid_os_source_rows: 0,
+      invalid_identity_quarantine_rows: 1,
+      invalid_identity_quarantine_marked_rows: 1,
+      invalid_identity_quarantine_live_contract: true,
       os_identity_contract: recordedVersions.includes(bridgeVersion),
+      ...overrides.metadataPatch,
+    });
+    if (query.includes("'invalid_identity_quarantine_contract'")) return JSON.stringify({
+      migration_versions: recordedVersions,
+      invalid_identity_quarantine_contract: recordedVersions.includes(quarantineVersion),
+      eligible_invalid_os_source_rows: 0,
+      invalid_identity_quarantine_rows: 1,
+      invalid_identity_quarantine_marked_rows: 1,
+      invalid_identity_quarantine_live_contract: true,
       ...overrides.metadataPatch,
     });
     if (query.includes("SET LOCAL ROLE anon")) return JSON.stringify({
@@ -161,6 +182,36 @@ test("runner applies location filter, exact ID binding, and invokes typed/public
   assert.equal(JSON.stringify(result).includes(auctionId), false);
 });
 
+test("postapply SQL certifies the exact quarantine schema and deterministic live-row parity", async () => {
+  const deps = dependencies();
+  await runCatalogueBehavioralProbe({ mode: "postapply", apiUrl, databaseUrl, key }, deps);
+
+  const metadata = deps.sql.find((query) => query.includes("'invalid_identity_quarantine_contract'"));
+  assert.ok(metadata);
+  for (const exactMetadataPredicate of [
+    "relation.relpersistence = 'p'",
+    "pg_get_userbyid(relation.relowner) = 'postgres'",
+    "NOT relation.relforcerowsecurity",
+    "attribute.attname = 'listing_id'",
+    "attribute.attname = 'previous_status'",
+    "attribute.attname = 'previous_tags'",
+    "attribute.attname = 'quarantined_at'",
+    "attribute.attname = 'reason'",
+    "constraint_definition.contype = 'p'",
+    "constraint_definition.convalidated",
+    "constraint_definition.confdeltype = 'r'",
+    "listing.owner_id IS NOT NULL",
+    "quarantine.previous_status = 'active'::public.listing_status",
+    "left(tag.value, length('os_auction:')) <> 'os_auction:'",
+    "WHERE marker.value = 'source:maiprop-os-invalid-identity-quarantine'",
+    "allocation.ends_at > statement_timestamp()",
+    "allocation.revoked_at IS NULL",
+  ]) {
+    assert.match(metadata, new RegExp(exactMetadataPredicate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.doesNotMatch(metadata, /LIKE 'os_auction:%'/);
+});
+
 test("runner certifies a publication with zero auctions using a deterministic sentinel", async () => {
   const deps = dependencies({ zeroAuctions: true });
   const result = await runCatalogueBehavioralProbe({ mode: "postapply", apiUrl, databaseUrl, key }, deps);
@@ -192,6 +243,14 @@ test("recorded-mode runner supports safe first-only recovery and rejects drift o
   );
   assert.equal(bridgeProof.contract_level, "identity_bridge");
   assert.deepEqual(bridgeProof.recorded_versions, [bridgeVersion]);
+
+  const quarantineOnly = dependencies({ recordedVersions: [quarantineVersion] });
+  const quarantineProof = await runCatalogueBehavioralProbe(
+    { mode: "recorded", apiUrl, databaseUrl, key },
+    quarantineOnly,
+  );
+  assert.equal(quarantineProof.contract_level, "invalid_identity_quarantine");
+  assert.deepEqual(quarantineProof.recorded_versions, [quarantineVersion]);
 
   const bridgeDrift = dependencies({
     recordedVersions: [bridgeVersion],
@@ -244,14 +303,165 @@ test("recorded-mode runner supports safe first-only recovery and rejects drift o
     { mode: "recorded", apiUrl, databaseUrl, key },
     allThree,
   );
-  assert.equal(fullContract.contract_level, "full");
+  assert.equal(fullContract.contract_level, "legacy_full");
   assert.deepEqual(fullContract.recorded_versions, [bridgeVersion, firstVersion, secondVersion]);
+
+  const allFour = dependencies({ recordedVersions: [quarantineVersion, bridgeVersion, firstVersion, secondVersion] });
+  const remediatedFullContract = await runCatalogueBehavioralProbe(
+    { mode: "recorded", apiUrl, databaseUrl, key },
+    allFour,
+  );
+  assert.equal(remediatedFullContract.contract_level, "full");
+  assert.deepEqual(remediatedFullContract.recorded_versions, [
+    quarantineVersion,
+    bridgeVersion,
+    firstVersion,
+    secondVersion,
+  ]);
+
+  const quarantineAndBridge = dependencies({
+    recordedVersions: [quarantineVersion, bridgeVersion],
+  });
+  assert.equal(
+    (await runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      quarantineAndBridge,
+    )).contract_level,
+    "quarantine_and_identity_bridge",
+  );
+
+  const quarantineBridgeAndFirst = dependencies({
+    recordedVersions: [quarantineVersion, bridgeVersion, firstVersion],
+  });
+  assert.equal(
+    (await runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      quarantineBridgeAndFirst,
+    )).contract_level,
+    "quarantine_bridge_and_first",
+  );
+
+  const quarantineAndFirst = dependencies({
+    recordedVersions: [quarantineVersion, firstVersion],
+  });
+  assert.equal(
+    (await runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      quarantineAndFirst,
+    )).contract_level,
+    "quarantine_and_first",
+  );
+
+  const quarantineCatalogue = dependencies({
+    recordedVersions: [quarantineVersion, firstVersion, secondVersion],
+  });
+  assert.equal(
+    (await runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      quarantineCatalogue,
+    )).contract_level,
+    "quarantine_catalogue_contract",
+  );
+
+  const unsupportedQuarantineAndSecond = dependencies({
+    recordedVersions: [quarantineVersion, secondVersion],
+  });
+  await assert.rejects(
+    runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      unsupportedQuarantineAndSecond,
+    ),
+    /dependency|approved/i,
+  );
 
   const postapplyPartial = dependencies({ recordedVersions: [firstVersion] });
   await assert.rejects(
     runCatalogueBehavioralProbe({ mode: "postapply", apiUrl, databaseUrl, key }, postapplyPartial),
     /all manifest-bound migrations/i,
   );
+  await assert.rejects(
+    runCatalogueBehavioralProbe({
+      mode: "postapply", apiUrl, databaseUrl, key,
+    }, dependencies({ recordedVersions: [bridgeVersion, firstVersion, secondVersion] })),
+    /all manifest-bound migrations/i,
+  );
+});
+
+test("recorded mode exhaustively accepts the 15 path-reachable Q/B/F/C/H subsets", async () => {
+  const versions = [quarantineVersion, bridgeVersion, repairVersion, firstVersion, secondVersion];
+  const acceptedMasks = new Set([0, 2, 8, 10, 24, 26, 1, 3, 7, 15, 31, 9, 11, 25, 27]);
+
+  for (let mask = 0; mask < 32; mask += 1) {
+    const recordedVersions = versions.filter((_, index) => (mask & (1 << index)) !== 0);
+    const hasQ = Boolean(mask & 1);
+    const hasB = Boolean(mask & 2);
+    const hasC = Boolean(mask & 8);
+    const hasH = Boolean(mask & 16);
+    const accepted = acceptedMasks.has(mask);
+    const run = runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      dependencies({ recordedVersions }),
+    );
+    if (!accepted) {
+      await assert.rejects(run, /dependency|approved/i, `mask ${mask} must fail closed`);
+      continue;
+    }
+    const result = await run;
+    const baseMask = (hasQ ? 1 : 0) | (hasB ? 2 : 0) | (hasC ? 4 : 0) | (hasH ? 8 : 0);
+    const expected = new Map([
+      [0, "skipped"],
+      [1, "invalid_identity_quarantine"],
+      [2, "identity_bridge"],
+      [3, "quarantine_and_identity_bridge"],
+      [4, "first_migration"],
+      [5, "quarantine_and_first"],
+      [6, "bridge_and_first"],
+      [7, "quarantine_bridge_and_first"],
+      [12, "catalogue_contract"],
+      [13, "quarantine_catalogue_contract"],
+      [14, "legacy_full"],
+      [15, "full"],
+    ]).get(baseMask);
+    assert.equal(
+      result.skipped ? "skipped" : result.contract_level,
+      expected,
+      `mask ${mask} has the approved feature contract`,
+    );
+  }
+});
+
+test("recorded probe accepts only known legacy/corrected bridge bodies until F certifies stored parity", async () => {
+  const legacy = dependencies({ recordedVersions: [bridgeVersion, firstVersion, secondVersion] });
+  await runCatalogueBehavioralProbe({ mode: "recorded", apiUrl, databaseUrl, key }, legacy);
+  const legacyMetadata = legacy.sql.find((query) => query.includes("'os_identity_contract'"));
+  assert.match(legacyMetadata, /532205de65120d3e34729a515d949f65/);
+  assert.match(legacyMetadata, /b98c2a7f368c498c75e221c4064c1878/);
+  assert.doesNotMatch(legacyMetadata, /listing\.os_auction_id IS DISTINCT FROM CASE/);
+
+  const repaired = dependencies({
+    recordedVersions: [quarantineVersion, bridgeVersion, repairVersion],
+  });
+  await runCatalogueBehavioralProbe({ mode: "recorded", apiUrl, databaseUrl, key }, repaired);
+  const repairedMetadata = repaired.sql.find((query) => query.includes("'os_identity_contract'"));
+  assert.doesNotMatch(repairedMetadata, /532205de65120d3e34729a515d949f65/);
+  assert.match(repairedMetadata, /b98c2a7f368c498c75e221c4064c1878/);
+  assert.match(repairedMetadata, /listing\.os_auction_id IS DISTINCT FROM CASE/);
+  for (const exactBridgePredicate of [
+    "pg_get_userbyid(procedure.proowner) = 'postgres'",
+    "NOT procedure.prosecdef",
+    "COALESCE(procedure.proconfig, ARRAY[]::text[]) = ARRAY['search_path=\"\"']::text[]",
+    "privilege.privilege_type = 'EXECUTE'",
+    "pg_get_userbyid(privilege.grantee) = 'service_role'",
+    "index_definition.indpred IS NULL",
+    "index_definition.indexprs IS NULL",
+    "index_definition.indnatts = 1",
+  ]) {
+    assert.match(repairedMetadata, new RegExp(exactBridgePredicate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(repairedMetadata, /regexp_replace\(\s*pg_get_expr\(definition\.adbin, definition\.adrelid\)/);
+  assert.match(repairedMetadata, /regexp_replace\(\s*pg_get_constraintdef\(constraint_definition\.oid\)/);
+  assert.doesNotMatch(repairedMetadata, /pg_get_expr\(definition\.adbin, definition\.adrelid\) LIKE/);
+  assert.doesNotMatch(repairedMetadata, /pg_get_constraintdef\(constraint_definition\.oid\) LIKE/);
 });
 
 test("runner fails closed on an HTTP 200 empty catalogue response", async () => {
@@ -304,6 +514,10 @@ test("full contract rejects second-migration function, retain-until, index, RLS,
     { private_catalogue_rls_enabled: false },
     { private_catalogue_rls_forced: true },
     { private_catalogue_no_direct_privileges: false },
+    { invalid_identity_quarantine_contract: false },
+    { eligible_invalid_os_source_rows: 1 },
+    { invalid_identity_quarantine_rows: 2 },
+    { invalid_identity_quarantine_live_contract: false },
     { os_identity_contract: false },
   ]) {
     const deps = dependencies({ metadataPatch });

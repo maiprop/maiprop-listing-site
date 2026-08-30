@@ -50,7 +50,7 @@ WITH source AS (
       ELSE (
         SELECT substr(tag.value, length('os_auction:') + 1)
         FROM unnest(COALESCE(listing.tags, '{}'::text[])) AS tag(value)
-        WHERE tag.value LIKE 'os_auction:%'
+        WHERE left(tag.value, length('os_auction:')) = 'os_auction:'
         ORDER BY tag.value
         LIMIT 1
       )
@@ -60,7 +60,7 @@ WITH source AS (
       ELSE (
         SELECT count(*)::integer
         FROM unnest(COALESCE(listing.tags, '{}'::text[])) AS tag(value)
-        WHERE tag.value LIKE 'os_auction:%'
+        WHERE left(tag.value, length('os_auction:')) = 'os_auction:'
       )
     END AS os_tag_count
   FROM public.listings AS listing
@@ -113,7 +113,7 @@ WITH source AS (
     FROM (
       SELECT lower(btrim(substr(tag.value, length('os_auction:') + 1))) AS value
       FROM unnest(COALESCE(listing.tags, '{}'::text[])) AS tag(value)
-      WHERE tag.value LIKE 'os_auction:%'
+      WHERE left(tag.value, length('os_auction:')) = 'os_auction:'
     ) AS normalized
   ) AS identity
 ), all_os_source_rows AS (
@@ -219,7 +219,6 @@ SELECT json_build_object(
       SELECT 1
       FROM public.listing_promotion_allocations AS allocation
       WHERE allocation.listing_id = invalid_source.listing_id
-        AND allocation.starts_at <= statement_timestamp()
         AND allocation.ends_at > statement_timestamp()
         AND allocation.revoked_at IS NULL
     )
@@ -241,7 +240,6 @@ SELECT json_build_object(
       SELECT 1
       FROM public.listing_promotion_allocations AS allocation
       WHERE allocation.listing_id = candidate.listing_id
-        AND allocation.starts_at <= statement_timestamp()
         AND allocation.ends_at > statement_timestamp()
         AND allocation.revoked_at IS NULL
     )
@@ -294,9 +292,13 @@ export function validateCatalogueSourceQuality(value) {
   ) {
     fail("Catalogue source-quality aggregate counts are inconsistent.");
   }
-  if (value.all_os_source_rows_with_invalid_identity > 0) {
+  if (
+    value.all_os_source_rows_with_invalid_identity > 1 ||
+    value.all_os_source_invalid_rows_with_owner > 0 ||
+    value.all_os_source_invalid_rows_with_active_promotion > 0
+  ) {
     fail(
-      "Catalogue all-status OS source identity contract is invalid: " +
+      "Catalogue all-status OS source identity contract is invalid or exceeds the one-row remediation cap: " +
         JSON.stringify({
           non_auction_rows: value.all_os_source_invalid_non_auction_rows,
           auction_rows_without_identity:
@@ -344,13 +346,26 @@ export async function runCatalogueSourceQualityProbe(
   return result;
 }
 
+export function requireZeroInvalidCatalogueSourceQuality(value) {
+  const result = validateCatalogueSourceQuality(value);
+  if (result.all_os_source_rows_with_invalid_identity !== 0) {
+    fail("Catalogue postapply source-quality contract still has eligible invalid OS source rows.");
+  }
+  return result;
+}
+
 async function main() {
-  const [outputPath] = process.argv.slice(2);
+  const [option] = process.argv.slice(2);
+  if (option && option !== "--require-zero-invalid") {
+    fail("Catalogue source-quality probe option is invalid.");
+  }
   const result = await runCatalogueSourceQualityProbe({
     databaseUrl: process.env.TARGET_DB_URL,
-    outputPath,
   });
-  process.stdout.write(`${JSON.stringify(result)}\n`);
+  const certified = option === "--require-zero-invalid"
+    ? requireZeroInvalidCatalogueSourceQuality(result)
+    : result;
+  process.stdout.write(`${JSON.stringify(certified)}\n`);
 }
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-source-quality-probe.mjs")) {

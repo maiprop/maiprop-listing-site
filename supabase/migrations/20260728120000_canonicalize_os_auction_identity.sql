@@ -13,7 +13,7 @@ AS $$
   WITH identities AS (
     SELECT lower(btrim(substr(tag.value, length('os_auction:') + 1))) AS value
     FROM unnest(COALESCE(p_tags, '{}'::text[])) AS tag(value)
-    WHERE tag.value LIKE 'os_auction:%'
+    WHERE left(tag.value, length('os_auction:')) = 'os_auction:'
   )
   SELECT CASE
     WHEN count(*) = 1
@@ -105,7 +105,7 @@ WITH ranked AS (
     (
       SELECT tag.value
       FROM unnest(COALESCE(listing.tags, '{}'::text[])) AS tag(value)
-      WHERE tag.value LIKE 'os_auction:%'
+      WHERE left(tag.value, length('os_auction:')) = 'os_auction:'
       ORDER BY tag.value
       LIMIT 1
     ) AS original_os_tag,
@@ -151,8 +151,7 @@ BEGIN
     FROM pg_temp.os_auction_duplicate_plan AS plan
     JOIN public.listing_promotion_allocations AS allocation
       ON allocation.listing_id = plan.duplicate_listing_id
-    WHERE allocation.starts_at <= statement_timestamp()
-      AND allocation.ends_at > statement_timestamp()
+    WHERE allocation.ends_at > statement_timestamp()
       AND allocation.revoked_at IS NULL
   ) THEN
     RAISE EXCEPTION 'os_auction_duplicate_has_active_promotion'

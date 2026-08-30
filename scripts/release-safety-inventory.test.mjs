@@ -136,6 +136,13 @@ describe("release safety inventory", () => {
     expect(violations({
       sourceQualityProbeText: sourceQualityWithoutInvalidDiagnostics,
     })).not.toEqual([]);
+    const sourceQualityWithoutCandidateCap = sourceQualityProbeText.replace(
+      "value.all_os_source_rows_with_invalid_identity > 1",
+      "false",
+    );
+    expect(violations({
+      sourceQualityProbeText: sourceQualityWithoutCandidateCap,
+    })).not.toEqual([]);
     const downgradedSourceQualitySchema = sourceQualityProbeText
       .replace("'schema_version', 2", "'schema_version', 1")
       .replace("value.schema_version !== 2", "value.schema_version !== 1");
@@ -144,7 +151,7 @@ describe("release safety inventory", () => {
     })).not.toEqual([]);
     const rawRoleMarker = "--command 'SET ROLE postgres'";
     const rawRoleOccurrences = [...text.matchAll(new RegExp(rawRoleMarker, "g"))];
-    expect(rawRoleOccurrences).toHaveLength(5);
+    expect(rawRoleOccurrences).toHaveLength(6);
     for (const occurrence of rawRoleOccurrences) {
       const missingSameSessionRole =
         text.slice(0, occurrence.index) + text.slice(occurrence.index + rawRoleMarker.length);

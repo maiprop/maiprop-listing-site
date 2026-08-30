@@ -195,6 +195,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const temporaryDatabasePhases = {
     staging: [
       "Prove recorded staging database state",
+      "Measure staging catalogue bootstrap source quality",
       "Prepare manifest-bound staging migration dry-run",
       "Verify staging database and pgTAP",
       "Prove staging publish-public-catalogue cron liveness",
@@ -214,17 +215,11 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const requiredDatabasePhases = Object.fromEntries(
     Object.keys(temporaryDatabasePhases).map((target) => [
       target,
-      target === "production"
-        ? [
+      [
         ...temporaryDatabasePhases[target].slice(0, 3),
         ...linkedMigrationPhases[target],
         ...temporaryDatabasePhases[target].slice(3),
-        ]
-        : [
-        ...temporaryDatabasePhases[target].slice(0, 2),
-        ...linkedMigrationPhases[target],
-        ...temporaryDatabasePhases[target].slice(2),
-        ],
+      ],
     ]),
   );
   const stagingMarker = stagingSteps.find(
@@ -332,7 +327,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     resolverIndex >= stagingControlIndex || stagingControlIndex >= identityIndex ||
     Object.keys(resolver?.env ?? {}).join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
     resolver?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
-    tokenSteps.length !== 12 ||
+    tokenSteps.length !== 13 ||
     tokenSteps.map((step) => step?.name).join("\n") !== [
       "Resolve current staging public API key",
       ...requiredDatabasePhases.staging,
@@ -581,6 +576,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "all_os_source_invalid_auction_rows_with_malformed_identity",
     "all_os_source_invalid_rows_with_owner",
     "all_os_source_invalid_rows_with_active_promotion",
+    "value.all_os_source_rows_with_invalid_identity > 1",
+    "requireZeroInvalidCatalogueSourceQuality",
     "manual ownership or promotion review",
   ];
   const phaseProblems = [];
@@ -625,12 +622,16 @@ export function cataloguePerformanceHotfixWorkflowViolations({
            /db push .*--db-url/.test(run))) {
         phaseProblems.push(`${target} linked migration preparation`);
       }
-      if (phaseName === "Measure production catalogue bootstrap source quality" && (
+      if (phaseName === `Measure ${target} catalogue bootstrap source quality` && (
         !run.includes('quality_json="$(node scripts/catalogue-hotfix-source-quality-probe.mjs)"') ||
         !run.includes("::notice::Catalogue bootstrap source quality:") ||
         /\bcat\b|\btee\b|--verbose|--trace|-sS/.test(run)
       )) {
-        phaseProblems.push("production source-quality output contract");
+        phaseProblems.push(`${target} source-quality output contract`);
+      }
+      if (/^Verify (?:staging database and pgTAP|production database)$/.test(phaseName) &&
+          !run.includes("catalogue-hotfix-source-quality-probe.mjs --require-zero-invalid")) {
+        phaseProblems.push(`${target} postapply source-quality contract`);
       }
     }
     for (const phaseName of linkedMigrationPhases[target]) {
@@ -664,7 +665,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const rawWorkflowDatabaseLines = String(text ?? "").split(/\r?\n/).filter((line) =>
     line.includes('psql "$TARGET_DB_URL"')
   );
-  const rawWorkflowDatabaseRoleViolation = rawWorkflowDatabaseLines.length !== 5 ||
+  const rawWorkflowDatabaseRoleViolation = rawWorkflowDatabaseLines.length !== 6 ||
     rawWorkflowDatabaseLines.some((line) => {
       const roleMarker = "--command 'SET ROLE postgres'";
       const roleIndex = line.indexOf(roleMarker);
@@ -745,6 +746,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
 
   const required = [
     "catalogue-performance-hotfix-contract.mjs verify --json",
+    "20260728115959",
+    "20260728121500",
     "RELEASE_AUTHORIZATION_ACTION: production-deploy",
     "RELEASE_STANDARD_CONFIRMATION: DEPLOY_CATALOGUE_PERFORMANCE_HOTFIX",
     "production-break-glass-validation.mjs validate-workflow",
@@ -758,6 +761,10 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "validate-target",
     "public_catalogue_snapshot_test.sql",
     "--expected-plan 90",
+    "catalogue_invalid_os_identity_quarantine_test.sql",
+    "--expected-plan 49",
+    "Measure staging catalogue bootstrap source quality",
+    "catalogue-hotfix-source-quality-probe.mjs --require-zero-invalid",
     "status=eq.active",
     "is_off_market=eq.false",
     "publish-public-catalogue",
@@ -797,6 +804,9 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "private_catalogue_rls_enabled",
     "private_catalogue_rls_forced",
     "private_catalogue_no_direct_privileges",
+    "invalid_identity_quarantine_contract",
+    "eligible_invalid_os_source_rows",
+    "invalid_identity_quarantine_live_contract",
   ]) {
     if (!String(supportText).includes(marker)) {
       violations.push(`catalogue hotfix support is missing ${marker}`);

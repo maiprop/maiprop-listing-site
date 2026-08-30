@@ -33,6 +33,33 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const MIGRATIONS_DIR = "supabase/migrations";
 const DEFAULT_FUTURE_GRACE_DAYS = 1;
 const APPLIED_FUTURE_MIGRATIONS_FILE = "scripts/applied-future-migrations.json";
+const STRICT_QUARANTINE_MIGRATION =
+  "20260728115959_quarantine_invalid_os_auction_identity.sql";
+
+function isDeliberatelyStrictQuarantineCreate(file, stripped) {
+  if (file !== STRICT_QUARANTINE_MIGRATION) return false;
+
+  const requiredSafetyClauses = [
+    "BEGIN;",
+    "CREATE TABLE private.os_auction_invalid_identity_quarantine",
+    "REFERENCES public.listings(id) ON DELETE RESTRICT",
+    "LOCK TABLE public.listings IN ACCESS EXCLUSIVE MODE",
+    "LOCK TABLE public.listing_promotion_allocations IN SHARE MODE",
+    "IF v_candidate_count > 1 THEN",
+    "INSERT INTO private.os_auction_invalid_identity_quarantine",
+    "REVOKE ALL ON TABLE private.os_auction_invalid_identity_quarantine",
+    "FROM PUBLIC, anon, authenticated, service_role",
+    "COMMIT;",
+  ];
+
+  return (
+    requiredSafetyClauses.every((clause) => stripped.includes(clause)) &&
+    !/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+private\.os_auction_invalid_identity_quarantine/i.test(
+      stripped,
+    ) &&
+    !/ON\s+CONFLICT/i.test(stripped)
+  );
+}
 
 // Forward-only enforcement. Anything stamped at or after this timestamp must
 // satisfy the rules below; older migrations are out of scope (already applied
@@ -77,7 +104,7 @@ export function lintMigration(file, sql) {
 
   // ---- CREATE TABLE -------------------------------------------------------
   const createTableRe = /^\s*CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/im;
-  if (createTableRe.test(stripped)) {
+  if (createTableRe.test(stripped) && !isDeliberatelyStrictQuarantineCreate(file, stripped)) {
     violations.push({
       file,
       line: findLine(createTableRe),
