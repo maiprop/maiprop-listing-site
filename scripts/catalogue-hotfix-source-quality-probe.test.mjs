@@ -7,7 +7,7 @@ import {
 } from "./catalogue-hotfix-source-quality-probe.mjs";
 
 const validQuality = {
-  schema_version: 1,
+  schema_version: 2,
   kind: "maiprop-catalogue-source-quality",
   eligible_active_listings: 120,
   auction_listings: 30,
@@ -22,6 +22,13 @@ const validQuality = {
   max_duplicate_multiplicity: 3,
   all_os_source_rows: 40,
   all_os_source_rows_with_invalid_identity: 0,
+  all_os_source_invalid_non_auction_rows: 0,
+  all_os_source_invalid_auction_rows_without_identity: 0,
+  all_os_source_invalid_auction_rows_with_multiple_identities: 0,
+  all_os_source_invalid_auction_rows_with_placeholder_identity: 0,
+  all_os_source_invalid_auction_rows_with_malformed_identity: 0,
+  all_os_source_invalid_rows_with_owner: 0,
+  all_os_source_invalid_rows_with_active_promotion: 0,
   all_os_identity_rows: 35,
   all_os_identity_rows_with_owner: 0,
   quarantine_candidate_rows: 5,
@@ -45,12 +52,45 @@ test("source-quality SQL emits only aggregate counts for the catalogue bootstrap
   assert.match(sql, /source:maiprop-os/);
   assert.match(sql, /source:maiprop-os-duplicate-quarantine/);
   assert.match(sql, /identity\.provider_id ~ '\^\[a-z0-9:_-\]\{1,120\}\$'/);
+  assert.match(sql, /'non_auction'/);
+  assert.match(sql, /'missing_identity'/);
+  assert.match(sql, /'multiple_identities'/);
+  assert.match(sql, /'placeholder_identity'/);
+  assert.match(sql, /'malformed_identity'/);
+  assert.match(sql, /all_os_source_invalid_rows_with_owner/);
+  assert.match(sql, /all_os_source_invalid_rows_with_active_promotion/);
   assert.match(
     sql,
     /'all_os_identity_rows_with_owner',[\s\S]*?FROM ranked_os_rows AS os_identity[\s\S]*?os_identity\.owner_id IS NOT NULL/,
   );
   assert.doesNotMatch(sql, /json_agg|array_agg|string_agg/);
   assert.doesNotMatch(sql, /listing\.title\s+AS|listing\.address\s+AS|listing\.owner_id\s+AS/);
+});
+
+test("source-quality validation exposes only aggregate invalid-source diagnostics", () => {
+  const invalidQuality = {
+    ...validQuality,
+    all_os_source_rows_with_invalid_identity: 15,
+    all_os_source_invalid_non_auction_rows: 1,
+    all_os_source_invalid_auction_rows_without_identity: 2,
+    all_os_source_invalid_auction_rows_with_multiple_identities: 3,
+    all_os_source_invalid_auction_rows_with_placeholder_identity: 4,
+    all_os_source_invalid_auction_rows_with_malformed_identity: 5,
+    all_os_source_invalid_rows_with_owner: 6,
+    all_os_source_invalid_rows_with_active_promotion: 7,
+  };
+
+  assert.throws(
+    () => validateCatalogueSourceQuality(invalidQuality),
+    (error) => {
+      assert.equal(
+        error.message,
+        "Catalogue all-status OS source identity contract is invalid: " +
+          '{"non_auction_rows":1,"auction_rows_without_identity":2,"auction_rows_with_multiple_identities":3,"auction_rows_with_placeholder_identity":4,"auction_rows_with_malformed_identity":5,"rows_with_owner":6,"rows_with_active_promotion":7}',
+      );
+      return true;
+    },
+  );
 });
 
 test("source-quality runner returns and writes the validated fixed-schema aggregate", async () => {
@@ -75,6 +115,10 @@ test("source-quality runner returns and writes the validated fixed-schema aggreg
 test("source-quality validation fails closed on extra, nonnumeric, negative, or inconsistent fields", () => {
   assert.throws(
     () => validateCatalogueSourceQuality({ ...validQuality, leaked_identifier: "auction-123" }),
+    /schema/i,
+  );
+  assert.throws(
+    () => validateCatalogueSourceQuality({ ...validQuality, schema_version: 1 }),
     /schema/i,
   );
   assert.throws(
@@ -107,6 +151,20 @@ test("source-quality validation fails closed on extra, nonnumeric, negative, or 
   );
   assert.throws(
     () => validateCatalogueSourceQuality({ ...validQuality, all_os_source_rows_with_invalid_identity: 1 }),
-    /all-status OS source identity contract/i,
+    /inconsistent/i,
+  );
+  assert.throws(
+    () => validateCatalogueSourceQuality({
+      ...validQuality,
+      all_os_source_invalid_rows_with_owner: 1,
+    }),
+    /inconsistent/i,
+  );
+  assert.throws(
+    () => validateCatalogueSourceQuality({
+      ...validQuality,
+      all_os_source_invalid_rows_with_active_promotion: 1,
+    }),
+    /inconsistent/i,
   );
 });
