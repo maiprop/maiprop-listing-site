@@ -721,6 +721,95 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
   }
 });
 
+test("preparation recovery wrapper uses one private psql session and sanitizes failures", () => {
+  const directory = mkdtempSync(join(tmpdir(), "catalogue-preparation-recovery-"));
+  const fakeBin = join(directory, "bin");
+  const fakePsql = join(fakeBin, "psql");
+  const fakeNode = join(fakeBin, "node");
+  const runnerTemp = join(directory, "runner-temp");
+  const inputPath = join(directory, "psql-input");
+  const secret = "postgresql://customer:never-print-this";
+  try {
+    mkdirSync(fakeBin);
+    mkdirSync(runnerTemp);
+    writeFileSync(fakePsql, `#!/usr/bin/env bash
+set -euo pipefail
+replay_copy=""
+contract_copy=""
+input=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    recovery_replay_file=*) replay_copy="$(printf '%s' "$1" | sed 's/^recovery_replay_file=//')" ;;
+    recovery_contract_file=*) contract_copy="$(printf '%s' "$1" | sed 's/^recovery_contract_file=//')" ;;
+    --file) shift; input="$1" ;;
+  esac
+  shift
+done
+[ -n "$input" ]
+[ -n "$replay_copy" ]
+[ -n "$contract_copy" ]
+printf 'replay=%s contract=%s\ncall\n' "$replay_copy" "$contract_copy" > "$TEST_RECOVERY_INPUT.debug"
+if [ "$TEST_RECOVERY_OUTCOME" = "failure" ]; then
+  printf '%s\\n' "$TEST_RECOVERY_SECRET" >&2
+  exit 25
+fi
+`);
+    chmodSync(fakePsql, 0o700);
+    const run = (outcome) => spawnSync(bashExecutable, [
+      "-c",
+      'export PATH="$TEST_RECOVERY_BIN:$PATH"; exec bash "$TEST_RECOVERY_SCRIPT"',
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        RUNNER_TEMP: runnerTemp,
+        TARGET_DB_URL: "postgresql://postgres:temporary@db.example.test:5432/postgres?sslmode=require",
+        TEST_RECOVERY_BIN: fakeBin,
+        TEST_RECOVERY_INPUT: inputPath,
+        TEST_RECOVERY_OUTCOME: outcome,
+        TEST_RECOVERY_SCRIPT: join(process.cwd(), "scripts/catalogue-hotfix-preparation-recovery.sh"),
+        TEST_RECOVERY_SECRET: secret,
+        WSLENV: [
+          process.env.WSLENV,
+          "RUNNER_TEMP/p",
+          "TARGET_DB_URL",
+          "TEST_RECOVERY_BIN/p",
+          "TEST_RECOVERY_INPUT/p",
+          "TEST_RECOVERY_OUTCOME",
+          "TEST_RECOVERY_SCRIPT/p",
+          "TEST_RECOVERY_SECRET",
+        ].filter(Boolean).join(":"),
+      },
+    });
+
+    const succeeded = run("success");
+    assert.equal(succeeded.status, 0, succeeded.stderr);
+    const privateFiles = readFileSync(`${inputPath}.debug`, "utf8");
+    assert.doesNotMatch(privateFiles, /supabase\/migrations\/20260728115960_prepare_batched_os_duplicate_quarantine\.sql/);
+    assert.match(readFileSync(join(process.cwd(), "scripts/catalogue-hotfix-preparation-recovery.sh"), "utf8"), /chmod 600 "\$driver" "\$output" "\$replay_copy" "\$contract_file"/);
+    assert.equal(privateFiles.split("\n").filter((line) => line === "call").length, 1);
+    assert.match(succeeded.stdout, /Catalogue preparation recovery completed safely/);
+    assert.doesNotMatch(succeeded.stdout + succeeded.stderr, new RegExp(secret));
+    assert.equal(readdirSync(runnerTemp).length, 0, "private SQL and output files are removed");
+
+    const failed = run("failure");
+    assert.equal(failed.status, 1);
+    assert.equal(readFileSync(`${inputPath}.debug`, "utf8").split("\n").filter((line) => line === "call").length, 1, "the wrapper never retries psql");
+    assert.doesNotMatch(failed.stdout + failed.stderr, new RegExp(secret));
+    assert.match(failed.stdout + failed.stderr, /Catalogue preparation recovery failed safely/);
+
+    writeFileSync(fakeNode, "#!/usr/bin/env bash\nexit 86\n");
+    chmodSync(fakeNode, 0o700);
+    const generatorFailure = run("success");
+    assert.equal(generatorFailure.status, 1);
+    assert.match(generatorFailure.stdout + generatorFailure.stderr, /Catalogue preparation recovery failed safely/);
+    assert.equal(readdirSync(runnerTemp).length, 0, "generator failure removes every private temporary file");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("linked project state is exact, passwordless, session-pooled, and manifest-bound", () => {
   const poolerUrl = `postgresql://postgres.${ref}@aws-0-eu-central-1.pooler.supabase.com:5432/postgres`;
   assert.deepEqual(validateLinkedProjectState({

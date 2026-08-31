@@ -305,7 +305,7 @@ jobs:
           set -euo pipefail
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-target
           IDENTITY_PHASE
-      - name: Prove recorded production database state
+      - name: Replay exact manifest-bound production preparation migration
         timeout-minutes: 4
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -316,7 +316,15 @@ jobs:
           unset SUPABASE_ACCESS_TOKEN
           SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-with-database-login.sh bash -s <<'DATABASE_PHASE'
           set -euo pipefail
+          node scripts/catalogue-performance-hotfix-contract.mjs verify --json > "$RUNNER_TEMP/catalogue-hotfix-contract.json"
+          replay_path="supabase/migrations/20260728115960_prepare_batched_os_duplicate_quarantine.sql"
+          replay_sha256="a35a4f6390937a04202e81ef67d2bd6d98e00c0118b9d7bff7b85544f6ed7a5b"
+          jq -e --arg path "$replay_path" --arg sha256 "$replay_sha256" '.ok == true and ([.hotfix.migrations[] | select(.version == "20260728115960" and .path == $path and .sha256 == $sha256)] | length == 1)' "$RUNNER_TEMP/catalogue-hotfix-contract.json" >/dev/null
+          [ "$(sha256sum "$replay_path" | awk '{print $1}')" = "$replay_sha256" ]
+          bash scripts/catalogue-hotfix-preparation-recovery.sh
           node scripts/catalogue-hotfix-behavioral-probe.mjs recorded "$RUNNER_TEMP/recorded-database-contract.json"
+          recovery_quality_json="$(node scripts/catalogue-hotfix-source-quality-probe.mjs --require-zero-recovery-candidates)"
+          printf '::notice::Catalogue preparation recovery source quality: %s\n' "$recovery_quality_json"
           DATABASE_PHASE
           unset management_token
       - name: Measure production catalogue bootstrap source quality

@@ -42,6 +42,10 @@ describe("release safety inventory", () => {
       resolve(process.cwd(), "scripts/catalogue-hotfix-with-database-login.sh"),
       "utf8",
     );
+    const preparationRecoveryWrapperText = readFileSync(
+      resolve(process.cwd(), "scripts/catalogue-hotfix-preparation-recovery.sh"),
+      "utf8",
+    );
     const canonicalDatabaseUrlWrapperText = readFileSync(
       resolve(process.cwd(), "scripts/catalogue-hotfix-with-canonical-database-url.sh"),
       "utf8",
@@ -62,6 +66,7 @@ describe("release safety inventory", () => {
       markerScriptText,
       databaseLoginScriptText,
       databaseLoginWrapperText,
+      preparationRecoveryWrapperText,
       canonicalDatabaseUrlWrapperText,
       linkedDatabasePushText,
       sourceQualityProbeText,
@@ -69,6 +74,13 @@ describe("release safety inventory", () => {
     });
 
     expect(violations()).toEqual([]);
+    for (const include of ["\\i :recovery_contract_file", "\\i :recovery_replay_file"]) {
+      expect(violations({ preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(include, "") })).not.toEqual([]);
+      expect(violations({ preparationRecoveryWrapperText: `${preparationRecoveryWrapperText}\n${include}` })).not.toEqual([]);
+    }
+    const recoveryContractsRead = "FROM pg_temp.catalogue_recovery_contracts";
+    expect(violations({ preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(recoveryContractsRead, "") })).not.toEqual([]);
+    expect(violations({ preparationRecoveryWrapperText: `${preparationRecoveryWrapperText}\n${recoveryContractsRead}` })).not.toEqual([]);
     const leakedAccessToken = structuredClone(parsed);
     leakedAccessToken.jobs.staging.env.SUPABASE_ACCESS_TOKEN = "${{ secrets.SUPABASE_ACCESS_TOKEN }}";
     expect(violations({ parsed: leakedAccessToken })).not.toEqual([]);
@@ -88,7 +100,7 @@ describe("release safety inventory", () => {
         "Prove staging publish-public-catalogue cron liveness",
       ],
       production: [
-        "Prove recorded production database state",
+        "Replay exact manifest-bound production preparation migration",
         "Measure production catalogue bootstrap source quality",
         "Prepare manifest-bound production migration dry-run",
         "Verify production database",
@@ -196,6 +208,7 @@ describe("release safety inventory", () => {
     });
     expect(violations({ parsed: oldJobWideLogin })).not.toEqual([]);
     expect(violations({ databaseLoginWrapperText: "" })).not.toEqual([]);
+    expect(violations({ preparationRecoveryWrapperText: "" })).not.toEqual([]);
     expect(violations({ canonicalDatabaseUrlWrapperText: "" })).not.toEqual([]);
     expect(violations({ linkedDatabasePushText: "" })).not.toEqual([]);
     for (const target of ["staging", "production"]) {

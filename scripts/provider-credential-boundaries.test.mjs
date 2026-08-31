@@ -27,7 +27,7 @@ describe("provider credential boundaries", () => {
       "Apply only manifest-bound staging migrations",
       "Verify staging database and pgTAP",
       "Prove staging publish-public-catalogue cron liveness",
-      "Prove recorded production database state",
+      "Replay exact manifest-bound production preparation migration",
       "Measure production catalogue bootstrap source quality",
       "Prepare manifest-bound production migration dry-run",
       "Apply only manifest-bound production migrations",

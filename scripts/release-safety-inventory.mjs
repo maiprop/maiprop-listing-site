@@ -130,6 +130,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   markerScriptText = "",
   databaseLoginScriptText = "",
   databaseLoginWrapperText = "",
+  preparationRecoveryWrapperText = "",
   canonicalDatabaseUrlWrapperText = "",
   linkedDatabasePushText = "",
   sourceQualityProbeText = "",
@@ -201,7 +202,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
       "Prove staging publish-public-catalogue cron liveness",
     ],
     production: [
-      "Prove recorded production database state",
+      "Replay exact manifest-bound production preparation migration",
       "Measure production catalogue bootstrap source quality",
       "Prepare manifest-bound production migration dry-run",
       "Verify production database",
@@ -293,6 +294,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const markerScript = String(markerScriptText);
   const databaseLoginScript = String(databaseLoginScriptText);
   const databaseLoginWrapper = String(databaseLoginWrapperText);
+  const preparationRecoveryWrapper = String(preparationRecoveryWrapperText);
   const canonicalDatabaseUrlWrapper = String(canonicalDatabaseUrlWrapperText);
   const linkedDatabasePush = String(linkedDatabasePushText);
   const sourceQualityProbe = String(sourceQualityProbeText);
@@ -684,6 +686,16 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     databaseLoginMarkers.some((marker) => !databaseLoginScript.includes(marker)) ||
     databaseSupportMarkers.some((marker) => !support.includes(marker)) ||
     databaseWrapperMarkers.some((marker) => !databaseLoginWrapper.includes(marker)) ||
+    !preparationRecoveryWrapper.includes("SET ROLE postgres;") ||
+    !preparationRecoveryWrapper.includes("LOCK TABLE public.listings IN SHARE ROW EXCLUSIVE MODE;") ||
+    !preparationRecoveryWrapper.includes("LOCK TABLE public.listing_promotion_allocations IN SHARE MODE;") ||
+    !preparationRecoveryWrapper.includes("md5(procedure.prosrc) = '532205de65120d3e34729a515d949f65'") ||
+    (preparationRecoveryWrapper.match(/\\i :recovery_replay_file/g) ?? []).length !== 1 ||
+    (preparationRecoveryWrapper.match(/\\i :recovery_contract_file/g) ?? []).length !== 1 ||
+    (preparationRecoveryWrapper.match(/FROM pg_temp\.catalogue_recovery_contracts/g) ?? []).length !== 2 ||
+    !preparationRecoveryWrapper.includes("catalogue_recovery_history") ||
+    !preparationRecoveryWrapper.includes("--set VERBOSITY=terse") ||
+    /set -x|\btee\b|console\.|--retry/.test(preparationRecoveryWrapper) ||
     canonicalDatabaseUrlWrapperMarkers.some((marker) => !canonicalDatabaseUrlWrapper.includes(marker)) ||
     linkedDatabasePushMarkers.some((marker) => !linkedDatabasePush.includes(marker)) ||
     sourceQualityProbeMarkers.some((marker) => !sourceQualityProbe.includes(marker)) ||
@@ -1205,6 +1217,7 @@ export function scanWorkflows() {
       markerScriptText: read(join(root, "scripts/catalogue-hotfix-static-marker.sh")),
       databaseLoginScriptText: read(join(root, "scripts/catalogue-hotfix-database-login.sh")),
       databaseLoginWrapperText: read(join(root, "scripts/catalogue-hotfix-with-database-login.sh")),
+      preparationRecoveryWrapperText: read(join(root, "scripts/catalogue-hotfix-preparation-recovery.sh")),
       canonicalDatabaseUrlWrapperText: read(join(root, "scripts/catalogue-hotfix-with-canonical-database-url.sh")),
       linkedDatabasePushText: read(join(root, "scripts/catalogue-hotfix-linked-db-push.sh")),
       sourceQualityProbeText: read(join(root, "scripts/catalogue-hotfix-source-quality-probe.mjs")),
