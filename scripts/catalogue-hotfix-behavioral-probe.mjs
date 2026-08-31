@@ -885,9 +885,69 @@ function validatePreparationContract(
     "duplicate_preparation_ledger_rows",
     "duplicate_preparation_live_marker_rows",
   ];
+  const exactPreparationState = JSON.stringify(recordedVersions) === JSON.stringify([
+    QUARANTINE_VERSION,
+    PREPARATION_VERSION,
+  ]);
+  const preparationDiagnostic = () => {
+    const evidence = Object.fromEntries(
+      [...booleanFields, ...countFields]
+        .filter((field) => typeof metadata?.[field] === "boolean" ||
+          (Number.isSafeInteger(metadata?.[field]) && metadata[field] >= 0))
+        .map((field) => [field, metadata[field]]),
+    );
+    const failedInvariants = [
+      ...booleanFields.filter((field) => typeof metadata?.[field] !== "boolean"),
+      ...countFields.filter((field) => !Number.isSafeInteger(metadata?.[field]) || metadata[field] < 0),
+    ];
+    if (typeof metadata?.duplicate_preparation_contract === "boolean" &&
+        !metadata.duplicate_preparation_contract) failedInvariants.push("duplicate_preparation_contract");
+    if (typeof metadata?.duplicate_preparation_ledger_contract === "boolean" &&
+        !metadata.duplicate_preparation_ledger_contract) failedInvariants.push("duplicate_preparation_ledger_contract");
+    if (typeof metadata?.duplicate_preparation_acl_contract === "boolean" &&
+        !metadata.duplicate_preparation_acl_contract) failedInvariants.push("duplicate_preparation_acl_contract");
+    if (!allowBridgeArtifacts) {
+      for (const field of [
+        "duplicate_preparation_generated_column",
+        "duplicate_preparation_unique_index",
+        "duplicate_preparation_source_check",
+      ]) {
+        if (metadata?.[field] === true) failedInvariants.push(field);
+      }
+    }
+    for (const field of [
+      "duplicate_preparation_remaining_candidates",
+      "duplicate_preparation_owner_guard_rows",
+      "duplicate_preparation_active_promotion_rows",
+    ]) {
+      if (Number.isSafeInteger(metadata?.[field]) && metadata[field] !== 0) {
+        failedInvariants.push(field);
+      }
+    }
+    if (Number.isSafeInteger(metadata?.duplicate_preparation_ledger_rows) &&
+        Number.isSafeInteger(metadata?.duplicate_preparation_live_marker_rows) &&
+        metadata.duplicate_preparation_ledger_rows !== metadata.duplicate_preparation_live_marker_rows) {
+      failedInvariants.push("duplicate_preparation_ledger_rows_match_live_marker_rows");
+    }
+    if (typeof metadata?.duplicate_preparation_live_recoverable_contract === "boolean" &&
+        !metadata.duplicate_preparation_live_recoverable_contract) {
+      failedInvariants.push("duplicate_preparation_live_recoverable_contract");
+    }
+    return {
+      schema_version: 1,
+      kind: "maiprop-duplicate-preparation-contract-failure",
+      failed_invariants: [...new Set(failedInvariants)].sort(),
+      evidence,
+    };
+  };
+  const failPreparation = (message) => {
+    const error = new Error(message);
+    if (exactPreparationState) error.preparationDiagnostic = preparationDiagnostic();
+    throw error;
+  };
   if (booleanFields.some((field) => typeof metadata?.[field] !== "boolean") ||
       countFields.some((field) => !Number.isSafeInteger(metadata?.[field]) || metadata[field] < 0)) {
-    fail("Database duplicate identity preparation evidence is invalid.");
+    failPreparation("Database duplicate identity preparation evidence is invalid.");
   }
   if (!metadata.duplicate_preparation_contract ||
       !metadata.duplicate_preparation_ledger_contract ||
@@ -902,7 +962,7 @@ function validatePreparationContract(
       metadata.duplicate_preparation_active_promotion_rows !== 0 ||
       metadata.duplicate_preparation_ledger_rows !== metadata.duplicate_preparation_live_marker_rows ||
       !metadata.duplicate_preparation_live_recoverable_contract) {
-    fail("Database duplicate identity preparation contract is incomplete.");
+    failPreparation("Database duplicate identity preparation contract is incomplete.");
   }
   const quarantineContract = validateDatabaseContract({
     metadata: {
@@ -923,6 +983,12 @@ function validatePreparationContract(
       duplicate_identity_preparation: true,
     },
   };
+}
+
+export function formatPreparationDiagnosticNotice(error) {
+  return error?.preparationDiagnostic
+    ? `::notice::${JSON.stringify(error.preparationDiagnostic)}`
+    : null;
 }
 
 function validateDatabaseContractForRecordedState({
@@ -1273,6 +1339,8 @@ async function main() {
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-behavioral-probe.mjs")) {
   main().catch((error) => {
+    const notice = formatPreparationDiagnosticNotice(error);
+    if (notice) process.stdout.write(`${notice}\n`);
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  formatPreparationDiagnosticNotice,
   runCatalogueBehavioralProbe,
   runCatalogueSql,
 } from "./catalogue-hotfix-behavioral-probe.mjs";
@@ -537,6 +538,57 @@ test("Q,P certification fails closed on preparation contract and parity drift", 
       /duplicate identity preparation/i,
     );
   }
+});
+
+test("recorded Q,P preparation rejection carries only deterministic aggregate diagnostics", async () => {
+  const secret = "postgresql://customer:credential@private.example/never-log";
+  await assert.rejects(
+    runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      dependencies({
+        recordedVersions: [quarantineVersion, preparationVersion],
+        metadataPatch: {
+          duplicate_preparation_generated_column: true,
+          duplicate_preparation_remaining_candidates: 4,
+          duplicate_preparation_ledger_rows: 3,
+          duplicate_preparation_live_marker_rows: 2,
+          customer_url: secret,
+        },
+      }),
+    ),
+    (error) => {
+      assert.match(error.message, /duplicate identity preparation contract is incomplete/i);
+      assert.deepEqual(error.preparationDiagnostic, {
+        schema_version: 1,
+        kind: "maiprop-duplicate-preparation-contract-failure",
+        failed_invariants: [
+          "duplicate_preparation_generated_column",
+          "duplicate_preparation_ledger_rows_match_live_marker_rows",
+          "duplicate_preparation_remaining_candidates",
+        ],
+        evidence: {
+          duplicate_preparation_contract: true,
+          duplicate_preparation_ledger_contract: true,
+          duplicate_preparation_acl_contract: true,
+          duplicate_preparation_generated_column: true,
+          duplicate_preparation_unique_index: false,
+          duplicate_preparation_source_check: false,
+          duplicate_preparation_live_recoverable_contract: true,
+          duplicate_preparation_remaining_candidates: 4,
+          duplicate_preparation_owner_guard_rows: 0,
+          duplicate_preparation_active_promotion_rows: 0,
+          duplicate_preparation_ledger_rows: 3,
+          duplicate_preparation_live_marker_rows: 2,
+        },
+      });
+      assert.doesNotMatch(JSON.stringify(error.preparationDiagnostic), /customer|credential|private\.example|postgresql/i);
+      assert.equal(
+        formatPreparationDiagnosticNotice(error),
+        `::notice::${JSON.stringify(error.preparationDiagnostic)}`,
+      );
+      return true;
+    },
+  );
 });
 
 test("Q,P preparation SQL exposes only fixed aggregate evidence and exact safety predicates", async () => {
