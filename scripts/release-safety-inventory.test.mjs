@@ -117,7 +117,7 @@ describe("release safety inventory", () => {
       const shortenedLinkedApply = structuredClone(parsed);
       shortenedLinkedApply.jobs[target].steps.find((step) =>
         step.name === `Apply only manifest-bound ${target} migrations`
-      )["timeout-minutes"] = 14;
+      )["timeout-minutes"] = 15;
       expect(violations({ parsed: shortenedLinkedApply })).not.toEqual([]);
     }
     const longDatabasePhase = structuredClone(parsed);
@@ -262,6 +262,14 @@ describe("release safety inventory", () => {
       ),
       `${linkedDatabasePushText}\ncat "$output"\n`,
       linkedDatabasePushText.replace('mode_flag="--dry-run"', 'mode_flag="--yes"'),
+      linkedDatabasePushText.replace(
+        'is-exact-precommit-deadlock-retryable "$diagnostic"',
+        'is-any-deadlock-retryable "$diagnostic"',
+      ),
+      linkedDatabasePushText.replace(
+        'echo "::notice::Retrying exact pre-commit canonicalization deadlock once."\n    : > "$output"\n    sleep 10',
+        'echo "::notice::Retrying exact pre-commit canonicalization deadlock once."\n    sleep 31',
+      ),
     ]) {
       expect(violations({ linkedDatabasePushText: unsafeLinkedPush })).not.toEqual([]);
     }

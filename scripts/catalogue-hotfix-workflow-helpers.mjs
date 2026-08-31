@@ -855,6 +855,24 @@ export function classifyLinkedPushFailure(output) {
   };
 }
 
+const EXACT_PRECOMMIT_CANONICALIZATION_DEADLOCK = Object.freeze({
+  schema_version: 1,
+  kind: "maiprop-linked-push-failure",
+  migration_filename: "20260728120000_canonicalize_os_auction_identity.sql",
+  migration_version: "20260728120000",
+  statement_index: 21,
+  sqlstate: "40P01",
+  category: "deadlock",
+  message: "Database execution detected a deadlock.",
+});
+
+export function isExactPreCommitDeadlockRetryable(diagnostic) {
+  if (!diagnostic || typeof diagnostic !== "object" || Array.isArray(diagnostic)) return false;
+  const expectedKeys = Object.keys(EXACT_PRECOMMIT_CANONICALIZATION_DEADLOCK).sort();
+  if (JSON.stringify(Object.keys(diagnostic).sort()) !== JSON.stringify(expectedKeys)) return false;
+  return expectedKeys.every((key) => diagnostic[key] === EXACT_PRECOMMIT_CANONICALIZATION_DEADLOCK[key]);
+}
+
 function isAllowedProject(value) {
   return value === null || (typeof value === "object" && !Array.isArray(value));
 }
@@ -1445,6 +1463,18 @@ function main() {
       fail("Linked push failure output is not a private bounded file.");
     }
     process.stdout.write(`${JSON.stringify(classifyLinkedPushFailure(readFileSync(outputPath, "utf8")))}\n`);
+    return;
+  }
+  if (command === "is-exact-precommit-deadlock-retryable") {
+    if (args.length !== 1) fail("Linked push failure diagnostic is incomplete.");
+    let diagnostic = null;
+    try {
+      diagnostic = JSON.parse(args[0]);
+    } catch {
+      process.stdout.write("false\n");
+      return;
+    }
+    process.stdout.write(`${isExactPreCommitDeadlockRetryable(diagnostic)}\n`);
     return;
   }
   if (command === "parse-cache-headers") {

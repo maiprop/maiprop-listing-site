@@ -167,7 +167,7 @@ jobs:
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-dry-run "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$work/remote-numeric-history.txt" "$work/dry-run-output.txt" evidence/dry-run-pending.json
           unset management_token
       - name: Apply only manifest-bound staging migrations
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -355,7 +355,7 @@ jobs:
           node scripts/catalogue-hotfix-workflow-helpers.mjs validate-dry-run "$RUNNER_TEMP/catalogue-hotfix-contract.json" "$work/remote-numeric-history.txt" "$work/dry-run-output.txt" evidence/dry-run-pending.json
           unset management_token
       - name: Apply only manifest-bound production migrations
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |

@@ -466,6 +466,10 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     'SUPABASE_ACCESS_TOKEN="$management_token" "$cli" --workdir "$work" --yes link --project-ref "$TARGET_PROJECT_REF"',
     'node scripts/catalogue-hotfix-workflow-helpers.mjs validate-linked-state "$project_ref_file" "$pooler_url_file"',
     'SUPABASE_ACCESS_TOKEN="$management_token" "$cli" --workdir "$work" --yes db push --linked --include-all "$mode_flag"',
+    "push_once() {",
+    'node scripts/catalogue-hotfix-workflow-helpers.mjs classify-push-failure "$output"',
+    'node scripts/catalogue-hotfix-workflow-helpers.mjs is-exact-precommit-deadlock-retryable "$diagnostic"',
+    'echo "::notice::Retrying exact pre-commit canonicalization deadlock once."\n    : > "$output"\n    sleep 10',
     'mode_flag="--dry-run"',
     'mode_flag="--yes"',
     "Official linked database push failed",
@@ -639,7 +643,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
       const phase = matches[0];
       const run = String(phase?.run ?? "");
       const envNames = Object.keys(phase?.env ?? {});
-      if (matches.length !== 1 || phase?.["timeout-minutes"] !== 15 ||
+      if (matches.length !== 1 || phase?.["timeout-minutes"] !== 20 ||
           envNames.join("\n") !== "SUPABASE_ACCESS_TOKEN" ||
           phase?.env?.SUPABASE_ACCESS_TOKEN !== "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ||
           !run.includes('SUPABASE_ACCESS_TOKEN="$management_token" bash scripts/catalogue-hotfix-linked-db-push.sh apply') ||

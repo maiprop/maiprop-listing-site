@@ -79,15 +79,38 @@ fi
 chmod 600 "$project_ref_file" "$pooler_url_file"
 node scripts/catalogue-hotfix-workflow-helpers.mjs validate-linked-state "$project_ref_file" "$pooler_url_file"
 
-if ! SUPABASE_ACCESS_TOKEN="$management_token" "$cli" --workdir "$work" --yes db push --linked --include-all "$mode_flag" > "$output" 2>&1; then
-  if [ "$mode" = apply ]; then
-    if diagnostic="$(node scripts/catalogue-hotfix-workflow-helpers.mjs classify-push-failure "$output" 2>/dev/null)"; then
-      printf '::error::Linked database push diagnostic: %s\n' "$diagnostic"
+push_once() {
+  SUPABASE_ACCESS_TOKEN="$management_token" "$cli" --workdir "$work" --yes db push --linked --include-all "$mode_flag" > "$output" 2>&1
+}
+
+if push_once; then
+  completed=true
+else
+  retryable=false
+  diagnostic=""
+  if [ "$mode" = apply ] &&
+     diagnostic="$(node scripts/catalogue-hotfix-workflow-helpers.mjs classify-push-failure "$output" 2>/dev/null)" &&
+     retryable="$(node scripts/catalogue-hotfix-workflow-helpers.mjs is-exact-precommit-deadlock-retryable "$diagnostic" 2>/dev/null)" &&
+     [ "$retryable" = true ]; then
+    echo "::notice::Retrying exact pre-commit canonicalization deadlock once."
+    : > "$output"
+    sleep 10
+    if push_once; then
+      completed=true
     else
-      echo "::error::Linked database push diagnostic is unavailable."
+      diagnostic=""
     fi
   fi
-  echo "::error::Official linked database push failed in ${mode} mode."
-  exit 1
+  if [ "${completed:-false}" != true ]; then
+    if [ "$mode" = apply ]; then
+      if [ -z "$diagnostic" ] ||
+         ! diagnostic="$(node scripts/catalogue-hotfix-workflow-helpers.mjs classify-push-failure "$output" 2>/dev/null)"; then
+        echo "::error::Linked database push diagnostic is unavailable."
+      else
+        printf '::error::Linked database push diagnostic: %s\n' "$diagnostic"
+      fi
+    fi
+    echo "::error::Official linked database push failed in ${mode} mode."
+    exit 1
+  fi
 fi
-completed=true
