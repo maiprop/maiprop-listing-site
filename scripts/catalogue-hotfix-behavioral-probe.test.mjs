@@ -728,7 +728,7 @@ test("preparation recovery component validator rejects each scoped marker", () =
     pLive: "source:maiprop-os-duplicate-quarantine",
     bAbsent: "idx_listings_os_auction_id_unique",
   })) {
-    const mutated = { ...components, [name]: components[name].replace(marker, "MUTATED") };
+    const mutated = { ...components, [name]: components[name].replaceAll(marker, "MUTATED") };
     assert.throws(() => validatePreparationRecoveryContractComponents(mutated), /incomplete/i, name);
   }
 });
