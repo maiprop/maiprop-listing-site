@@ -948,3 +948,195 @@ jobs:
           path: production-recovery-binding/
           if-no-files-found: error
           retention-days: 90
+
+  emergency-exact-ci-artifact:
+    name: Emergency deploy exact current-main CI artifact
+    if: >-
+      startsWith(github.ref, 'refs/heads/codex/emergency-cloudflare-current-artifact') &&
+      inputs.confirm == 'EMERGENCY_DEPLOY_EXACT_CI_ARTIFACT' &&
+      github.run_attempt == 1 &&
+      github.actor == github.triggering_actor
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Resolve trusted current-main CI artifact
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+             [ "$(git rev-parse HEAD)" != "$RELEASE_SHA" ] ||
+             [ "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" != "$RELEASE_SHA" ]; then
+            echo "::error::Emergency deploy is restricted to the exact current main SHA."
+            exit 1
+          fi
+          gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f head_sha="$RELEASE_SHA" \
+            -f branch=main \
+            -f event=push \
+            -f status=success \
+            -f per_page=20 \
+            > ci-runs.json
+          run_id="$(jq -er --arg sha "$RELEASE_SHA" '
+            [.workflow_runs[] |
+              select(
+                .head_sha == $sha and
+                .run_attempt == 1 and
+                .conclusion == "success" and
+                .actor.login == .triggering_actor.login
+              )][0].id
+          ' ci-runs.json)"
+          if ! [[ "$run_id" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::No successful attempt-1 trusted CI run exists for current main."
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "source_tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+
+      - name: Download signed candidate binding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-release-candidate-binding-${{ inputs.release_sha }}-1
+          path: source-binding
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Resolve candidate artifact ID
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_id="$(jq -er '.artifact.id' source-binding/release-artifact-binding.json)"
+          if ! [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Signed binding has no valid candidate artifact ID."
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id" > candidate-artifact.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/${{ steps.source.outputs.run_id }}" > candidate-run.json
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download immutable candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ steps.candidate.outputs.artifact_id }}
+          merge-multiple: true
+          path: release-candidate
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify candidate provenance and contents
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          SOURCE_TREE: ${{ steps.source.outputs.source_tree }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          node scripts/verify-release-artifact-binding.mjs \
+            --binding source-binding/release-artifact-binding.json \
+            --payload-root release-candidate \
+            --artifact-metadata candidate-artifact.json \
+            --producer-run candidate-run.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-sha "$RELEASE_SHA" \
+            --source-tree "$SOURCE_TREE" \
+            --workflow-path .github/workflows/ci.yml \
+            --workflow-ref "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
+            --workflow-sha "$RELEASE_SHA" \
+            --event push \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt 1 \
+            --actor "$GITHUB_ACTOR" \
+            --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            > candidate-verification.json
+          jq -e '.ok == true' candidate-verification.json > /dev/null
+          node scripts/production-release-artifact.mjs verify \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$SOURCE_TREE" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt 1 \
+            > /dev/null
+
+      - name: Capture rollback target
+        id: baseline
+        env:
+          CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/maiprop-listing-site" \
+            > production-before.json
+          rollback_id="$(jq -er '.result.canonical_deployment.id' production-before.json)"
+          echo "rollback_id=$rollback_id" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy immutable candidate to production
+        id: deploy
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: release-candidate
+          wranglerVersion: "4.86.0"
+          command: >-
+            pages deploy dist
+            --project-name=maiprop-listing-site
+            --branch=main
+            --commit-hash=${{ inputs.release_sha }}
+            --commit-dirty=false
+
+      - name: Verify live release and materialized catalogue
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          marker="$(mktemp)"
+          catalogue="$(mktemp)"
+          for attempt in $(seq 1 24); do
+            if curl -fsS --max-time 10 \
+                 -H 'Cache-Control: no-cache' \
+                 "https://portal.maiprop.co/api/release?recovery=$GITHUB_RUN_ID" \
+                 > "$marker" &&
+               jq -e --arg sha "$RELEASE_SHA" '.release_sha == $sha' "$marker" > /dev/null &&
+               curl -fsS --max-time 10 \
+                 "https://portal.maiprop.co/api/public/listings?purpose=sale&page=1&pageSize=12&recovery=$GITHUB_RUN_ID" \
+                 > "$catalogue" &&
+               jq -e '.publicationId > 0 and (.data | type == "array")' "$catalogue" > /dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::The live release marker or materialized catalogue did not become healthy."
+          exit 1
+
+      - name: Roll back when live verification fails
+        if: ${{ failure() && steps.deploy.outcome == 'success' }}
+        env:
+          CF_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ROLLBACK_ID: ${{ steps.baseline.outputs.rollback_id }}
+        run: |
+          set -euo pipefail
+          curl -fsS --request POST \
+            -H "Authorization: Bearer $CF_EDIT_TOKEN" \
+            -H 'Content-Type: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/maiprop-listing-site/deployments/$ROLLBACK_ID/rollback" \
+            > rollback.json
+          jq -e '.success == true' rollback.json > /dev/null
