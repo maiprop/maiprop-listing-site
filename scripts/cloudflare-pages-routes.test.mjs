@@ -42,19 +42,24 @@ function invokesPagesFunctions(routes, pathname) {
 }
 
 describe("Cloudflare Pages function routes", () => {
-  it("routes every application and API path through the root middleware", () => {
+  it("invokes Functions only for dynamic server routes", () => {
     const routes = JSON.parse(readFileSync(routesPath, "utf8"));
 
     expect(routes).toMatchObject({ version: 1 });
-    expect(routes.include).toEqual(["/*"]);
+    expect(routes.include).toEqual([
+      "/api/*",
+      "/runtime-config.js",
+      "/sitemap-dynamic.xml",
+      "/__unlock",
+      "/listings",
+      "/auctions",
+      "/auction/*",
+      "/new-build/*",
+      "/open-house/*",
+      "/property/*",
+    ]);
 
-    const protectedPaths = [
-      "/",
-      "/open-houses",
-      "/dashboard",
-      "/dashboard/listings",
-      "/investor-dashboard",
-      "/a/future/spa/route",
+    const dynamicPaths = [
       "/runtime-config.js",
       "/sitemap-dynamic.xml",
       "/__unlock",
@@ -62,13 +67,38 @@ describe("Cloudflare Pages function routes", () => {
       "/api/public/listings",
       "/api/private/unknown",
       "/api/anything/nested",
+      "/listings",
+      "/auctions",
+      "/auction/00000000-0000-0000-0000-000000000000",
+      "/new-build/00000000-0000-0000-0000-000000000000",
+      "/open-house/00000000-0000-0000-0000-000000000000",
+      "/property/00000000-0000-0000-0000-000000000000",
     ];
 
-    for (const pathname of protectedPaths) {
+    for (const pathname of dynamicPaths) {
       expect(
         invokesPagesFunctions(routes, pathname),
         `${pathname} must invoke Pages Functions`,
       ).toBe(true);
+    }
+
+    const staticSpaPaths = [
+      "/",
+      "/login",
+      "/signup",
+      "/dashboard",
+      "/dashboard/listings",
+      "/investor-dashboard",
+      "/open-houses",
+      "/listings/new",
+      "/a/future/spa/route",
+    ];
+
+    for (const pathname of staticSpaPaths) {
+      expect(
+        invokesPagesFunctions(routes, pathname),
+        `${pathname} must bypass Pages Functions`,
+      ).toBe(false);
     }
   });
 
@@ -163,6 +193,7 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(buildScript).toContain('"_routes.json"');
     expect(buildScript).toContain("curatedRoutesPath");
     expect(buildScript).toContain("requiredStaticExcludes");
+    expect(buildScript).toContain("requiredStaticBypasses");
     expect(buildScript).toContain("curatedInclude.length > 0");
     expect(buildScript).toContain(
       "Generated _routes.json would not invoke the Pages Function",

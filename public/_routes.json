@@ -1,7 +1,16 @@
 {
   "version": 1,
   "include": [
-    "/*"
+    "/api/*",
+    "/runtime-config.js",
+    "/sitemap-dynamic.xml",
+    "/__unlock",
+    "/listings",
+    "/auctions",
+    "/auction/*",
+    "/new-build/*",
+    "/open-house/*",
+    "/property/*"
   ],
   "exclude": [
     "/assets/*",

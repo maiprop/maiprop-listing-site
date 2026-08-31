@@ -44,6 +44,17 @@ const requiredStaticExcludes = [
   "/sitemap.xml",
 ];
 
+const requiredStaticBypasses = [
+  "/",
+  "/login",
+  "/signup",
+  "/dashboard",
+  "/dashboard/listings",
+  "/investor-dashboard",
+  "/open-houses",
+  "/listings/new",
+];
+
 if (!existsSync(distDir)) {
   console.error("dist/ does not exist. Run npm run build before packaging Pages Functions.");
   process.exit(1);
@@ -113,6 +124,13 @@ function validateRoutes(routes) {
   for (const pattern of requiredStaticExcludes) {
     if (!routes.exclude.includes(pattern)) {
       console.error(`Generated _routes.json must exclude static route ${pattern} to avoid unnecessary Pages Function invocations.`);
+      process.exit(1);
+    }
+  }
+
+  for (const path of requiredStaticBypasses) {
+    if (routeIncluded(routes, path) && !routeExcluded(routes, path)) {
+      console.error(`Generated _routes.json must bypass Pages Functions for static SPA route ${path}.`);
       process.exit(1);
     }
   }
