@@ -638,6 +638,62 @@ test("preparation diagnostic notice rejects arbitrary and noncanonical caller da
   }
 });
 
+test("preparation diagnostic notice never invokes diagnostic accessors", () => {
+  const safeDiagnostic = {
+    schema_version: 1,
+    kind: "maiprop-duplicate-preparation-contract-failure",
+    failed_invariants: ["duplicate_preparation_remaining_candidates"],
+    evidence: {
+      duplicate_preparation_contract: false,
+      duplicate_preparation_remaining_candidates: 4,
+    },
+  };
+  const token = "accessor_value_must_not_emit";
+  for (const [name, preparationDiagnostic, calls] of [
+    (() => {
+      let accessorCalls = 0;
+      const diagnostic = { ...safeDiagnostic };
+      Object.defineProperty(diagnostic, "schema_version", {
+        enumerable: true,
+        get: () => {
+          accessorCalls += 1;
+          return 1;
+        },
+      });
+      return ["top-level", diagnostic, () => accessorCalls];
+    })(),
+    (() => {
+      let accessorCalls = 0;
+      const failedInvariants = [...safeDiagnostic.failed_invariants];
+      Object.defineProperty(failedInvariants, "0", {
+        enumerable: true,
+        get: () => {
+          accessorCalls += 1;
+          return "duplicate_preparation_remaining_candidates";
+        },
+      });
+      return ["array", { ...safeDiagnostic, failed_invariants: failedInvariants }, () => accessorCalls];
+    })(),
+    (() => {
+      let accessorCalls = 0;
+      const evidence = { ...safeDiagnostic.evidence };
+      Object.defineProperty(evidence, "duplicate_preparation_contract", {
+        enumerable: true,
+        get: () => {
+          accessorCalls += 1;
+          return accessorCalls === 1 ? false : token;
+        },
+      });
+      return ["evidence", { ...safeDiagnostic, evidence }, () => accessorCalls];
+    })(),
+  ]) {
+    const notice = formatPreparationDiagnosticNotice({ preparationDiagnostic });
+    assert.equal(notice, null, name);
+    assert.equal(calls(), 0, name);
+    assert.doesNotMatch(String(notice), /accessor_value_must_not_emit/, name);
+  }
+});
+
 test("recorded Q,P downstream contract drift emits only the generic preparation failure", async () => {
   const secret = "provider-row-secret-must-not-log";
   await assert.rejects(

@@ -1015,53 +1015,90 @@ function validatePreparationContract(
 }
 
 export function formatPreparationDiagnosticNotice(error) {
-  const diagnostic = error?.preparationDiagnostic;
   try {
+    const enumerableDataValue = (record, field) => {
+      const descriptor = Object.getOwnPropertyDescriptor(record, field);
+      if (!descriptor || !descriptor.enumerable ||
+          !Object.hasOwn(descriptor, "value") || descriptor.get || descriptor.set) {
+        return null;
+      }
+      return { value: descriptor.value };
+    };
     const isPlainRecord = (value) => value && typeof value === "object" &&
       !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype &&
-      Object.getOwnPropertySymbols(value).length === 0 &&
-      Object.getOwnPropertyNames(value).length === Object.keys(value).length;
+      Object.getOwnPropertySymbols(value).length === 0;
     const isCanonicalStringArray = (value) => Array.isArray(value) &&
       Object.getPrototypeOf(value) === Array.prototype &&
       Object.getOwnPropertySymbols(value).length === 0 &&
       Object.getOwnPropertyNames(value).every((name) =>
-        name === "length" || /^(?:0|[1-9][0-9]*)$/.test(name)) &&
-      Object.keys(value).length === value.length;
-    if (!isPlainRecord(diagnostic) ||
-        JSON.stringify(Object.keys(diagnostic).sort()) !== JSON.stringify([
-          "evidence",
-          "failed_invariants",
-          "kind",
-          "schema_version",
-        ])) {
+        name === "length" || /^(?:0|[1-9][0-9]*)$/.test(name));
+    const diagnosticDescriptor = enumerableDataValue(error, "preparationDiagnostic");
+    const diagnostic = diagnosticDescriptor?.value;
+    const diagnosticFields = [
+      "evidence",
+      "failed_invariants",
+      "kind",
+      "schema_version",
+    ];
+    const diagnosticNames = isPlainRecord(diagnostic)
+      ? Object.getOwnPropertyNames(diagnostic).sort()
+      : [];
+    if (!diagnosticDescriptor ||
+        JSON.stringify(diagnosticNames) !== JSON.stringify(diagnosticFields)) {
       return null;
     }
-    if (diagnostic.schema_version !== 1 ||
-        diagnostic.kind !== "maiprop-duplicate-preparation-contract-failure" ||
-        !isCanonicalStringArray(diagnostic.failed_invariants)) {
+    const diagnosticValues = Object.fromEntries(
+      diagnosticFields.map((field) => {
+        const descriptor = enumerableDataValue(diagnostic, field);
+        return [field, descriptor?.value];
+      }),
+    );
+    if (diagnosticFields.some((field) => !enumerableDataValue(diagnostic, field)) ||
+        diagnosticValues.schema_version !== 1 ||
+        diagnosticValues.kind !== "maiprop-duplicate-preparation-contract-failure" ||
+        !isCanonicalStringArray(diagnosticValues.failed_invariants)) {
       return null;
     }
-    const failedInvariants = Array.from(diagnostic.failed_invariants);
+    const failedInvariantLength = Object.getOwnPropertyDescriptor(
+      diagnosticValues.failed_invariants,
+      "length",
+    );
+    if (!failedInvariantLength || !Object.hasOwn(failedInvariantLength, "value") ||
+        failedInvariantLength.get || failedInvariantLength.set ||
+        !Number.isSafeInteger(failedInvariantLength.value) ||
+        failedInvariantLength.value > PREPARATION_FAILED_INVARIANTS.size) {
+      return null;
+    }
+    const failedInvariants = [];
+    for (let index = 0; index < failedInvariantLength.value; index += 1) {
+      const descriptor = enumerableDataValue(diagnosticValues.failed_invariants, String(index));
+      if (!descriptor) return null;
+      failedInvariants.push(descriptor.value);
+    }
     const sortedInvariants = [...failedInvariants].sort();
     if (failedInvariants.length === 0 ||
         failedInvariants.some((invariant) =>
           typeof invariant !== "string" || !PREPARATION_FAILED_INVARIANTS.has(invariant)) ||
         new Set(failedInvariants).size !== failedInvariants.length ||
         failedInvariants.some((invariant, index) => invariant !== sortedInvariants[index]) ||
-        !isPlainRecord(diagnostic.evidence)) {
+        !isPlainRecord(diagnosticValues.evidence)) {
       return null;
     }
-    const evidenceKeys = Object.keys(diagnostic.evidence);
+    const evidenceKeys = Object.getOwnPropertyNames(diagnosticValues.evidence);
     if (evidenceKeys.some((field) => !PREPARATION_EVIDENCE_FIELDS.includes(field)) ||
-        evidenceKeys.some((field) => PREPARATION_BOOLEAN_FIELDS.includes(field)
-          ? typeof diagnostic.evidence[field] !== "boolean"
-          : !Number.isSafeInteger(diagnostic.evidence[field]) || diagnostic.evidence[field] < 0)) {
+        evidenceKeys.some((field) => !enumerableDataValue(diagnosticValues.evidence, field))) {
       return null;
     }
+    const evidenceValues = Object.fromEntries(
+      evidenceKeys.map((field) => [field, enumerableDataValue(diagnosticValues.evidence, field).value]),
+    );
+    if (evidenceKeys.some((field) => PREPARATION_BOOLEAN_FIELDS.includes(field)
+      ? typeof evidenceValues[field] !== "boolean"
+      : !Number.isSafeInteger(evidenceValues[field]) || evidenceValues[field] < 0)) return null;
     const evidence = Object.fromEntries(
       PREPARATION_EVIDENCE_FIELDS
-        .filter((field) => Object.hasOwn(diagnostic.evidence, field))
-        .map((field) => [field, diagnostic.evidence[field]]),
+        .filter((field) => Object.hasOwn(evidenceValues, field))
+        .map((field) => [field, evidenceValues[field]]),
     );
     return `::notice::${JSON.stringify({
       schema_version: 1,
