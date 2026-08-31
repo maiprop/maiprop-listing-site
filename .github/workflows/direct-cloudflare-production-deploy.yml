@@ -1188,7 +1188,6 @@ jobs:
               --current production-runtime-normalized.json \
               --out production-runtime-patch.json \
               --evidence production-runtime-plan.json
-          unset plain_text_json
           curl -fsS --request PATCH \
             -H "Authorization: Bearer $CF_EDIT_TOKEN" \
             -H 'Content-Type: application/json' \
@@ -1202,6 +1201,19 @@ jobs:
             .result.deployment_configs.production.env_vars.SUPABASE_PROJECT_ID.type == "plain_text" and
             .result.deployment_configs.production.env_vars.SUPABASE_PUBLISHABLE_KEY.type == "plain_text"
           ' production-runtime-response.json > /dev/null
+          jq -n --argjson vars "$plain_text_json" '{
+            name: "maiprop-listing-site",
+            pages_build_output_dir: "./dist",
+            compatibility_date: "2026-05-19",
+            vars: $vars
+          }' > release-candidate/wrangler.jsonc
+          jq -e '
+            .name == "maiprop-listing-site" and
+            .pages_build_output_dir == "./dist" and
+            .vars.SUPABASE_PROJECT_ID != "" and
+            .vars.SUPABASE_PUBLISHABLE_KEY != ""
+          ' release-candidate/wrangler.jsonc > /dev/null
+          unset plain_text_json
 
       - name: Deploy immutable candidate to production
         id: deploy
