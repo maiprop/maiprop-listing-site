@@ -25,15 +25,13 @@ npm run dev
 ## Devin Secrets Needed
 
 - `SUPABASE_SERVICE_ROLE_KEY` — Required for admin-level DB operations (user creation, profile updates). This is the `service_role` JWT from Supabase dashboard (Settings → API).
-- `SITE_LOCK_PASSWORD` — Required to access portal.maiprop.co (private preview gate). Not needed for localhost testing.
+- `SITE_LOCK_PASSWORD` — Legacy Pages Function route lock. It is not required for the public production portal and is not a substitute for Cloudflare Access.
 
 ## Production Portal Access (portal.maiprop.co)
 
-The production frontend is at `portal.maiprop.co` and is behind a **passcode gate**. To access:
-
-1. Navigate to `https://portal.maiprop.co`
-2. Enter the passcode (stored as `SITE_LOCK_PASSWORD` secret) and click Unlock
-3. The portal is now accessible for the browser session
+The production frontend is public at `portal.maiprop.co`. Navigate directly to
+`https://portal.maiprop.co`; no site-lock passcode is required. Cloudflare Pages
+preview URLs may still require Cloudflare Access.
 
 **When to use portal vs localhost:**
 

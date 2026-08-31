@@ -193,8 +193,10 @@ apex and www as distinct origins.
   - `functions/sitemap-dynamic.xml.ts` — proxies to the Supabase Edge Function
     that renders the SEO sitemap.
 - `public/_headers` — security + cache headers (applied to every response).
-- `public/_routes.json` — routes dynamic Pages Functions, including
-  `/api/public/*`, before static fallback handling.
+- `public/_routes.json` — routes only dynamic Pages Functions, including
+  `/api/public/*` and SEO-rendered detail routes, before static fallback
+  handling. Normal SPA documents such as `/`, `/login`, `/signup`, and
+  `/dashboard` bypass the Worker so they cannot incur a Function cold start.
 - `public/_redirects` — static sitemap fallback only. Do not add a catch-all
   SPA rewrite; Cloudflare Pages handles SPA fallback and Wrangler rejects
   `/* -> /index.html` as an infinite loop.
@@ -218,16 +220,16 @@ mutates the production Pages project.
   (`PRODUCTION_CHECKLIST.md`, `STAGING_SETUP.md`, `SECRETS_ROTATION.md`,
   `ENV_SETUP.md`, `archive/audits/AUDIT_RECONCILIATION.md`). Update when convenient.
 
-## 8. Pre-launch site lock (passcode gate)
+## 8. Legacy function-route lock
 
-`functions/_middleware.ts` implements a site-wide passcode gate. Every
-request — HTML, JS/CSS assets, Pages Functions — is intercepted at the edge.
-Visitors without a valid cookie see a branded splash form; submitting the
-correct passcode sets an `HttpOnly`, `Secure`, `SameSite=Lax` cookie valid
-for 30 days and redirects to the originally requested URL.
+`functions/_middleware.ts` implements a passcode gate for requests that invoke
+Pages Functions. Static SPA documents and assets intentionally bypass the
+Worker for predictable low latency, so this middleware is not a site-wide
+access-control boundary. Protect private staging or preview environments with
+Cloudflare Access instead.
 
-The gate is **fully disabled** when `SITE_LOCK_PASSWORD` is unset. The Vite
-bundle is never touched — the password only lives in the Cloudflare Pages
+The route lock is **fully disabled** when `SITE_LOCK_PASSWORD` is unset. The
+Vite bundle is never touched — the password only lives in the Cloudflare Pages
 runtime environment, so nothing leaks into the shipped JS.
 
 ### Enable the lock
