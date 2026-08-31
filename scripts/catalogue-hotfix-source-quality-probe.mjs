@@ -354,9 +354,17 @@ export function requireZeroInvalidCatalogueSourceQuality(value) {
   return result;
 }
 
+export function requireZeroPreparationRecoveryCandidates(value) {
+  const result = validateCatalogueSourceQuality(value);
+  if (result.quarantine_candidate_rows !== 0) {
+    fail("Catalogue preparation recovery still has remaining duplicate candidates.");
+  }
+  return result;
+}
+
 async function main() {
   const [option] = process.argv.slice(2);
-  if (option && option !== "--require-zero-invalid") {
+  if (option && !["--require-zero-invalid", "--require-zero-recovery-candidates"].includes(option)) {
     fail("Catalogue source-quality probe option is invalid.");
   }
   const result = await runCatalogueSourceQualityProbe({
@@ -364,6 +372,8 @@ async function main() {
   });
   const certified = option === "--require-zero-invalid"
     ? requireZeroInvalidCatalogueSourceQuality(result)
+    : option === "--require-zero-recovery-candidates"
+    ? requireZeroPreparationRecoveryCandidates(result)
     : result;
   process.stdout.write(`${JSON.stringify(certified)}\n`);
 }

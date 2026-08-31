@@ -276,7 +276,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   const rawDatabaseLines = text.split(/\r?\n/).filter((line) =>
     line.includes('psql "$TARGET_DB_URL"')
   );
-  assert.equal(rawDatabaseLines.length, 7);
+  assert.equal(rawDatabaseLines.length, 6);
   for (const line of rawDatabaseLines) {
     assert.equal((line.match(/--command 'SET ROLE postgres'/g) ?? []).length, 1);
     const roleIndex = line.indexOf("--command 'SET ROLE postgres'");
@@ -479,7 +479,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.doesNotMatch(productionBody, /write-staging-public-key-candidates|select-live-staging-public-key-env/);
   assert.match(stagingBody, /Prove recorded staging database state/);
   assert.match(productionBody, /Replay exact manifest-bound production preparation migration/);
-  assert.match(productionBody, /catalogue-hotfix-behavioral-probe\.mjs preparation-recovery/);
+  assert.match(productionBody, /catalogue-hotfix-preparation-recovery\.sh/);
   for (const body of [stagingBody, productionBody]) {
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs recorded/);
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs postapply/);
@@ -599,19 +599,15 @@ test("production preparation recovery replays only the exact manifest-bound P st
   assert.match(recovery.run, /unset SUPABASE_ACCESS_TOKEN/);
   assert.match(recovery.run, /catalogue-hotfix-with-database-login\.sh bash -s <<'DATABASE_PHASE'/);
   assert.match(recovery.run, /catalogue-performance-hotfix-contract\.mjs verify --json/);
-  assert.match(recovery.run, /catalogue-hotfix-behavioral-probe\.mjs preparation-recovery/);
+  assert.match(recovery.run, /catalogue-hotfix-preparation-recovery\.sh/);
   assert.match(recovery.run, /20260728115960_prepare_batched_os_duplicate_quarantine\.sql/);
   assert.match(recovery.run, /a35a4f6390937a04202e81ef67d2bd6d98e00c0118b9d7bff7b85544f6ed7a5b/);
   assert.match(recovery.run, /sha256sum/);
-  assert.match(recovery.run, /psql "\$TARGET_DB_URL".*--file "\$replay_path"/);
   assert.match(recovery.run, /catalogue-hotfix-behavioral-probe\.mjs recorded/);
-  assert.match(recovery.run, /recovery_action="\$\(jq -er/);
-  assert.match(recovery.run, /case "\$recovery_action" in/);
-  assert.match(recovery.run, /replay\) psql "\$TARGET_DB_URL"/);
-  assert.match(recovery.run, /no_replay\) ;;/);
+  assert.match(recovery.run, /catalogue-hotfix-source-quality-probe\.mjs --require-zero-recovery-candidates/);
   assert.doesNotMatch(recovery.run, /migration repair|db push|--db-url|--command .*schema_migrations/i);
   assert.ok(
-    recovery.run.indexOf("preparation-recovery") < recovery.run.indexOf('--file "$replay_path"'),
-    "the exact extractor attests immediately before replay",
+    recovery.run.indexOf("catalogue-hotfix-preparation-recovery.sh") < recovery.run.indexOf("catalogue-hotfix-behavioral-probe.mjs recorded"),
+    "the atomic recovery wrapper completes before ordinary recorded certification",
   );
 });

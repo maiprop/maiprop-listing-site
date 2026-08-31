@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildCatalogueSourceQualitySql,
   runCatalogueSourceQualityProbe,
+  requireZeroPreparationRecoveryCandidates,
   requireZeroInvalidCatalogueSourceQuality,
   validateCatalogueSourceQuality,
 } from "./catalogue-hotfix-source-quality-probe.mjs";
@@ -150,6 +151,17 @@ test("postapply source-quality certification requires exactly zero invalid rows"
       all_os_source_invalid_auction_rows_with_malformed_identity: 1,
     }),
     /postapply.*eligible invalid/i,
+  );
+});
+
+test("preparation recovery source-quality gate requires zero remaining duplicate candidates", () => {
+  assert.deepEqual(
+    requireZeroPreparationRecoveryCandidates({ ...validQuality, quarantine_candidate_rows: 0 }),
+    { ...validQuality, quarantine_candidate_rows: 0 },
+  );
+  assert.throws(
+    () => requireZeroPreparationRecoveryCandidates(validQuality),
+    /remaining duplicate candidates/i,
   );
 });
 

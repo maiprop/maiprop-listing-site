@@ -42,6 +42,10 @@ describe("release safety inventory", () => {
       resolve(process.cwd(), "scripts/catalogue-hotfix-with-database-login.sh"),
       "utf8",
     );
+    const preparationRecoveryWrapperText = readFileSync(
+      resolve(process.cwd(), "scripts/catalogue-hotfix-preparation-recovery.sh"),
+      "utf8",
+    );
     const canonicalDatabaseUrlWrapperText = readFileSync(
       resolve(process.cwd(), "scripts/catalogue-hotfix-with-canonical-database-url.sh"),
       "utf8",
@@ -62,6 +66,7 @@ describe("release safety inventory", () => {
       markerScriptText,
       databaseLoginScriptText,
       databaseLoginWrapperText,
+      preparationRecoveryWrapperText,
       canonicalDatabaseUrlWrapperText,
       linkedDatabasePushText,
       sourceQualityProbeText,
@@ -175,7 +180,7 @@ describe("release safety inventory", () => {
     }
     const rawRoleMarker = "--command 'SET ROLE postgres'";
     const rawRoleOccurrences = [...text.matchAll(new RegExp(rawRoleMarker, "g"))];
-    expect(rawRoleOccurrences).toHaveLength(7);
+    expect(rawRoleOccurrences).toHaveLength(6);
     for (const occurrence of rawRoleOccurrences) {
       const missingSameSessionRole =
         text.slice(0, occurrence.index) + text.slice(occurrence.index + rawRoleMarker.length);
@@ -196,6 +201,7 @@ describe("release safety inventory", () => {
     });
     expect(violations({ parsed: oldJobWideLogin })).not.toEqual([]);
     expect(violations({ databaseLoginWrapperText: "" })).not.toEqual([]);
+    expect(violations({ preparationRecoveryWrapperText: "" })).not.toEqual([]);
     expect(violations({ canonicalDatabaseUrlWrapperText: "" })).not.toEqual([]);
     expect(violations({ linkedDatabasePushText: "" })).not.toEqual([]);
     for (const target of ["staging", "production"]) {
