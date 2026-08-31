@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  formatPreparationDiagnosticNotice,
   runCatalogueBehavioralProbe,
   runCatalogueSql,
 } from "./catalogue-hotfix-behavioral-probe.mjs";
@@ -537,6 +538,186 @@ test("Q,P certification fails closed on preparation contract and parity drift", 
       /duplicate identity preparation/i,
     );
   }
+});
+
+test("recorded Q,P preparation rejection carries only deterministic aggregate diagnostics", async () => {
+  const secret = "postgresql://customer:credential@private.example/never-log";
+  await assert.rejects(
+    runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      dependencies({
+        recordedVersions: [quarantineVersion, preparationVersion],
+        metadataPatch: {
+          duplicate_preparation_generated_column: true,
+          duplicate_preparation_remaining_candidates: 4,
+          duplicate_preparation_ledger_rows: 3,
+          duplicate_preparation_live_marker_rows: 2,
+          customer_url: secret,
+        },
+      }),
+    ),
+    (error) => {
+      assert.match(error.message, /duplicate identity preparation contract is incomplete/i);
+      assert.deepEqual(error.preparationDiagnostic, {
+        schema_version: 1,
+        kind: "maiprop-duplicate-preparation-contract-failure",
+        failed_invariants: [
+          "duplicate_preparation_generated_column",
+          "duplicate_preparation_ledger_rows_match_live_marker_rows",
+          "duplicate_preparation_remaining_candidates",
+        ],
+        evidence: {
+          duplicate_preparation_contract: true,
+          duplicate_preparation_ledger_contract: true,
+          duplicate_preparation_acl_contract: true,
+          duplicate_preparation_generated_column: true,
+          duplicate_preparation_unique_index: false,
+          duplicate_preparation_source_check: false,
+          duplicate_preparation_live_recoverable_contract: true,
+          duplicate_preparation_remaining_candidates: 4,
+          duplicate_preparation_owner_guard_rows: 0,
+          duplicate_preparation_active_promotion_rows: 0,
+          duplicate_preparation_ledger_rows: 3,
+          duplicate_preparation_live_marker_rows: 2,
+        },
+      });
+      assert.doesNotMatch(JSON.stringify(error.preparationDiagnostic), /customer|credential|private\.example|postgresql/i);
+      assert.equal(
+        formatPreparationDiagnosticNotice(error),
+        `::notice::${JSON.stringify(error.preparationDiagnostic)}`,
+      );
+      return true;
+    },
+  );
+});
+
+test("preparation diagnostic notice rejects arbitrary and noncanonical caller data", () => {
+  const safeDiagnostic = {
+    schema_version: 1,
+    kind: "maiprop-duplicate-preparation-contract-failure",
+    failed_invariants: ["duplicate_preparation_remaining_candidates"],
+    evidence: {
+      duplicate_preparation_remaining_candidates: 4,
+      duplicate_preparation_contract: false,
+    },
+  };
+  assert.equal(
+    formatPreparationDiagnosticNotice({ preparationDiagnostic: safeDiagnostic }),
+    '::notice::{"schema_version":1,"kind":"maiprop-duplicate-preparation-contract-failure","failed_invariants":["duplicate_preparation_remaining_candidates"],"evidence":{"duplicate_preparation_contract":false,"duplicate_preparation_remaining_candidates":4}}',
+  );
+
+  const token = "sb_secret_never_emit";
+  const arrayWithHiddenSerializer = {
+    ...safeDiagnostic,
+    failed_invariants: [...safeDiagnostic.failed_invariants],
+  };
+  Object.defineProperty(arrayWithHiddenSerializer.failed_invariants, "toJSON", {
+    value: () => [token],
+  });
+  const evidenceWithHiddenSerializer = {
+    ...safeDiagnostic,
+    evidence: { ...safeDiagnostic.evidence },
+  };
+  Object.defineProperty(evidenceWithHiddenSerializer.evidence, "toJSON", {
+    value: () => ({ token }),
+  });
+  for (const preparationDiagnostic of [
+    { ...safeDiagnostic, token },
+    { ...safeDiagnostic, evidence: { ...safeDiagnostic.evidence, token } },
+    { ...safeDiagnostic, evidence: { ...safeDiagnostic.evidence, duplicate_preparation_remaining_candidates: "4" } },
+    { ...safeDiagnostic, failed_invariants: ["unknown_invariant"] },
+    { ...safeDiagnostic, failed_invariants: ["duplicate_preparation_remaining_candidates", "duplicate_preparation_generated_column"] },
+    { ...safeDiagnostic, failed_invariants: ["duplicate_preparation_remaining_candidates", "duplicate_preparation_remaining_candidates"] },
+    arrayWithHiddenSerializer,
+    evidenceWithHiddenSerializer,
+    token,
+  ]) {
+    const notice = formatPreparationDiagnosticNotice({ preparationDiagnostic });
+    assert.equal(notice, null);
+    assert.doesNotMatch(String(notice), /sb_secret_never_emit/);
+  }
+});
+
+test("preparation diagnostic notice never invokes diagnostic accessors", () => {
+  const safeDiagnostic = {
+    schema_version: 1,
+    kind: "maiprop-duplicate-preparation-contract-failure",
+    failed_invariants: ["duplicate_preparation_remaining_candidates"],
+    evidence: {
+      duplicate_preparation_contract: false,
+      duplicate_preparation_remaining_candidates: 4,
+    },
+  };
+  const token = "accessor_value_must_not_emit";
+  for (const [name, preparationDiagnostic, calls] of [
+    (() => {
+      let accessorCalls = 0;
+      const diagnostic = { ...safeDiagnostic };
+      Object.defineProperty(diagnostic, "schema_version", {
+        enumerable: true,
+        get: () => {
+          accessorCalls += 1;
+          return 1;
+        },
+      });
+      return ["top-level", diagnostic, () => accessorCalls];
+    })(),
+    (() => {
+      let accessorCalls = 0;
+      const failedInvariants = [...safeDiagnostic.failed_invariants];
+      Object.defineProperty(failedInvariants, "0", {
+        enumerable: true,
+        get: () => {
+          accessorCalls += 1;
+          return "duplicate_preparation_remaining_candidates";
+        },
+      });
+      return ["array", { ...safeDiagnostic, failed_invariants: failedInvariants }, () => accessorCalls];
+    })(),
+    (() => {
+      let accessorCalls = 0;
+      const evidence = { ...safeDiagnostic.evidence };
+      Object.defineProperty(evidence, "duplicate_preparation_contract", {
+        enumerable: true,
+        get: () => {
+          accessorCalls += 1;
+          return accessorCalls === 1 ? false : token;
+        },
+      });
+      return ["evidence", { ...safeDiagnostic, evidence }, () => accessorCalls];
+    })(),
+  ]) {
+    const notice = formatPreparationDiagnosticNotice({ preparationDiagnostic });
+    assert.equal(notice, null, name);
+    assert.equal(calls(), 0, name);
+    assert.doesNotMatch(String(notice), /accessor_value_must_not_emit/, name);
+  }
+});
+
+test("recorded Q,P downstream contract drift emits only the generic preparation failure", async () => {
+  const secret = "provider-row-secret-must-not-log";
+  await assert.rejects(
+    runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      dependencies({
+        recordedVersions: [quarantineVersion, preparationVersion],
+        metadataPatch: {
+          invalid_identity_quarantine_live_contract: false,
+          provider_diagnostic: secret,
+        },
+      }),
+    ),
+    (error) => {
+      assert.equal(error.message, "Database duplicate identity preparation contract is incomplete.");
+      assert.deepEqual(error.preparationDiagnostic.failed_invariants, [
+        "duplicate_preparation_quarantine_contract",
+      ]);
+      const notice = formatPreparationDiagnosticNotice(error);
+      assert.match(notice, /^::notice::\{/);
+      assert.doesNotMatch(`${error.message}${notice}`, /provider-row-secret-must-not-log/);
+      return true;
+    },
+  );
 });
 
 test("Q,P preparation SQL exposes only fixed aggregate evidence and exact safety predicates", async () => {

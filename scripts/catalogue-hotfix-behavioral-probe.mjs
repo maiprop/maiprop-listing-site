@@ -43,6 +43,31 @@ const OS_IDENTITY_COMPONENT_KEYS = [
   "source_check",
   "stored_parity",
 ];
+const PREPARATION_BOOLEAN_FIELDS = [
+  "duplicate_preparation_contract",
+  "duplicate_preparation_ledger_contract",
+  "duplicate_preparation_acl_contract",
+  "duplicate_preparation_generated_column",
+  "duplicate_preparation_unique_index",
+  "duplicate_preparation_source_check",
+  "duplicate_preparation_live_recoverable_contract",
+];
+const PREPARATION_COUNT_FIELDS = [
+  "duplicate_preparation_remaining_candidates",
+  "duplicate_preparation_owner_guard_rows",
+  "duplicate_preparation_active_promotion_rows",
+  "duplicate_preparation_ledger_rows",
+  "duplicate_preparation_live_marker_rows",
+];
+const PREPARATION_EVIDENCE_FIELDS = [
+  ...PREPARATION_BOOLEAN_FIELDS,
+  ...PREPARATION_COUNT_FIELDS,
+];
+const PREPARATION_FAILED_INVARIANTS = new Set([
+  ...PREPARATION_EVIDENCE_FIELDS,
+  "duplicate_preparation_ledger_rows_match_live_marker_rows",
+  "duplicate_preparation_quarantine_contract",
+]);
 
 function fail(message) {
   throw new Error(message);
@@ -869,25 +894,78 @@ function validatePreparationContract(
   recordedVersions,
   { allowBridgeArtifacts = false } = {},
 ) {
-  const booleanFields = [
-    "duplicate_preparation_contract",
-    "duplicate_preparation_ledger_contract",
-    "duplicate_preparation_acl_contract",
-    "duplicate_preparation_generated_column",
-    "duplicate_preparation_unique_index",
-    "duplicate_preparation_source_check",
-    "duplicate_preparation_live_recoverable_contract",
-  ];
-  const countFields = [
-    "duplicate_preparation_remaining_candidates",
-    "duplicate_preparation_owner_guard_rows",
-    "duplicate_preparation_active_promotion_rows",
-    "duplicate_preparation_ledger_rows",
-    "duplicate_preparation_live_marker_rows",
-  ];
-  if (booleanFields.some((field) => typeof metadata?.[field] !== "boolean") ||
-      countFields.some((field) => !Number.isSafeInteger(metadata?.[field]) || metadata[field] < 0)) {
-    fail("Database duplicate identity preparation evidence is invalid.");
+  const exactPreparationState = JSON.stringify(recordedVersions) === JSON.stringify([
+    QUARANTINE_VERSION,
+    PREPARATION_VERSION,
+  ]);
+  const preparationDiagnostic = () => {
+    const evidence = Object.fromEntries(
+      PREPARATION_EVIDENCE_FIELDS
+        .filter((field) => typeof metadata?.[field] === "boolean" ||
+          (Number.isSafeInteger(metadata?.[field]) && metadata[field] >= 0))
+        .map((field) => [field, metadata[field]]),
+    );
+    const failedInvariants = [
+      ...PREPARATION_BOOLEAN_FIELDS.filter((field) => typeof metadata?.[field] !== "boolean"),
+      ...PREPARATION_COUNT_FIELDS.filter((field) => !Number.isSafeInteger(metadata?.[field]) || metadata[field] < 0),
+    ];
+    if (typeof metadata?.duplicate_preparation_contract === "boolean" &&
+        !metadata.duplicate_preparation_contract) failedInvariants.push("duplicate_preparation_contract");
+    if (typeof metadata?.duplicate_preparation_ledger_contract === "boolean" &&
+        !metadata.duplicate_preparation_ledger_contract) failedInvariants.push("duplicate_preparation_ledger_contract");
+    if (typeof metadata?.duplicate_preparation_acl_contract === "boolean" &&
+        !metadata.duplicate_preparation_acl_contract) failedInvariants.push("duplicate_preparation_acl_contract");
+    if (!allowBridgeArtifacts) {
+      for (const field of [
+        "duplicate_preparation_generated_column",
+        "duplicate_preparation_unique_index",
+        "duplicate_preparation_source_check",
+      ]) {
+        if (metadata?.[field] === true) failedInvariants.push(field);
+      }
+    }
+    for (const field of [
+      "duplicate_preparation_remaining_candidates",
+      "duplicate_preparation_owner_guard_rows",
+      "duplicate_preparation_active_promotion_rows",
+    ]) {
+      if (Number.isSafeInteger(metadata?.[field]) && metadata[field] !== 0) {
+        failedInvariants.push(field);
+      }
+    }
+    if (Number.isSafeInteger(metadata?.duplicate_preparation_ledger_rows) &&
+        Number.isSafeInteger(metadata?.duplicate_preparation_live_marker_rows) &&
+        metadata.duplicate_preparation_ledger_rows !== metadata.duplicate_preparation_live_marker_rows) {
+      failedInvariants.push("duplicate_preparation_ledger_rows_match_live_marker_rows");
+    }
+    if (typeof metadata?.duplicate_preparation_live_recoverable_contract === "boolean" &&
+        !metadata.duplicate_preparation_live_recoverable_contract) {
+      failedInvariants.push("duplicate_preparation_live_recoverable_contract");
+    }
+    return {
+      schema_version: 1,
+      kind: "maiprop-duplicate-preparation-contract-failure",
+      failed_invariants: [...new Set(failedInvariants)].sort(),
+      evidence,
+    };
+  };
+  const failPreparation = (message, additionalInvariant = null) => {
+    const error = new Error(message);
+    if (exactPreparationState) {
+      const diagnostic = preparationDiagnostic();
+      if (additionalInvariant) {
+        diagnostic.failed_invariants = [...new Set([
+          ...diagnostic.failed_invariants,
+          additionalInvariant,
+        ])].sort();
+      }
+      error.preparationDiagnostic = diagnostic;
+    }
+    throw error;
+  };
+  if (PREPARATION_BOOLEAN_FIELDS.some((field) => typeof metadata?.[field] !== "boolean") ||
+      PREPARATION_COUNT_FIELDS.some((field) => !Number.isSafeInteger(metadata?.[field]) || metadata[field] < 0)) {
+    failPreparation("Database duplicate identity preparation evidence is invalid.");
   }
   if (!metadata.duplicate_preparation_contract ||
       !metadata.duplicate_preparation_ledger_contract ||
@@ -902,18 +980,29 @@ function validatePreparationContract(
       metadata.duplicate_preparation_active_promotion_rows !== 0 ||
       metadata.duplicate_preparation_ledger_rows !== metadata.duplicate_preparation_live_marker_rows ||
       !metadata.duplicate_preparation_live_recoverable_contract) {
-    fail("Database duplicate identity preparation contract is incomplete.");
+    failPreparation("Database duplicate identity preparation contract is incomplete.");
   }
-  const quarantineContract = validateDatabaseContract({
-    metadata: {
-      ...metadata,
-      migration_versions: [QUARANTINE_VERSION],
-    },
-    invocation: {},
-    restProbe: {},
-    recordedVersions: [QUARANTINE_VERSION],
-    requiredLevel: "invalid_identity_quarantine",
-  });
+  let quarantineContract;
+  try {
+    quarantineContract = validateDatabaseContract({
+      metadata: {
+        ...metadata,
+        migration_versions: [QUARANTINE_VERSION],
+      },
+      invocation: {},
+      restProbe: {},
+      recordedVersions: [QUARANTINE_VERSION],
+      requiredLevel: "invalid_identity_quarantine",
+    });
+  } catch (error) {
+    if (exactPreparationState) {
+      failPreparation(
+        "Database duplicate identity preparation contract is incomplete.",
+        "duplicate_preparation_quarantine_contract",
+      );
+    }
+    throw error;
+  }
   return {
     ...quarantineContract,
     contract_level: "duplicate_identity_preparation",
@@ -923,6 +1012,103 @@ function validatePreparationContract(
       duplicate_identity_preparation: true,
     },
   };
+}
+
+export function formatPreparationDiagnosticNotice(error) {
+  try {
+    const enumerableDataValue = (record, field) => {
+      const descriptor = Object.getOwnPropertyDescriptor(record, field);
+      if (!descriptor || !descriptor.enumerable ||
+          !Object.hasOwn(descriptor, "value") || descriptor.get || descriptor.set) {
+        return null;
+      }
+      return { value: descriptor.value };
+    };
+    const isPlainRecord = (value) => value && typeof value === "object" &&
+      !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype &&
+      Object.getOwnPropertySymbols(value).length === 0;
+    const isCanonicalStringArray = (value) => Array.isArray(value) &&
+      Object.getPrototypeOf(value) === Array.prototype &&
+      Object.getOwnPropertySymbols(value).length === 0 &&
+      Object.getOwnPropertyNames(value).every((name) =>
+        name === "length" || /^(?:0|[1-9][0-9]*)$/.test(name));
+    const diagnosticDescriptor = enumerableDataValue(error, "preparationDiagnostic");
+    const diagnostic = diagnosticDescriptor?.value;
+    const diagnosticFields = [
+      "evidence",
+      "failed_invariants",
+      "kind",
+      "schema_version",
+    ];
+    const diagnosticNames = isPlainRecord(diagnostic)
+      ? Object.getOwnPropertyNames(diagnostic).sort()
+      : [];
+    if (!diagnosticDescriptor ||
+        JSON.stringify(diagnosticNames) !== JSON.stringify(diagnosticFields)) {
+      return null;
+    }
+    const diagnosticValues = Object.fromEntries(
+      diagnosticFields.map((field) => {
+        const descriptor = enumerableDataValue(diagnostic, field);
+        return [field, descriptor?.value];
+      }),
+    );
+    if (diagnosticFields.some((field) => !enumerableDataValue(diagnostic, field)) ||
+        diagnosticValues.schema_version !== 1 ||
+        diagnosticValues.kind !== "maiprop-duplicate-preparation-contract-failure" ||
+        !isCanonicalStringArray(diagnosticValues.failed_invariants)) {
+      return null;
+    }
+    const failedInvariantLength = Object.getOwnPropertyDescriptor(
+      diagnosticValues.failed_invariants,
+      "length",
+    );
+    if (!failedInvariantLength || !Object.hasOwn(failedInvariantLength, "value") ||
+        failedInvariantLength.get || failedInvariantLength.set ||
+        !Number.isSafeInteger(failedInvariantLength.value) ||
+        failedInvariantLength.value > PREPARATION_FAILED_INVARIANTS.size) {
+      return null;
+    }
+    const failedInvariants = [];
+    for (let index = 0; index < failedInvariantLength.value; index += 1) {
+      const descriptor = enumerableDataValue(diagnosticValues.failed_invariants, String(index));
+      if (!descriptor) return null;
+      failedInvariants.push(descriptor.value);
+    }
+    const sortedInvariants = [...failedInvariants].sort();
+    if (failedInvariants.length === 0 ||
+        failedInvariants.some((invariant) =>
+          typeof invariant !== "string" || !PREPARATION_FAILED_INVARIANTS.has(invariant)) ||
+        new Set(failedInvariants).size !== failedInvariants.length ||
+        failedInvariants.some((invariant, index) => invariant !== sortedInvariants[index]) ||
+        !isPlainRecord(diagnosticValues.evidence)) {
+      return null;
+    }
+    const evidenceKeys = Object.getOwnPropertyNames(diagnosticValues.evidence);
+    if (evidenceKeys.some((field) => !PREPARATION_EVIDENCE_FIELDS.includes(field)) ||
+        evidenceKeys.some((field) => !enumerableDataValue(diagnosticValues.evidence, field))) {
+      return null;
+    }
+    const evidenceValues = Object.fromEntries(
+      evidenceKeys.map((field) => [field, enumerableDataValue(diagnosticValues.evidence, field).value]),
+    );
+    if (evidenceKeys.some((field) => PREPARATION_BOOLEAN_FIELDS.includes(field)
+      ? typeof evidenceValues[field] !== "boolean"
+      : !Number.isSafeInteger(evidenceValues[field]) || evidenceValues[field] < 0)) return null;
+    const evidence = Object.fromEntries(
+      PREPARATION_EVIDENCE_FIELDS
+        .filter((field) => Object.hasOwn(evidenceValues, field))
+        .map((field) => [field, evidenceValues[field]]),
+    );
+    return `::notice::${JSON.stringify({
+      schema_version: 1,
+      kind: "maiprop-duplicate-preparation-contract-failure",
+      failed_invariants: failedInvariants,
+      evidence,
+    })}`;
+  } catch {
+    return null;
+  }
 }
 
 function validateDatabaseContractForRecordedState({
@@ -1273,6 +1459,8 @@ async function main() {
 
 if (process.argv[1]?.endsWith("catalogue-hotfix-behavioral-probe.mjs")) {
   main().catch((error) => {
+    const notice = formatPreparationDiagnosticNotice(error);
+    if (notice) process.stdout.write(`${notice}\n`);
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   });
