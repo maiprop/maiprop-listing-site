@@ -43,7 +43,7 @@ const temporaryDatabasePhases = {
     "Prove staging publish-public-catalogue cron liveness",
   ],
   production: [
-    "Prove recorded production database state",
+    "Replay exact manifest-bound production preparation migration",
     "Measure production catalogue bootstrap source quality",
     "Prepare manifest-bound production migration dry-run",
     "Verify production database",
@@ -276,7 +276,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   const rawDatabaseLines = text.split(/\r?\n/).filter((line) =>
     line.includes('psql "$TARGET_DB_URL"')
   );
-  assert.equal(rawDatabaseLines.length, 6);
+  assert.equal(rawDatabaseLines.length, 7);
   for (const line of rawDatabaseLines) {
     assert.equal((line.match(/--command 'SET ROLE postgres'/g) ?? []).length, 1);
     const roleIndex = line.indexOf("--command 'SET ROLE postgres'");
@@ -477,8 +477,10 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
 
   const productionBody = stepText(production);
   assert.doesNotMatch(productionBody, /write-staging-public-key-candidates|select-live-staging-public-key-env/);
+  assert.match(stagingBody, /Prove recorded staging database state/);
+  assert.match(productionBody, /Replay exact manifest-bound production preparation migration/);
+  assert.match(productionBody, /catalogue-hotfix-behavioral-probe\.mjs preparation-recovery/);
   for (const body of [stagingBody, productionBody]) {
-    assert.match(body, /Prove recorded .* database state/);
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs recorded/);
     assert.match(body, /catalogue-hotfix-behavioral-probe\.mjs postapply/);
     assert.match(body, /catalogue-hotfix-source-quality-probe\.mjs --require-zero-invalid/);
@@ -572,4 +574,44 @@ test("catalogue hotfix workflow rejects unrelated mutation and secret surfaces",
   assert.doesNotMatch(text, /supabase\s+db\s+push\s+--workdir\s+supabase/i);
   assert.match(text, /catalogue-hotfix-linked-db-push\.sh/);
   assert.doesNotMatch(text, /echo[^\n]*(?:DB_URL|RELEASE_REASON|reason)/i);
+});
+
+test("production preparation recovery replays only the exact manifest-bound P state", () => {
+  const { value } = workflow();
+  const productionSteps = steps(value.jobs.production);
+  const recoveryIndex = productionSteps.findIndex((step) =>
+    step.name === "Replay exact manifest-bound production preparation migration"
+  );
+  const sourceQualityIndex = productionSteps.findIndex((step) =>
+    step.name === "Measure production catalogue bootstrap source quality"
+  );
+  const dryRunIndex = productionSteps.findIndex((step) =>
+    step.name === "Prepare manifest-bound production migration dry-run"
+  );
+  assert.ok(recoveryIndex >= 0, "the production-only replay gate exists");
+  assert.ok(recoveryIndex < sourceQualityIndex && sourceQualityIndex < dryRunIndex);
+  const recovery = productionSteps[recoveryIndex];
+  assert.equal(recovery["timeout-minutes"], 4);
+  assert.deepEqual(recovery.env, {
+    SUPABASE_ACCESS_TOKEN: "${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+    TARGET_DB_URL: "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
+  });
+  assert.match(recovery.run, /unset SUPABASE_ACCESS_TOKEN/);
+  assert.match(recovery.run, /catalogue-hotfix-with-database-login\.sh bash -s <<'DATABASE_PHASE'/);
+  assert.match(recovery.run, /catalogue-performance-hotfix-contract\.mjs verify --json/);
+  assert.match(recovery.run, /catalogue-hotfix-behavioral-probe\.mjs preparation-recovery/);
+  assert.match(recovery.run, /20260728115960_prepare_batched_os_duplicate_quarantine\.sql/);
+  assert.match(recovery.run, /a35a4f6390937a04202e81ef67d2bd6d98e00c0118b9d7bff7b85544f6ed7a5b/);
+  assert.match(recovery.run, /sha256sum/);
+  assert.match(recovery.run, /psql "\$TARGET_DB_URL".*--file "\$replay_path"/);
+  assert.match(recovery.run, /catalogue-hotfix-behavioral-probe\.mjs recorded/);
+  assert.match(recovery.run, /recovery_action="\$\(jq -er/);
+  assert.match(recovery.run, /case "\$recovery_action" in/);
+  assert.match(recovery.run, /replay\) psql "\$TARGET_DB_URL"/);
+  assert.match(recovery.run, /no_replay\) ;;/);
+  assert.doesNotMatch(recovery.run, /migration repair|db push|--db-url|--command .*schema_migrations/i);
+  assert.ok(
+    recovery.run.indexOf("preparation-recovery") < recovery.run.indexOf('--file "$replay_path"'),
+    "the exact extractor attests immediately before replay",
+  );
 });

@@ -201,7 +201,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
       "Prove staging publish-public-catalogue cron liveness",
     ],
     production: [
-      "Prove recorded production database state",
+      "Replay exact manifest-bound production preparation migration",
       "Measure production catalogue bootstrap source quality",
       "Prepare manifest-bound production migration dry-run",
       "Verify production database",
@@ -669,7 +669,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const rawWorkflowDatabaseLines = String(text ?? "").split(/\r?\n/).filter((line) =>
     line.includes('psql "$TARGET_DB_URL"')
   );
-  const rawWorkflowDatabaseRoleViolation = rawWorkflowDatabaseLines.length !== 6 ||
+  const rawWorkflowDatabaseRoleViolation = rawWorkflowDatabaseLines.length !== 7 ||
     rawWorkflowDatabaseLines.some((line) => {
       const roleMarker = "--command 'SET ROLE postgres'";
       const roleIndex = line.indexOf(roleMarker);

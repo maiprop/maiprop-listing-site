@@ -540,6 +540,89 @@ test("Q,P certification fails closed on preparation contract and parity drift", 
   }
 });
 
+test("preparation recovery attests only the exact recorded Q,P candidate state", async () => {
+  const exactMetadata = {
+    duplicate_preparation_contract: false,
+    duplicate_preparation_ledger_contract: true,
+    duplicate_preparation_acl_contract: true,
+    duplicate_preparation_generated_column: false,
+    duplicate_preparation_unique_index: false,
+    duplicate_preparation_source_check: false,
+    duplicate_preparation_remaining_candidates: 600,
+    duplicate_preparation_owner_guard_rows: 0,
+    duplicate_preparation_active_promotion_rows: 0,
+    duplicate_preparation_ledger_rows: 47123,
+    duplicate_preparation_live_marker_rows: 47123,
+    duplicate_preparation_live_recoverable_contract: true,
+  };
+  const deps = dependencies({
+    recordedVersions: [quarantineVersion, preparationVersion],
+    metadataPatch: exactMetadata,
+  });
+  assert.deepEqual(
+    await runCatalogueBehavioralProbe(
+      { mode: "preparation-recovery", apiUrl, databaseUrl, key },
+      deps,
+    ),
+    {
+      schema_version: 1,
+      kind: "maiprop-duplicate-preparation-recovery-attestation",
+      action: "replay",
+      recorded_versions: [quarantineVersion, preparationVersion],
+      evidence: exactMetadata,
+    },
+  );
+  assert.equal(deps.requests.length, 0, "recovery attestation never reaches public APIs");
+
+  assert.deepEqual(
+    await runCatalogueBehavioralProbe(
+      { mode: "preparation-recovery", apiUrl, databaseUrl, key },
+      dependencies({ recordedVersions: [quarantineVersion, preparationVersion] }),
+    ),
+    {
+      schema_version: 1,
+      kind: "maiprop-duplicate-preparation-recovery-attestation",
+      action: "no_replay",
+      recorded_versions: [quarantineVersion, preparationVersion],
+    },
+    "a clean Q,P rerun never selects a replay",
+  );
+
+  for (const metadataPatch of [
+    { invalid_identity_quarantine_contract: false },
+    { duplicate_preparation_remaining_candidates: 599 },
+    { duplicate_preparation_contract: true },
+    { duplicate_preparation_ledger_contract: false },
+    { duplicate_preparation_acl_contract: false },
+    { duplicate_preparation_generated_column: true },
+    { duplicate_preparation_unique_index: true },
+    { duplicate_preparation_source_check: true },
+    { duplicate_preparation_owner_guard_rows: 1 },
+    { duplicate_preparation_active_promotion_rows: 1 },
+    { duplicate_preparation_ledger_rows: 47122 },
+    { duplicate_preparation_live_marker_rows: 47122 },
+    { duplicate_preparation_live_recoverable_contract: false },
+  ]) {
+    await assert.rejects(
+      runCatalogueBehavioralProbe(
+        { mode: "preparation-recovery", apiUrl, databaseUrl, key },
+        dependencies({
+          recordedVersions: [quarantineVersion, preparationVersion],
+          metadataPatch: { ...exactMetadata, ...metadataPatch },
+        }),
+      ),
+      /exact preparation recovery state/i,
+    );
+  }
+  await assert.rejects(
+    runCatalogueBehavioralProbe(
+      { mode: "preparation-recovery", apiUrl, databaseUrl, key },
+      dependencies({ recordedVersions: [quarantineVersion, preparationVersion, bridgeVersion] }),
+    ),
+    /exact preparation recovery state/i,
+  );
+});
+
 test("recorded Q,P preparation rejection carries only deterministic aggregate diagnostics", async () => {
   const secret = "postgresql://customer:credential@private.example/never-log";
   await assert.rejects(

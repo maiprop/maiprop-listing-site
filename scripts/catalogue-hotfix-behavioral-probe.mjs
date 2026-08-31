@@ -68,6 +68,20 @@ const PREPARATION_FAILED_INVARIANTS = new Set([
   "duplicate_preparation_ledger_rows_match_live_marker_rows",
   "duplicate_preparation_quarantine_contract",
 ]);
+const PREPARATION_RECOVERY_EVIDENCE = Object.freeze({
+  duplicate_preparation_contract: false,
+  duplicate_preparation_ledger_contract: true,
+  duplicate_preparation_acl_contract: true,
+  duplicate_preparation_generated_column: false,
+  duplicate_preparation_unique_index: false,
+  duplicate_preparation_source_check: false,
+  duplicate_preparation_remaining_candidates: 600,
+  duplicate_preparation_owner_guard_rows: 0,
+  duplicate_preparation_active_promotion_rows: 0,
+  duplicate_preparation_ledger_rows: 47123,
+  duplicate_preparation_live_marker_rows: 47123,
+  duplicate_preparation_live_recoverable_contract: true,
+});
 
 function fail(message) {
   throw new Error(message);
@@ -1014,6 +1028,52 @@ function validatePreparationContract(
   };
 }
 
+function validatePreparationRecoveryAttestation(metadata, recordedVersions) {
+  const exactRecordedState = JSON.stringify(recordedVersions) === JSON.stringify([
+    QUARANTINE_VERSION,
+    PREPARATION_VERSION,
+  ]);
+  if (!exactRecordedState) {
+    fail("Database is not in the exact preparation recovery state.");
+  }
+  try {
+    validateDatabaseContract({
+      metadata: {
+        ...metadata,
+        migration_versions: [QUARANTINE_VERSION],
+      },
+      invocation: {},
+      restProbe: {},
+      recordedVersions: [QUARANTINE_VERSION],
+      requiredLevel: "invalid_identity_quarantine",
+    });
+  } catch {
+    fail("Database is not in the exact preparation recovery state.");
+  }
+  if (Object.entries(PREPARATION_RECOVERY_EVIDENCE).every(
+    ([field, expected]) => metadata?.[field] === expected,
+  )) {
+    return {
+      schema_version: 1,
+      kind: "maiprop-duplicate-preparation-recovery-attestation",
+      action: "replay",
+      recorded_versions: [QUARANTINE_VERSION, PREPARATION_VERSION],
+      evidence: { ...PREPARATION_RECOVERY_EVIDENCE },
+    };
+  }
+  try {
+    validatePreparationContract(metadata, recordedVersions);
+  } catch {
+    fail("Database is not in the exact preparation recovery state.");
+  }
+  return {
+    schema_version: 1,
+    kind: "maiprop-duplicate-preparation-recovery-attestation",
+    action: "no_replay",
+    recorded_versions: [QUARANTINE_VERSION, PREPARATION_VERSION],
+  };
+}
+
 export function formatPreparationDiagnosticNotice(error) {
   try {
     const enumerableDataValue = (record, field) => {
@@ -1203,7 +1263,7 @@ export async function runCatalogueBehavioralProbe(
   { mode, apiUrl, databaseUrl, key, outputPath },
   dependencies = {},
 ) {
-  if (!["recorded", "postapply"].includes(mode)) fail("Behavioral probe mode is invalid.");
+  if (!["recorded", "postapply", "preparation-recovery"].includes(mode)) fail("Behavioral probe mode is invalid.");
   if (!apiUrl || !databaseUrl || !key) fail("Behavioral probe target is incomplete.");
   const psql = dependencies.psql ?? ((query) => runCatalogueSql(query, databaseUrl));
   const fetchImpl = dependencies.fetchImpl ?? globalThis.fetch;
@@ -1249,6 +1309,15 @@ export async function runCatalogueBehavioralProbe(
   }
   if (mode === "postapply" && JSON.stringify(recordedVersions) !== JSON.stringify(HOTFIX_VERSIONS)) {
     fail("All manifest-bound migrations must be recorded before behavioral certification.");
+  }
+  if (mode === "preparation-recovery") {
+    const metadata = parseJson(
+      await psql(preparationMetadataSql()),
+      "Database duplicate identity preparation recovery attestation",
+    );
+    const attestation = validatePreparationRecoveryAttestation(metadata, recordedVersions);
+    if (outputPath) writeFileSync(outputPath, `${JSON.stringify(attestation, null, 2)}\n`);
+    return attestation;
   }
   if (mode === "recorded" && recordedVersions.length === 1 && recordedVersions[0] === QUARANTINE_VERSION) {
     const metadata = parseJson(await psql(quarantineMetadataSql()), "Database invalid OS identity quarantine contract");

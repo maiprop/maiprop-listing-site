@@ -88,7 +88,7 @@ describe("release safety inventory", () => {
         "Prove staging publish-public-catalogue cron liveness",
       ],
       production: [
-        "Prove recorded production database state",
+        "Replay exact manifest-bound production preparation migration",
         "Measure production catalogue bootstrap source quality",
         "Prepare manifest-bound production migration dry-run",
         "Verify production database",
@@ -175,7 +175,7 @@ describe("release safety inventory", () => {
     }
     const rawRoleMarker = "--command 'SET ROLE postgres'";
     const rawRoleOccurrences = [...text.matchAll(new RegExp(rawRoleMarker, "g"))];
-    expect(rawRoleOccurrences).toHaveLength(6);
+    expect(rawRoleOccurrences).toHaveLength(7);
     for (const occurrence of rawRoleOccurrences) {
       const missingSameSessionRole =
         text.slice(0, occurrence.index) + text.slice(occurrence.index + rawRoleMarker.length);
