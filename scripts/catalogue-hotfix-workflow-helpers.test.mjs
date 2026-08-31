@@ -750,6 +750,7 @@ done
 [ -n "$contract_copy" ]
 printf 'replay=%s contract=%s\ncall\n' "$replay_copy" "$contract_copy" > "$TEST_RECOVERY_INPUT.debug"
 if [ "$TEST_RECOVERY_OUTCOME" = "failure" ]; then
+  printf '%s\\n' 'ERROR: canceling statement due to statement timeout' >&2
   printf '%s\\n' "$TEST_RECOVERY_SECRET" >&2
   exit 25
 fi
@@ -798,6 +799,8 @@ fi
     assert.equal(readFileSync(`${inputPath}.debug`, "utf8").split("\n").filter((line) => line === "call").length, 1, "the wrapper never retries psql");
     assert.doesNotMatch(failed.stdout + failed.stderr, new RegExp(secret));
     assert.match(failed.stdout + failed.stderr, /Catalogue preparation recovery failed safely/);
+    assert.match(failed.stdout + failed.stderr, /statement_timeout/);
+    assert.doesNotMatch(failed.stdout + failed.stderr, /canceling statement/);
 
     writeFileSync(fakeNode, "#!/usr/bin/env bash\nexit 86\n");
     chmodSync(fakeNode, 0o700);
@@ -808,6 +811,55 @@ fi
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("preparation recovery snapshots live row accounting under lock without volatile constants", () => {
+  const recovery = readFileSync(
+    join(process.cwd(), "scripts/catalogue-hotfix-preparation-recovery.sh"),
+    "utf8",
+  );
+
+  assert.equal(
+    (recovery.match(/SET LOCAL statement_timeout = '90s';/g) ?? []).length,
+    2,
+    "both lock-protected recovery phases allow the measured production scan to finish",
+  );
+  assert.match(
+    recovery,
+    /CREATE TEMP TABLE pg_temp\.catalogue_recovery_snapshot ON COMMIT PRESERVE ROWS AS/,
+  );
+  assert.match(recovery, /initial_candidate_count/);
+  assert.match(recovery, /initial_candidate_digest/);
+  assert.match(recovery, /initial_quarantine_count/);
+  assert.match(recovery, /initial_live_marker_count/);
+  assert.match(recovery, /initial_candidate_count BETWEEN 1 AND 65536/);
+  assert.match(
+    recovery,
+    /initial_quarantine_count = initial_live_marker_count/,
+  );
+  assert.match(
+    recovery,
+    /snapshot\.initial_quarantine_count \+ snapshot\.initial_candidate_count/,
+  );
+  assert.match(
+    recovery,
+    /CREATE TEMP TABLE pg_temp\.catalogue_recovery_remaining_plan/,
+  );
+  assert.match(
+    recovery,
+    /FROM pg_temp\.catalogue_recovery_plan AS initial_plan[\s\S]*LEFT JOIN private\.os_auction_duplicate_quarantine AS quarantine/,
+    "post-state validation must bind the original locked candidate identities",
+  );
+  assert.doesNotMatch(
+    recovery,
+    /TRUNCATE pg_temp\.catalogue_recovery_plan/,
+    "the original locked candidate set must survive through post-state validation",
+  );
+  assert.doesNotMatch(
+    recovery,
+    /catalogue_recovery_plan\) = 600|os_auction_duplicate_quarantine\) = 47(?:123|723)|duplicate-quarantine'\]::text\[\]\) = 47(?:123|723)/,
+    "live ingestion counts must never be compiled into the recovery transaction",
+  );
 });
 
 test("linked project state is exact, passwordless, session-pooled, and manifest-bound", () => {

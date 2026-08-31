@@ -295,6 +295,16 @@ export function cataloguePerformanceHotfixWorkflowViolations({
   const databaseLoginScript = String(databaseLoginScriptText);
   const databaseLoginWrapper = String(databaseLoginWrapperText);
   const preparationRecoveryWrapper = String(preparationRecoveryWrapperText);
+  const preparationRecoveryAccountingMarkers = [
+    "CREATE TEMP TABLE pg_temp.catalogue_recovery_snapshot ON COMMIT PRESERVE ROWS AS",
+    "initial_candidate_count BETWEEN 1 AND 65536",
+    "initial_quarantine_count = initial_live_marker_count",
+    "CREATE TEMP TABLE pg_temp.catalogue_recovery_remaining_plan ON COMMIT DROP AS",
+    "FROM pg_temp.catalogue_recovery_plan AS initial_plan",
+    "snapshot.initial_quarantine_count + snapshot.initial_candidate_count",
+    "snapshot.initial_live_marker_count + snapshot.initial_candidate_count",
+    "(SELECT count(*) FROM pg_temp.catalogue_recovery_remaining_plan) = 0",
+  ];
   const canonicalDatabaseUrlWrapper = String(canonicalDatabaseUrlWrapperText);
   const linkedDatabasePush = String(linkedDatabasePushText);
   const sourceQualityProbe = String(sourceQualityProbeText);
@@ -693,6 +703,11 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     (preparationRecoveryWrapper.match(/\\i :recovery_replay_file/g) ?? []).length !== 1 ||
     (preparationRecoveryWrapper.match(/\\i :recovery_contract_file/g) ?? []).length !== 1 ||
     (preparationRecoveryWrapper.match(/FROM pg_temp\.catalogue_recovery_contracts/g) ?? []).length !== 2 ||
+    preparationRecoveryAccountingMarkers.some((marker) =>
+      preparationRecoveryWrapper.split(marker).length - 1 !== 1
+    ) ||
+    (preparationRecoveryWrapper.match(/SET LOCAL statement_timeout = '90s';/g) ?? []).length !== 2 ||
+    /TRUNCATE pg_temp\.catalogue_recovery_plan|catalogue_recovery_plan\) = 600|os_auction_duplicate_quarantine\) = 47(?:123|723)/.test(preparationRecoveryWrapper) ||
     !preparationRecoveryWrapper.includes("catalogue_recovery_history") ||
     !preparationRecoveryWrapper.includes("--set VERBOSITY=terse") ||
     /set -x|\btee\b|console\.|--retry/.test(preparationRecoveryWrapper) ||

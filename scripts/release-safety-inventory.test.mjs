@@ -81,6 +81,48 @@ describe("release safety inventory", () => {
     const recoveryContractsRead = "FROM pg_temp.catalogue_recovery_contracts";
     expect(violations({ preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(recoveryContractsRead, "") })).not.toEqual([]);
     expect(violations({ preparationRecoveryWrapperText: `${preparationRecoveryWrapperText}\n${recoveryContractsRead}` })).not.toEqual([]);
+    for (const accountingMarker of [
+      "CREATE TEMP TABLE pg_temp.catalogue_recovery_snapshot ON COMMIT PRESERVE ROWS AS",
+      "initial_candidate_count BETWEEN 1 AND 65536",
+      "initial_quarantine_count = initial_live_marker_count",
+      "CREATE TEMP TABLE pg_temp.catalogue_recovery_remaining_plan ON COMMIT DROP AS",
+      "FROM pg_temp.catalogue_recovery_plan AS initial_plan",
+      "snapshot.initial_quarantine_count + snapshot.initial_candidate_count",
+      "snapshot.initial_live_marker_count + snapshot.initial_candidate_count",
+      "(SELECT count(*) FROM pg_temp.catalogue_recovery_remaining_plan) = 0",
+    ]) {
+      expect(violations({
+        preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(accountingMarker, ""),
+      })).not.toEqual([]);
+      expect(violations({
+        preparationRecoveryWrapperText: `${preparationRecoveryWrapperText}\n${accountingMarker}`,
+      })).not.toEqual([]);
+    }
+    expect((preparationRecoveryWrapperText.match(/SET LOCAL statement_timeout = '90s';/g) ?? []).length).toBe(2);
+    expect(violations({
+      preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(
+        "SET LOCAL statement_timeout = '90s';",
+        "SET LOCAL statement_timeout = '30s';",
+      ),
+    })).not.toEqual([]);
+    expect(violations({
+      preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(
+        "initial_candidate_count BETWEEN 1 AND 65536",
+        "initial_candidate_count = 600",
+      ),
+    })).not.toEqual([]);
+    expect(violations({
+      preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(
+        "snapshot.initial_live_marker_count + snapshot.initial_candidate_count",
+        "snapshot.initial_live_marker_count - snapshot.initial_candidate_count",
+      ),
+    })).not.toEqual([]);
+    expect(violations({
+      preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(
+        "(SELECT count(*) FROM pg_temp.catalogue_recovery_remaining_plan) = 0",
+        "(SELECT count(*) FROM pg_temp.catalogue_recovery_remaining_plan) > 0",
+      ),
+    })).not.toEqual([]);
     const leakedAccessToken = structuredClone(parsed);
     leakedAccessToken.jobs.staging.env.SUPABASE_ACCESS_TOKEN = "${{ secrets.SUPABASE_ACCESS_TOKEN }}";
     expect(violations({ parsed: leakedAccessToken })).not.toEqual([]);
