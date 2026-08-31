@@ -692,6 +692,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     !preparationRecoveryWrapper.includes("md5(procedure.prosrc) = '532205de65120d3e34729a515d949f65'") ||
     (preparationRecoveryWrapper.match(/\\i :recovery_replay_file/g) ?? []).length !== 1 ||
     (preparationRecoveryWrapper.match(/\\i :recovery_contract_file/g) ?? []).length !== 1 ||
+    (preparationRecoveryWrapper.match(/FROM pg_temp\.catalogue_recovery_contracts/g) ?? []).length !== 2 ||
     !preparationRecoveryWrapper.includes("catalogue_recovery_history") ||
     !preparationRecoveryWrapper.includes("--set VERBOSITY=terse") ||
     /set -x|\btee\b|console\.|--retry/.test(preparationRecoveryWrapper) ||

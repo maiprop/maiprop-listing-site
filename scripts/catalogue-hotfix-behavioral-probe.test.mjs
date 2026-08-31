@@ -731,6 +731,14 @@ test("preparation recovery component validator rejects each scoped marker", () =
     const mutated = { ...components, [name]: components[name].replaceAll(marker, "MUTATED") };
     assert.throws(() => validatePreparationRecoveryContractComponents(mutated), /incomplete/i, name);
   }
+  assert.throws(
+    () => validatePreparationRecoveryContractComponents({
+      ...components,
+      qSchema: components.qSchema.replaceAll("privilege.grantee <> relation.relowner", "MUTATED"),
+    }),
+    /incomplete/i,
+    "Q table ACL is validated within qSchema rather than borrowed from P ACL",
+  );
 });
 
 test("recorded Q,P preparation rejection carries only deterministic aggregate diagnostics", async () => {

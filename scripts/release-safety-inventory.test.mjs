@@ -78,6 +78,9 @@ describe("release safety inventory", () => {
       expect(violations({ preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(include, "") })).not.toEqual([]);
       expect(violations({ preparationRecoveryWrapperText: `${preparationRecoveryWrapperText}\n${include}` })).not.toEqual([]);
     }
+    const recoveryContractsRead = "FROM pg_temp.catalogue_recovery_contracts";
+    expect(violations({ preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(recoveryContractsRead, "") })).not.toEqual([]);
+    expect(violations({ preparationRecoveryWrapperText: `${preparationRecoveryWrapperText}\n${recoveryContractsRead}` })).not.toEqual([]);
     const leakedAccessToken = structuredClone(parsed);
     leakedAccessToken.jobs.staging.env.SUPABASE_ACCESS_TOKEN = "${{ secrets.SUPABASE_ACCESS_TOKEN }}";
     expect(violations({ parsed: leakedAccessToken })).not.toEqual([]);

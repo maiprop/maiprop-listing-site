@@ -315,7 +315,7 @@ export function preparationRecoveryContractComponents() {
 
 export function validatePreparationRecoveryContractComponents(components) {
   const scopedMarkers = {
-    qSchema: ["attribute.attname = 'listing_id'", "attacl IS NOT NULL", "AND 3 = ("],
+    qSchema: ["attribute.attname = 'listing_id'", "attacl IS NOT NULL", "AND 3 = (", "privilege.grantee <> relation.relowner"],
     qLive: ["source:maiprop-os-invalid-identity-quarantine", "listing.tags IS DISTINCT FROM (", ") <> 1"],
     invalidSource: ["identity.provider_tag_count <> 1", "identity.provider_id !~"],
     qExtractor: ["532205de65120d3e34729a515d949f65", "procedure.proparallel = 's'"],
