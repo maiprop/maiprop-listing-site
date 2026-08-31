@@ -591,6 +591,79 @@ test("recorded Q,P preparation rejection carries only deterministic aggregate di
   );
 });
 
+test("preparation diagnostic notice rejects arbitrary and noncanonical caller data", () => {
+  const safeDiagnostic = {
+    schema_version: 1,
+    kind: "maiprop-duplicate-preparation-contract-failure",
+    failed_invariants: ["duplicate_preparation_remaining_candidates"],
+    evidence: {
+      duplicate_preparation_remaining_candidates: 4,
+      duplicate_preparation_contract: false,
+    },
+  };
+  assert.equal(
+    formatPreparationDiagnosticNotice({ preparationDiagnostic: safeDiagnostic }),
+    '::notice::{"schema_version":1,"kind":"maiprop-duplicate-preparation-contract-failure","failed_invariants":["duplicate_preparation_remaining_candidates"],"evidence":{"duplicate_preparation_contract":false,"duplicate_preparation_remaining_candidates":4}}',
+  );
+
+  const token = "sb_secret_never_emit";
+  const arrayWithHiddenSerializer = {
+    ...safeDiagnostic,
+    failed_invariants: [...safeDiagnostic.failed_invariants],
+  };
+  Object.defineProperty(arrayWithHiddenSerializer.failed_invariants, "toJSON", {
+    value: () => [token],
+  });
+  const evidenceWithHiddenSerializer = {
+    ...safeDiagnostic,
+    evidence: { ...safeDiagnostic.evidence },
+  };
+  Object.defineProperty(evidenceWithHiddenSerializer.evidence, "toJSON", {
+    value: () => ({ token }),
+  });
+  for (const preparationDiagnostic of [
+    { ...safeDiagnostic, token },
+    { ...safeDiagnostic, evidence: { ...safeDiagnostic.evidence, token } },
+    { ...safeDiagnostic, evidence: { ...safeDiagnostic.evidence, duplicate_preparation_remaining_candidates: "4" } },
+    { ...safeDiagnostic, failed_invariants: ["unknown_invariant"] },
+    { ...safeDiagnostic, failed_invariants: ["duplicate_preparation_remaining_candidates", "duplicate_preparation_generated_column"] },
+    { ...safeDiagnostic, failed_invariants: ["duplicate_preparation_remaining_candidates", "duplicate_preparation_remaining_candidates"] },
+    arrayWithHiddenSerializer,
+    evidenceWithHiddenSerializer,
+    token,
+  ]) {
+    const notice = formatPreparationDiagnosticNotice({ preparationDiagnostic });
+    assert.equal(notice, null);
+    assert.doesNotMatch(String(notice), /sb_secret_never_emit/);
+  }
+});
+
+test("recorded Q,P downstream contract drift emits only the generic preparation failure", async () => {
+  const secret = "provider-row-secret-must-not-log";
+  await assert.rejects(
+    runCatalogueBehavioralProbe(
+      { mode: "recorded", apiUrl, databaseUrl, key },
+      dependencies({
+        recordedVersions: [quarantineVersion, preparationVersion],
+        metadataPatch: {
+          invalid_identity_quarantine_live_contract: false,
+          provider_diagnostic: secret,
+        },
+      }),
+    ),
+    (error) => {
+      assert.equal(error.message, "Database duplicate identity preparation contract is incomplete.");
+      assert.deepEqual(error.preparationDiagnostic.failed_invariants, [
+        "duplicate_preparation_quarantine_contract",
+      ]);
+      const notice = formatPreparationDiagnosticNotice(error);
+      assert.match(notice, /^::notice::\{/);
+      assert.doesNotMatch(`${error.message}${notice}`, /provider-row-secret-must-not-log/);
+      return true;
+    },
+  );
+});
+
 test("Q,P preparation SQL exposes only fixed aggregate evidence and exact safety predicates", async () => {
   const deps = dependencies({ recordedVersions: [quarantineVersion, preparationVersion] });
   await runCatalogueBehavioralProbe({ mode: "recorded", apiUrl, databaseUrl, key }, deps);
