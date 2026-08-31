@@ -232,6 +232,7 @@ function preparationRecoveryExtractorContractSql() {
       CROSS JOIN LATERAL aclexplode(COALESCE(procedure.proacl, acldefault('f', procedure.proowner))) AS privilege
       WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
         AND privilege.privilege_type = 'EXECUTE'
+        AND NOT privilege.is_grantable
         AND pg_get_userbyid(privilege.grantee) = 'service_role'
     )
     AND NOT EXISTS (
@@ -239,7 +240,7 @@ function preparationRecoveryExtractorContractSql() {
       FROM pg_proc AS procedure
       CROSS JOIN LATERAL aclexplode(COALESCE(procedure.proacl, acldefault('f', procedure.proowner))) AS privilege
       WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
-        AND (privilege.privilege_type <> 'EXECUTE' OR privilege.grantee NOT IN (
+        AND (privilege.privilege_type <> 'EXECUTE' OR privilege.is_grantable OR privilege.grantee NOT IN (
           procedure.proowner,
           (SELECT oid FROM pg_roles WHERE rolname = 'service_role')
         ))
@@ -315,11 +316,11 @@ export function preparationRecoveryContractComponents() {
 
 export function validatePreparationRecoveryContractComponents(components) {
   const scopedMarkers = {
-    qSchema: ["attribute.attname = 'listing_id'", "attacl IS NOT NULL", "AND 3 = (", "privilege.grantee <> relation.relowner"],
+    qSchema: ["attribute.attname = 'listing_id'", "attacl IS NOT NULL", "AND 3 = (", "constraint_definition.condeferrable OR constraint_definition.condeferred", "privilege.grantee <> relation.relowner"],
     qLive: ["source:maiprop-os-invalid-identity-quarantine", "listing.tags IS DISTINCT FROM (", ") <> 1"],
     invalidSource: ["identity.provider_tag_count <> 1", "identity.provider_id !~"],
-    qExtractor: ["532205de65120d3e34729a515d949f65", "procedure.proparallel = 's'"],
-    pSchema: ["attribute.attname = 'duplicate_listing_id'", "attacl IS NOT NULL", "duplicate_listing_id <> canonical_listing_id"],
+    qExtractor: ["532205de65120d3e34729a515d949f65", "procedure.proparallel = 's'", "privilege.is_grantable"],
+    pSchema: ["attribute.attname = 'duplicate_listing_id'", "attacl IS NOT NULL", "constraint_definition.condeferrable OR constraint_definition.condeferred", "duplicate_listing_id <> canonical_listing_id"],
     pAcl: ["privilege.grantee <> relation.relowner"],
     pLive: ["source:maiprop-os-duplicate-quarantine", "listing.tags IS DISTINCT FROM CASE", ") <> 1"],
     bAbsent: ["idx_listings_os_auction_id_unique", "listings_os_auction_source_identity_valid"],
@@ -402,6 +403,11 @@ function duplicatePreparationLedgerContractSql() {
       SELECT count(*)
       FROM pg_constraint AS constraint_definition
       WHERE constraint_definition.conrelid = to_regclass('private.os_auction_duplicate_quarantine')
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND (constraint_definition.condeferrable OR constraint_definition.condeferred)
     )
     AND EXISTS (
       SELECT 1 FROM pg_attribute AS attribute
@@ -702,6 +708,11 @@ function invalidIdentityQuarantineContractSql() {
     AND 3 = (
       SELECT count(*) FROM pg_constraint AS constraint_definition
       WHERE constraint_definition.conrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND (constraint_definition.condeferrable OR constraint_definition.condeferred)
     )
     AND NOT EXISTS (
       SELECT 1 FROM pg_attribute AS attribute

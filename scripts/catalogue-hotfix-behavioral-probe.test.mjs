@@ -739,6 +739,9 @@ test("preparation recovery component validator rejects each scoped marker", () =
     /incomplete/i,
     "Q table ACL is validated within qSchema rather than borrowed from P ACL",
   );
+  for (const [name, marker] of [["qSchema", "constraint_definition.condeferrable OR constraint_definition.condeferred"], ["pSchema", "constraint_definition.condeferrable OR constraint_definition.condeferred"], ["qExtractor", "privilege.is_grantable"]]) {
+    assert.throws(() => validatePreparationRecoveryContractComponents({ ...components, [name]: components[name].replaceAll(marker, "MUTATED") }), /incomplete/i, marker);
+  }
 });
 
 test("recorded Q,P preparation rejection carries only deterministic aggregate diagnostics", async () => {
