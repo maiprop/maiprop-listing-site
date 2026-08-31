@@ -69,6 +69,7 @@ const PREPARATION_FAILED_INVARIANTS = new Set([
   "duplicate_preparation_quarantine_contract",
 ]);
 const PREPARATION_RECOVERY_EVIDENCE = Object.freeze({
+  preparation_recovery_extractor_contract: true,
   duplicate_preparation_contract: false,
   duplicate_preparation_ledger_contract: true,
   duplicate_preparation_acl_contract: true,
@@ -80,6 +81,21 @@ const PREPARATION_RECOVERY_EVIDENCE = Object.freeze({
   duplicate_preparation_active_promotion_rows: 0,
   duplicate_preparation_ledger_rows: 47123,
   duplicate_preparation_live_marker_rows: 47123,
+  duplicate_preparation_live_recoverable_contract: true,
+});
+const PREPARATION_RECOVERY_POSTSTATE_EVIDENCE = Object.freeze({
+  preparation_recovery_extractor_contract: true,
+  duplicate_preparation_contract: true,
+  duplicate_preparation_ledger_contract: true,
+  duplicate_preparation_acl_contract: true,
+  duplicate_preparation_generated_column: false,
+  duplicate_preparation_unique_index: false,
+  duplicate_preparation_source_check: false,
+  duplicate_preparation_remaining_candidates: 0,
+  duplicate_preparation_owner_guard_rows: 0,
+  duplicate_preparation_active_promotion_rows: 0,
+  duplicate_preparation_ledger_rows: 47723,
+  duplicate_preparation_live_marker_rows: 47723,
   duplicate_preparation_live_recoverable_contract: true,
 });
 
@@ -193,6 +209,110 @@ function quarantineMetadataFieldsSql(includeQuarantine) {
     WHERE COALESCE(listing.tags, '{}'::text[]) @> ARRAY['source:maiprop-os-invalid-identity-quarantine']::text[]
   ),
   'invalid_identity_quarantine_live_contract', ${invalidIdentityQuarantineLiveContractSql()}`;
+}
+
+function preparationRecoveryExtractorContractSql() {
+  return `
+    EXISTS (
+      SELECT 1
+      FROM pg_proc AS procedure
+      WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+        AND pg_get_userbyid(procedure.proowner) = 'postgres'
+        AND procedure.prokind = 'f'
+        AND procedure.prorettype = 'text'::regtype
+        AND NOT procedure.prosecdef
+        AND procedure.provolatile = 'i'
+        AND procedure.proparallel = 's'
+        AND COALESCE(procedure.proconfig, ARRAY[]::text[]) = ARRAY['search_path=""']::text[]
+        AND md5(procedure.prosrc) = '532205de65120d3e34729a515d949f65'
+    )
+    AND 1 = (
+      SELECT count(*)
+      FROM pg_proc AS procedure
+      CROSS JOIN LATERAL aclexplode(COALESCE(procedure.proacl, acldefault('f', procedure.proowner))) AS privilege
+      WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+        AND privilege.privilege_type = 'EXECUTE'
+        AND pg_get_userbyid(privilege.grantee) = 'service_role'
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_proc AS procedure
+      CROSS JOIN LATERAL aclexplode(COALESCE(procedure.proacl, acldefault('f', procedure.proowner))) AS privilege
+      WHERE procedure.oid = to_regprocedure('private.extract_os_auction_id(text[])')
+        AND (privilege.privilege_type <> 'EXECUTE' OR privilege.grantee NOT IN (
+          procedure.proowner,
+          (SELECT oid FROM pg_roles WHERE rolname = 'service_role')
+        ))
+    )`;
+}
+
+const PREPARATION_RECOVERY_SQL_REQUIRED_PREDICATES = Object.freeze([
+  "attribute.attname = 'listing_id'",
+  "privilege.grantee <> relation.relowner",
+  "pg_get_expr(definition.adbin, definition.adrelid) = 'statement_timestamp()'",
+  "'CHECK ((reason = ANY (ARRAY[''non_auction''::text",
+  "constraint_definition.confdeltype = 'r'",
+  "quarantine.previous_status = 'active'::public.listing_status",
+  "listing.tags IS DISTINCT FROM (",
+  "WHERE marker.value = 'source:maiprop-os-invalid-identity-quarantine'",
+  "NOT EXISTS (\n      SELECT 1\n      FROM public.listings AS listing\n      WHERE COALESCE(listing.tags, '{}'::text[]) @> ARRAY['source:maiprop-os-invalid-identity-quarantine']",
+  "allocation.ends_at > statement_timestamp()",
+  "source:maiprop-os-invalid-identity-quarantine",
+  "532205de65120d3e34729a515d949f65",
+  "procedure.proparallel = 's'",
+  "privilege.privilege_type = 'EXECUTE'",
+  "attribute.attname = 'duplicate_listing_id'",
+  "attribute.attname = 'canonical_listing_id'",
+  "attribute.attname = 'provider_id'",
+  "attribute.attname = 'previous_status'",
+  "attribute.attname = 'previous_tags'",
+  "'CHECK ((reason = ''duplicate_os_auction_identity''::text))'",
+  "'CHECK ((duplicate_listing_id <> canonical_listing_id))'",
+  "constraint_definition.confkey = ARRAY[",
+  "listing.tags IS DISTINCT FROM CASE",
+  "WHERE marker.value = 'source:maiprop-os-duplicate-quarantine'",
+  "AND NOT EXISTS (\n          SELECT 1\n          FROM private.os_auction_duplicate_quarantine AS quarantine",
+  "source:maiprop-os-duplicate-quarantine",
+  "to_regclass('public.idx_listings_os_auction_id_unique') IS NULL",
+  "listings_os_auction_source_identity_valid",
+]);
+
+export function validatePreparationRecoveryContractsSql(sql) {
+  const missingPredicate = typeof sql === "string"
+    ? PREPARATION_RECOVERY_SQL_REQUIRED_PREDICATES.find((predicate) => !sql.includes(predicate))
+    : null;
+  if (typeof sql !== "string" || missingPredicate) {
+    fail("Preparation recovery SQL contract is incomplete.");
+  }
+  return sql;
+}
+
+export function preparationRecoveryContractsSql() {
+  const noBridgeArtifacts = `
+    to_regclass('public.idx_listings_os_auction_id_unique') IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = 'public.listings'::regclass
+        AND attribute.attname = 'os_auction_id'
+        AND attribute.attnum > 0 AND NOT attribute.attisdropped
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = 'public.listings'::regclass
+        AND constraint_definition.conname = 'listings_os_auction_source_identity_valid'
+    )`;
+  return validatePreparationRecoveryContractsSql(`
+CREATE TEMP VIEW pg_temp.catalogue_recovery_contracts AS
+SELECT
+  COALESCE((${invalidIdentityQuarantineContractSql()}), false) AS exact_q_schema_contract,
+  COALESCE((${invalidIdentityQuarantineLiveContractSql()}), false) AS exact_q_live_contract,
+  (${eligibleInvalidOsSourceRowsSql()}) = 0 AS exact_invalid_source_contract,
+  COALESCE((${preparationRecoveryExtractorContractSql()}), false) AS exact_q_extractor_contract,
+  COALESCE((${duplicatePreparationLedgerContractSql()}), false) AS exact_p_ledger_contract,
+  COALESCE((${duplicatePreparationAclContractSql()}), false) AS exact_p_acl_contract,
+  COALESCE((${duplicatePreparationLiveRecoverableContractSql()}), false) AS exact_p_live_contract,
+  COALESCE((${noBridgeArtifacts}), false) AS exact_b_absent_contract;
+`);
 }
 
 function bridgeResidueMetadataFieldsSql() {
@@ -497,6 +617,7 @@ WITH preparation AS MATERIALIZED (
 SELECT json_build_object(
   'migration_versions', COALESCE((SELECT json_agg(version ORDER BY version) FROM supabase_migrations.schema_migrations WHERE version IN (${HOTFIX_VERSION_SQL})), '[]'::json),
   ${quarantineMetadataFieldsSql(true)},
+  'preparation_recovery_extractor_contract', COALESCE((${preparationRecoveryExtractorContractSql()}), false),
   'duplicate_preparation_contract',
     preparation.ledger_contract
     AND preparation.acl_contract
@@ -583,7 +704,7 @@ function invalidIdentityQuarantineContractSql() {
       FROM pg_class AS relation
       CROSS JOIN LATERAL aclexplode(COALESCE(relation.relacl, acldefault('r', relation.relowner))) AS privilege
       WHERE relation.oid = to_regclass('private.os_auction_invalid_identity_quarantine')
-        AND privilege.grantee IN (0, (SELECT oid FROM pg_roles WHERE rolname = 'anon'), (SELECT oid FROM pg_roles WHERE rolname = 'authenticated'), (SELECT oid FROM pg_roles WHERE rolname = 'service_role'))
+        AND privilege.grantee <> relation.relowner
     )
     AND EXISTS (
       SELECT 1
@@ -1061,9 +1182,9 @@ function validatePreparationRecoveryAttestation(metadata, recordedVersions) {
       evidence: { ...PREPARATION_RECOVERY_EVIDENCE },
     };
   }
-  try {
-    validatePreparationContract(metadata, recordedVersions);
-  } catch {
+  if (!Object.entries(PREPARATION_RECOVERY_POSTSTATE_EVIDENCE).every(
+    ([field, expected]) => metadata?.[field] === expected,
+  )) {
     fail("Database is not in the exact preparation recovery state.");
   }
   return {

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   formatPreparationDiagnosticNotice,
+  preparationRecoveryContractsSql,
   runCatalogueBehavioralProbe,
   runCatalogueSql,
+  validatePreparationRecoveryContractsSql,
 } from "./catalogue-hotfix-behavioral-probe.mjs";
 
 const apiUrl = "https://xsiehskfgeoqyazcgauv.supabase.co/";
@@ -112,6 +114,7 @@ function dependencies(overrides = {}) {
       anon_homepage_execute: recordedVersions.includes(secondVersion),
       auction_index: recordedVersions.includes(secondVersion),
       invalid_identity_quarantine_contract: recordedVersions.includes(quarantineVersion),
+      preparation_recovery_extractor_contract: recordedVersions.includes(quarantineVersion),
       eligible_invalid_os_source_rows: 0,
       invalid_identity_quarantine_rows: 1,
       invalid_identity_quarantine_marked_rows: 1,
@@ -142,6 +145,7 @@ function dependencies(overrides = {}) {
     if (query.includes("'os_identity_contract'")) return JSON.stringify({
       migration_versions: recordedVersions,
       invalid_identity_quarantine_contract: recordedVersions.includes(quarantineVersion),
+      preparation_recovery_extractor_contract: recordedVersions.includes(quarantineVersion),
       eligible_invalid_os_source_rows: 0,
       invalid_identity_quarantine_rows: 1,
       invalid_identity_quarantine_marked_rows: 1,
@@ -172,6 +176,7 @@ function dependencies(overrides = {}) {
     if (query.includes("'invalid_identity_quarantine_contract'")) return JSON.stringify({
       migration_versions: recordedVersions,
       invalid_identity_quarantine_contract: recordedVersions.includes(quarantineVersion),
+      preparation_recovery_extractor_contract: recordedVersions.includes(quarantineVersion),
       eligible_invalid_os_source_rows: 0,
       invalid_identity_quarantine_rows: 1,
       invalid_identity_quarantine_marked_rows: 1,
@@ -280,6 +285,7 @@ test("postapply SQL certifies the exact quarantine schema and deterministic live
   for (const exactMetadataPredicate of [
     "relation.relpersistence = 'p'",
     "pg_get_userbyid(relation.relowner) = 'postgres'",
+    "privilege.grantee <> relation.relowner",
     "NOT relation.relforcerowsecurity",
     "attribute.attname = 'listing_id'",
     "attribute.attname = 'previous_status'",
@@ -542,6 +548,7 @@ test("Q,P certification fails closed on preparation contract and parity drift", 
 
 test("preparation recovery attests only the exact recorded Q,P candidate state", async () => {
   const exactMetadata = {
+    preparation_recovery_extractor_contract: true,
     duplicate_preparation_contract: false,
     duplicate_preparation_ledger_contract: true,
     duplicate_preparation_acl_contract: true,
@@ -577,7 +584,24 @@ test("preparation recovery attests only the exact recorded Q,P candidate state",
   assert.deepEqual(
     await runCatalogueBehavioralProbe(
       { mode: "preparation-recovery", apiUrl, databaseUrl, key },
-      dependencies({ recordedVersions: [quarantineVersion, preparationVersion] }),
+      dependencies({
+        recordedVersions: [quarantineVersion, preparationVersion],
+        metadataPatch: {
+          preparation_recovery_extractor_contract: true,
+          duplicate_preparation_contract: true,
+          duplicate_preparation_ledger_contract: true,
+          duplicate_preparation_acl_contract: true,
+          duplicate_preparation_generated_column: false,
+          duplicate_preparation_unique_index: false,
+          duplicate_preparation_source_check: false,
+          duplicate_preparation_remaining_candidates: 0,
+          duplicate_preparation_owner_guard_rows: 0,
+          duplicate_preparation_active_promotion_rows: 0,
+          duplicate_preparation_ledger_rows: 47723,
+          duplicate_preparation_live_marker_rows: 47723,
+          duplicate_preparation_live_recoverable_contract: true,
+        },
+      }),
     ),
     {
       schema_version: 1,
@@ -588,8 +612,31 @@ test("preparation recovery attests only the exact recorded Q,P candidate state",
     "a clean Q,P rerun never selects a replay",
   );
 
+  await assert.rejects(
+    runCatalogueBehavioralProbe(
+      { mode: "preparation-recovery", apiUrl, databaseUrl, key },
+      dependencies({
+        recordedVersions: [quarantineVersion, preparationVersion],
+        metadataPatch: {
+          duplicate_preparation_contract: true,
+          duplicate_preparation_ledger_contract: true,
+          duplicate_preparation_acl_contract: true,
+          duplicate_preparation_remaining_candidates: 0,
+          duplicate_preparation_owner_guard_rows: 0,
+          duplicate_preparation_active_promotion_rows: 0,
+          duplicate_preparation_ledger_rows: 3,
+          duplicate_preparation_live_marker_rows: 3,
+          duplicate_preparation_live_recoverable_contract: true,
+        },
+      }),
+    ),
+    /exact preparation recovery state/i,
+    "arbitrary equal ledger/marker counts must not become a no-replay state",
+  );
+
   for (const metadataPatch of [
     { invalid_identity_quarantine_contract: false },
+    { preparation_recovery_extractor_contract: false },
     { duplicate_preparation_remaining_candidates: 599 },
     { duplicate_preparation_contract: true },
     { duplicate_preparation_ledger_contract: false },
@@ -621,6 +668,47 @@ test("preparation recovery attests only the exact recorded Q,P candidate state",
     ),
     /exact preparation recovery state/i,
   );
+});
+
+test("preparation recovery SQL rejects mutations of every exact precondition", () => {
+  const exactSql = preparationRecoveryContractsSql();
+  assert.doesNotThrow(() => validatePreparationRecoveryContractsSql(exactSql));
+  for (const predicate of [
+    "attribute.attname = 'listing_id'",
+    "privilege.grantee <> relation.relowner",
+    "pg_get_expr(definition.adbin, definition.adrelid) = 'statement_timestamp()'",
+    "'CHECK ((reason = ANY (ARRAY[''non_auction''::text",
+    "constraint_definition.confdeltype = 'r'",
+    "quarantine.previous_status = 'active'::public.listing_status",
+    "listing.tags IS DISTINCT FROM (",
+    "WHERE marker.value = 'source:maiprop-os-invalid-identity-quarantine'",
+    "NOT EXISTS (\n      SELECT 1\n      FROM public.listings AS listing\n      WHERE COALESCE(listing.tags, '{}'::text[]) @> ARRAY['source:maiprop-os-invalid-identity-quarantine']",
+    "allocation.ends_at > statement_timestamp()",
+    "source:maiprop-os-invalid-identity-quarantine",
+    "532205de65120d3e34729a515d949f65",
+    "procedure.proparallel = 's'",
+    "privilege.privilege_type = 'EXECUTE'",
+    "attribute.attname = 'duplicate_listing_id'",
+    "attribute.attname = 'canonical_listing_id'",
+    "attribute.attname = 'provider_id'",
+    "attribute.attname = 'previous_status'",
+    "attribute.attname = 'previous_tags'",
+    "'CHECK ((reason = ''duplicate_os_auction_identity''::text))'",
+    "'CHECK ((duplicate_listing_id <> canonical_listing_id))'",
+    "constraint_definition.confkey = ARRAY[",
+    "listing.tags IS DISTINCT FROM CASE",
+    "WHERE marker.value = 'source:maiprop-os-duplicate-quarantine'",
+    "AND NOT EXISTS (\n          SELECT 1\n          FROM private.os_auction_duplicate_quarantine AS quarantine",
+    "source:maiprop-os-duplicate-quarantine",
+    "to_regclass('public.idx_listings_os_auction_id_unique') IS NULL",
+    "listings_os_auction_source_identity_valid",
+  ]) {
+    assert.throws(
+      () => validatePreparationRecoveryContractsSql(exactSql.replaceAll(predicate, "MUTATED_PREDICATE")),
+      /preparation recovery SQL contract is incomplete/i,
+      predicate,
+    );
+  }
 });
 
 test("recorded Q,P preparation rejection carries only deterministic aggregate diagnostics", async () => {

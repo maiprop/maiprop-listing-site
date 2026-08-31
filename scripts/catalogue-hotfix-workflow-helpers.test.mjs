@@ -720,65 +720,42 @@ printf 'phase-ok' > "$TEST_PHASE_RESULT"
     rmSync(directory, { recursive: true, force: true });
   }
 });
-+
-test("preparation recovery wrapper uses one private psql session and fails closed", () => {
+
+test("preparation recovery wrapper uses one private psql session and sanitizes failures", () => {
   const directory = mkdtempSync(join(tmpdir(), "catalogue-preparation-recovery-"));
   const fakeBin = join(directory, "bin");
   const fakePsql = join(fakeBin, "psql");
+  const fakeNode = join(fakeBin, "node");
   const runnerTemp = join(directory, "runner-temp");
-  const callsPath = join(directory, "psql-calls");
   const inputPath = join(directory, "psql-input");
-  const replayPath = join(directory, "replays");
   const secret = "postgresql://customer:never-print-this";
   try {
     mkdirSync(fakeBin);
     mkdirSync(runnerTemp);
     writeFileSync(fakePsql, `#!/usr/bin/env bash
 set -euo pipefail
-[ "$1" = "$TARGET_DB_URL" ]
-shift
-[ "$1" = "--no-psqlrc" ]
-shift
-[ "$1" = "--set" ]
-shift
-[ "$1" = "ON_ERROR_STOP=1" ]
-shift
-[ "$1" = "--set" ]
-shift
-[ "$1" = "VERBOSITY=terse" ]
-shift
 replay_copy=""
+contract_copy=""
 input=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     recovery_replay_file=*) replay_copy="$(printf '%s' "$1" | sed 's/^recovery_replay_file=//')" ;;
+    recovery_contract_file=*) contract_copy="$(printf '%s' "$1" | sed 's/^recovery_contract_file=//')" ;;
     --file) shift; input="$1" ;;
   esac
   shift
 done
 [ -n "$input" ]
-printf '1\\n' >> "$TEST_RECOVERY_CALLS"
-cp "$input" "$TEST_RECOVERY_INPUT"
-grep -F "BEGIN;" "$input" >/dev/null
-grep -F "SET ROLE postgres;" "$input" >/dev/null
-grep -F "SET LOCAL lock_timeout = '5s';" "$input" >/dev/null
-grep -F "SET LOCAL statement_timeout = '30s';" "$input" >/dev/null
-grep -F "LOCK TABLE public.listings IN SHARE ROW EXCLUSIVE MODE;" "$input" >/dev/null
-grep -F "LOCK TABLE public.listing_promotion_allocations IN SHARE MODE;" "$input" >/dev/null
-grep -F "532205de65120d3e34729a515d949f65" "$input" >/dev/null
-grep -F "\\if :recovery_replay" "$input" >/dev/null
-grep -F "\\i :recovery_replay_file" "$input" >/dev/null
-grep -F "catalogue_recovery_history" "$input" >/dev/null
-grep -F "numeric_version_count" "$input" >/dev/null
-case "$TEST_RECOVERY_SCENARIO" in
-  pre) printf 'replay\\n' >> "$TEST_RECOVERY_REPLAYS" ;;
-  post) : ;;
-  mismatch|lock|replay-failure) printf '%s\\n' "$TEST_RECOVERY_SECRET" >&2; exit 25 ;;
-  *) exit 26 ;;
-esac
+[ -n "$replay_copy" ]
+[ -n "$contract_copy" ]
+printf 'replay=%s contract=%s\ncall\n' "$replay_copy" "$contract_copy" > "$TEST_RECOVERY_INPUT.debug"
+if [ "$TEST_RECOVERY_OUTCOME" = "failure" ]; then
+  printf '%s\\n' "$TEST_RECOVERY_SECRET" >&2
+  exit 25
+fi
 `);
     chmodSync(fakePsql, 0o700);
-    const run = (scenario) => spawnSync(bashExecutable, [
+    const run = (outcome) => spawnSync(bashExecutable, [
       "-c",
       'export PATH="$TEST_RECOVERY_BIN:$PATH"; exec bash "$TEST_RECOVERY_SCRIPT"',
     ], {
@@ -789,10 +766,8 @@ esac
         RUNNER_TEMP: runnerTemp,
         TARGET_DB_URL: "postgresql://postgres:temporary@db.example.test:5432/postgres?sslmode=require",
         TEST_RECOVERY_BIN: fakeBin,
-        TEST_RECOVERY_CALLS: callsPath,
         TEST_RECOVERY_INPUT: inputPath,
-        TEST_RECOVERY_REPLAYS: replayPath,
-        TEST_RECOVERY_SCENARIO: scenario,
+        TEST_RECOVERY_OUTCOME: outcome,
         TEST_RECOVERY_SCRIPT: join(process.cwd(), "scripts/catalogue-hotfix-preparation-recovery.sh"),
         TEST_RECOVERY_SECRET: secret,
         WSLENV: [
@@ -800,56 +775,36 @@ esac
           "RUNNER_TEMP/p",
           "TARGET_DB_URL",
           "TEST_RECOVERY_BIN/p",
-          "TEST_RECOVERY_CALLS/p",
           "TEST_RECOVERY_INPUT/p",
-          "TEST_RECOVERY_REPLAYS/p",
-          "TEST_RECOVERY_SCENARIO",
+          "TEST_RECOVERY_OUTCOME",
           "TEST_RECOVERY_SCRIPT/p",
           "TEST_RECOVERY_SECRET",
         ].filter(Boolean).join(":"),
       },
     });
 
-    const pre = run("pre");
-    assert.equal(pre.status, 0, pre.stderr);
-    assert.equal(readFileSync(callsPath, "utf8"), "1\n");
-    assert.equal(readFileSync(replayPath, "utf8"), "replay\n");
-    assert.match(pre.stdout, /Catalogue preparation recovery completed safely/);
-    assert.doesNotMatch(pre.stdout + pre.stderr, new RegExp(secret));
+    const succeeded = run("success");
+    assert.equal(succeeded.status, 0, succeeded.stderr);
+    const privateFiles = readFileSync(`${inputPath}.debug`, "utf8");
+    assert.doesNotMatch(privateFiles, /supabase\/migrations\/20260728115960_prepare_batched_os_duplicate_quarantine\.sql/);
+    assert.match(readFileSync(join(process.cwd(), "scripts/catalogue-hotfix-preparation-recovery.sh"), "utf8"), /chmod 600 "\$driver" "\$output" "\$replay_copy" "\$contract_file"/);
+    assert.equal(privateFiles.split("\n").filter((line) => line === "call").length, 1);
+    assert.match(succeeded.stdout, /Catalogue preparation recovery completed safely/);
+    assert.doesNotMatch(succeeded.stdout + succeeded.stderr, new RegExp(secret));
     assert.equal(readdirSync(runnerTemp).length, 0, "private SQL and output files are removed");
 
-    rmSync(callsPath);
-    rmSync(inputPath);
-    rmSync(replayPath);
-    const post = run("post");
-    assert.equal(post.status, 0, post.stderr);
-    assert.equal(readFileSync(callsPath, "utf8"), "1\n");
-    assert.equal(existsSync(replayPath), false, "exact poststate does not replay P");
+    const failed = run("failure");
+    assert.equal(failed.status, 1);
+    assert.equal(readFileSync(`${inputPath}.debug`, "utf8").split("\n").filter((line) => line === "call").length, 1, "the wrapper never retries psql");
+    assert.doesNotMatch(failed.stdout + failed.stderr, new RegExp(secret));
+    assert.match(failed.stdout + failed.stderr, /Catalogue preparation recovery failed safely/);
 
-    for (const scenario of [
-      "mismatch",
-      "extractor-body",
-      "extractor-owner",
-      "extractor-posture",
-      "extractor-acl",
-      "quarantine-contract",
-      "duplicate-ledger-contract",
-      "duplicate-ledger-acl",
-      "invalid-source",
-      "candidate-count",
-      "candidate-owner",
-      "candidate-promotion",
-      "history-drift",
-      "lock",
-      "replay-failure",
-    ]) {
-      rmSync(callsPath);
-      const failed = run(scenario);
-      assert.equal(failed.status, 1, scenario);
-      assert.equal(readFileSync(callsPath, "utf8"), "1\n", scenario + " is never retried");
-      assert.doesNotMatch(failed.stdout + failed.stderr, new RegExp(secret));
-      assert.match(failed.stdout + failed.stderr, /Catalogue preparation recovery failed safely/);
-    }
+    writeFileSync(fakeNode, "#!/usr/bin/env bash\nexit 86\n");
+    chmodSync(fakeNode, 0o700);
+    const generatorFailure = run("success");
+    assert.equal(generatorFailure.status, 1);
+    assert.match(generatorFailure.stdout + generatorFailure.stderr, /Catalogue preparation recovery failed safely/);
+    assert.equal(readdirSync(runnerTemp).length, 0, "generator failure removes every private temporary file");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

@@ -12,13 +12,22 @@ fi
 driver="$(mktemp "$RUNNER_TEMP/catalogue-preparation-recovery.XXXXXX.sql")"
 output="$(mktemp "$RUNNER_TEMP/catalogue-preparation-recovery.XXXXXX.out")"
 replay_copy="$(mktemp "$RUNNER_TEMP/catalogue-preparation-recovery.XXXXXX.sql")"
+contract_file="$(mktemp "$RUNNER_TEMP/catalogue-preparation-recovery.XXXXXX.contract.sql")"
+trap 'rm -f -- "$driver" "$output" "$replay_copy" "$contract_file"' EXIT
 cp -- "$replay_path" "$replay_copy"
-chmod 600 "$driver" "$output" "$replay_copy"
+chmod 600 "$driver" "$output" "$replay_copy" "$contract_file"
 if [ "$(sha256sum "$replay_copy" | awk '{print $1}')" != "$replay_sha256" ]; then
   echo "::error::Catalogue preparation recovery failed safely."
   exit 1
 fi
-trap 'rm -f -- "$driver" "$output" "$replay_copy"' EXIT
+if ! node --input-type=module --eval '
+  import { preparationRecoveryContractsSql } from "./scripts/catalogue-hotfix-behavioral-probe.mjs";
+  process.stdout.write(preparationRecoveryContractsSql());
+' > "$contract_file"; then
+  echo "::error::Catalogue preparation recovery failed safely."
+  exit 1
+fi
+chmod 600 "$contract_file"
 cat > "$driver" <<'RECOVERY_SQL'
 \set ON_ERROR_STOP on
 \set QUIET 1
@@ -29,9 +38,13 @@ SET LOCAL statement_timeout = '30s';
 LOCK TABLE public.listings IN SHARE ROW EXCLUSIVE MODE;
 LOCK TABLE public.listing_promotion_allocations IN SHARE MODE;
 CREATE TEMP TABLE pg_temp.catalogue_recovery_history ON COMMIT PRESERVE ROWS AS
-SELECT count(*)::bigint AS numeric_version_count,
-  md5(COALESCE(string_agg(version, ',' ORDER BY version), '')) AS digest
-FROM supabase_migrations.schema_migrations WHERE version ~ '^[0-9]+$';
+SELECT count(*)::bigint AS history_row_count,
+  md5(COALESCE(string_agg(
+    row_to_json(migration_row)::text,
+    E'\n' ORDER BY row_to_json(migration_row)::text
+  ), '')) AS history_digest
+FROM supabase_migrations.schema_migrations AS migration_row;
+\i :recovery_contract_file
 CREATE TEMP TABLE pg_temp.catalogue_recovery_plan ON COMMIT PRESERVE ROWS AS
 WITH candidates AS MATERIALIZED (
   SELECT listing.id, listing.owner_id, private.extract_os_auction_id(listing.tags) AS provider_id,
@@ -44,6 +57,16 @@ WITH candidates AS MATERIALIZED (
   FROM candidates AS candidate WHERE candidate.provider_id IS NOT NULL
 ) SELECT id AS duplicate_listing_id, owner_id FROM ranked WHERE identity_rank > 1;
 SELECT CASE WHEN (
+  (SELECT exact_q_schema_contract
+    AND exact_q_live_contract
+    AND exact_invalid_source_contract
+    AND exact_q_extractor_contract
+    AND exact_p_ledger_contract
+    AND exact_p_acl_contract
+    AND exact_p_live_contract
+    AND exact_b_absent_contract
+   FROM pg_temp.catalogue_recovery_contracts)
+  AND
   (SELECT COALESCE(json_agg(version ORDER BY version), '[]'::json)::text
    FROM supabase_migrations.schema_migrations
    WHERE version IN ('20260728115959','20260728115960','20260728120000','20260728121500','20260728123058','20260729120405'))
@@ -132,6 +155,16 @@ WITH candidates AS MATERIALIZED (
 DO $$
 BEGIN
   IF NOT (
+    (SELECT exact_q_schema_contract
+      AND exact_q_live_contract
+      AND exact_invalid_source_contract
+      AND exact_q_extractor_contract
+      AND exact_p_ledger_contract
+      AND exact_p_acl_contract
+      AND exact_p_live_contract
+      AND exact_b_absent_contract
+     FROM pg_temp.catalogue_recovery_contracts)
+    AND
     (SELECT COALESCE(json_agg(version ORDER BY version), '[]'::json)::text FROM supabase_migrations.schema_migrations
       WHERE version IN ('20260728115959','20260728115960','20260728120000','20260728121500','20260728123058','20260729120405'))
       = '["20260728115959", "20260728115960"]'
@@ -213,12 +246,15 @@ BEGIN
     AND NOT EXISTS (SELECT 1 FROM private.os_auction_duplicate_quarantine AS quarantine
       JOIN public.listing_promotion_allocations AS allocation ON allocation.listing_id = quarantine.duplicate_listing_id
       WHERE allocation.ends_at > statement_timestamp() AND allocation.revoked_at IS NULL)
-    AND (SELECT numeric_version_count FROM pg_temp.catalogue_recovery_history) = (
-      SELECT count(*)::bigint FROM supabase_migrations.schema_migrations WHERE version ~ '^[0-9]+$'
+    AND (SELECT history_row_count FROM pg_temp.catalogue_recovery_history) = (
+      SELECT count(*)::bigint FROM supabase_migrations.schema_migrations
     )
-    AND (SELECT digest FROM pg_temp.catalogue_recovery_history) = (
-      SELECT md5(COALESCE(string_agg(version, ',' ORDER BY version), ''))
-      FROM supabase_migrations.schema_migrations WHERE version ~ '^[0-9]+$'
+    AND (SELECT history_digest FROM pg_temp.catalogue_recovery_history) = (
+      SELECT md5(COALESCE(string_agg(
+        row_to_json(migration_row)::text,
+        E'\n' ORDER BY row_to_json(migration_row)::text
+      ), ''))
+      FROM supabase_migrations.schema_migrations AS migration_row
     )
   ) THEN RAISE EXCEPTION 'catalogue_preparation_recovery_poststate_invalid' USING ERRCODE = 'P0001';
   END IF;
@@ -226,7 +262,7 @@ END;
 $$;
 COMMIT;
 RECOVERY_SQL
-if ! psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --set VERBOSITY=terse --set "recovery_replay_file=$replay_copy" --file "$driver" >"$output" 2>&1; then
+if ! psql "$TARGET_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --set VERBOSITY=terse --set "recovery_replay_file=$replay_copy" --set "recovery_contract_file=$contract_file" --file "$driver" >"$output" 2>&1; then
   echo "::error::Catalogue preparation recovery failed safely."
   exit 1
 fi
