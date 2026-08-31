@@ -1045,6 +1045,7 @@ jobs:
           RELEASE_SHA: ${{ inputs.release_sha }}
           SOURCE_TREE: ${{ steps.source.outputs.source_tree }}
           SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+          RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
         run: |
           set -euo pipefail
           node scripts/verify-release-artifact-binding.mjs \
@@ -1063,6 +1064,7 @@ jobs:
             --run-attempt 1 \
             --actor "$GITHUB_ACTOR" \
             --triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+            --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
             > candidate-verification.json
           jq -e '.ok == true' candidate-verification.json > /dev/null
           node scripts/production-release-artifact.mjs verify \
