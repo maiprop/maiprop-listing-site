@@ -301,17 +301,42 @@ export function preparationRecoveryContractsSql() {
       WHERE constraint_definition.conrelid = 'public.listings'::regclass
         AND constraint_definition.conname = 'listings_os_auction_source_identity_valid'
     )`;
+  const components = {
+    qSchema: invalidIdentityQuarantineContractSql(),
+    qLive: invalidIdentityQuarantineLiveContractSql(),
+    invalidSource: eligibleInvalidOsSourceRowsSql(),
+    qExtractor: preparationRecoveryExtractorContractSql(),
+    pSchema: duplicatePreparationLedgerContractSql(),
+    pAcl: duplicatePreparationAclContractSql(),
+    pLive: duplicatePreparationLiveRecoverableContractSql(),
+    bAbsent: noBridgeArtifacts,
+  };
+  const scopedMarkers = {
+    qSchema: ["attribute.attname = 'listing_id'", "attacl IS NOT NULL", "AND 3 = ("],
+    qLive: ["source:maiprop-os-invalid-identity-quarantine", "listing.tags IS DISTINCT FROM (", ") <> 1"],
+    invalidSource: ["identity.provider_tag_count <> 1", "identity.provider_id !~"],
+    qExtractor: ["532205de65120d3e34729a515d949f65", "procedure.proparallel = 's'"],
+    pSchema: ["attribute.attname = 'duplicate_listing_id'", "attacl IS NOT NULL", "duplicate_listing_id <> canonical_listing_id"],
+    pAcl: ["privilege.grantee <> relation.relowner"],
+    pLive: ["source:maiprop-os-duplicate-quarantine", "listing.tags IS DISTINCT FROM CASE", ") <> 1"],
+    bAbsent: ["idx_listings_os_auction_id_unique", "listings_os_auction_source_identity_valid"],
+  };
+  for (const [name, markers] of Object.entries(scopedMarkers)) {
+    if (markers.some((marker) => !components[name].includes(marker))) {
+      fail("Preparation recovery SQL contract is incomplete.");
+    }
+  }
   return validatePreparationRecoveryContractsSql(`
 CREATE TEMP VIEW pg_temp.catalogue_recovery_contracts AS
 SELECT
-  COALESCE((${invalidIdentityQuarantineContractSql()}), false) AS exact_q_schema_contract,
-  COALESCE((${invalidIdentityQuarantineLiveContractSql()}), false) AS exact_q_live_contract,
-  (${eligibleInvalidOsSourceRowsSql()}) = 0 AS exact_invalid_source_contract,
-  COALESCE((${preparationRecoveryExtractorContractSql()}), false) AS exact_q_extractor_contract,
-  COALESCE((${duplicatePreparationLedgerContractSql()}), false) AS exact_p_ledger_contract,
-  COALESCE((${duplicatePreparationAclContractSql()}), false) AS exact_p_acl_contract,
-  COALESCE((${duplicatePreparationLiveRecoverableContractSql()}), false) AS exact_p_live_contract,
-  COALESCE((${noBridgeArtifacts}), false) AS exact_b_absent_contract;
+  COALESCE((${components.qSchema}), false) AS exact_q_schema_contract,
+  COALESCE((${components.qLive}), false) AS exact_q_live_contract,
+  (${components.invalidSource}) = 0 AS exact_invalid_source_contract,
+  COALESCE((${components.qExtractor}), false) AS exact_q_extractor_contract,
+  COALESCE((${components.pSchema}), false) AS exact_p_ledger_contract,
+  COALESCE((${components.pAcl}), false) AS exact_p_acl_contract,
+  COALESCE((${components.pLive}), false) AS exact_p_live_contract,
+  COALESCE((${components.bAbsent}), false) AS exact_b_absent_contract;
 `);
 }
 
@@ -359,6 +384,11 @@ function duplicatePreparationLedgerContractSql() {
       WHERE attribute.attrelid = to_regclass('private.os_auction_duplicate_quarantine')
         AND attribute.attnum > 0
         AND NOT attribute.attisdropped
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_duplicate_quarantine')
+        AND attribute.attnum > 0 AND NOT attribute.attisdropped AND attribute.attacl IS NOT NULL
     )
     AND 5 = (
       SELECT count(*)
@@ -660,6 +690,15 @@ function invalidIdentityQuarantineContractSql() {
       WHERE attribute.attrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
         AND attribute.attnum > 0
         AND NOT attribute.attisdropped
+    )
+    AND 3 = (
+      SELECT count(*) FROM pg_constraint AS constraint_definition
+      WHERE constraint_definition.conrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_attribute AS attribute
+      WHERE attribute.attrelid = to_regclass('private.os_auction_invalid_identity_quarantine')
+        AND attribute.attnum > 0 AND NOT attribute.attisdropped AND attribute.attacl IS NOT NULL
     )
     AND EXISTS (
       SELECT 1 FROM pg_attribute AS attribute

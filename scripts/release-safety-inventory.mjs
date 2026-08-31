@@ -690,7 +690,8 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     !preparationRecoveryWrapper.includes("LOCK TABLE public.listings IN SHARE ROW EXCLUSIVE MODE;") ||
     !preparationRecoveryWrapper.includes("LOCK TABLE public.listing_promotion_allocations IN SHARE MODE;") ||
     !preparationRecoveryWrapper.includes("md5(procedure.prosrc) = '532205de65120d3e34729a515d949f65'") ||
-    !preparationRecoveryWrapper.includes("\\i :recovery_replay_file") ||
+    (preparationRecoveryWrapper.match(/\\i :recovery_replay_file/g) ?? []).length !== 1 ||
+    (preparationRecoveryWrapper.match(/\\i :recovery_contract_file/g) ?? []).length !== 1 ||
     !preparationRecoveryWrapper.includes("catalogue_recovery_history") ||
     !preparationRecoveryWrapper.includes("--set VERBOSITY=terse") ||
     /set -x|\btee\b|console\.|--retry/.test(preparationRecoveryWrapper) ||

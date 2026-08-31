@@ -286,6 +286,8 @@ test("postapply SQL certifies the exact quarantine schema and deterministic live
     "relation.relpersistence = 'p'",
     "pg_get_userbyid(relation.relowner) = 'postgres'",
     "privilege.grantee <> relation.relowner",
+    "attribute.attacl IS NOT NULL",
+    "AND 3 = (",
     "NOT relation.relforcerowsecurity",
     "attribute.attname = 'listing_id'",
     "attribute.attname = 'previous_status'",
