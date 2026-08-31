@@ -1095,6 +1095,111 @@ jobs:
           rollback_id="$(jq -er '.result.canonical_deployment.id' production-before.json)"
           echo "rollback_id=$rollback_id" >> "$GITHUB_OUTPUT"
 
+      - name: Provision production runtime bindings
+        env:
+          CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}
+          CF_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_PROJECT_ID: ${{ vars.PRODUCTION_SUPABASE_PROJECT_ID }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          TURN_KEY_ID: ${{ secrets.CLOUDFLARE_TURN_KEY_ID }}
+          TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_TURN_API_TOKEN }}
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ vars.VITE_STRIPE_PUBLISHABLE_KEY }}
+          VITE_STRIPE_RUNTIME_MODE: ${{ vars.VITE_STRIPE_RUNTIME_MODE }}
+          VITE_BILLING_MODE: ${{ vars.VITE_BILLING_MODE }}
+          VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY }}
+          VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL }}
+          VITE_STRIPE_PRICE_AGENT_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_AGENT_MONTHLY }}
+          VITE_STRIPE_PRICE_AGENT_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_AGENT_ANNUAL }}
+          VITE_STRIPE_PRICE_DEVELOPER_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_DEVELOPER_MONTHLY }}
+          VITE_STRIPE_PRICE_DEVELOPER_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_DEVELOPER_ANNUAL }}
+          VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY: ${{ vars.VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY }}
+          VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL: ${{ vars.VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL }}
+        run: |
+          set -euo pipefail
+          for value in \
+            "$CF_READ_TOKEN" \
+            "$CF_EDIT_TOKEN" \
+            "$CF_ACCOUNT_ID" \
+            "$SUPABASE_URL" \
+            "$SUPABASE_PROJECT_ID" \
+            "$SUPABASE_PUBLISHABLE_KEY" \
+            "$TURN_KEY_ID" \
+            "$TURN_API_TOKEN"; do
+            if [ -z "$value" ]; then
+              echo "::error::A required production runtime binding is unavailable."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+          done
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/maiprop-listing-site" \
+            > production-runtime-before.json
+          plain_text_json="$(
+            jq -cn \
+              --arg url "$SUPABASE_URL" \
+              --arg project "$SUPABASE_PROJECT_ID" \
+              --arg key "$SUPABASE_PUBLISHABLE_KEY" \
+              --arg stripe_key "$VITE_STRIPE_PUBLISHABLE_KEY" \
+              --arg stripe_mode "$VITE_STRIPE_RUNTIME_MODE" \
+              --arg billing_mode "$VITE_BILLING_MODE" \
+              --arg participant_monthly "$VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY" \
+              --arg participant_annual "$VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL" \
+              --arg agent_monthly "$VITE_STRIPE_PRICE_AGENT_MONTHLY" \
+              --arg agent_annual "$VITE_STRIPE_PRICE_AGENT_ANNUAL" \
+              --arg developer_monthly "$VITE_STRIPE_PRICE_DEVELOPER_MONTHLY" \
+              --arg developer_annual "$VITE_STRIPE_PRICE_DEVELOPER_ANNUAL" \
+              --arg professional_monthly "$VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY" \
+              --arg professional_annual "$VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL" '{
+                SUPABASE_URL: $url,
+                SUPABASE_PROJECT_ID: $project,
+                SUPABASE_PUBLISHABLE_KEY: $key,
+                VITE_SUPABASE_URL: $url,
+                VITE_SUPABASE_PROJECT_ID: $project,
+                VITE_SUPABASE_PUBLISHABLE_KEY: $key,
+                VITE_APP_URL: "https://portal.maiprop.co",
+                VITE_PUBLIC_API_ORIGIN: "https://portal.maiprop.co",
+                VITE_APP_ENVIRONMENT: "production",
+                MAIPROP_TURN_TTL_SECONDS: "21600",
+                VITE_STRIPE_PUBLISHABLE_KEY: $stripe_key,
+                VITE_STRIPE_RUNTIME_MODE: $stripe_mode,
+                VITE_BILLING_MODE: $billing_mode,
+                VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY: $participant_monthly,
+                VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL: $participant_annual,
+                VITE_STRIPE_PRICE_AGENT_MONTHLY: $agent_monthly,
+                VITE_STRIPE_PRICE_AGENT_ANNUAL: $agent_annual,
+                VITE_STRIPE_PRICE_DEVELOPER_MONTHLY: $developer_monthly,
+                VITE_STRIPE_PRICE_DEVELOPER_ANNUAL: $developer_annual,
+                VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY: $professional_monthly,
+                VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL: $professional_annual
+              }'
+          )"
+          PAGES_RUNTIME_PLAIN_TEXT_JSON="$plain_text_json" \
+          PAGES_RUNTIME_SUPABASE_SERVICE_ROLE_KEY='' \
+          PAGES_RUNTIME_TURN_KEY_ID="$TURN_KEY_ID" \
+          PAGES_RUNTIME_TURN_API_TOKEN="$TURN_API_TOKEN" \
+            node scripts/build-cloudflare-pages-runtime-patch.mjs \
+              --target production \
+              --current production-runtime-before.json \
+              --out production-runtime-patch.json \
+              --evidence production-runtime-plan.json
+          unset plain_text_json
+          curl -fsS --request PATCH \
+            -H "Authorization: Bearer $CF_EDIT_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @production-runtime-patch.json \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/maiprop-listing-site" \
+            > production-runtime-response.json
+          jq -e '
+            .success == true and
+            .result.name == "maiprop-listing-site" and
+            .result.deployment_configs.production.env_vars.SUPABASE_URL.type == "plain_text" and
+            .result.deployment_configs.production.env_vars.SUPABASE_PROJECT_ID.type == "plain_text" and
+            .result.deployment_configs.production.env_vars.SUPABASE_PUBLISHABLE_KEY.type == "plain_text"
+          ' production-runtime-response.json > /dev/null
+
       - name: Deploy immutable candidate to production
         id: deploy
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
