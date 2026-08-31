@@ -74,6 +74,10 @@ describe("release safety inventory", () => {
     });
 
     expect(violations()).toEqual([]);
+    for (const include of ["\\i :recovery_contract_file", "\\i :recovery_replay_file"]) {
+      expect(violations({ preparationRecoveryWrapperText: preparationRecoveryWrapperText.replace(include, "") })).not.toEqual([]);
+      expect(violations({ preparationRecoveryWrapperText: `${preparationRecoveryWrapperText}\n${include}` })).not.toEqual([]);
+    }
     const leakedAccessToken = structuredClone(parsed);
     leakedAccessToken.jobs.staging.env.SUPABASE_ACCESS_TOKEN = "${{ secrets.SUPABASE_ACCESS_TOKEN }}";
     expect(violations({ parsed: leakedAccessToken })).not.toEqual([]);

@@ -287,7 +287,7 @@ export function validatePreparationRecoveryContractsSql(sql) {
   return sql;
 }
 
-export function preparationRecoveryContractsSql() {
+export function preparationRecoveryContractComponents() {
   const noBridgeArtifacts = `
     to_regclass('public.idx_listings_os_auction_id_unique') IS NULL
     AND NOT EXISTS (
@@ -301,7 +301,7 @@ export function preparationRecoveryContractsSql() {
       WHERE constraint_definition.conrelid = 'public.listings'::regclass
         AND constraint_definition.conname = 'listings_os_auction_source_identity_valid'
     )`;
-  const components = {
+  return {
     qSchema: invalidIdentityQuarantineContractSql(),
     qLive: invalidIdentityQuarantineLiveContractSql(),
     invalidSource: eligibleInvalidOsSourceRowsSql(),
@@ -311,6 +311,9 @@ export function preparationRecoveryContractsSql() {
     pLive: duplicatePreparationLiveRecoverableContractSql(),
     bAbsent: noBridgeArtifacts,
   };
+}
+
+export function validatePreparationRecoveryContractComponents(components) {
   const scopedMarkers = {
     qSchema: ["attribute.attname = 'listing_id'", "attacl IS NOT NULL", "AND 3 = ("],
     qLive: ["source:maiprop-os-invalid-identity-quarantine", "listing.tags IS DISTINCT FROM (", ") <> 1"],
@@ -322,10 +325,15 @@ export function preparationRecoveryContractsSql() {
     bAbsent: ["idx_listings_os_auction_id_unique", "listings_os_auction_source_identity_valid"],
   };
   for (const [name, markers] of Object.entries(scopedMarkers)) {
-    if (markers.some((marker) => !components[name].includes(marker))) {
+    if (typeof components?.[name] !== "string" || markers.some((marker) => !components[name].includes(marker))) {
       fail("Preparation recovery SQL contract is incomplete.");
     }
   }
+  return components;
+}
+
+export function preparationRecoveryContractsSql() {
+  const components = validatePreparationRecoveryContractComponents(preparationRecoveryContractComponents());
   return validatePreparationRecoveryContractsSql(`
 CREATE TEMP VIEW pg_temp.catalogue_recovery_contracts AS
 SELECT

@@ -3,9 +3,11 @@ import test from "node:test";
 import {
   formatPreparationDiagnosticNotice,
   preparationRecoveryContractsSql,
+  preparationRecoveryContractComponents,
   runCatalogueBehavioralProbe,
   runCatalogueSql,
   validatePreparationRecoveryContractsSql,
+  validatePreparationRecoveryContractComponents,
 } from "./catalogue-hotfix-behavioral-probe.mjs";
 
 const apiUrl = "https://xsiehskfgeoqyazcgauv.supabase.co/";
@@ -710,6 +712,24 @@ test("preparation recovery SQL rejects mutations of every exact precondition", (
       /preparation recovery SQL contract is incomplete/i,
       predicate,
     );
+  }
+});
+
+test("preparation recovery component validator rejects each scoped marker", () => {
+  const components = preparationRecoveryContractComponents();
+  assert.doesNotThrow(() => validatePreparationRecoveryContractComponents(components));
+  for (const [name, marker] of Object.entries({
+    qSchema: "attacl IS NOT NULL",
+    qLive: "source:maiprop-os-invalid-identity-quarantine",
+    invalidSource: "identity.provider_tag_count <> 1",
+    qExtractor: "532205de65120d3e34729a515d949f65",
+    pSchema: "attacl IS NOT NULL",
+    pAcl: "privilege.grantee <> relation.relowner",
+    pLive: "source:maiprop-os-duplicate-quarantine",
+    bAbsent: "idx_listings_os_auction_id_unique",
+  })) {
+    const mutated = { ...components, [name]: components[name].replace(marker, "MUTATED") };
+    assert.throws(() => validatePreparationRecoveryContractComponents(mutated), /incomplete/i, name);
   }
 });
 
