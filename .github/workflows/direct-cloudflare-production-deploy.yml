@@ -1137,6 +1137,9 @@ jobs:
             -H "Authorization: Bearer $CF_READ_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/maiprop-listing-site" \
             > production-runtime-before.json
+          jq '.result.deployment_configs.production.env_vars //= {}' \
+            production-runtime-before.json \
+            > production-runtime-normalized.json
           plain_text_json="$(
             jq -cn \
               --arg url "$SUPABASE_URL" \
@@ -1182,7 +1185,7 @@ jobs:
           PAGES_RUNTIME_TURN_API_TOKEN="$TURN_API_TOKEN" \
             node scripts/build-cloudflare-pages-runtime-patch.mjs \
               --target production \
-              --current production-runtime-before.json \
+              --current production-runtime-normalized.json \
               --out production-runtime-patch.json \
               --evidence production-runtime-plan.json
           unset plain_text_json
