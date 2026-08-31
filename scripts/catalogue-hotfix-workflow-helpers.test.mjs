@@ -15,6 +15,7 @@ import {
   buildReleaseSummary,
   classifyLinkedPushFailure,
   inspectPublicListingBody,
+  isExactPreCommitDeadlockRetryable,
   parseCacheState,
   selectCatalogueProbeContext,
   summarizeLatencySamples,
@@ -758,6 +759,8 @@ test("linked migration push exposes the management token only to the exact offic
   const fakeCli = join(workspace, "node_modules", ".bin", "supabase");
   const work = join(runnerTemp, "catalogue-hotfix-staging");
   const invocationPath = join(directory, "invocation");
+  const pushAttemptsPath = join(directory, "push-attempts");
+  const pushOutcomesPath = join(directory, "push-outcomes");
   const sentinelPath = join(directory, "sentinel");
   const token = "management-token-must-not-log";
   try {
@@ -789,13 +792,31 @@ case "$4" in
     [ "$8" = "$TEST_EXPECTED_MODE" ]
     [ "$(cat "$TEST_WORK/supabase/.temp/project-ref")" = "$TARGET_PROJECT_REF" ]
     printf 'push %s\n' "$*" >> "$TEST_INVOCATION"
-    if [ "\${TEST_PUSH_FAILURE:-false}" = true ]; then
-      printf 'Applying migration 20260728123058_materialize_public_catalogue_snapshots.sql...\n'
-      printf 'ERROR: public_catalogue_duplicate_os_tag (SQLSTATE P0001)\n'
-      printf 'At statement: 12\n%s\n' "$TEST_PROVIDER_SECRET"
-      exit 1
-    fi
-    printf 'Would push manifest migration\n'
+    attempt="$(( $(<"$TEST_PUSH_ATTEMPTS") + 1 ))"
+    printf '%s' "$attempt" > "$TEST_PUSH_ATTEMPTS"
+    outcome="$(sed -n "\${attempt}p" "$TEST_PUSH_OUTCOMES_FILE")"
+    case "\${outcome:-success}" in
+      success) printf 'Would push manifest migration\n' ;;
+      duplicate)
+        printf 'Applying migration 20260728123058_materialize_public_catalogue_snapshots.sql...\n'
+        printf 'ERROR: public_catalogue_duplicate_os_tag (SQLSTATE P0001)\n'
+        printf 'At statement: 12\n%s\n' "$TEST_PROVIDER_SECRET"
+        exit 1
+        ;;
+      exact-deadlock)
+        printf 'Applying migration 20260728120000_canonicalize_os_auction_identity.sql...\n'
+        printf 'ERROR: deadlock detected (SQLSTATE 40P01)\n'
+        printf 'At statement: 21\n%s\n' "$TEST_PROVIDER_SECRET"
+        exit 1
+        ;;
+      other-deadlock)
+        printf 'Applying migration 20260728120000_canonicalize_os_auction_identity.sql...\n'
+        printf 'ERROR: deadlock detected (SQLSTATE 40P01)\n'
+        printf 'At statement: 22\n%s\n' "$TEST_PROVIDER_SECRET"
+        exit 1
+        ;;
+      *) exit 1 ;;
+    esac
     ;;
   *) exit 1 ;;
 esac
@@ -812,15 +833,27 @@ case "$2" in
     printf 'token-absent\n' >> "$TEST_SENTINEL"
     ;;
   classify-push-failure)
-    grep -q '^Applying migration 20260728123058_materialize_public_catalogue_snapshots.sql\.\.\.$' "$3"
-    grep -q '^ERROR: public_catalogue_duplicate_os_tag (SQLSTATE P0001)$' "$3"
     grep -q "$TEST_PROVIDER_SECRET" "$3"
-    printf '%s\n' '{"schema_version":1,"kind":"maiprop-linked-push-failure","migration_filename":"20260728123058_materialize_public_catalogue_snapshots.sql","migration_version":"20260728123058","sqlstate":"P0001","category":"catalogue-duplicate-os-tag","message":"Catalogue bootstrap rejected duplicate OS auction tags."}'
+    if grep -q '^At statement: 21$' "$3"; then
+      printf '%s\n' '{"schema_version":1,"kind":"maiprop-linked-push-failure","migration_filename":"20260728120000_canonicalize_os_auction_identity.sql","migration_version":"20260728120000","statement_index":21,"sqlstate":"40P01","category":"deadlock","message":"Database execution detected a deadlock."}'
+    elif grep -q '^At statement: 22$' "$3"; then
+      printf '%s\n' '{"schema_version":1,"kind":"maiprop-linked-push-failure","migration_filename":"20260728120000_canonicalize_os_auction_identity.sql","migration_version":"20260728120000","statement_index":22,"sqlstate":"40P01","category":"deadlock","message":"Database execution detected a deadlock."}'
+    else
+      printf '%s\n' '{"schema_version":1,"kind":"maiprop-linked-push-failure","migration_filename":"20260728123058_materialize_public_catalogue_snapshots.sql","migration_version":"20260728123058","statement_index":12,"sqlstate":"P0001","category":"catalogue-duplicate-os-tag","message":"Catalogue bootstrap rejected duplicate OS auction tags."}'
+    fi
+    ;;
+  is-exact-precommit-deadlock-retryable)
+    case "$3" in
+      *'"migration_filename":"20260728120000_canonicalize_os_auction_identity.sql"'*'"statement_index":21'*'"sqlstate":"40P01"'*'"category":"deadlock"'*) printf 'true\n' ;;
+      *) printf 'false\n' ;;
+    esac
     ;;
   *) exit 1 ;;
 esac
 `);
     chmodSync(join(fakeBin, "node"), 0o700);
+    writeFileSync(pushAttemptsPath, "0");
+    writeFileSync(pushOutcomesPath, "success\n");
 
     const run = (mode, overrides = {}) => spawnSync(bashExecutable, [
       "-c",
@@ -842,7 +875,8 @@ esac
         TEST_LINKED_MODE: mode,
         TEST_LINKED_SCRIPT: join(process.cwd(), "scripts/catalogue-hotfix-linked-db-push.sh"),
         TEST_PROVIDER_SECRET: "provider-secret-must-not-log",
-        TEST_PUSH_FAILURE: "false",
+        TEST_PUSH_ATTEMPTS: pushAttemptsPath,
+        TEST_PUSH_OUTCOMES_FILE: pushOutcomesPath,
         TEST_SENTINEL: sentinelPath,
         TEST_WORK: work,
         WSLENV: [
@@ -859,7 +893,8 @@ esac
           "TEST_LINKED_MODE",
           "TEST_LINKED_SCRIPT/p",
           "TEST_PROVIDER_SECRET",
-          "TEST_PUSH_FAILURE",
+          "TEST_PUSH_ATTEMPTS/p",
+          "TEST_PUSH_OUTCOMES_FILE/p",
           "TEST_SENTINEL/p",
           "TEST_WORK/p",
         ].filter(Boolean).join(":"),
@@ -901,11 +936,42 @@ esac
 
     const thirdPrepare = run("prepare");
     assert.equal(thirdPrepare.status, 0, thirdPrepare.stderr);
-    const failedApply = run("apply", { TEST_PUSH_FAILURE: "true" });
+    writeFileSync(pushAttemptsPath, "0");
+    writeFileSync(pushOutcomesPath, "duplicate\n");
+    const failedApply = run("apply");
     assert.equal(failedApply.status, 1);
     assert.match(`${failedApply.stdout}${failedApply.stderr}`, /Linked database push diagnostic: .*catalogue-duplicate-os-tag/);
     assert.doesNotMatch(`${failedApply.stdout}${failedApply.stderr}`, /provider-secret-must-not-log|postgresql:\/\//);
     assert.equal(existsSync(join(work, "push-output.txt")), false, "private failed apply output is removed");
+
+    const retryPrepare = run("prepare");
+    assert.equal(retryPrepare.status, 0, retryPrepare.stderr);
+    writeFileSync(invocationPath, "");
+    writeFileSync(pushAttemptsPath, "0");
+    writeFileSync(pushOutcomesPath, "exact-deadlock\nsuccess\n");
+    const retriedApply = run("apply");
+    assert.equal(retriedApply.status, 0, retriedApply.stderr);
+    assert.equal(readFileSync(pushAttemptsPath, "utf8"), "2", "only one exact deadlock retry is allowed");
+    assert.equal((readFileSync(invocationPath, "utf8").match(/^push /gm) ?? []).length, 2);
+    assert.match(`${retriedApply.stdout}${retriedApply.stderr}`, /Retrying exact pre-commit canonicalization deadlock once/);
+    assert.doesNotMatch(`${retriedApply.stdout}${retriedApply.stderr}`, /provider-secret-must-not-log|postgresql:\/\//);
+
+    const otherDeadlockPrepare = run("prepare");
+    assert.equal(otherDeadlockPrepare.status, 0, otherDeadlockPrepare.stderr);
+    writeFileSync(pushAttemptsPath, "0");
+    writeFileSync(pushOutcomesPath, "other-deadlock\nsuccess\n");
+    const otherDeadlockApply = run("apply");
+    assert.equal(otherDeadlockApply.status, 1);
+    assert.equal(readFileSync(pushAttemptsPath, "utf8"), "1", "non-exact deadlocks fail closed without retry");
+    assert.match(`${otherDeadlockApply.stdout}${otherDeadlockApply.stderr}`, /Linked database push diagnostic: .*deadlock/);
+    assert.doesNotMatch(`${otherDeadlockApply.stdout}${otherDeadlockApply.stderr}`, /provider-secret-must-not-log|postgresql:\/\//);
+
+    writeFileSync(pushAttemptsPath, "0");
+    writeFileSync(pushOutcomesPath, "exact-deadlock\nsuccess\n");
+    const failedDryRun = run("prepare");
+    assert.equal(failedDryRun.status, 1);
+    assert.equal(readFileSync(pushAttemptsPath, "utf8"), "1", "dry-run never retries a deadlock");
+    assert.doesNotMatch(`${failedDryRun.stdout}${failedDryRun.stderr}`, /provider-secret-must-not-log|postgresql:\/\//);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -1708,6 +1774,30 @@ test("linked push failure classifier exposes only bounded operational fields", (
       "Applying migration 20260728123058_materialize_public_catalogue_snapshots.sql...",
       `ERROR: provider-controlled text must not escape (SQLSTATE ${sqlstate})`,
     ].join("\n")).category, category);
+  }
+});
+
+test("only the exact pre-commit canonicalization deadlock classifier is retryable", () => {
+  const exact = classifyLinkedPushFailure([
+    "Applying migration 20260728120000_canonicalize_os_auction_identity.sql...",
+    "ERROR: deadlock detected (SQLSTATE 40P01)",
+    "At statement: 21",
+  ].join("\n"));
+  assert.equal(isExactPreCommitDeadlockRetryable(exact), true);
+
+  for (const changed of [
+    { migration_filename: "20260728123058_materialize_public_catalogue_snapshots.sql" },
+    { migration_version: "20260728123058" },
+    { statement_index: 22 },
+    { sqlstate: "55P03", category: "lock-unavailable" },
+    { category: "database-error" },
+    { message: "Database execution returned an unclassified SQLSTATE." },
+    { unexpected: true },
+  ]) {
+    assert.equal(isExactPreCommitDeadlockRetryable({ ...exact, ...changed }), false);
+  }
+  for (const malformed of [null, [], "not-json", { ...exact, statement_index: "21" }]) {
+    assert.equal(isExactPreCommitDeadlockRetryable(malformed), false);
   }
 });
 
