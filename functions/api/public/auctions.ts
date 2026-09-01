@@ -1048,7 +1048,7 @@ export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promis
   );
   const cacheKey = normalizedCacheUrl(requestUrl, "auctions", cacheParams);
 
-  const response = await cachedJson(ctx, cacheKey, async () => {
+  const produceResponse = async (): Promise<Response> => {
     try {
       if (exactResult.filters.ids || exactResult.filters.osTag) {
         const exactPage = await fetchExactAuctionPage(
@@ -1116,13 +1116,16 @@ export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promis
       if (isSupabaseTransientError(error)) return upstreamUnavailable();
       throw error;
     }
-  }, {
-    edgeTtlSeconds: 60,
-    browserTtlSeconds: 30,
-    staleSeconds: 60,
-    staleFallbackSeconds: 120,
-    producerTimeoutMs: PUBLIC_AUCTION_PRODUCER_TIMEOUT_MS,
-  });
+  };
+  const response = entitlement.authenticated
+    ? await produceResponse()
+    : await cachedJson(ctx, cacheKey, produceResponse, {
+      edgeTtlSeconds: 60,
+      browserTtlSeconds: 30,
+      staleSeconds: 60,
+      staleFallbackSeconds: 120,
+      producerTimeoutMs: PUBLIC_AUCTION_PRODUCER_TIMEOUT_MS,
+    });
   return entitlement.authenticated ? privateAuctionResponse(response) : response;
 }
 

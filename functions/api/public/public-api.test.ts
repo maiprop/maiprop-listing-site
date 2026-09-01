@@ -3458,6 +3458,8 @@ describe("public auctions endpoint", () => {
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
     expect(organicUrl?.searchParams.get("p_limit")).toBe("600");
+    expect(cacheApi.match).toHaveBeenCalled();
+    expect(cacheApi.put).toHaveBeenCalledTimes(2);
     const cacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(cacheKey.searchParams.get("limit")).toBe("60");
     expect(cacheKey.searchParams.has("day")).toBe(true);
@@ -3817,6 +3819,8 @@ describe("public auctions endpoint", () => {
     expect(expandedBody.total).toBe(100);
     expect(expanded.headers.get("Cache-Control")).toBe("private, no-store");
     expect(expanded.headers.get("Vary")).toContain("Authorization");
+    expect(cacheApi.match).not.toHaveBeenCalled();
+    expect(cacheApi.put).not.toHaveBeenCalled();
     expect(candidateHeaders).toHaveLength(2);
     expect(candidateHeaders.every((headers) => headers.get("apikey") === "publishable_test_key"))
       .toBe(true);
@@ -3915,6 +3919,8 @@ describe("public auctions endpoint", () => {
     expect(body.total).toBe(60);
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(response.headers.get("CDN-Cache-Control")).toBe("no-store");
+    expect(cacheApi.match).not.toHaveBeenCalled();
+    expect(cacheApi.put).not.toHaveBeenCalled();
     expect(candidateHeaders.every((candidateHeader) =>
       candidateHeader.get("Authorization") === "Bearer paid-user-token"
     )).toBe(true);
