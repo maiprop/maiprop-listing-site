@@ -558,6 +558,7 @@ jobs:
               --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
               --status reverted \
               --yes
+            rm -rf -- release-candidate/supabase/.temp
           fi
 
           node scripts/reconcile-staging-migration-aliases.mjs \

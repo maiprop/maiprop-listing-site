@@ -2492,6 +2492,12 @@ describe("production release train", () => {
     expect(repair.run).toContain('--db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL"');
     expect(repair.run).toContain("--status reverted");
     expect(repair.run).toContain("--yes");
+    expect(repair.run).toContain(
+      "rm -rf -- release-candidate/supabase/.temp",
+    );
+    expect(
+      repair.run.indexOf("rm -rf -- release-candidate/supabase/.temp"),
+    ).toBeGreaterThan(repair.run.indexOf(repairCommand));
     expect(repair.run).toContain("Post-repair staging migration history is not canonical");
     expect(repair.run).not.toContain("SUPABASE_STAGING_DB_URL");
 
