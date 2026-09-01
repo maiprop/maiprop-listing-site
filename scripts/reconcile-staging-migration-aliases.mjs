@@ -187,7 +187,7 @@ export const STAGING_MIGRATION_REPAIR_MAP = new Map([
     "20260726223733",
     repair(
       "add_storage_cleanup_outbox",
-      "2eed62f5cefc664ada6bafa27508866ca12b580fbe6b398fc13a2a5c456b69b6",
+      "2eed62f5cefc664ada6bafa27508866ca12c580fbe6b398fc13a2a5c456b69b6",
       "20260726222529",
       "add_storage_cleanup_outbox",
       "4742e0ed4d0f3023169bffe464a063198b54c9230860363120926cd6c680a790",

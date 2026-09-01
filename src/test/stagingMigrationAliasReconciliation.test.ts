@@ -1,6 +1,7 @@
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -18,6 +19,7 @@ import {
   readRemoteMigrations,
   reconcileStagingMigrationAliases,
   runCommand,
+  STAGING_MIGRATION_REPAIR_MAP,
 } from "../../scripts/reconcile-staging-migration-aliases.mjs";
 import {
   MAIPROP_STAGING_MUTATION_ACKNOWLEDGEMENT,
@@ -139,6 +141,24 @@ describe("staging migration alias reconciliation", () => {
 
     expect(readLocalMigrations(root).byVersion.get(canonical.version)).toEqual(
       canonical,
+    );
+  });
+
+  it("binds the storage cleanup alias to the exact canonical statement array", () => {
+    const reviewed = STAGING_MIGRATION_REPAIR_MAP.get("20260726223733");
+    const sql = readFileSync(
+      join(
+        process.cwd(),
+        "supabase",
+        "migrations",
+        "20260726222529_add_storage_cleanup_outbox.sql",
+      ),
+      "utf8",
+    ).replace(/\r\n?/g, "\n");
+
+    expect(reviewed?.canonicalFileSha256).toBe(exactSqlFileSha256(sql));
+    expect(reviewed?.remoteStatementsSha256).toBe(
+      exactSqlFileSha256(JSON.stringify([sql.trim()])),
     );
   });
 
