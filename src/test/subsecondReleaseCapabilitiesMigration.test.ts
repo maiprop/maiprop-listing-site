@@ -15,18 +15,50 @@ const compactMigration = migration
   .replace(/\(\s+/g, "(")
   .replace(/\s+\)/g, ")");
 
+const visibleAuctionSignature =
+  "INTEGER, TEXT, DATE, TIMESTAMPTZ, TEXT, TEXT, TEXT, TEXT, " +
+  "NUMERIC, NUMERIC, INTEGER, INTEGER, NUMERIC, NUMERIC, TEXT, TEXT, TEXT";
+
 const visibleAuctionWrapper =
   migration.match(
     /CREATE OR REPLACE FUNCTION public\.get_visible_auction_candidates\([\s\S]*?\$function\$;/,
+  )?.[0] ?? "";
+
+const currentUserAuctionLimit =
+  migration.match(
+    /CREATE OR REPLACE FUNCTION public\.get_current_auction_listing_visible_limit\(\)[\s\S]*?\$function\$;/,
   )?.[0] ?? "";
 
 const preflightAssertions =
   migration.match(/DO \$\$\nBEGIN[\s\S]*?END\n\$\$;/)?.[0] ?? "";
 
 const postCreateAssertions =
-  migration.match(/DO \$\$\nDECLARE\n  signature TEXT;[\s\S]*?END\n\$\$;/)?.[0] ?? "";
+  migration.match(/DO \$\$\nDECLARE\n {2}signature TEXT;[\s\S]*?END\n\$\$;/)?.[0] ?? "";
 
 describe("subsecond release capability repair migration", () => {
+  it("exposes only an auth.uid-derived current-user entitlement RPC to authenticated callers", () => {
+    expect(currentUserAuctionLimit).toContain(
+      "CREATE OR REPLACE FUNCTION public.get_current_auction_listing_visible_limit()",
+    );
+    expect(currentUserAuctionLimit).toContain("auth.uid()");
+    expect(currentUserAuctionLimit).not.toContain("p_user_id");
+    expect(currentUserAuctionLimit).toContain(
+      "public.get_auction_listing_visible_limit(v_user_id)",
+    );
+    expect(compactMigration).toContain(
+      "REVOKE ALL ON FUNCTION public.get_current_auction_listing_visible_limit() FROM PUBLIC, anon, authenticated, service_role",
+    );
+    expect(compactMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION public.get_current_auction_listing_visible_limit() TO authenticated",
+    );
+    expect(compactMigration).toContain(
+      "REVOKE ALL ON FUNCTION public.get_auction_listing_visible_limit(UUID) FROM PUBLIC, anon, authenticated, service_role",
+    );
+    expect(compactMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION public.get_auction_listing_visible_limit(UUID) TO service_role",
+    );
+  });
+
   it("adds a bounded public wrapper over the service-role-only auction RPC", () => {
     expect(migration).toContain(
       "CREATE OR REPLACE FUNCTION public.get_visible_auction_candidates(",
@@ -34,11 +66,14 @@ describe("subsecond release capability repair migration", () => {
     expect(visibleAuctionWrapper).toMatch(
       /LANGUAGE plpgsql\s+STABLE\s+SECURITY DEFINER\s+SET search_path = ''/,
     );
-    expect(visibleAuctionWrapper).toContain("v_user_id UUID := auth.uid()");
+    expect(visibleAuctionWrapper).not.toContain("v_user_id UUID");
     expect(visibleAuctionWrapper).toContain("v_visible_limit INTEGER := 60");
-    expect(visibleAuctionWrapper).toContain("LEAST(\n      600,");
+    expect(visibleAuctionWrapper).toMatch(/LEAST\(\s+600,/);
     expect(visibleAuctionWrapper).toContain(
-      "COALESCE(public.get_auction_listing_visible_limit(v_user_id), 60)",
+      "public.get_current_auction_listing_visible_limit()",
+    );
+    expect(visibleAuctionWrapper).not.toContain(
+      "public.get_auction_listing_visible_limit(v_user_id)",
     );
     expect(visibleAuctionWrapper).toContain(
       "LEAST(GREATEST(COALESCE(p_limit, 1), 1), v_visible_limit, 600)",
@@ -48,9 +83,12 @@ describe("subsecond release capability repair migration", () => {
     );
     expect(visibleAuctionWrapper).not.toContain("FROM public.listings");
     expect(compactMigration).toContain(
-      "REVOKE ALL ON FUNCTION public.get_visible_auction_candidates(INTEGER, TEXT, DATE, TIMESTAMPTZ, TEXT) FROM PUBLIC",
+      `REVOKE ALL ON FUNCTION public.get_visible_auction_candidates(${visibleAuctionSignature}) FROM PUBLIC`,
     );
     expect(compactMigration).toContain(
+      `GRANT EXECUTE ON FUNCTION public.get_visible_auction_candidates(${visibleAuctionSignature}) TO anon, authenticated`,
+    );
+    expect(compactMigration).not.toContain(
       "GRANT EXECUTE ON FUNCTION public.get_visible_auction_candidates(INTEGER, TEXT, DATE, TIMESTAMPTZ, TEXT) TO anon, authenticated",
     );
     expect(compactMigration).toContain(
@@ -59,6 +97,72 @@ describe("subsecond release capability repair migration", () => {
     expect(compactMigration).toContain(
       "GRANT EXECUTE ON FUNCTION public.get_public_auction_candidates(INTEGER, TEXT, DATE, TIMESTAMPTZ, TEXT) TO service_role",
     );
+  });
+
+  it("filters the bounded 600-row database pool before applying the caller's 60/600 cap", () => {
+    for (const parameter of [
+      "p_city TEXT DEFAULT NULL",
+      "p_property_base TEXT DEFAULT NULL",
+      "p_property_subtype TEXT DEFAULT NULL",
+      "p_bid_min NUMERIC DEFAULT NULL",
+      "p_bid_max NUMERIC DEFAULT NULL",
+      "p_year_min INTEGER DEFAULT NULL",
+      "p_year_max INTEGER DEFAULT NULL",
+      "p_sqm_min NUMERIC DEFAULT NULL",
+      "p_sqm_max NUMERIC DEFAULT NULL",
+      "p_ownership TEXT DEFAULT NULL",
+      "p_round TEXT DEFAULT NULL",
+      "p_yield TEXT DEFAULT NULL",
+    ]) {
+      expect(visibleAuctionWrapper).toContain(parameter);
+    }
+
+    expect(visibleAuctionWrapper).toMatch(
+      /FROM public\.get_public_auction_candidates\(\s*600,/,
+    );
+    expect(visibleAuctionWrapper).toContain(
+      "STRPOS(LOWER(COALESCE(candidate.city, '')), LOWER(p_city)) > 0",
+    );
+    expect(visibleAuctionWrapper).toContain(
+      "candidate.property_type = p_property_base",
+    );
+    expect(visibleAuctionWrapper).toContain("land_type:");
+    expect(visibleAuctionWrapper).toContain("commercial_type:");
+    expect(visibleAuctionWrapper).toContain(
+      "COALESCE(candidate.auction_starting_bid, candidate.price, 0)",
+    );
+    expect(visibleAuctionWrapper).toContain("candidate.year_built IS NOT NULL");
+    expect(visibleAuctionWrapper).toContain("COALESCE(candidate.sqm, 0)");
+
+    for (const ownershipAlias of [
+      "full_ownership",
+      "bare_ownership",
+      "undivided",
+      "epikarpia",
+      "vertical_ownership",
+      "horizontal_ownership",
+      "ownership_pct:",
+    ]) {
+      expect(visibleAuctionWrapper).toContain(ownershipAlias);
+    }
+    expect(visibleAuctionWrapper).toContain("p_round = '3plus'");
+    expect(visibleAuctionWrapper).toContain("auction_round >= 3");
+    expect(visibleAuctionWrapper).toContain("p_yield = 'low'");
+    expect(visibleAuctionWrapper).toContain("p_yield = 'medium'");
+    expect(visibleAuctionWrapper).toContain("p_yield = 'high'");
+    expect(visibleAuctionWrapper).toContain("p_yield = 'very_high'");
+    expect(visibleAuctionWrapper).toContain("estimated_yield >= 9");
+
+    const poolIndex = visibleAuctionWrapper.indexOf(
+      "FROM public.get_public_auction_candidates(",
+    );
+    const filterIndex = visibleAuctionWrapper.indexOf("WHERE");
+    const callerCapIndex = visibleAuctionWrapper.lastIndexOf(
+      "LIMIT LEAST(GREATEST(COALESCE(p_limit, 1), 1), v_visible_limit, 600)",
+    );
+    expect(poolIndex).toBeGreaterThanOrEqual(0);
+    expect(filterIndex).toBeGreaterThan(poolIndex);
+    expect(callerCapIndex).toBeGreaterThan(filterIndex);
   });
 
   it("restores management and professional projections with their original grants", () => {
@@ -107,7 +211,10 @@ describe("subsecond release capability repair migration", () => {
     );
     expect(postCreateAssertions).toContain("FOREACH signature IN ARRAY ARRAY[");
     expect(postCreateAssertions).toContain(
-      "public.get_visible_auction_candidates(integer,text,date,timestamp with time zone,text)",
+      "public.get_visible_auction_candidates(integer,text,date,timestamp with time zone,text,text,text,text,numeric,numeric,integer,integer,numeric,numeric,text,text,text)",
+    );
+    expect(postCreateAssertions).toContain(
+      "public.get_current_auction_listing_visible_limit()",
     );
     expect(postCreateAssertions).toContain(
       "public.get_manageable_listing_catalogue_page(integer,timestamp with time zone,uuid)",

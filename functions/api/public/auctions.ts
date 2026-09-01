@@ -45,6 +45,7 @@ const PUBLIC_AUCTION_LIMIT_DEFAULT = 60;
 const AUCTION_PAGE_SIZE_DEFAULT = 20;
 const AUCTION_PAGE_SIZE_MAX = 60;
 const PUBLIC_AUCTION_PRODUCER_TIMEOUT_MS = 5_000;
+const AUCTION_REQUEST_TIMEOUT_MS = 5_000;
 const AUCTION_DB_TIMEOUT_MS = 2_500;
 const AUCTION_AUTH_TIMEOUT_MS = 2_500;
 const AUCTION_CACHE_VERSION = "canonical-server-filtered-v13";
@@ -519,6 +520,8 @@ async function fetchDbAuctionStream(
   now: string,
   poolTag?: string,
   accessToken: string | null = null,
+  filters: AuctionFilters | null = null,
+  requestSignal?: AbortSignal,
 ): Promise<AuctionRow[]> {
   const params = new URLSearchParams([
     ["p_limit", String(limit)],
@@ -527,6 +530,24 @@ async function fetchDbAuctionStream(
     ["p_now", now],
   ]);
   if (poolTag) params.set("p_pool_tag", poolTag);
+  if (filters?.city) params.set("p_city", filters.city);
+  if (filters?.propertyBase) params.set("p_property_base", filters.propertyBase);
+  if (filters?.propertySubtype) params.set("p_property_subtype", filters.propertySubtype);
+  if (filters?.bidRange) {
+    params.set("p_bid_min", String(filters.bidRange[0]));
+    params.set("p_bid_max", String(filters.bidRange[1]));
+  }
+  if (filters?.yearRange) {
+    params.set("p_year_min", String(filters.yearRange[0]));
+    params.set("p_year_max", String(filters.yearRange[1]));
+  }
+  if (filters?.sqmRange) {
+    params.set("p_sqm_min", String(filters.sqmRange[0]));
+    params.set("p_sqm_max", String(filters.sqmRange[1]));
+  }
+  if (filters?.ownership) params.set("p_ownership", filters.ownership);
+  if (filters?.round) params.set("p_round", String(filters.round));
+  if (filters?.yield) params.set("p_yield", filters.yield);
   const runtime = getSupabaseRuntime(env);
   if (!runtime) throw new Error("missing-runtime");
 
@@ -534,10 +555,10 @@ async function fetchDbAuctionStream(
   const url = new URL(path, runtime.url);
   for (const [key, value] of params) url.searchParams.append(key, value);
 
-  let response: Response;
+  let result: { response: Response; rows: AuctionRow[] };
   try {
     const authorizationToken = accessToken ?? runtime.key;
-    response = await fetchWithAbortableTimeout(
+    result = await fetchAndConsumeWithAbortableTimeout(
       url,
       {
         headers: {
@@ -547,11 +568,17 @@ async function fetchDbAuctionStream(
         },
       },
       AUCTION_DB_TIMEOUT_MS,
+      async (response) => ({
+        response,
+        rows: response.ok ? await response.json() as AuctionRow[] : [],
+      }),
+      requestSignal,
     );
   } catch {
     throw new SupabaseTransientError("Auction candidate request timed out", path);
   }
 
+  const { response, rows } = result;
   if (!response.ok) {
     if ([408, 425, 429, 500, 502, 503, 504, 520, 522, 524, 544].includes(response.status)) {
       throw new SupabaseTransientError(
@@ -563,7 +590,7 @@ async function fetchDbAuctionStream(
     throw new Error(`Auction candidate request failed with ${response.status}`);
   }
 
-  return await response.json() as AuctionRow[];
+  return rows;
 }
 
 async function fetchDbAuctionStreams(
@@ -572,10 +599,30 @@ async function fetchDbAuctionStreams(
   now: string,
   poolTag?: string,
   accessToken: string | null = null,
+  filters: AuctionFilters | null = null,
+  requestSignal?: AbortSignal,
 ): Promise<AuctionStreams> {
   const [priorityRows, organicRows] = await Promise.all([
-    fetchDbAuctionStream(env, limits.priority, "priority", now, poolTag, accessToken),
-    fetchDbAuctionStream(env, limits.organic, "organic", now, poolTag, accessToken),
+    fetchDbAuctionStream(
+      env,
+      limits.priority,
+      "priority",
+      now,
+      poolTag,
+      accessToken,
+      filters,
+      requestSignal,
+    ),
+    fetchDbAuctionStream(
+      env,
+      limits.organic,
+      "organic",
+      now,
+      poolTag,
+      accessToken,
+      filters,
+      requestSignal,
+    ),
   ]);
   return { priorityRows, organicRows };
 }
@@ -588,6 +635,8 @@ async function fetchCanonicalAuctionStreams(
   env: PublicApiEnv,
   now: string,
   accessToken: string | null = null,
+  filters: AuctionFilters | null = null,
+  requestSignal?: AbortSignal,
 ): Promise<AuctionStreams> {
   const scheduledPool = await fetchDbAuctionStreams(
     env,
@@ -595,17 +644,28 @@ async function fetchCanonicalAuctionStreams(
     now,
     todayAuctionPoolTag(),
     accessToken,
+    filters,
+    requestSignal,
   );
   if (hasAuctionRows(scheduledPool)) return scheduledPool;
-  return fetchDbAuctionStreams(env, FULL_AUCTION_CANDIDATE_LIMITS, now, undefined, accessToken);
+  return fetchDbAuctionStreams(
+    env,
+    FULL_AUCTION_CANDIDATE_LIMITS,
+    now,
+    undefined,
+    accessToken,
+    filters,
+    requestSignal,
+  );
 }
 
-async function fetchWithAbortableTimeout(
+async function fetchAndConsumeWithAbortableTimeout<T>(
   input: RequestInfo | URL,
   init: RequestInit,
   timeoutMs: number,
+  consume: (response: Response) => Promise<T>,
   parentSignal?: AbortSignal,
-): Promise<Response> {
+): Promise<T> {
   const controller = new AbortController();
   const abortFromParent = () => controller.abort(parentSignal?.reason);
   if (parentSignal?.aborted) abortFromParent();
@@ -615,17 +675,45 @@ async function fetchWithAbortableTimeout(
     timeoutMs,
   );
   try {
-    return await fetch(input, { ...init, signal: controller.signal });
+    const response = await fetch(input, { ...init, signal: controller.signal });
+    return await consume(response);
   } finally {
     clearTimeout(timer);
     parentSignal?.removeEventListener("abort", abortFromParent);
   }
 }
 
+type AuctionRequestDeadline = {
+  signal: AbortSignal;
+  dispose: () => void;
+};
+
+function createAuctionRequestDeadline(parentSignal: AbortSignal): AuctionRequestDeadline {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal.aborted) abortFromParent();
+  else parentSignal.addEventListener("abort", abortFromParent, { once: true });
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException("Auction request timed out", "TimeoutError"));
+  }, AUCTION_REQUEST_TIMEOUT_MS);
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      clearTimeout(timer);
+      parentSignal.removeEventListener("abort", abortFromParent);
+    },
+  };
+}
+
 function bearerToken(request: Request): string | null {
   const authorization = request.headers.get("Authorization")?.trim() ?? "";
   const match = authorization.match(/^Bearer\s+(\S+)$/i);
   return match?.[1] ?? null;
+}
+
+function hasBearerPresence(request: Request): boolean {
+  const authorization = request.headers.get("Authorization")?.trim() ?? "";
+  return /^Bearer(?:\s|$)/i.test(authorization);
 }
 
 function visibleLimitFromPayload(payload: unknown): number | null {
@@ -645,6 +733,7 @@ function visibleLimitFromPayload(payload: unknown): number | null {
 async function resolveAuctionEntitlement(
   ctx: PublicApiCtx,
   requestedLimit: number,
+  requestSignal: AbortSignal = ctx.request.signal,
 ): Promise<AuctionEntitlement> {
   const freeLimit = Math.min(requestedLimit, PUBLIC_AUCTION_LIMIT_MAX);
   if (requestedLimit <= PUBLIC_AUCTION_LIMIT_MAX) {
@@ -659,7 +748,7 @@ async function resolveAuctionEntitlement(
 
   let validatedAccessToken: string | null = null;
   try {
-    const userResponse = await fetchWithAbortableTimeout(
+    const userResult = await fetchAndConsumeWithAbortableTimeout(
       new URL("/auth/v1/user", publicRuntime.url),
       {
         headers: {
@@ -669,19 +758,23 @@ async function resolveAuctionEntitlement(
         },
       },
       AUCTION_AUTH_TIMEOUT_MS,
-      ctx.request.signal,
+      async (response) => ({
+        response,
+        payload: response.ok ? await response.json() as { id?: unknown } : null,
+      }),
+      requestSignal,
     );
+    const { response: userResponse, payload: user } = userResult;
     if (!userResponse.ok) {
       return { limit: freeLimit, authenticated: false, accessToken: null };
     }
-    const user = await userResponse.json() as { id?: unknown };
-    if (typeof user.id !== "string" || !USER_ID_RE.test(user.id)) {
+    if (!user || typeof user.id !== "string" || !USER_ID_RE.test(user.id)) {
       return { limit: freeLimit, authenticated: false, accessToken: null };
     }
     validatedAccessToken = token;
 
-    const limitResponse = await fetchWithAbortableTimeout(
-      new URL("/rest/v1/rpc/get_auction_listing_visible_limit", publicRuntime.url),
+    const limitResult = await fetchAndConsumeWithAbortableTimeout(
+      new URL("/rest/v1/rpc/get_current_auction_listing_visible_limit", publicRuntime.url),
       {
         method: "POST",
         headers: {
@@ -690,15 +783,20 @@ async function resolveAuctionEntitlement(
           Accept: "application/json",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ p_user_id: user.id }),
+        body: JSON.stringify({}),
       },
       AUCTION_AUTH_TIMEOUT_MS,
-      ctx.request.signal,
+      async (response) => ({
+        response,
+        payload: response.ok ? await response.json() : null,
+      }),
+      requestSignal,
     );
+    const { response: limitResponse } = limitResult;
     if (!limitResponse.ok) {
       return { limit: freeLimit, authenticated: true, accessToken: token };
     }
-    const configuredLimit = visibleLimitFromPayload(await limitResponse.json());
+    const configuredLimit = visibleLimitFromPayload(limitResult.payload);
     if (!Number.isFinite(configuredLimit)) {
       return { limit: freeLimit, authenticated: true, accessToken: token };
     }
@@ -712,6 +810,12 @@ async function resolveAuctionEntitlement(
       accessToken: token,
     };
   } catch {
+    if (requestSignal.aborted) {
+      throw new SupabaseTransientError(
+        "Auction request deadline exceeded",
+        "/api/public/auctions",
+      );
+    }
     return {
       limit: freeLimit,
       authenticated: validatedAccessToken !== null,
@@ -724,6 +828,7 @@ export async function fetchPublicAuctionRows(
   env: PublicApiEnv,
   limit: number,
   accessToken: string | null = null,
+  requestSignal?: AbortSignal,
 ): Promise<AuctionRow[]> {
   const requestedLimit = Math.min(
     PUBLIC_AUCTION_LIMIT_MAX,
@@ -731,7 +836,13 @@ export async function fetchPublicAuctionRows(
   );
   const nowMs = auctionRevisionTimeMs();
   const now = new Date(nowMs).toISOString();
-  const streams = await fetchCanonicalAuctionStreams(env, now, accessToken);
+  const streams = await fetchCanonicalAuctionStreams(
+    env,
+    now,
+    accessToken,
+    null,
+    requestSignal,
+  );
   return rankAuctionRows(
     streams.priorityRows,
     streams.organicRows,
@@ -811,10 +922,17 @@ async function fetchCanonicalAuctionPage(
   page: number,
   pageSize: number,
   accessToken: string | null = null,
+  requestSignal?: AbortSignal,
 ): Promise<AuctionPagePayload> {
   const nowMs = auctionRevisionTimeMs();
   const now = new Date(nowMs).toISOString();
-  const streams = await fetchCanonicalAuctionStreams(env, now, accessToken);
+  const streams = await fetchCanonicalAuctionStreams(
+    env,
+    now,
+    accessToken,
+    filters,
+    requestSignal,
+  );
   const canonicalRows = rankAuctionRows(
     streams.priorityRows,
     streams.organicRows,
@@ -845,11 +963,12 @@ async function fetchExactAuctionPage(
   entitlementLimit: number,
   page: number,
   pageSize: number,
+  requestSignal?: AbortSignal,
 ): Promise<{
   payload: AuctionPagePayload;
   validityHeaders: Record<string, string>;
 }> {
-  const publication = await getPublicCataloguePublication(env, null);
+  const publication = await getPublicCataloguePublication(env, null, requestSignal);
   const rows = await supabaseRpcJson<ExactAuctionRpcRow>(
     env,
     "get_public_catalogue_auctions",
@@ -858,7 +977,7 @@ async function fetchExactAuctionPage(
       p_listing_ids: exact.ids ? [...exact.ids] : null,
       p_os_tag: exact.osTag,
     },
-    { failOnTransient: true },
+    { failOnTransient: true, signal: requestSignal },
   );
   const requestedIds = exact.ids;
   if (
@@ -991,6 +1110,7 @@ function privateAuctionResponse(response: Response): Response {
 
 export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
   if (!getSupabaseRuntime(ctx.env)) return missingRuntime();
+  const bypassSharedCache = hasBearerPresence(ctx.request);
 
   const exactResult = parseExactAuctionFilters(requestUrl.searchParams);
   if (!exactResult.valid) return invalidExactAuctionFilter();
@@ -1022,111 +1142,135 @@ export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promis
     );
   }
 
-  const entitlement = await resolveAuctionEntitlement(ctx, requestedLimit);
-  const canonicalQuery = hasCanonicalQuery(requestUrl.searchParams, entitlement.limit);
-  const page = canonicalQuery
-    ? safeInt(requestUrl.searchParams.get("page"), 1, 1, 10_000)
-    : 1;
-  const pageSize = canonicalQuery
-    ? safeInt(
-      requestUrl.searchParams.get("pageSize"),
-      AUCTION_PAGE_SIZE_DEFAULT,
-      1,
-      AUCTION_PAGE_SIZE_MAX,
-    )
-    : entitlement.limit;
-  const filters = parseAuctionFilters(
-    requestUrl.searchParams,
-    entitlement.limit > PUBLIC_AUCTION_LIMIT_MAX,
-    exactResult.filters,
-  );
-  const cacheParams = cacheParamsForAuctionQuery(
-    requestUrl,
-    entitlement.limit,
-    page,
-    pageSize,
-  );
-  const cacheKey = normalizedCacheUrl(requestUrl, "auctions", cacheParams);
+  const requestDeadline = createAuctionRequestDeadline(ctx.request.signal);
+  const runWithinDeadline = async (): Promise<Response> => {
+    const entitlement = await resolveAuctionEntitlement(
+      ctx,
+      requestedLimit,
+      requestDeadline.signal,
+    );
+    const canonicalQuery = hasCanonicalQuery(requestUrl.searchParams, entitlement.limit);
+    const page = canonicalQuery
+      ? safeInt(requestUrl.searchParams.get("page"), 1, 1, 10_000)
+      : 1;
+    const pageSize = canonicalQuery
+      ? safeInt(
+        requestUrl.searchParams.get("pageSize"),
+        AUCTION_PAGE_SIZE_DEFAULT,
+        1,
+        AUCTION_PAGE_SIZE_MAX,
+      )
+      : entitlement.limit;
+    const filters = parseAuctionFilters(
+      requestUrl.searchParams,
+      entitlement.limit > PUBLIC_AUCTION_LIMIT_MAX,
+      exactResult.filters,
+    );
+    const cacheParams = cacheParamsForAuctionQuery(
+      requestUrl,
+      entitlement.limit,
+      page,
+      pageSize,
+    );
+    const cacheKey = normalizedCacheUrl(requestUrl, "auctions", cacheParams);
 
-  const produceResponse = async (): Promise<Response> => {
-    try {
-      if (exactResult.filters.ids || exactResult.filters.osTag) {
-        const exactPage = await fetchExactAuctionPage(
+    const produceResponse = async (): Promise<Response> => {
+      try {
+        if (exactResult.filters.ids || exactResult.filters.osTag) {
+          const exactPage = await fetchExactAuctionPage(
+            ctx.env,
+            exactResult.filters,
+            entitlement.limit,
+            page,
+            pageSize,
+            requestDeadline.signal,
+          );
+          return jsonResponse(exactPage.payload, {
+            headers: exactPage.validityHeaders,
+          });
+        }
+        if (canonicalQuery) {
+          const payload = await fetchCanonicalAuctionPage(
+            ctx.env,
+            filters,
+            entitlement.limit,
+            page,
+            pageSize,
+            entitlement.accessToken,
+            requestDeadline.signal,
+          );
+          if (!exactAuctionPayloadMatches(payload, exactResult.filters)) {
+            return invalidExactAuctionIdentity();
+          }
+          return jsonResponse(payload);
+        }
+        const nowMs = auctionRevisionTimeMs();
+        const rows = await fetchPublicAuctionRows(
           ctx.env,
-          exactResult.filters,
           entitlement.limit,
-          page,
-          pageSize,
-        );
-        return jsonResponse(exactPage.payload, {
-          headers: exactPage.validityHeaders,
-        });
-      }
-      if (canonicalQuery) {
-        const payload = await fetchCanonicalAuctionPage(
-          ctx.env,
-          filters,
-          entitlement.limit,
-          page,
-          pageSize,
           entitlement.accessToken,
+          requestDeadline.signal,
         );
-        if (!exactAuctionPayloadMatches(payload, exactResult.filters)) {
+        return jsonResponse(auctionPagePayload(
+          rows,
+          rows,
+          entitlement.limit,
+          1,
+          Math.max(1, entitlement.limit),
+          activeRevision,
+          nowMs,
+        ));
+      } catch (error) {
+        if (
+          error instanceof ExactAuctionIdentityError ||
+          (
+            error instanceof Error &&
+            error.message.includes("public_catalogue_duplicate_os_tag")
+          )
+        ) {
           return invalidExactAuctionIdentity();
         }
-        return jsonResponse(payload);
-      }
-      const nowMs = auctionRevisionTimeMs();
-      const rows = await fetchPublicAuctionRows(
-        ctx.env,
-        entitlement.limit,
-        entitlement.accessToken,
-      );
-      return jsonResponse(auctionPagePayload(
-        rows,
-        rows,
-        entitlement.limit,
-        1,
-        Math.max(1, entitlement.limit),
-        activeRevision,
-        nowMs,
-      ));
-    } catch (error) {
-      if (
-        error instanceof ExactAuctionIdentityError ||
-        (
-          error instanceof Error &&
-          error.message.includes("public_catalogue_duplicate_os_tag")
-        )
-      ) {
-        return invalidExactAuctionIdentity();
-      }
-      if (isPublicCatalogueSnapshotExpiredError(error)) {
-        return jsonResponse(
-          { error: "Auction catalogue publication is no longer active" },
-          {
-            status: 409,
-            headers: {
-              "Cache-Control": "no-store",
-              "CDN-Cache-Control": "no-store",
+        if (isPublicCatalogueSnapshotExpiredError(error)) {
+          return jsonResponse(
+            { error: "Auction catalogue publication is no longer active" },
+            {
+              status: 409,
+              headers: {
+                "Cache-Control": "no-store",
+                "CDN-Cache-Control": "no-store",
+              },
             },
-          },
-        );
+          );
+        }
+        if (isSupabaseTransientError(error)) return upstreamUnavailable();
+        throw error;
       }
-      if (isSupabaseTransientError(error)) return upstreamUnavailable();
-      throw error;
-    }
+    };
+    const response = bypassSharedCache || entitlement.authenticated
+      ? await produceResponse()
+      : await cachedJson(ctx, cacheKey, produceResponse, {
+        edgeTtlSeconds: 60,
+        browserTtlSeconds: 30,
+        staleSeconds: 60,
+        staleFallbackSeconds: 120,
+        producerTimeoutMs: PUBLIC_AUCTION_PRODUCER_TIMEOUT_MS,
+      });
+    return bypassSharedCache || entitlement.authenticated
+      ? privateAuctionResponse(response)
+      : response;
   };
-  const response = entitlement.authenticated
-    ? await produceResponse()
-    : await cachedJson(ctx, cacheKey, produceResponse, {
-      edgeTtlSeconds: 60,
-      browserTtlSeconds: 30,
-      staleSeconds: 60,
-      staleFallbackSeconds: 120,
-      producerTimeoutMs: PUBLIC_AUCTION_PRODUCER_TIMEOUT_MS,
-    });
-  return entitlement.authenticated ? privateAuctionResponse(response) : response;
+
+  try {
+    return await runWithinDeadline();
+  } catch (error) {
+    if (requestDeadline.signal.aborted) {
+      const response = upstreamUnavailable();
+      return bypassSharedCache ? privateAuctionResponse(response) : response;
+    }
+    throw error;
+  } finally {
+    requestDeadline.dispose();
+  }
 }
 
 export const onRequest: PagesFunction<PublicApiEnv> = async (ctx) => {

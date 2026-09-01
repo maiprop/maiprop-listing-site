@@ -74,6 +74,7 @@ type SupabaseFetchOptions = {
   retryDelayMs?: number;
   countStrategy?: "exact" | "planned" | "estimated";
   timeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 export type PublicCataloguePublication = {
@@ -193,6 +194,29 @@ async function fetchWithTimeout(
     return await fetch(input, { ...init, signal: controller.signal });
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function fetchAndConsumeWithTimeout<T>(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+  consume: (response: Response) => Promise<T>,
+  parentSignal?: AbortSignal,
+): Promise<T> {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort(parentSignal?.reason);
+  if (parentSignal?.aborted) abortFromParent();
+  else parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+  const timeout = setTimeout(() => {
+    controller.abort(new DOMException("Supabase response timed out", "TimeoutError"));
+  }, timeoutMs);
+  try {
+    const response = await fetch(input, { ...init, signal: controller.signal });
+    return await consume(response);
+  } finally {
+    clearTimeout(timeout);
+    parentSignal?.removeEventListener("abort", abortFromParent);
   }
 }
 
@@ -697,25 +721,53 @@ export async function supabaseRpcJson<T>(
   const retryLimit = transientStatusRetryLimit(options);
 
   for (let attempt = 0; ; attempt += 1) {
-    let res: Response;
+    let result: {
+      response: Response;
+      payload: unknown;
+      details: string;
+    };
     try {
-      res = await fetchWithTimeout(url, {
-        method: "POST",
-        headers: {
-          apikey: runtime.key,
-          Authorization: `Bearer ${runtime.key}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
+      result = await fetchAndConsumeWithTimeout(
+        url,
+        {
+          method: "POST",
+          headers: {
+            apikey: runtime.key,
+            Authorization: `Bearer ${runtime.key}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
         },
-        body: JSON.stringify(body),
-      }, supabaseFetchTimeoutMs(options));
+        supabaseFetchTimeoutMs(options),
+        async (response) => {
+          if (response.ok) {
+            return {
+              response,
+              payload: await response.json(),
+              details: "",
+            };
+          }
+          return {
+            response,
+            payload: null,
+            details: TRANSIENT_UPSTREAM_STATUSES.has(response.status)
+              ? ""
+              : (await response.text()).slice(0, 1_000),
+          };
+        },
+        options.signal,
+      );
     } catch (error) {
+      if (error instanceof SyntaxError) throw error;
       if (options.failOnTransient) {
         throw new SupabaseTransientError("Supabase RPC timed out", path);
       }
       warnTransientFetchFailure("RPC", path, error);
       return [];
     }
+
+    const res = result.response;
 
     if (!res.ok) {
       if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
@@ -729,19 +781,19 @@ export async function supabaseRpcJson<T>(
         console.warn(`[public-api] Supabase ${path} transiently unavailable with ${res.status}`);
         return [];
       }
-      const details = (await res.text()).slice(0, 1_000);
       throw new Error(
-        `Supabase RPC failed with ${res.status}${details ? `: ${details}` : ""}`,
+        `Supabase RPC failed with ${res.status}${result.details ? `: ${result.details}` : ""}`,
       );
     }
 
-    return (await res.json()) as T[];
+    return result.payload as T[];
   }
 }
 
 export async function getPublicCataloguePublication(
   env: PublicApiEnv,
   requestedPublicationId: number | null,
+  signal?: AbortSignal,
 ): Promise<PublicCataloguePublication> {
   try {
     const rows = await supabaseRpcJson<{
@@ -754,7 +806,7 @@ export async function getPublicCataloguePublication(
       env,
       "get_public_catalogue_publication",
       { p_publication_id: requestedPublicationId },
-      { failOnTransient: true },
+      { failOnTransient: true, signal },
     );
     const publicationId = Number(rows[0]?.publication_id);
     const snapshotMinute = rows[0]?.snapshot_minute;

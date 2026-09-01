@@ -122,6 +122,39 @@ function jsonRows(rows: unknown[], init: ResponseInit = {}): Response {
   });
 }
 
+function delayedJsonBody(
+  payload: unknown,
+  delayMs: number,
+  signal: AbortSignal | null | undefined,
+): Response {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let abortBody: (() => void) | undefined;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      abortBody = () => {
+        if (timer) clearTimeout(timer);
+        controller.error(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+      };
+      if (signal?.aborted) {
+        abortBody();
+        return;
+      }
+      signal?.addEventListener("abort", abortBody, { once: true });
+      timer = setTimeout(() => {
+        signal?.removeEventListener("abort", abortBody!);
+        controller.enqueue(bytes);
+        controller.close();
+      }, delayMs);
+    },
+    cancel() {
+      if (timer) clearTimeout(timer);
+      if (abortBody) signal?.removeEventListener("abort", abortBody);
+    },
+  });
+  return new Response(body, { headers: { "Content-Type": "application/json" } });
+}
+
 function publicationTimestamp(): string {
   const timestamp = new Date();
   timestamp.setUTCSeconds(0, 0);
@@ -3474,6 +3507,23 @@ describe("public auctions endpoint", () => {
     );
   });
 
+  it.each([
+    "Bearer low-limit-token",
+    "Bearer",
+  ])("bypasses shared cache for low-limit bearer presence: %s", async (authorization) => {
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=12",
+      { headers: { Authorization: authorization } },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(response.headers.get("CDN-Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Vary")).toContain("Authorization");
+    expect(cacheApi.match).not.toHaveBeenCalled();
+    expect(cacheApi.put).not.toHaveBeenCalled();
+  });
+
   it("defaults omitted auction limits to the first-paint window", async () => {
     const res = await auctionsRequest(makeCtx("https://portal.maiprop.co/api/public/auctions"));
     expect(res.status).toBe(200);
@@ -3486,6 +3536,71 @@ describe("public auctions endpoint", () => {
 
     const cacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(cacheKey.searchParams.get("limit")).toBe("60");
+  });
+
+  it("forwards every canonical filter to the bounded database scan before the visible cap", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/auth/v1/user") {
+        return new Response(JSON.stringify({ id: "00000000-0000-4000-8000-000000000001" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_current_auction_listing_visible_limit") {
+        expect(requestJson(init)).toEqual({});
+        return new Response("600", { headers: { "Content-Type": "application/json" } });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+        const expectedParams = {
+          p_city: "Athens",
+          p_property_base: "commercial",
+          p_property_subtype: "office",
+          p_bid_min: "100000",
+          p_bid_max: "200000",
+          p_year_min: "1990",
+          p_year_max: "2010",
+          p_sqm_min: "80",
+          p_sqm_max: "120",
+          p_ownership: "common",
+          p_round: "3plus",
+          p_yield: "high",
+        };
+        const hasAllFilters = Object.entries(expectedParams).every(
+          ([key, value]) => url.searchParams.get(key) === value,
+        );
+        if (!hasAllFilters || url.searchParams.get("p_stream") === "priority") {
+          return jsonRows([]);
+        }
+        return jsonRows([{
+          id: "match-beyond-old-60-row-prefix",
+          city: "Athens",
+          property_type: "commercial",
+          auction_date: "2026-08-01",
+          auction_starting_bid: 150_000,
+          year_built: 2000,
+          sqm: 100,
+          priority_placement: 0,
+          tags: ["commercial_type:office", "ownership:common", "round:3"],
+        }]);
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions" +
+        "?limit=600&page=1&pageSize=60&city=Athens&propertyType=commercial:office" +
+        "&bidRange=100000-200000&yearRange=1990-2010&sqmRange=80-120" +
+        "&ownership=common&round=3plus&yield=high",
+      { headers: { Authorization: "Bearer paid-user-token" } },
+    ));
+    const body = await response.json() as { data: AuctionRowForTest[]; total: number };
+
+    expect(response.status).toBe(200);
+    expect(body.total).toBe(1);
+    expect(body.data.map((row) => row.id)).toEqual(["match-beyond-old-60-row-prefix"]);
+    const candidateUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
+    expect(candidateUrls).toHaveLength(2);
+    expect(candidateUrls.every((url) => url.searchParams.get("p_limit") === "600")).toBe(true);
   });
 
   it("excludes auctions with an unknown construction year when a year filter is active", async () => {
@@ -3780,10 +3895,11 @@ describe("public auctions endpoint", () => {
           headers: { "Content-Type": "application/json" },
         });
       }
-      if (url.pathname === "/rest/v1/rpc/get_auction_listing_visible_limit") {
+      if (url.pathname === "/rest/v1/rpc/get_current_auction_listing_visible_limit") {
         const headers = new Headers(init?.headers);
         expect(headers.get("apikey")).toBe("publishable_test_key");
         expect(headers.get("Authorization")).toBe("Bearer paid-user-token");
+        expect(requestJson(init)).toEqual({});
         return new Response("600", {
           headers: { "Content-Type": "application/json" },
         });
@@ -3876,6 +3992,111 @@ describe("public auctions endpoint", () => {
     expect(candidateHeaders.every((candidateHeader) =>
       candidateHeader.get("Authorization") === "Bearer publishable_test_key"
     )).toBe(true);
+    if (headers) {
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+      expect(cacheApi.match).not.toHaveBeenCalled();
+      expect(cacheApi.put).not.toHaveBeenCalled();
+    } else {
+      expect(response.headers.get("Cache-Control")).toContain("public");
+      expect(cacheApi.match).toHaveBeenCalled();
+      expect(cacheApi.put).toHaveBeenCalled();
+    }
+  });
+
+  it("keeps the subordinate DB timeout active through candidate response-body reads", async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+        return delayedJsonBody([{
+          id: "late-body-row",
+          city: "Athens",
+          auction_date: "2026-08-01",
+          priority_placement: 0,
+        }], 6_000, init?.signal);
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    let settledResponse: Response | undefined;
+    let settledError: unknown;
+    const tracked = Promise.resolve(auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=12",
+      { headers: { Authorization: "Bearer body-timeout-token" } },
+    ))).then(
+      (response) => {
+        settledResponse = response;
+        return response;
+      },
+      (error: unknown) => {
+        settledError = error;
+        throw error;
+      },
+    );
+
+    try {
+      await vi.advanceTimersByTimeAsync(2_500);
+      await Promise.resolve();
+      expect(settledError).toBeUndefined();
+      expect(settledResponse).toBeDefined();
+      const response = await tracked;
+      expect(response.status).toBe(503);
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+      expect(response.headers.get("CDN-Cache-Control")).toBe("no-store");
+    } finally {
+      if (!settledResponse && settledError === undefined) {
+        await vi.advanceTimersByTimeAsync(10_000);
+      }
+      await tracked.catch(() => undefined);
+      vi.useRealTimers();
+    }
+  });
+
+  it("maps an exact-publication body timeout to a private upstream response", async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/rpc/get_public_catalogue_publication") {
+        return delayedJsonBody([], 6_000, init?.signal);
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    let settledResponse: Response | undefined;
+    let settledError: unknown;
+    const listingId = "abcdefab-cdef-4abc-8def-abcdefabcdef";
+    const tracked = Promise.resolve(auctionsRequest(makeCtx(
+      `https://portal.maiprop.co/api/public/auctions?limit=12&ids=${listingId}`,
+      { headers: { Authorization: "Bearer exact-body-timeout-token" } },
+    ))).then(
+      (response) => {
+        settledResponse = response;
+        return response;
+      },
+      (error: unknown) => {
+        settledError = error;
+        throw error;
+      },
+    );
+
+    try {
+      await vi.advanceTimersByTimeAsync(2_500);
+      await Promise.resolve();
+      expect(settledError).toBeUndefined();
+      expect(settledResponse).toBeDefined();
+      const response = await tracked;
+      expect(response.status).toBe(503);
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+      expect(response.headers.get("CDN-Cache-Control")).toBe("no-store");
+      expect(cacheApi.match).not.toHaveBeenCalled();
+      expect(cacheApi.put).not.toHaveBeenCalled();
+    } finally {
+      if (!settledResponse && settledError === undefined) {
+        await vi.advanceTimersByTimeAsync(10_000);
+      }
+      await tracked.catch(() => undefined);
+      vi.useRealTimers();
+    }
   });
 
   it("keeps a validated caller private when entitlement falls back to 60", async () => {
@@ -3887,7 +4108,7 @@ describe("public auctions endpoint", () => {
           headers: { "Content-Type": "application/json" },
         });
       }
-      if (url.pathname === "/rest/v1/rpc/get_auction_listing_visible_limit") {
+      if (url.pathname === "/rest/v1/rpc/get_current_auction_listing_visible_limit") {
         return jsonRows([], { status: 503 });
       }
       if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
@@ -3964,7 +4185,9 @@ describe("public auctions endpoint", () => {
       expect(authSignal?.aborted).toBe(true);
       expect(body.total).toBe(60);
       expect(body.data).toHaveLength(60);
-      expect(response.headers.get("Cache-Control")).toContain("public");
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+      expect(cacheApi.match).not.toHaveBeenCalled();
+      expect(cacheApi.put).not.toHaveBeenCalled();
       expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
     } finally {
       vi.useRealTimers();
@@ -4003,6 +4226,67 @@ describe("public auctions endpoint", () => {
       expect(headers.get("apikey")).toBe("publishable_test_key");
       expect(headers.get("Authorization")).toBe("Bearer publishable_test_key");
       expect(headers.get("Authorization")).not.toContain("service_role_test_key");
+    }
+  });
+
+  it("applies one aggregate deadline across auth bodies, entitlement, and candidate bodies", async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/auth/v1/user") {
+        return delayedJsonBody(
+          { id: "00000000-0000-4000-8000-000000000001" },
+          2_000,
+          init?.signal,
+        );
+      }
+      if (url.pathname === "/rest/v1/rpc/get_current_auction_listing_visible_limit") {
+        return delayedJsonBody(600, 2_000, init?.signal);
+      }
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+        return delayedJsonBody([{
+          id: "aggregate-late-row",
+          city: "Athens",
+          auction_date: "2026-08-01",
+          priority_placement: 0,
+        }], 2_000, init?.signal);
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    let settledResponse: Response | undefined;
+    let settledError: unknown;
+    const tracked = Promise.resolve(auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=600&page=1&pageSize=60",
+      { headers: { Authorization: "Bearer aggregate-timeout-token" } },
+    ))).then(
+      (response) => {
+        settledResponse = response;
+        return response;
+      },
+      (error: unknown) => {
+        settledError = error;
+        throw error;
+      },
+    );
+
+    try {
+      await vi.advanceTimersByTimeAsync(5_000);
+      await Promise.resolve();
+      expect(settledError).toBeUndefined();
+      expect(settledResponse).toBeDefined();
+      const response = await tracked;
+      expect(response.status).toBe(503);
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+      expect(response.headers.get("CDN-Cache-Control")).toBe("no-store");
+      expect(cacheApi.match).not.toHaveBeenCalled();
+      expect(cacheApi.put).not.toHaveBeenCalled();
+    } finally {
+      if (!settledResponse && settledError === undefined) {
+        await vi.advanceTimersByTimeAsync(10_000);
+      }
+      await tracked.catch(() => undefined);
+      vi.useRealTimers();
     }
   });
 

@@ -28,7 +28,7 @@ jobs:
       - name: Run unauthenticated public read-only checks
         shell: bash
         run: |
-          node <<'NODE'
+          node --input-type=module <<'NODE'
           const baseUrl = new URL(process.env.PUBLIC_BASE_URL);
           const API_MAX_MS = 3_500;
           if (
@@ -75,6 +75,8 @@ jobs:
             for (let attempt = 1; attempt <= 3; attempt += 1) {
               const startedAt = performance.now();
               let elapsedMs = 0;
+              let retryable = false;
+              let responseReceived = false;
               try {
                 const response = await fetch(target, {
                   method: probe.method,
@@ -86,9 +88,11 @@ jobs:
                   },
                   signal: AbortSignal.timeout(15_000),
                 });
+                responseReceived = true;
 
                 if (!response.ok) {
                   lastFailure = `HTTP ${response.status}`;
+                  retryable = response.status >= 500 && response.status <= 599;
                 } else if (probe.expectsJson) {
                   const payload = await response.json();
                   if (!payload || typeof payload !== "object") {
@@ -121,11 +125,13 @@ jobs:
               } catch (error) {
                 lastFailure =
                   error instanceof Error ? error.message : String(error);
+                retryable = !responseReceived;
               }
 
               elapsedMs = Math.round(performance.now() - startedAt);
               if (probe.expectsJson && elapsedMs > API_MAX_MS) {
                 lastFailure = `elapsed ${elapsedMs} ms exceeded API ceiling ${API_MAX_MS} ms`;
+                retryable = false;
               }
               lastElapsedMs = elapsedMs;
               lastAttempt = attempt;
@@ -141,8 +147,10 @@ jobs:
                 break;
               }
 
-              if (attempt < 3) {
+              if (retryable && attempt < 3) {
                 await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+              } else {
+                break;
               }
             }
 
