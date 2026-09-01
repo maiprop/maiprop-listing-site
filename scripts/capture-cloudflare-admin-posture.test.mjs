@@ -166,7 +166,7 @@ describe("Cloudflare admin posture capture", () => {
      });
    });
 
-   it("fails closed when the Pages API omits source posture", async () => {
+   it("recognizes an omitted optional source as a Direct Upload project", async () => {
      const evidence = await buildCloudflarePostureEvidence({
        env: {
          CLOUDFLARE_API_TOKEN: "cf_secret",
@@ -188,11 +188,14 @@ describe("Cloudflare admin posture capture", () => {
      });
 
      expect(evidence).toMatchObject({
-       status: "failed",
+       status: "captured",
        pagesProject: {
          gitAutoDeploy: {
-           allAutomaticDeploymentsDisabled: false,
-           status: "unknown",
+           sourceConnected: false,
+           productionDeploymentsEnabled: false,
+           previewDeploymentSetting: "none",
+           allAutomaticDeploymentsDisabled: true,
+           status: "disabled",
          },
        },
      });

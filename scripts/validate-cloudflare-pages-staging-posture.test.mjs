@@ -181,6 +181,30 @@ describe("Cloudflare staging Pages posture validation", () => {
     expect(serialized).not.toContain("portal.maiprop.co");
   });
 
+  it("accepts Cloudflare's optional source omission for Direct Upload", () => {
+    const stagingApi = projectEnvelope({
+      name: options.stagingProjectName,
+      values: stagingValues,
+    });
+    delete stagingApi.result.source;
+
+    const evidence = buildCloudflarePagesStagingPostureEvidence({
+      ...options,
+      stagingApi,
+      productionApi: projectEnvelope({
+        name: options.productionProjectName,
+        values: productionValues,
+      }),
+    });
+
+    expect(evidence.projects[0]).toMatchObject({
+      role: "staging",
+      source_connected: false,
+      all_automatic_deployments_disabled: true,
+      status: "disabled",
+    });
+  });
+
   it("accepts only redacted Stripe test-mode staging bindings", () => {
     const evidence = buildCloudflarePagesStagingPostureEvidence({
       ...options,

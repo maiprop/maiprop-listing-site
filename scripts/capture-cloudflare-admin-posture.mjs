@@ -21,20 +21,8 @@ export const validateCloudflareEnv = (env = process.env) => {
 const allowedDnsModes = new Set(["registrar", "cloudflare-authoritative"]);
 
 export const normalizePagesGitAutoDeploy = (project) => {
-  const sourceFieldPresent = Object.prototype.hasOwnProperty.call(
-    project ?? {},
-    "source",
-  );
-  if (!sourceFieldPresent) {
-    return {
-      sourceConnected: false,
-      productionDeploymentsEnabled: null,
-      previewDeploymentSetting: null,
-      allAutomaticDeploymentsDisabled: false,
-      status: "unknown",
-    };
-  }
-
+  // Cloudflare defines Project.source as optional. Direct Upload projects have
+  // no Git source, so the API may omit this property instead of returning null.
   if (project.source == null) {
     return {
       sourceConnected: false,
