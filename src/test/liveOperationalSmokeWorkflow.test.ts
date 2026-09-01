@@ -12,8 +12,22 @@ describe("live operational smoke workflow", () => {
     expect(workflow).toContain("/api/public/listings?limit=1");
     expect(workflow).toContain("/api/public/auctions?limit=1");
     expect(workflow).toContain("/api/public/open-houses?limit=1");
-    expect(workflow).toContain("/api/public/homepage?section=listing_counts");
+    expect(workflow).toContain("/api/public/homepage?section=type-counts");
+    expect(workflow).not.toContain("/api/public/homepage?section=listing_counts");
+    expect(workflow).toContain("performance.now()");
+    expect(workflow).toContain("3_500");
+    expect(workflow).toContain(
+      'Object.prototype.hasOwnProperty.call(payload, "error")',
+    );
+    expect(workflow).toContain('shape: "data-array"');
+    expect(workflow).toContain('shape: "array"');
+    expect(workflow).toContain('shape: "object"');
+    expect(workflow).toContain("Array.isArray(payload.data)");
+    expect(workflow).toContain("Array.isArray(payload)");
+    expect(workflow).toContain("!Array.isArray(payload)");
+    expect(workflow).toContain("elapsedMs");
     expect(workflow).toContain("Public read-only probe passed");
+    expect(workflow).toContain("Public read-only probe failed");
   });
 
   it("cannot reach authenticated, metered, or repository-controlled production paths", () => {
