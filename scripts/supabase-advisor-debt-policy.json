@@ -26,6 +26,46 @@
       "reason": "Invocation reconciliation is service-role-only: PUBLIC, anon, and authenticated have no table privileges, while RLS remains enabled as defense in depth.",
       "next_action": "Keep grants service-role-only and retain invocation lifecycle tests whenever reconciliation changes.",
       "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "rls_enabled_no_policy",
+        "cache_key_contains": "private_os_auction_invalid_identity_quarantine"
+      },
+      "owner": "auctions/security",
+      "reason": "The invalid-identity quarantine is in the unexposed private schema and staging proves anon, authenticated, and service_role have no direct DML privileges; privileged maintenance functions own the boundary.",
+      "next_action": "Keep the private-schema placement, zero browser-role grants, and quarantine integrity checks as release gates.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "rls_enabled_no_policy",
+        "cache_key_contains": "private_public_catalogue_current"
+      },
+      "owner": "catalogue/security",
+      "reason": "The current-publication pointer is an unexposed private table with no direct browser-role DML privileges; public access is only through bounded projection RPCs.",
+      "next_action": "Retain zero direct grants and the exact-publication projection tests whenever publication switching changes.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "rls_enabled_no_policy",
+        "cache_key_contains": "private_public_catalogue_publications"
+      },
+      "owner": "catalogue/security",
+      "reason": "Publication metadata is stored in the unexposed private schema with no direct browser-role DML privileges and is exposed only through a fixed public projection.",
+      "next_action": "Keep direct grants revoked and validate the publication projection and retention lifecycle in staging.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "rls_enabled_no_policy",
+        "cache_key_contains": "private_public_catalogue_versions"
+      },
+      "owner": "catalogue/security",
+      "reason": "Materialized listing versions are isolated in the unexposed private schema with no direct browser-role DML privileges; only allowlisted public fields leave through bounded RPCs.",
+      "next_action": "Retain zero direct grants and the raw-table denial plus public-projection staging tests.",
+      "review_cadence": "monthly"
     }
   ],
   "review": [
@@ -151,6 +191,104 @@
       "owner": "agent-data/pricing",
       "reason": "Agent data-input submission is an authenticated RPC with role, ban, quota, and idempotency checks enforced inside the function.",
       "next_action": "Keep denial-path tests current and migrate browser submission to an Edge Function if additional moderation steps are added.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "security_definer_function_executable_public_get_public_catalogue_auctions_" },
+      "owner": "auctions/security",
+      "reason": "The public auction projection reads only a fixed materialized-publication snapshot and allowlisted auction fields while raw snapshot and auction tables remain inaccessible to browser roles.",
+      "next_action": "Keep publication identity, bounded listing IDs, output allowlists, and raw-table denial covered by staging catalogue tests.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "security_definer_function_executable_public_get_public_catalogue_homepage_" },
+      "owner": "catalogue/security",
+      "reason": "Homepage reads are served from an immutable public snapshot and return only the fixed homepage aggregate instead of exposing private snapshot tables.",
+      "next_action": "Keep the response contract, publication identity, and anonymous raw-table denial tests as hard staging gates.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "security_definer_function_executable_public_get_public_catalogue_listing_" },
+      "owner": "catalogue/security",
+      "reason": "Exact listing reads use the immutable public snapshot and return only an allowlisted public listing envelope for one bounded identifier.",
+      "next_action": "Keep inactive/off-market denial, output allowlist, and exact-publication tests as hard staging gates.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "security_definer_function_executable_public_get_public_catalogue_publication_" },
+      "owner": "catalogue/security",
+      "reason": "The publication RPC exposes only the current immutable publication identity required to bind subsequent public reads and never exposes the private control table.",
+      "next_action": "Keep the fixed return shape and raw-table denial proof tied to every catalogue publication change.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "security_definer_function_executable_public_query_public_catalogue_" },
+      "owner": "catalogue/security",
+      "reason": "Search queries are bounded, filter-normalized reads over the immutable public snapshot and return only the public listing projection; private snapshot tables have no browser grants.",
+      "next_action": "Keep filter bounds, cursor validation, output allowlists, and raw-table denial in the staging performance/security suite.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "security_definer_function_executable_public_get_visible_auction_candidate_envelope_" },
+      "owner": "auctions/security",
+      "reason": "The public envelope is a bounded read-only auction projection that excludes invalid, duplicate, and private quarantine rows while keeping source tables inaccessible.",
+      "next_action": "Keep limit/filter bounds, invalid-identity exclusion, and output-field tests as release gates.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "security_definer_function_executable_public_get_visible_auction_candidates_" },
+      "owner": "auctions/security",
+      "reason": "The visible-candidate RPC is a bounded read-only compatibility projection with explicit visibility and quarantine exclusions; raw auction data remains inaccessible to browser roles.",
+      "next_action": "Keep visibility, quarantine, and bounded-result regression tests until all clients use the envelope RPC.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "authenticated_security_definer_function_executable_public_activate_listing_promotion_" },
+      "owner": "listings/billing",
+      "reason": "Authenticated promotion activation enforces the caller principal, listing ownership, entitlement balance, idempotency, and promotion type inside the RPC.",
+      "next_action": "Keep owner/outsider, balance, concurrency, and idempotency tests as hard release gates.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "authenticated_security_definer_function_executable_public_deactivate_listing_promotion_" },
+      "owner": "listings/billing",
+      "reason": "Authenticated promotion deactivation verifies the caller owns the target listing before changing its active promotion state.",
+      "next_action": "Keep owner/outsider and entitlement-state tests tied to this RPC.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "authenticated_security_definer_function_executable_public_can_access_video_room_" },
+      "owner": "communications/video",
+      "reason": "Realtime and TURN authorization require an authenticated SECURITY DEFINER predicate that validates the room topic and current user participation without exposing room membership rows.",
+      "next_action": "Keep malformed-topic, participant, outsider, and realtime-policy tests as hard release gates.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "authenticated_security_definer_function_executable_public_get_current_auction_listing_visible_limit_" },
+      "owner": "auctions/entitlements",
+      "reason": "The authenticated quota RPC derives the caller from auth.uid() and returns only the caller's effective visible-auction limit without exposing subscription records.",
+      "next_action": "Keep anonymous denial and role/plan quota matrix tests tied to this RPC.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "authenticated_security_definer_function_executable_public_get_manageable_listing_catalogue_" },
+      "owner": "listings/security",
+      "reason": "The authenticated management catalogue derives the caller principal and returns only listings the owner, permitted organization member, or platform administrator may manage.",
+      "next_action": "Keep owner, organization-member, outsider, pagination, and platform-admin tests as hard release gates.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "authenticated_security_definer_function_executable_public_get_manageable_listing_summary_" },
+      "owner": "listings/security",
+      "reason": "The management summary applies the same caller-scoped owner, organization, and administrator predicate and returns only aggregate counts for that authorized set.",
+      "next_action": "Keep summary parity and outsider-denial tests aligned with the management catalogue predicate.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": { "cache_key_contains": "authenticated_security_definer_function_executable_public_register_new_building_storage_upload_" },
+      "owner": "storage/platform",
+      "reason": "Upload registration verifies the authenticated project owner, bucket, normalized object path, and lifecycle state before recording cleanup ownership.",
+      "next_action": "Keep owner/outsider, bucket/path, state-transition, and cleanup lifecycle tests as hard release gates.",
       "review_cadence": "monthly"
     },
     {

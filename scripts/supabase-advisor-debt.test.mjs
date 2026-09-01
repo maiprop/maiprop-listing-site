@@ -110,6 +110,47 @@ describe("supabase advisor debt classification", () => {
     expect(() => assertAdvisorDebtIsActionable(debt)).not.toThrow();
   });
 
+  it("classifies the verified catalogue, auction, and authenticated workflow surfaces", async () => {
+    const repositoryPolicy = await loadAdvisorDebtPolicy(
+      resolve(process.cwd(), "scripts/supabase-advisor-debt-policy.json"),
+    );
+    const lints = [
+      "rls_enabled_no_policy_private_os_auction_invalid_identity_quarantine",
+      "rls_enabled_no_policy_private_public_catalogue_current",
+      "rls_enabled_no_policy_private_public_catalogue_publications",
+      "rls_enabled_no_policy_private_public_catalogue_versions",
+      "anon_security_definer_function_executable_public_get_public_catalogue_homepage_p_publication_id bigint",
+      "authenticated_security_definer_function_executable_public_get_public_catalogue_listing_p_publication_id bigint",
+      "anon_security_definer_function_executable_public_query_public_catalogue_p_publication_id bigint",
+      "authenticated_security_definer_function_executable_public_query_public_catalogue_p_publication_id bigint",
+      "anon_security_definer_function_executable_public_get_visible_auction_candidate_envelope_p_limit integer",
+      "authenticated_security_definer_function_executable_public_get_visible_auction_candidates_p_limit integer",
+      "authenticated_security_definer_function_executable_public_activate_listing_promotion_p_listing_id uuid",
+      "authenticated_security_definer_function_executable_public_deactivate_listing_promotion_p_listing_id uuid",
+      "authenticated_security_definer_function_executable_public_can_access_video_room_p_topic text",
+      "authenticated_security_definer_function_executable_public_get_current_auction_listing_visible_limit_",
+      "authenticated_security_definer_function_executable_public_get_manageable_listing_catalogue_page_p_limit integer",
+      "authenticated_security_definer_function_executable_public_register_new_building_storage_upload_p_project_id uuid",
+    ].map((cacheKey) => ({
+      name: cacheKey.startsWith("rls_enabled_no_policy")
+        ? "rls_enabled_no_policy"
+        : cacheKey.startsWith("anon_")
+          ? "anon_security_definer_function_executable"
+          : "authenticated_security_definer_function_executable",
+      level: cacheKey.startsWith("rls_enabled_no_policy") ? "INFO" : "WARN",
+      cache_key: cacheKey,
+    }));
+
+    const debt = classifyAdvisorDebt(
+      { results: [{ category: "security", lints }] },
+      repositoryPolicy,
+    );
+
+    expect(debt.unknown_count).toBe(0);
+    expect(debt.accepted_count + debt.review_count).toBe(lints.length);
+    expect(() => assertAdvisorDebtIsActionable(debt)).not.toThrow();
+  });
+
   it("treats Supabase performance advisor parser crashes as unavailable evidence only for performance", () => {
     const detail = "Failed to run project advisor lints: ERROR: 42601: syntax error at or near storage.buckets";
 
