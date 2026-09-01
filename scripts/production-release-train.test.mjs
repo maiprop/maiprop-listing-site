@@ -2715,7 +2715,7 @@ describe("production release train", () => {
     expect(statusIndex).toBeGreaterThan(mutationIndex);
     expect(attemptedIndex).toBeGreaterThan(statusIndex);
     expect(deploy.run).toContain("cloudflare-production-deployments-before.json");
-    expect(deploy.run.indexOf("deployments?env=production&per_page=100"))
+    expect(deploy.run.indexOf("deployments?env=production&per_page=20"))
       .toBeLessThan(mutationIndex);
     expect(reconciliation.env.DEPLOYMENTS_BEFORE).toBe(
       "${{ steps.deploy.outputs.deployments_before }}",
@@ -2739,6 +2739,26 @@ describe("production release train", () => {
     expect(reconciliation.run).toContain(
       "cloudflare-production-deployments-after.json",
     );
+  });
+
+  it("uses supported Cloudflare Pages deployment pagination throughout the release train", () => {
+    for (const workflowName of [
+      "bootstrap-cloudflare-staging-pages.yml",
+      "stage-release.yml",
+      "deploy-production-release.yml",
+      "reusable-cloudflare-production-deploy.yml",
+    ]) {
+      const source = workflow(workflowName);
+      expect(source, workflowName).not.toContain(
+        "pages/projects/$STAGING_PROJECT/deployments?env=production&per_page=100",
+      );
+      expect(source, workflowName).not.toContain(
+        "pages/projects/$PRODUCTION_PROJECT/deployments?env=production&per_page=100",
+      );
+      expect(source, workflowName).toMatch(
+        /pages\/projects\/\$(?:STAGING_PROJECT|PRODUCTION_PROJECT)\/deployments\?env=production&per_page=20/,
+      );
+    }
   });
 
   it("performs the production rollback guard immediately before POST", () => {

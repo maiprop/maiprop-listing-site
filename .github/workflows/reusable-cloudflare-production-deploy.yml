@@ -1304,7 +1304,7 @@ jobs:
           deployments_before="$RUNNER_TEMP/cloudflare-production-deployments-before.json"
           curl -fsS --retry 3 \
             -H "Authorization: Bearer $CF_READ_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments?env=production&per_page=100" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments?env=production&per_page=20" \
             > "$deployments_before"
           jq -e '.success == true and (.result | type == "array")' \
             "$deployments_before" > /dev/null
@@ -1455,7 +1455,7 @@ jobs:
           for attempt in $(seq 1 18); do
             curl -fsS --retry 3 \
               -H "Authorization: Bearer $CF_API_TOKEN" \
-              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments?env=production&per_page=100" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments?env=production&per_page=20" \
               > "$deployments_after"
             curl -fsS --retry 3 \
               -H "Authorization: Bearer $CF_API_TOKEN" \

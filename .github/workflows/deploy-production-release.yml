@@ -1088,7 +1088,7 @@ jobs:
             > "$RUNNER_TEMP/cloudflare-production-preflight-rollback-marker.json"
           curl -fsS --retry 3 \
             -H "Authorization: Bearer $CF_READ_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments?env=production&per_page=100" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/$PRODUCTION_PROJECT/deployments?env=production&per_page=20" \
             > "$deployments"
           jq -e --arg id "$(jq -er '.id' "$rollback")" \
             '.success == true and any(.result[]; .id == $id)' \

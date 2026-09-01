@@ -246,7 +246,7 @@ jobs:
             --out "$RUNNER_TEMP/bootstrap-staging-posture.json"
           curl -fsS --retry 3 \
             -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/deployments?env=production&per_page=100" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_PROJECT/deployments?env=production&per_page=20" \
             > "$deployments"
           jq -e '.success == true and (.result | type == "array")' "$deployments" > /dev/null
 
