@@ -810,7 +810,6 @@ jobs:
              [ "$PRODUCTION_PROJECT" != "maiprop-listing-site" ] ||
              [ "$STAGING_PROJECT" = "$PRODUCTION_PROJECT" ] ||
              [ "$STAGING_CF_ACCOUNT_ID" = "$PRODUCTION_CF_ACCOUNT_ID" ] ||
-             [ "$STAGING_CF_READ_TOKEN" = "$STAGING_CF_EDIT_TOKEN" ] ||
              [ "$STAGING_CF_READ_TOKEN" = "$PRODUCTION_CF_READ_TOKEN" ] ||
              [ "$STAGING_CF_EDIT_TOKEN" = "$PRODUCTION_CF_READ_TOKEN" ]; then
             echo "::error::Cloudflare staging preflight identities are not isolated from production."

@@ -211,7 +211,6 @@ jobs:
             echo "::add-mask::$value"
           done
           if [ "$STAGING_CF_ACCOUNT_ID" = "$PRODUCTION_CF_ACCOUNT_ID" ] ||
-             [ "$STAGING_CF_READ_TOKEN" = "$STAGING_CF_EDIT_TOKEN" ] ||
              [ "$STAGING_CF_READ_TOKEN" = "$PRODUCTION_CF_READ_TOKEN" ] ||
              [ "$STAGING_CF_EDIT_TOKEN" = "$PRODUCTION_CF_READ_TOKEN" ]; then
             echo "::error::Bootstrap Cloudflare credentials are not isolated from production."

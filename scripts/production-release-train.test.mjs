@@ -294,6 +294,51 @@ function executeBashSyntax(run) {
   return spawnSync(command, args, { encoding: "utf8", input: run });
 }
 
+function executeCloudflareStagingIsolation(
+  workflowName,
+  jobName,
+  stepName,
+  overrides = {},
+) {
+  const parsed = yaml.load(workflow(workflowName));
+  const step = parsed.jobs[jobName].steps.find(
+    (candidate) => candidate.name === stepName,
+  );
+  assert.ok(step, "Cloudflare staging preflight isolation step is required");
+  const apiBoundary = step.run.indexOf("\nstaging_read=");
+  assert.ok(
+    apiBoundary > 0,
+    "Cloudflare isolation guard must precede API validation",
+  );
+
+  const environment = {
+    STAGING_CF_READ_TOKEN: "staging-pages-token",
+    STAGING_CF_EDIT_TOKEN: "staging-pages-token",
+    STAGING_CF_ACCOUNT_ID: "staging-account",
+    PRODUCTION_CF_READ_TOKEN: "production-pages-read-token",
+    PRODUCTION_CF_ACCOUNT_ID: "production-account",
+    STAGING_PROJECT: "maiprop-listing-site-staging",
+    PRODUCTION_PROJECT: "maiprop-listing-site",
+    STAGING_APP_URL: "https://maiprop-listing-site-staging.pages.dev",
+    CLOUDFLARE_STAGING_PAGES_PROJECT_ID: "staging-project-id",
+    CLOUDFLARE_PAGES_PROJECT_ID: "production-project-id",
+    ...overrides,
+  };
+  const command = process.platform === "win32" ? "wsl.exe" : "env";
+  const prefix = process.platform === "win32" ? ["--exec", "env"] : [];
+  return spawnSync(
+    command,
+    [
+      ...prefix,
+      ...Object.entries(environment).map(([key, value]) => `${key}=${value}`),
+      "bash",
+      "-c",
+      step.run.slice(0, apiBoundary),
+    ],
+    { encoding: "utf8" },
+  );
+}
+
 function pagesRuntimeResultContract() {
   const producer = yaml.load(workflow("provision-cloudflare-pages-runtime.yml"));
   const producerStep = producer.jobs.provision.steps.find(
@@ -3618,6 +3663,55 @@ describe("production release train", () => {
        /turnCredentialIssuance\?\.credentialsRedacted !==\s+true/,
      );
     });
+
+   it("allows one staging-account Pages token while preserving production isolation", () => {
+     for (const [workflowName, jobName, stepName] of [
+       [
+         "bootstrap-cloudflare-staging-pages.yml",
+         "bootstrap",
+         "Preflight empty or already bootstrapped staging project",
+       ],
+       [
+         "stage-release.yml",
+         "cloudflare-staging-preflight",
+         "Verify Cloudflare staging identity credentials and canonical baseline",
+       ],
+     ]) {
+       const isolated = executeCloudflareStagingIsolation(
+         workflowName,
+         jobName,
+         stepName,
+       );
+       expect(
+         isolated.status,
+         `${workflowName}: ${isolated.stderr || isolated.stdout}`,
+       ).toBe(0);
+     }
+
+     for (const [name, overrides] of [
+       ["account reuse", { STAGING_CF_ACCOUNT_ID: "production-account" }],
+       ["project reuse", { STAGING_PROJECT: "maiprop-listing-site" }],
+       [
+         "staging read token reused in production",
+         { STAGING_CF_READ_TOKEN: "production-pages-read-token" },
+       ],
+       [
+         "staging edit token reused in production",
+         { STAGING_CF_EDIT_TOKEN: "production-pages-read-token" },
+       ],
+     ]) {
+       const result = executeCloudflareStagingIsolation(
+         "stage-release.yml",
+         "cloudflare-staging-preflight",
+         "Verify Cloudflare staging identity credentials and canonical baseline",
+         overrides,
+       );
+       expect(
+         result.status,
+         `${name}: ${result.stderr || result.stdout}`,
+       ).not.toBe(0);
+     }
+   });
 
    it("isolates staging Pages reads and writes in a dedicated Cloudflare account", () => {
       const stage = workflow("stage-release.yml");
