@@ -46,12 +46,32 @@ function fixture() {
     "select 1;\n",
   );
   writeFileSync(
+    join(
+      supabase,
+      "reconciliation",
+      "activate-role-switch-billing-cron.sql",
+    ),
+    "select 1;\n",
+  );
+  writeFileSync(
     join(supabase, "reconciliation", "production-history-v1.json"),
     '{"schema_version":1}\n',
   );
   writeFileSync(
     join(supabase, "reconciliation", "production-history-v1.sql"),
     "select json_build_object('ok', true);\n",
+  );
+  writeFileSync(
+    join(supabase, "reconciliation", "role-switch-fk-state.sql"),
+    "select 1;\n",
+  );
+  writeFileSync(
+    join(supabase, "reconciliation", "role-switch-index-preflight.sql"),
+    "select 1;\n",
+  );
+  writeFileSync(
+    join(supabase, "reconciliation", "role-switch-online-finalization.sql"),
+    "select 1;\n",
   );
   writeFileSync(
     join(supabase, "functions", "deno.json"),
@@ -97,8 +117,12 @@ describe("immutable production release artifact", () => {
       "supabase/functions/deno.json",
       "supabase/functions/deno.lock",
       "supabase/migrations/20260729120000_alpha.sql",
+      "supabase/reconciliation/activate-role-switch-billing-cron.sql",
       "supabase/reconciliation/production-history-v1.json",
       "supabase/reconciliation/production-history-v1.sql",
+      "supabase/reconciliation/role-switch-fk-state.sql",
+      "supabase/reconciliation/role-switch-index-preflight.sql",
+      "supabase/reconciliation/role-switch-online-finalization.sql",
     ]);
     expect(
       manifest.files.find((record) => record.path === "supabase/config.toml"),

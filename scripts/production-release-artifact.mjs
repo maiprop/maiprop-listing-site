@@ -33,6 +33,17 @@ const FUNCTION_SOURCE_EXTENSIONS = new Set([
   ".ts",
   ".tsx",
 ]);
+const RECONCILIATION_FILES = [
+  "reconciliation/activate-role-switch-billing-cron.sql",
+  "reconciliation/production-history-v1.json",
+  "reconciliation/production-history-v1.sql",
+  "reconciliation/role-switch-fk-state.sql",
+  "reconciliation/role-switch-index-preflight.sql",
+  "reconciliation/role-switch-online-finalization.sql",
+];
+const PACKAGED_RECONCILIATION_PATHS = new Set(
+  RECONCILIATION_FILES.map((path) => `supabase/${path}`),
+);
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -95,10 +106,7 @@ function assertPackagedSupabasePath(path) {
   if (/^supabase\/migrations\/\d{14}_[a-z0-9_-]+\.sql$/.test(path)) {
     return;
   }
-  if (
-    path === "supabase/reconciliation/production-history-v1.json" ||
-    path === "supabase/reconciliation/production-history-v1.sql"
-  ) {
+  if (PACKAGED_RECONCILIATION_PATHS.has(path)) {
     return;
   }
   if (
@@ -183,10 +191,7 @@ function collectSupabaseSourceFiles(root) {
     throw new Error("Supabase release source must contain migrations.");
   }
 
-  const reconciliation = [
-    "reconciliation/production-history-v1.json",
-    "reconciliation/production-history-v1.sql",
-  ];
+  const reconciliation = RECONCILIATION_FILES;
   for (const path of reconciliation) {
     assertFile(join(root, ...path.split("/")), `Supabase ${path}`);
   }
