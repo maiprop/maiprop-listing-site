@@ -8,6 +8,30 @@ BEGIN
     RAISE EXCEPTION 'Required managed catalogue relation is missing';
   END IF;
 
+  IF to_regclass('public.listings') IS NULL THEN
+    RAISE EXCEPTION 'Required listings relation is missing';
+  END IF;
+
+  IF to_regclass('public.professionals') IS NULL THEN
+    RAISE EXCEPTION 'Required professionals relation is missing';
+  END IF;
+
+  IF to_regprocedure('auth.uid()') IS NULL THEN
+    RAISE EXCEPTION 'Required auth.uid helper is missing';
+  END IF;
+
+  IF to_regprocedure(
+    'public.get_auction_listing_visible_limit(uuid)'
+  ) IS NULL THEN
+    RAISE EXCEPTION 'Required auction listing visible limit helper is missing';
+  END IF;
+
+  IF to_regprocedure(
+    'private.has_org_permission(uuid,text,uuid)'
+  ) IS NULL THEN
+    RAISE EXCEPTION 'Required organization permission helper is missing';
+  END IF;
+
   IF to_regprocedure(
     'public.get_public_auction_candidates(integer,text,date,timestamp with time zone,text)'
   ) IS NULL THEN
