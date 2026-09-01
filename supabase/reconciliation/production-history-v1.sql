@@ -8,34 +8,34 @@ WITH function_targets(
   signature,
   must_exist,
   expected_volatility,
-  require_public_search_path
+  expected_search_path
 ) AS (
   VALUES
-    ('function.public.can_review_professional', 'public.can_review_professional(uuid,uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.check_ai_quota', 'public.check_ai_quota(text)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.check_listing_quota', 'public.check_listing_quota()', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_agent_monthly_input_count', 'public.get_agent_monthly_input_count(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_ai_call_monthly_limit', 'public.get_ai_call_monthly_limit(uuid,text)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_auction_alert_limit', 'public.get_auction_alert_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_auction_listing_visible_limit', 'public.get_auction_listing_visible_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_contact_monthly_limit', 'public.get_contact_monthly_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_listing_limit', 'public.get_listing_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_open_house_rsvp_monthly_limit', 'public.get_open_house_rsvp_monthly_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_priority_ad_monthly_limit', 'public.get_priority_ad_monthly_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_professionals_per_category_limit', 'public.get_professionals_per_category_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_report_monthly_limit', 'public.get_report_monthly_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_saved_search_limit', 'public.get_saved_search_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_search_alert_limit', 'public.get_search_alert_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_valuation_monthly_limit', 'public.get_valuation_monthly_limit(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.get_viewing_limit', 'public.get_viewing_limit(uuid,boolean)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.has_buy_side_role', 'public.has_buy_side_role(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.has_sell_side_role', 'public.has_sell_side_role(uuid)', TRUE, NULL::TEXT, FALSE),
-    ('function.public.record_role_switch_audit', 'public.record_role_switch_audit(text,text,text,boolean,boolean)', TRUE, 'v', TRUE),
-    ('function.public.record_role_switch_audit_for_user', 'public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean)', TRUE, 'v', TRUE),
-    ('function.public.reserve_ai_quota', 'public.reserve_ai_quota(text)', TRUE, 'v', TRUE),
-    ('function.public.reserve_ai_quota_for_user', 'public.reserve_ai_quota_for_user(uuid,text)', TRUE, 'v', TRUE),
-    ('function.public.submit_agent_data_input_canonical', 'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)', TRUE, 'v', TRUE),
-    ('function.public.submit_agent_data_input_obsolete_absent', 'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text)', FALSE, NULL::TEXT, FALSE)
+    ('function.public.can_review_professional', 'public.can_review_professional(uuid,uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.check_ai_quota', 'public.check_ai_quota(text)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.check_listing_quota', 'public.check_listing_quota()', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_agent_monthly_input_count', 'public.get_agent_monthly_input_count(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_ai_call_monthly_limit', 'public.get_ai_call_monthly_limit(uuid,text)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_auction_alert_limit', 'public.get_auction_alert_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_auction_listing_visible_limit', 'public.get_auction_listing_visible_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_contact_monthly_limit', 'public.get_contact_monthly_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_listing_limit', 'public.get_listing_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_open_house_rsvp_monthly_limit', 'public.get_open_house_rsvp_monthly_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_priority_ad_monthly_limit', 'public.get_priority_ad_monthly_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_professionals_per_category_limit', 'public.get_professionals_per_category_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_report_monthly_limit', 'public.get_report_monthly_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_saved_search_limit', 'public.get_saved_search_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_search_alert_limit', 'public.get_search_alert_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_valuation_monthly_limit', 'public.get_valuation_monthly_limit(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.get_viewing_limit', 'public.get_viewing_limit(uuid,boolean)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.has_buy_side_role', 'public.has_buy_side_role(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.has_sell_side_role', 'public.has_sell_side_role(uuid)', TRUE, NULL::TEXT, NULL::TEXT),
+    ('function.public.record_role_switch_audit', 'public.record_role_switch_audit(text,text,text,boolean,boolean)', TRUE, 'v', 'public'),
+    ('function.public.record_role_switch_audit_for_user', 'public.record_role_switch_audit_for_user(uuid,uuid,text,text,text)', TRUE, 'v', 'pg_catalog, public'),
+    ('function.public.reserve_ai_quota', 'public.reserve_ai_quota(text)', TRUE, 'v', 'public'),
+    ('function.public.reserve_ai_quota_for_user', 'public.reserve_ai_quota_for_user(uuid,text)', TRUE, 'v', 'public'),
+    ('function.public.submit_agent_data_input_canonical', 'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)', TRUE, 'v', 'public'),
+    ('function.public.submit_agent_data_input_obsolete_absent', 'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text)', FALSE, NULL::TEXT, NULL::TEXT)
 ),
 function_observed AS (
   SELECT
@@ -43,7 +43,7 @@ function_observed AS (
     target.signature,
     target.must_exist,
     target.expected_volatility,
-    target.require_public_search_path,
+    target.expected_search_path,
     procedure_state.oid,
     pg_get_userbyid(procedure_state.proowner) AS owner_name,
     procedure_state.prosecdef AS security_definer,
@@ -112,8 +112,10 @@ function_checks AS (
           OR observed.volatility = observed.expected_volatility
         )
         AND (
-          NOT observed.require_public_search_path
-          OR observed.config @> '["search_path=public"]'::JSONB
+          observed.expected_search_path IS NULL
+          OR observed.config @> jsonb_build_array(
+            'search_path=' || observed.expected_search_path
+          )
         )
       ELSE observed.oid IS NULL
     END AS ok,

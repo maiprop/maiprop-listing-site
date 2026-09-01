@@ -299,6 +299,21 @@ describe("legacy migration history reconciliation", () => {
 });
 
 describe("legacy migration schema evidence", () => {
+  it("tracks the canonical operation-bound role-switch audit RPC", () => {
+    const evidenceSql = readFileSync(
+      "supabase/reconciliation/production-history-v1.sql",
+      "utf8",
+    );
+
+    expect(evidenceSql).toContain(
+      "public.record_role_switch_audit_for_user(uuid,uuid,text,text,text)",
+    );
+    expect(evidenceSql).not.toContain(
+      "public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean)",
+    );
+    expect(evidenceSql).toContain("'pg_catalog, public'");
+  });
+
   it("requires every deterministic postcondition check to pass", () => {
     const evidence = {
       schema_version: 1,
