@@ -436,7 +436,7 @@ test("catalogue hotfix deploys the manifest-bound database subset staging before
   assert.doesNotMatch(staticMarker, /\/api\/release|--location|-L\b|-sS|--show-error|\bcat\b|\btee\b/);
   assert.doesNotMatch(text, /release:verify-live-marker|\/api\/release/);
   assert.match(stagingBody, /public_catalogue_snapshot_test\.sql/);
-  assert.match(stagingBody, /90/);
+  assert.match(stagingBody, /--expected-plan 132/);
   assert.match(stagingBody, /catalogue_invalid_os_identity_quarantine_test\.sql/);
   assert.match(stagingBody, /--expected-plan 49/);
   assert.match(stagingBody, /status=eq\.active/);

@@ -793,7 +793,7 @@ export function cataloguePerformanceHotfixWorkflowViolations({
     "catalogue-hotfix-workflow-helpers.mjs validate-dry-run",
     "validate-target",
     "public_catalogue_snapshot_test.sql",
-    "--expected-plan 90",
+    "--expected-plan 132",
     "catalogue_invalid_os_identity_quarantine_test.sql",
     "--expected-plan 49",
     "Measure staging catalogue bootstrap source quality",
