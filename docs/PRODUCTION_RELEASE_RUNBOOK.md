@@ -420,9 +420,17 @@ Production may start only when its pre-mutation history matches that signed
 manifest exactly. It applies the forward cutover through the ordinary
 lease-bound `supabase db push` path, captures the same read-only schema evidence
 afterward, and requires byte-for-byte equality with the signed staging object.
-The workflows must never run `supabase migration repair`, update
+Production workflows must never run `supabase migration repair`, update
 `supabase_migrations.schema_migrations` directly, or rewrite/delete an applied
-migration to manufacture convergence.
+migration to manufacture convergence. The isolated pre-canonical staging
+project has one explicit bootstrap exception for the fixed, exact-hash-bound
+alias map. It requires the repository variable
+`STAGING_MIGRATION_ALIAS_REPAIR_AUTHORIZATION` to equal
+`REPAIR_REVIEWED_STAGING_MIGRATION_ALIASES <exact-release-sha>` and must be
+cleared immediately after a successful canonical staging run. The staging
+workflow must renew its lease, reassert the fixed staging target, verify the
+immutable candidate, and prove that the post-repair plan is empty before the
+normal dry-run and forward migration apply.
 
 ## Coordinated Deploy
 

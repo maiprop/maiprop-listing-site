@@ -876,6 +876,7 @@ jobs:
       manifest_sha256: ${{ needs.validate-source.outputs.manifest_sha256 }}
       production_supabase_project_id: ${{ vars.PRODUCTION_SUPABASE_PROJECT_ID }}
       staging_mutation_acknowledgement: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+      staging_migration_alias_repair_authorization: ${{ vars.STAGING_MIGRATION_ALIAS_REPAIR_AUTHORIZATION }}
       trusted_control_sha: ${{ github.workflow_sha }}
     secrets:
       STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}

@@ -306,6 +306,10 @@ describe("Supabase index stats workflow wiring", () => {
 
   it("revalidates the exact staging lease inside each mutating shell step", () => {
     for (const [stepName, mutation] of [
+      [
+        "Repair reviewed staging migration aliases",
+        "npx --no-install supabase --workdir release-candidate migration repair",
+      ],
       ["Apply database migrations to staging", "db push"],
       ["Deploy edge functions to staging", "functions deploy"],
     ]) {
@@ -319,7 +323,10 @@ describe("Supabase index stats workflow wiring", () => {
     }
   });
 
-  it("uses forward-only migration convergence without ledger repair", () => {
+  it("uses forward-only convergence after the exact authorized staging bootstrap repair", () => {
+    const repairStep = supabaseStagingWorkflow.indexOf(
+      "- name: Repair reviewed staging migration aliases",
+    );
     const dryRunStep = supabaseStagingWorkflow.indexOf(
       "- name: Dry-run staging database migrations",
     );
@@ -330,10 +337,21 @@ describe("Supabase index stats workflow wiring", () => {
       "- name: Capture legacy migration convergence evidence",
     );
 
-    expect(dryRunStep).toBeGreaterThan(-1);
+    expect(repairStep).toBeGreaterThan(-1);
+    expect(dryRunStep).toBeGreaterThan(repairStep);
     expect(applyStep).toBeGreaterThan(dryRunStep);
     expect(evidenceStep).toBeGreaterThan(applyStep);
-    expect(supabaseStagingWorkflow).not.toContain("migration repair");
+    expect(
+      supabaseStagingWorkflow.match(
+        /npx --no-install supabase --workdir release-candidate migration repair/g,
+      ),
+    ).toHaveLength(1);
+    expect(stagingStepBlock("Repair reviewed staging migration aliases")).toContain(
+      'expected_repair_authorization="REPAIR_REVIEWED_STAGING_MIGRATION_ALIASES $RELEASE_SHA"',
+    );
+    expect(supabaseProductionWorkflow).not.toContain(
+      "supabase --workdir release-candidate migration repair",
+    );
     expect(supabaseStagingWorkflow).not.toMatch(
       /(?:insert\s+into|update|delete\s+from)\s+supabase_migrations\.schema_migrations/i,
     );

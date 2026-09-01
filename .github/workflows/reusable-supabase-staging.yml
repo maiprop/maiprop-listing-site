@@ -31,6 +31,11 @@ on:
         description: Exact acknowledgement authorizing mutations only in the fixed MaiProp staging project.
         required: true
         type: string
+      staging_migration_alias_repair_authorization:
+        description: Optional exact-SHA authorization for the reviewed one-time staging migration-alias repair.
+        required: false
+        default: ""
+        type: string
       trusted_control_sha:
         description: Manually approved immutable SHA containing this reusable control workflow.
         required: true
@@ -453,6 +458,125 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Revalidate staging lease before migration alias repair
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true' && inputs.staging_migration_alias_repair_authorization != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+
+      - name: Repair reviewed staging migration aliases
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true' && inputs.staging_migration_alias_repair_authorization != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ inputs.staging_mutation_acknowledgement }}
+          STAGING_MIGRATION_ALIAS_REPAIR_AUTHORIZATION: ${{ inputs.staging_migration_alias_repair_authorization }}
+        run: |
+          set -euo pipefail
+          expected_repair_authorization="REPAIR_REVIEWED_STAGING_MIGRATION_ALIASES $RELEASE_SHA"
+          if [ "$STAGING_MIGRATION_ALIAS_REPAIR_AUTHORIZATION" != "$expected_repair_authorization" ]; then
+            echo "::error::Staging migration alias repair authorization is not bound to the exact release SHA."
+            exit 1
+          fi
+          node scripts/assert-staging-mutation-target.mjs \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+            --database-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
+          if [ "$actual_manifest_sha256" != "$EXPECTED_MANIFEST_SHA256" ]; then
+            echo "::error::Release manifest changed at the staging migration repair boundary."
+            exit 1
+          fi
+          npm run release:artifact:verify -- \
+            --dir release-candidate \
+            --sha "$RELEASE_SHA" \
+            --tree "$source_tree" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT"
+          artifact_sha256="$(node -e "const m=require('./release-candidate/release-manifest.json'); process.stdout.write(m.artifact_sha256)")"
+          if [ "$artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]; then
+            echo "::error::Release artifact changed at the staging migration repair boundary."
+            exit 1
+          fi
+
+          repair_plan="$(mktemp)"
+          post_repair_plan="$(mktemp)"
+          trap 'rm -f "$repair_plan" "$post_repair_plan"' EXIT
+          node scripts/reconcile-staging-migration-aliases.mjs \
+            --root release-candidate \
+            --out "$repair_plan"
+          versions_output="$(REPAIR_PLAN="$repair_plan" node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+
+          const plan = JSON.parse(readFileSync(process.env.REPAIR_PLAN, "utf8"));
+          const versions = plan.versions_to_revert;
+          const repairs = plan.repairs;
+          if (
+            plan.schema_version !== 1 ||
+            !Array.isArray(versions) ||
+            !Array.isArray(repairs) ||
+            repairs.length !== versions.length ||
+            versions.some((version) => typeof version !== "string" || !/^\d{14}$/.test(version)) ||
+            new Set(versions).size !== versions.length ||
+            versions.some((version, index) => index > 0 && versions[index - 1] >= version) ||
+            repairs.some(
+              (repair, index) =>
+                repair?.version !== versions[index] ||
+                typeof repair?.reason !== "string" ||
+                repair.reason.length === 0,
+            )
+          ) {
+            throw new Error("Invalid reviewed staging migration repair plan.");
+          }
+          process.stdout.write(versions.join("\n"));
+          NODE
+          )"
+          versions=()
+          if [ -n "$versions_output" ]; then
+            mapfile -t versions <<< "$versions_output"
+          fi
+
+          if [ "${#versions[@]}" -gt 0 ]; then
+            npm run --silent release:validate -- github-staging-lease \
+              --repository "$GITHUB_REPOSITORY" \
+              --sha "$RELEASE_SHA" \
+              --source-run-id "$SOURCE_RUN_ID" \
+              --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+            node scripts/assert-staging-mutation-target.mjs \
+              --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+              --database-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+              --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
+            npx --no-install supabase --workdir release-candidate migration repair \
+              "${versions[@]}" \
+              --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+              --status reverted \
+              --yes
+          fi
+
+          node scripts/reconcile-staging-migration-aliases.mjs \
+            --root release-candidate \
+            --out "$post_repair_plan"
+          POST_REPAIR_PLAN="$post_repair_plan" node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+
+          const plan = JSON.parse(readFileSync(process.env.POST_REPAIR_PLAN, "utf8"));
+          if (
+            plan.schema_version !== 1 ||
+            !Array.isArray(plan.versions_to_revert) ||
+            plan.versions_to_revert.length !== 0 ||
+            !Array.isArray(plan.repairs) ||
+            plan.repairs.length !== 0
+          ) {
+            throw new Error("Post-repair staging migration history is not canonical.");
+          }
+          NODE
 
       - name: Dry-run staging database migrations
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'

@@ -167,13 +167,23 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   acknowledgement, and an exact project-ref allowlist match, so it cannot
   prepare identities in production.
 - Required when migrations change: add `SUPABASE_STAGING_DB_URL`, the percent-encoded Postgres connection string used by CI to run `supabase db push --db-url` before deploying staging edge functions. Without it, CI fails the staging migration path instead of deploying functions against a stale schema.
-- Legacy migration convergence is forward-only. The staging release train
-  validates the fixed anomaly manifest in
-  `supabase/reconciliation/production-history-v1.json`, runs one dry-run and one
-  acknowledged `supabase db push`, and packages read-only schema evidence plus
-  the pgTap convergence proof. Do not add `supabase migration repair` or write
-  directly to `supabase_migrations.schema_migrations`; production accepts only
-  the signed manifest and exact staged schema evidence.
+- Legacy migration convergence is forward-only after the isolated staging
+  ledger has been canonicalized. The staging release train validates the fixed
+  anomaly manifest in `supabase/reconciliation/production-history-v1.json`,
+  runs one dry-run and one acknowledged `supabase db push`, and packages
+  read-only schema evidence plus the pgTap convergence proof. Production must
+  never run `supabase migration repair` or write directly to
+  `supabase_migrations.schema_migrations`.
+- The pre-canonical isolated staging project has one bounded bootstrap
+  exception. Set `STAGING_MIGRATION_ALIAS_REPAIR_AUTHORIZATION` to
+  `REPAIR_REVIEWED_STAGING_MIGRATION_ALIASES <exact-release-sha>` for the single
+  exact-SHA run, then clear it after that run succeeds. The protected workflow
+  accepts only the fixed version/name/remote-statement-hash/canonical-file-hash
+  map in `scripts/reconcile-staging-migration-aliases.mjs`, renews the staging
+  lease and target assertion immediately before the CLI repair, and requires a
+  canonical empty repair plan before the ordinary dry-run. Unknown or changed
+  history fails closed. This exception is staging-only and must not be expanded
+  into a generic migration-history repair path.
 - `STAGING_SUPABASE_PROJECT_ID`, `STAGING_SUPABASE_URL`, and
   `STAGING_SUPABASE_PUBLISHABLE_KEY` must all point to the same non-production
   project. The dedicated Pages project's `SUPABASE_*` and `VITE_SUPABASE_*`

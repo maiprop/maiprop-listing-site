@@ -44,9 +44,13 @@ Expected result: every command exits 0.
 
 - [ ] Confirm `supabase/reconciliation/production-history-v1.json` still names
       the exact reviewed legacy anomalies and binds every canonical SQL hash.
-- [ ] Confirm staging uses one dry-run and one lease-bound `supabase db push`;
-      reject any workflow containing `supabase migration repair` or a direct write
-      to `supabase_migrations.schema_migrations`.
+- [ ] Confirm staging uses one dry-run and one lease-bound `supabase db push`.
+      The only permitted history rewrite is the exact-SHA, staging-only bootstrap
+      lane for the fixed reviewed alias map; it must be explicitly enabled with
+      `REPAIR_REVIEWED_STAGING_MIGRATION_ALIASES <exact-release-sha>`, prove the
+      canonical repair plan is empty afterward, and be disabled after success.
+      Reject every production `supabase migration repair`, every direct write to
+      `supabase_migrations.schema_migrations`, and every unknown staging alias.
 - [ ] Capture the read-only legacy schema evidence and pgTap convergence proof;
       bind both digests into the signed staging database attestation.
 - [ ] Confirm production preflight accepts only the fixed manifest, applies the

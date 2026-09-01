@@ -2384,6 +2384,12 @@ describe("production release train", () => {
   it("revalidates the staging lease before every Supabase mutation", () => {
     const staging = workflow("reusable-supabase-staging.yml");
     const stagingJob = yaml.load(staging).jobs["deploy-supabase-staging"];
+    const repairLease = staging.indexOf(
+      "Revalidate staging lease before migration alias repair",
+    );
+    const repair = staging.indexOf(
+      "Repair reviewed staging migration aliases",
+    );
     const dryRun = staging.indexOf("Dry-run staging database migrations");
     const applyLease = staging.indexOf(
       "Revalidate staging lease before database apply",
@@ -2403,7 +2409,9 @@ describe("production release train", () => {
     );
     const edgeDeploy = staging.indexOf("Deploy edge functions to staging");
 
-    expect(dryRun).toBeGreaterThan(-1);
+    expect(repairLease).toBeGreaterThan(-1);
+    expect(repair).toBeGreaterThan(repairLease);
+    expect(dryRun).toBeGreaterThan(repair);
     expect(applyLease).toBeGreaterThan(dryRun);
     expect(apply).toBeGreaterThan(applyLease);
     expect(convergenceEvidence).toBeGreaterThan(apply);
@@ -2424,8 +2432,11 @@ describe("production release train", () => {
     expect(staging).toContain("job.workflow_sha");
     expect(staging).toContain("persist-credentials: false");
 
-    expect(staging).not.toContain("migration repair");
     for (const [stepName, mutation] of [
+      [
+        "Repair reviewed staging migration aliases",
+        "npx --no-install supabase --workdir release-candidate migration repair",
+      ],
       ["Apply database migrations to staging", "db push"],
       ["Deploy edge functions to staging", "functions deploy"],
     ]) {
@@ -2439,6 +2450,66 @@ describe("production release train", () => {
         step.run.indexOf(mutation),
       );
     }
+  });
+
+  it("repairs only the exact reviewed staging migration aliases before dry-run", () => {
+    const stagingSource = workflow("reusable-supabase-staging.yml");
+    const staging = yaml.load(stagingSource);
+    const stageSource = workflow("stage-release.yml");
+    const stagingJob = staging.jobs["deploy-supabase-staging"];
+    const repair = stagingJob.steps.find(
+      (candidate) => candidate.name === "Repair reviewed staging migration aliases",
+    );
+    const repairCommand =
+      "npx --no-install supabase --workdir release-candidate migration repair";
+
+    expect(repair).toBeDefined();
+    expect(repair.env?.GITHUB_TOKEN).toBe("${{ github.token }}");
+    expect(repair.env?.STAGING_MIGRATION_ALIAS_REPAIR_AUTHORIZATION).toBe(
+      "${{ inputs.staging_migration_alias_repair_authorization }}",
+    );
+    expect(repair.if).toContain(
+      "inputs.staging_migration_alias_repair_authorization != ''",
+    );
+    expect(repair.run).toContain(
+      'expected_repair_authorization="REPAIR_REVIEWED_STAGING_MIGRATION_ALIASES $RELEASE_SHA"',
+    );
+    expect(repair.run).toContain(
+      '"$STAGING_MIGRATION_ALIAS_REPAIR_AUTHORIZATION" != "$expected_repair_authorization"',
+    );
+    expect(stagingSource).toContain(
+      "staging_migration_alias_repair_authorization:",
+    );
+    expect(stageSource).toContain(
+      "staging_migration_alias_repair_authorization: ${{ vars.STAGING_MIGRATION_ALIAS_REPAIR_AUTHORIZATION }}",
+    );
+    expect(repair.run).toContain("reconcile-staging-migration-aliases.mjs");
+    expect(repair.run).toContain("--root release-candidate");
+    expect(repair.run).toContain("versions_to_revert");
+    expect(repair.run).toContain("/^\\d{14}$/");
+    expect(repair.run).toContain(repairCommand);
+    expect(repair.run.match(new RegExp(repairCommand, "g"))).toHaveLength(1);
+    expect(repair.run).toContain('--db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL"');
+    expect(repair.run).toContain("--status reverted");
+    expect(repair.run).toContain("--yes");
+    expect(repair.run).toContain("Post-repair staging migration history is not canonical");
+    expect(repair.run).not.toContain("SUPABASE_STAGING_DB_URL");
+
+    for (const prerequisite of [
+      "assert-staging-mutation-target.mjs",
+      "release:artifact:verify",
+      "github-staging-lease",
+      "reconcile-staging-migration-aliases.mjs",
+    ]) {
+      expect(repair.run.indexOf(prerequisite), prerequisite).toBeGreaterThan(-1);
+      expect(repair.run.indexOf(prerequisite), prerequisite).toBeLessThan(
+        repair.run.indexOf(repairCommand),
+      );
+    }
+
+    expect(workflow("deploy-supabase-production-db.yml")).not.toContain(
+      "supabase --workdir release-candidate migration repair",
+    );
   });
 
   it("canonicalizes the configured staging database URL before validation and resolution", () => {
@@ -2507,7 +2578,9 @@ describe("production release train", () => {
     expect(staging).toContain(
       "npx --no-install supabase --workdir release-candidate db push",
     );
-    expect(staging).not.toContain("migration repair");
+    expect(staging).toContain(
+      "npx --no-install supabase --workdir release-candidate migration repair",
+    );
     expect(staging).toContain(
       "supabase/reconciliation/production-history-v1.sql",
     );
