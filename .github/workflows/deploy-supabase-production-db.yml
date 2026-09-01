@@ -1288,6 +1288,7 @@ jobs:
           npx --no-install supabase --workdir release-candidate db push \
             --db-url "$SUPABASE_PRODUCTION_DB_URL" \
             --dry-run 2>&1 | tee production-migration-dry-run.txt
+          rm -rf -- release-candidate/supabase/.temp
 
       - name: Verify exact production migration dry run
         run: |

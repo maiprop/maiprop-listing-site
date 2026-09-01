@@ -2612,6 +2612,28 @@ describe("production release train", () => {
         "release-candidate/release-manifest.json",
       );
     }
+    const stagingDryRun = stagingJob.steps.find(
+      (step) => step.name === "Dry-run staging database migrations",
+    );
+    expect(stagingDryRun.run).toContain(
+      "rm -rf -- release-candidate/supabase/.temp",
+    );
+    expect(
+      stagingDryRun.run.indexOf(
+        "rm -rf -- release-candidate/supabase/.temp",
+      ),
+    ).toBeGreaterThan(stagingDryRun.run.indexOf("--dry-run"));
+    const stagingApply = stagingJob.steps.find(
+      (step) => step.name === "Apply database migrations to staging",
+    );
+    expect(stagingApply.run).toContain(
+      "rm -rf -- release-candidate/supabase/.temp",
+    );
+    expect(
+      stagingApply.run.indexOf(
+        "rm -rf -- release-candidate/supabase/.temp",
+      ),
+    ).toBeGreaterThan(stagingApply.run.indexOf("--include-all"));
     expect(staging).not.toMatch(
       /(?:cp|rsync)\s+(?:-a\s+)?supabase(?:\/|\s).*release-candidate/,
     );
@@ -3627,6 +3649,14 @@ describe("production release train", () => {
     const dryRunStep = job.steps.find(
       (step) => step.name === "Dry-run exact staged production migrations",
     );
+    expect(dryRunStep.run).toContain(
+      "rm -rf -- release-candidate/supabase/.temp",
+    );
+    expect(
+      dryRunStep.run.indexOf(
+        "rm -rf -- release-candidate/supabase/.temp",
+      ),
+    ).toBeGreaterThan(dryRunStep.run.indexOf("--dry-run"));
     expect(indexPreflightStep).toBeDefined();
     expect(job.steps.indexOf(indexPreflightStep)).toBeLessThan(
       job.steps.indexOf(dryRunStep),

@@ -604,6 +604,7 @@ jobs:
             --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
             --dry-run \
             --include-all
+          rm -rf -- release-candidate/supabase/.temp
 
       - name: Revalidate staging lease before database apply
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -650,6 +651,7 @@ jobs:
             --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
             --yes \
             --include-all
+          rm -rf -- release-candidate/supabase/.temp
           psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
             --no-psqlrc \
             --set ON_ERROR_STOP=1 \
