@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
       account_deletion_jobs: {
@@ -1850,10 +1855,10 @@ export type Database = {
           min_rental_months: number | null
           monthly_expenses: number | null
           noise_score: number | null
-          os_auction_id: string | null
           open_house_date: string | null
           open_house_transaction_type: string | null
           organization_id: string | null
+          os_auction_id: string | null
           owner_id: string | null
           pets_allowed: boolean | null
           plot_depth: number | null
@@ -1974,10 +1979,10 @@ export type Database = {
           min_rental_months?: number | null
           monthly_expenses?: number | null
           noise_score?: number | null
-          os_auction_id?: never
           open_house_date?: string | null
           open_house_transaction_type?: string | null
           organization_id?: string | null
+          os_auction_id?: string | null
           owner_id?: string | null
           pets_allowed?: boolean | null
           plot_depth?: number | null
@@ -2098,10 +2103,10 @@ export type Database = {
           min_rental_months?: number | null
           monthly_expenses?: number | null
           noise_score?: number | null
-          os_auction_id?: never
           open_house_date?: string | null
           open_house_transaction_type?: string | null
           organization_id?: string | null
+          os_auction_id?: string | null
           owner_id?: string | null
           pets_allowed?: boolean | null
           plot_depth?: number | null
@@ -6521,6 +6526,10 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      get_current_auction_listing_visible_limit: {
+        Args: never
+        Returns: number
+      }
       get_listing_limit:
         | { Args: { p_is_pro: boolean; p_role: string }; Returns: number }
         | { Args: { p_user_id: string }; Returns: number }
@@ -7187,6 +7196,89 @@ export type Database = {
       get_viewing_limit: {
         Args: { p_is_requester: boolean; p_user_id: string }
         Returns: number
+      }
+      get_visible_auction_candidate_envelope: {
+        Args: {
+          p_bid_max?: number
+          p_bid_min?: number
+          p_city?: string
+          p_limit?: number
+          p_now?: string
+          p_ownership?: string
+          p_pool_tag?: string
+          p_property_base?: string
+          p_property_subtype?: string
+          p_round?: string
+          p_sqm_max?: number
+          p_sqm_min?: number
+          p_stream?: string
+          p_today?: string
+          p_year_max?: number
+          p_year_min?: number
+          p_yield?: string
+        }
+        Returns: {
+          facet_cities: string[]
+          facet_rounds: number[]
+          pool_exists: boolean
+          total_raw: number
+          visible_rows: Json
+        }[]
+      }
+      get_visible_auction_candidates: {
+        Args: {
+          p_bid_max?: number
+          p_bid_min?: number
+          p_city?: string
+          p_limit?: number
+          p_now?: string
+          p_ownership?: string
+          p_pool_tag?: string
+          p_property_base?: string
+          p_property_subtype?: string
+          p_round?: string
+          p_sqm_max?: number
+          p_sqm_min?: number
+          p_stream?: string
+          p_today?: string
+          p_year_max?: number
+          p_year_min?: number
+          p_yield?: string
+        }
+        Returns: {
+          address: string
+          ai_score: number
+          auction_court: string
+          auction_date: string
+          auction_starting_bid: number
+          bathrooms: number
+          bedrooms: number
+          city: string
+          construction_status: string
+          cover_image_url: string
+          energy_class: string
+          featured_until: string
+          floor: number
+          id: string
+          is_featured: boolean
+          latitude: number
+          listing_images: Json
+          listing_type: string
+          longitude: number
+          price: number
+          price_per_sqm: number
+          priority_placement: number
+          priority_until: string
+          property_type: string
+          region: string
+          sqm: number
+          tags: string[]
+          title: string
+          total_floors: number
+          views_count: number
+          website_url: string
+          year_built: number
+        }[]
       }
       grant_platform_admin: {
         Args: { target_user_id: string }
@@ -7988,3 +8080,4 @@ export const Constants = {
     },
   },
 } as const
+
