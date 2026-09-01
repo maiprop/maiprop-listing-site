@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -9,6 +9,23 @@ const migration = readFileSync(
   ),
   "utf8",
 );
+
+const envelopeMigrationPath = resolve(
+  process.cwd(),
+  "supabase/migrations/20260901130000_add_visible_auction_candidate_envelopes.sql",
+);
+const envelopeMigration = existsSync(envelopeMigrationPath)
+  ? readFileSync(envelopeMigrationPath, "utf8")
+  : "";
+const compactEnvelopeMigration = envelopeMigration
+  .replace(/\s+/g, " ")
+  .replace(/\(\s+/g, "(")
+  .replace(/\s+\)/g, ")");
+
+const visibleAuctionEnvelope =
+  envelopeMigration.match(
+    /CREATE OR REPLACE FUNCTION public\.get_visible_auction_candidate_envelope\([\s\S]*?\$function\$;/,
+  )?.[0] ?? "";
 
 const compactMigration = migration
   .replace(/\s+/g, " ")
@@ -232,5 +249,103 @@ describe("subsecond release capability repair migration", () => {
     expect(migration).toMatch(/NOTIFY pgrst, 'reload schema';\s*$/);
     expect(migration.toLowerCase()).not.toContain("supabase_service_role_key");
     expect(migration.toLowerCase()).not.toContain("service-role secret");
+  });
+});
+
+describe("visible auction candidate envelope migration", () => {
+  const envelopeSignature =
+    "INTEGER, TEXT, DATE, TIMESTAMPTZ, TEXT, TEXT, TEXT, TEXT, " +
+    "NUMERIC, NUMERIC, INTEGER, INTEGER, NUMERIC, NUMERIC, TEXT, TEXT, TEXT";
+
+  it("returns one bounded stream envelope with pre-filter pool existence and full metadata", () => {
+    expect(visibleAuctionEnvelope).toContain(
+      "CREATE OR REPLACE FUNCTION public.get_visible_auction_candidate_envelope(",
+    );
+    expect(visibleAuctionEnvelope).toMatch(
+      /RETURNS TABLE \(\s*pool_exists BOOLEAN,\s*total_raw BIGINT,\s*facet_cities TEXT\[\],\s*facet_rounds INTEGER\[\],\s*visible_rows JSONB\s*\)/,
+    );
+    expect(visibleAuctionEnvelope).toMatch(
+      /LANGUAGE plpgsql\s+STABLE\s+SECURITY DEFINER\s+SET search_path = ''/,
+    );
+    expect(visibleAuctionEnvelope).toMatch(
+      /bounded_candidates AS MATERIALIZED \([\s\S]*?FROM public\.get_public_auction_candidates\(\s*600,/,
+    );
+    expect(visibleAuctionEnvelope.match(/get_public_auction_candidates\(/g)).toHaveLength(1);
+
+    for (const parameter of [
+      "p_city TEXT DEFAULT NULL",
+      "p_property_base TEXT DEFAULT NULL",
+      "p_property_subtype TEXT DEFAULT NULL",
+      "p_bid_min NUMERIC DEFAULT NULL",
+      "p_bid_max NUMERIC DEFAULT NULL",
+      "p_year_min INTEGER DEFAULT NULL",
+      "p_year_max INTEGER DEFAULT NULL",
+      "p_sqm_min NUMERIC DEFAULT NULL",
+      "p_sqm_max NUMERIC DEFAULT NULL",
+      "p_ownership TEXT DEFAULT NULL",
+      "p_round TEXT DEFAULT NULL",
+      "p_yield TEXT DEFAULT NULL",
+    ]) {
+      expect(visibleAuctionEnvelope).toContain(parameter);
+    }
+    for (const filterFragment of [
+      "STRPOS(LOWER(COALESCE(candidate.city, '')), LOWER(p_city)) > 0",
+      "candidate.property_type = p_property_base",
+      "land_type:",
+      "commercial_type:",
+      "COALESCE(candidate.auction_starting_bid, candidate.price, 0)",
+      "candidate.year_built IS NOT NULL",
+      "COALESCE(candidate.sqm, 0)",
+      "p_ownership = 'full'",
+      "p_ownership = 'bare'",
+      "p_ownership = 'common'",
+      "p_round = '3plus'",
+      "auction_round >= 3",
+      "~ '^[1-9][0-9]{0,8}$'",
+      "p_yield = 'low'",
+      "p_yield = 'medium'",
+      "p_yield = 'high'",
+      "p_yield = 'very_high'",
+      "estimated_yield >= 9",
+    ]) {
+      expect(visibleAuctionEnvelope).toContain(filterFragment);
+    }
+    expect(visibleAuctionEnvelope).toContain(
+      "TRANSLATE(\n          LOWER(BTRIM(COALESCE(candidate.city, ''))),\n          'άέήίόύώϊΐϋΰ',\n          'αεηιουωιιυυ'",
+    );
+
+    const boundedPoolIndex = visibleAuctionEnvelope.indexOf("bounded_candidates AS MATERIALIZED");
+    const filteredPoolIndex = visibleAuctionEnvelope.indexOf("filtered_candidates AS MATERIALIZED");
+    const poolExistsIndex = visibleAuctionEnvelope.indexOf("EXISTS (SELECT 1 FROM bounded_candidates)");
+    const totalRawIndex = visibleAuctionEnvelope.indexOf("COUNT(*) FROM filtered_candidates");
+    const cityFacetsIndex = visibleAuctionEnvelope.indexOf("FROM bounded_candidates AS city_candidate");
+    const roundFacetsIndex = visibleAuctionEnvelope.indexOf("FROM bounded_candidates AS round_candidate");
+    const visibleCapIndex = visibleAuctionEnvelope.indexOf(
+      "LIMIT LEAST(GREATEST(COALESCE(p_limit, 1), 1), v_visible_limit, 600)",
+    );
+    expect(boundedPoolIndex).toBeGreaterThanOrEqual(0);
+    expect(filteredPoolIndex).toBeGreaterThan(boundedPoolIndex);
+    expect(poolExistsIndex).toBeGreaterThan(filteredPoolIndex);
+    expect(totalRawIndex).toBeGreaterThan(filteredPoolIndex);
+    expect(cityFacetsIndex).toBeGreaterThan(filteredPoolIndex);
+    expect(roundFacetsIndex).toBeGreaterThan(filteredPoolIndex);
+    expect(visibleCapIndex).toBeGreaterThan(filteredPoolIndex);
+  });
+
+  it("exposes only the envelope while preserving the underlying RPC as service-role-only", () => {
+    expect(compactEnvelopeMigration).toContain(
+      `REVOKE ALL ON FUNCTION public.get_visible_auction_candidate_envelope(${envelopeSignature}) FROM PUBLIC, anon, authenticated, service_role`,
+    );
+    expect(compactEnvelopeMigration).toContain(
+      `GRANT EXECUTE ON FUNCTION public.get_visible_auction_candidate_envelope(${envelopeSignature}) TO anon, authenticated`,
+    );
+    expect(compactEnvelopeMigration).toContain(
+      "REVOKE ALL ON FUNCTION public.get_public_auction_candidates(INTEGER, TEXT, DATE, TIMESTAMPTZ, TEXT) FROM PUBLIC, anon, authenticated, service_role",
+    );
+    expect(compactEnvelopeMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION public.get_public_auction_candidates(INTEGER, TEXT, DATE, TIMESTAMPTZ, TEXT) TO service_role",
+    );
+    expect(compactEnvelopeMigration).toMatch(/NOTIFY pgrst, 'reload schema';\s*$/);
+    expect(envelopeMigration.toLowerCase()).not.toContain("service_role_key");
   });
 });

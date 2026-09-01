@@ -16,7 +16,9 @@ import {
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
-import { PUBLIC_AUCTION_CANDIDATES_PATH } from "../../_publicListingProjection";
+import {
+  PUBLIC_AUCTION_CANDIDATES_PATH,
+} from "../../_publicListingProjection";
 import { interleaveCatalogueStreams } from "./_listingRank";
 import { normalizePublicPromotionState } from "./_promotionState";
 
@@ -48,7 +50,7 @@ const PUBLIC_AUCTION_PRODUCER_TIMEOUT_MS = 5_000;
 const AUCTION_REQUEST_TIMEOUT_MS = 5_000;
 const AUCTION_DB_TIMEOUT_MS = 2_500;
 const AUCTION_AUTH_TIMEOUT_MS = 2_500;
-const AUCTION_CACHE_VERSION = "canonical-server-filtered-v13";
+const AUCTION_CACHE_VERSION = "canonical-server-filtered-v14";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const PREMIUM_OWNERSHIP_FILTERS = new Set([
   "full",
@@ -131,6 +133,14 @@ type AuctionCandidateLimits = {
   organic: number;
 };
 
+type AuctionStreamEnvelope = {
+  poolExists: boolean;
+  totalRaw: number;
+  facetCities: string[];
+  facetRounds: number[];
+  visibleRows: AuctionRow[];
+};
+
 const FULL_AUCTION_CANDIDATE_LIMITS: AuctionCandidateLimits = {
   priority: AUCTION_CANDIDATE_LIMIT_MAX,
   organic: AUCTION_CANDIDATE_LIMIT_MAX,
@@ -176,6 +186,15 @@ function parseRange(
     return null;
   }
   return [lower, upper];
+}
+
+function parseIntegerRange(
+  value: string | null,
+  minimum: number,
+  maximum: number,
+): NumericRange | null {
+  const range = parseRange(value, minimum, maximum);
+  return range && range.every(Number.isSafeInteger) ? range : null;
 }
 
 function parseExactAuctionFilters(
@@ -230,7 +249,7 @@ function parseAuctionFilters(
     propertyBase,
     propertySubtype,
     bidRange: parseRange(searchParams.get("bidRange"), 0, 100_000_000),
-    yearRange: parseRange(searchParams.get("yearRange"), 0, 2200),
+    yearRange: parseIntegerRange(searchParams.get("yearRange"), 0, 2200),
     sqmRange: parseRange(searchParams.get("sqmRange"), 0, 1_000_000),
     ownership:
       allowPremium && ownershipValue && PREMIUM_OWNERSHIP_FILTERS.has(ownershipValue)
@@ -314,8 +333,10 @@ function auctionOwnershipMatches(row: AuctionRow, expected: string): boolean {
 }
 
 function auctionRound(row: AuctionRow): number | null {
-  const round = Number(tagValue(rowTags(row), "round:"));
-  return Number.isFinite(round) && round >= 1 ? round : null;
+  const rawRound = tagValue(rowTags(row), "round:")?.trim() ?? "";
+  if (!/^[1-9]\d{0,8}$/.test(rawRound)) return null;
+  const round = Number(rawRound);
+  return Number.isSafeInteger(round) ? round : null;
 }
 
 const RENT_PER_SQM: Record<string, number> = {
@@ -340,9 +361,15 @@ const RENT_PER_SQM: Record<string, number> = {
 };
 
 function normalizedCityKey(value: unknown): string {
-  return typeof value === "string"
-    ? value.toLowerCase().trim().normalize("NFD").replace(/\p{M}/gu, "")
-    : "";
+  if (typeof value !== "string") return "";
+  const accented = "άέήίόύώϊΐϋΰ";
+  const plain = "αεηιουωιιυυ";
+  return [...value.toLowerCase().trim()]
+    .map((character) => {
+      const index = accented.indexOf(character);
+      return index >= 0 ? plain[index] : character;
+    })
+    .join("");
 }
 
 function estimatedAuctionYield(row: AuctionRow): number | null {
@@ -511,7 +538,122 @@ function rankAuctionRows(
 type AuctionStreams = {
   priorityRows: AuctionRow[];
   organicRows: AuctionRow[];
+  poolExists: boolean;
+  totalRaw: number;
+  facets: AuctionPagePayload["facets"];
 };
+
+function parseAuctionStreamEnvelope(payload: unknown): AuctionStreamEnvelope {
+  if (!Array.isArray(payload) || payload.length !== 1) {
+    throw new SupabaseTransientError(
+      "Auction candidate envelope must contain exactly one row",
+      PUBLIC_AUCTION_CANDIDATES_PATH,
+    );
+  }
+  const raw = payload[0];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new SupabaseTransientError(
+      "Auction candidate envelope row is invalid",
+      PUBLIC_AUCTION_CANDIDATES_PATH,
+    );
+  }
+  const record = raw as Record<string, unknown>;
+  const totalRaw = Number(record.total_raw);
+  const facetCitiesValid = Array.isArray(record.facet_cities) &&
+    record.facet_cities.every((item) => typeof item === "string" && item.trim().length > 0);
+  const facetRoundsValid = Array.isArray(record.facet_rounds) &&
+    record.facet_rounds.every(
+      (item) => typeof item === "number" && Number.isSafeInteger(item) && item >= 1,
+    );
+  const visibleRowsValid = Array.isArray(record.visible_rows) &&
+    record.visible_rows.every(
+      (item) => item != null && typeof item === "object" && !Array.isArray(item) &&
+        typeof (item as Record<string, unknown>).id === "string",
+    );
+  const emptyMissingPool = record.pool_exists === false && (
+    totalRaw !== 0 ||
+    (Array.isArray(record.facet_cities) && record.facet_cities.length !== 0) ||
+    (Array.isArray(record.facet_rounds) && record.facet_rounds.length !== 0) ||
+    (Array.isArray(record.visible_rows) && record.visible_rows.length !== 0)
+  );
+  if (
+    typeof record.pool_exists !== "boolean" ||
+    typeof record.total_raw !== "number" ||
+    !Number.isSafeInteger(totalRaw) ||
+    totalRaw < 0 ||
+    totalRaw > AUCTION_CANDIDATE_LIMIT_MAX ||
+    !facetCitiesValid ||
+    !facetRoundsValid ||
+    !visibleRowsValid ||
+    (Array.isArray(record.visible_rows) && record.visible_rows.length > totalRaw) ||
+    (Array.isArray(record.visible_rows) &&
+      record.visible_rows.length > AUCTION_CANDIDATE_LIMIT_MAX) ||
+    emptyMissingPool
+  ) {
+    throw new SupabaseTransientError(
+      "Auction candidate envelope fields are invalid",
+      PUBLIC_AUCTION_CANDIDATES_PATH,
+    );
+  }
+  return {
+    poolExists: record.pool_exists,
+    totalRaw,
+    facetCities: record.facet_cities as string[],
+    facetRounds: (record.facet_rounds as number[]).map(Number),
+    visibleRows: record.visible_rows as AuctionRow[],
+  };
+}
+
+async function fetchDbAuctionRpcPayload(
+  env: PublicApiEnv,
+  path: string,
+  params: URLSearchParams,
+  accessToken: string | null,
+  requestSignal?: AbortSignal,
+): Promise<unknown> {
+  const runtime = getSupabaseRuntime(env);
+  if (!runtime) throw new Error("missing-runtime");
+
+  const url = new URL(path, runtime.url);
+  for (const [key, value] of params) url.searchParams.append(key, value);
+
+  let result: { response: Response; payload: unknown };
+  try {
+    const authorizationToken = accessToken ?? runtime.key;
+    result = await fetchAndConsumeWithAbortableTimeout(
+      url,
+      {
+        headers: {
+          apikey: runtime.key,
+          Authorization: `Bearer ${authorizationToken}`,
+          Accept: "application/json",
+        },
+      },
+      AUCTION_DB_TIMEOUT_MS,
+      async (response) => ({
+        response,
+        payload: response.ok ? await response.json() : [],
+      }),
+      requestSignal,
+    );
+  } catch {
+    throw new SupabaseTransientError("Auction candidate request timed out", path);
+  }
+
+  const { response, payload } = result;
+  if (!response.ok) {
+    if ([408, 425, 429, 500, 502, 503, 504, 520, 522, 524, 544].includes(response.status)) {
+      throw new SupabaseTransientError(
+        `Auction candidate request failed with ${response.status}`,
+        path,
+        response.status,
+      );
+    }
+    throw new Error(`Auction candidate request failed with ${response.status}`);
+  }
+
+  return payload;
+}
 
 async function fetchDbAuctionStream(
   env: PublicApiEnv,
@@ -522,7 +664,7 @@ async function fetchDbAuctionStream(
   accessToken: string | null = null,
   filters: AuctionFilters | null = null,
   requestSignal?: AbortSignal,
-): Promise<AuctionRow[]> {
+): Promise<AuctionStreamEnvelope> {
   const params = new URLSearchParams([
     ["p_limit", String(limit)],
     ["p_stream", stream],
@@ -548,49 +690,14 @@ async function fetchDbAuctionStream(
   if (filters?.ownership) params.set("p_ownership", filters.ownership);
   if (filters?.round) params.set("p_round", String(filters.round));
   if (filters?.yield) params.set("p_yield", filters.yield);
-  const runtime = getSupabaseRuntime(env);
-  if (!runtime) throw new Error("missing-runtime");
-
-  const path = PUBLIC_AUCTION_CANDIDATES_PATH;
-  const url = new URL(path, runtime.url);
-  for (const [key, value] of params) url.searchParams.append(key, value);
-
-  let result: { response: Response; rows: AuctionRow[] };
-  try {
-    const authorizationToken = accessToken ?? runtime.key;
-    result = await fetchAndConsumeWithAbortableTimeout(
-      url,
-      {
-        headers: {
-          apikey: runtime.key,
-          Authorization: `Bearer ${authorizationToken}`,
-          Accept: "application/json",
-        },
-      },
-      AUCTION_DB_TIMEOUT_MS,
-      async (response) => ({
-        response,
-        rows: response.ok ? await response.json() as AuctionRow[] : [],
-      }),
-      requestSignal,
-    );
-  } catch {
-    throw new SupabaseTransientError("Auction candidate request timed out", path);
-  }
-
-  const { response, rows } = result;
-  if (!response.ok) {
-    if ([408, 425, 429, 500, 502, 503, 504, 520, 522, 524, 544].includes(response.status)) {
-      throw new SupabaseTransientError(
-        `Auction candidate request failed with ${response.status}`,
-        path,
-        response.status,
-      );
-    }
-    throw new Error(`Auction candidate request failed with ${response.status}`);
-  }
-
-  return rows;
+  const envelopePayload = await fetchDbAuctionRpcPayload(
+    env,
+    PUBLIC_AUCTION_CANDIDATES_PATH,
+    params,
+    accessToken,
+    requestSignal,
+  );
+  return parseAuctionStreamEnvelope(envelopePayload);
 }
 
 async function fetchDbAuctionStreams(
@@ -602,7 +709,7 @@ async function fetchDbAuctionStreams(
   filters: AuctionFilters | null = null,
   requestSignal?: AbortSignal,
 ): Promise<AuctionStreams> {
-  const [priorityRows, organicRows] = await Promise.all([
+  const [priority, organic] = await Promise.all([
     fetchDbAuctionStream(
       env,
       limits.priority,
@@ -624,11 +731,17 @@ async function fetchDbAuctionStreams(
       requestSignal,
     ),
   ]);
-  return { priorityRows, organicRows };
-}
-
-function hasAuctionRows(streams: AuctionStreams): boolean {
-  return streams.priorityRows.length > 0 || streams.organicRows.length > 0;
+  const cities = [...new Set([...priority.facetCities, ...organic.facetCities])]
+    .sort((a, b) => a.localeCompare(b));
+  const rounds = [...new Set([...priority.facetRounds, ...organic.facetRounds])]
+    .sort((a, b) => a - b);
+  return {
+    priorityRows: priority.visibleRows,
+    organicRows: organic.visibleRows,
+    poolExists: priority.poolExists || organic.poolExists,
+    totalRaw: priority.totalRaw + organic.totalRaw,
+    facets: { cities, rounds },
+  };
 }
 
 async function fetchCanonicalAuctionStreams(
@@ -647,7 +760,7 @@ async function fetchCanonicalAuctionStreams(
     filters,
     requestSignal,
   );
-  if (hasAuctionRows(scheduledPool)) return scheduledPool;
+  if (scheduledPool.poolExists) return scheduledPool;
   return fetchDbAuctionStreams(
     env,
     FULL_AUCTION_CANDIDATE_LIMITS,
@@ -824,12 +937,15 @@ async function resolveAuctionEntitlement(
   }
 }
 
-export async function fetchPublicAuctionRows(
+async function fetchPublicAuctionResult(
   env: PublicApiEnv,
   limit: number,
   accessToken: string | null = null,
   requestSignal?: AbortSignal,
-): Promise<AuctionRow[]> {
+): Promise<{
+  rows: AuctionRow[];
+  metadata: Pick<AuctionStreams, "totalRaw" | "facets">;
+}> {
   const requestedLimit = Math.min(
     PUBLIC_AUCTION_LIMIT_MAX,
     Math.max(1, Math.trunc(limit)),
@@ -843,12 +959,28 @@ export async function fetchPublicAuctionRows(
     null,
     requestSignal,
   );
-  return rankAuctionRows(
+  const rows = rankAuctionRows(
     streams.priorityRows,
     streams.organicRows,
     PUBLIC_AUCTION_LIMIT_MAX,
     nowMs,
   ).slice(0, requestedLimit);
+  return {
+    rows,
+    metadata: {
+      totalRaw: streams.totalRaw,
+      facets: streams.facets,
+    },
+  };
+}
+
+export async function fetchPublicAuctionRows(
+  env: PublicApiEnv,
+  limit: number,
+  accessToken: string | null = null,
+  requestSignal?: AbortSignal,
+): Promise<AuctionRow[]> {
+  return (await fetchPublicAuctionResult(env, limit, accessToken, requestSignal)).rows;
 }
 
 function auctionFacets(rows: AuctionRow[]): AuctionPagePayload["facets"] {
@@ -897,8 +1029,9 @@ function auctionPagePayload(
   pageSize: number,
   revision: string,
   nowMs: number,
+  metadata?: Pick<AuctionStreams, "totalRaw" | "facets">,
 ): AuctionPagePayload {
-  const totalRaw = filteredRows.length;
+  const totalRaw = metadata?.totalRaw ?? filteredRows.length;
   const visibleRows = filteredRows.slice(0, entitlementLimit);
   const total = visibleRows.length;
   const offset = (page - 1) * pageSize;
@@ -910,7 +1043,7 @@ function auctionPagePayload(
     total,
     totalRaw,
     totalPages: Math.max(1, Math.ceil(total / pageSize)),
-    facets: auctionFacets(canonicalRows),
+    facets: metadata?.facets ?? auctionFacets(canonicalRows),
     stats: auctionStats(visibleRows, nowMs),
   };
 }
@@ -954,6 +1087,7 @@ async function fetchCanonicalAuctionPage(
     pageSize,
     todayAuctionPoolTag(),
     nowMs,
+    streams,
   );
 }
 
@@ -1205,20 +1339,21 @@ export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promis
           return jsonResponse(payload);
         }
         const nowMs = auctionRevisionTimeMs();
-        const rows = await fetchPublicAuctionRows(
+        const auctionResult = await fetchPublicAuctionResult(
           ctx.env,
           entitlement.limit,
           entitlement.accessToken,
           requestDeadline.signal,
         );
         return jsonResponse(auctionPagePayload(
-          rows,
-          rows,
+          auctionResult.rows,
+          auctionResult.rows,
           entitlement.limit,
           1,
           Math.max(1, entitlement.limit),
           activeRevision,
           nowMs,
+          auctionResult.metadata,
         ));
       } catch (error) {
         if (

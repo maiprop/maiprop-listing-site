@@ -454,3 +454,28 @@ Report before/after results without rounding away failures. Wave 0 succeeds only
 - media/render optimization if APIs are fast but meaningful UI remains slow.
 
 Do not claim the full performance refactor is complete at the end of Wave 0.
+
+---
+
+### Residual Task 4a: Decouple scheduled-pool existence and metadata from visible filtered rows
+
+**Files:**
+- Modify: `functions/_publicListingProjection.ts`
+- Modify: `functions/api/public/auctions.ts`
+- Modify: `functions/api/public/public-api.test.ts`
+- Create: `supabase/migrations/20260901130000_add_visible_auction_candidate_envelopes.sql`
+- Modify: `src/test/subsecondReleaseCapabilitiesMigration.test.ts`
+
+**Interfaces:**
+- Adds an explicitly granted, fixed-search-path envelope RPC that returns one row per requested stream: caller-visible filtered rows, unfiltered `pool_exists`, pre-cap `filtered_total_raw`, and unfiltered bounded city/round facets.
+- Keeps `public.get_public_auction_candidates(INTEGER, TEXT, DATE, TIMESTAMPTZ, TEXT)` service-role-only.
+- Pages requests priority and organic envelopes concurrently and chooses scheduled versus untagged pools using envelope metadata, never filtered-row presence.
+
+- [x] Add failing handler tests for (1) a zero-match filter retaining the scheduled pool and (2) anonymous `totalRaw`/facets remaining complete beyond the 60-row disclosure cap.
+- [x] Add failing migration contract assertions for the envelope return shape, bounded 600-row scan, pre-filter pool existence/facets, pre-cap filtered count, fixed empty search path, explicit revokes/grants, and PostgREST reload.
+- [x] Implement the envelope migration without rewriting the earlier repair migration or exposing raw bounded rows.
+- [x] Parse and merge both stream envelopes in Pages, retain defense-in-depth row filtering, preserve exact-auction behavior, and keep the expected path at two parallel RPC calls.
+- [x] Run focused tests and static checks, then obtain an independent review specifically covering SQL/TypeScript filter parity, pool selection, aggregate semantics, privileges, timeouts, and request-count regression.
+- [ ] Run the complete verification matrix before Task 5. Execute the SQL, role matrix, and `EXPLAIN (ANALYZE, BUFFERS)` on staging; local source-contract tests are not database-execution proof.
+
+The Data API cap in this design is per stream. Pages applies the combined 60/600 response cap after merging priority and organic streams. Do not describe the per-stream RPC as a combined database confidentiality boundary.

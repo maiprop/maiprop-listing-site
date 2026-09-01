@@ -122,6 +122,39 @@ function jsonRows(rows: unknown[], init: ResponseInit = {}): Response {
   });
 }
 
+function auctionEnvelopeRows(
+  rows: Array<Record<string, unknown>>,
+  metadata: {
+    poolExists?: boolean;
+    totalRaw?: number;
+    facetCities?: string[];
+    facetRounds?: number[];
+  } = {},
+): Response {
+  const facetCities = metadata.facetCities ?? [...new Set(
+    rows
+      .map((row) => typeof row.city === "string" ? row.city.trim() : "")
+      .filter(Boolean),
+  )].sort((a, b) => a.localeCompare(b));
+  const facetRounds = metadata.facetRounds ?? [...new Set(
+    rows.flatMap((row) => {
+      if (!Array.isArray(row.tags)) return [];
+      const raw = row.tags.find(
+        (tag): tag is string => typeof tag === "string" && tag.startsWith("round:"),
+      );
+      const parsed = Number(raw?.slice("round:".length));
+      return Number.isSafeInteger(parsed) && parsed >= 1 ? [parsed] : [];
+    }),
+  )].sort((a, b) => a - b);
+  return jsonRows([{
+    pool_exists: metadata.poolExists ?? rows.length > 0,
+    total_raw: metadata.totalRaw ?? rows.length,
+    facet_cities: facetCities,
+    facet_rounds: facetRounds,
+    visible_rows: rows,
+  }]);
+}
+
 function delayedJsonBody(
   payload: unknown,
   delayMs: number,
@@ -467,9 +500,9 @@ function installSupabaseFetch(): FetchMock {
       ]);
     }
 
-    if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+    if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
       if (url.searchParams.get("p_stream") === "priority") {
-        return jsonRows([{
+        return auctionEnvelopeRows([{
           id: "db-2",
           is_featured: false,
           priority_placement: 1,
@@ -477,7 +510,7 @@ function installSupabaseFetch(): FetchMock {
           auction_date: "2026-06-03",
         }]);
       }
-      return jsonRows([{
+      return auctionEnvelopeRows([{
         id: "db-1",
         is_featured: true,
         featured_until: "2099-01-01T00:00:00.000Z",
@@ -3065,16 +3098,16 @@ describe("public auctions endpoint", () => {
     const rows = await fetchPublicAuctionRows(env, 1);
     expect(rows.map((row) => row.id)).toEqual(["db-2"]);
 
-    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")[0]).toBeDefined();
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")[0]).toBeDefined();
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
   it("keeps Spotlight visual-only when ordering auctions", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
-      if (url.searchParams.get("p_stream") === "priority") return jsonRows([]);
-      return jsonRows([
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") return jsonRows([]);
+      if (url.searchParams.get("p_stream") === "priority") return auctionEnvelopeRows([]);
+      return auctionEnvelopeRows([
         {
           id: "spotlight-later",
           city: "Athens",
@@ -3102,9 +3135,9 @@ describe("public auctions endpoint", () => {
   it("treats expired auction promotion flags as organic response state", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
-      if (url.searchParams.get("p_stream") === "priority") return jsonRows([]);
-      return jsonRows([
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") return jsonRows([]);
+      if (url.searchParams.get("p_stream") === "priority") return auctionEnvelopeRows([]);
+      return auctionEnvelopeRows([
         {
           id: "expired-flags",
           city: "Athens",
@@ -3136,11 +3169,11 @@ describe("public auctions endpoint", () => {
   it("limits active Priority auctions to three per 12 while preserving stream order", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") return jsonRows([]);
       const priority = url.searchParams.get("p_stream") === "priority";
       const prefix = priority ? "priority" : "organic";
       const count = priority ? 5 : 12;
-      return jsonRows(Array.from({ length: count }, (_, index) => ({
+      return auctionEnvelopeRows(Array.from({ length: count }, (_, index) => ({
         id: `${prefix}-${String(count - index).padStart(2, "0")}`,
         city: "Athens",
         auction_date: "2026-08-01",
@@ -3169,7 +3202,7 @@ describe("public auctions endpoint", () => {
     ]);
     expect(rows.filter((row) => Number(row.priority_placement) > 0)).toHaveLength(3);
 
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_now")).toMatch(/T/);
@@ -3188,11 +3221,11 @@ describe("public auctions endpoint", () => {
     }));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") return jsonRows([]);
       const limit = Number(url.searchParams.get("p_limit") ?? priorityRows.length);
       return url.searchParams.get("p_stream") === "priority"
-        ? jsonRows(priorityRows.slice(0, limit))
-        : jsonRows([]);
+        ? auctionEnvelopeRows(priorityRows.slice(0, limit))
+        : auctionEnvelopeRows([]);
     }) as unknown as typeof fetch;
 
     const rows = await fetchPublicAuctionRows(env, 6);
@@ -3205,7 +3238,7 @@ describe("public auctions endpoint", () => {
       "priority-only-5",
       "priority-only-6",
     ]);
-    const priorityLimits = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")
+    const priorityLimits = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")
       .filter((url) => url.searchParams.get("p_stream") === "priority")
       .map((url) => url.searchParams.get("p_limit"));
     expect(priorityLimits).toEqual(["600"]);
@@ -3237,10 +3270,10 @@ describe("public auctions endpoint", () => {
     ];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") return jsonRows([]);
       return url.searchParams.get("p_stream") === "priority"
-        ? jsonRows([])
-        : jsonRows(rowsByMunicipality);
+        ? auctionEnvelopeRows([])
+        : auctionEnvelopeRows(rowsByMunicipality);
     }) as unknown as typeof fetch;
 
     const rows = await fetchPublicAuctionRows(env, 60);
@@ -3254,7 +3287,7 @@ describe("public auctions endpoint", () => {
       "Patras",
     ]);
 
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
@@ -3272,16 +3305,16 @@ describe("public auctions endpoint", () => {
       }));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") return jsonRows([]);
       return url.searchParams.get("p_stream") === "priority"
-        ? jsonRows([])
-        : jsonRows(clusteredRows);
+        ? auctionEnvelopeRows([])
+        : auctionEnvelopeRows(clusteredRows);
     }) as unknown as typeof fetch;
     const rows = await fetchPublicAuctionRows(env, 60);
     expect(rows).toHaveLength(48);
     expect(rows.every((row) => row.city === "Agrinio")).toBe(true);
 
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
@@ -3291,13 +3324,13 @@ describe("public auctions endpoint", () => {
 
   it("falls back to source auctions when the daily cached DB window is empty", async () => {
     fetchMock()
-      .mockResolvedValueOnce(jsonRows([]))
-      .mockResolvedValueOnce(jsonRows([]));
+      .mockResolvedValueOnce(auctionEnvelopeRows([], { poolExists: false }))
+      .mockResolvedValueOnce(auctionEnvelopeRows([], { poolExists: false }));
 
     const rows = await fetchPublicAuctionRows(env, 2);
     expect(rows).toHaveLength(2);
 
-    const dbCalls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
+    const dbCalls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     expect(dbCalls).toHaveLength(4);
     expect(dbCalls[0].searchParams.get("p_pool_tag")).toMatch(/^auction_pool:\d{4}-\d{2}-\d{2}$/);
     expect(dbCalls[1].searchParams.get("p_pool_tag")).toMatch(/^auction_pool:\d{4}-\d{2}-\d{2}$/);
@@ -3308,34 +3341,34 @@ describe("public auctions endpoint", () => {
 
   it("returns an empty list when both local DB auction windows are empty", async () => {
     fetchMock()
-      .mockResolvedValueOnce(jsonRows([]))
-      .mockResolvedValueOnce(jsonRows([]))
-      .mockResolvedValueOnce(jsonRows([]))
-      .mockResolvedValueOnce(jsonRows([]));
+      .mockResolvedValueOnce(auctionEnvelopeRows([], { poolExists: false }))
+      .mockResolvedValueOnce(auctionEnvelopeRows([], { poolExists: false }))
+      .mockResolvedValueOnce(auctionEnvelopeRows([], { poolExists: false }))
+      .mockResolvedValueOnce(auctionEnvelopeRows([], { poolExists: false }));
     await expect(fetchPublicAuctionRows(env, 1)).resolves.toEqual([]);
 
     fetchMock().mockClear();
     fetchMock()
-      .mockResolvedValueOnce(jsonRows([]))
-      .mockResolvedValueOnce(jsonRows([]))
-      .mockResolvedValueOnce(jsonRows([]))
-      .mockResolvedValueOnce(jsonRows([]));
+      .mockResolvedValueOnce(auctionEnvelopeRows([], { poolExists: false }))
+      .mockResolvedValueOnce(auctionEnvelopeRows([], { poolExists: false }))
+      .mockResolvedValueOnce(auctionEnvelopeRows([], { poolExists: false }))
+      .mockResolvedValueOnce(auctionEnvelopeRows([], { poolExists: false }));
     await expect(fetchPublicAuctionRows(env, 2)).resolves.toEqual([]);
   });
 
   it("queries the narrow auction RPC with bounded candidate arguments", async () => {
     await expect(fetchPublicAuctionRows(env, 1)).resolves.toMatchObject([{ id: "db-2" }]);
 
-    const dbUrl = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")[0];
+    const dbUrl = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")[0];
     expect(dbUrl.searchParams.get("p_stream")).toBe("priority");
     expect(dbUrl.searchParams.get("p_pool_tag")).toMatch(/^auction_pool:\d{4}-\d{2}-\d{2}$/);
     expect(dbUrl.searchParams.get("p_limit")).toBe("600");
     expect(dbUrl.searchParams.get("p_today")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(dbUrl.searchParams.get("p_now")).toMatch(/T/);
-    expect(new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidates").headers).get("apikey"))
+    expect(new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidate_envelope").headers).get("apikey"))
       .toBe("publishable_test_key");
     expect(
-      new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidates").headers)
+      new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidate_envelope").headers)
         .get("Authorization"),
     ).toBe("Bearer publishable_test_key");
   });
@@ -3345,7 +3378,7 @@ describe("public auctions endpoint", () => {
     const candidateSignals: AbortSignal[] = [];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") return jsonRows([]);
       const signal = init?.signal;
       if (signal) candidateSignals.push(signal);
       return await new Promise<Response>((_resolve, reject) => {
@@ -3359,7 +3392,7 @@ describe("public auctions endpoint", () => {
       const pending = fetchPublicAuctionRows(env, 1);
       const rejection = expect(pending).rejects.toMatchObject({
         name: "SupabaseTransientError",
-        path: "/rest/v1/rpc/get_visible_auction_candidates",
+        path: "/rest/v1/rpc/get_visible_auction_candidate_envelope",
       });
       await vi.advanceTimersByTimeAsync(2_500);
 
@@ -3405,13 +3438,13 @@ describe("public auctions endpoint", () => {
     ];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         return jsonRows([]);
       }
       const limit = Number(url.searchParams.get("p_limit") ?? 600);
       return url.searchParams.get("p_stream") === "priority"
-        ? jsonRows(priorityRows.slice(0, limit))
-        : jsonRows(organicRows.slice(0, limit));
+        ? auctionEnvelopeRows(priorityRows.slice(0, limit))
+        : auctionEnvelopeRows(organicRows.slice(0, limit));
     }) as unknown as typeof fetch;
 
     const compact = await fetchPublicAuctionRows(env, 6);
@@ -3421,7 +3454,7 @@ describe("public auctions endpoint", () => {
       canonical.slice(0, 6).map((row) => row.id),
     );
     const requestedLimits = fetchUrls(
-      "/rest/v1/rpc/get_visible_auction_candidates",
+      "/rest/v1/rpc/get_visible_auction_candidate_envelope",
     ).map((url) => url.searchParams.get("p_limit"));
     expect(new Set(requestedLimits)).toEqual(new Set(["600"]));
   });
@@ -3456,13 +3489,13 @@ describe("public auctions endpoint", () => {
     ];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         return jsonRows([]);
       }
       const limit = Number(url.searchParams.get("p_limit") ?? 600);
       return url.searchParams.get("p_stream") === "priority"
-        ? jsonRows(priorityRows.slice(0, limit))
-        : jsonRows(organicRows.slice(0, limit));
+        ? auctionEnvelopeRows(priorityRows.slice(0, limit))
+        : auctionEnvelopeRows(organicRows.slice(0, limit));
     }) as unknown as typeof fetch;
 
     const homepageRows = await fetchPublicAuctionRows(env, 60);
@@ -3486,7 +3519,7 @@ describe("public auctions endpoint", () => {
     const body = await res.json() as { data: unknown[] };
     expect(body.data).toHaveLength(2);
 
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
@@ -3496,7 +3529,7 @@ describe("public auctions endpoint", () => {
     const cacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(cacheKey.searchParams.get("limit")).toBe("60");
     expect(cacheKey.searchParams.has("day")).toBe(true);
-    expect(cacheKey.searchParams.get("v")).toBe("canonical-server-filtered-v13");
+    expect(cacheKey.searchParams.get("v")).toBe("canonical-server-filtered-v14");
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=30, stale-while-revalidate=60");
     expect(res.headers.get("CDN-Cache-Control")).toBe("no-store");
     const staleSeed = cacheApi.put.mock.calls.find(([request]) =>
@@ -3528,7 +3561,7 @@ describe("public auctions endpoint", () => {
     const res = await auctionsRequest(makeCtx("https://portal.maiprop.co/api/public/auctions"));
     expect(res.status).toBe(200);
 
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
@@ -3550,7 +3583,7 @@ describe("public auctions endpoint", () => {
         expect(requestJson(init)).toEqual({});
         return new Response("600", { headers: { "Content-Type": "application/json" } });
       }
-      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         const expectedParams = {
           p_city: "Athens",
           p_property_base: "commercial",
@@ -3569,9 +3602,9 @@ describe("public auctions endpoint", () => {
           ([key, value]) => url.searchParams.get(key) === value,
         );
         if (!hasAllFilters || url.searchParams.get("p_stream") === "priority") {
-          return jsonRows([]);
+          return auctionEnvelopeRows([], { poolExists: true });
         }
-        return jsonRows([{
+        return auctionEnvelopeRows([{
           id: "match-beyond-old-60-row-prefix",
           city: "Athens",
           property_type: "commercial",
@@ -3598,19 +3631,345 @@ describe("public auctions endpoint", () => {
     expect(response.status).toBe(200);
     expect(body.total).toBe(1);
     expect(body.data.map((row) => row.id)).toEqual(["match-beyond-old-60-row-prefix"]);
-    const candidateUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
+    const candidateUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     expect(candidateUrls).toHaveLength(2);
     expect(candidateUrls.every((url) => url.searchParams.get("p_limit") === "600")).toBe(true);
+  });
+
+  it("does not fall back outside today's scheduled pool when filters match zero scheduled rows", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
+        return jsonRows([{
+          pool_exists: url.searchParams.has("p_pool_tag"),
+          total_raw: 0,
+          facet_cities: ["Patras"],
+          facet_rounds: [2],
+          visible_rows: [],
+        }]);
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?city=Athens&propertyType=villa",
+    ));
+    const body = await response.json() as {
+      data: AuctionRowForTest[];
+      totalRaw: number;
+      facets: { cities: string[]; rounds: number[] };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data).toEqual([]);
+    expect(body.totalRaw).toBe(0);
+    expect(body.facets).toEqual({ cities: ["Patras"], rounds: [2] });
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")).toHaveLength(2);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")
+      .every((url) => url.searchParams.has("p_pool_tag"))).toBe(true);
+  });
+
+  it("uses full bounded-pool metadata when the visible filtered rows are entitlement-capped", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const priorityRows = Array.from({ length: 5 }, (_, index) => ({
+        id: `visible-priority-${String(index + 1).padStart(3, "0")}`,
+        city: "Athens",
+        property_type: "villa",
+        auction_date: "2026-08-01",
+        priority_placement: 1,
+        priority_until: "2099-01-01T00:00:00.000Z",
+        tags: ["round:2"],
+      }));
+      const organicRows = Array.from({ length: 55 }, (_, index) => ({
+        id: `visible-organic-${String(index + 1).padStart(3, "0")}`,
+        city: "Athens",
+        property_type: "villa",
+        auction_date: "2026-08-02",
+        priority_placement: 0,
+        tags: ["round:2"],
+      }));
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
+        return url.searchParams.get("p_stream") === "priority"
+          ? jsonRows([{
+            pool_exists: true,
+            total_raw: 5,
+            facet_cities: ["Athens", "Larissa"],
+            facet_rounds: [2, 4],
+            visible_rows: priorityRows,
+          }])
+          : jsonRows([{
+            pool_exists: true,
+            total_raw: 120,
+            facet_cities: ["Athens", "Patras"],
+            facet_rounds: [2, 4],
+            visible_rows: organicRows,
+          }]);
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=60&propertyType=villa&page=3&pageSize=20",
+    ));
+    const body = await response.json() as {
+      data: AuctionRowForTest[];
+      total: number;
+      totalRaw: number;
+      totalPages: number;
+      facets: { cities: string[]; rounds: number[] };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data).toHaveLength(20);
+    expect(body.data.every((row) => (row as { city?: string }).city === "Athens")).toBe(true);
+    expect(body.totalRaw).toBe(125);
+    expect(body.total).toBe(60);
+    expect(body.totalPages).toBe(3);
+    expect(body.facets).toEqual({
+      cities: ["Athens", "Larissa", "Patras"],
+      rounds: [2, 4],
+    });
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")).toHaveLength(2);
+  });
+
+  it("preserves full metadata on the non-canonical first-paint route without disclosing extra rows", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
+        return jsonRows([]);
+      }
+      const priority = url.searchParams.get("p_stream") === "priority";
+      const visibleRows = Array.from({ length: priority ? 5 : 55 }, (_, index) => ({
+        id: `${priority ? "first-paint-priority" : "first-paint-organic"}-${index + 1}`,
+        city: "Athens",
+        auction_date: priority ? "2026-08-01" : "2026-08-02",
+        priority_placement: priority ? 1 : 0,
+        priority_until: priority ? "2099-01-01T00:00:00.000Z" : null,
+        tags: ["round:2"],
+      }));
+      return auctionEnvelopeRows(visibleRows, {
+        poolExists: true,
+        totalRaw: priority ? 5 : 120,
+        facetCities: priority ? ["Athens", "Larissa"] : ["Athens", "Patras"],
+        facetRounds: priority ? [2, 4] : [2, 4],
+      });
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=60",
+    ));
+    const body = await response.json() as {
+      data: AuctionRowForTest[];
+      total: number;
+      totalRaw: number;
+      facets: { cities: string[]; rounds: number[] };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data).toHaveLength(60);
+    expect(body.total).toBe(60);
+    expect(body.totalRaw).toBe(125);
+    expect(body.facets).toEqual({
+      cities: ["Athens", "Larissa", "Patras"],
+      rounds: [2, 4],
+    });
+    expect(body.data.every((row) => (row as { city?: string }).city === "Athens")).toBe(true);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")).toHaveLength(2);
+  });
+
+  it("starts both bounded stream reads before awaiting either response", async () => {
+    const started: Array<"priority" | "organic"> = [];
+    const releases = new Map<"priority" | "organic", (response: Response) => void>();
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
+        return jsonRows([]);
+      }
+      const stream = url.searchParams.get("p_stream") as "priority" | "organic";
+      started.push(stream);
+      return await new Promise<Response>((resolve) => releases.set(stream, resolve));
+    }) as unknown as typeof fetch;
+
+    let settled = false;
+    const pending = fetchPublicAuctionRows(env, 2).finally(() => {
+      settled = true;
+    });
+    await vi.waitFor(() => expect(new Set(started)).toEqual(new Set(["priority", "organic"])));
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")).toHaveLength(2);
+
+    releases.get("priority")?.(auctionEnvelopeRows([{
+      id: "concurrent-priority",
+      city: "Athens",
+      auction_date: "2026-08-01",
+      priority_placement: 1,
+      priority_until: "2099-01-01T00:00:00.000Z",
+    }]));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    releases.get("organic")?.(auctionEnvelopeRows([{
+      id: "concurrent-organic",
+      city: "Athens",
+      auction_date: "2026-08-02",
+      priority_placement: 0,
+    }]));
+    await expect(pending).resolves.toHaveLength(2);
+  });
+
+  it.each([
+    {
+      label: "missing envelope row",
+      payload: [],
+    },
+    {
+      label: "metadata on a missing pool",
+      payload: [{
+        pool_exists: false,
+        total_raw: 0,
+        facet_cities: ["Athens"],
+        facet_rounds: [],
+        visible_rows: [],
+      }],
+    },
+    {
+      label: "more visible rows than total_raw",
+      payload: [{
+        pool_exists: true,
+        total_raw: 0,
+        facet_cities: [],
+        facet_rounds: [],
+        visible_rows: [{ id: "over-disclosed" }],
+      }],
+    },
+  ])("fails closed with 503 for a malformed auction envelope: $label", async ({ payload }) => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      return url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope"
+        ? jsonRows(payload)
+        : jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=60",
+    ));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({ error: "Supabase upstream unavailable" });
+    expect(cacheApi.put).not.toHaveBeenCalled();
+  });
+
+  it("ignores a decimal construction-year range instead of sending decimals to INTEGER RPC parameters", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
+        return jsonRows([]);
+      }
+      expect(url.searchParams.has("p_year_min")).toBe(false);
+      expect(url.searchParams.has("p_year_max")).toBe(false);
+      return url.searchParams.get("p_stream") === "priority"
+        ? auctionEnvelopeRows([])
+        : auctionEnvelopeRows([{
+          id: "decimal-year-filter-ignored",
+          city: "Athens",
+          year_built: 1980,
+          auction_date: "2026-08-01",
+          priority_placement: 0,
+        }]);
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?yearRange=1990.5-2010",
+    ));
+    const body = await response.json() as { data: AuctionRowForTest[] };
+
+    expect(response.status).toBe(200);
+    expect(body.data.map((row) => row.id)).toEqual(["decimal-year-filter-ignored"]);
+  });
+
+  it("matches SQL yield normalization for decomposed Greek city text", async () => {
+    const decomposedAthens = "αθη\u0301να";
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/auth/v1/user") {
+        return new Response(JSON.stringify({ id: "00000000-0000-4000-8000-000000000001" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_current_auction_listing_visible_limit") {
+        expect(requestJson(init)).toEqual({});
+        return new Response("600", { headers: { "Content-Type": "application/json" } });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
+        return url.searchParams.get("p_stream") === "priority"
+          ? auctionEnvelopeRows([])
+          : auctionEnvelopeRows([{
+            id: "decomposed-greek-city",
+            city: decomposedAthens,
+            auction_date: "2026-08-01",
+            auction_starting_bid: 100_000,
+            sqm: 100,
+            priority_placement: 0,
+          }]);
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=600&yield=high",
+      { headers: { Authorization: "Bearer paid-user-token" } },
+    ));
+    const body = await response.json() as { data: AuctionRowForTest[] };
+
+    expect(response.status).toBe(200);
+    expect(body.data.map((row) => row.id)).toEqual(["decomposed-greek-city"]);
+  });
+
+  it("treats auction round tags as positive integers in the TypeScript defense layer", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/auth/v1/user") {
+        return new Response(JSON.stringify({ id: "00000000-0000-4000-8000-000000000001" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_current_auction_listing_visible_limit") {
+        expect(requestJson(init)).toEqual({});
+        return new Response("600", { headers: { "Content-Type": "application/json" } });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
+        return url.searchParams.get("p_stream") === "priority"
+          ? auctionEnvelopeRows([])
+          : auctionEnvelopeRows([{
+            id: "decimal-round",
+            city: "Athens",
+            auction_date: "2026-08-01",
+            priority_placement: 0,
+            tags: ["round:2.5"],
+          }], { totalRaw: 1, facetRounds: [] });
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=600&round=2",
+      { headers: { Authorization: "Bearer paid-user-token" } },
+    ));
+    const body = await response.json() as { data: AuctionRowForTest[] };
+
+    expect(response.status).toBe(200);
+    expect(body.data).toEqual([]);
   });
 
   it("excludes auctions with an unknown construction year when a year filter is active", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         return jsonRows([]);
       }
-      if (url.searchParams.get("p_stream") === "priority") return jsonRows([]);
-      return jsonRows([
+      if (url.searchParams.get("p_stream") === "priority") return auctionEnvelopeRows([]);
+      return auctionEnvelopeRows([
         {
           id: "unknown-year",
           city: "Athens",
@@ -3662,12 +4021,18 @@ describe("public auctions endpoint", () => {
     ];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         return jsonRows([]);
       }
-      return url.searchParams.get("p_stream") === "priority"
-        ? jsonRows([])
-        : jsonRows(organicRows);
+      if (url.searchParams.get("p_stream") === "priority") {
+        return auctionEnvelopeRows([]);
+      }
+      const visibleRows = organicRows.filter((row) => row.property_type === "villa");
+      return auctionEnvelopeRows(visibleRows, {
+        poolExists: true,
+        totalRaw: visibleRows.length,
+        facetCities: ["Athens"],
+      });
     }) as unknown as typeof fetch;
 
     const response = await auctionsRequest(makeCtx(
@@ -3697,7 +4062,7 @@ describe("public auctions endpoint", () => {
     );
     expect(body.facets.cities).toEqual(["Athens"]);
     expect(body.stats.mappableCount).toBe(0);
-    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")
       .map((url) => url.searchParams.get("p_limit"))).toEqual(["600", "600"]);
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
@@ -3722,7 +4087,7 @@ describe("public auctions endpoint", () => {
           },
         }]);
       }
-      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         throw new Error("exact lookup must not scan bounded auction streams");
       }
       return jsonRows([]);
@@ -3747,7 +4112,7 @@ describe("public auctions endpoint", () => {
     });
     expect(response.headers.get("X-Maiprop-Cache-Valid-Until"))
       .toBe(cataloguePublicationMetadata().retain_until);
-    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")).toHaveLength(0);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")).toHaveLength(0);
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
@@ -3770,7 +4135,7 @@ describe("public auctions endpoint", () => {
           },
         }]);
       }
-      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         throw new Error("exact lookup must not scan bounded auction streams");
       }
       return jsonRows([]);
@@ -3788,7 +4153,7 @@ describe("public auctions endpoint", () => {
       p_listing_ids: [listingId],
       p_os_tag: null,
     });
-    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")).toHaveLength(0);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")).toHaveLength(0);
   });
 
   it("fails closed when an exact OS tag resolves more than one auction", async () => {
@@ -3804,7 +4169,7 @@ describe("public auctions endpoint", () => {
           headers: { "Content-Type": "application/json" },
         });
       }
-      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         throw new Error("duplicate exact lookup must fail at the snapshot reader");
       }
       return jsonRows([]);
@@ -3819,7 +4184,7 @@ describe("public auctions endpoint", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Auction catalogue identity mismatch",
     });
-    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")).toHaveLength(0);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")).toHaveLength(0);
   });
 
   it("returns identical IDs and order for the same canonical revision", async () => {
@@ -3833,18 +4198,18 @@ describe("public auctions endpoint", () => {
     }));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         return jsonRows([]);
       }
       return url.searchParams.get("p_stream") === "priority"
-        ? jsonRows([{
+        ? auctionEnvelopeRows([{
           id: "promoted-until-noon",
           city: "Athens",
           auction_date: "2026-08-02",
           priority_placement: 1,
           priority_until: "2026-07-28T12:00:00.000Z",
         }])
-        : jsonRows(organicRows);
+        : auctionEnvelopeRows(organicRows);
     }) as unknown as typeof fetch;
 
     try {
@@ -3862,7 +4227,7 @@ describe("public auctions endpoint", () => {
       expect(secondBody.revision).toBe(firstBody.revision);
       expect(secondBody.data.map((row) => row.id)).toEqual(firstBody.data.map((row) => row.id));
       expect(firstBody.data[0]?.id).toBe("promoted-until-noon");
-      expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")
+      expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")
         .map((url) => url.searchParams.get("p_now")))
         .toEqual(Array(4).fill("2026-07-28T00:00:00.000Z"));
 
@@ -3904,11 +4269,11 @@ describe("public auctions endpoint", () => {
           headers: { "Content-Type": "application/json" },
         });
       }
-      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         candidateHeaders.push(new Headers(init?.headers));
         return url.searchParams.get("p_stream") === "priority"
-          ? jsonRows([])
-          : jsonRows(organicRows);
+          ? auctionEnvelopeRows([])
+          : auctionEnvelopeRows(organicRows);
       }
       return jsonRows([]);
     }) as unknown as typeof fetch;
@@ -3959,16 +4324,17 @@ describe("public auctions endpoint", () => {
       if (url.pathname === "/auth/v1/user") {
         return jsonRows([], { status: 401 });
       }
-      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         candidateHeaders.push(new Headers(init?.headers));
+        const rows = Array.from({ length: 80 }, (_, index) => ({
+          id: `anonymous-${String(index + 1).padStart(3, "0")}`,
+          city: "Athens",
+          auction_date: "2026-08-01",
+          priority_placement: 0,
+        }));
         return url.searchParams.get("p_stream") === "priority"
-          ? jsonRows([])
-          : jsonRows(Array.from({ length: 80 }, (_, index) => ({
-            id: `anonymous-${String(index + 1).padStart(3, "0")}`,
-            city: "Athens",
-            auction_date: "2026-08-01",
-            priority_placement: 0,
-          })));
+          ? auctionEnvelopeRows([])
+          : auctionEnvelopeRows(rows.slice(0, 60), { totalRaw: rows.length });
       }
       return jsonRows([]);
     }) as unknown as typeof fetch;
@@ -4007,12 +4373,18 @@ describe("public auctions endpoint", () => {
     vi.useFakeTimers();
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
-      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         return delayedJsonBody([{
-          id: "late-body-row",
-          city: "Athens",
-          auction_date: "2026-08-01",
-          priority_placement: 0,
+          pool_exists: true,
+          total_raw: 1,
+          facet_cities: ["Athens"],
+          facet_rounds: [],
+          visible_rows: [{
+            id: "late-body-row",
+            city: "Athens",
+            auction_date: "2026-08-01",
+            priority_placement: 0,
+          }],
         }], 6_000, init?.signal);
       }
       return jsonRows([]);
@@ -4111,16 +4483,17 @@ describe("public auctions endpoint", () => {
       if (url.pathname === "/rest/v1/rpc/get_current_auction_listing_visible_limit") {
         return jsonRows([], { status: 503 });
       }
-      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         candidateHeaders.push(new Headers(init?.headers));
+        const rows = Array.from({ length: 80 }, (_, index) => ({
+          id: `fallback-${String(index + 1).padStart(3, "0")}`,
+          city: "Athens",
+          auction_date: "2026-08-01",
+          priority_placement: 0,
+        }));
         return url.searchParams.get("p_stream") === "priority"
-          ? jsonRows([])
-          : jsonRows(Array.from({ length: 80 }, (_, index) => ({
-            id: `fallback-${String(index + 1).padStart(3, "0")}`,
-            city: "Athens",
-            auction_date: "2026-08-01",
-            priority_placement: 0,
-          })));
+          ? auctionEnvelopeRows([])
+          : auctionEnvelopeRows(rows.slice(0, 60), { totalRaw: rows.length });
       }
       return jsonRows([]);
     }) as unknown as typeof fetch;
@@ -4160,15 +4533,16 @@ describe("public auctions endpoint", () => {
           }, { once: true });
         });
       }
-      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
+        const rows = Array.from({ length: 80 }, (_, index) => ({
+          id: `timeout-${String(index + 1).padStart(3, "0")}`,
+          city: "Athens",
+          auction_date: "2026-08-01",
+          priority_placement: 0,
+        }));
         return url.searchParams.get("p_stream") === "priority"
-          ? jsonRows([])
-          : jsonRows(Array.from({ length: 80 }, (_, index) => ({
-            id: `timeout-${String(index + 1).padStart(3, "0")}`,
-            city: "Athens",
-            auction_date: "2026-08-01",
-            priority_placement: 0,
-          })));
+          ? auctionEnvelopeRows([])
+          : auctionEnvelopeRows(rows.slice(0, 60), { totalRaw: rows.length });
       }
       return jsonRows([]);
     }) as unknown as typeof fetch;
@@ -4218,7 +4592,7 @@ describe("public auctions endpoint", () => {
 
     expect(res.status).toBe(200);
     const candidateCalls = fetchMock().mock.calls.filter(([input]) =>
-      new URL(String(input)).pathname === "/rest/v1/rpc/get_visible_auction_candidates"
+      new URL(String(input)).pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope"
     );
     expect(candidateCalls).toHaveLength(2);
     for (const [, init] of candidateCalls) {
@@ -4243,12 +4617,18 @@ describe("public auctions endpoint", () => {
       if (url.pathname === "/rest/v1/rpc/get_current_auction_listing_visible_limit") {
         return delayedJsonBody(600, 2_000, init?.signal);
       }
-      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         return delayedJsonBody([{
-          id: "aggregate-late-row",
-          city: "Athens",
-          auction_date: "2026-08-01",
-          priority_placement: 0,
+          pool_exists: true,
+          total_raw: 1,
+          facet_cities: ["Athens"],
+          facet_rounds: [],
+          visible_rows: [{
+            id: "aggregate-late-row",
+            city: "Athens",
+            auction_date: "2026-08-01",
+            priority_placement: 0,
+          }],
         }], 2_000, init?.signal);
       }
       return jsonRows([]);
@@ -4316,12 +4696,12 @@ describe("public homepage endpoint", () => {
     expect(invalid.headers.get("Cache-Control")).toBe("no-store");
 
     await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=auctions"));
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
     expect(organicUrl?.searchParams.get("p_limit")).toBe("600");
-    expect(new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidates").headers)
+    expect(new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidate_envelope").headers)
       .get("Authorization")).toBe("Bearer publishable_test_key");
     expect(fetchUrls("/rest/v1/rpc/get_public_auction_candidates")).toHaveLength(0);
   });
