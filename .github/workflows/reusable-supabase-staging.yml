@@ -195,9 +195,16 @@ jobs:
             exit 1
           fi
 
+          canonical_staging_db_url="$(STAGING_DATABASE_URL="$SUPABASE_STAGING_DB_URL" node --input-type=module <<'NODE'
+          import { normalizeDatabaseUrlTls } from "./scripts/catalogue-hotfix-workflow-helpers.mjs";
+          process.stdout.write(normalizeDatabaseUrlTls(process.env.STAGING_DATABASE_URL));
+          NODE
+          )"
+          echo "::add-mask::$canonical_staging_db_url"
+
           node scripts/assert-staging-mutation-target.mjs \
             --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
-            --database-url "$SUPABASE_STAGING_DB_URL" \
+            --database-url "$canonical_staging_db_url" \
             --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
 
           echo "isolated_staging=true" >> "$GITHUB_OUTPUT"
@@ -396,7 +403,9 @@ jobs:
             project_json="{}"
           fi
 
-          resolved_url="$(PROJECTS_JSON="$projects_json" PROJECT_JSON="$project_json" node <<'NODE'
+          resolved_url="$(PROJECTS_JSON="$projects_json" PROJECT_JSON="$project_json" node --input-type=module <<'NODE'
+          import { normalizeDatabaseUrlTls } from "./scripts/catalogue-hotfix-workflow-helpers.mjs";
+
           const directUrl = process.env.SUPABASE_STAGING_DB_URL;
           const projectRef = process.env.STAGING_SUPABASE_PROJECT_ID;
           const projects = JSON.parse(process.env.PROJECTS_JSON || "[]");
@@ -409,7 +418,7 @@ jobs:
             throw new Error("STAGING_SUPABASE_PROJECT_ID is required");
           }
 
-          const current = new URL(directUrl);
+          const current = new URL(normalizeDatabaseUrlTls(directUrl));
           if (current.hostname.endsWith(".pooler.supabase.com")) {
             process.stdout.write(current.toString());
             process.exit(0);

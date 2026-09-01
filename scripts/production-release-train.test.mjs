@@ -1,21 +1,28 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import yaml from "js-yaml";
 
 const directNodeTest =
-  typeof globalThis.describe === "function" && typeof globalThis.it === "function"
+  typeof globalThis.describe === "function" &&
+  typeof globalThis.it === "function"
     ? null
     : await import(/* @vite-ignore */ ["node", "test"].join(":"));
-const describe = directNodeTest ? directNodeTest.describe.skip : globalThis.describe;
+const describe = directNodeTest
+  ? directNodeTest.describe.skip
+  : globalThis.describe;
 const it = directNodeTest ? directNodeTest.it : globalThis.it;
 const expect = globalThis.expect;
 
-import {
-  STRIPE_RUNTIME_BINDINGS,
-} from "./validate-cloudflare-pages-staging-posture.mjs";
+import { STRIPE_RUNTIME_BINDINGS } from "./validate-cloudflare-pages-staging-posture.mjs";
 import { releaseAuthorizationSha256 } from "./production-break-glass-validation.mjs";
 
 const root = resolve(import.meta.dirname, "..");
@@ -118,34 +125,56 @@ function validatorCliArgs(mode, file, now, authorizationFile) {
   const common = [
     resolve(root, "scripts", "production-release-validation.mjs"),
     mode,
-    "--file", file,
-    "--sha", validatorFixture.releaseSha,
-    "--repository", validatorFixture.repository,
-    "--source-tree", validatorFixture.sourceTree,
-    "--source-run-id", "10",
-    "--source-run-attempt", "1",
-    "--staging-run-id", "20",
-    "--staging-run-attempt", "1",
-    "--approval-run-id", "50",
-    "--approval-run-attempt", "1",
+    "--file",
+    file,
+    "--sha",
+    validatorFixture.releaseSha,
+    "--repository",
+    validatorFixture.repository,
+    "--source-tree",
+    validatorFixture.sourceTree,
+    "--source-run-id",
+    "10",
+    "--source-run-attempt",
+    "1",
+    "--staging-run-id",
+    "20",
+    "--staging-run-attempt",
+    "1",
+    "--approval-run-id",
+    "50",
+    "--approval-run-attempt",
+    "1",
   ];
   if (mode === "release-approval") {
     common.push(
-      "--artifact-sha256", validatorFixture.artifactSha256,
-      "--deploy-actor", "krenios",
-      "--allowed-approvers", "reviewer",
+      "--artifact-sha256",
+      validatorFixture.artifactSha256,
+      "--deploy-actor",
+      "krenios",
+      "--allowed-approvers",
+      "reviewer",
     );
   } else {
     common.push(
-      "--artifact-sha256", validatorFixture.artifactSha256,
-      "--approval-nonce", validatorFixture.approvalNonce,
-      "--production-run-id", "70",
-      "--production-run-attempt", "1",
-      "--stripe-readiness-run-id", "30",
-      "--stripe-readiness-run-attempt", "1",
-      "--stripe-readiness-sha256", validatorFixture.stripeSha256,
-      "--stripe-readiness-artifact-id", "31",
-      "--stripe-readiness-artifact-digest", validatorFixture.stripeArtifactDigest,
+      "--artifact-sha256",
+      validatorFixture.artifactSha256,
+      "--approval-nonce",
+      validatorFixture.approvalNonce,
+      "--production-run-id",
+      "70",
+      "--production-run-attempt",
+      "1",
+      "--stripe-readiness-run-id",
+      "30",
+      "--stripe-readiness-run-attempt",
+      "1",
+      "--stripe-readiness-sha256",
+      validatorFixture.stripeSha256,
+      "--stripe-readiness-artifact-id",
+      "31",
+      "--stripe-readiness-artifact-digest",
+      validatorFixture.stripeArtifactDigest,
     );
   }
   if (authorizationFile) common.push("--authorization-file", authorizationFile);
@@ -156,32 +185,50 @@ function validatorCliArgs(mode, file, now, authorizationFile) {
 function workflowAuthorizationGuard(name) {
   const parsed = yaml.load(workflow(name));
   const step = parsed.jobs.deploy.steps.find(
-    (candidate) => candidate.name === "Authenticate declared production authorization mode",
+    (candidate) =>
+      candidate.name === "Authenticate declared production authorization mode",
   );
   assert.ok(step, `${name} must authenticate the declared authorization mode`);
-  const match = /node --input-type=module <<'NODE'\n([\s\S]*?)\nNODE/.exec(step.run);
-  assert.ok(match, `${name} must expose an executable Node authorization guard`);
+  const match = /node --input-type=module <<'NODE'\n([\s\S]*?)\nNODE/.exec(
+    step.run,
+  );
+  assert.ok(
+    match,
+    `${name} must expose an executable Node authorization guard`,
+  );
   return match[1];
 }
 
 function executeAuthorizationGuard(source, env) {
-  return spawnSync(process.execPath, ["--input-type=module", "--eval", source], {
-    cwd: root,
-    encoding: "utf8",
-    env: { ...process.env, ...env },
-  });
+  return spawnSync(
+    process.execPath,
+    ["--input-type=module", "--eval", source],
+    {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, ...env },
+    },
+  );
 }
 
 function productionConsumptionPostcheckFilter() {
   const parsed = yaml.load(workflow("deploy-production-release.yml"));
   const step = parsed.jobs["consume-break-glass-authorization"].steps.find(
-    (candidate) => candidate.name === "Finalize exact production consumption tuple",
+    (candidate) =>
+      candidate.name === "Finalize exact production consumption tuple",
   );
-  assert.ok(step, "production release must finalize the exact consumption tuple");
-  const match = /--arg digest "\$RECEIPT_ARTIFACT_DIGEST" '\n([\s\S]*?)\n\s+' receipt-postcheck\.json/.exec(
-    step.run,
+  assert.ok(
+    step,
+    "production release must finalize the exact consumption tuple",
   );
-  assert.ok(match, "production receipt postcheck must expose an executable jq filter");
+  const match =
+    /--arg digest "\$RECEIPT_ARTIFACT_DIGEST" '\n([\s\S]*?)\n\s+' receipt-postcheck\.json/.exec(
+      step.run,
+    );
+  assert.ok(
+    match,
+    "production receipt postcheck must expose an executable jq filter",
+  );
   return match[1];
 }
 
@@ -269,13 +316,17 @@ gh() {
 }
 ${step.run}
 `;
-  return spawnSync(command, [
-    ...prefix,
-    ...Object.entries(environment).map(([key, value]) => `${key}=${value}`),
-    "bash",
-    "-c",
-    script,
-  ], { encoding: "utf8" });
+  return spawnSync(
+    command,
+    [
+      ...prefix,
+      ...Object.entries(environment).map(([key, value]) => `${key}=${value}`),
+      "bash",
+      "-c",
+      script,
+    ],
+    { encoding: "utf8" },
+  );
 }
 
 function executeJq(filter, input, args = []) {
@@ -340,25 +391,40 @@ function executeCloudflareStagingIsolation(
 }
 
 function pagesRuntimeResultContract() {
-  const producer = yaml.load(workflow("provision-cloudflare-pages-runtime.yml"));
+  const producer = yaml.load(
+    workflow("provision-cloudflare-pages-runtime.yml"),
+  );
   const producerStep = producer.jobs.provision.steps.find(
-    (step) => step.name === "Provision strict Cloudflare Pages runtime bindings",
+    (step) =>
+      step.name === "Provision strict Cloudflare Pages runtime bindings",
   );
   assert.ok(producerStep, "Pages runtime producer step is required");
-  const producerMatch = /--arg release_sha "\$RELEASE_SHA" '(\{[\s\S]*?\})' > "\$EVIDENCE_DIR\/cloudflare-pages-runtime-result\.json"/.exec(
-    producerStep.run,
+  const producerMatch =
+    /--arg release_sha "\$RELEASE_SHA" '(\{[\s\S]*?\})' > "\$EVIDENCE_DIR\/cloudflare-pages-runtime-result\.json"/.exec(
+      producerStep.run,
+    );
+  assert.ok(
+    producerMatch,
+    "Pages runtime producer jq contract must remain executable",
   );
-  assert.ok(producerMatch, "Pages runtime producer jq contract must remain executable");
 
   const consumer = yaml.load(workflow("deploy-production-release.yml"));
   const consumerStep = consumer.jobs.validate.steps.find(
-    (step) => step.name === "Require current main and final exact-SHA readiness",
+    (step) =>
+      step.name === "Require current main and final exact-SHA readiness",
   );
-  assert.ok(consumerStep, "production release Pages proof consumer is required");
-  const consumerMatch = /jq -e --arg target "\$target" --arg sha "\$RELEASE_SHA" '([\s\S]*?)' "\$root\/evidence\/cloudflare-pages-runtime-result\.json"/.exec(
-    consumerStep.run,
+  assert.ok(
+    consumerStep,
+    "production release Pages proof consumer is required",
   );
-  assert.ok(consumerMatch, "Pages runtime consumer jq contract must remain executable");
+  const consumerMatch =
+    /jq -e --arg target "\$target" --arg sha "\$RELEASE_SHA" '([\s\S]*?)' "\$root\/evidence\/cloudflare-pages-runtime-result\.json"/.exec(
+      consumerStep.run,
+    );
+  assert.ok(
+    consumerMatch,
+    "Pages runtime consumer jq contract must remain executable",
+  );
   return { producer: producerMatch[1], consumer: consumerMatch[1] };
 }
 
@@ -367,13 +433,22 @@ it("break-glass approval uses central authorization and signs schema 2 evidence"
   const dispatch = parsed.on.workflow_dispatch.inputs;
   const job = parsed.jobs.approve;
   const stepNames = job.steps.map((step) => step.name ?? "");
-  const authorizeIndex = stepNames.indexOf("Validate production approval authorization");
-  const evidenceIndex = stepNames.indexOf("Verify exact current-main release evidence");
-  const createIndex = stepNames.indexOf("Create short-lived exact-SHA approval");
-  const bindingIndex = stepNames.indexOf("Create and verify production approval binding");
+  const authorizeIndex = stepNames.indexOf(
+    "Validate production approval authorization",
+  );
+  const evidenceIndex = stepNames.indexOf(
+    "Verify exact current-main release evidence",
+  );
+  const createIndex = stepNames.indexOf(
+    "Create short-lived exact-SHA approval",
+  );
+  const bindingIndex = stepNames.indexOf(
+    "Create and verify production approval binding",
+  );
 
   assert.deepEqual(dispatch.single_admin_break_glass, {
-    description: "Use the exact configured single-admin break-glass authorization",
+    description:
+      "Use the exact configured single-admin break-glass authorization",
     required: true,
     default: false,
     type: "boolean",
@@ -385,28 +460,49 @@ it("break-glass approval uses central authorization and signs schema 2 evidence"
   assert.match(job.if, /github\.ref == 'refs\/heads\/main'/);
   assert.match(job.if, /github\.run_attempt == 1/);
   assert.match(job.if, /github\.actor == github\.triggering_actor/);
-  assert.doesNotMatch(job.if, /APPROVE_PRODUCTION_RELEASE|single_admin_break_glass/);
+  assert.doesNotMatch(
+    job.if,
+    /APPROVE_PRODUCTION_RELEASE|single_admin_break_glass/,
+  );
   assert.ok(authorizeIndex > stepNames.findIndex((name) => name === ""));
   assert.ok(authorizeIndex < evidenceIndex);
   assert.ok(evidenceIndex < createIndex);
   assert.ok(createIndex < bindingIndex);
 
   const authorize = job.steps[authorizeIndex];
-  assert.equal(authorize.env.RELEASE_AUTHORIZATION_ACTION, "production-approval");
-  assert.equal(authorize.env.RELEASE_STANDARD_CONFIRMATION, "APPROVE_PRODUCTION_RELEASE");
-  assert.equal(authorize.env.RELEASE_SINGLE_ADMIN_BREAK_GLASS, "${{ inputs.single_admin_break_glass }}");
+  assert.equal(
+    authorize.env.RELEASE_AUTHORIZATION_ACTION,
+    "production-approval",
+  );
+  assert.equal(
+    authorize.env.RELEASE_STANDARD_CONFIRMATION,
+    "APPROVE_PRODUCTION_RELEASE",
+  );
+  assert.equal(
+    authorize.env.RELEASE_SINGLE_ADMIN_BREAK_GLASS,
+    "${{ inputs.single_admin_break_glass }}",
+  );
   assert.equal(authorize.env.RELEASE_INCIDENT_ID, "${{ inputs.incident_id }}");
   assert.equal(authorize.env.RELEASE_REASON, "${{ inputs.reason }}");
-  assert.match(authorize.run, /production-break-glass-validation\.mjs validate-workflow/);
+  assert.match(
+    authorize.run,
+    /production-break-glass-validation\.mjs validate-workflow/,
+  );
   assert.match(authorize.run, /--out release-authorization\.json/);
 
   const standardGate = job.steps.find(
     (step) => step.name === "Require standard production approver allowlist",
   );
-  assert.equal(standardGate.if, "${{ steps.authorization.outputs.mode == 'standard' }}");
+  assert.equal(
+    standardGate.if,
+    "${{ steps.authorization.outputs.mode == 'standard' }}",
+  );
   assert.match(standardGate.run, /PRODUCTION_RELEASE_APPROVERS/);
   const evidence = job.steps[evidenceIndex];
-  assert.equal(evidence.env.AUTHORIZATION_MODE, "${{ steps.authorization.outputs.mode }}");
+  assert.equal(
+    evidence.env.AUTHORIZATION_MODE,
+    "${{ steps.authorization.outputs.mode }}",
+  );
   assert.match(evidence.run, /AUTHORIZATION_MODE.*standard/);
   assert.match(evidence.run, /independent from CI and staging producers/);
 
@@ -417,14 +513,22 @@ it("break-glass approval uses central authorization and signs schema 2 evidence"
   assert.match(create.run, /Math\.min/);
   assert.match(create.run, /authorized_expires_at/);
   assert.doesNotMatch(create.run, /RELEASE_REASON/);
-  assert.match(job.steps[bindingIndex].run, /--payload-root production-release-approval\.json/);
+  assert.match(
+    job.steps[bindingIndex].run,
+    /--payload-root production-release-approval\.json/,
+  );
 });
 
 it("reusable mutation guards reject mixed authorization evidence with real validators", () => {
-  const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-mixed-authorization-"));
+  const fixtureRoot = mkdtempSync(
+    join(tmpdir(), "maiprop-mixed-authorization-"),
+  );
   try {
     const approvalFile = join(fixtureRoot, "production-release-approval.json");
-    const approvalAuthorizationFile = join(fixtureRoot, "approval-authorization.json");
+    const approvalAuthorizationFile = join(
+      fixtureRoot,
+      "approval-authorization.json",
+    );
     const leaseFile = join(fixtureRoot, "production-mutation-lease.json");
     const probeNow = new Date();
     const authorizedExpiry = new Date(probeNow.getTime() + 60 * 60 * 1000);
@@ -440,14 +544,19 @@ it("reusable mutation guards reject mixed authorization evidence with real valid
       workflow_run_id: "50",
       workflow_run_attempt: "1",
     };
-    writeFileSync(approvalFile, JSON.stringify(releaseApproval(
-      breakGlassApprovalAuthorization,
-      {
-        approved_at: approvedAt.toISOString(),
-        expires_at: authorizedExpiry.toISOString(),
-      },
-    )));
-    writeFileSync(approvalAuthorizationFile, JSON.stringify(breakGlassApprovalAuthorization));
+    writeFileSync(
+      approvalFile,
+      JSON.stringify(
+        releaseApproval(breakGlassApprovalAuthorization, {
+          approved_at: approvedAt.toISOString(),
+          expires_at: authorizedExpiry.toISOString(),
+        }),
+      ),
+    );
+    writeFileSync(
+      approvalAuthorizationFile,
+      JSON.stringify(breakGlassApprovalAuthorization),
+    );
     writeFileSync(leaseFile, JSON.stringify(standardMutationLease()));
 
     const approvalProbe = spawnSync(
@@ -463,11 +572,7 @@ it("reusable mutation guards reject mixed authorization evidence with real valid
     assert.equal(approvalProbe.status, 0, approvalProbe.stderr);
     const leaseProbe = spawnSync(
       process.execPath,
-      validatorCliArgs(
-        "mutation-lease",
-        leaseFile,
-        "2026-08-26T11:00:00.000Z",
-      ),
+      validatorCliArgs("mutation-lease", leaseFile, "2026-08-26T11:00:00.000Z"),
       { cwd: root, encoding: "utf8" },
     );
     assert.equal(leaseProbe.status, 0, leaseProbe.stderr);
@@ -501,7 +606,11 @@ it("reusable mutation guards reject mixed authorization evidence with real valid
     ].map((name) => [name, workflowAuthorizationGuard(name)]);
     for (const [name, guard] of guards) {
       const mixed = executeAuthorizationGuard(guard, baseEnv);
-      assert.notEqual(mixed.status, 0, `${name} accepted break-glass approval as standard`);
+      assert.notEqual(
+        mixed.status,
+        0,
+        `${name} accepted break-glass approval as standard`,
+      );
       assert.match(mixed.stderr, /mode|standard|authorization/i, name);
     }
 
@@ -513,19 +622,27 @@ it("reusable mutation guards reject mixed authorization evidence with real valid
       workflow_run_id: "50",
       workflow_run_attempt: "1",
     };
-    writeFileSync(approvalFile, JSON.stringify(releaseApproval(standardApprovalAuthorization)));
+    writeFileSync(
+      approvalFile,
+      JSON.stringify(releaseApproval(standardApprovalAuthorization)),
+    );
     for (const [name, guard] of guards) {
       const valid = executeAuthorizationGuard(guard, baseEnv);
       assert.equal(valid.status, 0, `${name}: ${valid.stderr}`);
     }
 
-    const cloudflareGuard = guards.find(([name]) =>
-      name === "reusable-cloudflare-production-deploy.yml")[1];
+    const cloudflareGuard = guards.find(
+      ([name]) => name === "reusable-cloudflare-production-deploy.yml",
+    )[1];
     const databaseGuard = guards[0][1];
     writeFileSync(approvalFile, JSON.stringify(releaseApproval(undefined)));
     for (const [name, guard] of guards) {
       const legacyCoordinated = executeAuthorizationGuard(guard, baseEnv);
-      assert.equal(legacyCoordinated.status, 0, `${name}: ${legacyCoordinated.stderr}`);
+      assert.equal(
+        legacyCoordinated.status,
+        0,
+        `${name}: ${legacyCoordinated.stderr}`,
+      );
     }
     const legacy = executeAuthorizationGuard(cloudflareGuard, {
       ...baseEnv,
@@ -549,36 +666,52 @@ it("reusable mutation guards reject mixed authorization evidence with real valid
       release_sha: validatorFixture.releaseSha,
       parent_run_id: "70",
     };
-    writeFileSync(approvalFile, JSON.stringify(releaseApproval(
-      breakGlassApprovalAuthorization,
-      {
-        approved_at: approvedAt.toISOString(),
-        expires_at: authorizedExpiry.toISOString(),
-      },
-    )));
-    writeFileSync(leaseFile, JSON.stringify({
-      ...standardMutationLease(),
-      schema_version: 3,
-      authorization: breakGlassDeploymentAuthorization,
-      consumption,
-    }));
+    writeFileSync(
+      approvalFile,
+      JSON.stringify(
+        releaseApproval(breakGlassApprovalAuthorization, {
+          approved_at: approvedAt.toISOString(),
+          expires_at: authorizedExpiry.toISOString(),
+        }),
+      ),
+    );
+    writeFileSync(
+      leaseFile,
+      JSON.stringify({
+        ...standardMutationLease(),
+        schema_version: 3,
+        authorization: breakGlassDeploymentAuthorization,
+        consumption,
+      }),
+    );
     const breakGlassEnv = {
       ...baseEnv,
       DECLARED_AUTHORIZATION_MODE: "break_glass",
-      EXPECTED_AUTHORIZATION_SHA256:
-        releaseAuthorizationSha256(breakGlassDeploymentAuthorization),
+      EXPECTED_AUTHORIZATION_SHA256: releaseAuthorizationSha256(
+        breakGlassDeploymentAuthorization,
+      ),
     };
     for (const [name, guard] of guards) {
       const validBreakGlass = executeAuthorizationGuard(guard, breakGlassEnv);
-      assert.equal(validBreakGlass.status, 0, `${name}: ${validBreakGlass.stderr}`);
+      assert.equal(
+        validBreakGlass.status,
+        0,
+        `${name}: ${validBreakGlass.stderr}`,
+      );
     }
 
-    writeFileSync(approvalFile, JSON.stringify(releaseApproval(standardApprovalAuthorization)));
+    writeFileSync(
+      approvalFile,
+      JSON.stringify(releaseApproval(standardApprovalAuthorization)),
+    );
     writeFileSync(leaseFile, JSON.stringify(standardMutationLease()));
     for (const [label, env] of [
-      ["break-glass declaration with standard approval", {
-        DECLARED_AUTHORIZATION_MODE: "break_glass",
-      }],
+      [
+        "break-glass declaration with standard approval",
+        {
+          DECLARED_AUTHORIZATION_MODE: "break_glass",
+        },
+      ],
       ["unknown declared mode", { DECLARED_AUTHORIZATION_MODE: "unexpected" }],
     ]) {
       const result = executeAuthorizationGuard(databaseGuard, {
@@ -592,14 +725,20 @@ it("reusable mutation guards reject mixed authorization evidence with real valid
       DECLARED_AUTHORIZATION_MODE: "break_glass",
       DIRECT_STANDARD_RECOVERY: "true",
     });
-    assert.notEqual(directBreakGlass.status, 0, "direct recovery break-glass was accepted");
-    writeFileSync(approvalFile, JSON.stringify(releaseApproval(
-      breakGlassApprovalAuthorization,
-      {
-        approved_at: approvedAt.toISOString(),
-        expires_at: authorizedExpiry.toISOString(),
-      },
-    )));
+    assert.notEqual(
+      directBreakGlass.status,
+      0,
+      "direct recovery break-glass was accepted",
+    );
+    writeFileSync(
+      approvalFile,
+      JSON.stringify(
+        releaseApproval(breakGlassApprovalAuthorization, {
+          approved_at: approvedAt.toISOString(),
+          expires_at: authorizedExpiry.toISOString(),
+        }),
+      ),
+    );
     const breakGlassWithStandardLease = executeAuthorizationGuard(
       guards[0][1],
       breakGlassEnv,
@@ -608,31 +747,58 @@ it("reusable mutation guards reject mixed authorization evidence with real valid
 
     writeFileSync(leaseFile, JSON.stringify(standardMutationLease()));
     const rejectedVariants = [
-      ["missing hash", releaseApproval(standardApprovalAuthorization), {
-        EXPECTED_AUTHORIZATION_SHA256: "",
-      }],
-      ["uppercase hash", releaseApproval(standardApprovalAuthorization), {
-        EXPECTED_AUTHORIZATION_SHA256: standardHash.toUpperCase(),
-      }],
-      ["extra authorization field", releaseApproval({
-        ...standardApprovalAuthorization,
-        unexpected: "field",
-      }), {}],
-      ["wrong approval action", releaseApproval({
-        ...standardApprovalAuthorization,
-        action: "production-deploy",
-      }), {}],
-      ["wrong approval run", releaseApproval({
-        ...standardApprovalAuthorization,
-        workflow_run_id: "51",
-      }), {}],
-      ["wrong production parent", releaseApproval(standardApprovalAuthorization), {
-        PRODUCTION_RUN_ID: "71",
-      }],
+      [
+        "missing hash",
+        releaseApproval(standardApprovalAuthorization),
+        {
+          EXPECTED_AUTHORIZATION_SHA256: "",
+        },
+      ],
+      [
+        "uppercase hash",
+        releaseApproval(standardApprovalAuthorization),
+        {
+          EXPECTED_AUTHORIZATION_SHA256: standardHash.toUpperCase(),
+        },
+      ],
+      [
+        "extra authorization field",
+        releaseApproval({
+          ...standardApprovalAuthorization,
+          unexpected: "field",
+        }),
+        {},
+      ],
+      [
+        "wrong approval action",
+        releaseApproval({
+          ...standardApprovalAuthorization,
+          action: "production-deploy",
+        }),
+        {},
+      ],
+      [
+        "wrong approval run",
+        releaseApproval({
+          ...standardApprovalAuthorization,
+          workflow_run_id: "51",
+        }),
+        {},
+      ],
+      [
+        "wrong production parent",
+        releaseApproval(standardApprovalAuthorization),
+        {
+          PRODUCTION_RUN_ID: "71",
+        },
+      ],
     ];
     for (const [label, approval, env] of rejectedVariants) {
       writeFileSync(approvalFile, JSON.stringify(approval));
-      const result = executeAuthorizationGuard(databaseGuard, { ...baseEnv, ...env });
+      const result = executeAuthorizationGuard(databaseGuard, {
+        ...baseEnv,
+        ...env,
+      });
       assert.notEqual(result.status, 0, `${label} was accepted`);
     }
   } finally {
@@ -641,13 +807,17 @@ it("reusable mutation guards reject mixed authorization evidence with real valid
 });
 
 it("Cloudflare authorizes the exact millisecond forward mutation boundary", () => {
-  const parsed = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
+  const parsed = yaml.load(
+    workflow("reusable-cloudflare-production-deploy.yml"),
+  );
   const deploy = parsed.jobs.deploy.steps.find(
     (step) => step.name === "Deploy exact immutable production artifact",
   );
   assert.ok(deploy);
   const run = deploy.run;
-  const deploymentsRead = run.indexOf('deployments_before="$RUNNER_TEMP/cloudflare-production-deployments-before.json"');
+  const deploymentsRead = run.indexOf(
+    'deployments_before="$RUNNER_TEMP/cloudflare-production-deployments-before.json"',
+  );
   const finalGithubLease = run.lastIndexOf(
     'node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" github-staging-lease',
   );
@@ -655,9 +825,18 @@ it("Cloudflare authorizes the exact millisecond forward mutation boundary", () =
     'node "$GITHUB_WORKSPACE/scripts/production-release-validation.mjs" mutation-lease',
     finalGithubLease,
   );
-  const preparation = run.indexOf('wrangler_output_dir="$RUNNER_TEMP/cloudflare-production-wrangler-output"', boundaryValidation);
-  const boundaryClock = run.indexOf('provider_boundary_epoch_real="$EPOCHREALTIME"', preparation);
-  const wrangler = run.indexOf("npx --no-install wrangler pages deploy dist", boundaryClock);
+  const preparation = run.indexOf(
+    'wrangler_output_dir="$RUNNER_TEMP/cloudflare-production-wrangler-output"',
+    boundaryValidation,
+  );
+  const boundaryClock = run.indexOf(
+    'provider_boundary_epoch_real="$EPOCHREALTIME"',
+    preparation,
+  );
+  const wrangler = run.indexOf(
+    "npx --no-install wrangler pages deploy dist",
+    boundaryClock,
+  );
   const timestamp = run.indexOf("forward_mutation_started_at=", wrangler);
   assert.ok(deploymentsRead >= 0 && finalGithubLease > deploymentsRead);
   assert.ok(boundaryValidation > finalGithubLease);
@@ -672,8 +851,14 @@ it("Cloudflare authorizes the exact millisecond forward mutation boundary", () =
   const afterMutation = run.slice(wrangler, timestamp);
   assert.match(afterMutation, /wrangler_statuses=\("\$\{PIPESTATUS\[@\]\}"\)/);
   const evidenceBoundary = run.slice(timestamp);
-  assert.match(evidenceBoundary, /--arg attempted_at "\$forward_mutation_started_at"/);
-  assert.match(evidenceBoundary, /forward_mutation_started_at=\$forward_mutation_started_at/);
+  assert.match(
+    evidenceBoundary,
+    /--arg attempted_at "\$forward_mutation_started_at"/,
+  );
+  assert.match(
+    evidenceBoundary,
+    /forward_mutation_started_at=\$forward_mutation_started_at/,
+  );
   const rollback = parsed.jobs.deploy.steps.find(
     (step) => step.name === "Roll back failed production candidate",
   );
@@ -684,31 +869,42 @@ it("Cloudflare authorizes the exact millisecond forward mutation boundary", () =
     rollback.env.FORWARD_MUTATION_STARTED_AT,
     "${{ steps.deploy.outputs.forward_mutation_started_at }}",
   );
-  assert.match(rollback.run, /Date\.parse\(process\.env\.FORWARD_MUTATION_STARTED_AT\)/);
+  assert.match(
+    rollback.run,
+    /Date\.parse\(process\.env\.FORWARD_MUTATION_STARTED_AT\)/,
+  );
   assert.equal(
     evidence.env.FORWARD_MUTATION_STARTED_AT,
     "${{ steps.deploy.outputs.forward_mutation_started_at }}",
   );
-  assert.match(evidence.run, /forward_mutation_started_at:[\s\S]*FORWARD_MUTATION_STARTED_AT/);
+  assert.match(
+    evidence.run,
+    /forward_mutation_started_at:[\s\S]*FORWARD_MUTATION_STARTED_AT/,
+  );
 
   const fixtureRoot = mkdtempSync(join(tmpdir(), "maiprop-forward-boundary-"));
   try {
     const leaseFile = join(fixtureRoot, "production-mutation-lease.json");
-    writeFileSync(leaseFile, JSON.stringify(standardMutationLease({
-      issued_at: "2026-08-26T10:55:00.000Z",
-      expires_at: "2026-08-26T11:00:00.500Z",
-    })));
-    const beforeBoundary = spawnSync(process.execPath, validatorCliArgs(
-      "mutation-lease",
+    writeFileSync(
       leaseFile,
-      "2026-08-26T11:00:00.499Z",
-    ), { cwd: root, encoding: "utf8" });
+      JSON.stringify(
+        standardMutationLease({
+          issued_at: "2026-08-26T10:55:00.000Z",
+          expires_at: "2026-08-26T11:00:00.500Z",
+        }),
+      ),
+    );
+    const beforeBoundary = spawnSync(
+      process.execPath,
+      validatorCliArgs("mutation-lease", leaseFile, "2026-08-26T11:00:00.499Z"),
+      { cwd: root, encoding: "utf8" },
+    );
     assert.equal(beforeBoundary.status, 0, beforeBoundary.stderr);
-    const exactExpiryBoundary = spawnSync(process.execPath, validatorCliArgs(
-      "mutation-lease",
-      leaseFile,
-      "2026-08-26T11:00:00.500Z",
-    ), { cwd: root, encoding: "utf8" });
+    const exactExpiryBoundary = spawnSync(
+      process.execPath,
+      validatorCliArgs("mutation-lease", leaseFile, "2026-08-26T11:00:00.500Z"),
+      { cwd: root, encoding: "utf8" },
+    );
     assert.notEqual(exactExpiryBoundary.status, 0);
     assert.match(exactExpiryBoundary.stderr, /lease has expired/i);
   } finally {
@@ -739,7 +935,8 @@ it("coordinated break-glass deployment consumes and propagates one exact tuple",
   const tupleInputs = [...authorizationInputs, ...consumptionInputs];
 
   assert.deepEqual(dispatch.single_admin_break_glass, {
-    description: "Use the exact configured single-admin break-glass authorization",
+    description:
+      "Use the exact configured single-admin break-glass authorization",
     required: true,
     default: false,
     type: "boolean",
@@ -747,24 +944,51 @@ it("coordinated break-glass deployment consumes and propagates one exact tuple",
   assert.equal(dispatch.incident_id.type, "string");
   assert.equal(dispatch.reason.type, "string");
   assert.match(dispatch.confirm.description, /DEPLOY_PRODUCTION_BREAK_GLASS/);
-  assert.doesNotMatch(validate.if, /DEPLOY_PRODUCTION_RELEASE|single_admin_break_glass/);
+  assert.doesNotMatch(
+    validate.if,
+    /DEPLOY_PRODUCTION_RELEASE|single_admin_break_glass/,
+  );
 
   const validateSteps = validate.steps.map((step) => step.name ?? "");
-  const authorizeIndex = validateSteps.indexOf("Validate production deployment authorization");
-  const contractIndex = validateSteps.indexOf("Require current main and final exact-SHA readiness");
+  const authorizeIndex = validateSteps.indexOf(
+    "Validate production deployment authorization",
+  );
+  const contractIndex = validateSteps.indexOf(
+    "Require current main and final exact-SHA readiness",
+  );
   assert.ok(authorizeIndex > 0 && authorizeIndex < contractIndex);
   const authorize = validate.steps[authorizeIndex];
   assert.equal(authorize.env.RELEASE_AUTHORIZATION_ACTION, "production-deploy");
-  assert.equal(authorize.env.RELEASE_STANDARD_CONFIRMATION, "DEPLOY_PRODUCTION_RELEASE");
-  assert.match(authorize.run, /production-break-glass-validation\.mjs validate-workflow/);
+  assert.equal(
+    authorize.env.RELEASE_STANDARD_CONFIRMATION,
+    "DEPLOY_PRODUCTION_RELEASE",
+  );
+  assert.match(
+    authorize.run,
+    /production-break-glass-validation\.mjs validate-workflow/,
+  );
   assert.match(authorize.run, /--out release-authorization\.json/);
-  assert.match(validate.steps[contractIndex].run, /validateReleaseAuthorizationGrant/);
-  for (const proof of ["stripe", "pages-staging", "pages-production", "approval"]) {
+  assert.match(
+    validate.steps[contractIndex].run,
+    /validateReleaseAuthorizationGrant/,
+  );
+  for (const proof of [
+    "stripe",
+    "pages-staging",
+    "pages-production",
+    "approval",
+  ]) {
     assert.match(validate.steps[contractIndex].run, new RegExp(proof));
   }
-  assert.match(validate.steps[contractIndex].run, /release-authorization\.json/);
+  assert.match(
+    validate.steps[contractIndex].run,
+    /release-authorization\.json/,
+  );
   assert.match(validate.steps[contractIndex].run, /PRODUCTION_RELEASE_ENABLED/);
-  assert.match(validate.steps[contractIndex].run, /PRODUCTION_RELEASE_DEPLOYERS/);
+  assert.match(
+    validate.steps[contractIndex].run,
+    /PRODUCTION_RELEASE_DEPLOYERS/,
+  );
 
   assert.ok(consume);
   assert.equal(consume.needs, "validate");
@@ -803,7 +1027,10 @@ it("coordinated break-glass deployment consumes and propagates one exact tuple",
       ? parsed.jobs[name].needs
       : [parsed.jobs[name].needs];
     assert.ok(needs.includes("consume-break-glass-authorization"), name);
-    assert.match(String(parsed.jobs[name].if ?? ""), /consume-break-glass-authorization\.result == 'success'/);
+    assert.match(
+      String(parsed.jobs[name].if ?? ""),
+      /consume-break-glass-authorization\.result == 'success'/,
+    );
   }
   assert.ok(Array.isArray(archive.needs));
 
@@ -815,17 +1042,28 @@ it("coordinated break-glass deployment consumes and propagates one exact tuple",
     const call = parsed.jobs[name];
     for (const input of tupleInputs) {
       assert.ok(call.with[input], `${name}:${input}`);
-      const output = input === "authorization_artifact_id" || input === "authorization_artifact_digest" ||
-        input === "authorization_run_id" || input === "authorization_run_attempt"
-        ? `needs.validate.outputs.${input}`
-        : `needs.consume-break-glass-authorization.outputs.${input}`;
+      const output =
+        input === "authorization_artifact_id" ||
+        input === "authorization_artifact_digest" ||
+        input === "authorization_run_id" ||
+        input === "authorization_run_attempt"
+          ? `needs.validate.outputs.${input}`
+          : `needs.consume-break-glass-authorization.outputs.${input}`;
       assert.equal(call.with[input], `\${{ ${output} }}`, `${name}:${input}`);
     }
   }
 
-  for (const name of ["renew-edge-mutation-lease", "renew-cloudflare-mutation-lease"]) {
-    const source = parsed.jobs[name].steps.map((step) => step.run ?? "").join("\n");
-    assert.match(source, /schema_version:\s*previous\.authorization\?\.mode === "break_glass" \? 3 : 2/);
+  for (const name of [
+    "renew-edge-mutation-lease",
+    "renew-cloudflare-mutation-lease",
+  ]) {
+    const source = parsed.jobs[name].steps
+      .map((step) => step.run ?? "")
+      .join("\n");
+    assert.match(
+      source,
+      /schema_version:\s*previous\.authorization\?\.mode === "break_glass" \? 3 : 2/,
+    );
     assert.match(source, /authorization/);
     assert.match(source, /consumption/);
     assert.match(source, /--authorization-file/);
@@ -842,7 +1080,11 @@ it("coordinated break-glass deployment consumes and propagates one exact tuple",
       const contract = reusable.on.workflow_call.inputs[input];
       assert.equal(contract.type, "string", `${name}:${input}:type`);
       if (name === "reusable-cloudflare-production-deploy.yml") {
-        assert.equal(contract.required, false, `${name}:${input}:direct-recovery-default`);
+        assert.equal(
+          contract.required,
+          false,
+          `${name}:${input}:direct-recovery-default`,
+        );
         assert.equal(
           contract.default,
           input === "authorization_mode" ? "standard" : "",
@@ -853,7 +1095,10 @@ it("coordinated break-glass deployment consumes and propagates one exact tuple",
       }
     }
     const source = workflow(name);
-    assert.match(source, /Download exact production authorization and consumption evidence/);
+    assert.match(
+      source,
+      /Download exact production authorization and consumption evidence/,
+    );
     assert.match(source, /verify-release-artifact-binding\.mjs/);
     assert.match(source, /production-break-glass-consumption\.mjs verify/);
     assert.match(source, /--authorization-file/);
@@ -866,11 +1111,16 @@ it("coordinated break-glass deployment consumes and propagates one exact tuple",
   assert.match(cloudflare, /forward_mutation_started_at/);
   assert.match(cloudflare, /authorized_expires_at/);
   assert.match(cloudflare, /lease_expires_at/);
-  assert.match(cloudflare, /rollback.*forward mutation began while authorization and lease were valid/is);
+  assert.match(
+    cloudflare,
+    /rollback.*forward mutation began while authorization and lease were valid/is,
+  );
 });
 
 it("accepts the exact API-shaped sha256 production consumption artifact", () => {
-  const result = executeProductionConsumptionPostcheck({ artifacts: [githubArtifact()] });
+  const result = executeProductionConsumptionPostcheck({
+    artifacts: [githubArtifact()],
+  });
   assert.equal(result.status, 0, result.stderr);
 });
 
@@ -879,20 +1129,38 @@ it("rejects non-exact production consumption artifact identities", () => {
   const invalidCases = [
     ["wrong algorithm", [githubArtifact({ digest: `sha512:${digest}` })], {}],
     ["missing prefix", [githubArtifact({ digest })], {}],
-    ["wrong digest", [githubArtifact({ digest: `sha256:${"b".repeat(64)}` })], {}],
-    ["uppercase API digest", [githubArtifact({ digest: `sha256:${digest.toUpperCase()}` })], {}],
+    [
+      "wrong digest",
+      [githubArtifact({ digest: `sha256:${"b".repeat(64)}` })],
+      {},
+    ],
+    [
+      "uppercase API digest",
+      [githubArtifact({ digest: `sha256:${digest.toUpperCase()}` })],
+      {},
+    ],
     ["malformed API digest", [githubArtifact({ digest: "sha256:abc" })], {}],
     [
       "duplicate exact name",
-      [githubArtifact(), githubArtifact({ id: 92, node_id: "MDg6QXJ0aWZhY3Q5Mg==" })],
+      [
+        githubArtifact(),
+        githubArtifact({ id: 92, node_id: "MDg6QXJ0aWZhY3Q5Mg==" }),
+      ],
       {},
     ],
     ["wrong artifact ID", [githubArtifact({ id: 92 })], {}],
-    ["uppercase expected digest", [githubArtifact()], { expectedDigest: digest.toUpperCase() }],
+    [
+      "uppercase expected digest",
+      [githubArtifact()],
+      { expectedDigest: digest.toUpperCase() },
+    ],
   ];
 
   for (const [label, artifacts, expected] of invalidCases) {
-    const result = executeProductionConsumptionPostcheck({ artifacts, ...expected });
+    const result = executeProductionConsumptionPostcheck({
+      artifacts,
+      ...expected,
+    });
     assert.notEqual(result.status, 0, label);
   }
 });
@@ -903,22 +1171,31 @@ it("gates approval and deployment on trusted current-main identity before reposi
     "deploy-production-release.yml",
   ]) {
     const parsed = yaml.load(workflow(name));
-    const job = name.startsWith("approve") ? parsed.jobs.approve : parsed.jobs.validate;
+    const job = name.startsWith("approve")
+      ? parsed.jobs.approve
+      : parsed.jobs.validate;
     const gateIndex = job.steps.findIndex(
-      (step) => step.name === "Verify trusted exact current-main control identity",
+      (step) =>
+        step.name === "Verify trusted exact current-main control identity",
     );
     const checkoutIndex = job.steps.findIndex((step) =>
-      String(step.uses ?? "").startsWith("actions/checkout@"));
+      String(step.uses ?? "").startsWith("actions/checkout@"),
+    );
     const checkoutVerificationIndex = job.steps.findIndex(
       (step) => step.name === "Verify exact clean checkout identity",
     );
     const firstRepositoryScript = job.steps.findIndex((step) =>
-      /(?:^|\s)(?:node|npm)\s+(?:scripts\/|run)/m.test(String(step.run ?? "")));
+      /(?:^|\s)(?:node|npm)\s+(?:scripts\/|run)/m.test(String(step.run ?? "")),
+    );
     const firstSigningSecret = job.steps.findIndex((step) =>
-      JSON.stringify(step.env ?? {}).includes("RELEASE_EVIDENCE_SIGNING_KEY"));
+      JSON.stringify(step.env ?? {}).includes("RELEASE_EVIDENCE_SIGNING_KEY"),
+    );
 
     assert.equal(gateIndex, 0, `${name}: trusted gate must be first`);
-    assert.ok(checkoutIndex > gateIndex, `${name}: checkout must follow trusted gate`);
+    assert.ok(
+      checkoutIndex > gateIndex,
+      `${name}: checkout must follow trusted gate`,
+    );
     assert.ok(
       checkoutVerificationIndex > checkoutIndex,
       `${name}: clean checkout verification must follow checkout`,
@@ -933,7 +1210,10 @@ it("gates approval and deployment on trusted current-main identity before reposi
     );
     assert.doesNotMatch(job.steps[gateIndex].run, /\$\{\{\s*inputs\./);
     assert.match(job.steps[gateIndex].run, /\^\[0-9a-f\]\{40\}\$/);
-    assert.match(job.steps[checkoutVerificationIndex].run, /git status --porcelain/);
+    assert.match(
+      job.steps[checkoutVerificationIndex].run,
+      /git status --porcelain/,
+    );
 
     const valid = executeTrustedMainGate(job.steps[gateIndex]);
     assert.equal(valid.status, 0, `${name}: ${valid.stderr}`);
@@ -955,7 +1235,9 @@ it("gates approval and deployment on trusted current-main identity before reposi
 it("keeps schema 2 standard approval authorization attached through direct recovery and rollback", () => {
   const direct = yaml.load(workflow("direct-cloudflare-production-deploy.yml"));
   const directValidation = direct.jobs.validate.steps.find(
-    (step) => step.name === "Verify signed recovery prerequisites and issue mutation lease",
+    (step) =>
+      step.name ===
+      "Verify signed recovery prerequisites and issue mutation lease",
   );
   assert.ok(directValidation, "direct recovery validation step is required");
   assert.match(
@@ -971,23 +1253,36 @@ it("keeps schema 2 standard approval authorization attached through direct recov
   const authorizationModeIndex = directValidation.run.indexOf(
     '.authorization.mode == "standard"',
   );
-  const extractionStart = directValidation.run.lastIndexOf("if (", authorizationModeIndex);
-  const extractionEnd = directValidation.run.indexOf(" end'", authorizationModeIndex) + 4;
+  const extractionStart = directValidation.run.lastIndexOf(
+    "if (",
+    authorizationModeIndex,
+  );
+  const extractionEnd =
+    directValidation.run.indexOf(" end'", authorizationModeIndex) + 4;
   assert.ok(
     extractionStart >= 0 && extractionEnd > extractionStart,
     "direct standard authorization filter must remain executable",
   );
-  const directExtraction = directValidation.run.slice(extractionStart, extractionEnd);
+  const directExtraction = directValidation.run.slice(
+    extractionStart,
+    extractionEnd,
+  );
 
-  const reusable = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
+  const reusable = yaml.load(
+    workflow("reusable-cloudflare-production-deploy.yml"),
+  );
   const rollback = reusable.jobs.deploy.steps.find(
     (step) => step.name === "Roll back failed production candidate",
   );
   assert.ok(rollback, "automatic rollback step is required");
-  const standardRollback = /if \[ "\$AUTHORIZATION_MODE" = "standard" \]; then([\s\S]*?)\n\s*fi/.exec(
-    rollback.run,
+  const standardRollback =
+    /if \[ "\$AUTHORIZATION_MODE" = "standard" \]; then([\s\S]*?)\n\s*fi/.exec(
+      rollback.run,
+    );
+  assert.ok(
+    standardRollback,
+    "rollback must retain a distinct standard authorization branch",
   );
-  assert.ok(standardRollback, "rollback must retain a distinct standard authorization branch");
   assert.match(
     standardRollback[1],
     /release:validate -- release-approval[\s\S]*--authorization-file evidence\/approval-authorization\.json/,
@@ -1007,16 +1302,19 @@ it("keeps schema 2 standard approval authorization attached through direct recov
       workflow_run_id: "50",
       workflow_run_attempt: "1",
     };
-    const extractAuthorization = (approval) => executeJq(
-      directExtraction,
-      approval,
-      [
+    const extractAuthorization = (approval) =>
+      executeJq(directExtraction, approval, [
         "-e",
-        "--arg", "sha", validatorFixture.releaseSha,
-        "--arg", "run_id", "50",
-        "--arg", "run_attempt", "1",
-      ],
-    );
+        "--arg",
+        "sha",
+        validatorFixture.releaseSha,
+        "--arg",
+        "run_id",
+        "50",
+        "--arg",
+        "run_attempt",
+        "1",
+      ]);
     const standardApproval = releaseApproval(standardAuthorization);
     const extracted = extractAuthorization(standardApproval);
     assert.equal(extracted.status, 0, extracted.stderr);
@@ -1027,7 +1325,12 @@ it("keeps schema 2 standard approval authorization attached through direct recov
       writeFileSync(authorizationFile, JSON.stringify(authorization));
       return spawnSync(
         process.execPath,
-        validatorCliArgs("release-approval", approvalFile, now, authorizationFile),
+        validatorCliArgs(
+          "release-approval",
+          approvalFile,
+          now,
+          authorizationFile,
+        ),
         { cwd: root, encoding: "utf8" },
       );
     };
@@ -1036,111 +1339,176 @@ it("keeps schema 2 standard approval authorization attached through direct recov
     assert.equal(valid.status, 0, valid.stderr);
 
     const rejectedApprovals = [
-      ["partial standard approval", releaseApproval({
-        ...standardAuthorization,
-        workflow_run_attempt: undefined,
-      })],
-      ["mismatched standard approval", releaseApproval({
-        ...standardAuthorization,
-        workflow_run_id: "51",
-      })],
-      ["break-glass approval", releaseApproval({
-        ...standardAuthorization,
-        mode: "break_glass",
-        incident_id: "PERF-RECOVERY-20260826-01",
-        reason_sha256: "0".repeat(64),
-        authorized_expires_at: "2026-08-26T12:00:00.000Z",
-      })],
+      [
+        "partial standard approval",
+        releaseApproval({
+          ...standardAuthorization,
+          workflow_run_attempt: undefined,
+        }),
+      ],
+      [
+        "mismatched standard approval",
+        releaseApproval({
+          ...standardAuthorization,
+          workflow_run_id: "51",
+        }),
+      ],
+      [
+        "break-glass approval",
+        releaseApproval({
+          ...standardAuthorization,
+          mode: "break_glass",
+          incident_id: "PERF-RECOVERY-20260826-01",
+          reason_sha256: "0".repeat(64),
+          authorized_expires_at: "2026-08-26T12:00:00.000Z",
+        }),
+      ],
     ];
     for (const [label, approval] of rejectedApprovals) {
       const result = extractAuthorization(approval);
-      assert.notEqual(result.status, 0, `${label} passed the direct recovery callsite`);
+      assert.notEqual(
+        result.status,
+        0,
+        `${label} passed the direct recovery callsite`,
+      );
     }
 
     for (const [label, authorization] of [
-      ["partial standard authorization", {
-        ...standardAuthorization,
-        workflow_run_attempt: undefined,
-      }],
-      ["mismatched standard authorization", {
-        ...standardAuthorization,
-        workflow_run_id: "51",
-      }],
-      ["break-glass authorization alias", {
-        ...standardAuthorization,
-        mode: "break_glass",
-        incident_id: "PERF-RECOVERY-20260826-01",
-        reason_sha256: "0".repeat(64),
-        authorized_expires_at: "2026-08-26T12:00:00.000Z",
-      }],
+      [
+        "partial standard authorization",
+        {
+          ...standardAuthorization,
+          workflow_run_attempt: undefined,
+        },
+      ],
+      [
+        "mismatched standard authorization",
+        {
+          ...standardAuthorization,
+          workflow_run_id: "51",
+        },
+      ],
+      [
+        "break-glass authorization alias",
+        {
+          ...standardAuthorization,
+          mode: "break_glass",
+          incident_id: "PERF-RECOVERY-20260826-01",
+          reason_sha256: "0".repeat(64),
+          authorized_expires_at: "2026-08-26T12:00:00.000Z",
+        },
+      ],
     ]) {
       const result = validateAuthorization(authorization);
-      assert.notEqual(result.status, 0, `${label} reached standard direct recovery`);
+      assert.notEqual(
+        result.status,
+        0,
+        `${label} reached standard direct recovery`,
+      );
     }
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });
 
-it("accepts the real Pages runtime producer result in both strict production consumers", { timeout: 60_000 }, () => {
-  const contract = pagesRuntimeResultContract();
-  for (const target of ["staging", "production"]) {
-    const produced = executeJq(contract.producer, null, [
-      "-n",
-      "--argjson", "authorization", '[{"mode":"standard"}]',
-      "--argjson", "consumption", "[null]",
-      "--arg", "target", target,
-      "--arg", "project_id", `project-${target}`,
-      "--arg", "release_sha", validatorFixture.releaseSha,
-    ]);
-    assert.equal(produced.status, 0, produced.stderr);
-    const evidence = JSON.parse(produced.stdout);
-    const accepted = executeJq(contract.consumer, evidence, [
-      "-e",
-      "--arg", "target", target,
-      "--arg", "sha", validatorFixture.releaseSha,
-    ]);
-    assert.equal(accepted.status, 0, `${target}: ${accepted.stderr}`);
+it(
+  "accepts the real Pages runtime producer result in both strict production consumers",
+  { timeout: 60_000 },
+  () => {
+    const contract = pagesRuntimeResultContract();
+    for (const target of ["staging", "production"]) {
+      const produced = executeJq(contract.producer, null, [
+        "-n",
+        "--argjson",
+        "authorization",
+        '[{"mode":"standard"}]',
+        "--argjson",
+        "consumption",
+        "[null]",
+        "--arg",
+        "target",
+        target,
+        "--arg",
+        "project_id",
+        `project-${target}`,
+        "--arg",
+        "release_sha",
+        validatorFixture.releaseSha,
+      ]);
+      assert.equal(produced.status, 0, produced.stderr);
+      const evidence = JSON.parse(produced.stdout);
+      const accepted = executeJq(contract.consumer, evidence, [
+        "-e",
+        "--arg",
+        "target",
+        target,
+        "--arg",
+        "sha",
+        validatorFixture.releaseSha,
+      ]);
+      assert.equal(accepted.status, 0, `${target}: ${accepted.stderr}`);
 
-    for (const status of [undefined, "pending", "VERIFIED", true]) {
-      const invalid = { ...evidence };
-      if (status === undefined) delete invalid.status;
-      else invalid.status = status;
-      const rejected = executeJq(contract.consumer, invalid, [
-        "-e",
-        "--arg", "target", target,
-        "--arg", "sha", validatorFixture.releaseSha,
-      ]);
-      assert.notEqual(rejected.status, 0, `${target} accepted status ${String(status)}`);
+      for (const status of [undefined, "pending", "VERIFIED", true]) {
+        const invalid = { ...evidence };
+        if (status === undefined) delete invalid.status;
+        else invalid.status = status;
+        const rejected = executeJq(contract.consumer, invalid, [
+          "-e",
+          "--arg",
+          "target",
+          target,
+          "--arg",
+          "sha",
+          validatorFixture.releaseSha,
+        ]);
+        assert.notEqual(
+          rejected.status,
+          0,
+          `${target} accepted status ${String(status)}`,
+        );
+      }
+      const withoutStatus = { ...evidence };
+      delete withoutStatus.status;
+      for (const [label, invalid] of [
+        ["legacy ok true", { ...withoutStatus, ok: true }],
+        ["legacy ok false", { ...withoutStatus, ok: false }],
+        ["mixed ok true", { ...evidence, ok: true }],
+        ["mixed ok false", { ...evidence, ok: false }],
+        ["success alias", { ...evidence, success: true }],
+        ["verified alias", { ...evidence, verified: true }],
+        [
+          "unexpected success detail",
+          { ...evidence, status_detail: "verified" },
+        ],
+      ]) {
+        const rejected = executeJq(contract.consumer, invalid, [
+          "-e",
+          "--arg",
+          "target",
+          target,
+          "--arg",
+          "sha",
+          validatorFixture.releaseSha,
+        ]);
+        assert.notEqual(rejected.status, 0, `${target} accepted ${label}`);
+      }
     }
-    const withoutStatus = { ...evidence };
-    delete withoutStatus.status;
-    for (const [label, invalid] of [
-      ["legacy ok true", { ...withoutStatus, ok: true }],
-      ["legacy ok false", { ...withoutStatus, ok: false }],
-      ["mixed ok true", { ...evidence, ok: true }],
-      ["mixed ok false", { ...evidence, ok: false }],
-      ["success alias", { ...evidence, success: true }],
-      ["verified alias", { ...evidence, verified: true }],
-      ["unexpected success detail", { ...evidence, status_detail: "verified" }],
-    ]) {
-      const rejected = executeJq(contract.consumer, invalid, [
-        "-e",
-        "--arg", "target", target,
-        "--arg", "sha", validatorFixture.releaseSha,
-      ]);
-      assert.notEqual(rejected.status, 0, `${target} accepted ${label}`);
-    }
-  }
-});
+  },
+);
 
 it("keeps mutation lease artifact input data-only inside the signing-secret shell", () => {
-  const reusable = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
+  const reusable = yaml.load(
+    workflow("reusable-cloudflare-production-deploy.yml"),
+  );
   const job = reusable.jobs.deploy;
   const verification = job.steps.find(
-    (step) => step.name === "Verify signed release and provider artifact bindings",
+    (step) =>
+      step.name === "Verify signed release and provider artifact bindings",
   );
-  assert.ok(verification, "signed provider binding verification step is required");
+  assert.ok(
+    verification,
+    "signed provider binding verification step is required",
+  );
   assert.equal(
     job.env.MUTATION_LEASE_ARTIFACT,
     "${{ inputs.mutation_lease_artifact }}",
@@ -1170,26 +1538,35 @@ it("keeps mutation lease artifact input data-only inside the signing-secret shel
   );
 });
 
-it("parses every reusable Cloudflare release run block as real Bash", { timeout: 60_000 }, () => {
-  const reusable = yaml.load(workflow("reusable-cloudflare-production-deploy.yml"));
-  const runnable = reusable.jobs.deploy.steps.filter(
-    (step) => typeof step.run === "string",
-  );
-  for (const required of [
-    "Authenticate declared production authorization mode",
-    "Roll back failed production candidate",
-  ]) {
-    assert.ok(runnable.some((step) => step.name === required), `${required} is required`);
-  }
-  for (const step of runnable) {
-    const result = executeBashSyntax(step.run);
-    assert.equal(
-      result.status,
-      0,
-      `${step.name ?? "unnamed run step"}: ${result.stderr}`,
+it(
+  "parses every reusable Cloudflare release run block as real Bash",
+  { timeout: 60_000 },
+  () => {
+    const reusable = yaml.load(
+      workflow("reusable-cloudflare-production-deploy.yml"),
     );
-  }
-});
+    const runnable = reusable.jobs.deploy.steps.filter(
+      (step) => typeof step.run === "string",
+    );
+    for (const required of [
+      "Authenticate declared production authorization mode",
+      "Roll back failed production candidate",
+    ]) {
+      assert.ok(
+        runnable.some((step) => step.name === required),
+        `${required} is required`,
+      );
+    }
+    for (const step of runnable) {
+      const result = executeBashSyntax(step.run);
+      assert.equal(
+        result.status,
+        0,
+        `${step.name ?? "unnamed run step"}: ${result.stderr}`,
+      );
+    }
+  },
+);
 
 describe("production release train", () => {
   it("parses every production release workflow as valid YAML", () => {
@@ -1259,7 +1636,12 @@ describe("production release train", () => {
       for (const [jobName, job] of Object.entries(parsed.jobs ?? {})) {
         for (const [stepIndex, step] of (job.steps ?? []).entries()) {
           if (step.name === "Validate exact production release tuple") {
-            validationSteps.push({ jobName, stepIndex, step, steps: job.steps });
+            validationSteps.push({
+              jobName,
+              stepIndex,
+              step,
+              steps: job.steps,
+            });
           }
         }
       }
@@ -1338,7 +1720,8 @@ describe("production release train", () => {
       (step) => step.name === "Verify Cloudflare Pages Git deployment lockout",
     );
     const controlUpload = control.steps.find(
-      (step) => step.name === "Upload minimized Cloudflare Pages posture evidence",
+      (step) =>
+        step.name === "Upload minimized Cloudflare Pages posture evidence",
     );
     const controlEnforcement = control.steps.find(
       (step) => step.name === "Enforce Cloudflare Pages posture verification",
@@ -1346,13 +1729,14 @@ describe("production release train", () => {
     const controlSource = JSON.stringify(control);
     const collectSource = JSON.stringify(collect);
     const evidenceMaterialize = collect.steps.find(
-      (step) => step.name === "Materialize minimized Cloudflare Pages posture evidence",
+      (step) =>
+        step.name === "Materialize minimized Cloudflare Pages posture evidence",
     );
-    const collectCheckout = collect.steps.find(
-      (step) => String(step.uses ?? "").startsWith("actions/checkout@"),
+    const collectCheckout = collect.steps.find((step) =>
+      String(step.uses ?? "").startsWith("actions/checkout@"),
     );
-    const setupNode = collect.steps.find(
-      (step) => String(step.uses ?? "").startsWith("actions/setup-node@"),
+    const setupNode = collect.steps.find((step) =>
+      String(step.uses ?? "").startsWith("actions/setup-node@"),
     );
     const install = collect.steps.find(
       (step) => step.name === "Install dependencies",
@@ -1372,9 +1756,7 @@ describe("production release train", () => {
 
     expect(parsed.concurrency["cancel-in-progress"]).toBe(false);
     expect(dispatch).toEqual({});
-    expect(mainVerification.if).toBe(
-      "${{ github.ref == 'refs/heads/main' }}",
-    );
+    expect(mainVerification.if).toBe("${{ github.ref == 'refs/heads/main' }}");
     expect(JSON.stringify(mainVerification)).not.toMatch(
       /secrets\.(?:CLOUDFLARE|SUPABASE|SENTRY)/,
     );
@@ -1412,12 +1794,7 @@ describe("production release train", () => {
     );
     expect(collect.env).toBeUndefined();
     expect(collectSource).not.toContain("secrets.CLOUDFLARE_PAGES_EDIT_TOKEN");
-    for (const step of [
-      collectCheckout,
-      setupNode,
-      install,
-      localStandards,
-    ]) {
+    for (const step of [collectCheckout, setupNode, install, localStandards]) {
       expect(JSON.stringify(step)).not.toMatch(
         /(?:SUPABASE|SENTRY|GH_TOKEN|GITHUB_TOKEN|secrets\.)/,
       );
@@ -1433,8 +1810,7 @@ describe("production release train", () => {
     expect(sentryEvidence.env).toEqual({
       SENTRY_AUTH_TOKEN: "${{ secrets.SENTRY_AUTH_TOKEN }}",
       SENTRY_ORG: "${{ vars.SENTRY_ORG || secrets.SENTRY_ORG }}",
-      SENTRY_PROJECT:
-        "${{ vars.SENTRY_PROJECT || secrets.SENTRY_PROJECT }}",
+      SENTRY_PROJECT: "${{ vars.SENTRY_PROJECT || secrets.SENTRY_PROJECT }}",
       SENTRY_ENVIRONMENT: "production",
     });
     expect(controlStep.run).toContain(
@@ -1444,14 +1820,10 @@ describe("production release train", () => {
       'STAGING_PROJECT="maiprop-listing-site-staging"',
     );
     expect(controlStep.run).toContain(
-      '.success == true and .result.name == $name',
+      ".success == true and .result.name == $name",
     );
-    expect(controlStep.run).toContain(
-      '($id == "" or .result.id == $id)',
-    );
-    expect(controlStep.run).toContain(
-      '.result.source == null or',
-    );
+    expect(controlStep.run).toContain('($id == "" or .result.id == $id)');
+    expect(controlStep.run).toContain(".result.source == null or");
     expect(controlStep.run).toContain(
       '.result.source.type == "github" or .result.source.type == "gitlab"',
     );
@@ -1459,10 +1831,10 @@ describe("production release train", () => {
       "cloudflare-pages-git-auto-deploy-post-state.json",
     );
     expect(controlStep.run).toContain(
-      '.result.source.config.deployments_enabled == false',
+      ".result.source.config.deployments_enabled == false",
     );
     expect(controlStep.run).toContain(
-      '.result.source.config.production_deployments_enabled == false',
+      ".result.source.config.production_deployments_enabled == false",
     );
     expect(controlStep.run).toContain(
       '.result.source.config.preview_deployment_setting == "none"',
@@ -1491,7 +1863,9 @@ describe("production release train", () => {
       CLOUDFLARE_ADMIN_POSTURE_JSON:
         "${{ needs.cloudflare-pages-verify.outputs.cloudflare_admin_posture_json }}",
     });
-    expect(evidenceMaterialize.run).toContain("compliance-evidence/cloudflare-pages-git-auto-deploy-post-state.json");
+    expect(evidenceMaterialize.run).toContain(
+      "compliance-evidence/cloudflare-pages-git-auto-deploy-post-state.json",
+    );
     expect(collect.needs).toEqual([
       "verify-current-main",
       "cloudflare-pages-verify",
@@ -1539,9 +1913,7 @@ describe("production release train", () => {
     expect(run).toContain(
       'if [ "$PRODUCTION_ACTUAL_ID" = "$STAGING_ACTUAL_ID" ]; then',
     );
-    expect(run).toContain(
-      "allAutomaticDeploymentsDisabled:",
-    );
+    expect(run).toContain("allAutomaticDeploymentsDisabled:");
     expect(evidenceWrite).toBeGreaterThanOrEqual(0);
     expect(evidenceWrite).toBeLessThan(bootstrapFailure);
     expect(bootstrapFailure).toBeLessThan(lockedValidation);
@@ -1551,15 +1923,11 @@ describe("production release train", () => {
     expect(releasePlan).toContain(
       "No candidate branch receives live provider secrets",
     );
-    expect(releasePlan).toContain(
-      "bootstrap Task 1 workflow",
-    );
+    expect(releasePlan).toContain("bootstrap Task 1 workflow");
     expect(releasePlan).toContain(
       "merged to trusted `main` under `[CF-Pages-Skip]`",
     );
-    expect(releasePlan).toContain(
-      "main-only read and lock verification",
-    );
+    expect(releasePlan).toContain("main-only read and lock verification");
   });
 
   it("isolates Cloudflare Pages PATCH operations in a manual trusted-main workflow", () => {
@@ -1576,9 +1944,7 @@ describe("production release train", () => {
     const jobSource = JSON.stringify(job);
 
     expect(triggerNames).toEqual(["workflow_dispatch"]);
-    expect(
-      parsed.on.workflow_dispatch.inputs.confirm,
-    ).toMatchObject({
+    expect(parsed.on.workflow_dispatch.inputs.confirm).toMatchObject({
       required: true,
       type: "string",
     });
@@ -1631,29 +1997,25 @@ describe("production release train", () => {
       'STAGING_PROJECT="maiprop-listing-site-staging"',
     );
     expect(controlStep.run).toContain(
-      '.success == true and .result.name == $name and .result.id == $id',
+      ".success == true and .result.name == $name and .result.id == $id",
     );
-    expect(controlStep.run).toContain(
-      '.result.source == null or',
-    );
+    expect(controlStep.run).toContain(".result.source == null or");
     expect(controlStep.run).toContain(
       '.result.source.type == "github" or .result.source.type == "gitlab"',
     );
     expect(controlStep.run).toContain('if [ -z "$source_type" ]; then');
-    expect(controlStep.run.indexOf(
-      '[ -z "$EXPECTED_PRODUCTION_PROJECT_ID" ]',
-    )).toBeLessThan(controlStep.run.indexOf("patch_project()"));
-    expect(controlStep.run.indexOf(
-      '[ -z "$EXPECTED_STAGING_PROJECT_ID" ]',
-    )).toBeLessThan(controlStep.run.indexOf("patch_project()"));
+    expect(
+      controlStep.run.indexOf('[ -z "$EXPECTED_PRODUCTION_PROJECT_ID" ]'),
+    ).toBeLessThan(controlStep.run.indexOf("patch_project()"));
+    expect(
+      controlStep.run.indexOf('[ -z "$EXPECTED_STAGING_PROJECT_ID" ]'),
+    ).toBeLessThan(controlStep.run.indexOf("patch_project()"));
     expect(controlStep.run).toContain('"type": $source_type');
     expect(controlStep.run).toContain('"deployments_enabled": false');
     expect(controlStep.run).toContain(
       '"production_deployments_enabled": false',
     );
-    expect(controlStep.run).toContain(
-      '"preview_deployment_setting": "none"',
-    );
+    expect(controlStep.run).toContain('"preview_deployment_setting": "none"');
     expect(controlStep.run).toContain(
       "cloudflare-pages-git-auto-deploy-pre-state.json",
     );
@@ -1662,10 +2024,10 @@ describe("production release train", () => {
     );
     expect(controlStep.run).toContain('"capture_status": "failed"');
     expect(controlStep.run).toContain(
-      '.result.source.config.deployments_enabled == false',
+      ".result.source.config.deployments_enabled == false",
     );
     expect(controlStep.run).toContain(
-      '.result.source.config.production_deployments_enabled == false',
+      ".result.source.config.production_deployments_enabled == false",
     );
     expect(controlStep.run).toContain(
       '.result.source.config.preview_deployment_setting == "none"',
@@ -1706,9 +2068,11 @@ describe("production release train", () => {
     expect(approval).toContain("github-release-evidence");
     expect(approval).not.toContain("git fetch --no-tags origin main");
     expect(approval).toContain(
-      'gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq \'.commit.sha\'',
+      "gh api \"repos/${GITHUB_REPOSITORY}/branches/main\" --jq '.commit.sha'",
     );
-    expect(approval).toContain("Require standard production approver allowlist");
+    expect(approval).toContain(
+      "Require standard production approver allowlist",
+    );
     expect(approval).toContain("PRODUCTION_RELEASE_APPROVERS");
     expect(approval).toContain("The approval actor is not allowlisted");
     expect(approval).toContain(
@@ -1721,9 +2085,7 @@ describe("production release train", () => {
     expect(approval).toContain('verification_mode == "prior-run"');
     expect(approval).toContain("RELEASE_EVIDENCE_SIGNING_KEY");
     expect(approval).toContain("RELEASE_EVIDENCE_SIGNING_KEY_ID");
-    expect(approval).toContain(
-      ".github/workflows/stage-release.yml",
-    );
+    expect(approval).toContain(".github/workflows/stage-release.yml");
     for (const field of [
       "schema_version: 2",
       "repository:",
@@ -1769,9 +2131,7 @@ describe("production release train", () => {
       const parsed = yaml.load(workflow(name));
       const guard = String(parsed.jobs[jobName].if ?? "");
       expect(guard, name).toContain("github.run_attempt == 1");
-      expect(guard, name).toContain(
-        "github.actor == github.triggering_actor",
-      );
+      expect(guard, name).toContain("github.actor == github.triggering_actor");
     }
   });
 
@@ -1835,19 +2195,23 @@ describe("production release train", () => {
       expect(provider, name).toContain("--stripe-readiness-run-attempt");
       expect(provider, name).toContain("--stripe-readiness-sha256");
       expect(provider, name).toContain("--stripe-readiness-artifact-id");
-      expect(provider, name).toContain(
-        "--stripe-readiness-artifact-digest",
-      );
+      expect(provider, name).toContain("--stripe-readiness-artifact-digest");
     }
 
     expect(
-      release.match(/stripe_readiness_run_id: process\.env\.STRIPE_READINESS_RUN_ID/g),
+      release.match(
+        /stripe_readiness_run_id: process\.env\.STRIPE_READINESS_RUN_ID/g,
+      ),
     ).toHaveLength(4);
     expect(
-      release.match(/stripe_readiness_sha256: process\.env\.STRIPE_READINESS_SHA256/g),
+      release.match(
+        /stripe_readiness_sha256: process\.env\.STRIPE_READINESS_SHA256/g,
+      ),
     ).toHaveLength(4);
     expect(
-      release.match(/stripe_readiness_checked_at:\s*process\.env\.STRIPE_READINESS_CHECKED_AT/g),
+      release.match(
+        /stripe_readiness_checked_at:\s*process\.env\.STRIPE_READINESS_CHECKED_AT/g,
+      ),
     ).toHaveLength(3);
 
     const directRecovery = workflow("direct-cloudflare-production-deploy.yml");
@@ -1874,7 +2238,8 @@ describe("production release train", () => {
       (step) => step.name === "Require exact staging-production Edge parity",
     );
     const activationIndex = steps.findIndex(
-      (step) => step.name === "Activate and verify role-switch reconciliation cron",
+      (step) =>
+        step.name === "Activate and verify role-switch reconciliation cron",
     );
     const attestationIndex = steps.findIndex(
       (step) => step.name === "Create production Edge attestation",
@@ -1910,10 +2275,9 @@ describe("production release train", () => {
       verificationSteps,
       `${jobName}:provenance verification`,
     ).toHaveLength(1);
-    expect(
-      uploadSteps,
-      `${jobName}:provenance evidence upload`,
-    ).toHaveLength(1);
+    expect(uploadSteps, `${jobName}:provenance evidence upload`).toHaveLength(
+      1,
+    );
 
     const [verificationStep] = verificationSteps;
     const [uploadStep] = uploadSteps;
@@ -1928,7 +2292,9 @@ describe("production release train", () => {
     );
 
     expect(verificationStep.run).toContain("--payload-root release-candidate");
-    expect(verifierOutputIndex, `${jobName}:verifier output`).toBeGreaterThan(-1);
+    expect(verifierOutputIndex, `${jobName}:verifier output`).toBeGreaterThan(
+      -1,
+    );
     expect(jqInputIndex, `${jobName}:jq evidence input`).toBeGreaterThan(-1);
 
     const verifierOutputPath = runLines[verifierOutputIndex].match(
@@ -1969,9 +2335,7 @@ describe("production release train", () => {
       "github.workflow_sha == github.event.workflow_run.head_sha",
     );
     expect(stage).toContain("WORKFLOW_SHA:");
-    expect(stage).toContain(
-      "trusted_control_sha: ${{ github.workflow_sha }}",
-    );
+    expect(stage).toContain("trusted_control_sha: ${{ github.workflow_sha }}");
     expect(stage).toContain(
       "github.event.workflow_run.conclusion == 'success'",
     );
@@ -1991,12 +2355,8 @@ describe("production release train", () => {
     expect(stage).toContain("STAGING_SUPABASE_PROJECT_ID:");
     expect(stage).toContain("STAGING_SUPABASE_URL:");
     expect(stage).toContain("STAGING_SUPABASE_PUBLISHABLE_KEY:");
-    expect(stage).toContain(
-      "validate-cloudflare-pages-staging-posture.mjs",
-    );
-    expect(cloudflarePostureValidator).toContain(
-      "SUPABASE_SERVICE_ROLE_KEY",
-    );
+    expect(stage).toContain("validate-cloudflare-pages-staging-posture.mjs");
+    expect(cloudflarePostureValidator).toContain("SUPABASE_SERVICE_ROLE_KEY");
     expect(cloudflarePostureValidator).toContain(
       "SUPABASE_PROJECT_ID: stagingSupabaseProjectId",
     );
@@ -2012,10 +2372,13 @@ describe("production release train", () => {
     expect(stage).toContain(
       '--workflow-ref "$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main"',
     );
-    expect(stage.match(/persist-credentials: false/g)?.length ?? 0)
-      .toBeGreaterThanOrEqual(3);
+    expect(
+      stage.match(/persist-credentials: false/g)?.length ?? 0,
+    ).toBeGreaterThanOrEqual(3);
     expect(stage).not.toContain("npm ci --prefer-offline --no-audit\n");
-    expect(stage).toContain("npm ci --ignore-scripts --prefer-offline --no-audit");
+    expect(stage).toContain(
+      "npm ci --ignore-scripts --prefer-offline --no-audit",
+    );
   });
 
   it("revalidates the staging lease before every Supabase mutation", () => {
@@ -2066,7 +2429,9 @@ describe("production release train", () => {
       ["Apply database migrations to staging", "db push"],
       ["Deploy edge functions to staging", "functions deploy"],
     ]) {
-      const step = stagingJob.steps.find((candidate) => candidate.name === stepName);
+      const step = stagingJob.steps.find(
+        (candidate) => candidate.name === stepName,
+      );
       expect(step, stepName).toBeDefined();
       expect(step.env?.GITHUB_TOKEN, stepName).toBe("${{ github.token }}");
       expect(step.run, stepName).toContain("github-staging-lease");
@@ -2074,6 +2439,35 @@ describe("production release train", () => {
         step.run.indexOf(mutation),
       );
     }
+  });
+
+  it("canonicalizes the configured staging database URL before validation and resolution", () => {
+    const staging = yaml.load(workflow("reusable-supabase-staging.yml"));
+    const stagingJob = staging.jobs["deploy-supabase-staging"];
+    const target = stagingJob.steps.find(
+      (candidate) => candidate.name === "Resolve Supabase staging target",
+    );
+    const resolution = stagingJob.steps.find(
+      (candidate) => candidate.name === "Resolve staging database URL",
+    );
+
+    expect(target).toBeDefined();
+    expect(target.run).toContain("normalizeDatabaseUrlTls");
+    expect(
+      target.run.indexOf(
+        "process.stdout.write(normalizeDatabaseUrlTls(process.env.STAGING_DATABASE_URL))",
+      ),
+    ).toBeLessThan(target.run.indexOf("assert-staging-mutation-target.mjs"));
+    expect(target.run).toContain('--database-url "$canonical_staging_db_url"');
+    expect(target.run).not.toContain(
+      '--database-url "$SUPABASE_STAGING_DB_URL"',
+    );
+
+    expect(resolution).toBeDefined();
+    expect(resolution.run).toContain("normalizeDatabaseUrlTls");
+    expect(resolution.run).toContain(
+      "new URL(normalizeDatabaseUrlTls(directUrl))",
+    );
   });
 
   it("stages database and Edge mutations only from the verified signed artifact", () => {
@@ -2085,26 +2479,24 @@ describe("production release train", () => {
       "manifest_sha256: ${{ needs.validate-source.outputs.manifest_sha256 }}",
     );
     expect(staging).toContain("manifest_sha256:");
-    expect(staging).toContain("Download immutable Supabase release candidate binding");
+    expect(staging).toContain(
+      "Download immutable Supabase release candidate binding",
+    );
     expect(staging).toContain(
       "production-release-candidate-binding-${{ inputs.release_sha }}-${{ inputs.source_run_attempt }}",
     );
     expect(staging).toContain("run-id: ${{ inputs.source_run_id }}");
-    expect(staging).toContain("artifact-ids: ${{ steps.supabase_source_binding.outputs.artifact_id }}");
+    expect(staging).toContain(
+      "artifact-ids: ${{ steps.supabase_source_binding.outputs.artifact_id }}",
+    );
     expect(staging).toContain("verify-release-artifact-binding.mjs");
     expect(staging).toContain(
       "--producer-run source-binding-metadata/run.json",
     );
     expect(staging).not.toContain("gh attestation");
-    expect(staging).toContain(
-      ".github/workflows/ci.yml",
-    );
-    expect(staging).toContain(
-      "npm run release:artifact:verify --",
-    );
-    expect(staging).toContain(
-      '--dir release-candidate',
-    );
+    expect(staging).toContain(".github/workflows/ci.yml");
+    expect(staging).toContain("npm run release:artifact:verify --");
+    expect(staging).toContain("--dir release-candidate");
     expect(staging).toContain(
       'actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json',
     );
@@ -2122,12 +2514,8 @@ describe("production release train", () => {
     expect(staging).toContain(
       "npx --no-install supabase --workdir release-candidate functions deploy",
     );
-    expect(staging).toContain(
-      "find release-candidate/supabase/migrations",
-    );
-    expect(staging).toContain(
-      "--supabase-workdir release-candidate",
-    );
+    expect(staging).toContain("find release-candidate/supabase/migrations");
+    expect(staging).toContain("--supabase-workdir release-candidate");
     expect(staging).toContain("file_sha256");
     expect(staging).toContain("migration_inventory_sha256");
     for (const stepName of [
@@ -2217,8 +2605,11 @@ describe("production release train", () => {
     expect(stage).not.toContain(
       "STAGING_SUPABASE_SERVICE_ROLE_KEY=$service_role_key",
     );
-    expect(stage.match(/STAGING_DEMO_PASSWORD: \$\{\{ secrets\.E2E_DEMO_PASSWORD \}\}/g))
-      .toHaveLength(5);
+    expect(
+      stage.match(
+        /STAGING_DEMO_PASSWORD: \$\{\{ secrets\.E2E_DEMO_PASSWORD \}\}/g,
+      ),
+    ).toHaveLength(5);
     expect(stage).not.toContain("secrets.STAGING_DEMO_PASSWORD");
     expect(stage).not.toMatch(
       /STAGING_(?:DEVELOPER_A|DEVELOPER_B|DEVELOPER_FREE|SELLER_FREE)_EMAIL:\s+\$\{\{ secrets\./,
@@ -2227,28 +2618,26 @@ describe("production release train", () => {
       'const expectedProofNames = [\n            "listings",\n            "projects",\n            "promotions",\n            "storage",',
     );
     expect(stage).toContain("expectedProofNames.some(");
-    expect(stage).toContain(
-      "(name) => business.proofs?.[name]?.ok !== true,",
-    );
+    expect(stage).toContain("(name) => business.proofs?.[name]?.ok !== true,");
   });
 
   it("requires non-skipped exact-SHA live security evidence before attestation", () => {
     const stage = workflow("stage-release.yml");
 
     expect(stage).toContain("staging-live-security:");
-    expect(stage).toContain("Revalidate lease before security fixture preparation");
+    expect(stage).toContain(
+      "Revalidate lease before security fixture preparation",
+    );
     expect(stage).toContain(
       "Revalidate lease before destructive live security proof",
     );
     expect(stage).toContain("api-keys?reveal=true");
-    expect(stage).toContain("E2E_SECURITY_USE_ISOLATED_STAGING: \"true\"");
-    expect(stage).toContain("E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: \"true\"");
+    expect(stage).toContain('E2E_SECURITY_USE_ISOLATED_STAGING: "true"');
+    expect(stage).toContain('E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: "true"');
     expect(stage).toContain("--project=chromium");
     expect(stage).toContain("--reporter=json");
     expect(stage).toContain("staging-live-security-proof.json");
-    expect(stage).not.toContain(
-      "path: staging-live-security-playwright.json",
-    );
+    expect(stage).not.toContain("path: staging-live-security-playwright.json");
     expect(stage).toContain("security: securityEvidence.sha256");
     expect(stage).toContain("security.playwright?.skipped !== 0");
     expect(stage).toContain("security.playwright?.unexpected !== 0");
@@ -2464,8 +2853,12 @@ describe("production release train", () => {
     expect(aggregateSource).toContain(
       "needs.staging-stripe-payment.outputs.artifact_name",
     );
-    expect(aggregateSource).toContain("stripePayment.playwright?.expected !== 1");
-    expect(aggregateSource).toContain("stripePayment.playwright?.skipped !== 0");
+    expect(aggregateSource).toContain(
+      "stripePayment.playwright?.expected !== 1",
+    );
+    expect(aggregateSource).toContain(
+      "stripePayment.playwright?.skipped !== 0",
+    );
     expect(aggregateSource).toContain("stripePaymentPlaywright.sha256");
   });
 
@@ -2556,7 +2949,9 @@ describe("production release train", () => {
     expect(content).toContain(
       'STAGING_PROJECT: "maiprop-listing-site-staging"',
     );
-    expect(content).toContain('PRODUCTION_APP_URL: "https://portal.maiprop.co"');
+    expect(content).toContain(
+      'PRODUCTION_APP_URL: "https://portal.maiprop.co"',
+    );
     expect(content).toContain('PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"');
     expect(content).toContain('WRANGLER_VERSION: "4.86.0"');
     expect(job.env.CLOUDFLARE_PAGES_PROJECT_ID).toBe(
@@ -2596,8 +2991,12 @@ describe("production release train", () => {
     expect(content).toContain("RELEASE_EVIDENCE_SIGNING_KEY_ID");
     expect(content).toContain(".github/workflows/ci.yml");
     expect(content).toContain(".github/workflows/stage-release.yml");
-    expect(content).toContain(".github/workflows/approve-production-release.yml");
-    expect(content).toContain(".github/workflows/deploy-production-release.yml");
+    expect(content).toContain(
+      ".github/workflows/approve-production-release.yml",
+    );
+    expect(content).toContain(
+      ".github/workflows/deploy-production-release.yml",
+    );
     expect(content).not.toContain("gh attestation");
     expect(content).not.toContain("actions/attest-build-provenance");
     expect(content).not.toContain("secrets: inherit");
@@ -2619,9 +3018,10 @@ describe("production release train", () => {
     expect(content).toContain(
       "production-release-approval-${{ inputs.release_sha }}-${{ inputs.approval_run_id }}-${{ inputs.approval_run_attempt }}",
     );
-    const githubValidationSteps = job.steps.filter((step) =>
-      typeof step.run === "string" &&
-      /github-(?:staging-lease|release-approval)/.test(step.run)
+    const githubValidationSteps = job.steps.filter(
+      (step) =>
+        typeof step.run === "string" &&
+        /github-(?:staging-lease|release-approval)/.test(step.run),
     );
     expect(githubValidationSteps.length).toBeGreaterThan(0);
     for (const step of githubValidationSteps) {
@@ -2653,12 +3053,17 @@ describe("production release train", () => {
         mutationIndex,
       );
       expect(mainIndex, `${name} current-main validation`).toBeGreaterThan(-1);
-      expect(projectLockIndex, `${name} immutable project and Git-lock validation`)
-        .toBeGreaterThan(-1);
-      expect(mainIndex, `${name} final current-main validation`)
-        .toBeGreaterThan(projectLockIndex);
-      expect(leaseIndex, `${name} final lease validation`)
-        .toBeGreaterThan(mainIndex);
+      expect(
+        projectLockIndex,
+        `${name} immutable project and Git-lock validation`,
+      ).toBeGreaterThan(-1);
+      expect(
+        mainIndex,
+        `${name} final current-main validation`,
+      ).toBeGreaterThan(projectLockIndex);
+      expect(leaseIndex, `${name} final lease validation`).toBeGreaterThan(
+        mainIndex,
+      );
       expect(mutationIndex, `${name} mutation`).toBeGreaterThan(leaseIndex);
     }
 
@@ -2689,7 +3094,7 @@ describe("production release train", () => {
       if (typeof step.run !== "string") continue;
       for (const request of curlRequestsTo(step.run, "STAGING_CF_ACCOUNT_ID")) {
         expect(request, step.name).toContain(
-          'Authorization: Bearer $STAGING_CF_READ_TOKEN',
+          "Authorization: Bearer $STAGING_CF_READ_TOKEN",
         );
         expect(request, step.name).not.toContain("CF_API_TOKEN");
       }
@@ -2705,24 +3110,32 @@ describe("production release train", () => {
       (step) => step.name === "Deploy exact immutable production artifact",
     );
     const reconciliation = steps.find(
-      (step) => step.name === "Resolve and validate exact production deployment",
+      (step) =>
+        step.name === "Resolve and validate exact production deployment",
     );
 
     const mutationIndex = deploy.run.indexOf("wrangler pages deploy");
-    const statusIndex = deploy.run.indexOf('wrangler_statuses=("${PIPESTATUS[@]}")', mutationIndex);
-    const attemptedIndex = deploy.run.indexOf("mutation_attempted=true", statusIndex);
+    const statusIndex = deploy.run.indexOf(
+      'wrangler_statuses=("${PIPESTATUS[@]}")',
+      mutationIndex,
+    );
+    const attemptedIndex = deploy.run.indexOf(
+      "mutation_attempted=true",
+      statusIndex,
+    );
     expect(mutationIndex).toBeGreaterThan(-1);
     expect(statusIndex).toBeGreaterThan(mutationIndex);
     expect(attemptedIndex).toBeGreaterThan(statusIndex);
-    expect(deploy.run).toContain("cloudflare-production-deployments-before.json");
-    expect(deploy.run.indexOf("deployments?env=production&per_page=20"))
-      .toBeLessThan(mutationIndex);
+    expect(deploy.run).toContain(
+      "cloudflare-production-deployments-before.json",
+    );
+    expect(
+      deploy.run.indexOf("deployments?env=production&per_page=20"),
+    ).toBeLessThan(mutationIndex);
     expect(reconciliation.env.DEPLOYMENTS_BEFORE).toBe(
       "${{ steps.deploy.outputs.deployments_before }}",
     );
-    expect(deploy.run).toContain(
-      "cloudflare-production-mutation-attempt.json",
-    );
+    expect(deploy.run).toContain("cloudflare-production-mutation-attempt.json");
     expect(reconciliation.if).toContain("always()");
     expect(reconciliation.if).toContain(
       "steps.deploy.outputs.mutation_attempted == 'true'",
@@ -2803,7 +3216,8 @@ describe("production release train", () => {
       (step) => step.name === "Deploy exact immutable production artifact",
     );
     const deployment = steps.find(
-      (step) => step.name === "Resolve and validate exact production deployment",
+      (step) =>
+        step.name === "Resolve and validate exact production deployment",
     );
     const health = steps.find(
       (step) => step.name === "Validate production promotion health",
@@ -2842,11 +3256,11 @@ describe("production release train", () => {
     expect(deploy.run).toContain("--branch=main");
     expect(deploy.run).toContain('--commit-hash="$RELEASE_SHA"');
     expect(deploy.run).toContain("--commit-dirty=false");
-    expect(deploy.run.match(/production-release-artifact\.mjs/g)).toHaveLength(2);
-    expect(browser.run).toContain("npx playwright install chromium");
-    expect(steps.indexOf(browser)).toBeLessThan(
-      steps.indexOf(runtimeSync),
+    expect(deploy.run.match(/production-release-artifact\.mjs/g)).toHaveLength(
+      2,
     );
+    expect(browser.run).toContain("npx playwright install chromium");
+    expect(steps.indexOf(browser)).toBeLessThan(steps.indexOf(runtimeSync));
     expect(steps.indexOf(prepare)).toBeLessThan(steps.indexOf(runtimeSync));
     expect(runtimeSync["continue-on-error"]).toBe(true);
     expect(nMinusOne).toBeDefined();
@@ -2904,7 +3318,9 @@ describe("production release train", () => {
     expect(rollback.run).toContain(
       '"$RUNNER_TEMP/verify-cloudflare-release-bindings.sh"',
     );
-    expect(rollback.run.indexOf("verify-cloudflare-release-bindings.sh")).toBeLessThan(
+    expect(
+      rollback.run.indexOf("verify-cloudflare-release-bindings.sh"),
+    ).toBeLessThan(
       rollback.run.indexOf("release:validate -- release-approval"),
     );
     expect(rollback.run).toContain("randomBytes(32)");
@@ -2971,8 +3387,12 @@ describe("production release train", () => {
     expect(content).toContain(
       "Rollback target must differ from the candidate release SHA.",
     );
-    expect(deploy.env.ROLLBACK_ID).toBe("${{ steps.preflight.outputs.rollback_id }}");
-    expect(deploy.env.ROLLBACK_SHA).toBe("${{ steps.preflight.outputs.rollback_sha }}");
+    expect(deploy.env.ROLLBACK_ID).toBe(
+      "${{ steps.preflight.outputs.rollback_id }}",
+    );
+    expect(deploy.env.ROLLBACK_SHA).toBe(
+      "${{ steps.preflight.outputs.rollback_sha }}",
+    );
     expect(deploy.run).toContain("canonical_deployment.id == $rollback_id");
     expect(deploy.run).toContain(
       "Production canonical changed after rollback capture; candidate deploy refused.",
@@ -2981,9 +3401,10 @@ describe("production release train", () => {
 
   it("binds every Cloudflare deployment record to the immutable project ID", () => {
     const content = workflow("reusable-cloudflare-production-deploy.yml");
-    const commands = content.match(
-      /release:validate -- cloudflare-deployment[\s\S]*?(?=\n\s{10}\S|$)/g,
-    ) ?? [];
+    const commands =
+      content.match(
+        /release:validate -- cloudflare-deployment[\s\S]*?(?=\n\s{10}\S|$)/g,
+      ) ?? [];
 
     expect(commands.length).toBeGreaterThanOrEqual(4);
     for (const command of commands) {
@@ -2991,9 +3412,10 @@ describe("production release train", () => {
     }
 
     const staging = workflow("stage-release.yml");
-    const stagingCommands = staging.match(
-      /release:validate -- cloudflare-deployment[\s\S]*?(?=\n\s{10}\S|$)/g,
-    ) ?? [];
+    const stagingCommands =
+      staging.match(
+        /release:validate -- cloudflare-deployment[\s\S]*?(?=\n\s{10}\S|$)/g,
+      ) ?? [];
     expect(stagingCommands).toHaveLength(4);
     const isolatedStagingCommands = stagingCommands.filter((command) =>
       command.includes("CLOUDFLARE_STAGING_PAGES_PROJECT_ID"),
@@ -3155,12 +3577,24 @@ describe("production release train", () => {
     expect(applyStep.run.indexOf("release:artifact:verify")).toBeLessThan(
       applyStep.run.indexOf("db push"),
     );
-    expect(applyStep.run).toContain("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_profiles_role_switch_audit_id");
-    expect(applyStep.run).toContain("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_role_switch_history_reconciliation_due");
-    expect(applyStep.run).toContain("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_agent_data_inputs_user_discount_invoice");
-    expect(applyStep.run).toContain("VALIDATE CONSTRAINT profiles_role_switch_audit_id_fkey");
-    expect(applyStep.run).toContain("production-role-switch-online-finalization.json");
-    expect(applyStep.run).not.toContain('pending_count" = "0" ]; then\n            echo "Production migration history already matches staging."\n            exit 0');
+    expect(applyStep.run).toContain(
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_profiles_role_switch_audit_id",
+    );
+    expect(applyStep.run).toContain(
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_role_switch_history_reconciliation_due",
+    );
+    expect(applyStep.run).toContain(
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_agent_data_inputs_user_discount_invoice",
+    );
+    expect(applyStep.run).toContain(
+      "VALIDATE CONSTRAINT profiles_role_switch_audit_id_fkey",
+    );
+    expect(applyStep.run).toContain(
+      "production-role-switch-online-finalization.json",
+    );
+    expect(applyStep.run).not.toContain(
+      'pending_count" = "0" ]; then\n            echo "Production migration history already matches staging."\n            exit 0',
+    );
     const terminalEvidence = job.steps.find(
       (step) => step.name === "Create production database terminal evidence",
     );
@@ -3177,16 +3611,14 @@ describe("production release train", () => {
     expect(terminalEvidence.run).toContain(
       "production-migrations-terminal.json",
     );
-    expect(terminalEvidence.run).toContain(
-      "production_history_capture_status",
-    );
+    expect(terminalEvidence.run).toContain("production_history_capture_status");
     expect(
       terminalEvidence.run.indexOf('psql "$SUPABASE_PRODUCTION_DB_URL"'),
-    ).toBeLessThan(
-      terminalEvidence.run.indexOf("node --input-type=module"),
-    );
+    ).toBeLessThan(terminalEvidence.run.indexOf("node --input-type=module"));
     expect(terminalEvidence.run).toContain("production-migrations-before.json");
-    expect(terminalEvidence.run).toContain("production-migrations-pre-apply.json");
+    expect(terminalEvidence.run).toContain(
+      "production-migrations-pre-apply.json",
+    );
     expect(terminalEvidence.run).toContain("production-migrations-after.json");
     expect(terminalEvidence.run).toContain("production-migration-dry-run.txt");
     expect(terminalEvidence.run).toContain(
@@ -3214,8 +3646,12 @@ describe("production release train", () => {
     expect(content).toContain("npm run check:live-security-posture");
     expect(content).toContain("db lint");
     expect(content).toContain("production-supabase-db-attestation");
-    expect(content).toContain("Create signed production database evidence binding");
-    expect(content).toContain("Upload signed production database evidence binding");
+    expect(content).toContain(
+      "Create signed production database evidence binding",
+    );
+    expect(content).toContain(
+      "Upload signed production database evidence binding",
+    );
     expect(content).not.toContain("gh attestation");
     expect(content).not.toContain("actions/attest-build-provenance");
     expect(content).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
@@ -3310,9 +3746,7 @@ describe("production release train", () => {
     expect(content).toContain("assertEdgeSourceManifestParity");
     expect(content).toContain("assertEdgeBundleParity");
     expect(content).toContain("buildEdgeForwardConvergencePlan");
-    expect(content).toContain(
-      "--supabase-workdir release-candidate",
-    );
+    expect(content).toContain("--supabase-workdir release-candidate");
     expect(content).toContain(
       "npx --no-install supabase --workdir release-candidate functions deploy",
     );
@@ -3321,12 +3755,15 @@ describe("production release train", () => {
     expect(content).toContain(
       "Capture strict production live function inventory before deploy",
     );
-    expect(content).toContain("release-safety-production-live-functions-before.json");
+    expect(content).toContain(
+      "release-safety-production-live-functions-before.json",
+    );
     expect(content).toContain("production-edge-forward-plan.json");
     expect(content).toContain("production-edge-deploy-progress.jsonl");
     expect(content).toContain('functions deploy "$function_name"');
     const deployStep = job.steps.find(
-      (step) => step.name === "Forward-converge exact artifact Edge functions serially",
+      (step) =>
+        step.name === "Forward-converge exact artifact Edge functions serially",
     );
     expect(deployStep.run).toContain("npm run release:artifact:verify --");
     expect(deployStep.run).toContain("inventory:release");
@@ -3350,8 +3787,12 @@ describe("production release train", () => {
     expect(edgeTerminalEvidence.run).toContain(
       "release-safety-production-live-functions.json",
     );
-    expect(edgeTerminalEvidence.run).toContain("production-edge-forward-plan.json");
-    expect(edgeTerminalEvidence.run).toContain("production-edge-deploy-progress.jsonl");
+    expect(edgeTerminalEvidence.run).toContain(
+      "production-edge-forward-plan.json",
+    );
+    expect(edgeTerminalEvidence.run).toContain(
+      "production-edge-deploy-progress.jsonl",
+    );
     expect(edgeTerminalEvidence.run).toContain("job_status");
     expect(edgeTerminalEvidence.run).toContain("readJsonIfValid");
     expect(edgeTerminalEvidence.run).toContain("manifest_parse_error");
@@ -3374,8 +3815,7 @@ describe("production release train", () => {
     const release = workflow("deploy-production-release.yml");
     const parsed = yaml.load(release);
     const validate = parsed.jobs.validate;
-    const cloudflarePreflight =
-      parsed.jobs["cloudflare-production-preflight"];
+    const cloudflarePreflight = parsed.jobs["cloudflare-production-preflight"];
     const sourceArchive = parsed.jobs["archive-production-source"];
     const database = parsed.jobs["deploy-production-database"];
     const renew = parsed.jobs["renew-edge-mutation-lease"];
@@ -3395,11 +3835,15 @@ describe("production release train", () => {
     expect(release).toContain("verify-release-artifact-binding.mjs");
     expect(release).toContain("RELEASE_EVIDENCE_SIGNING_KEY");
     expect(release).toContain("RELEASE_EVIDENCE_SIGNING_KEY_ID");
-    expect(release).toContain("release-candidate-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}-binding");
+    expect(release).toContain(
+      "release-candidate-attestation-${RELEASE_SHA}-${STAGING_RUN_ATTEMPT}-binding",
+    );
     expect(release).not.toContain("gh attestation");
     expect(release).not.toContain("actions/attest-build-provenance");
     expect(release).toContain("release-candidate-attestation");
-    expect(release).toContain('SOURCE_TREE="$(git rev-parse "${RELEASE_SHA}^{tree}")"');
+    expect(release).toContain(
+      'SOURCE_TREE="$(git rev-parse "${RELEASE_SHA}^{tree}")"',
+    );
     expect(release).toContain('--source-tree "$SOURCE_TREE"');
     expect(release).toContain('--source-run-id "$SOURCE_RUN_ID"');
     expect(release).toContain('--source-run-attempt "$SOURCE_RUN_ATTEMPT"');
@@ -3523,10 +3967,10 @@ describe("production release train", () => {
       actions: "read",
       contents: "read",
     });
+    expect(release).toContain("production-release-attestation.json");
     expect(release).toContain(
-      "production-release-attestation.json",
+      "Create signed coordinated production release binding",
     );
-    expect(release).toContain("Create signed coordinated production release binding");
     expect(release).toContain("Upload coordinated production release binding");
     expect(release).not.toContain("secrets: inherit");
     expect(release).not.toContain(
@@ -3548,7 +3992,9 @@ describe("production release train", () => {
     });
     expect(finalAttestation).toBeDefined();
     expect(finalAttestation.run).toContain("schema_version: 5");
-    expect(stage).toContain("Create and verify final release candidate binding");
+    expect(stage).toContain(
+      "Create and verify final release candidate binding",
+    );
     expect(stage).toContain("Upload final release candidate binding");
     expect(stage).toContain("verify-release-artifact-binding.mjs");
     expect(stage).not.toContain("gh attestation");
@@ -3578,323 +4024,307 @@ describe("production release train", () => {
     }
   });
 
-   it("proves every staging runtime alias targets the isolated Supabase project", () => {
-     const stage = workflow("stage-release.yml");
+  it("proves every staging runtime alias targets the isolated Supabase project", () => {
+    const stage = workflow("stage-release.yml");
 
-     expect(stage).toContain("STAGING_APP_URL:");
-     expect(cloudflarePostureValidator).toContain(
-       "VITE_SUPABASE_URL: stagingSupabaseUrl",
-     );
-     expect(cloudflarePostureValidator).toContain(
-       "VITE_SUPABASE_PROJECT_ID: stagingSupabaseProjectId",
-     );
-     expect(cloudflarePostureValidator).toContain(
-       "VITE_SUPABASE_PUBLISHABLE_KEY: stagingSupabasePublishableKey",
-     );
-     expect(cloudflarePostureValidator).toContain(
-       "VITE_APP_URL: stagingAppUrl",
-     );
-     expect(cloudflarePostureValidator).toContain(
-       "VITE_PUBLIC_API_ORIGIN: stagingAppUrl",
-     );
+    expect(stage).toContain("STAGING_APP_URL:");
+    expect(cloudflarePostureValidator).toContain(
+      "VITE_SUPABASE_URL: stagingSupabaseUrl",
+    );
+    expect(cloudflarePostureValidator).toContain(
+      "VITE_SUPABASE_PROJECT_ID: stagingSupabaseProjectId",
+    );
+    expect(cloudflarePostureValidator).toContain(
+      "VITE_SUPABASE_PUBLISHABLE_KEY: stagingSupabasePublishableKey",
+    );
+    expect(cloudflarePostureValidator).toContain("VITE_APP_URL: stagingAppUrl");
+    expect(cloudflarePostureValidator).toContain(
+      "VITE_PUBLIC_API_ORIGIN: stagingAppUrl",
+    );
     expect(stage).toContain("Verify immutable and canonical staging runtimes");
     expect(stage).toContain("runtime-config.js");
-   });
+  });
 
-   it("API-attests disabled Git auto-deploy for both Pages projects", () => {
-     const stage = workflow("stage-release.yml");
+  it("API-attests disabled Git auto-deploy for both Pages projects", () => {
+    const stage = workflow("stage-release.yml");
 
-     expect(stage.match(/--mode staging/g)).toHaveLength(4);
-     expect(stage).toContain("cloudflare-staging-project.json");
-     expect(stage).toContain("cloudflare-production-project.json");
-     expect(stage).toContain("cloudflare-pages-final-posture.json");
-     expect(cloudflarePostureValidator).toContain(
-       "productionDeploymentsEnabled",
-     );
-     expect(cloudflarePostureValidator).toContain(
-       "previewDeploymentSetting",
-     );
-     expect(stage).toContain("git_auto_deploy_posture_sha256");
-     expect(stage).toContain("git_auto_deploy_posture");
-     expect(stage).toContain("cloudflare.schema_version !== 4");
-     expect(stage).toContain(
-       "cloudflare.git_auto_deploy_posture?.status !== \"passed\"",
-     );
-     expect(stage).toContain(
-       "Re-attest both Pages projects immediately before final attestation",
-     );
-     const runtimeIndex = stage.indexOf(
-       "Verify immutable and canonical staging runtimes",
-     );
-     const finalPostureIndex = stage.indexOf(
-       "Re-attest both Pages projects immediately before final attestation",
-     );
-     const attestationIndex = stage.indexOf(
-       "Create Cloudflare staging attestation",
-     );
-     expect(finalPostureIndex).toBeGreaterThan(runtimeIndex);
-     expect(attestationIndex).toBeGreaterThan(finalPostureIndex);
-     const finalPostureBlock = stage.slice(
-       finalPostureIndex,
-       attestationIndex,
-     );
-     expect(finalPostureBlock).toContain(
-       "--staging-project-file cloudflare-staging-project-final.json",
-     );
-     expect(finalPostureBlock).toContain(
-       "--production-project-file cloudflare-production-project-final.json",
-     );
-     expect(finalPostureBlock.match(/release:verify-runtime-config/g)).toHaveLength(
-       2,
-     );
-   });
+    expect(stage.match(/--mode staging/g)).toHaveLength(4);
+    expect(stage).toContain("cloudflare-staging-project.json");
+    expect(stage).toContain("cloudflare-production-project.json");
+    expect(stage).toContain("cloudflare-pages-final-posture.json");
+    expect(cloudflarePostureValidator).toContain(
+      "productionDeploymentsEnabled",
+    );
+    expect(cloudflarePostureValidator).toContain("previewDeploymentSetting");
+    expect(stage).toContain("git_auto_deploy_posture_sha256");
+    expect(stage).toContain("git_auto_deploy_posture");
+    expect(stage).toContain("cloudflare.schema_version !== 4");
+    expect(stage).toContain(
+      'cloudflare.git_auto_deploy_posture?.status !== "passed"',
+    );
+    expect(stage).toContain(
+      "Re-attest both Pages projects immediately before final attestation",
+    );
+    const runtimeIndex = stage.indexOf(
+      "Verify immutable and canonical staging runtimes",
+    );
+    const finalPostureIndex = stage.indexOf(
+      "Re-attest both Pages projects immediately before final attestation",
+    );
+    const attestationIndex = stage.indexOf(
+      "Create Cloudflare staging attestation",
+    );
+    expect(finalPostureIndex).toBeGreaterThan(runtimeIndex);
+    expect(attestationIndex).toBeGreaterThan(finalPostureIndex);
+    const finalPostureBlock = stage.slice(finalPostureIndex, attestationIndex);
+    expect(finalPostureBlock).toContain(
+      "--staging-project-file cloudflare-staging-project-final.json",
+    );
+    expect(finalPostureBlock).toContain(
+      "--production-project-file cloudflare-production-project-final.json",
+    );
+    expect(
+      finalPostureBlock.match(/release:verify-runtime-config/g),
+    ).toHaveLength(2);
+  });
 
-   it("enforces Stripe test mode in API posture and live runtime proof", () => {
-     const stage = workflow("stage-release.yml");
+  it("enforces Stripe test mode in API posture and live runtime proof", () => {
+    const stage = workflow("stage-release.yml");
 
-     expect(cloudflarePostureValidator).toContain(
-       "VITE_STRIPE_PUBLISHABLE_KEY",
-     );
-     expect(cloudflarePostureValidator).toContain(
-       "VITE_STRIPE_RUNTIME_MODE",
-     );
-     expect(cloudflarePostureValidator).toContain("VITE_BILLING_MODE");
-     expect(stage).toContain("--staging-project-file");
-     expect(stage).toContain("--production-project-file");
-     expect(stage).toContain("stripe_runtime");
-     expect(stage).toContain('status !== "test-or-disabled"');
-     expect(stage).toContain("production_price_reuse !== false");
-   });
+    expect(cloudflarePostureValidator).toContain("VITE_STRIPE_PUBLISHABLE_KEY");
+    expect(cloudflarePostureValidator).toContain("VITE_STRIPE_RUNTIME_MODE");
+    expect(cloudflarePostureValidator).toContain("VITE_BILLING_MODE");
+    expect(stage).toContain("--staging-project-file");
+    expect(stage).toContain("--production-project-file");
+    expect(stage).toContain("stripe_runtime");
+    expect(stage).toContain('status !== "test-or-disabled"');
+    expect(stage).toContain("production_price_reuse !== false");
+  });
 
-   it("proves authorized short-lived TURN issuance on immutable and canonical staging URLs", () => {
-     const stage = workflow("stage-release.yml");
+  it("proves authorized short-lived TURN issuance on immutable and canonical staging URLs", () => {
+    const stage = workflow("stage-release.yml");
 
-     expect(stage).toContain("STAGING_TURN_PROOF_EMAIL:");
-     expect(stage).toContain("STAGING_DEMO_PASSWORD:");
-     expect(stage).toContain("/auth/v1/token?grant_type=password");
-     expect(stage).toContain("/rest/v1/professionals?select=id");
-     expect(stage).toContain("PRODUCTION_DEPLOY_TURN_ACCESS_TOKEN");
-     expect(stage).toContain("PRODUCTION_DEPLOY_TURN_ROOM_ID");
-     expect(stage).toContain("target?.publicApi?.schemaVersion !== 3");
-     expect(stage).toMatch(
-       /turnCredentialIssuance\?\.httpStatus !==\s+200/,
-     );
-     expect(stage).toMatch(
-       /turnCredentialIssuance\?\.credentialsRedacted !==\s+true/,
-     );
-    });
+    expect(stage).toContain("STAGING_TURN_PROOF_EMAIL:");
+    expect(stage).toContain("STAGING_DEMO_PASSWORD:");
+    expect(stage).toContain("/auth/v1/token?grant_type=password");
+    expect(stage).toContain("/rest/v1/professionals?select=id");
+    expect(stage).toContain("PRODUCTION_DEPLOY_TURN_ACCESS_TOKEN");
+    expect(stage).toContain("PRODUCTION_DEPLOY_TURN_ROOM_ID");
+    expect(stage).toContain("target?.publicApi?.schemaVersion !== 3");
+    expect(stage).toMatch(/turnCredentialIssuance\?\.httpStatus !==\s+200/);
+    expect(stage).toMatch(
+      /turnCredentialIssuance\?\.credentialsRedacted !==\s+true/,
+    );
+  });
 
-   it("allows one staging-account Pages token while preserving production isolation", () => {
-     for (const [workflowName, jobName, stepName] of [
-       [
-         "bootstrap-cloudflare-staging-pages.yml",
-         "bootstrap",
-         "Preflight empty or already bootstrapped staging project",
-       ],
-       [
-         "stage-release.yml",
-         "cloudflare-staging-preflight",
-         "Verify Cloudflare staging identity credentials and canonical baseline",
-       ],
-     ]) {
-       const isolated = executeCloudflareStagingIsolation(
-         workflowName,
-         jobName,
-         stepName,
-       );
-       expect(
-         isolated.status,
-         `${workflowName}: ${isolated.stderr || isolated.stdout}`,
-       ).toBe(0);
-     }
-
-     for (const [name, overrides] of [
-       ["account reuse", { STAGING_CF_ACCOUNT_ID: "production-account" }],
-       ["project reuse", { STAGING_PROJECT: "maiprop-listing-site" }],
-       [
-         "staging read token reused in production",
-         { STAGING_CF_READ_TOKEN: "production-pages-read-token" },
-       ],
-       [
-         "staging edit token reused in production",
-         { STAGING_CF_EDIT_TOKEN: "production-pages-read-token" },
-       ],
-     ]) {
-       const result = executeCloudflareStagingIsolation(
-         "stage-release.yml",
-         "cloudflare-staging-preflight",
-         "Verify Cloudflare staging identity credentials and canonical baseline",
-         overrides,
-       );
-       expect(
-         result.status,
-         `${name}: ${result.stderr || result.stdout}`,
-       ).not.toBe(0);
-     }
-   });
-
-   it("isolates staging Pages reads and writes in a dedicated Cloudflare account", () => {
-      const stage = workflow("stage-release.yml");
-      const parsed = yaml.load(stage);
-      const job = parsed.jobs["cloudflare-staging"];
-     const deploy = job.steps.find(
-       (step) => step.name === "Deploy exact artifact to dedicated staging project",
-     );
-     const preflight = job.steps.find(
-       (step) => step.name === "Verify pre-provisioned dedicated Pages project",
-     );
-
-     expect(deploy.with.apiToken).toBe(
-       "${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}",
-     );
-      expect(deploy.with.accountId).toBe(
-        "${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}",
+  it("allows one staging-account Pages token while preserving production isolation", () => {
+    for (const [workflowName, jobName, stepName] of [
+      [
+        "bootstrap-cloudflare-staging-pages.yml",
+        "bootstrap",
+        "Preflight empty or already bootstrapped staging project",
+      ],
+      [
+        "stage-release.yml",
+        "cloudflare-staging-preflight",
+        "Verify Cloudflare staging identity credentials and canonical baseline",
+      ],
+    ]) {
+      const isolated = executeCloudflareStagingIsolation(
+        workflowName,
+        jobName,
+        stepName,
       );
-      expect(preflight.env.STAGING_CF_READ_TOKEN).toBe(
+      expect(
+        isolated.status,
+        `${workflowName}: ${isolated.stderr || isolated.stdout}`,
+      ).toBe(0);
+    }
+
+    for (const [name, overrides] of [
+      ["account reuse", { STAGING_CF_ACCOUNT_ID: "production-account" }],
+      ["project reuse", { STAGING_PROJECT: "maiprop-listing-site" }],
+      [
+        "staging read token reused in production",
+        { STAGING_CF_READ_TOKEN: "production-pages-read-token" },
+      ],
+      [
+        "staging edit token reused in production",
+        { STAGING_CF_EDIT_TOKEN: "production-pages-read-token" },
+      ],
+    ]) {
+      const result = executeCloudflareStagingIsolation(
+        "stage-release.yml",
+        "cloudflare-staging-preflight",
+        "Verify Cloudflare staging identity credentials and canonical baseline",
+        overrides,
+      );
+      expect(
+        result.status,
+        `${name}: ${result.stderr || result.stdout}`,
+      ).not.toBe(0);
+    }
+  });
+
+  it("isolates staging Pages reads and writes in a dedicated Cloudflare account", () => {
+    const stage = workflow("stage-release.yml");
+    const parsed = yaml.load(stage);
+    const job = parsed.jobs["cloudflare-staging"];
+    const deploy = job.steps.find(
+      (step) =>
+        step.name === "Deploy exact artifact to dedicated staging project",
+    );
+    const preflight = job.steps.find(
+      (step) => step.name === "Verify pre-provisioned dedicated Pages project",
+    );
+
+    expect(deploy.with.apiToken).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}",
+    );
+    expect(deploy.with.accountId).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}",
+    );
+    expect(preflight.env.STAGING_CF_READ_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}",
+    );
+    expect(preflight.env.STAGING_CF_ACCOUNT_ID).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}",
+    );
+    expect(preflight.env.PRODUCTION_CF_READ_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}",
+    );
+    expect(preflight.env.PRODUCTION_CF_ACCOUNT_ID).toBe(
+      "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+    );
+    expect(preflight.run).toContain(
+      'if [ "$STAGING_CF_ACCOUNT_ID" = "$PRODUCTION_CF_ACCOUNT_ID" ]',
+    );
+    expect(preflight.run).toContain(
+      "Staging and production Cloudflare account IDs must be distinct.",
+    );
+    expect(stage).not.toContain(
+      "apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}",
+    );
+    for (const step of job.steps.filter(
+      (candidate) =>
+        typeof candidate.run === "string" &&
+        candidate.run.includes("api.cloudflare.com") &&
+        candidate.run.includes("$STAGING_CF_ACCOUNT_ID"),
+    )) {
+      const performsRollback = step.run.includes("--request POST");
+      expect(step.env.STAGING_CF_READ_TOKEN, step.name).toBe(
         "${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}",
       );
-     expect(preflight.env.STAGING_CF_ACCOUNT_ID).toBe(
-       "${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}",
-     );
-     expect(preflight.env.PRODUCTION_CF_READ_TOKEN).toBe(
-       "${{ secrets.CLOUDFLARE_PAGES_READ_TOKEN }}",
-     );
-     expect(preflight.env.PRODUCTION_CF_ACCOUNT_ID).toBe(
-       "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
-     );
-     expect(preflight.run).toContain(
-       'if [ "$STAGING_CF_ACCOUNT_ID" = "$PRODUCTION_CF_ACCOUNT_ID" ]',
-     );
-     expect(preflight.run).toContain(
-       "Staging and production Cloudflare account IDs must be distinct.",
-     );
-      expect(stage).not.toContain(
-        "apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}",
-      );
-       for (const step of job.steps.filter(
-        (candidate) =>
-          typeof candidate.run === "string" &&
-          candidate.run.includes("api.cloudflare.com") &&
-          candidate.run.includes("$STAGING_CF_ACCOUNT_ID"),
-      )) {
-        const performsRollback = step.run.includes("--request POST");
-        expect(step.env.STAGING_CF_READ_TOKEN, step.name).toBe(
-          "${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}",
+      if (performsRollback) {
+        expect(step.env.STAGING_CF_EDIT_TOKEN, step.name).toBe(
+          "${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}",
         );
-        if (performsRollback) {
-          expect(step.env.STAGING_CF_EDIT_TOKEN, step.name).toBe(
-            "${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}",
+      } else {
+        expect(JSON.stringify(step.env), step.name).not.toContain(
+          "CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN",
+        );
+      }
+    }
+    for (const step of job.steps) {
+      if (typeof step.run !== "string") continue;
+      for (const request of curlRequestsTo(step.run, "STAGING_CF_ACCOUNT_ID")) {
+        if (request.includes("--request POST")) {
+          expect(request, step.name).toContain(
+            "Authorization: Bearer $STAGING_CF_EDIT_TOKEN",
           );
         } else {
-          expect(JSON.stringify(step.env), step.name).not.toContain(
-            "CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN",
+          expect(request, step.name).toContain(
+            "Authorization: Bearer $STAGING_CF_READ_TOKEN",
           );
-         }
-       }
-       for (const step of job.steps) {
-         if (typeof step.run !== "string") continue;
-         for (const request of curlRequestsTo(
-           step.run,
-           "STAGING_CF_ACCOUNT_ID",
-         )) {
-           if (request.includes("--request POST")) {
-             expect(request, step.name).toContain(
-               'Authorization: Bearer $STAGING_CF_EDIT_TOKEN',
-             );
-           } else {
-             expect(request, step.name).toContain(
-               'Authorization: Bearer $STAGING_CF_READ_TOKEN',
-             );
-             expect(request, step.name).not.toContain("STAGING_CF_EDIT_TOKEN");
-             expect(request, step.name).not.toContain("PRODUCTION_CF_READ_TOKEN");
-           }
-         }
-       }
-     });
+          expect(request, step.name).not.toContain("STAGING_CF_EDIT_TOKEN");
+          expect(request, step.name).not.toContain("PRODUCTION_CF_READ_TOKEN");
+        }
+      }
+    }
+  });
 
-    it("durably reconciles staging mutation outcomes and guards the final rollback read", () => {
-      const parsed = yaml.load(workflow("stage-release.yml"));
-      const steps = parsed.jobs["cloudflare-staging"].steps;
-      const intent = steps.find(
-        (step) => step.name === "Record staging Pages mutation attempt",
-      );
-      const deploy = steps.find(
-        (step) => step.name === "Deploy exact artifact to dedicated staging project",
-      );
-      const reconciliation = steps.find(
-        (step) => step.name === "Fetch and validate exact Pages deployment",
-      );
-      const rollback = steps.find(
-        (step) => step.name === "Roll back failed staging candidate",
-      );
-      const finalRead = rollback.run.lastIndexOf(
-        "cloudflare-staging-rollback-current-project-final.json",
-      );
-      const authorization = rollback.run.lastIndexOf(
-        "cloudflare-pages-candidate-guard.mjs authorize-rollback",
-      );
-      const post = rollback.run.indexOf("--request POST", authorization);
+  it("durably reconciles staging mutation outcomes and guards the final rollback read", () => {
+    const parsed = yaml.load(workflow("stage-release.yml"));
+    const steps = parsed.jobs["cloudflare-staging"].steps;
+    const intent = steps.find(
+      (step) => step.name === "Record staging Pages mutation attempt",
+    );
+    const deploy = steps.find(
+      (step) =>
+        step.name === "Deploy exact artifact to dedicated staging project",
+    );
+    const reconciliation = steps.find(
+      (step) => step.name === "Fetch and validate exact Pages deployment",
+    );
+    const rollback = steps.find(
+      (step) => step.name === "Roll back failed staging candidate",
+    );
+    const finalRead = rollback.run.lastIndexOf(
+      "cloudflare-staging-rollback-current-project-final.json",
+    );
+    const authorization = rollback.run.lastIndexOf(
+      "cloudflare-pages-candidate-guard.mjs authorize-rollback",
+    );
+    const post = rollback.run.indexOf("--request POST", authorization);
 
-      expect(intent.run).toContain("mutation_attempted=true");
-      expect(intent.run).toContain("cloudflare-staging-mutation-attempt.json");
-      expect(steps.indexOf(intent)).toBeLessThan(steps.indexOf(deploy));
-      expect(reconciliation.if).toContain("always()");
-      expect(reconciliation.if).toContain(
-        "steps.mutation-intent.outputs.mutation_attempted == 'true'",
-      );
-      expect(reconciliation.run).toContain(
-        "cloudflare-pages-candidate-guard.mjs resolve-candidate",
-      );
-      expect(reconciliation.run).toContain(
-        "cloudflare-staging-candidate-receipt.json",
-      );
-      expect(rollback.if).toContain(
-        "steps.mutation-intent.outputs.mutation_attempted == 'true'",
-      );
-      expect(finalRead).toBeGreaterThan(-1);
-      expect(authorization).toBeGreaterThan(finalRead);
-      expect(post).toBeGreaterThan(authorization);
-      expect(rollback.run.slice(finalRead, post)).not.toMatch(/npm |gh |sleep /);
-      expect(rollback.run).toContain(
-        "Cloudflare Pages rollback has no provider-side compare-and-swap precondition",
-      );
+    expect(intent.run).toContain("mutation_attempted=true");
+    expect(intent.run).toContain("cloudflare-staging-mutation-attempt.json");
+    expect(steps.indexOf(intent)).toBeLessThan(steps.indexOf(deploy));
+    expect(reconciliation.if).toContain("always()");
+    expect(reconciliation.if).toContain(
+      "steps.mutation-intent.outputs.mutation_attempted == 'true'",
+    );
+    expect(reconciliation.run).toContain(
+      "cloudflare-pages-candidate-guard.mjs resolve-candidate",
+    );
+    expect(reconciliation.run).toContain(
+      "cloudflare-staging-candidate-receipt.json",
+    );
+    expect(rollback.if).toContain(
+      "steps.mutation-intent.outputs.mutation_attempted == 'true'",
+    );
+    expect(finalRead).toBeGreaterThan(-1);
+    expect(authorization).toBeGreaterThan(finalRead);
+    expect(post).toBeGreaterThan(authorization);
+    expect(rollback.run.slice(finalRead, post)).not.toMatch(/npm |gh |sleep /);
+    expect(rollback.run).toContain(
+      "Cloudflare Pages rollback has no provider-side compare-and-swap precondition",
+    );
+  });
+
+  it("serializes every GitHub-controlled Cloudflare mutation lane", () => {
+    const staging = yaml.load(workflow("stage-release.yml"));
+    const production = yaml.load(workflow("deploy-production-release.yml"));
+    const recovery = yaml.load(
+      workflow("direct-cloudflare-production-deploy.yml"),
+    );
+
+    expect(staging.concurrency).toEqual({
+      group: "maiprop-staging-release",
+      "cancel-in-progress": false,
     });
-
-    it("serializes every GitHub-controlled Cloudflare mutation lane", () => {
-      const staging = yaml.load(workflow("stage-release.yml"));
-      const production = yaml.load(workflow("deploy-production-release.yml"));
-      const recovery = yaml.load(
-        workflow("direct-cloudflare-production-deploy.yml"),
-      );
-
-      expect(staging.concurrency).toEqual({
-        group: "maiprop-staging-release",
-        "cancel-in-progress": false,
-      });
-      expect(production.concurrency).toEqual({
-        group: "maiprop-production-release",
-        "cancel-in-progress": false,
-      });
-      expect(recovery.concurrency).toEqual(production.concurrency);
+    expect(production.concurrency).toEqual({
+      group: "maiprop-production-release",
+      "cancel-in-progress": false,
     });
+    expect(recovery.concurrency).toEqual(production.concurrency);
+  });
 
-   it("attests that the exact Pages deployment is canonical at the stable staging origin", () => {
+  it("attests that the exact Pages deployment is canonical at the stable staging origin", () => {
     const stage = workflow("stage-release.yml");
 
     expect(stage).toContain("cloudflare-staging-project-after.json");
     expect(stage).toContain(".result.canonical_deployment.id");
     expect(stage).toContain("canonical_deployment_id");
     expect(stage).toContain("STAGING_APP_URL");
-     expect(stage).toContain("stable-release-marker.json");
-     expect(stage).toContain("stable-runtime-config.json");
-     expect(stage).toContain("cloudflare-staging-candidate-receipt.json");
-     expect(stage).toContain("cloudflare-staging-mutation-attempt.json");
-     expect(stage).toContain(
-       'secret_binding_verification: "allowlisted-name-and-type"',
-     );
-     expect(stage).toContain(
-       'authenticated_live_functional_proof: "passed"',
-     );
+    expect(stage).toContain("stable-release-marker.json");
+    expect(stage).toContain("stable-runtime-config.json");
+    expect(stage).toContain("cloudflare-staging-candidate-receipt.json");
+    expect(stage).toContain("cloudflare-staging-mutation-attempt.json");
+    expect(stage).toContain(
+      'secret_binding_verification: "allowlisted-name-and-type"',
+    );
+    expect(stage).toContain('authenticated_live_functional_proof: "passed"');
   });
 
   it("uploads only minimized Cloudflare evidence and never raw binding-bearing responses", () => {
@@ -3902,23 +4332,19 @@ describe("production release train", () => {
     const uploadStart = stage.indexOf(
       "Upload exact Cloudflare staging evidence",
     );
-    const rollbackStart = stage.indexOf(
-      "Roll back failed staging candidate",
-    );
+    const rollbackStart = stage.indexOf("Roll back failed staging candidate");
     const uploadBlock = stage.slice(uploadStart, rollbackStart);
 
     expect(uploadBlock).toContain(
       "cloudflare-staging-deployment-evidence.json",
     );
-    expect(uploadBlock).toContain(
-      "cloudflare-staging-canonical-evidence.json",
-    );
+    expect(uploadBlock).toContain("cloudflare-staging-canonical-evidence.json");
     expect(uploadBlock).toContain(
       "cloudflare-staging-project-identity-evidence.json",
     );
-     expect(uploadBlock).toContain("cloudflare-pages-final-posture.json");
-     expect(uploadBlock).toContain("cloudflare-staging-candidate-receipt.json");
-     expect(uploadBlock).toContain("cloudflare-staging-mutation-attempt.json");
+    expect(uploadBlock).toContain("cloudflare-pages-final-posture.json");
+    expect(uploadBlock).toContain("cloudflare-staging-candidate-receipt.json");
+    expect(uploadBlock).toContain("cloudflare-staging-mutation-attempt.json");
     expect(uploadBlock).not.toContain("cloudflare-staging-deployment.json");
     expect(uploadBlock).not.toContain(
       "cloudflare-staging-canonical-deployment.json",
@@ -4027,7 +4453,9 @@ describe("production release train", () => {
 
     expect(runbook).toContain("Immutable release candidate built");
     expect(runbook).toContain("PRODUCTION_RELEASE_ENABLED");
-    expect(runbook).toContain("enabled only through the protected coordinated release");
+    expect(runbook).toContain(
+      "enabled only through the protected coordinated release",
+    );
     expect(runbook).toContain("backend proof");
     expect(runbook).toContain("N-1 frontend");
     expect(runbook).toContain("SITE_LOCK_PASSWORD");
