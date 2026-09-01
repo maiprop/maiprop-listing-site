@@ -15,10 +15,7 @@ import {
   type PublicApiCtx,
   type PublicApiEnv,
 } from "./_cache";
-import {
-  getSupabaseRuntime,
-  getSupabaseServiceRuntime,
-} from "../../_seo";
+import { getSupabaseRuntime } from "../../_seo";
 import { PUBLIC_AUCTION_CANDIDATES_PATH } from "../../_publicListingProjection";
 import { interleaveCatalogueStreams } from "./_listingRank";
 import { normalizePublicPromotionState } from "./_promotionState";
@@ -125,6 +122,7 @@ class ExactAuctionIdentityError extends Error {
 type AuctionEntitlement = {
   limit: number;
   authenticated: boolean;
+  accessToken: string | null;
 };
 
 type AuctionCandidateLimits = {
@@ -520,6 +518,7 @@ async function fetchDbAuctionStream(
   stream: "priority" | "organic",
   now: string,
   poolTag?: string,
+  accessToken: string | null = null,
 ): Promise<AuctionRow[]> {
   const params = new URLSearchParams([
     ["p_limit", String(limit)],
@@ -528,7 +527,7 @@ async function fetchDbAuctionStream(
     ["p_now", now],
   ]);
   if (poolTag) params.set("p_pool_tag", poolTag);
-  const runtime = getSupabaseServiceRuntime(env);
+  const runtime = getSupabaseRuntime(env);
   if (!runtime) throw new Error("missing-runtime");
 
   const path = PUBLIC_AUCTION_CANDIDATES_PATH;
@@ -537,12 +536,13 @@ async function fetchDbAuctionStream(
 
   let response: Response;
   try {
+    const authorizationToken = accessToken ?? runtime.key;
     response = await fetchWithAbortableTimeout(
       url,
       {
         headers: {
           apikey: runtime.key,
-          Authorization: `Bearer ${runtime.key}`,
+          Authorization: `Bearer ${authorizationToken}`,
           Accept: "application/json",
         },
       },
@@ -571,10 +571,11 @@ async function fetchDbAuctionStreams(
   limits: AuctionCandidateLimits,
   now: string,
   poolTag?: string,
+  accessToken: string | null = null,
 ): Promise<AuctionStreams> {
   const [priorityRows, organicRows] = await Promise.all([
-    fetchDbAuctionStream(env, limits.priority, "priority", now, poolTag),
-    fetchDbAuctionStream(env, limits.organic, "organic", now, poolTag),
+    fetchDbAuctionStream(env, limits.priority, "priority", now, poolTag, accessToken),
+    fetchDbAuctionStream(env, limits.organic, "organic", now, poolTag, accessToken),
   ]);
   return { priorityRows, organicRows };
 }
@@ -586,15 +587,17 @@ function hasAuctionRows(streams: AuctionStreams): boolean {
 async function fetchCanonicalAuctionStreams(
   env: PublicApiEnv,
   now: string,
+  accessToken: string | null = null,
 ): Promise<AuctionStreams> {
   const scheduledPool = await fetchDbAuctionStreams(
     env,
     FULL_AUCTION_CANDIDATE_LIMITS,
     now,
     todayAuctionPoolTag(),
+    accessToken,
   );
   if (hasAuctionRows(scheduledPool)) return scheduledPool;
-  return fetchDbAuctionStreams(env, FULL_AUCTION_CANDIDATE_LIMITS, now);
+  return fetchDbAuctionStreams(env, FULL_AUCTION_CANDIDATE_LIMITS, now, undefined, accessToken);
 }
 
 async function fetchWithAbortableTimeout(
@@ -645,16 +648,16 @@ async function resolveAuctionEntitlement(
 ): Promise<AuctionEntitlement> {
   const freeLimit = Math.min(requestedLimit, PUBLIC_AUCTION_LIMIT_MAX);
   if (requestedLimit <= PUBLIC_AUCTION_LIMIT_MAX) {
-    return { limit: freeLimit, authenticated: false };
+    return { limit: freeLimit, authenticated: false, accessToken: null };
   }
 
   const token = bearerToken(ctx.request);
   const publicRuntime = getSupabaseRuntime(ctx.env);
-  const serviceRuntime = getSupabaseServiceRuntime(ctx.env);
-  if (!token || !publicRuntime || !serviceRuntime) {
-    return { limit: freeLimit, authenticated: false };
+  if (!token || !publicRuntime) {
+    return { limit: freeLimit, authenticated: false, accessToken: null };
   }
 
+  let validatedAccessToken: string | null = null;
   try {
     const userResponse = await fetchWithAbortableTimeout(
       new URL("/auth/v1/user", publicRuntime.url),
@@ -668,19 +671,22 @@ async function resolveAuctionEntitlement(
       AUCTION_AUTH_TIMEOUT_MS,
       ctx.request.signal,
     );
-    if (!userResponse.ok) return { limit: freeLimit, authenticated: false };
+    if (!userResponse.ok) {
+      return { limit: freeLimit, authenticated: false, accessToken: null };
+    }
     const user = await userResponse.json() as { id?: unknown };
     if (typeof user.id !== "string" || !USER_ID_RE.test(user.id)) {
-      return { limit: freeLimit, authenticated: false };
+      return { limit: freeLimit, authenticated: false, accessToken: null };
     }
+    validatedAccessToken = token;
 
     const limitResponse = await fetchWithAbortableTimeout(
-      new URL("/rest/v1/rpc/get_auction_listing_visible_limit", serviceRuntime.url),
+      new URL("/rest/v1/rpc/get_auction_listing_visible_limit", publicRuntime.url),
       {
         method: "POST",
         headers: {
-          apikey: serviceRuntime.key,
-          Authorization: `Bearer ${serviceRuntime.key}`,
+          apikey: publicRuntime.key,
+          Authorization: `Bearer ${token}`,
           Accept: "application/json",
           "Content-Type": "application/json",
         },
@@ -689,9 +695,13 @@ async function resolveAuctionEntitlement(
       AUCTION_AUTH_TIMEOUT_MS,
       ctx.request.signal,
     );
-    if (!limitResponse.ok) return { limit: freeLimit, authenticated: true };
+    if (!limitResponse.ok) {
+      return { limit: freeLimit, authenticated: true, accessToken: token };
+    }
     const configuredLimit = visibleLimitFromPayload(await limitResponse.json());
-    if (!Number.isFinite(configuredLimit)) return { limit: freeLimit, authenticated: true };
+    if (!Number.isFinite(configuredLimit)) {
+      return { limit: freeLimit, authenticated: true, accessToken: token };
+    }
     return {
       limit: Math.min(
         requestedLimit,
@@ -699,20 +709,29 @@ async function resolveAuctionEntitlement(
         Math.max(PUBLIC_AUCTION_LIMIT_MAX, Math.trunc(configuredLimit ?? 0)),
       ),
       authenticated: true,
+      accessToken: token,
     };
   } catch {
-    return { limit: freeLimit, authenticated: false };
+    return {
+      limit: freeLimit,
+      authenticated: validatedAccessToken !== null,
+      accessToken: validatedAccessToken,
+    };
   }
 }
 
-export async function fetchPublicAuctionRows(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
+export async function fetchPublicAuctionRows(
+  env: PublicApiEnv,
+  limit: number,
+  accessToken: string | null = null,
+): Promise<AuctionRow[]> {
   const requestedLimit = Math.min(
     PUBLIC_AUCTION_LIMIT_MAX,
     Math.max(1, Math.trunc(limit)),
   );
   const nowMs = auctionRevisionTimeMs();
   const now = new Date(nowMs).toISOString();
-  const streams = await fetchCanonicalAuctionStreams(env, now);
+  const streams = await fetchCanonicalAuctionStreams(env, now, accessToken);
   return rankAuctionRows(
     streams.priorityRows,
     streams.organicRows,
@@ -791,10 +810,11 @@ async function fetchCanonicalAuctionPage(
   entitlementLimit: number,
   page: number,
   pageSize: number,
+  accessToken: string | null = null,
 ): Promise<AuctionPagePayload> {
   const nowMs = auctionRevisionTimeMs();
   const now = new Date(nowMs).toISOString();
-  const streams = await fetchCanonicalAuctionStreams(env, now);
+  const streams = await fetchCanonicalAuctionStreams(env, now, accessToken);
   const canonicalRows = rankAuctionRows(
     streams.priorityRows,
     streams.organicRows,
@@ -970,7 +990,7 @@ function privateAuctionResponse(response: Response): Response {
 }
 
 export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
-  if (!getSupabaseServiceRuntime(ctx.env)) return missingRuntime();
+  if (!getSupabaseRuntime(ctx.env)) return missingRuntime();
 
   const exactResult = parseExactAuctionFilters(requestUrl.searchParams);
   if (!exactResult.valid) return invalidExactAuctionFilter();
@@ -1049,6 +1069,7 @@ export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promis
           entitlement.limit,
           page,
           pageSize,
+          entitlement.accessToken,
         );
         if (!exactAuctionPayloadMatches(payload, exactResult.filters)) {
           return invalidExactAuctionIdentity();
@@ -1056,7 +1077,11 @@ export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promis
         return jsonResponse(payload);
       }
       const nowMs = auctionRevisionTimeMs();
-      const rows = await fetchPublicAuctionRows(ctx.env, entitlement.limit);
+      const rows = await fetchPublicAuctionRows(
+        ctx.env,
+        entitlement.limit,
+        entitlement.accessToken,
+      );
       return jsonResponse(auctionPagePayload(
         rows,
         rows,

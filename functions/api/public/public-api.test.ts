@@ -434,7 +434,7 @@ function installSupabaseFetch(): FetchMock {
       ]);
     }
 
-    if (url.pathname === "/rest/v1/rpc/get_public_auction_candidates") {
+    if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
       if (url.searchParams.get("p_stream") === "priority") {
         return jsonRows([{
           id: "db-2",
@@ -3032,14 +3032,14 @@ describe("public auctions endpoint", () => {
     const rows = await fetchPublicAuctionRows(env, 1);
     expect(rows.map((row) => row.id)).toEqual(["db-2"]);
 
-    expect(fetchUrls("/rest/v1/rpc/get_public_auction_candidates")[0]).toBeDefined();
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")[0]).toBeDefined();
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
   it("keeps Spotlight visual-only when ordering auctions", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
       if (url.searchParams.get("p_stream") === "priority") return jsonRows([]);
       return jsonRows([
         {
@@ -3069,7 +3069,7 @@ describe("public auctions endpoint", () => {
   it("treats expired auction promotion flags as organic response state", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
       if (url.searchParams.get("p_stream") === "priority") return jsonRows([]);
       return jsonRows([
         {
@@ -3103,7 +3103,7 @@ describe("public auctions endpoint", () => {
   it("limits active Priority auctions to three per 12 while preserving stream order", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
       const priority = url.searchParams.get("p_stream") === "priority";
       const prefix = priority ? "priority" : "organic";
       const count = priority ? 5 : 12;
@@ -3136,7 +3136,7 @@ describe("public auctions endpoint", () => {
     ]);
     expect(rows.filter((row) => Number(row.priority_placement) > 0)).toHaveLength(3);
 
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_now")).toMatch(/T/);
@@ -3155,7 +3155,7 @@ describe("public auctions endpoint", () => {
     }));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
       const limit = Number(url.searchParams.get("p_limit") ?? priorityRows.length);
       return url.searchParams.get("p_stream") === "priority"
         ? jsonRows(priorityRows.slice(0, limit))
@@ -3172,7 +3172,7 @@ describe("public auctions endpoint", () => {
       "priority-only-5",
       "priority-only-6",
     ]);
-    const priorityLimits = fetchUrls("/rest/v1/rpc/get_public_auction_candidates")
+    const priorityLimits = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")
       .filter((url) => url.searchParams.get("p_stream") === "priority")
       .map((url) => url.searchParams.get("p_limit"));
     expect(priorityLimits).toEqual(["600"]);
@@ -3204,7 +3204,7 @@ describe("public auctions endpoint", () => {
     ];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
       return url.searchParams.get("p_stream") === "priority"
         ? jsonRows([])
         : jsonRows(rowsByMunicipality);
@@ -3221,7 +3221,7 @@ describe("public auctions endpoint", () => {
       "Patras",
     ]);
 
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
@@ -3239,7 +3239,7 @@ describe("public auctions endpoint", () => {
       }));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
       return url.searchParams.get("p_stream") === "priority"
         ? jsonRows([])
         : jsonRows(clusteredRows);
@@ -3248,7 +3248,7 @@ describe("public auctions endpoint", () => {
     expect(rows).toHaveLength(48);
     expect(rows.every((row) => row.city === "Agrinio")).toBe(true);
 
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
@@ -3264,7 +3264,7 @@ describe("public auctions endpoint", () => {
     const rows = await fetchPublicAuctionRows(env, 2);
     expect(rows).toHaveLength(2);
 
-    const dbCalls = fetchUrls("/rest/v1/rpc/get_public_auction_candidates");
+    const dbCalls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
     expect(dbCalls).toHaveLength(4);
     expect(dbCalls[0].searchParams.get("p_pool_tag")).toMatch(/^auction_pool:\d{4}-\d{2}-\d{2}$/);
     expect(dbCalls[1].searchParams.get("p_pool_tag")).toMatch(/^auction_pool:\d{4}-\d{2}-\d{2}$/);
@@ -3293,18 +3293,18 @@ describe("public auctions endpoint", () => {
   it("queries the narrow auction RPC with bounded candidate arguments", async () => {
     await expect(fetchPublicAuctionRows(env, 1)).resolves.toMatchObject([{ id: "db-2" }]);
 
-    const dbUrl = fetchUrls("/rest/v1/rpc/get_public_auction_candidates")[0];
+    const dbUrl = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")[0];
     expect(dbUrl.searchParams.get("p_stream")).toBe("priority");
     expect(dbUrl.searchParams.get("p_pool_tag")).toMatch(/^auction_pool:\d{4}-\d{2}-\d{2}$/);
     expect(dbUrl.searchParams.get("p_limit")).toBe("600");
     expect(dbUrl.searchParams.get("p_today")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(dbUrl.searchParams.get("p_now")).toMatch(/T/);
-    expect(new Headers(initFor("/rest/v1/rpc/get_public_auction_candidates").headers).get("apikey"))
-      .toBe("service_role_test_key");
+    expect(new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidates").headers).get("apikey"))
+      .toBe("publishable_test_key");
     expect(
-      new Headers(initFor("/rest/v1/rpc/get_public_auction_candidates").headers)
+      new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidates").headers)
         .get("Authorization"),
-    ).toBe("Bearer service_role_test_key");
+    ).toBe("Bearer publishable_test_key");
   });
 
   it("physically aborts timed-out canonical candidate reads", async () => {
@@ -3312,7 +3312,7 @@ describe("public auctions endpoint", () => {
     const candidateSignals: AbortSignal[] = [];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") return jsonRows([]);
       const signal = init?.signal;
       if (signal) candidateSignals.push(signal);
       return await new Promise<Response>((_resolve, reject) => {
@@ -3326,7 +3326,7 @@ describe("public auctions endpoint", () => {
       const pending = fetchPublicAuctionRows(env, 1);
       const rejection = expect(pending).rejects.toMatchObject({
         name: "SupabaseTransientError",
-        path: "/rest/v1/rpc/get_public_auction_candidates",
+        path: "/rest/v1/rpc/get_visible_auction_candidates",
       });
       await vi.advanceTimersByTimeAsync(2_500);
 
@@ -3372,7 +3372,7 @@ describe("public auctions endpoint", () => {
     ];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") {
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") {
         return jsonRows([]);
       }
       const limit = Number(url.searchParams.get("p_limit") ?? 600);
@@ -3388,7 +3388,7 @@ describe("public auctions endpoint", () => {
       canonical.slice(0, 6).map((row) => row.id),
     );
     const requestedLimits = fetchUrls(
-      "/rest/v1/rpc/get_public_auction_candidates",
+      "/rest/v1/rpc/get_visible_auction_candidates",
     ).map((url) => url.searchParams.get("p_limit"));
     expect(new Set(requestedLimits)).toEqual(new Set(["600"]));
   });
@@ -3423,7 +3423,7 @@ describe("public auctions endpoint", () => {
     ];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") {
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") {
         return jsonRows([]);
       }
       const limit = Number(url.searchParams.get("p_limit") ?? 600);
@@ -3453,7 +3453,7 @@ describe("public auctions endpoint", () => {
     const body = await res.json() as { data: unknown[] };
     expect(body.data).toHaveLength(2);
 
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
@@ -3476,7 +3476,7 @@ describe("public auctions endpoint", () => {
     const res = await auctionsRequest(makeCtx("https://portal.maiprop.co/api/public/auctions"));
     expect(res.status).toBe(200);
 
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
@@ -3489,7 +3489,7 @@ describe("public auctions endpoint", () => {
   it("excludes auctions with an unknown construction year when a year filter is active", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") {
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") {
         return jsonRows([]);
       }
       if (url.searchParams.get("p_stream") === "priority") return jsonRows([]);
@@ -3545,7 +3545,7 @@ describe("public auctions endpoint", () => {
     ];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") {
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") {
         return jsonRows([]);
       }
       return url.searchParams.get("p_stream") === "priority"
@@ -3580,7 +3580,7 @@ describe("public auctions endpoint", () => {
     );
     expect(body.facets.cities).toEqual(["Athens"]);
     expect(body.stats.mappableCount).toBe(0);
-    expect(fetchUrls("/rest/v1/rpc/get_public_auction_candidates")
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")
       .map((url) => url.searchParams.get("p_limit"))).toEqual(["600", "600"]);
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
@@ -3605,7 +3605,7 @@ describe("public auctions endpoint", () => {
           },
         }]);
       }
-      if (url.pathname === "/rest/v1/rpc/get_public_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
         throw new Error("exact lookup must not scan bounded auction streams");
       }
       return jsonRows([]);
@@ -3630,7 +3630,7 @@ describe("public auctions endpoint", () => {
     });
     expect(response.headers.get("X-Maiprop-Cache-Valid-Until"))
       .toBe(cataloguePublicationMetadata().retain_until);
-    expect(fetchUrls("/rest/v1/rpc/get_public_auction_candidates")).toHaveLength(0);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")).toHaveLength(0);
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
@@ -3653,7 +3653,7 @@ describe("public auctions endpoint", () => {
           },
         }]);
       }
-      if (url.pathname === "/rest/v1/rpc/get_public_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
         throw new Error("exact lookup must not scan bounded auction streams");
       }
       return jsonRows([]);
@@ -3671,7 +3671,7 @@ describe("public auctions endpoint", () => {
       p_listing_ids: [listingId],
       p_os_tag: null,
     });
-    expect(fetchUrls("/rest/v1/rpc/get_public_auction_candidates")).toHaveLength(0);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")).toHaveLength(0);
   });
 
   it("fails closed when an exact OS tag resolves more than one auction", async () => {
@@ -3687,7 +3687,7 @@ describe("public auctions endpoint", () => {
           headers: { "Content-Type": "application/json" },
         });
       }
-      if (url.pathname === "/rest/v1/rpc/get_public_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
         throw new Error("duplicate exact lookup must fail at the snapshot reader");
       }
       return jsonRows([]);
@@ -3702,7 +3702,7 @@ describe("public auctions endpoint", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Auction catalogue identity mismatch",
     });
-    expect(fetchUrls("/rest/v1/rpc/get_public_auction_candidates")).toHaveLength(0);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")).toHaveLength(0);
   });
 
   it("returns identical IDs and order for the same canonical revision", async () => {
@@ -3716,7 +3716,7 @@ describe("public auctions endpoint", () => {
     }));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/rpc/get_public_auction_candidates") {
+      if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidates") {
         return jsonRows([]);
       }
       return url.searchParams.get("p_stream") === "priority"
@@ -3745,7 +3745,7 @@ describe("public auctions endpoint", () => {
       expect(secondBody.revision).toBe(firstBody.revision);
       expect(secondBody.data.map((row) => row.id)).toEqual(firstBody.data.map((row) => row.id));
       expect(firstBody.data[0]?.id).toBe("promoted-until-noon");
-      expect(fetchUrls("/rest/v1/rpc/get_public_auction_candidates")
+      expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidates")
         .map((url) => url.searchParams.get("p_now")))
         .toEqual(Array(4).fill("2026-07-28T00:00:00.000Z"));
 
@@ -3760,28 +3760,34 @@ describe("public auctions endpoint", () => {
     }
   });
 
-  it("authorizes the expanded DB-backed window without invoking the live OS API", async () => {
+  it("validates a paid caller and forwards its bearer token to entitlement and candidates", async () => {
     const organicRows = Array.from({ length: 100 }, (_, index) => ({
       id: `paid-${String(index + 1).padStart(3, "0")}`,
       city: "Athens",
       auction_date: "2026-08-01",
       priority_placement: 0,
     }));
+    const candidateHeaders: Headers[] = [];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
       if (url.pathname === "/auth/v1/user") {
-        expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer paid-user-token");
+        const headers = new Headers(init?.headers);
+        expect(headers.get("apikey")).toBe("publishable_test_key");
+        expect(headers.get("Authorization")).toBe("Bearer paid-user-token");
         return new Response(JSON.stringify({ id: "00000000-0000-4000-8000-000000000001" }), {
           headers: { "Content-Type": "application/json" },
         });
       }
       if (url.pathname === "/rest/v1/rpc/get_auction_listing_visible_limit") {
-        expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer service_role_test_key");
+        const headers = new Headers(init?.headers);
+        expect(headers.get("apikey")).toBe("publishable_test_key");
+        expect(headers.get("Authorization")).toBe("Bearer paid-user-token");
         return new Response("600", {
           headers: { "Content-Type": "application/json" },
         });
       }
-      if (url.pathname === "/rest/v1/rpc/get_public_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+        candidateHeaders.push(new Headers(init?.headers));
         return url.searchParams.get("p_stream") === "priority"
           ? jsonRows([])
           : jsonRows(organicRows);
@@ -3791,7 +3797,13 @@ describe("public auctions endpoint", () => {
 
     const expanded = await auctionsRequest(makeCtx(
       "https://portal.maiprop.co/api/public/auctions?limit=600&page=4&pageSize=20",
-      { headers: { Authorization: "Bearer paid-user-token" } },
+      {
+        headers: { Authorization: "Bearer paid-user-token" },
+        requestEnv: {
+          SUPABASE_URL: `https://${PROJECT_ID}.supabase.co`,
+          SUPABASE_PUBLISHABLE_KEY: "publishable_test_key",
+        },
+      },
     ));
     const expandedBody = await expanded.json() as {
       data: AuctionRowForTest[];
@@ -3805,14 +3817,107 @@ describe("public auctions endpoint", () => {
     expect(expandedBody.total).toBe(100);
     expect(expanded.headers.get("Cache-Control")).toBe("private, no-store");
     expect(expanded.headers.get("Vary")).toContain("Authorization");
-
-    const anonymous = await auctionsRequest(makeCtx(
-      "https://portal.maiprop.co/api/public/auctions?limit=600&page=4&pageSize=20",
-    ));
-    const anonymousBody = await anonymous.json() as { data: AuctionRowForTest[]; total: number };
-    expect(anonymousBody.total).toBe(60);
-    expect(anonymousBody.data).toHaveLength(0);
+    expect(candidateHeaders).toHaveLength(2);
+    expect(candidateHeaders.every((headers) => headers.get("apikey") === "publishable_test_key"))
+      .toBe(true);
+    expect(candidateHeaders.every((headers) =>
+      headers.get("Authorization") === "Bearer paid-user-token"
+    )).toBe(true);
+    expect(candidateHeaders.some((headers) =>
+      headers.get("Authorization")?.includes("service_role_test_key")
+    )).toBe(false);
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
+  });
+
+  it.each([
+    { label: "missing", headers: undefined },
+    { label: "invalid", headers: { Authorization: "Bearer invalid-user-token" } },
+  ])("keeps a $label caller at the anonymous 60-row limit", async ({ headers }) => {
+    const candidateHeaders: Headers[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/auth/v1/user") {
+        return jsonRows([], { status: 401 });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+        candidateHeaders.push(new Headers(init?.headers));
+        return url.searchParams.get("p_stream") === "priority"
+          ? jsonRows([])
+          : jsonRows(Array.from({ length: 80 }, (_, index) => ({
+            id: `anonymous-${String(index + 1).padStart(3, "0")}`,
+            city: "Athens",
+            auction_date: "2026-08-01",
+            priority_placement: 0,
+          })));
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=600&page=1&pageSize=60",
+      {
+        headers,
+        requestEnv: {
+          SUPABASE_URL: `https://${PROJECT_ID}.supabase.co`,
+          SUPABASE_PUBLISHABLE_KEY: "publishable_test_key",
+        },
+      },
+    ));
+    const body = await response.json() as { data: AuctionRowForTest[]; total: number };
+
+    expect(response.status).toBe(200);
+    expect(body.total).toBe(60);
+    expect(body.data).toHaveLength(60);
+    expect(candidateHeaders).toHaveLength(2);
+    expect(candidateHeaders.every((candidateHeader) =>
+      candidateHeader.get("Authorization") === "Bearer publishable_test_key"
+    )).toBe(true);
+  });
+
+  it("keeps a validated caller private when entitlement falls back to 60", async () => {
+    const candidateHeaders: Headers[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/auth/v1/user") {
+        return new Response(JSON.stringify({ id: "00000000-0000-4000-8000-000000000001" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_auction_listing_visible_limit") {
+        return jsonRows([], { status: 503 });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
+        candidateHeaders.push(new Headers(init?.headers));
+        return url.searchParams.get("p_stream") === "priority"
+          ? jsonRows([])
+          : jsonRows(Array.from({ length: 80 }, (_, index) => ({
+            id: `fallback-${String(index + 1).padStart(3, "0")}`,
+            city: "Athens",
+            auction_date: "2026-08-01",
+            priority_placement: 0,
+          })));
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=600&page=1&pageSize=60",
+      {
+        headers: { Authorization: "Bearer paid-user-token" },
+        requestEnv: {
+          SUPABASE_URL: `https://${PROJECT_ID}.supabase.co`,
+          SUPABASE_PUBLISHABLE_KEY: "publishable_test_key",
+        },
+      },
+    ));
+    const body = await response.json() as { data: AuctionRowForTest[]; total: number };
+
+    expect(body.total).toBe(60);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(response.headers.get("CDN-Cache-Control")).toBe("no-store");
+    expect(candidateHeaders.every((candidateHeader) =>
+      candidateHeader.get("Authorization") === "Bearer paid-user-token"
+    )).toBe(true);
   });
 
   it("aborts a timed-out entitlement fetch and fails closed to the anonymous DB window", async () => {
@@ -3828,7 +3933,7 @@ describe("public auctions endpoint", () => {
           }, { once: true });
         });
       }
-      if (url.pathname === "/rest/v1/rpc/get_public_auction_candidates") {
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidates") {
         return url.searchParams.get("p_stream") === "priority"
           ? jsonRows([])
           : jsonRows(Array.from({ length: 80 }, (_, index) => ({
@@ -3871,13 +3976,37 @@ describe("public auctions endpoint", () => {
     expect(cacheApi.put).not.toHaveBeenCalled();
   });
 
-  it("fails closed when the server-only auction credential is absent", async () => {
+  it("serves auctions with only the public runtime and never sends a service-role bearer", async () => {
+    const res = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=6",
+      {
+        requestEnv: {
+          SUPABASE_URL: `https://${PROJECT_ID}.supabase.co`,
+          SUPABASE_PUBLISHABLE_KEY: "publishable_test_key",
+        },
+      },
+    ));
+
+    expect(res.status).toBe(200);
+    const candidateCalls = fetchMock().mock.calls.filter(([input]) =>
+      new URL(String(input)).pathname === "/rest/v1/rpc/get_visible_auction_candidates"
+    );
+    expect(candidateCalls).toHaveLength(2);
+    for (const [, init] of candidateCalls) {
+      const headers = new Headers((init as RequestInit | undefined)?.headers);
+      expect(headers.get("apikey")).toBe("publishable_test_key");
+      expect(headers.get("Authorization")).toBe("Bearer publishable_test_key");
+      expect(headers.get("Authorization")).not.toContain("service_role_test_key");
+    }
+  });
+
+  it("returns the existing 503 contract when the public runtime is absent", async () => {
     const res = await auctionsRequest(makeCtx(
       "https://portal.maiprop.co/api/public/auctions?limit=6",
       {
         requestEnv: {
           SUPABASE_PROJECT_ID: PROJECT_ID,
-          SUPABASE_PUBLISHABLE_KEY: "publishable_test_key",
+          SUPABASE_SERVICE_ROLE_KEY: "service_role_test_key",
         },
       },
     ));
@@ -3897,11 +4026,14 @@ describe("public homepage endpoint", () => {
     expect(invalid.headers.get("Cache-Control")).toBe("no-store");
 
     await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=auctions"));
-    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_auction_candidates");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidates");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
     expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
     expect(organicUrl?.searchParams.get("p_limit")).toBe("600");
+    expect(new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidates").headers)
+      .get("Authorization")).toBe("Bearer publishable_test_key");
+    expect(fetchUrls("/rest/v1/rpc/get_public_auction_candidates")).toHaveLength(0);
   });
 
   it("fetches lightweight featured and open-house homepage sections", async () => {
