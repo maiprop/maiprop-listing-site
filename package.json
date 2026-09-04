@@ -87,7 +87,7 @@
     "check:edge-functions": "node scripts/check-edge-functions.mjs",
     "check:deployable-runtimes": "npm run typecheck && npm run typecheck:functions && npm run typecheck:remotion && npm run check:edge-functions",
     "prebuild": "npm run api-docs:copy && npm run typecheck",
-    "build": "vite build",
+    "build": "vite build && npm run build:homepage-initial",
     "build:homepage-initial": "node scripts/inject-homepage-initial.mjs",
     "build:cloudflare-pages-worker": "node scripts/build-cloudflare-pages-worker.mjs",
     "compress:images": "node scripts/compress-images.mjs",

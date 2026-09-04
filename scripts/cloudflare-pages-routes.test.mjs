@@ -266,6 +266,9 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(packageJson.scripts["build:homepage-initial"]).toBe(
       "node scripts/inject-homepage-initial.mjs",
     );
+    expect(packageJson.scripts.build).toContain(
+      "npm run build:homepage-initial",
+    );
     expect(injector).toContain("maiprop-homepage-initial");
     expect(injector).toContain('url.searchParams.set("section", section)');
     expect(injector).toContain('fetchHomepageSection(origin, "featured"');
