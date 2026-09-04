@@ -104,6 +104,13 @@ describe("public catalogue TAP proof parser", () => {
     );
   });
 
+  it("ignores psql column headers when counting TAP results", () => {
+    assert.deepEqual(
+      assertCompleteTapOutput(" ok\n----\n ok 1 - reader\n(1 row)\n\n1..1\n"),
+      { plan: 1, okCount: 1 },
+    );
+  });
+
   it("rejects a TAP bailout", () => {
     assert.throws(
       () =>
