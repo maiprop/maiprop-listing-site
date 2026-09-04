@@ -396,6 +396,7 @@ jobs:
             sed 's/./*/g' /tmp/supabase-projects-list.err || true
             projects_json="[]"
           fi
+          rm -rf -- release-candidate/supabase/.temp
 
           project_json="{}"
           if ! project_json="$(curl -fsS --retry 3 --connect-timeout 10 \

@@ -2545,6 +2545,12 @@ describe("production release train", () => {
     expect(resolution.run).toContain(
       "new URL(normalizeDatabaseUrlTls(directUrl))",
     );
+    expect(resolution.run).toContain(
+      "rm -rf -- release-candidate/supabase/.temp",
+    );
+    expect(
+      resolution.run.indexOf("rm -rf -- release-candidate/supabase/.temp"),
+    ).toBeGreaterThan(resolution.run.indexOf("projects list --output json"));
   });
 
   it("stages database and Edge mutations only from the verified signed artifact", () => {
