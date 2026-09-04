@@ -41,7 +41,7 @@ export function assertCompleteTapOutput(output) {
   }
 
   const plan = Number.parseInt(plans[0][1], 10);
-  const okCount = [...tap.matchAll(/^\s*ok\b/gm)].length;
+  const okCount = [...tap.matchAll(/^\s*ok\s+\d+\b/gm)].length;
   if (!Number.isSafeInteger(plan) || plan < 1) {
     throw new Error(`TAP plan is invalid: ${plans[0][1]}.`);
   }
