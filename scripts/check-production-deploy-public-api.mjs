@@ -302,12 +302,39 @@ function cursorPath(path, cursor) {
   return `${url.pathname}${url.search}`;
 }
 
-async function validateCursorRoundTrip(
+export async function validateCursorRoundTrip(
   baseUrl,
   firstPath,
   firstBody,
-  { assertOk, fetchText },
+  { assertOk, fetchText, allowTerminalPage = false },
 ) {
+  if (allowTerminalPage && firstBody?.hasMore === false) {
+    const requestedLimit = Number(
+      new URL(firstPath, "https://probe.local").searchParams.get("limit"),
+    );
+    assertOk(
+      firstBody.nextCursor === null &&
+        Array.isArray(firstBody.data) &&
+        Number.isSafeInteger(requestedLimit) &&
+        requestedLimit > 0 &&
+        firstBody.data.length <= requestedLimit &&
+        Number.isSafeInteger(firstBody.publicationId) &&
+        firstBody.publicationId > 0,
+      `${firstPath} returned invalid terminal-page cursor metadata`,
+    );
+    return {
+      evidence: null,
+      proof: {
+        mode: "terminal-page",
+        firstPath,
+        secondPath: null,
+        publicationId: firstBody.publicationId,
+        firstIds: rowIds(firstBody),
+        secondIds: [],
+        status: "passed",
+      },
+    };
+  }
   assertOk(
     firstBody?.hasMore === true &&
       typeof firstBody.nextCursor === "string" &&
@@ -334,6 +361,7 @@ async function validateCursorRoundTrip(
     proof: {
       firstPath,
       secondPath,
+      mode: "cursor-round-trip",
       publicationId: firstBody.publicationId,
       firstIds: [...firstIds],
       secondIds: rowIds(second.body),
@@ -613,9 +641,11 @@ export async function validatePublicApiEndpoints(
       baseUrl,
       openHouseFirstPath,
       openHouseFirst,
-      { assertOk, fetchText },
+      { assertOk, fetchText, allowTerminalPage: true },
     );
-    endpoints.push(openHouseCursor.evidence);
+    if (openHouseCursor.evidence) {
+      endpoints.push(openHouseCursor.evidence);
+    }
 
     const listingId = rowIds(listingFirst)[0];
     assertOk(

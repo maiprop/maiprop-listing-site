@@ -66,6 +66,65 @@ function publicApiPayloadForUrl(href, { featured = featuredHomepagePayload() } =
 }
 
 describe("production deploy site-lock smoke helpers", () => {
+  it.each([
+    [[]],
+    [[{ id: "open-house-1", title: "Clean open house" }]],
+  ])(
+    "accepts a valid terminal open-house page without a fabricated cursor (%#)",
+    async (data) => {
+      const { validateCursorRoundTrip } = await import(
+        "./check-production-deploy-public-api.mjs"
+      );
+      const fetchText = vi.fn();
+      const assertOk = (condition, message) => {
+        if (!condition) throw new Error(message);
+      };
+
+      const result = await validateCursorRoundTrip(
+        "https://portal.maiprop.co",
+        "/api/public/open-houses?limit=1&includeMeta=1&showPast=1",
+        {
+          data,
+          hasMore: false,
+          nextCursor: null,
+          limit: 1,
+          publicationId: 17,
+        },
+        { assertOk, fetchText, allowTerminalPage: true },
+      );
+
+      expect(fetchText).not.toHaveBeenCalled();
+      expect(result.evidence).toBeNull();
+      expect(result.proof).toMatchObject({
+        mode: "terminal-page",
+        secondPath: null,
+        publicationId: 17,
+        firstIds: data.map((row) => row.id),
+        secondIds: [],
+        status: "passed",
+      });
+    },
+  );
+
+  it.each([
+    { data: [], hasMore: false, nextCursor: "unexpected", publicationId: 17 },
+    { data: [], hasMore: true, nextCursor: null, publicationId: 17 },
+  ])("rejects inconsistent open-house cursor metadata (%#)", async (body) => {
+    const { validateCursorRoundTrip } = await import(
+      "./check-production-deploy-public-api.mjs"
+    );
+    const assertOk = (condition, message) => {
+      if (!condition) throw new Error(message);
+    };
+
+    await expect(validateCursorRoundTrip(
+      "https://portal.maiprop.co",
+      "/api/public/open-houses?limit=1&includeMeta=1&showPast=1",
+      body,
+      { assertOk, fetchText: vi.fn(), allowTerminalPage: true },
+    )).rejects.toThrow();
+  });
+
   it("honors endpoint-specific request timeouts in the deploy wrapper", () => {
     const source = readFileSync("scripts/check-production-deploy.mjs", "utf8");
 
