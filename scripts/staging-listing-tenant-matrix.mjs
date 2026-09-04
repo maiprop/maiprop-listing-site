@@ -6,11 +6,13 @@ const required = (name) => {
 
 const SUPABASE_URL = required("STAGING_SUPABASE_URL").replace(/\/+$/, "");
 const ANON_KEY = required("STAGING_SUPABASE_ANON_KEY");
+const SERVICE_ROLE_KEY = required("STAGING_SUPABASE_SERVICE_ROLE_KEY");
 const PASSWORD = required("STAGING_DEMO_PASSWORD");
 
 const accounts = {
   developerA: {
-    email: process.env.STAGING_DEVELOPER_A_EMAIL ?? "developer.pro@maiprop.demo",
+    email:
+      process.env.STAGING_DEVELOPER_A_EMAIL ?? "developer.pro@maiprop.demo",
     expectedUserId: "6214f804-492d-491b-9ebf-02d8bfd576f5",
   },
   developerB: {
@@ -18,7 +20,8 @@ const accounts = {
     expectedUserId: "942130d0-c41c-4cde-8664-34c00cac32fb",
   },
   developerFree: {
-    email: process.env.STAGING_DEVELOPER_FREE_EMAIL ?? "developer.free@maiprop.demo",
+    email:
+      process.env.STAGING_DEVELOPER_FREE_EMAIL ?? "developer.free@maiprop.demo",
     expectedUserId: "ff122ceb-4012-42f8-bb97-6ab71b522036",
   },
   sellerFree: {
@@ -27,8 +30,10 @@ const accounts = {
   },
 };
 
-const organizationA = "ec260001-0000-4000-8000-000000000001";
-const organizationB = "ec260001-0000-4000-8000-000000000002";
+const fixtureRunId = globalThis.crypto.randomUUID();
+const fixtureSlug = fixtureRunId.replaceAll("-", "");
+const organizationA = globalThis.crypto.randomUUID();
+const organizationB = globalThis.crypto.randomUUID();
 
 const authHeaders = (token) => ({
   apikey: ANON_KEY,
@@ -70,7 +75,9 @@ async function signIn(account) {
   );
   const result = await parseResponse(response);
   if (!result.ok) {
-    throw new Error(`Sign-in failed for ${account.email}: ${boundedJson(result.body)}`);
+    throw new Error(
+      `Sign-in failed for ${account.email}: ${boundedJson(result.body)}`,
+    );
   }
   if (result.body?.user?.id !== account.expectedUserId) {
     throw new Error(`Unexpected user identity for ${account.email}`);
@@ -93,9 +100,26 @@ async function rest(account, path, { method = "GET", body, prefer } = {}) {
   return parseResponse(response);
 }
 
+async function serviceRest(path, { method = "GET", body, prefer } = {}) {
+  const headers = {
+    apikey: SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    "Content-Type": "application/json",
+  };
+  if (prefer) headers.Prefer = prefer;
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return parseResponse(response);
+}
+
 function expectSuccess(result, label) {
   if (!result.ok) {
-    throw new Error(`${label} failed (${result.status}): ${boundedJson(result.body)}`);
+    throw new Error(
+      `${label} failed (${result.status}): ${boundedJson(result.body)}`,
+    );
   }
   return result.body;
 }
@@ -126,7 +150,12 @@ function listingPayload(title, overrides = {}) {
   };
 }
 
-async function createListing(account, title, organizationId = null, overrides = {}) {
+async function createListing(
+  account,
+  title,
+  organizationId = null,
+  overrides = {},
+) {
   return rest(account, "rpc/create_listing_for_user", {
     method: "POST",
     body: {
@@ -163,6 +192,56 @@ async function setMembershipRole(owner, userId, role, status = "active") {
 
 const evidence = [];
 const record = (name, status = "passed") => evidence.push({ name, status });
+const createdOrganizations = [];
+
+async function createPaidOrganization(owner, id, suffix) {
+  const result = await serviceRest("organizations", {
+    method: "POST",
+    prefer: "return=minimal",
+    body: {
+      id,
+      name: `ECAS Tenant Matrix ${suffix}`,
+      slug: `ecas-tenant-matrix-${suffix.toLowerCase()}-${fixtureSlug}`,
+      plan: "internal",
+      created_by: owner.userId,
+      settings: {
+        disposable_fixture: "staging-listing-tenant-matrix",
+        fixture_run_id: fixtureRunId,
+      },
+    },
+  });
+  expectSuccess(result, `Developer ${suffix} organization fixture creation`);
+  createdOrganizations.push(id);
+}
+
+async function cleanupOrganizations() {
+  const failures = [];
+  for (const id of createdOrganizations.reverse()) {
+    const listingsResult = await serviceRest(
+      `listings?organization_id=eq.${id}`,
+      {
+        method: "DELETE",
+        prefer: "return=minimal",
+      },
+    );
+    if (!listingsResult.ok) {
+      failures.push(
+        `organization listings ${id}: ${boundedJson(listingsResult.body)}`,
+      );
+      continue;
+    }
+    const result = await serviceRest(`organizations?id=eq.${id}`, {
+      method: "DELETE",
+      prefer: "return=minimal",
+    });
+    if (!result.ok) failures.push(`${id}: ${boundedJson(result.body)}`);
+  }
+  if (failures.length > 0) {
+    throw new Error(
+      `Organization fixture cleanup failed: ${failures.join("; ")}`,
+    );
+  }
+}
 
 async function main() {
   const [developerA, developerB, developerFree, sellerFree] = await Promise.all(
@@ -170,33 +249,9 @@ async function main() {
   );
   record("real JWT authentication for four role/tier fixtures");
 
-  expectSuccess(
-    await rest(developerA, "organizations", {
-      method: "POST",
-      prefer: "return=minimal",
-      body: {
-        id: organizationA,
-        name: "ECAS Tenant Matrix A",
-        slug: "ecas-tenant-matrix-a",
-        created_by: developerA.userId,
-      },
-    }),
-    "Developer A organization creation",
-  );
-  expectSuccess(
-    await rest(developerB, "organizations", {
-      method: "POST",
-      prefer: "return=minimal",
-      body: {
-        id: organizationB,
-        name: "ECAS Tenant Matrix B",
-        slug: "ecas-tenant-matrix-b",
-        created_by: developerB.userId,
-      },
-    }),
-    "Developer B organization creation",
-  );
-  record("caller-owned organization creation");
+  await createPaidOrganization(developerA, organizationA, "A");
+  await createPaidOrganization(developerB, organizationB, "B");
+  record("service-controlled paid organization fixture creation");
 
   const listingA = expectSuccess(
     await createListing(
@@ -215,12 +270,14 @@ async function main() {
     "Organization B listing creation",
   );
   if (
-    listingA.owner_id !== developerA.userId
-    || listingA.organization_id !== organizationA
-    || listingB.owner_id !== developerB.userId
-    || listingB.organization_id !== organizationB
+    listingA.owner_id !== developerA.userId ||
+    listingA.organization_id !== organizationA ||
+    listingB.owner_id !== developerB.userId ||
+    listingB.organization_id !== organizationB
   ) {
-    throw new Error("Server-derived listing ownership did not match the acting tenant");
+    throw new Error(
+      "Server-derived listing ownership did not match the acting tenant",
+    );
   }
   record("server-derived personal and organization ownership");
 
@@ -231,7 +288,9 @@ async function main() {
     "Own-tenant listing update",
   );
   expectFailure(
-    await updateListing(developerA, listingB.id, { title: "Cross-tenant write" }),
+    await updateListing(developerA, listingB.id, {
+      title: "Cross-tenant write",
+    }),
     "Cross-tenant listing update",
     /listing_not_managed/,
   );
@@ -352,7 +411,12 @@ async function main() {
   record("organization role capability matrix");
 
   expectSuccess(
-    await setMembershipRole(developerA, developerB.userId, "member", "suspended"),
+    await setMembershipRole(
+      developerA,
+      developerB.userId,
+      "member",
+      "suspended",
+    ),
     "Membership suspension",
   );
   expectFailure(
@@ -426,11 +490,31 @@ async function main() {
   );
   record("authorized listing deletion");
 
-  process.stdout.write(`${JSON.stringify({ ok: true, evidence }, null, 2)}\n`);
+  return { ok: true, evidence };
 }
 
-main().catch((error) => {
-  const detail = error instanceof Error ? error.stack ?? error.message : String(error);
-  process.stderr.write(`${detail.slice(0, 4000)}\n`);
-  process.exitCode = 1;
-});
+main()
+  .then(
+    async (result) => {
+      await cleanupOrganizations();
+      record("service-controlled organization fixture cleanup");
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    },
+    async (error) => {
+      try {
+        await cleanupOrganizations();
+      } catch (cleanupError) {
+        error = new AggregateError(
+          [error, cleanupError],
+          "Tenant matrix and fixture cleanup both failed",
+        );
+      }
+      throw error;
+    },
+  )
+  .catch((error) => {
+    const detail =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
+    process.stderr.write(`${detail.slice(0, 4000)}\n`);
+    process.exitCode = 1;
+  });

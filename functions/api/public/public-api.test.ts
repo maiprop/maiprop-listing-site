@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { onRequest as auctionsRequest, fetchPublicAuctionRows } from "./auctions";
+import {
+  onRequest as auctionsRequest,
+  fetchPublicAuctionRows,
+  projectAuctionPublicIdentity,
+} from "./auctions";
 import { onRequest as homepageRequest } from "./homepage";
 import { onRequest as listingRequest } from "./listing";
 import { onRequest as listingsRequest } from "./listings";
@@ -30,6 +34,7 @@ type CacheApi = {
 };
 type AuctionRowForTest = {
   id: string;
+  listing_id?: string;
 };
 
 const realFetch = globalThis.fetch;
@@ -3075,6 +3080,30 @@ describe("public open houses endpoint", () => {
 });
 
 describe("public auctions endpoint", () => {
+  it("projects canonical OS identities while preserving the database listing id", () => {
+    expect(projectAuctionPublicIdentity({
+      id: "5a7a9000-0000-4000-8000-000000000002",
+      tags: ["source:maiprop-os", "os_auction:stage-proof-os-auction"],
+    })).toMatchObject({
+      id: "stage-proof-os-auction",
+      listing_id: "5a7a9000-0000-4000-8000-000000000002",
+    });
+  });
+
+  it("keeps UUID routing for explicitly UUID-routed staging proof auctions", () => {
+    expect(projectAuctionPublicIdentity({
+      id: "5a7a9000-0000-4000-8000-000000000001",
+      tags: [
+        "source:maiprop-os",
+        "os_auction:stage-proof-uuid-auction",
+        "staging-auction-route:uuid",
+      ],
+    })).toMatchObject({
+      id: "5a7a9000-0000-4000-8000-000000000001",
+      listing_id: "5a7a9000-0000-4000-8000-000000000001",
+    });
+  });
+
   it.each([
     "osTag=bad%2Ftag",
     "ids=valid-id,bad%21",
@@ -3529,7 +3558,7 @@ describe("public auctions endpoint", () => {
     const cacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(cacheKey.searchParams.get("limit")).toBe("60");
     expect(cacheKey.searchParams.has("day")).toBe(true);
-    expect(cacheKey.searchParams.get("v")).toBe("canonical-server-filtered-v14");
+    expect(cacheKey.searchParams.get("v")).toBe("canonical-server-filtered-v15");
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=30, stale-while-revalidate=60");
     expect(res.headers.get("CDN-Cache-Control")).toBe("no-store");
     const staleSeed = cacheApi.put.mock.calls.find(([request]) =>
@@ -4102,7 +4131,7 @@ describe("public auctions endpoint", () => {
       revision: string;
     };
 
-    expect(body.data.map((row) => row.id)).toEqual([listingId]);
+    expect(body.data).toMatchObject([{ id: "external-999", listing_id: listingId }]);
     expect(body.total).toBe(1);
     expect(body.revision).toMatch(/^auction_pool:\d{4}-\d{2}-\d{2}$/);
     expect(jsonBodyFor("/rest/v1/rpc/get_public_catalogue_auctions")).toEqual({

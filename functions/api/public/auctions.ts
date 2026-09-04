@@ -24,6 +24,7 @@ import { normalizePublicPromotionState } from "./_promotionState";
 
 type AuctionRow = Record<string, unknown> & {
   id: string;
+  listing_id?: string;
   is_featured?: boolean | null;
   featured_until?: string | null;
   priority_placement?: number | null;
@@ -50,7 +51,7 @@ const PUBLIC_AUCTION_PRODUCER_TIMEOUT_MS = 5_000;
 const AUCTION_REQUEST_TIMEOUT_MS = 5_000;
 const AUCTION_DB_TIMEOUT_MS = 2_500;
 const AUCTION_AUTH_TIMEOUT_MS = 2_500;
-const AUCTION_CACHE_VERSION = "canonical-server-filtered-v14";
+const AUCTION_CACHE_VERSION = "canonical-server-filtered-v15";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const PREMIUM_OWNERSHIP_FILTERS = new Set([
   "full",
@@ -301,6 +302,23 @@ function rowTags(row: AuctionRow): string[] {
     : [];
 }
 
+export function projectAuctionPublicIdentity<T extends { id: string; tags?: unknown }>(
+  row: T,
+  preserveUuid = false,
+): T & { listing_id: string } {
+  const tags = Array.isArray(row.tags)
+    ? row.tags.filter((tag): tag is string => typeof tag === "string")
+    : [];
+  const providerTag = tags.find((tag) => tag.startsWith("os_auction:"));
+  const providerId = providerTag?.slice("os_auction:".length).trim() ?? "";
+  const keepUuidRoute = preserveUuid || tags.includes("staging-auction-route:uuid");
+  return {
+    ...row,
+    id: providerId && !keepUuidRoute ? providerId : row.id,
+    listing_id: row.id,
+  };
+}
+
 function tagValue(tags: string[], prefix: string): string | null {
   const value = tags.find((tag) => tag.startsWith(prefix));
   return value ? value.slice(prefix.length) : null;
@@ -523,7 +541,7 @@ function rankAuctionRows(
       seen.add(row.id);
       return true;
     })
-    .map((row) => normalizePublicPromotionState(row, nowMs))
+    .map((row) => normalizePublicPromotionState(projectAuctionPublicIdentity(row), nowMs))
     .filter(predicate);
   const activePriorityRows = sortAuctionRows(
     normalizedRows.filter((row) => row.priority_placement > 0),
@@ -1153,7 +1171,7 @@ async function fetchExactAuctionPage(
     }
     seenListingIds.add(listingId);
     return normalizePublicPromotionState(
-      detailRow,
+      projectAuctionPublicIdentity(detailRow, Boolean(requestedIds)),
       Date.parse(publication.snapshotMinute),
     ) as AuctionRow;
   });

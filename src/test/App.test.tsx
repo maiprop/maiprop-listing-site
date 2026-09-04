@@ -52,6 +52,7 @@ vi.mock("@/components/AIAssistantWidget", () => stub("ai-widget"));
 vi.mock("@/pages/Listings", () => stub("page-listings"));
 vi.mock("@/pages/PropertyDetail", () => stub("page-property"));
 vi.mock("@/pages/Auctions", () => stub("page-auctions"));
+vi.mock("@/pages/AuctionDetail", () => stub("page-auction-detail"));
 vi.mock("@/pages/Firesale", () => stub("page-firesale"));
 vi.mock("@/pages/InvestorDashboard", () => stub("page-investor-dashboard"));
 vi.mock("@/pages/Professionals", () => stub("page-professionals"));
@@ -156,6 +157,18 @@ describe("App.tsx render smoke", () => {
       expect(screen.getByText("page-property")).toBeInTheDocument(),
     );
     expect(screen.queryByText("ai-widget")).toBeNull();
+  });
+
+  it("routes UUID auction identities to the database-backed property detail", async () => {
+    setLocation("/auction/5a7a9000-0000-4000-8000-000000000001");
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("page-property")).toBeInTheDocument());
+  });
+
+  it("routes projected OS auction identities to the OS auction detail", async () => {
+    setLocation("/auction/stage-proof-os-auction");
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("page-auction-detail")).toBeInTheDocument());
   });
 
   it("renders the NotFound page for unknown paths (catch-all '*' route)", async () => {
