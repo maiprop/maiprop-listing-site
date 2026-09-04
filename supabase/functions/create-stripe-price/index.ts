@@ -17,6 +17,11 @@ import {
   STRIPE_DEFAULT_PRODUCT_TAX_CODE,
   STRIPE_DEFAULT_TAX_BEHAVIOR,
 } from "../_shared/stripeClient.ts";
+import {
+  assertMarkedStagingCatalogBoundary,
+  MAIPROP_STRIPE_SANDBOX_ACCOUNT_ID,
+  stagingCatalogIdempotencyKey,
+} from "./stagingCatalog.ts";
 
 const _log = createLogger("create-stripe-price");
 const limiter = makeRateLimiter({
@@ -36,7 +41,6 @@ class AdminAuthError extends Error {
 
 interface ProfileRow {
   role?: string | null;
-  is_platform_admin?: boolean | null;
 }
 
 interface PricingConfigRow {
@@ -215,6 +219,7 @@ async function ensureAnnualCompanionPrice(
   meta: Record<string, unknown>,
   newMeta: Record<string, unknown>,
   entitlementMetadata: Record<string, string>,
+  markedStagingCatalog: boolean,
 ): Promise<string | null> {
   if (!shouldCreateAnnualCompanionPrice(config)) return null;
 
@@ -230,14 +235,27 @@ async function ensureAnnualCompanionPrice(
     existingAnnualTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR
   ) {
     const previousAnnualPriceId = annualPriceId;
-    const annualPrice = await stripe.prices.create({
-      product: productId,
-      currency,
-      unit_amount: amount,
-      recurring: { interval: "year" },
-      tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR,
-      metadata: priceMetadata(entitlementMetadata, "annual"),
-    });
+    const annualPrice = await stripe.prices.create(
+      {
+        product: productId,
+        currency,
+        unit_amount: amount,
+        recurring: { interval: "year" },
+        tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR,
+        metadata: priceMetadata(entitlementMetadata, "annual"),
+      },
+      markedStagingCatalog
+        ? {
+          idempotencyKey: stagingCatalogIdempotencyKey({
+            configId: config.id,
+            kind: "annual",
+            currency,
+            amount,
+            interval: "year",
+          }),
+        }
+        : undefined,
+    );
     annualPriceId = annualPrice.id;
     if (previousAnnualPriceId) {
       await stripe.prices.update(previousAnnualPriceId, { active: false });
@@ -296,12 +314,13 @@ Deno.serve(async (req) => {
       throw new AdminAuthError("Unauthenticated", 401);
     }
 
-    // Check platform admin
+    // This billing mutation requires the authoritative admin role. A legacy
+    // platform flag alone is not sufficient.
     const { data: profile } = await supabaseClient.from("profiles").select(
-      "role,is_platform_admin",
+      "role",
     ).eq("user_id", userData.user.id).single();
     const adminProfile = profile as ProfileRow | null;
-    if (adminProfile?.role !== "admin" && !adminProfile?.is_platform_admin) {
+    if (adminProfile?.role !== "admin") {
       throw new AdminAuthError("Platform admin only", 403);
     }
 
@@ -324,7 +343,20 @@ Deno.serve(async (req) => {
 
     if (amount <= 0) throw new Error("Amount must be greater than 0");
 
-    const stripe = await createVerifiedStripeClient(stripeKey);
+    const markedStagingCatalog = assertMarkedStagingCatalogBoundary(
+      config.metadata,
+      stripeKey,
+      Deno.env.get("STRIPE_EXPECTED_ACCOUNT_ID"),
+    );
+    const stripe = await createVerifiedStripeClient(
+      stripeKey,
+      markedStagingCatalog
+        ? {
+          runtimeMode: "test",
+          expectedAccountId: MAIPROP_STRIPE_SANDBOX_ACCOUNT_ID,
+        }
+        : {},
+    );
     const audience = normalizeAudience(config.audience) ?? "participant";
     const entitlementMetadata = {
       pricing_config_key: config.key,
@@ -373,12 +405,25 @@ Deno.serve(async (req) => {
         metadata: stripeProductMetadata,
       });
     } else {
-      const product = await stripe.products.create({
-        name: productName,
-        ...(productDescription ? { description: productDescription } : {}),
-        tax_code: stripeTaxCode,
-        metadata: stripeProductMetadata,
-      });
+      const product = await stripe.products.create(
+        {
+          name: productName,
+          ...(productDescription ? { description: productDescription } : {}),
+          tax_code: stripeTaxCode,
+          metadata: stripeProductMetadata,
+        },
+        markedStagingCatalog
+          ? {
+            idempotencyKey: stagingCatalogIdempotencyKey({
+              configId,
+              kind: "product",
+              currency,
+              amount,
+              interval,
+            }),
+          }
+          : undefined,
+      );
       productId = product.id;
     }
 
@@ -396,7 +441,20 @@ Deno.serve(async (req) => {
     const price = !existingPriceId ||
         Number(config.amount ?? 0) !== existingAmountMajor ||
         existingPriceTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR
-      ? await stripe.prices.create(priceParams)
+      ? await stripe.prices.create(
+        priceParams,
+        markedStagingCatalog
+          ? {
+            idempotencyKey: stagingCatalogIdempotencyKey({
+              configId,
+              kind: primaryCycle === "annual" ? "annual" : "monthly",
+              currency,
+              amount,
+              interval,
+            }),
+          }
+          : undefined,
+      )
       : { id: existingPriceId };
     if (
       existingPriceId &&
@@ -426,6 +484,7 @@ Deno.serve(async (req) => {
       config.metadata ?? {},
       meta,
       entitlementMetadata,
+      markedStagingCatalog,
     );
 
     const { error: updateError } = await supabaseClient

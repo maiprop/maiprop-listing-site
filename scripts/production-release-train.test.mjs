@@ -2799,6 +2799,36 @@ describe("production release train", () => {
     expect(compatibilitySource).toContain(
       "SUPABASE_SERVICE_ROLE_KEY=$service_role_key",
     );
+    const compatibilityRuntime = compatibility.steps.find(
+      (step) =>
+        step.name === "Run N-1 Pages runtime against staged Supabase and Edge",
+    );
+    expect(compatibilityRuntime.env.CLOUDFLARE_STAGING_TURN_KEY_ID).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_TURN_KEY_ID }}",
+    );
+    expect(compatibilityRuntime.env.CLOUDFLARE_STAGING_TURN_API_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_STAGING_TURN_API_TOKEN }}",
+    );
+    const requiredRuntimeValues = compatibilityRuntime.run.slice(
+      compatibilityRuntime.run.indexOf("for value in"),
+      compatibilityRuntime.run.indexOf("; do"),
+    );
+    expect(requiredRuntimeValues).toContain(
+      '"$CLOUDFLARE_STAGING_TURN_KEY_ID"',
+    );
+    expect(requiredRuntimeValues).toContain(
+      '"$CLOUDFLARE_STAGING_TURN_API_TOKEN"',
+    );
+    expect(compatibilityRuntime.run).toContain('echo "::add-mask::$value"');
+    expect(compatibilityRuntime.run).toContain(
+      '--binding "CLOUDFLARE_TURN_KEY_ID=$CLOUDFLARE_STAGING_TURN_KEY_ID"',
+    );
+    expect(compatibilityRuntime.run).toContain(
+      '--binding "CLOUDFLARE_TURN_API_TOKEN=$CLOUDFLARE_STAGING_TURN_API_TOKEN"',
+    );
+    expect(compatibilityRuntime.run).toContain(
+      '--binding "MAIPROP_TURN_TTL_SECONDS=21600"',
+    );
     expect(compatibilitySource).toContain("check:production-deploy");
     expect(compatibilitySource).toContain("staging-catalogue-gates.spec.ts");
     expect(compatibilitySource).toContain(

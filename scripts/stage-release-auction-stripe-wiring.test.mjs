@@ -16,10 +16,6 @@ describe("stage release Stripe and auction proof wiring", () => {
     const attestationStep = workflow.jobs["cloudflare-staging"].steps.find(
       (candidate) => candidate.name === "Create Cloudflare staging attestation",
     );
-    const downloadStep = stripeSteps.find(
-      (candidate) =>
-        candidate.name === "Download exact Cloudflare staging attestation",
-    );
     const step = stripeSteps.find(
       (candidate) =>
         candidate.name ===
@@ -35,25 +31,50 @@ describe("stage release Stripe and auction proof wiring", () => {
     expect(fullTitles.filter((title) => new RegExp(grep).test(title))).toEqual([
       fullTitles[0],
     ]);
-    expect(step.run).toContain("VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY");
-    expect(step.run).toContain("staging_release_fixture: true");
-    expect(step.run).toContain("trap cleanup_stripe_fixture EXIT");
-    expect(step.run).toContain("metadata=cs.%7B%22staging_release_fixture%22%3Atrue%7D");
-    expect(step.run).toContain("stripe_price_binding_sha256");
-    expect(step.run).toContain("monthly_price_sha256");
-    expect(step.run).toContain("--retry-all-errors --request DELETE");
-    expect(step.run).toContain("Temporary staging Stripe pricing fixture cleanup could not be verified");
-    expect(step.run).not.toContain(">/dev/null || true");
-    expect(step.env.STAGING_CF_READ_TOKEN).toBeTruthy();
-    expect(downloadStep.with.name).toContain(
-      "needs.cloudflare-staging.outputs.attestation_artifact",
+    expect(step.run).toContain("staging_catalog_initialized_by_stage_release");
+    expect(step.run).toContain("/functions/v1/create-stripe-price");
+    expect(step.run).toContain('then .[0].id else empty end');
+    expect(step.run).toContain("grant_type=password");
+    expect(step.run).toContain("role == \"admin\"");
+    expect(step.run).not.toContain("is_platform_admin");
+    expect(step.run).toContain("repair_marked_catalog=true");
+    expect(step.run).toContain('.metadata.staging_catalog_initialized_by_stage_release == true');
+    expect(step.run).toContain('if [ "$repair_marked_catalog" = "true" ]');
+    expect(step.run).toContain("Existing unmarked staging pro catalog is not checkout-ready and was not overwritten");
+    expect(step.run).toContain(".metadata.stripe_product_id == $created[0].product_id");
+    expect(step.run).toContain(".metadata.stripe_price_id_monthly == $created[0].price_id");
+    expect(step.run).not.toContain("pricing_configs?key=eq.pro&metadata=cs.");
+    expect(step.env.STAGING_ADMIN_EMAIL).toBe("${{ secrets.E2E_ADMIN_EMAIL }}");
+    expect(step.env.STAGING_ADMIN_PASSWORD).toBe("${{ secrets.E2E_ADMIN_PASSWORD }}");
+    expect(step.env.STRIPE_RESTRICTED_KEY).toBeUndefined();
+    expect(step.run).not.toContain("VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY");
+    expect(attestationStep.run).not.toContain("stripe_price_binding_sha256");
+    expect(attestationStep.run).not.toContain("participantMonthlyPrice");
+
+    const markedRowBranch = step.run.indexOf(
+      ".metadata.staging_catalog_initialized_by_stage_release == true",
     );
-    expect(attestationStep.run).toContain(
-      "stripe_price_binding_sha256",
+    const markedRepairAssignment = step.run.indexOf(
+      "repair_marked_catalog=true",
+      markedRowBranch,
     );
-    expect(attestationStep.run).toContain(
-      "VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY",
+    const repairBlock = step.run.indexOf(
+      'if [ "$repair_marked_catalog" = "true" ]',
+      markedRepairAssignment,
     );
+    const deployedMutation = step.run.indexOf(
+      "/functions/v1/create-stripe-price",
+      repairBlock,
+    );
+    const finalMetadataVerification = step.run.indexOf(
+      ".metadata.stripe_product_id == $created[0].product_id",
+      deployedMutation,
+    );
+    expect(markedRowBranch).toBeGreaterThan(-1);
+    expect(markedRepairAssignment).toBeGreaterThan(markedRowBranch);
+    expect(repairBlock).toBeGreaterThan(markedRepairAssignment);
+    expect(deployedMutation).toBeGreaterThan(repairBlock);
+    expect(finalMetadataVerification).toBeGreaterThan(deployedMutation);
   });
 
   it("seeds guarded auction fixtures before the live catalogue proof and always cleans them afterward", () => {
