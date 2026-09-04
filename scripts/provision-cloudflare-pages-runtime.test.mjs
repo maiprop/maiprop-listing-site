@@ -297,6 +297,9 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
     const isolation = provision.steps.find(
       (step) => step.name === "Verify provider credential isolation",
     );
+    const turnProof = provision.steps.find(
+      (step) => step.name === "Functionally verify target TURN key pair",
+    );
     const control = provision.steps.find(
       (step) => step.name === "Provision strict Cloudflare Pages runtime bindings",
     );
@@ -335,6 +338,17 @@ describe("Cloudflare Pages runtime provisioning workflow", () => {
     assert.ok(isolation.run.includes(
       '[ "$CLOUDFLARE_STAGING_TURN_API_TOKEN" = "$CLOUDFLARE_TURN_API_TOKEN" ]',
     ));
+    assert.ok(stepIndex(provision, turnProof.name) > stepIndex(provision, isolation.name));
+    assert.ok(stepIndex(provision, turnProof.name) < stepIndex(
+      provision,
+      "Precheck and create break-glass consumption receipt",
+    ));
+    assert.ok(turnProof.env.TURN_KEY_ID.includes("inputs.target == 'staging'"));
+    assert.ok(turnProof.env.TURN_API_TOKEN.includes("inputs.target == 'staging'"));
+    assert.ok(turnProof.run.includes("verifyCloudflareTurnCredentials"));
+    assert.ok(turnProof.run.includes("ttlSeconds: 600"));
+    assert.ok(turnProof.run.includes("JSON.stringify(proof)"));
+    assert.doesNotMatch(turnProof.run, /process\.env\.TURN_API_TOKEN[^,\n]*\)/);
     assert.ok(control.run.includes('PRODUCTION_PROJECT="maiprop-listing-site"'));
     assert.ok(control.run.includes(
       'STAGING_PROJECT="maiprop-listing-site-staging"',

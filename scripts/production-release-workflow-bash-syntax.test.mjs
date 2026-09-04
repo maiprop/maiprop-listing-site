@@ -65,7 +65,7 @@ describe("changed production release workflow Bash syntax", () => {
         }
       }
     }
-    assert.equal(runBlockCount, 142);
+    assert.equal(runBlockCount, 143);
     assert.ok(helperCount > 0, "no generated release helper shell bodies were checked");
   });
 });
