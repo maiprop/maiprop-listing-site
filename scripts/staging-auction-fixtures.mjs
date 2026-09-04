@@ -25,7 +25,11 @@ export function validateStagingAuctionFixtureConfig({
   if (!new Set(["seed", "cleanup"]).has(action)) {
     failures.push("Action must be seed or cleanup.");
   }
-  let databaseUrl = String(env.SUPABASE_STAGING_DB_URL ?? "").trim();
+  let databaseUrl = String(
+    env.SUPABASE_STAGING_EFFECTIVE_DB_URL ??
+      env.SUPABASE_STAGING_DB_URL ??
+      "",
+  ).trim();
   try {
     const parsed = new URL(databaseUrl);
     if ([...parsed.searchParams.keys()].length === 0) {

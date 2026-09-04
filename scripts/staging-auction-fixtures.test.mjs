@@ -42,6 +42,30 @@ describe("staging auction fixture target guard", () => {
       ).toBe(false);
     }
   });
+
+  it("prefers the separately resolved IPv4 endpoint while applying the same exact guard", () => {
+    const resolvedUrl = stagingUrl.replace("aws-0-", "aws-1-");
+    expect(
+      validateStagingAuctionFixtureConfig({
+        env: validEnv({
+          SUPABASE_STAGING_EFFECTIVE_DB_URL: resolvedUrl,
+        }),
+        action: "seed",
+      }),
+    ).toMatchObject({ ok: true, databaseUrl: resolvedUrl });
+
+    expect(
+      validateStagingAuctionFixtureConfig({
+        env: validEnv({
+          SUPABASE_STAGING_EFFECTIVE_DB_URL: resolvedUrl.replace(
+            STAGING_REF,
+            "qvvicunqcrwpioqnvzxf",
+          ),
+        }),
+        action: "seed",
+      }).ok,
+    ).toBe(false);
+  });
 });
 
 describe("staging auction fixture SQL", () => {

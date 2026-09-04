@@ -3,6 +3,7 @@ import {
   assertExistingFixtureUsersAreSafe,
   assertIsolatedStagingTarget,
   prepareIsolatedSecurityFixtures,
+  resetVerifiedPlatformAdmin,
 } from "./prepare-isolated-security-fixtures.mjs";
 import {
   PRODUCTION_PROJECT_REF,
@@ -27,6 +28,8 @@ function stagingEnv(overrides = {}) {
     RLS_USER_A_EMAIL: "buyer-a@example.test",
     RLS_USER_B_EMAIL: "seller-b@example.test",
     RLS_USER_PASSWORD: "not-a-secret",
+    RLS_ADMIN_EMAIL: "platform-admin@example.test",
+    RLS_ADMIN_PASSWORD: "admin-not-a-secret",
     ONBOARDING_TEST_EMAIL: "onboarding@example.test",
     ONBOARDING_TEST_PASSWORD: "not-a-secret",
     ...overrides,
@@ -102,6 +105,76 @@ describe("isolated security fixture target guard", () => {
 });
 
 describe("isolated security fixture privilege gate", () => {
+  it("resets credentials only for an existing verified platform admin", async () => {
+    const adminUser = {
+      id: "verified-admin-id",
+      email: "platform-admin@example.test",
+      app_metadata: { provider: "email", providers: ["email"] },
+    };
+    const updatedUser = { ...adminUser, email_confirmed_at: "2026-09-05T00:00:00Z" };
+    const updateUserById = vi.fn().mockResolvedValue({
+      data: { user: updatedUser },
+      error: null,
+    });
+    const profileQuery = {
+      select: vi.fn(() => profileQuery),
+      eq: vi.fn(() => profileQuery),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { role: "admin", is_platform_admin: false },
+        error: null,
+      }),
+    };
+    const admin = {
+      auth: { admin: { updateUserById } },
+      from: vi.fn(() => profileQuery),
+    };
+
+    await expect(
+      resetVerifiedPlatformAdmin(
+        admin,
+        adminUser,
+        "platform-admin@example.test",
+        "admin-not-a-secret",
+      ),
+    ).resolves.toBe(updatedUser);
+    expect(updateUserById).toHaveBeenCalledWith(adminUser.id, {
+      password: "admin-not-a-secret",
+      email_confirm: true,
+    });
+  });
+
+  it("does not create or promote an identity that is not already a platform admin", async () => {
+    const mutation = vi.fn(() => {
+      throw new Error("admin mutation must not run");
+    });
+    const profileQuery = {
+      select: vi.fn(() => profileQuery),
+      eq: vi.fn(() => profileQuery),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { role: "seller", is_platform_admin: true },
+        error: null,
+      }),
+    };
+    const admin = {
+      auth: { admin: { updateUserById: mutation, createUser: mutation } },
+      from: vi.fn(() => profileQuery),
+    };
+
+    await expect(
+      resetVerifiedPlatformAdmin(
+        admin,
+        {
+          id: "ordinary-user-id",
+          email: "ordinary@example.test",
+          app_metadata: { provider: "email", providers: ["email"] },
+        },
+        "ordinary@example.test",
+        "admin-not-a-secret",
+      ),
+    ).rejects.toThrow(/not an existing platform admin/i);
+    expect(mutation).not.toHaveBeenCalled();
+  });
+
   it("adopts only a non-admin canonical staging demo identity into server-owned metadata", async () => {
     const existingUser = {
       id: "canonical-seller-id",
