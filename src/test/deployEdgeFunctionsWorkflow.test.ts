@@ -103,6 +103,11 @@ describe("production Edge Function deploy workflow", () => {
     expect(postDeployStep).toContain("release-safety-staging-live-functions.json");
     expect(postDeployStep).toContain("--supabase-workdir release-candidate");
     expect(postDeployStep).toContain("--require-live-source-evidence");
+    expect(postDeployStep).toContain("LIVE_FUNCTION_INVENTORY_ATTEMPTS");
+    expect(postDeployStep).toContain("LIVE_FUNCTION_INVENTORY_DELAY_SECONDS");
+    expect(postDeployStep).toContain('for attempt in $(seq 1 "$LIVE_FUNCTION_INVENTORY_ATTEMPTS")');
+    expect(postDeployStep).toContain('if [ "$attempt" -eq "$LIVE_FUNCTION_INVENTORY_ATTEMPTS" ]');
+    expect(postDeployStep).toContain('sleep "$LIVE_FUNCTION_INVENTORY_DELAY_SECONDS"');
     expect(postDeployStep).not.toContain("continue-on-error");
   });
 });
