@@ -2785,6 +2785,12 @@ describe("production release train", () => {
     ]);
     expect(compatibility.environment).toBe("staging");
     expect(compatibilitySource).toContain("wrangler pages dev");
+    expect(compatibilitySource).toContain(
+      "--compatibility-date 2026-05-03",
+    );
+    expect(readFileSync(resolve(root, "wrangler.toml"), "utf8")).toContain(
+      'compatibility_date = "2026-05-19"',
+    );
     expect(compatibilitySource).toContain("STAGING_SUPABASE_URL");
     expect(compatibilitySource).toContain("STAGING_SUPABASE_PROJECT_ID");
     expect(compatibilitySource).toContain("STAGING_SUPABASE_PUBLISHABLE_KEY");
@@ -2804,6 +2810,15 @@ describe("production release train", () => {
     );
     expect(compatibilitySource).toContain(
       "staging-n-minus-one-compatibility-${RELEASE_SHA}-${GITHUB_RUN_ATTEMPT}",
+    );
+
+    const businessProofSource = JSON.stringify(
+      parsed.jobs["staging-business-proofs"],
+    );
+    expect(businessProofSource).toContain("SUPABASE_ACCESS_TOKEN");
+    expect(businessProofSource).toContain("api-keys?reveal=true");
+    expect(businessProofSource).toContain(
+      "STAGING_SUPABASE_SERVICE_ROLE_KEY",
     );
 
     expect(aggregate.needs).toContain("staging-n-minus-one-compatibility");

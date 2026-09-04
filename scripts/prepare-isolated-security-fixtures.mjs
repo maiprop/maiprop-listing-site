@@ -10,6 +10,10 @@ import {
 const STAGING_MUTATION_ACKNOWLEDGEMENT =
   `MUTATE_STAGING_${STAGING_PROJECT_REF}`;
 const DISPOSABLE_FIXTURE_MARKER = "isolated-security";
+const CANONICAL_SECURITY_DEMO_EMAILS = new Set([
+  "buyer.free@maiprop.demo",
+  "seller.pro@maiprop.demo",
+]);
 
 const REQUIRED_ENV = [
   "VITE_SUPABASE_URL",
@@ -97,7 +101,11 @@ async function listUsersByEmail(admin, expectedEmails) {
   return usersByEmail;
 }
 
-async function assertExistingFixtureUsersAreSafe(admin, existingByEmail) {
+export async function assertExistingFixtureUsersAreSafe(
+  admin,
+  existingByEmail,
+  { allowCanonicalDemoAdoption = false } = {},
+) {
   const existingUsers = [...existingByEmail.values()];
   if (existingUsers.length === 0) return;
 
@@ -146,6 +154,25 @@ async function assertExistingFixtureUsersAreSafe(admin, existingByEmail) {
       );
     }
     if (user.app_metadata?.e2e_fixture !== DISPOSABLE_FIXTURE_MARKER) {
+      const email = user.email?.toLowerCase();
+      if (allowCanonicalDemoAdoption && CANONICAL_SECURITY_DEMO_EMAILS.has(email)) {
+        const appMetadata = {
+          ...(user.app_metadata ?? {}),
+          e2e_fixture: DISPOSABLE_FIXTURE_MARKER,
+        };
+        const { data, error } = await admin.auth.admin.updateUserById(user.id, {
+          app_metadata: appMetadata,
+        });
+        if (error || !data.user) {
+          throw new Error(
+            `Could not adopt canonical staging demo fixture ${user.email}: ${
+              error?.message ?? "missing user"
+            }`,
+          );
+        }
+        user.app_metadata = data.user.app_metadata ?? appMetadata;
+        continue;
+      }
       throw new Error(
         `Existing user ${user.email} is not a server-owned disposable staging fixture.`,
       );
@@ -261,7 +288,9 @@ export async function prepareIsolatedSecurityFixtures({
     realtime: { transport: WebSocket },
   });
   const existingByEmail = await listUsersByEmail(admin, new Set(emails));
-  await assertExistingFixtureUsersAreSafe(admin, existingByEmail);
+  await assertExistingFixtureUsersAreSafe(admin, existingByEmail, {
+    allowCanonicalDemoAdoption: true,
+  });
 
   const userA = await ensureAuthUser(admin, existingByEmail.get(userAEmail), userAEmail, rlsPassword);
   const userB = await ensureAuthUser(admin, existingByEmail.get(userBEmail), userBEmail, rlsPassword);

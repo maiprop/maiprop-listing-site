@@ -47,6 +47,7 @@ export type AuctionListingRow = Pick<
   | "priority_placement"
   | "priority_until"
 > & {
+  listing_id?: string;
   listing_images?: { url: string; sort_order: number }[];
 };
 

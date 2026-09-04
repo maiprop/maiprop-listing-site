@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  assertExistingFixtureUsersAreSafe,
   assertIsolatedStagingTarget,
   prepareIsolatedSecurityFixtures,
 } from "./prepare-isolated-security-fixtures.mjs";
@@ -101,6 +102,63 @@ describe("isolated security fixture target guard", () => {
 });
 
 describe("isolated security fixture privilege gate", () => {
+  it("adopts only a non-admin canonical staging demo identity into server-owned metadata", async () => {
+    const existingUser = {
+      id: "canonical-seller-id",
+      email: "seller.pro@maiprop.demo",
+      app_metadata: { provider: "email", providers: ["email"] },
+    };
+    const updateUserById = vi.fn().mockResolvedValue({
+      data: {
+        user: {
+          ...existingUser,
+          app_metadata: {
+            ...existingUser.app_metadata,
+            e2e_fixture: "isolated-security",
+          },
+        },
+      },
+      error: null,
+    });
+    const queryResults = {
+      profiles: {
+        data: [{
+          user_id: existingUser.id,
+          role: "seller",
+          is_platform_admin: false,
+        }],
+        error: null,
+      },
+      user_roles: { data: [], error: null },
+    };
+    const admin = {
+      auth: { admin: { updateUserById } },
+      from: vi.fn((table) => {
+        const query = {
+          select: vi.fn(() => query),
+          in: vi.fn().mockResolvedValue(queryResults[table]),
+        };
+        return query;
+      }),
+    };
+
+    await expect(
+      assertExistingFixtureUsersAreSafe(
+        admin,
+        new Map([[existingUser.email, existingUser]]),
+        { allowCanonicalDemoAdoption: true },
+      ),
+    ).resolves.toBeUndefined();
+    expect(updateUserById).toHaveBeenCalledWith(existingUser.id, {
+      app_metadata: {
+        provider: "email",
+        providers: ["email"],
+        e2e_fixture: "isolated-security",
+      },
+    });
+    expect(existingUser.app_metadata.e2e_fixture).toBe("isolated-security");
+  });
+
   it("rejects target evidence before constructing an admin client", async () => {
     const createAdminClient = vi.fn();
 
