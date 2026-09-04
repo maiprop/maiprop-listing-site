@@ -997,6 +997,8 @@ jobs:
           STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
           STAGING_TURN_PROOF_EMAIL: ${{ vars.STAGING_TURN_PROOF_EMAIL }}
           STAGING_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+          CLOUDFLARE_STAGING_TURN_KEY_ID: ${{ secrets.CLOUDFLARE_STAGING_TURN_KEY_ID }}
+          CLOUDFLARE_STAGING_TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_TURN_API_TOKEN }}
         run: |
           set -euo pipefail
           for value in \
@@ -1004,7 +1006,9 @@ jobs:
             "$STAGING_SUPABASE_URL" \
             "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
             "$STAGING_TURN_PROOF_EMAIL" \
-            "$STAGING_DEMO_PASSWORD"; do
+            "$STAGING_DEMO_PASSWORD" \
+            "$CLOUDFLARE_STAGING_TURN_KEY_ID" \
+            "$CLOUDFLARE_STAGING_TURN_API_TOKEN"; do
             if [ -z "$value" ]; then
               echo "::error::N-1 compatibility requires the isolated staging runtime and proof identity."
               exit 1
@@ -1052,6 +1056,9 @@ jobs:
             --binding "SUPABASE_ANON_KEY=$STAGING_SUPABASE_PUBLISHABLE_KEY" \
             --binding "SUPABASE_PUBLISHABLE_KEY=$STAGING_SUPABASE_PUBLISHABLE_KEY" \
             --binding "SUPABASE_SERVICE_ROLE_KEY=$service_role_key" \
+            --binding "CLOUDFLARE_TURN_KEY_ID=$CLOUDFLARE_STAGING_TURN_KEY_ID" \
+            --binding "CLOUDFLARE_TURN_API_TOKEN=$CLOUDFLARE_STAGING_TURN_API_TOKEN" \
+            --binding "MAIPROP_TURN_TTL_SECONDS=21600" \
             --log-level warn \
             > n-minus-one/wrangler-pages-dev.log 2>&1 &
           wrangler_pid=$!
@@ -1927,21 +1934,6 @@ jobs:
           const stableRuntimeConfig = JSON.parse(
             readFileSync("stable-runtime-config.json", "utf8"),
           );
-          const stagingProjectApi = JSON.parse(
-            readFileSync("cloudflare-staging-project-final.json", "utf8"),
-          );
-          const participantMonthlyPrice =
-            stagingProjectApi?.result?.deployment_configs?.production?.env
-              ?.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY;
-          if (
-            participantMonthlyPrice?.type !== "plain_text" ||
-            typeof participantMonthlyPrice.value !== "string" ||
-            !participantMonthlyPrice.value.startsWith("price_")
-          ) {
-            throw new Error(
-              "The attested staging participant monthly price is missing.",
-            );
-          }
           const deployVerificationBytes = readFileSync(
             "staging-deploy-verification.json",
           );
@@ -2143,11 +2135,6 @@ jobs:
             stable_marker: stableMarker,
             runtime_config: runtimeConfig,
             stable_runtime_config: stableRuntimeConfig,
-            stripe_price_binding_sha256: {
-              VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY: createHash("sha256")
-                .update(participantMonthlyPrice.value)
-                .digest("hex"),
-            },
              previous_canonical_deployment_id:
                previousCanonical.deployment_id,
             git_auto_deploy_posture_sha256: createHash("sha256")
@@ -2540,12 +2527,6 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts --prefer-offline --no-audit
 
-      - name: Download exact Cloudflare staging attestation
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: ${{ needs.cloudflare-staging.outputs.attestation_artifact }}
-          path: stripe-cloudflare-attestation
-
       - name: Install Chromium for Stripe payment proof
         run: npx playwright install --with-deps chromium
 
@@ -2562,17 +2543,13 @@ jobs:
       - name: Complete one Stripe test-mode subscription and cleanup
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
           STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
           STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
           STAGING_APP_URL: ${{ needs.cloudflare-staging.outputs.stable_url }}
-          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
-          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
-          STAGING_CF_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
-          STAGING_CF_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
-          STAGING_DEPLOYMENT_ID: ${{ needs.cloudflare-staging.outputs.deployment_id }}
+          STAGING_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          STAGING_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
         run: |
           set -euo pipefail
           node scripts/assert-staging-mutation-target.mjs
@@ -2591,84 +2568,37 @@ jobs:
             exit 1
           fi
           echo "::add-mask::$service_role_key"
-          stripe_project_file="$(mktemp "$RUNNER_TEMP/staging-stripe-project.XXXXXX.json")"
-          stripe_fixture_file="$(mktemp "$RUNNER_TEMP/staging-stripe-pricing.XXXXXX.json")"
-          stripe_fixture_created=false
-          cleanup_stripe_fixture() {
-            proof_status=$?
-            trap - EXIT
-            set +e
-            cleanup_status=0
-            if [ "$stripe_fixture_created" = "true" ]; then
-              curl -fsS --retry 3 --retry-all-errors --request DELETE \
-                -H "apikey: $service_role_key" \
-                -H "Authorization: Bearer $service_role_key" \
-                -H "Prefer: return=minimal" \
-                "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?key=eq.pro&metadata=cs.%7B%22staging_release_fixture%22%3Atrue%7D" \
-                >/dev/null
-              if [ $? -ne 0 ]; then
-                echo "::error::Could not delete the temporary staging Stripe pricing fixture."
-                cleanup_status=1
-              else
-                remaining_fixture="$(curl -fsS --retry 3 --retry-all-errors \
-                  -H "apikey: $service_role_key" \
-                  -H "Authorization: Bearer $service_role_key" \
-                  "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?select=key&key=eq.pro&metadata=cs.%7B%22staging_release_fixture%22%3Atrue%7D")"
-                if [ $? -ne 0 ] || [ "$(jq 'length' <<<"$remaining_fixture" 2>/dev/null)" != "0" ]; then
-                  echo "::error::Temporary staging Stripe pricing fixture cleanup could not be verified."
-                  cleanup_status=1
-                fi
-              fi
+          for value in "$STAGING_ADMIN_EMAIL" "$STAGING_ADMIN_PASSWORD"; do
+            if [ -z "$value" ]; then
+              echo "::error::Authoritative staging admin credentials are required for catalog initialization."
+              exit 1
             fi
-            rm -f -- "$stripe_project_file" "$stripe_fixture_file" /tmp/staging-api-keys.json
-            if [ "$proof_status" -ne 0 ] && [ "$cleanup_status" -ne 0 ]; then
-              echo "::error::Stripe payment proof and temporary fixture cleanup both failed."
-            fi
-            if [ "$proof_status" -ne 0 ]; then
-              exit "$proof_status"
-            fi
-            exit "$cleanup_status"
-          }
-          trap cleanup_stripe_fixture EXIT
+            echo "::add-mask::$value"
+          done
+          pro_before="$(mktemp "$RUNNER_TEMP/staging-pro-before.XXXXXX.json")"
+          pro_after="$(mktemp "$RUNNER_TEMP/staging-pro-after.XXXXXX.json")"
+          admin_auth_request="$(mktemp "$RUNNER_TEMP/staging-admin-auth-request.XXXXXX.json")"
+          admin_auth_response="$(mktemp "$RUNNER_TEMP/staging-admin-auth-response.XXXXXX.json")"
+          create_price_request="$(mktemp "$RUNNER_TEMP/staging-create-price-request.XXXXXX.json")"
+          create_price_response="$(mktemp "$RUNNER_TEMP/staging-create-price-response.XXXXXX.json")"
+          chmod 600 "$pro_before" "$pro_after" "$admin_auth_request" "$admin_auth_response" "$create_price_request" "$create_price_response"
+          trap 'rm -f -- "$pro_before" "$pro_after" "$admin_auth_request" "$admin_auth_response" "$create_price_request" "$create_price_response" /tmp/staging-api-keys.json' EXIT
           curl -fsS --retry 3 \
-            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_CF_PROJECT" \
-            > "$stripe_project_file"
-          jq -e --arg id "$STAGING_CF_PROJECT_ID" '
-            .success == true and
-            .result.id == $id and
-            .result.name == "maiprop-listing-site-staging"
-          ' "$stripe_project_file" >/dev/null
-          monthly_price="$(jq -er '.result.deployment_configs.production.env.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY.value | select(startswith("price_"))' "$stripe_project_file")"
-          echo "::add-mask::$monthly_price"
-          monthly_price_sha256="$(printf '%s' "$monthly_price" | sha256sum | awk '{print $1}')"
-          jq -e \
-            --arg release_sha "$RELEASE_SHA" \
-            --arg deployment_id "$STAGING_DEPLOYMENT_ID" \
-            --arg project "$STAGING_CF_PROJECT" \
-            --arg price_sha256 "$monthly_price_sha256" '
-              .schema_version == 4 and
-              .evidence_type == "maiprop-staging-pages-deployment" and
-              .release_sha == $release_sha and
-              .deployment_id == $deployment_id and
-              .canonical_deployment_id == $deployment_id and
-              .project_name == $project and
-              .runtime_config.stripe_runtime.status == "test-or-disabled" and
-              .runtime_config.stripe_runtime.production_price_reuse == false and
-              .runtime_config.stripe_runtime.api_binding_match == true and
-              .stable_runtime_config.stripe_runtime.api_binding_match == true and
-              .stripe_price_binding_sha256.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY == $price_sha256
-            ' stripe-cloudflare-attestation/cloudflare-staging-attestation.json \
-            >/dev/null
-          existing_pro="$(curl -fsS --retry 3 \
             -H "apikey: $service_role_key" \
             -H "Authorization: Bearer $service_role_key" \
-            "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?select=key,audience,module,unit,metadata&key=eq.pro")"
-          if [ "$(jq 'length' <<<"$existing_pro")" -eq 0 ]; then
-            jq -n --arg monthly "$monthly_price" '[{
+            "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?select=id,key,audience,module,unit,is_active,metadata&key=eq.pro" \
+            > "$pro_before"
+          pro_count="$(jq 'length' "$pro_before")"
+          if [ "$pro_count" -gt 1 ]; then
+            echo "::error::Staging pro pricing config is ambiguous."
+            exit 1
+          fi
+          repair_marked_catalog=false
+          if [ "$pro_count" -eq 0 ]; then
+            jq -n --arg run "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" '[{
               key: "pro",
               label: "Participant Pro",
-              description: "Staging release payment proof fixture",
+              description: "Staging participant subscription catalog",
               audience: "participant",
               module: "user_subscription",
               unit: "monthly",
@@ -2677,28 +2607,96 @@ jobs:
               is_active: true,
               sort_order: 2,
               metadata: {
-                stripe_price_id: $monthly,
-                stripe_price_id_monthly: $monthly,
-                staging_release_fixture: true
+                staging_catalog_initialized_by_stage_release: true,
+                staging_catalog_initialization_run: $run
               }
-            }]' > "$stripe_fixture_file"
-            curl -fsS --request POST \
+            }]' | curl -fsS --request POST \
               -H "apikey: $service_role_key" \
               -H "Authorization: Bearer $service_role_key" \
               -H "Content-Type: application/json" \
-              -H "Prefer: return=minimal" \
-              --data-binary "@$stripe_fixture_file" \
-              "$STAGING_SUPABASE_URL/rest/v1/pricing_configs" >/dev/null
-            stripe_fixture_created=true
-          else
-            jq -e --arg monthly "$monthly_price" '
-              length == 1 and
-              .[0].audience == "participant" and
-              .[0].module == "user_subscription" and
-              .[0].unit == "monthly" and
-              .[0].metadata.stripe_price_id_monthly == $monthly
-            ' <<<"$existing_pro" >/dev/null
+              -H "Prefer: return=representation" \
+              --data-binary @- \
+              "$STAGING_SUPABASE_URL/rest/v1/pricing_configs" \
+              > "$pro_after"
+            config_id="$(jq -er 'if length == 1 and .[0].key == "pro" then .[0].id else empty end' "$pro_after")"
+            repair_marked_catalog=true
+          elif jq -e '
+            length == 1 and
+            .[0].key == "pro" and
+            .[0].audience == "participant" and
+            .[0].module == "user_subscription" and
+            .[0].unit == "monthly" and
+            .[0].is_active == true and
+            .[0].metadata.staging_catalog_initialized_by_stage_release == true
+          ' "$pro_before" >/dev/null; then
+            config_id="$(jq -er '.[0].id' "$pro_before")"
+            repair_marked_catalog=true
+          elif ! jq -e '
+            length == 1 and
+            .[0].key == "pro" and
+            .[0].audience == "participant" and
+            .[0].module == "user_subscription" and
+            .[0].unit == "monthly" and
+            .[0].is_active == true and
+            (.[0].metadata.stripe_product_id | type == "string" and startswith("prod_")) and
+            (.[0].metadata.stripe_price_id_monthly | type == "string" and startswith("price_"))
+          ' "$pro_before" >/dev/null; then
+            echo "::error::Existing unmarked staging pro catalog is not checkout-ready and was not overwritten."
+            exit 1
           fi
+
+          if [ "$repair_marked_catalog" = "true" ]; then
+            jq -n --arg email "$STAGING_ADMIN_EMAIL" --arg password "$STAGING_ADMIN_PASSWORD" \
+              '{email: $email, password: $password}' > "$admin_auth_request"
+            curl -fsS --retry 3 --request POST \
+              -H "apikey: $STAGING_SUPABASE_PUBLISHABLE_KEY" \
+              -H "Content-Type: application/json" \
+              --data-binary "@$admin_auth_request" \
+              "$STAGING_SUPABASE_URL/auth/v1/token?grant_type=password" \
+              > "$admin_auth_response"
+            admin_token="$(jq -er '.access_token' "$admin_auth_response")"
+            admin_user_id="$(jq -er '.user.id' "$admin_auth_response")"
+            echo "::add-mask::$admin_token"
+            admin_profile="$(curl -fsS --retry 3 \
+              -H "apikey: $service_role_key" \
+              -H "Authorization: Bearer $service_role_key" \
+              "$STAGING_SUPABASE_URL/rest/v1/profiles?select=user_id,role&user_id=eq.$admin_user_id")"
+            jq -e --arg id "$admin_user_id" '
+              length == 1 and
+              .[0].user_id == $id and
+              .[0].role == "admin"
+            ' <<<"$admin_profile" >/dev/null
+            jq -n --arg id "$config_id" '{config_id: $id}' > "$create_price_request"
+            curl -fsS --retry 3 --request POST \
+              -H "apikey: $STAGING_SUPABASE_PUBLISHABLE_KEY" \
+              -H "Authorization: Bearer $admin_token" \
+              -H "Content-Type: application/json" \
+              --data-binary "@$create_price_request" \
+              "$STAGING_SUPABASE_URL/functions/v1/create-stripe-price" \
+              > "$create_price_response"
+            jq -e '
+              (.product_id | type == "string" and startswith("prod_")) and
+              (.price_id | type == "string" and startswith("price_"))
+            ' "$create_price_response" >/dev/null
+          fi
+          curl -fsS --retry 3 \
+            -H "apikey: $service_role_key" \
+            -H "Authorization: Bearer $service_role_key" \
+            "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?select=id,key,audience,module,unit,is_active,metadata&key=eq.pro" \
+            > "$pro_after"
+          jq -e --slurpfile created "$create_price_response" '
+            length == 1 and
+            .[0].key == "pro" and
+            .[0].audience == "participant" and
+            .[0].module == "user_subscription" and
+            .[0].unit == "monthly" and
+            .[0].is_active == true and
+            (.[0].metadata.stripe_product_id | type == "string" and startswith("prod_")) and
+            (.[0].metadata.stripe_price_id_monthly | type == "string" and startswith("price_")) and
+            (($created | length) == 0 or
+              (.[0].metadata.stripe_product_id == $created[0].product_id and
+               .[0].metadata.stripe_price_id_monthly == $created[0].price_id))
+          ' "$pro_after" >/dev/null
           CI=true \
           E2E_COMPLETE_STRIPE_PAYMENT=true \
           PLAYWRIGHT_BASE_URL="$STAGING_APP_URL" \

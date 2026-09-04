@@ -85,7 +85,7 @@ Deno.test("per-row price replacement creates the new price before archiving the 
   assertEquals(createIndex > -1, true);
   assertEquals(archiveIndex > -1, true);
   assertEquals(createIndex < archiveIndex, true);
-  assertStringIncludes(source, "is_platform_admin");
+  assertEquals(source.includes("is_platform_admin"), false);
   assertStringIncludes(
     source,
     "existingPriceTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR",
@@ -93,6 +93,40 @@ Deno.test("per-row price replacement creates the new price before archiving the 
   assertStringIncludes(
     source,
     "existingAnnualTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR",
+  );
+});
+
+Deno.test("marked stage-release rows enforce sandbox identity before Stripe mutation and use idempotency options", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const boundaryIndex = source.indexOf(
+    "const markedStagingCatalog = assertMarkedStagingCatalogBoundary(",
+  );
+  const productMutationIndex = source.indexOf(
+    "stripe.products.update(",
+    boundaryIndex,
+  );
+  const priceMutationIndex = source.indexOf(
+    "stripe.prices.create(",
+    boundaryIndex,
+  );
+  assertEquals(boundaryIndex > -1, true);
+  assertEquals(boundaryIndex < productMutationIndex, true);
+  assertEquals(boundaryIndex < priceMutationIndex, true);
+  assertStringIncludes(
+    source,
+    "expectedAccountId: MAIPROP_STRIPE_SANDBOX_ACCOUNT_ID",
+  );
+  assertStringIncludes(
+    source,
+    "idempotencyKey: stagingCatalogIdempotencyKey({",
+  );
+  assertStringIncludes(source, 'kind: "product"');
+  assertStringIncludes(source, 'kind: "annual"');
+  assertStringIncludes(
+    source,
+    'kind: primaryCycle === "annual" ? "annual" : "monthly"',
   );
 });
 
