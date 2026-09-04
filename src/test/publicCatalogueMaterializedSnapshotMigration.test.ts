@@ -172,7 +172,12 @@ describe("materialized public catalogue snapshot migration", () => {
   });
 
   it("expects the listings identity index to reject duplicate OS auctions before publication", () => {
-    expect(snapshotPgTap).toContain("SELECT plan(132)");
+    expect(snapshotPgTap).toContain("SELECT plan(90)");
+    expect(
+      snapshotPgTap.match(
+        /^\s*SELECT\s+(?:ok|is|isnt|cmp_ok|matches|lives_ok|throws_ok|results_eq|set_eq|bag_eq|is_empty|isnt_empty|has_[a-z_]+)\s*\(/gim,
+      ),
+    ).toHaveLength(90);
     expect(snapshotPgTap).toContain(
       'duplicate key value violates unique constraint "idx_listings_os_auction_id_unique"',
     );

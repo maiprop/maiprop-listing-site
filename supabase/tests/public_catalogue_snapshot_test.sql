@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(132);
+SELECT plan(90);
 
 SELECT ok(
   to_regclass('private.public_catalogue_publications') IS NOT NULL,
