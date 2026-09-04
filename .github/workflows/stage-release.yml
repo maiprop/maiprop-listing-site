@@ -920,6 +920,7 @@ jobs:
 
       - name: Verify captured N-1 source again
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
           PREVIOUS_SHA: ${{ needs.capture-production-n-minus-one.outputs.previous_sha }}
           PREVIOUS_SOURCE_RUN_ID: ${{ needs.capture-production-n-minus-one.outputs.previous_source_run_id }}
@@ -927,8 +928,10 @@ jobs:
           LEGACY_PRODUCTION_SHA: db53d1b9adae41edae93fbeb3e612b42dd8fec0b
         run: |
           set -euo pipefail
-          git fetch --no-tags origin "$PREVIOUS_SHA"
-          previous_tree="$(git rev-parse "${PREVIOUS_SHA}^{tree}")"
+          previous_tree="$(
+            gh api "repos/${GITHUB_REPOSITORY}/git/commits/$PREVIOUS_SHA" \
+              --jq '.tree.sha'
+          )"
           jq -e \
             --arg release_sha "$RELEASE_SHA" \
             --arg previous_sha "$PREVIOUS_SHA" \

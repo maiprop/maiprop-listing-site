@@ -2793,6 +2793,11 @@ describe("production release train", () => {
     expect(compatibilitySource).toContain(
       "needs.capture-production-n-minus-one.outputs.artifact_name",
     );
+    expect(compatibilitySource).toContain(
+      "repos/${GITHUB_REPOSITORY}/git/commits/$PREVIOUS_SHA",
+    );
+    expect(compatibilitySource).toContain("GH_TOKEN");
+    expect(compatibilitySource).not.toContain("git fetch --no-tags origin");
     expect(compatibilitySource).not.toContain("https://portal.maiprop.co");
     expect(compatibility.outputs.artifact_name).toContain(
       "steps.evidence.outputs.artifact_name",
