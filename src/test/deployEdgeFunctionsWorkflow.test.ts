@@ -11,6 +11,8 @@ const stagingWorkflow = readFileSync(
   ".github/workflows/reusable-supabase-staging.yml",
   "utf8",
 ).replace(/\r\n/g, "\n");
+const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+const packageLock = JSON.parse(readFileSync("package-lock.json", "utf8"));
 
 function stagingStepBlock(name: string): string {
   const marker = `      - name: ${name}`;
@@ -23,6 +25,11 @@ function stagingStepBlock(name: string): string {
 }
 
 describe("production Edge Function deploy workflow", () => {
+  it("pins the Supabase CLI release that preserves bulk Edge bundle hashes", () => {
+    expect(packageJson.devDependencies.supabase).toBe("2.116.0");
+    expect(packageLock.packages["node_modules/supabase"].version).toBe("2.116.0");
+  });
+
   it("promotes exact artifact Edge source through a signed reusable workflow", () => {
     const parsed = yaml.load(workflow) as {
       on: {
@@ -103,6 +110,11 @@ describe("production Edge Function deploy workflow", () => {
     expect(postDeployStep).toContain("release-safety-staging-live-functions.json");
     expect(postDeployStep).toContain("--supabase-workdir release-candidate");
     expect(postDeployStep).toContain("--require-live-source-evidence");
+    expect(postDeployStep).toContain("LIVE_FUNCTION_INVENTORY_ATTEMPTS");
+    expect(postDeployStep).toContain("LIVE_FUNCTION_INVENTORY_DELAY_SECONDS");
+    expect(postDeployStep).toContain('for attempt in $(seq 1 "$LIVE_FUNCTION_INVENTORY_ATTEMPTS")');
+    expect(postDeployStep).toContain('if [ "$attempt" -eq "$LIVE_FUNCTION_INVENTORY_ATTEMPTS" ]');
+    expect(postDeployStep).toContain('sleep "$LIVE_FUNCTION_INVENTORY_DELAY_SECONDS"');
     expect(postDeployStep).not.toContain("continue-on-error");
   });
 });

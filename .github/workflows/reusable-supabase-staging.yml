@@ -1639,11 +1639,25 @@ jobs:
 
       - name: Capture staging live function drift inventory
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: npm run check:release-safety -- --supabase-workdir release-candidate --live-functions --require-live-source-evidence --out release-safety-staging-live-functions.json
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 "$LIVE_FUNCTION_INVENTORY_ATTEMPTS"); do
+            if npm run check:release-safety -- --supabase-workdir release-candidate --live-functions --require-live-source-evidence --out release-safety-staging-live-functions.json; then
+              exit 0
+            fi
+            if [ "$attempt" -eq "$LIVE_FUNCTION_INVENTORY_ATTEMPTS" ]; then
+              echo "::error::Staging Edge inventory did not converge after $LIVE_FUNCTION_INVENTORY_ATTEMPTS attempts."
+              exit 1
+            fi
+            echo "::warning::Staging Edge inventory has not converged (attempt $attempt/$LIVE_FUNCTION_INVENTORY_ATTEMPTS); retrying in ${LIVE_FUNCTION_INVENTORY_DELAY_SECONDS}s."
+            sleep "$LIVE_FUNCTION_INVENTORY_DELAY_SECONDS"
+          done
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
           RELEASE_SAFETY_RELEASE_SHA: ${{ inputs.release_sha }}
+          LIVE_FUNCTION_INVENTORY_ATTEMPTS: "6"
+          LIVE_FUNCTION_INVENTORY_DELAY_SECONDS: "10"
 
       - name: Create exact staging Edge attestation
         id: edge_attestation

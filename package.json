@@ -256,7 +256,7 @@
     "remotion": "^4.0.482",
     "rollup-plugin-visualizer": "^6.0.11",
     "sharp": "^0.35.3",
-    "supabase": "^2.104.0",
+    "supabase": "2.116.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.64.0",
