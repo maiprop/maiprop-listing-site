@@ -25,11 +25,28 @@ describe("staging listing tenant fixtures", () => {
       "const organizationB = globalThis.crypto.randomUUID()",
     );
     expect(source).toContain("async function cleanupOrganizations()");
-    expect(source).toContain("await cleanupOrganizations()");
+    expect(source).toContain("await cleanupFixtures()");
     expect(source).toContain(
-      'record("service-controlled organization fixture cleanup")',
+      'record("service-controlled tenant fixture cleanup")',
     );
     expect(source).toContain("`listings?organization_id=eq.${id}`");
     expect(source).toContain('method: "DELETE"');
+  });
+
+  it("establishes one occupied free-seller slot before racing for the final slot", () => {
+    expect(source).toContain('serviceRest("rpc/get_listing_limit"');
+    expect(source).toContain("sellerFreeLimit !== 2");
+    expect(source).toContain("Seller Free occupied-slot fixture creation");
+    expect(source).toContain("`${quotaFixtureTitlePrefix} occupied slot`");
+    expect(source).toContain("`${quotaFixtureTitlePrefix} contender A`");
+    expect(source).toContain("`${quotaFixtureTitlePrefix} contender B`");
+  });
+
+  it("cleans current and legacy seller quota proof rows", () => {
+    expect(source).toContain("async function cleanupQuotaFixtures()");
+    expect(source).toContain("title.eq.ECAS tenant matrix concurrent seller A");
+    expect(source).toContain("title.eq.ECAS tenant matrix concurrent seller B");
+    expect(source).toContain("`title.like.${quotaFixtureTitlePrefix}*`");
+    expect(source).toContain("await cleanupQuotaFixtures()");
   });
 });

@@ -991,6 +991,7 @@ jobs:
           RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
           ARTIFACT_SHA256: ${{ needs.validate-source.outputs.artifact_sha256 }}
           PREVIOUS_SHA: ${{ needs.capture-production-n-minus-one.outputs.previous_sha }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
           STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
           STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
@@ -1010,6 +1011,26 @@ jobs:
             fi
             echo "::add-mask::$value"
           done
+          service_role_key="$(
+            curl -fsS --retry 3 \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID/api-keys?reveal=true" \
+              | jq -er '
+                  (if type == "array" then . else (.keys // .result // []) end)
+                  | map(select(
+                      (.type // "") == "secret" or
+                      (.name // .role // .id // "") == "service_role"
+                    ))
+                  | sort_by(if (.type // "") == "secret" then 0 else 1 end)
+                  | .[0]
+                  | (.api_key // .key // .value // empty)
+                '
+          )"
+          if [ -z "$service_role_key" ] || [ "$service_role_key" = "$STAGING_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Could not resolve a distinct staging service-role key for the N-1 runtime."
+            exit 1
+          fi
+          echo "::add-mask::$service_role_key"
           local_origin="http://127.0.0.1:8788"
           # Wrangler 4.86's bundled local runtime supports dates through
           # 2026-05-03. Production and deployed staging continue to use the
@@ -1029,9 +1050,12 @@ jobs:
             --binding "SUPABASE_PROJECT_ID=$STAGING_SUPABASE_PROJECT_ID" \
             --binding "SUPABASE_URL=$STAGING_SUPABASE_URL" \
             --binding "SUPABASE_ANON_KEY=$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            --binding "SUPABASE_PUBLISHABLE_KEY=$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            --binding "SUPABASE_SERVICE_ROLE_KEY=$service_role_key" \
             --log-level warn \
             > n-minus-one/wrangler-pages-dev.log 2>&1 &
           wrangler_pid=$!
+          unset service_role_key
           trap 'kill "$wrangler_pid" 2>/dev/null || true' EXIT
           ready=false
           for attempt in $(seq 1 30); do
@@ -1903,6 +1927,21 @@ jobs:
           const stableRuntimeConfig = JSON.parse(
             readFileSync("stable-runtime-config.json", "utf8"),
           );
+          const stagingProjectApi = JSON.parse(
+            readFileSync("cloudflare-staging-project-final.json", "utf8"),
+          );
+          const participantMonthlyPrice =
+            stagingProjectApi?.result?.deployment_configs?.production?.env
+              ?.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY;
+          if (
+            participantMonthlyPrice?.type !== "plain_text" ||
+            typeof participantMonthlyPrice.value !== "string" ||
+            !participantMonthlyPrice.value.startsWith("price_")
+          ) {
+            throw new Error(
+              "The attested staging participant monthly price is missing.",
+            );
+          }
           const deployVerificationBytes = readFileSync(
             "staging-deploy-verification.json",
           );
@@ -2104,6 +2143,11 @@ jobs:
             stable_marker: stableMarker,
             runtime_config: runtimeConfig,
             stable_runtime_config: stableRuntimeConfig,
+            stripe_price_binding_sha256: {
+              VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY: createHash("sha256")
+                .update(participantMonthlyPrice.value)
+                .digest("hex"),
+            },
              previous_canonical_deployment_id:
                previousCanonical.deployment_id,
             git_auto_deploy_posture_sha256: createHash("sha256")
@@ -2496,6 +2540,12 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts --prefer-offline --no-audit
 
+      - name: Download exact Cloudflare staging attestation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.cloudflare-staging.outputs.attestation_artifact }}
+          path: stripe-cloudflare-attestation
+
       - name: Install Chromium for Stripe payment proof
         run: npx playwright install --with-deps chromium
 
@@ -2512,11 +2562,17 @@ jobs:
       - name: Complete one Stripe test-mode subscription and cleanup
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RELEASE_SHA: ${{ needs.validate-source.outputs.release_sha }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
           STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
           STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
           STAGING_APP_URL: ${{ needs.cloudflare-staging.outputs.stable_url }}
+          STAGING_CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_READ_TOKEN }}
+          STAGING_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          STAGING_CF_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          STAGING_CF_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          STAGING_DEPLOYMENT_ID: ${{ needs.cloudflare-staging.outputs.deployment_id }}
         run: |
           set -euo pipefail
           node scripts/assert-staging-mutation-target.mjs
@@ -2535,6 +2591,114 @@ jobs:
             exit 1
           fi
           echo "::add-mask::$service_role_key"
+          stripe_project_file="$(mktemp "$RUNNER_TEMP/staging-stripe-project.XXXXXX.json")"
+          stripe_fixture_file="$(mktemp "$RUNNER_TEMP/staging-stripe-pricing.XXXXXX.json")"
+          stripe_fixture_created=false
+          cleanup_stripe_fixture() {
+            proof_status=$?
+            trap - EXIT
+            set +e
+            cleanup_status=0
+            if [ "$stripe_fixture_created" = "true" ]; then
+              curl -fsS --retry 3 --retry-all-errors --request DELETE \
+                -H "apikey: $service_role_key" \
+                -H "Authorization: Bearer $service_role_key" \
+                -H "Prefer: return=minimal" \
+                "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?key=eq.pro&metadata=cs.%7B%22staging_release_fixture%22%3Atrue%7D" \
+                >/dev/null
+              if [ $? -ne 0 ]; then
+                echo "::error::Could not delete the temporary staging Stripe pricing fixture."
+                cleanup_status=1
+              else
+                remaining_fixture="$(curl -fsS --retry 3 --retry-all-errors \
+                  -H "apikey: $service_role_key" \
+                  -H "Authorization: Bearer $service_role_key" \
+                  "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?select=key&key=eq.pro&metadata=cs.%7B%22staging_release_fixture%22%3Atrue%7D")"
+                if [ $? -ne 0 ] || [ "$(jq 'length' <<<"$remaining_fixture" 2>/dev/null)" != "0" ]; then
+                  echo "::error::Temporary staging Stripe pricing fixture cleanup could not be verified."
+                  cleanup_status=1
+                fi
+              fi
+            fi
+            rm -f -- "$stripe_project_file" "$stripe_fixture_file" /tmp/staging-api-keys.json
+            if [ "$proof_status" -ne 0 ] && [ "$cleanup_status" -ne 0 ]; then
+              echo "::error::Stripe payment proof and temporary fixture cleanup both failed."
+            fi
+            if [ "$proof_status" -ne 0 ]; then
+              exit "$proof_status"
+            fi
+            exit "$cleanup_status"
+          }
+          trap cleanup_stripe_fixture EXIT
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $STAGING_CF_READ_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$STAGING_CF_ACCOUNT_ID/pages/projects/$STAGING_CF_PROJECT" \
+            > "$stripe_project_file"
+          jq -e --arg id "$STAGING_CF_PROJECT_ID" '
+            .success == true and
+            .result.id == $id and
+            .result.name == "maiprop-listing-site-staging"
+          ' "$stripe_project_file" >/dev/null
+          monthly_price="$(jq -er '.result.deployment_configs.production.env.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY.value | select(startswith("price_"))' "$stripe_project_file")"
+          echo "::add-mask::$monthly_price"
+          monthly_price_sha256="$(printf '%s' "$monthly_price" | sha256sum | awk '{print $1}')"
+          jq -e \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg deployment_id "$STAGING_DEPLOYMENT_ID" \
+            --arg project "$STAGING_CF_PROJECT" \
+            --arg price_sha256 "$monthly_price_sha256" '
+              .schema_version == 4 and
+              .evidence_type == "maiprop-staging-pages-deployment" and
+              .release_sha == $release_sha and
+              .deployment_id == $deployment_id and
+              .canonical_deployment_id == $deployment_id and
+              .project_name == $project and
+              .runtime_config.stripe_runtime.status == "test-or-disabled" and
+              .runtime_config.stripe_runtime.production_price_reuse == false and
+              .runtime_config.stripe_runtime.api_binding_match == true and
+              .stable_runtime_config.stripe_runtime.api_binding_match == true and
+              .stripe_price_binding_sha256.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY == $price_sha256
+            ' stripe-cloudflare-attestation/cloudflare-staging-attestation.json \
+            >/dev/null
+          existing_pro="$(curl -fsS --retry 3 \
+            -H "apikey: $service_role_key" \
+            -H "Authorization: Bearer $service_role_key" \
+            "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?select=key,audience,module,unit,metadata&key=eq.pro")"
+          if [ "$(jq 'length' <<<"$existing_pro")" -eq 0 ]; then
+            jq -n --arg monthly "$monthly_price" '[{
+              key: "pro",
+              label: "Participant Pro",
+              description: "Staging release payment proof fixture",
+              audience: "participant",
+              module: "user_subscription",
+              unit: "monthly",
+              currency: "EUR",
+              amount: 29,
+              is_active: true,
+              sort_order: 2,
+              metadata: {
+                stripe_price_id: $monthly,
+                stripe_price_id_monthly: $monthly,
+                staging_release_fixture: true
+              }
+            }]' > "$stripe_fixture_file"
+            curl -fsS --request POST \
+              -H "apikey: $service_role_key" \
+              -H "Authorization: Bearer $service_role_key" \
+              -H "Content-Type: application/json" \
+              -H "Prefer: return=minimal" \
+              --data-binary "@$stripe_fixture_file" \
+              "$STAGING_SUPABASE_URL/rest/v1/pricing_configs" >/dev/null
+            stripe_fixture_created=true
+          else
+            jq -e --arg monthly "$monthly_price" '
+              length == 1 and
+              .[0].audience == "participant" and
+              .[0].module == "user_subscription" and
+              .[0].unit == "monthly" and
+              .[0].metadata.stripe_price_id_monthly == $monthly
+            ' <<<"$existing_pro" >/dev/null
+          fi
           CI=true \
           E2E_COMPLETE_STRIPE_PAYMENT=true \
           PLAYWRIGHT_BASE_URL="$STAGING_APP_URL" \
@@ -2644,6 +2808,8 @@ jobs:
           RLS_USER_A_EMAIL: buyer.free@maiprop.demo
           RLS_USER_B_EMAIL: seller.pro@maiprop.demo
           RLS_USER_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+          RLS_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          RLS_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
           ONBOARDING_TEST_EMAIL: onboarding.security@maiprop.demo
           ONBOARDING_TEST_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
         run: |
@@ -2791,10 +2957,62 @@ jobs:
       - name: Install Chromium for catalogue proof
         run: npx playwright install --with-deps chromium
 
+      - name: Resolve IPv4 staging auction database endpoint
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+          STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+        run: |
+          set -euo pipefail
+          project_json="$(mktemp "$RUNNER_TEMP/staging-auction-project.XXXXXX.json")"
+          trap 'rm -f -- "$project_json"' EXIT
+          curl -fsS --retry 3 --connect-timeout 10 \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Accept: application/json" \
+            "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID" \
+            > "$project_json"
+          resolved_url="$(PROJECT_JSON_FILE="$project_json" node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          import { normalizeDatabaseUrlTls } from "./scripts/catalogue-hotfix-workflow-helpers.mjs";
+
+          const projectRef = process.env.STAGING_SUPABASE_PROJECT_ID;
+          const current = new URL(
+            normalizeDatabaseUrlTls(process.env.SUPABASE_STAGING_DB_URL),
+          );
+          if (current.hostname.endsWith(".pooler.supabase.com")) {
+            process.stdout.write(current.toString());
+            process.exit(0);
+          }
+          if (current.hostname !== `db.${projectRef}.supabase.co`) {
+            throw new Error("Staging database URL is not bound to the staging project.");
+          }
+          const project = JSON.parse(
+            readFileSync(process.env.PROJECT_JSON_FILE, "utf8"),
+          );
+          const region = String(project.region ?? "");
+          if (!/^[a-z0-9-]+$/.test(region)) {
+            throw new Error("Could not resolve the staging Supabase region.");
+          }
+          const pooler = new URL("postgresql://postgres:postgres@example.invalid/postgres");
+          pooler.username = `postgres.${projectRef}`;
+          pooler.password = decodeURIComponent(current.password);
+          pooler.hostname = `aws-0-${region}.pooler.supabase.com`;
+          pooler.port = "5432";
+          pooler.searchParams.set("sslmode", "require");
+          process.stdout.write(pooler.toString());
+          NODE
+          )"
+          echo "::add-mask::$resolved_url"
+          node scripts/assert-staging-mutation-target.mjs \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+            --database-url "$resolved_url" \
+            --acknowledgement "$STAGING_MUTATION_ACKNOWLEDGEMENT"
+          echo "SUPABASE_STAGING_EFFECTIVE_DB_URL=$resolved_url" >> "$GITHUB_ENV"
+
       - name: Seed exact-SHA staging auction proof fixtures
         env:
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
-          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
         run: node scripts/staging-auction-fixtures.mjs seed
 
@@ -3032,7 +3250,6 @@ jobs:
         if: always()
         env:
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
-          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
         run: node scripts/staging-auction-fixtures.mjs cleanup
 

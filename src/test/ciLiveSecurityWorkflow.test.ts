@@ -130,6 +130,11 @@ describe("release-train live security workflow", () => {
   });
 
   it("proves live security against the exact staged app and Supabase project", () => {
+    const preparation = stagingWorkflow.slice(
+      stagingWorkflow.indexOf("- name: Prepare isolated staging security fixtures"),
+      stagingWorkflow.indexOf("- name: Revalidate lease before destructive live security proof"),
+    );
+
     expect(stagingWorkflow).toContain("staging-live-security:");
     expect(stagingWorkflow).toContain("name: Prove staged live security boundaries");
     expect(stagingWorkflow).toContain(
@@ -146,6 +151,12 @@ describe("release-train live security workflow", () => {
     );
     expect(stagingWorkflow).toContain(
       "node scripts/prepare-isolated-security-fixtures.mjs",
+    );
+    expect(preparation).toContain(
+      "RLS_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}",
+    );
+    expect(preparation).toContain(
+      "RLS_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}",
     );
     expect(stagingWorkflow).toContain(
       "E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}",

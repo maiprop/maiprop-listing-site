@@ -23,6 +23,8 @@ const REQUIRED_ENV = [
   "RLS_USER_A_EMAIL",
   "RLS_USER_B_EMAIL",
   "RLS_USER_PASSWORD",
+  "RLS_ADMIN_EMAIL",
+  "RLS_ADMIN_PASSWORD",
   "ONBOARDING_TEST_EMAIL",
   "ONBOARDING_TEST_PASSWORD",
 ];
@@ -180,6 +182,44 @@ export async function assertExistingFixtureUsersAreSafe(
   }
 }
 
+export async function resetVerifiedPlatformAdmin(
+  admin,
+  existingUser,
+  email,
+  password,
+) {
+  if (!existingUser || existingUser.email?.toLowerCase() !== email) {
+    throw new Error(`Staging admin ${email} is not an existing platform admin.`);
+  }
+
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("user_id", existingUser.id)
+    .maybeSingle();
+  if (profileError) {
+    throw new Error(
+      `Could not verify staging platform admin ${email}: ${profileError.message}`,
+    );
+  }
+  if (profile?.role !== "admin") {
+    throw new Error(`Staging admin ${email} is not an existing platform admin.`);
+  }
+
+  const { data, error } = await admin.auth.admin.updateUserById(existingUser.id, {
+    password,
+    email_confirm: true,
+  });
+  if (error || !data.user) {
+    throw new Error(
+      `Could not reset verified staging platform admin ${email}: ${
+        error?.message ?? "missing user"
+      }`,
+    );
+  }
+  return data.user;
+}
+
 async function ensureAuthUser(admin, existingUser, email, password, { replace = false } = {}) {
   if (existingUser && replace) {
     const { error: deleteError } = await admin.auth.admin.deleteUser(existingUser.id);
@@ -275,22 +315,38 @@ export async function prepareIsolatedSecurityFixtures({
   const userAEmail = requireEnv("RLS_USER_A_EMAIL", env).toLowerCase();
   const userBEmail = requireEnv("RLS_USER_B_EMAIL", env).toLowerCase();
   const onboardingEmail = requireEnv("ONBOARDING_TEST_EMAIL", env).toLowerCase();
+  const adminEmail = requireEnv("RLS_ADMIN_EMAIL", env).toLowerCase();
   const rlsPassword = requireEnv("RLS_USER_PASSWORD", env);
+  const adminPassword = requireEnv("RLS_ADMIN_PASSWORD", env);
   const onboardingPassword = requireEnv("ONBOARDING_TEST_PASSWORD", env);
   const emails = [userAEmail, userBEmail, onboardingEmail];
 
-  if (new Set(emails).size !== emails.length) {
-    throw new Error("RLS and onboarding staging fixture emails must be distinct.");
+  if (new Set([...emails, adminEmail]).size !== emails.length + 1) {
+    throw new Error("RLS, onboarding, and admin staging emails must be distinct.");
   }
 
   const admin = createAdminClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     realtime: { transport: WebSocket },
   });
-  const existingByEmail = await listUsersByEmail(admin, new Set(emails));
-  await assertExistingFixtureUsersAreSafe(admin, existingByEmail, {
+  const existingByEmail = await listUsersByEmail(
+    admin,
+    new Set([...emails, adminEmail]),
+  );
+  const fixturesByEmail = new Map(
+    emails
+      .map((email) => [email, existingByEmail.get(email)])
+      .filter(([, user]) => user),
+  );
+  await assertExistingFixtureUsersAreSafe(admin, fixturesByEmail, {
     allowCanonicalDemoAdoption: true,
   });
+  await resetVerifiedPlatformAdmin(
+    admin,
+    existingByEmail.get(adminEmail),
+    adminEmail,
+    adminPassword,
+  );
 
   const userA = await ensureAuthUser(admin, existingByEmail.get(userAEmail), userAEmail, rlsPassword);
   const userB = await ensureAuthUser(admin, existingByEmail.get(userBEmail), userBEmail, rlsPassword);

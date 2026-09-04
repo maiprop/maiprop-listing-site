@@ -2794,6 +2794,11 @@ describe("production release train", () => {
     expect(compatibilitySource).toContain("STAGING_SUPABASE_URL");
     expect(compatibilitySource).toContain("STAGING_SUPABASE_PROJECT_ID");
     expect(compatibilitySource).toContain("STAGING_SUPABASE_PUBLISHABLE_KEY");
+    expect(compatibilitySource).toContain("SUPABASE_ACCESS_TOKEN");
+    expect(compatibilitySource).toContain("api-keys?reveal=true");
+    expect(compatibilitySource).toContain(
+      "SUPABASE_SERVICE_ROLE_KEY=$service_role_key",
+    );
     expect(compatibilitySource).toContain("check:production-deploy");
     expect(compatibilitySource).toContain("staging-catalogue-gates.spec.ts");
     expect(compatibilitySource).toContain(

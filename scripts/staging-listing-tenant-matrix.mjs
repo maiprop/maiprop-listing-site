@@ -34,6 +34,7 @@ const fixtureRunId = globalThis.crypto.randomUUID();
 const fixtureSlug = fixtureRunId.replaceAll("-", "");
 const organizationA = globalThis.crypto.randomUUID();
 const organizationB = globalThis.crypto.randomUUID();
+const quotaFixtureTitlePrefix = `ECAS tenant matrix quota ${fixtureRunId}`;
 
 const authHeaders = (token) => ({
   apikey: ANON_KEY,
@@ -194,6 +195,24 @@ const evidence = [];
 const record = (name, status = "passed") => evidence.push({ name, status });
 const createdOrganizations = [];
 
+async function cleanupQuotaFixtures() {
+  const titleFilters = [
+    "title.eq.ECAS tenant matrix concurrent seller A",
+    "title.eq.ECAS tenant matrix concurrent seller B",
+    `title.like.${quotaFixtureTitlePrefix}*`,
+  ];
+  const filters = new URLSearchParams({
+    owner_id: `eq.${accounts.sellerFree.expectedUserId}`,
+    organization_id: "is.null",
+    or: `(${titleFilters.join(",")})`,
+  });
+  const result = await serviceRest(`listings?${filters}`, {
+    method: "DELETE",
+    prefer: "return=minimal",
+  });
+  expectSuccess(result, "Seller quota fixture cleanup");
+}
+
 async function createPaidOrganization(owner, id, suffix) {
   const result = await serviceRest("organizations", {
     method: "POST",
@@ -243,11 +262,27 @@ async function cleanupOrganizations() {
   }
 }
 
+async function cleanupFixtures() {
+  const failures = [];
+  for (const cleanup of [cleanupQuotaFixtures, cleanupOrganizations]) {
+    try {
+      await cleanup();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, "Tenant matrix fixture cleanup failed");
+  }
+}
+
 async function main() {
   const [developerA, developerB, developerFree, sellerFree] = await Promise.all(
     Object.values(accounts).map(signIn),
   );
   record("real JWT authentication for four role/tier fixtures");
+
+  await cleanupQuotaFixtures();
 
   await createPaidOrganization(developerA, organizationA, "A");
   await createPaidOrganization(developerB, organizationB, "B");
@@ -458,9 +493,27 @@ async function main() {
   );
   record("Developer Free pricing enforcement");
 
+  const sellerFreeLimit = expectSuccess(
+    await serviceRest("rpc/get_listing_limit", {
+      method: "POST",
+      body: { p_user_id: sellerFree.userId },
+    }),
+    "Seller Free listing limit lookup",
+  );
+  if (sellerFreeLimit !== 2) {
+    throw new Error(
+      `Expected Seller Free listing limit 2; got ${boundedJson(sellerFreeLimit)}`,
+    );
+  }
+
+  expectSuccess(
+    await createListing(sellerFree, `${quotaFixtureTitlePrefix} occupied slot`),
+    "Seller Free occupied-slot fixture creation",
+  );
+
   const concurrentResults = await Promise.all([
-    createListing(sellerFree, "ECAS tenant matrix concurrent seller A"),
-    createListing(sellerFree, "ECAS tenant matrix concurrent seller B"),
+    createListing(sellerFree, `${quotaFixtureTitlePrefix} contender A`),
+    createListing(sellerFree, `${quotaFixtureTitlePrefix} contender B`),
   ]);
   const concurrentSuccesses = concurrentResults.filter((result) => result.ok);
   const concurrentFailures = concurrentResults.filter((result) => !result.ok);
@@ -496,13 +549,13 @@ async function main() {
 main()
   .then(
     async (result) => {
-      await cleanupOrganizations();
-      record("service-controlled organization fixture cleanup");
+      await cleanupFixtures();
+      record("service-controlled tenant fixture cleanup");
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     },
     async (error) => {
       try {
-        await cleanupOrganizations();
+        await cleanupFixtures();
       } catch (cleanupError) {
         error = new AggregateError(
           [error, cleanupError],
