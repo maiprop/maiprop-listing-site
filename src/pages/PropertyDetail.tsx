@@ -393,10 +393,10 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
               })}</p>
             </div>
           )}
-          <div className="grid lg:grid-cols-[1fr_340px] gap-6 lg:gap-8">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_340px] gap-6 lg:gap-8">
 
             {/* ──── LEFT COLUMN ──── */}
-            <div className="space-y-5">
+            <div className="min-w-0 space-y-5">
 
               {/* ── Gallery ── */}
               <PropertyGallery
