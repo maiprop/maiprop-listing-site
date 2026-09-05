@@ -119,7 +119,7 @@ describe("performance budget configuration", () => {
       expect(spec).toContain("CF-Access-Client-Id");
       expect(spec).toContain("CF-Access-Client-Secret");
       expect(spec).toContain("must be configured together");
-      expect(spec).toContain("page.context().route");
+      expect(spec).toContain(spec === stagingCatalogueGateSpec ? "page.route" : "page.context().route");
     }
   });
 
