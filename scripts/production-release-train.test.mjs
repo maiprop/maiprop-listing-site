@@ -3055,6 +3055,7 @@ describe("production release train", () => {
       "validate-source",
       "supabase-staging",
       "cloudflare-staging",
+      "staging-live-security",
     ]);
     expect(proofSource).toContain("E2E_COMPLETE_STRIPE_PAYMENT");
     expect(proofSource).toContain("stripe-payment-complete.spec.ts");
