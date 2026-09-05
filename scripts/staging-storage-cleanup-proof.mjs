@@ -554,16 +554,20 @@ try {
   });
   userId = expectNoError(created, "Create disposable staging developer").user.id;
 
+  const onboarding = await admin.rpc("complete_onboarding_role_for_user", {
+    p_user_id: userId,
+    p_role: "developer",
+    p_participant_type: "developer",
+    p_display_name: `ECAS Storage ${runId.slice(0, 8)}`,
+  });
+  expectNoError(onboarding, "Complete disposable developer onboarding");
+
   const profile = await admin
     .from("profiles")
-    .upsert({
-      user_id: userId,
-      role: "developer",
-      participant_type: "developer",
-      display_name: `ECAS Storage ${runId.slice(0, 8)}`,
+    .update({
       force_pro_access: true,
       account_status: "active",
-    }, { onConflict: "user_id" });
+    }).eq("user_id", userId);
   expectNoError(profile, "Provision disposable developer profile");
 
   const signedIn = await publicClient.auth.signInWithPassword({ email, password });
