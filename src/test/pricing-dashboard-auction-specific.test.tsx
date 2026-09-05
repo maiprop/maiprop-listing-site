@@ -617,11 +617,29 @@ describe("Pricing focused page behavior", () => {
     expect(window.open).not.toHaveBeenCalled();
   });
 
+  it("preserves Checkout reconciliation until the returning user's auth is restored", async () => {
+    const { default: Pricing } = await import("@/pages/Pricing");
+    const refreshSubscription = vi.fn().mockResolvedValue(undefined);
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, refreshSubscription });
+    mocks.useAuthMock.mockReturnValue({ user: null, profile: null, loading: true, profileLoading: true });
+    const view = renderWithProviders(<Pricing />, {
+      initialPath: "/pricing?checkout=success&session_id=cs_test_delayed_auth",
+    });
+    expect(refreshSubscription).not.toHaveBeenCalled();
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "returning-user" }, profile: { role: "buyer" }, loading: false, profileLoading: false,
+    });
+    view.rerender(<Pricing />);
+    await waitFor(() => expect(refreshSubscription).toHaveBeenCalledWith("cs_test_delayed_auth"));
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ["/pricing?checkout=success&billing_mode=mock", "info", /Mock checkout completed/i],
     ["/pricing?checkout=success", "success", /Payment successful/i],
     ["/pricing?checkout=cancelled", "info", /Checkout cancelled/i],
   ] as const)("handles the Stripe return state for %s", async (initialPath, toastKind, message) => {
+    mocks.useAuthMock.mockReturnValue({ user: { id: "returning-user" }, profile: null, loading: false, profileLoading: false });
     const refreshSubscription = vi.fn();
     mocks.useSubscriptionMock.mockReturnValue({
       isPro: false,
@@ -642,6 +660,7 @@ describe("Pricing focused page behavior", () => {
   });
 
   it("reconciles the exact Stripe session once without a stale delayed retry", async () => {
+    mocks.useAuthMock.mockReturnValue({ user: { id: "returning-user" }, profile: null, loading: false, profileLoading: false });
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const refreshSubscription = vi.fn().mockResolvedValue(undefined);
     mocks.useSubscriptionMock.mockReturnValue({

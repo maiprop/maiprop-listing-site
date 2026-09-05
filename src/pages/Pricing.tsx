@@ -439,7 +439,7 @@ const getCheckoutErrorMessage = async (
 };
 
 export default function Pricing() {
-  const { user, profile, profileLoading } = useAuth();
+  const { user, profile, profileLoading, loading: authLoading } = useAuth();
   const { isPro, loading: subLoading, refreshSubscription, hasStripeBilling } = useSubscription();
   const { i18n } = useTranslation();
   const navigate = useNavigate();
@@ -562,6 +562,10 @@ export default function Pricing() {
     const checkoutStatus = searchParams.get("checkout");
     const checkoutSessionId = searchParams.get("checkout_session_id") ??
       searchParams.get("session_id");
+    // A cold Checkout return can render before AuthContext adopts the session.
+    // Keep the reconciliation ID in the URL until the correct user is ready.
+    if (checkoutStatus === "success" && searchParams.get("billing_mode") !== "mock" &&
+      (authLoading || !user)) return;
     if (checkoutStatus === "success") {
       if (searchParams.get("billing_mode") === "mock") {
         toast.info(tr("Mock checkout completed. No live payment or subscription entitlement was created."));
@@ -580,7 +584,7 @@ export default function Pricing() {
     setSearchParams(nextParams, { replace: true });
 
     return undefined;
-  }, [refreshSubscription, searchParams, setSearchParams, tr]);
+  }, [authLoading, user, refreshSubscription, searchParams, setSearchParams, tr]);
 
   useEffect(() => {
     if (hasAutoSelected) return;

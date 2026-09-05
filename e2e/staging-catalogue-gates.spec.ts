@@ -118,7 +118,7 @@ function stagingHeaders(): Record<string, string> {
 async function configureProtectedPagesContext(page: Page): Promise<void> {
   const accessHeaders = stagingHeaders();
   if (Object.keys(accessHeaders).length > 0) {
-    await page.context().route(`${STAGING_BASE_URL}/**`, async (route) => {
+    await page.route(`${STAGING_BASE_URL}/**`, async (route) => {
       const response = await route.fetch({
         headers: { ...route.request().headers(), ...accessHeaders },
         maxRedirects: 0,
@@ -138,6 +138,10 @@ async function configureProtectedPagesContext(page: Page): Promise<void> {
       sameSite: "Lax",
     }]);
   }
+}
+
+async function drainProtectedPagesRoutes(page: Page): Promise<void> {
+  await page.unrouteAll({ behavior: "wait" });
 }
 
 function collectRuntimeEvidence(page: Page): RuntimeEvidence {
@@ -291,6 +295,10 @@ test.describe("exact-SHA staging catalogue proof", () => {
     await configureProtectedPagesContext(page);
   });
 
+  test.afterEach(async ({ page }) => {
+    await drainProtectedPagesRoutes(page);
+  });
+
   test("serves the expected immutable release marker", async ({ page }, testInfo) => {
     const headers = stagingHeaders();
     const liveResponse = await page.request.get(`${STAGING_BASE_URL}/api/release`, { headers });
@@ -391,12 +399,14 @@ test.describe("exact-SHA staging catalogue proof", () => {
 
       const freshPage = await page.context().newPage();
       try {
+        await configureProtectedPagesContext(freshPage);
         const freshEvidence = collectRuntimeEvidence(freshPage);
         const freshSince = checkpoint(freshEvidence);
         await freshPage.goto(target.href, { waitUntil: "domcontentloaded", timeout: 30_000 });
         expect(await expectVerifiedAuctionDetail(freshPage, target.href), `${target.kind} fresh page title`).toBe(directTitle);
         expectCleanRuntimeSince(freshEvidence, freshSince, `${target.kind} fresh-page detail`);
       } finally {
+        await drainProtectedPagesRoutes(freshPage);
         await freshPage.close();
       }
 
