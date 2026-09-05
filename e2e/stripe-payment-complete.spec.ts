@@ -7,6 +7,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fillStripeTestTaxInformation } from "./helpers/stripe-checkout-tax";
 import {
   type APIRequestContext,
   expect,
@@ -223,6 +224,7 @@ async function fillStripeBillingAddress(page: Page) {
     page.locator('input[autocomplete="billing address-level2"]'),
     page.getByPlaceholder(/^city$/i),
   ], "Athens");
+  await fillStripeTestTaxInformation(page);
 }
 
 async function completeStripeCheckout(page: Page) {
