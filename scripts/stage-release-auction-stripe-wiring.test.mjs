@@ -101,7 +101,7 @@ describe("stage release Stripe and auction proof wiring", () => {
     expect(step.run).not.toContain("pricing_configs?key=eq.pro&metadata=cs.");
     expect(step.env.STAGING_ADMIN_EMAIL).toBeUndefined();
     expect(step.env.STAGING_ADMIN_PASSWORD).toBeUndefined();
-    expect(step.env.E2E_ADMIN_EMAIL).toBe("${{ secrets.E2E_ADMIN_EMAIL }}");
+    expect(step.env.E2E_ADMIN_EMAIL).toBeUndefined();
     expect(step.run).toContain(
       "scripts/staging-stripe-admin-fixture.mjs create",
     );

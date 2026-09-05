@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 
 const EXPECTED_STAGING_REF = "xsiehskfgeoqyazcgauv";
 const PRODUCTION_REF = "qvvicunqcrwpioqnvzxf";
@@ -33,12 +34,12 @@ if (
 const runId = globalThis.crypto.randomUUID();
 const password = `Ecas-${globalThis.crypto.randomUUID()}-aA9!`;
 const email = `ecas-storage-${runId}@example.invalid`;
-const admin = createClient(supabaseUrl, serviceRoleKey, {
+const supabaseClientOptions = {
   auth: { autoRefreshToken: false, persistSession: false },
-});
-const publicClient = createClient(supabaseUrl, anonKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+  realtime: { transport: WebSocket },
+};
+const admin = createClient(supabaseUrl, serviceRoleKey, supabaseClientOptions);
+const publicClient = createClient(supabaseUrl, anonKey, supabaseClientOptions);
 
 const ids = {
   project: globalThis.crypto.randomUUID(),

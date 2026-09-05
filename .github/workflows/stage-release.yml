@@ -2675,7 +2675,6 @@ jobs:
           STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
           STAGING_APP_URL: ${{ needs.cloudflare-staging.outputs.stable_url }}
-          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
         run: |
           set -euo pipefail
           node scripts/assert-staging-mutation-target.mjs

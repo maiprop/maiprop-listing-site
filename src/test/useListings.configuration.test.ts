@@ -316,8 +316,15 @@ describe("useListings query configuration", () => {
     expect(disabled.enabled).toBe(false);
     await expect(disabled.queryFn()).resolves.toBe(false);
 
+    const anonymous = useOwnerProStatus("listing-1", "owner-1") as unknown as QueryOptions;
+    expect(anonymous.enabled).toBe(false);
+    expect(anonymous.queryKey).toEqual(["owner-pro-status", null, "listing-1", "owner-1"]);
+    expect(invokeMock).not.toHaveBeenCalled();
+
+    authState.user = { id: "user-42" };
     const enabled = useOwnerProStatus("listing-1", "owner-1", { initialData: false }) as unknown as QueryOptions;
     expect(enabled.enabled).toBe(true);
+    expect(enabled.queryKey).toEqual(["owner-pro-status", "user-42", "listing-1", "owner-1"]);
     expect(enabled.initialData).toBe(false);
     await expect(enabled.queryFn()).resolves.toBe(true);
     expect(invokeMock).toHaveBeenCalledWith("owner-pro-status", { body: { listingId: "listing-1" } });

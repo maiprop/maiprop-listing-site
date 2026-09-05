@@ -26,52 +26,17 @@ function assertFixtureTarget(env) {
   return url;
 }
 
-function authoritativeAdminEmail(env) {
-  const email = requireEnv("E2E_ADMIN_EMAIL", env).toLowerCase();
+function authoritativeAdminEmail(value) {
+  const email = value?.trim().toLowerCase();
   if (
+    !email ||
     email.length > 320 ||
     /[\r\n\s]/.test(email) ||
     !/^[^@]+@[^@]+$/.test(email)
   ) {
-    throw new Error("E2E_ADMIN_EMAIL is invalid.");
+    throw new Error("Authoritative staging admin Auth email is invalid.");
   }
   return email;
-}
-
-async function findExistingAuthUser(admin, email) {
-  const matches = [];
-  let completedScan = false;
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await admin.auth.admin.listUsers({
-      page,
-      perPage: 1000,
-    });
-    if (error || !Array.isArray(data?.users)) {
-      throw new Error(
-        `Could not inspect staging Auth users: ${error?.message ?? "missing users result"}`,
-      );
-    }
-    matches.push(
-      ...data.users.filter(
-        (user) => user.email?.trim().toLowerCase() === email,
-      ),
-    );
-    if (data.users.length < 1000) {
-      completedScan = true;
-      break;
-    }
-  }
-  if (!completedScan) {
-    throw new Error(
-      "Could not prove authoritative staging admin uniqueness before the Auth pagination cap.",
-    );
-  }
-  if (matches.length !== 1) {
-    throw new Error(
-      `Expected exactly one existing authoritative staging admin Auth user; found ${matches.length}.`,
-    );
-  }
-  return matches[0];
 }
 
 export async function cleanupStagingStripeAdminFixture({ env, admin, state }) {
@@ -104,26 +69,40 @@ export async function cleanupStagingStripeAdminFixture({ env, admin, state }) {
 
 export async function createStagingStripeAdminFixture({ env, admin, actor }) {
   assertFixtureTarget(env);
-  const email = authoritativeAdminEmail(env);
-  const existingUser = await findExistingAuthUser(admin, email);
-  const userId = existingUser.id;
-  if (!userId) throw new Error("Existing staging admin Auth user has no ID.");
-
-  const { data: profile, error: profileError } = await admin
+  const { data: profiles, error: profileError } = await admin
     .from("profiles")
     .select("user_id,role,is_platform_admin")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (
-    profileError ||
-    profile?.user_id !== userId ||
-    profile?.role !== "admin" ||
-    profile?.is_platform_admin !== true
-  ) {
+    .eq("role", "admin")
+    .eq("is_platform_admin", true);
+  if (profileError || !Array.isArray(profiles)) {
     throw new Error(
-      `Configured staging admin is not authoritative: ${profileError?.message ?? "profile privilege mismatch"}`,
+      `Could not inspect authoritative staging admin profiles: ${profileError?.message ?? "missing profiles result"}`,
     );
   }
+  if (profiles.length !== 1) {
+    throw new Error(
+      `Expected exactly one authoritative staging admin profile; found ${profiles.length}.`,
+    );
+  }
+  const profile = profiles[0];
+  const userId = profile?.user_id;
+  if (
+    !userId ||
+    profile.role !== "admin" ||
+    profile.is_platform_admin !== true
+  ) {
+    throw new Error("Authoritative staging admin profile is invalid.");
+  }
+
+  const { data: authUserData, error: authUserError } =
+    await admin.auth.admin.getUserById(userId);
+  const existingUser = authUserData?.user;
+  if (authUserError || existingUser?.id !== userId) {
+    throw new Error(
+      `Authoritative staging admin Auth identity mismatch: ${authUserError?.message ?? "user ID mismatch"}`,
+    );
+  }
+  const email = authoritativeAdminEmail(existingUser.email);
 
   const { data: generated, error: generateError } =
     await admin.auth.admin.generateLink({ type: "recovery", email });

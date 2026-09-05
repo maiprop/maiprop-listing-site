@@ -100,6 +100,25 @@ describe("useAuctionsPipeline auction fetch limits", () => {
     expect(refetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps page two selected while its server metadata is loading", () => {
+    const { rerender } = renderHook(
+      ({ currentPage }) => useAuctionsPipeline({ ...defaultOpts, currentPage }),
+      { initialProps: { currentPage: 1 } },
+    );
+    defaultOpts.setCurrentPage.mockClear();
+    useAuctionListingsMock.mockReturnValue({
+      data: undefined,
+      auctionPage: undefined,
+      isLoading: true,
+      error: null,
+      refetch: refetchMock,
+    });
+
+    rerender({ currentPage: 2 });
+
+    expect(defaultOpts.setCurrentPage).not.toHaveBeenCalled();
+  });
+
   it("requests one canonical server-paginated Pro query without hydration", () => {
     useSubscriptionMock.mockReturnValue({ isPro: true });
 
