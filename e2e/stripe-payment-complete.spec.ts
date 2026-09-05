@@ -538,6 +538,7 @@ async function pollSyncedSubscription(
   request: APIRequestContext,
   token: string,
 ) {
+  let lastObservation: Record<string, unknown> = {};
   await expect.poll(async () => {
     const response = await request.post(
       `${SUPABASE_URL}/functions/v1/check-subscription`,
@@ -548,19 +549,24 @@ async function pollSyncedSubscription(
       },
     );
     if (!response.ok()) {
-      return { subscribed: false, product_id: null, status: response.status() };
+      lastObservation = { subscribed: false, status: response.status() };
+      return lastObservation;
     }
     const body = await response.json();
-    return {
+    lastObservation = {
       subscribed: Boolean(body.subscribed),
-      product_id: body.product_id ?? null,
       subscription_status: body.subscription_status ?? body.status ?? null,
+      source: body.source ?? null,
+      sync_status: body.sync_status ?? null,
       status: response.status(),
     };
+    return lastObservation;
   }, {
     intervals: [2_000, 4_000, 8_000, 12_000],
     timeout: 60_000,
-  }).toMatchObject({ subscribed: true });
+  }).toMatchObject({ subscribed: true }).catch((error: unknown) => {
+    throw new Error(`Subscription sync did not complete: ${JSON.stringify(lastObservation)}`, { cause: error });
+  });
 }
 
 async function pollPaidInvoiceAndReceipt(
