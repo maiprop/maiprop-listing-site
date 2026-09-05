@@ -86,6 +86,11 @@ describe("stage release Stripe and auction proof wiring", () => {
     expect(step.run).toContain(
       '[ -z "$service_role_key" ] || [ "$service_role_key" = "$STAGING_SUPABASE_PUBLISHABLE_KEY" ]',
     );
+    expect(step.run).toContain('-H "apikey: $service_role_key"');
+    expect(step.run).not.toContain(
+      '-H "Authorization: Bearer $service_role_key"',
+    );
+    expect(step.run).toContain('-H "Authorization: Bearer $admin_token"');
     expect(attestationStep.run).not.toContain("stripe_price_binding_sha256");
     expect(attestationStep.run).not.toContain("participantMonthlyPrice");
 

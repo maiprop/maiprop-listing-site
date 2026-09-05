@@ -2689,7 +2689,6 @@ jobs:
           trap 'rm -f -- "$pro_before" "$pro_after" "$admin_auth_request" "$admin_auth_response" "$create_price_request" "$create_price_response" /tmp/staging-api-keys.json' EXIT
           curl -fsS --retry 3 \
             -H "apikey: $service_role_key" \
-            -H "Authorization: Bearer $service_role_key" \
             "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?select=id,key,audience,module,unit,is_active,metadata&key=eq.pro" \
             > "$pro_before"
           pro_count="$(jq 'length' "$pro_before")"
@@ -2716,7 +2715,6 @@ jobs:
               }
             }]' | curl -fsS --request POST \
               -H "apikey: $service_role_key" \
-              -H "Authorization: Bearer $service_role_key" \
               -H "Content-Type: application/json" \
               -H "Prefer: return=representation" \
               --data-binary @- \
@@ -2763,7 +2761,6 @@ jobs:
             echo "::add-mask::$admin_token"
             admin_profile="$(curl -fsS --retry 3 \
               -H "apikey: $service_role_key" \
-              -H "Authorization: Bearer $service_role_key" \
               "$STAGING_SUPABASE_URL/rest/v1/profiles?select=user_id,role&user_id=eq.$admin_user_id")"
             jq -e --arg id "$admin_user_id" '
               length == 1 and
@@ -2785,7 +2782,6 @@ jobs:
           fi
           curl -fsS --retry 3 \
             -H "apikey: $service_role_key" \
-            -H "Authorization: Bearer $service_role_key" \
             "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?select=id,key,audience,module,unit,is_active,metadata&key=eq.pro" \
             > "$pro_after"
           jq -e --slurpfile created "$create_price_response" '

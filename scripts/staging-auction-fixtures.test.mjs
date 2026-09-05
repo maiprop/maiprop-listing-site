@@ -104,6 +104,9 @@ describe("staging auction fixture SQL", () => {
       "auction_pool:' || to_char((now() AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD')",
     );
     expect(sql).toContain("now() + interval '30 days'");
+    expect(sql).toContain("clock_timestamp() + interval '11 minutes'");
+    expect(sql).toContain("clock_timestamp() + interval '10 minutes'");
+    expect(sql).toContain("fixture.auction_date");
     expect(sql).toContain("'source:maiprop-os'");
     expect(sql).toContain("'os_auction:stage-proof-os-auction-");
     expect(sql).toContain("'staging-auction-route:uuid'");
