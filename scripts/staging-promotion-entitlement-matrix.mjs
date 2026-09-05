@@ -471,16 +471,75 @@ async function cleanup() {
   }
 }
 
-function assertBalance(balance, expected) {
+function assertEntitlementBalance(balance) {
+  if (balance?.bundles?.addons !== 0) {
+    throw new Error(`Unexpected bundle add-on inventory: ${boundedJson(balance?.bundles)}`);
+  }
   for (const type of ["spotlight", "priority"]) {
-    for (const key of ["included", "used", "remaining"]) {
-      if (balance?.[type]?.[key] !== expected[type][key]) {
+    const actual = balance?.[type];
+    if (
+      actual?.included !== 1
+      || actual?.addons !== 0
+      || !Number.isInteger(actual.used)
+      || actual.used < 0
+      || (actual.addons === 0 && actual.used > actual.included)
+      || !Number.isInteger(actual.remaining)
+      || actual.remaining !== Math.max(actual.included - actual.used, 0)
+    ) {
+      throw new Error(`Invalid ${type} entitlement balance: ${boundedJson(actual)}`);
+    }
+  }
+}
+
+function assertBalanceUnchanged(actual, expected) {
+  if (actual?.bundles?.addons !== expected?.bundles?.addons) {
+    throw new Error(`Denied attempt changed bundle inventory: ${boundedJson(actual?.bundles)}`);
+  }
+  for (const type of ["spotlight", "priority"]) {
+    for (const key of ["included", "used", "remaining", "addons"]) {
+      if (actual?.[type]?.[key] !== expected?.[type]?.[key]) {
         throw new Error(
-          `Unexpected ${type}.${key}: ${boundedJson(balance?.[type])}`,
+          `Denied attempt changed ${type}.${key}: ${boundedJson(actual?.[type])}`,
         );
       }
     }
   }
+}
+
+async function provePromotionInventory(
+  account,
+  type,
+  initial,
+  firstListingId,
+  secondListingId,
+) {
+  const entitlementError = new RegExp(`${type}_entitlement_required`);
+  let expectedUsed;
+  if (initial.remaining === 1) {
+    expectSuccess(
+      await activate(account, firstListingId, type, `${type}-1`),
+      `Available included ${type} activation`,
+    );
+    activePromotions.push({ account, listingId: firstListingId, type });
+    expectSuccess(
+      await activate(account, firstListingId, type, `${type}-1`),
+      `Idempotent ${type} replay`,
+    );
+    expectedUsed = initial.used + 1;
+  } else {
+    expectFailure(
+      await activate(account, firstListingId, type, `${type}-exhausted-1`),
+      `Pre-consumed monthly ${type} activation`,
+      entitlementError,
+    );
+    expectedUsed = initial.used;
+  }
+  expectFailure(
+    await activate(account, secondListingId, type, `${type}-exhausted-2`),
+    `Exhausted monthly ${type} activation`,
+    entitlementError,
+  );
+  return expectedUsed;
 }
 
 async function main() {
@@ -501,10 +560,7 @@ async function main() {
     await rpc(developerA, "get_listing_promotion_balance"),
     "Initial Developer Pro promotion balance",
   );
-  assertBalance(balanceBefore, {
-    spotlight: { included: 1, used: 0, remaining: 1 },
-    priority: { included: 1, used: 0, remaining: 1 },
-  });
+  assertEntitlementBalance(balanceBefore);
   record("canonical paid Developer Pro grants exactly one Spotlight and one Priority");
 
   const listingA1 = expectSuccess(
@@ -559,55 +615,38 @@ async function main() {
     await rpc(developerA, "get_listing_promotion_balance"),
     "Balance after denied promotion attempts",
   );
-  assertBalance(balanceAfterDenied, {
-    spotlight: { included: 1, used: 0, remaining: 1 },
-    priority: { included: 1, used: 0, remaining: 1 },
-  });
+  assertEntitlementBalance(balanceAfterDenied);
+  assertBalanceUnchanged(balanceAfterDenied, balanceBefore);
   record("cross-tenant and Open House denials do not consume inventory");
 
-  expectSuccess(
-    await activate(developerA, listingA1.id, "spotlight", "spotlight-1"),
-    "First included Spotlight activation",
+  const expectedSpotlightUsed = await provePromotionInventory(
+    developerA,
+    "spotlight",
+    balanceAfterDenied.spotlight,
+    listingA1.id,
+    listingA3.id,
   );
-  activePromotions.push({
-    account: developerA,
-    listingId: listingA1.id,
-    type: "spotlight",
-  });
-  expectSuccess(
-    await activate(developerA, listingA2.id, "priority", "priority-1"),
-    "First included Priority activation",
-  );
-  activePromotions.push({
-    account: developerA,
-    listingId: listingA2.id,
-    type: "priority",
-  });
-  expectSuccess(
-    await activate(developerA, listingA1.id, "spotlight", "spotlight-1"),
-    "Idempotent Spotlight replay",
+  const expectedPriorityUsed = await provePromotionInventory(
+    developerA,
+    "priority",
+    balanceAfterDenied.priority,
+    listingA2.id,
+    listingA4.id,
   );
   const balanceConsumed = expectSuccess(
     await rpc(developerA, "get_listing_promotion_balance"),
-    "Consumed Developer Pro promotion balance",
+    "Final Developer Pro promotion balance",
   );
-  assertBalance(balanceConsumed, {
-    spotlight: { included: 1, used: 1, remaining: 0 },
-    priority: { included: 1, used: 1, remaining: 0 },
-  });
-  record("included credits activate once and request replay is idempotent");
-
-  expectFailure(
-    await activate(developerA, listingA3.id, "spotlight", "spotlight-2"),
-    "Second monthly Spotlight activation",
-    /spotlight_entitlement_required/,
-  );
-  expectFailure(
-    await activate(developerA, listingA4.id, "priority", "priority-2"),
-    "Second monthly Priority activation",
-    /priority_entitlement_required/,
-  );
-  record("second monthly Developer Pro Spotlight and Priority require add-ons");
+  assertEntitlementBalance(balanceConsumed);
+  if (
+    balanceConsumed.spotlight.used !== expectedSpotlightUsed
+    || balanceConsumed.priority.used !== expectedPriorityUsed
+    || balanceConsumed.spotlight.remaining !== 0
+    || balanceConsumed.priority.remaining !== 0
+  ) {
+    throw new Error(`Unexpected final promotion balance: ${boundedJson(balanceConsumed)}`);
+  }
+  record("available credits are idempotent and exhausted inventory fails closed");
 }
 
 let mainError = null;

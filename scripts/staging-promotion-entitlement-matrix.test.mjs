@@ -75,4 +75,35 @@ describe("staging promotion durable subscription fixtures", () => {
     expect(source).toContain("canonical paid Developer Pro grants exactly one Spotlight and one Priority");
     expect(source).toContain('billing_subscription_fixtures: "deleted"');
   });
+
+  it("treats monthly audit-ledger usage as a baseline and fails closed", () => {
+    expect(source).toContain("function assertEntitlementBalance");
+    expect(source).toContain("Number.isInteger(actual.used)");
+    expect(source).toContain("Math.max(actual.included - actual.used, 0)");
+    expect(source).toContain("balance?.bundles?.addons !== 0");
+    expect(source).toContain("function assertBalanceUnchanged");
+    expect(source).toContain("async function provePromotionInventory");
+    expect(source).toContain("if (initial.remaining === 1)");
+    expect(source).toContain("expectedUsed = initial.used + 1");
+    expect(source).toContain("expectedUsed = initial.used");
+    expect(source).not.toContain("spotlight: { included: 1, used: 0, remaining: 1 }");
+    expect(source).not.toContain("priority: { included: 1, used: 0, remaining: 1 }");
+  });
+
+  it("behaviorally rejects plan usage above included inventory without add-ons", () => {
+    const functionSource = source.match(
+      /function assertEntitlementBalance\(balance\) \{[\s\S]*?\n\}\n\nfunction assertBalanceUnchanged/,
+    )?.[0].replace(/\n\nfunction assertBalanceUnchanged$/, "");
+    expect(functionSource).toBeTruthy();
+    const assertEntitlementBalance = Function(
+      "boundedJson",
+      `${functionSource}; return assertEntitlementBalance;`,
+    )(JSON.stringify);
+
+    expect(() => assertEntitlementBalance({
+      spotlight: { included: 1, used: 2, remaining: 0, addons: 0 },
+      priority: { included: 1, used: 0, remaining: 1, addons: 0 },
+      bundles: { addons: 0 },
+    })).toThrow(/Invalid spotlight entitlement balance/);
+  });
 });
