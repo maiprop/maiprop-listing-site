@@ -200,9 +200,11 @@ async function fillStripeCheckoutCard(
 }
 
 async function fillStripeBillingAddress(page: Page) {
-  await page.getByLabel(/country|region/i).selectOption({ label: "Greece" }, {
-    timeout: 2_000,
-  }).catch(() => undefined);
+  // The Link phone selector also has a country label. Select the billing
+  // combobox explicitly and fail immediately if the country did not change.
+  const billingCountry = page.getByRole("combobox", { name: "Country or region", exact: true });
+  await billingCountry.selectOption("GR", { timeout: 10_000 });
+  await expect(billingCountry).toHaveValue("GR");
   await fillFirstVisible([
     page.getByLabel(/address line 1/i),
     page.locator('input[name="billingAddressLine1"]'),
@@ -226,6 +228,8 @@ async function fillStripeBillingAddress(page: Page) {
 async function completeStripeCheckout(page: Page) {
   await fillStripeCheckoutCard(page);
   await fillStripeBillingAddress(page);
+  const saveWithLink = page.getByRole("checkbox", { name: /save my information/i });
+  if (await saveWithLink.isVisible()) await saveWithLink.uncheck();
   await page.keyboard.press("Tab").catch(() => undefined);
   await page.waitForTimeout(1_500);
   const submitButton = page.getByRole("button", {
