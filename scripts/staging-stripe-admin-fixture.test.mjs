@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   cleanupStagingStripeAdminFixture,
@@ -29,6 +31,16 @@ function profileQuery(profile) {
 }
 
 describe("staging Stripe admin session", () => {
+  it("supplies the pinned ws transport to Supabase clients on Node 20", async () => {
+    const source = await readFile(
+      resolve("scripts/staging-stripe-admin-fixture.mjs"),
+      "utf8",
+    );
+
+    expect(source).toContain('import WebSocket from "ws";');
+    expect(source).toContain("realtime: { transport: WebSocket }");
+  });
+
   it("authenticates the exact existing authoritative admin without mutating its identity", async () => {
     const existingUser = {
       id: "authoritative-admin-id",

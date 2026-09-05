@@ -6,6 +6,13 @@ const source = readFileSync(
   resolve(import.meta.dirname, "staging-promotion-entitlement-matrix.mjs"),
   "utf8",
 );
+const openHouseGuardMigration = readFileSync(
+  resolve(
+    import.meta.dirname,
+    "../supabase/migrations/20260719061629_report_promotion_campaign_truth_and_block_open_houses.sql",
+  ),
+  "utf8",
+);
 
 describe("staging promotion durable subscription fixtures", () => {
   it("requires the staging service secret and never uses it as a bearer token", () => {
@@ -105,5 +112,77 @@ describe("staging promotion durable subscription fixtures", () => {
       priority: { included: 1, used: 0, remaining: 1, addons: 0 },
       bundles: { addons: 0 },
     })).toThrow(/Invalid spotlight entitlement balance/);
+  });
+
+  it("reaches and asserts the database Open House guard with run-owned priority inventory", () => {
+    const sqlGuardToken = openHouseGuardMigration.match(
+      /guard_listing_promotion_eligibility\(\)[\s\S]*?RAISE EXCEPTION '([^']+)'/,
+    )?.[1];
+    expect(sqlGuardToken).toBe("open_house_promotion_not_supported");
+    expect(source).toContain("async function seedOpenHousePriorityAddonFixture");
+    expect(source).toContain("await seedOpenHousePriorityAddonFixture()");
+    expect(source).toContain("/open_house_promotion_not_supported/");
+    expect(source).not.toContain("expectedOpenHousePriorityError");
+    expect(source).toMatch(
+      /await seedOpenHousePriorityAddonFixture\(\)[\s\S]*?const openHouseActivation = await activate\([\s\S]*?openHouse\.id,[\s\S]*?"priority",[\s\S]*?"open-house"[\s\S]*?\/open_house_promotion_not_supported\//,
+    );
+    expect(source).toMatch(
+      /if \(openHouseActivation\.ok\) \{[\s\S]*?activePromotions\.push/,
+    );
+  });
+
+  it("deletes and verifies only the marked run-owned priority add-on", () => {
+    expect(source).toContain(
+      "const openHousePriorityAddonPurchaseId = globalThis.crypto.randomUUID()",
+    );
+    expect(source).toContain("async function cleanupOpenHousePriorityAddonFixture");
+    expect(source).toContain('id: `eq.${openHousePriorityAddonPurchaseId}`');
+    expect(source).toContain(
+      '"metadata->>ecas_fixture": "eq.staging-promotion-entitlement-matrix"',
+    );
+    expect(source).toContain('"metadata->>ecas_run_id": `eq.${RUN_ID}`');
+    expect(source).toContain(
+      '`addon_purchases?select=id&id=eq.${openHousePriorityAddonPurchaseId}`',
+    );
+    expect(source).toMatch(
+      /finally \{[\s\S]*?await cleanup\(\)[\s\S]*?\}/,
+    );
+  });
+
+  it("deletes an unexpected Open House allocation before its add-on purchase", () => {
+    const functionSource = source.match(
+      /function openHouseAddonAllocationFilter\(select\) \{[\s\S]*?\n\}/,
+    )?.[0];
+    expect(functionSource).toBeTruthy();
+    const openHouseAddonAllocationFilter = Function(
+      "URLSearchParams",
+      "openHousePriorityAddonPurchaseId",
+      "REQUEST_PREFIX",
+      `${functionSource}; return openHouseAddonAllocationFilter;`,
+    )(URLSearchParams, "addon-fixture-id", "ecas:run-id:");
+    const filterUrl = new URL(
+      `https://example.test/${openHouseAddonAllocationFilter("id")}`,
+    );
+    expect(filterUrl.searchParams.get("select")).toBe("id");
+    expect(filterUrl.searchParams.get("addon_purchase_id"))
+      .toBe("eq.addon-fixture-id");
+    expect(filterUrl.searchParams.get("request_key"))
+      .toBe("eq.ecas:run-id:open-house");
+
+    expect(source).toContain(
+      "async function cleanupOpenHousePriorityAddonAllocationFixture",
+    );
+    expect(source).toContain("row.addon_purchase_id !== openHousePriorityAddonPurchaseId");
+    expect(source).toContain("row.request_key !== `${REQUEST_PREFIX}open-house`");
+    expect(source).toContain('openHouseAddonAllocationFilter("id")');
+    const allocationCleanup = source.indexOf(
+      "await cleanupOpenHousePriorityAddonAllocationFixture()",
+    );
+    const purchaseCleanup = source.indexOf(
+      "await cleanupOpenHousePriorityAddonFixture()",
+      allocationCleanup,
+    );
+    expect(allocationCleanup).toBeGreaterThan(-1);
+    expect(purchaseCleanup).toBeGreaterThan(allocationCleanup);
   });
 });

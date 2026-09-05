@@ -33,6 +33,10 @@ const LOCAL_DEV_ORIGINS = [
 
 /** Cloudflare Pages preview deploys use `<branch>.maiprop-listing-site.pages.dev`. */
 const CF_PAGES_PATTERN = /^https:\/\/[\w-]+\.maiprop-listing-site\.pages\.dev$/;
+const STAGING_CF_PAGES_ORIGIN =
+  "https://maiprop-listing-site-staging.pages.dev";
+const STAGING_CF_PAGES_HASH_PATTERN =
+  /^https:\/\/[0-9a-f]{8}\.maiprop-listing-site-staging\.pages\.dev$/;
 
 const isProduction = Deno.env.get("ENVIRONMENT") === "production";
 
@@ -41,7 +45,11 @@ const ALLOWED_ORIGINS = isProduction
   : [...PRODUCTION_ORIGINS, ...LOCAL_DEV_ORIGINS];
 
 function isAllowedOrigin(origin: string): boolean {
-  return ALLOWED_ORIGINS.includes(origin) || CF_PAGES_PATTERN.test(origin);
+  const isStagingPagesOrigin = Deno.env.get("ENVIRONMENT") === "staging" &&
+    (origin === STAGING_CF_PAGES_ORIGIN ||
+      STAGING_CF_PAGES_HASH_PATTERN.test(origin));
+  return ALLOWED_ORIGINS.includes(origin) || CF_PAGES_PATTERN.test(origin) ||
+    isStagingPagesOrigin;
 }
 
 const BASE_ALLOWED_HEADERS =

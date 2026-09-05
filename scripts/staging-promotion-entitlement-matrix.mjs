@@ -18,6 +18,7 @@ const pricingConfigIds = {
   developerA: globalThis.crypto.randomUUID(),
   developerB: globalThis.crypto.randomUUID(),
 };
+const openHousePriorityAddonPurchaseId = globalThis.crypto.randomUUID();
 
 const accounts = {
   developerA: {
@@ -253,6 +254,138 @@ async function seedBillingSubscriptionFixtures(pricingConfigs) {
   }
 }
 
+function addonPurchaseFilter() {
+  const parameters = new URLSearchParams({
+    id: `eq.${openHousePriorityAddonPurchaseId}`,
+    user_id: `eq.${accounts.developerA.expectedUserId}`,
+    addon_key: "eq.priority_placement",
+    stripe_session_id: `eq.cs_test_ecas_stage_${RUN_ID}`,
+    "metadata->>ecas_fixture": "eq.staging-promotion-entitlement-matrix",
+    "metadata->>ecas_run_id": `eq.${RUN_ID}`,
+  });
+  return `addon_purchases?${parameters}`;
+}
+
+function openHouseAddonAllocationFilter(select) {
+  const parameters = new URLSearchParams({
+    ...(select ? { select } : {}),
+    addon_purchase_id: `eq.${openHousePriorityAddonPurchaseId}`,
+    request_key: `eq.${REQUEST_PREFIX}open-house`,
+  });
+  return `listing_promotion_allocations?${parameters}`;
+}
+
+async function seedOpenHousePriorityAddonFixture() {
+  const inserted = expectSuccess(
+    await serviceRequest("addon_purchases", {
+      method: "POST",
+      prefer: "return=representation",
+      body: {
+        id: openHousePriorityAddonPurchaseId,
+        user_id: accounts.developerA.expectedUserId,
+        addon_key: "priority_placement",
+        module: "adhoc_charges",
+        audience: "developer",
+        unit: "per_listing",
+        quantity: 1,
+        checkout_mode: "payment",
+        status: "paid",
+        stripe_session_id: `cs_test_ecas_stage_${RUN_ID}`,
+        runtime_mode: "test",
+        livemode: false,
+        metadata: {
+          ecas_fixture: "staging-promotion-entitlement-matrix",
+          ecas_run_id: RUN_ID,
+        },
+      },
+    }),
+    "Open House priority entitlement fixture creation",
+  );
+  if (
+    !Array.isArray(inserted)
+    || inserted.length !== 1
+    || inserted[0]?.id !== openHousePriorityAddonPurchaseId
+    || inserted[0]?.user_id !== accounts.developerA.expectedUserId
+    || inserted[0]?.addon_key !== "priority_placement"
+    || inserted[0]?.stripe_session_id !== `cs_test_ecas_stage_${RUN_ID}`
+    || inserted[0]?.metadata?.ecas_fixture !== "staging-promotion-entitlement-matrix"
+    || inserted[0]?.metadata?.ecas_run_id !== RUN_ID
+  ) {
+    throw new Error(`Unexpected priority add-on fixture: ${boundedJson(inserted)}`);
+  }
+}
+
+async function cleanupOpenHousePriorityAddonAllocationFixture() {
+  const result = await serviceRequest(openHouseAddonAllocationFilter(), {
+    method: "DELETE",
+    prefer: "return=representation",
+  });
+  if (!result.ok) return result;
+  if (
+    !Array.isArray(result.body)
+    || result.body.length > 1
+    || result.body.some((row) => (
+      row.addon_purchase_id !== openHousePriorityAddonPurchaseId
+      || row.request_key !== `${REQUEST_PREFIX}open-house`
+    ))
+  ) {
+    return {
+      status: 500,
+      ok: false,
+      body: { error: "unexpected_open_house_addon_allocation_cleanup_response" },
+    };
+  }
+  const remaining = await serviceRequest(openHouseAddonAllocationFilter("id"));
+  if (!remaining.ok || !Array.isArray(remaining.body) || remaining.body.length > 0) {
+    return {
+      status: remaining.status,
+      ok: false,
+      body: {
+        error: "open_house_addon_allocation_cleanup_incomplete",
+        remaining: remaining.body,
+      },
+    };
+  }
+  return result;
+}
+
+async function cleanupOpenHousePriorityAddonFixture() {
+  const result = await serviceRequest(addonPurchaseFilter(), {
+    method: "DELETE",
+    prefer: "return=representation",
+  });
+  if (!result.ok) return result;
+  if (
+    !Array.isArray(result.body)
+    || result.body.length > 1
+    || result.body.some((row) => (
+      row.id !== openHousePriorityAddonPurchaseId
+      || row.user_id !== accounts.developerA.expectedUserId
+      || row.addon_key !== "priority_placement"
+      || row.stripe_session_id !== `cs_test_ecas_stage_${RUN_ID}`
+      || row.metadata?.ecas_fixture !== "staging-promotion-entitlement-matrix"
+      || row.metadata?.ecas_run_id !== RUN_ID
+    ))
+  ) {
+    return {
+      status: 500,
+      ok: false,
+      body: { error: "unexpected_priority_addon_cleanup_response" },
+    };
+  }
+  const remaining = await serviceRequest(
+    `addon_purchases?select=id&id=eq.${openHousePriorityAddonPurchaseId}`,
+  );
+  if (!remaining.ok || !Array.isArray(remaining.body) || remaining.body.length > 0) {
+    return {
+      status: remaining.status,
+      ok: false,
+      body: { error: "priority_addon_cleanup_incomplete", remaining: remaining.body },
+    };
+  }
+  return result;
+}
+
 function allocationFilter(select) {
   const filters = {
     billing_subscription_id: `in.(${Object.values(billingSubscriptionIds).join(",")})`,
@@ -458,7 +591,20 @@ async function cleanup() {
     cleanupErrors.push(
       `delete promotion allocations: ${boundedJson(allocationResult.body)}`,
     );
+  }
+  const openHouseAllocationResult =
+    await cleanupOpenHousePriorityAddonAllocationFixture();
+  if (!openHouseAllocationResult.ok) {
+    cleanupErrors.push(
+      `delete Open House add-on allocation: ${boundedJson(openHouseAllocationResult.body)}`,
+    );
   } else {
+    const addonResult = await cleanupOpenHousePriorityAddonFixture();
+    if (!addonResult.ok) {
+      cleanupErrors.push(`delete priority add-on fixture: ${boundedJson(addonResult.body)}`);
+    }
+  }
+  if (allocationResult.ok) {
     const billingResult = await cleanupBillingSubscriptionFixtures();
     if (!billingResult.ok) {
       cleanupErrors.push(`delete billing fixtures: ${boundedJson(billingResult.body)}`);
@@ -503,6 +649,21 @@ function assertBalanceUnchanged(actual, expected) {
         );
       }
     }
+  }
+}
+
+function assertRunOwnedPriorityAddonAvailable(actual, baseline) {
+  if (
+    actual?.bundles?.addons !== baseline?.bundles?.addons
+    || ["included", "used", "remaining"].some(
+      (key) => actual?.priority?.[key] !== baseline?.priority?.[key],
+    )
+    || actual?.priority?.addons !== baseline?.priority?.addons + 1
+    || ["included", "used", "remaining", "addons"].some(
+      (key) => actual?.spotlight?.[key] !== baseline?.spotlight?.[key],
+    )
+  ) {
+    throw new Error(`Run-owned priority add-on is unavailable: ${boundedJson(actual)}`);
   }
 }
 
@@ -606,18 +767,42 @@ async function main() {
     "Cross-tenant promotion activation",
     /listing_promotion_forbidden/,
   );
+  await seedOpenHousePriorityAddonFixture();
+  const balanceWithOpenHouseEntitlement = expectSuccess(
+    await rpc(developerA, "get_listing_promotion_balance"),
+    "Open House priority entitlement balance",
+  );
+  assertRunOwnedPriorityAddonAvailable(balanceWithOpenHouseEntitlement, balanceBefore);
+  const openHouseActivation = await activate(
+    developerA,
+    openHouse.id,
+    "priority",
+    "open-house",
+  );
+  if (openHouseActivation.ok) {
+    activePromotions.push({ account: developerA, listingId: openHouse.id, type: "priority" });
+  }
   expectFailure(
-    await activate(developerA, openHouse.id, "priority", "open-house"),
+    openHouseActivation,
     "Open House promotion activation",
     /open_house_promotion_not_supported/,
   );
+  const balanceAfterOpenHouseDenied = expectSuccess(
+    await rpc(developerA, "get_listing_promotion_balance"),
+    "Balance after denied Open House promotion",
+  );
+  assertBalanceUnchanged(balanceAfterOpenHouseDenied, balanceWithOpenHouseEntitlement);
+  expectSuccess(
+    await cleanupOpenHousePriorityAddonFixture(),
+    "Open House priority entitlement fixture cleanup",
+  );
   const balanceAfterDenied = expectSuccess(
     await rpc(developerA, "get_listing_promotion_balance"),
-    "Balance after denied promotion attempts",
+    "Balance after denied promotion cleanup",
   );
   assertEntitlementBalance(balanceAfterDenied);
   assertBalanceUnchanged(balanceAfterDenied, balanceBefore);
-  record("cross-tenant and Open House denials do not consume inventory");
+  record("cross-tenant and Open House policy denials do not consume inventory");
 
   const expectedSpotlightUsed = await provePromotionInventory(
     developerA,
@@ -685,6 +870,7 @@ process.stdout.write(`${JSON.stringify({
   cleanup: {
     listings_and_active_projection: "passed",
     promotion_allocation_history: "deleted",
+    open_house_priority_addon_fixture: "deleted",
     billing_subscription_fixtures: "deleted",
     inserted_pricing_config_fixtures: "deleted",
     service_cleanup_required_for_allocation_history: false,

@@ -1629,6 +1629,14 @@ jobs:
             --sha "$RELEASE_SHA" \
             --source-run-id "$SOURCE_RUN_ID" \
             --source-run-attempt "$SOURCE_RUN_ATTEMPT"
+          npx --no-install supabase --workdir release-candidate secrets set \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+            ENVIRONMENT=staging
+          npm run --silent release:validate -- github-staging-lease \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha "$RELEASE_SHA" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT"
           npx --no-install supabase --workdir release-candidate functions deploy \
             --use-api \
             --project-ref "$STAGING_SUPABASE_PROJECT_ID"
