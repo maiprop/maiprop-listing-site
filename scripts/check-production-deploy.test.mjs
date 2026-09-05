@@ -262,6 +262,22 @@ describe("production deploy site-lock smoke helpers", () => {
 });
 
 describe("production deploy public API fixture guard", () => {
+  it("uses canonical auction listing UUIDs and only UUID-safe auction fallbacks", async () => {
+    const { extractPublicListingIds } = await import(
+      "./check-production-deploy-public-api.mjs"
+    );
+    const canonicalId = "5a7a9000-0000-4000-8000-000000000002";
+    const fallbackId = "5a7a9000-0000-4000-8000-000000000003";
+
+    expect(extractPublicListingIds({
+      data: [
+        { id: "stage-proof-os-auction", listing_id: canonicalId },
+        { id: fallbackId },
+        { id: "not-a-uuid" },
+      ],
+    }, { requireUuid: true })).toEqual([canonicalId, fallbackId]);
+  });
+
   it("documents the production-blocked fixture markers", () => {
     expect(PUBLIC_API_FIXTURE_MARKERS.map((marker) => marker.name)).toEqual([
       "supervisor marker",
@@ -315,6 +331,7 @@ describe("production deploy public API fixture guard", () => {
   it("follows public listing feed rows into the public detail API and records every checked route", async () => {
     const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
     const calls = [];
+    const auctionListingId = "5a7a9000-0000-4000-8000-000000000002";
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (url) => {
       const href = String(url);
@@ -332,13 +349,21 @@ describe("production deploy public API fixture guard", () => {
       if (href.includes("/api/public/auctions?")) {
         return Response.json({
           data: href.endsWith("limit=60")
-            ? [{ id: "auction-1", title: "Clean auction" }]
+            ? [{
+                id: "stage-proof-os-auction",
+                listing_id: auctionListingId,
+                title: "Clean auction",
+              }]
             : [],
         });
       }
       if (href.includes("/api/public/homepage?section=auctions")) {
         return Response.json({
-          data: [{ id: "auction-1", title: "Clean auction" }],
+          data: [{
+            id: "stage-proof-os-auction",
+            listing_id: auctionListingId,
+            title: "Clean auction",
+          }],
         });
       }
       if (href.includes("/api/public/homepage?section=type-counts")) {
@@ -372,8 +397,8 @@ describe("production deploy public API fixture guard", () => {
       if (href.endsWith("/api/public/listing?id=new-build-1")) {
         return Response.json({ data: { id: "new-build-1", title: "Clean new build detail" } });
       }
-      if (href.endsWith("/api/public/listing?id=auction-1")) {
-        return Response.json({ data: { id: "auction-1", title: "Clean auction detail" } });
+      if (href.endsWith(`/api/public/listing?id=${auctionListingId}`)) {
+        return Response.json({ data: { id: auctionListingId, title: "Clean auction detail" } });
       }
       return Response.json([]);
     };
@@ -408,7 +433,7 @@ describe("production deploy public API fixture guard", () => {
           status: "passed",
         }),
         expect.objectContaining({
-          path: "/api/public/listing?id=auction-1",
+          path: `/api/public/listing?id=${auctionListingId}`,
           status: "passed",
         }),
       ]));
@@ -420,7 +445,12 @@ describe("production deploy public API fixture guard", () => {
 
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=listing-1");
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=new-build-1");
-    expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=auction-1");
+    expect(calls).toContain(
+      `https://portal.maiprop.co/api/public/listing?id=${auctionListingId}`,
+    );
+    expect(calls).not.toContain(
+      "https://portal.maiprop.co/api/public/listing?id=stage-proof-os-auction",
+    );
     expect(calls).toContain("https://portal.maiprop.co/api/public/auctions?limit=600");
   });
 

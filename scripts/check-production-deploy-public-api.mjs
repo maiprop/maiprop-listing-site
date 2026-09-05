@@ -46,6 +46,7 @@ const listingDetailSourcePaths = new Set([
   "/api/public/auctions?limit=60",
 ]);
 const MAX_DETAIL_CHECK_IDS = 3;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CACHE_STATES = new Set([
   "BYPASS",
   "COALESCED",
@@ -73,7 +74,7 @@ const defaultFetchText = async (url, options = {}) => {
   return { res, text };
 };
 
-function extractPublicListingIds(body) {
+export function extractPublicListingIds(body, { requireUuid = false } = {}) {
   const rows = Array.isArray(body)
     ? body
     : body && typeof body === "object" && Array.isArray(body.data)
@@ -81,7 +82,16 @@ function extractPublicListingIds(body) {
       : [];
 
   return rows
-    .map((row) => row && typeof row === "object" ? row.id : null)
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      if (!requireUuid) return row.id;
+      if (typeof row.listing_id === "string" && UUID_RE.test(row.listing_id)) {
+        return row.listing_id;
+      }
+      return typeof row.id === "string" && UUID_RE.test(row.id)
+        ? row.id
+        : null;
+    })
     .filter((id) => typeof id === "string" && id.trim().length > 0);
 }
 
@@ -577,7 +587,9 @@ export async function validatePublicApiEndpoints(
     endpoints.push(evidence);
     results.set(path, { body, evidence });
     if (listingDetailSourcePaths.has(path)) {
-      for (const id of extractPublicListingIds(body)) {
+      for (const id of extractPublicListingIds(body, {
+        requireUuid: path.startsWith("/api/public/auctions?"),
+      })) {
         if (listingIds.size >= MAX_DETAIL_CHECK_IDS) break;
         listingIds.add(id);
       }
