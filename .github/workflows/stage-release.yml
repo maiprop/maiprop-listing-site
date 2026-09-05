@@ -2506,6 +2506,7 @@ jobs:
 
       - name: Run staged promotion entitlement proof
         env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
           STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
           STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
@@ -2514,8 +2515,33 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/assert-staging-mutation-target.mjs
-          node scripts/staging-promotion-entitlement-matrix.mjs \
-            > staging-promotion-proof.json
+          api_keys_response="$(mktemp "$RUNNER_TEMP/staging-promotion-api-keys.XXXXXX.json")"
+          chmod 600 "$api_keys_response"
+          trap 'rm -f -- "$api_keys_response"' EXIT
+          curl -fsS --retry 3 \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID/api-keys?reveal=true" \
+            > "$api_keys_response"
+          service_role_key="$(jq -r '
+            (if type == "array" then . else (.keys // .result // []) end)
+            | map(select(
+                (.type // "") == "secret" or
+                ((.type // "") != "publishable" and
+                 (.name // .role // .id // "") == "service_role")
+              ))
+            | sort_by(if (.type // "") == "secret" then 0 else 1 end)
+            | .[0]
+            | (.api_key // .key // .value // empty)
+          ' "$api_keys_response")"
+          if [ -z "$service_role_key" ] || [ "$service_role_key" = "$STAGING_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Could not resolve a distinct staging service-role key."
+            exit 1
+          fi
+          echo "::add-mask::$service_role_key"
+          STAGING_SUPABASE_SERVICE_ROLE_KEY="$service_role_key" \
+            node scripts/staging-promotion-entitlement-matrix.mjs \
+              > staging-promotion-proof.json
+          unset service_role_key
           jq -e '.ok == true' staging-promotion-proof.json >/dev/null
 
       - name: Revalidate lease before storage cleanup proof
@@ -2760,7 +2786,8 @@ jobs:
             admin_user_id="$(jq -er '.user.id' "$admin_auth_response")"
             echo "::add-mask::$admin_token"
             admin_profile="$(curl -fsS --retry 3 \
-              -H "apikey: $service_role_key" \
+              -H "apikey: $STAGING_SUPABASE_PUBLISHABLE_KEY" \
+              -H "Authorization: Bearer $admin_token" \
               "$STAGING_SUPABASE_URL/rest/v1/profiles?select=user_id,role&user_id=eq.$admin_user_id")"
             jq -e --arg id "$admin_user_id" '
               length == 1 and

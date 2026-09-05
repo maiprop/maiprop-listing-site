@@ -245,7 +245,8 @@ WITH fixture_owner AS (
         'staging-auction-route:uuid',
         'auction_pool:' || to_char((now() AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD')
       ]::text[],
-      clock_timestamp() + interval '11 minutes'
+      date_trunc('day', clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+        + interval '2 minutes'
     ),
     (
       '${osListingId}'::uuid,
@@ -256,7 +257,8 @@ WITH fixture_owner AS (
         'os_auction:${osProviderId}',
         'auction_pool:' || to_char((now() AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD')
       ]::text[],
-      clock_timestamp() + interval '10 minutes'
+      date_trunc('day', clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+        + interval '1 minute'
     )
   ) AS fixture(id, title, city, tags, auction_date)
 )
