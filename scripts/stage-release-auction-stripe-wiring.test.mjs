@@ -41,6 +41,23 @@ describe("stage release Stripe and auction proof wiring", () => {
     );
   });
 
+  it("passes a distinct revealed service key to the promotion entitlement proof", () => {
+    const step = workflow.jobs["staging-business-proofs"].steps.find(
+      (candidate) => candidate.name === "Run staged promotion entitlement proof",
+    );
+
+    expect(step.env.SUPABASE_ACCESS_TOKEN).toBeTruthy();
+    expect(step.run).toContain("/api-keys?reveal=true");
+    expect(step.run).toContain('(.type // "") != "publishable"');
+    expect(step.run).toContain('(.type // "") == "secret"');
+    expect(step.run).toContain(
+      'STAGING_SUPABASE_SERVICE_ROLE_KEY="$service_role_key"',
+    );
+    expect(step.run).not.toContain(
+      '-H "Authorization: Bearer $service_role_key"',
+    );
+  });
+
   it("selects exactly the intended described Stripe payment test", () => {
     const stripeSteps = workflow.jobs["staging-stripe-payment"].steps;
     const attestationStep = workflow.jobs["cloudflare-staging"].steps.find(
@@ -91,6 +108,9 @@ describe("stage release Stripe and auction proof wiring", () => {
       '-H "Authorization: Bearer $service_role_key"',
     );
     expect(step.run).toContain('-H "Authorization: Bearer $admin_token"');
+    expect(step.run).toMatch(
+      /admin_profile="\$\(curl -fsS --retry 3 \\\n\s+-H "apikey: \$STAGING_SUPABASE_PUBLISHABLE_KEY" \\\n\s+-H "Authorization: Bearer \$admin_token" \\\n\s+"\$STAGING_SUPABASE_URL\/rest\/v1\/profiles\?select=user_id,role&user_id=eq\.\$admin_user_id"\)"/,
+    );
     expect(attestationStep.run).not.toContain("stripe_price_binding_sha256");
     expect(attestationStep.run).not.toContain("participantMonthlyPrice");
 
