@@ -2803,6 +2803,34 @@ describe("production release train", () => {
       (step) =>
         step.name === "Run N-1 Pages runtime against staged Supabase and Edge",
     );
+    const compatibilityResolve = compatibility.steps.find(
+      (step) => step.name === "Resolve IPv4 staging auction database endpoint",
+    );
+    const compatibilitySeed = compatibility.steps.find(
+      (step) => step.name === "Seed exact-SHA staging auction proof fixtures",
+    );
+    const compatibilityCleanup = compatibility.steps.find(
+      (step) => step.name === "Cleanup exact-SHA staging auction proof fixtures",
+    );
+    expect(compatibility.steps.indexOf(compatibilityResolve)).toBeLessThan(
+      compatibility.steps.indexOf(compatibilitySeed),
+    );
+    expect(compatibility.steps.indexOf(compatibilitySeed)).toBeLessThan(
+      compatibility.steps.indexOf(compatibilityRuntime),
+    );
+    expect(compatibility.steps.indexOf(compatibilityRuntime)).toBeLessThan(
+      compatibility.steps.indexOf(compatibilityCleanup),
+    );
+    expect(compatibilityResolve.run).toContain(
+      "SUPABASE_STAGING_EFFECTIVE_DB_URL=$resolved_url",
+    );
+    expect(compatibilitySeed.run).toBe(
+      "node scripts/staging-auction-fixtures.mjs seed",
+    );
+    expect(compatibilityCleanup.if).toBe("always()" );
+    expect(compatibilityCleanup.run).toBe(
+      "node scripts/staging-auction-fixtures.mjs cleanup",
+    );
     expect(compatibilityRuntime.env.CLOUDFLARE_STAGING_TURN_KEY_ID).toBe(
       "${{ secrets.CLOUDFLARE_STAGING_TURN_KEY_ID }}",
     );
@@ -2875,6 +2903,7 @@ describe("production release train", () => {
       "validate-source",
       "supabase-staging",
       "cloudflare-staging",
+      "staging-n-minus-one-compatibility",
     ]);
     expect(proof.environment).toBe("staging");
     expect(proofSource).toContain("staging-catalogue-gates.spec.ts");
