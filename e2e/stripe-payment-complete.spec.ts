@@ -238,8 +238,10 @@ async function completeStripeCheckout(page: Page) {
     name: /subscribe|pay|start trial/i,
   });
   await expect(submitButton).toBeEnabled({ timeout: 10_000 });
-  await submitButton.click();
-  await page.waitForURL(/[?&]checkout=success/, { timeout: 120_000, waitUntil: "commit" });
+  await Promise.all([
+    page.waitForURL(/[?&]checkout=success/, { timeout: 120_000, waitUntil: "commit" }),
+    submitButton.click(),
+  ]);
   expect(new URL(page.url()).origin, "Checkout must return to the originating app environment")
     .toBe(new URL(APP_ORIGIN).origin);
   await page.waitForLoadState("domcontentloaded");
