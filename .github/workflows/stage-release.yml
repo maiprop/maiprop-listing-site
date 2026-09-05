@@ -2675,8 +2675,7 @@ jobs:
           STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
           STAGING_APP_URL: ${{ needs.cloudflare-staging.outputs.stable_url }}
-          STAGING_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-          STAGING_ADMIN_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
         run: |
           set -euo pipefail
           node scripts/assert-staging-mutation-target.mjs
@@ -2699,21 +2698,27 @@ jobs:
             exit 1
           fi
           echo "::add-mask::$service_role_key"
-          for value in "$STAGING_ADMIN_EMAIL" "$STAGING_ADMIN_PASSWORD"; do
-            if [ -z "$value" ]; then
-              echo "::error::Authoritative staging admin credentials are required for catalog initialization."
-              exit 1
-            fi
-            echo "::add-mask::$value"
-          done
           pro_before="$(mktemp "$RUNNER_TEMP/staging-pro-before.XXXXXX.json")"
           pro_after="$(mktemp "$RUNNER_TEMP/staging-pro-after.XXXXXX.json")"
-          admin_auth_request="$(mktemp "$RUNNER_TEMP/staging-admin-auth-request.XXXXXX.json")"
-          admin_auth_response="$(mktemp "$RUNNER_TEMP/staging-admin-auth-response.XXXXXX.json")"
+          admin_fixture="$(mktemp "$RUNNER_TEMP/staging-stripe-admin.XXXXXX.json")"
           create_price_request="$(mktemp "$RUNNER_TEMP/staging-create-price-request.XXXXXX.json")"
           create_price_response="$(mktemp "$RUNNER_TEMP/staging-create-price-response.XXXXXX.json")"
-          chmod 600 "$pro_before" "$pro_after" "$admin_auth_request" "$admin_auth_response" "$create_price_request" "$create_price_response"
-          trap 'rm -f -- "$pro_before" "$pro_after" "$admin_auth_request" "$admin_auth_response" "$create_price_request" "$create_price_response" /tmp/staging-api-keys.json' EXIT
+          chmod 600 "$pro_before" "$pro_after" "$admin_fixture" "$create_price_request" "$create_price_response"
+          cleanup_stripe_admin_fixture() {
+            original_status="$?"
+            trap - EXIT
+            cleanup_status=0
+            if [ -s "$admin_fixture" ]; then
+              SUPABASE_SERVICE_ROLE_KEY="$service_role_key" \
+                node scripts/staging-stripe-admin-fixture.mjs cleanup "$admin_fixture" || cleanup_status="$?"
+            fi
+            rm -f -- "$pro_before" "$pro_after" "$admin_fixture" "$create_price_request" "$create_price_response" /tmp/staging-api-keys.json
+            if [ "$original_status" -ne 0 ]; then
+              exit "$original_status"
+            fi
+            exit "$cleanup_status"
+          }
+          trap cleanup_stripe_admin_fixture EXIT
           curl -fsS --retry 3 \
             -H "apikey: $service_role_key" \
             "$STAGING_SUPABASE_URL/rest/v1/pricing_configs?select=id,key,audience,module,unit,is_active,metadata&key=eq.pro" \
@@ -2775,16 +2780,10 @@ jobs:
           fi
 
           if [ "$repair_marked_catalog" = "true" ]; then
-            jq -n --arg email "$STAGING_ADMIN_EMAIL" --arg password "$STAGING_ADMIN_PASSWORD" \
-              '{email: $email, password: $password}' > "$admin_auth_request"
-            curl -fsS --retry 3 --request POST \
-              -H "apikey: $STAGING_SUPABASE_PUBLISHABLE_KEY" \
-              -H "Content-Type: application/json" \
-              --data-binary "@$admin_auth_request" \
-              "$STAGING_SUPABASE_URL/auth/v1/token?grant_type=password" \
-              > "$admin_auth_response"
-            admin_token="$(jq -er '.access_token' "$admin_auth_response")"
-            admin_user_id="$(jq -er '.user.id' "$admin_auth_response")"
+            SUPABASE_SERVICE_ROLE_KEY="$service_role_key" \
+              node scripts/staging-stripe-admin-fixture.mjs create "$admin_fixture"
+            admin_token="$(jq -er .accessToken "$admin_fixture")"
+            admin_user_id="$(jq -er .userId "$admin_fixture")"
             echo "::add-mask::$admin_token"
             admin_profile="$(curl -fsS --retry 3 \
               -H "apikey: $STAGING_SUPABASE_PUBLISHABLE_KEY" \

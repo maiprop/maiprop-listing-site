@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { isExpectedNMinusOneCorsConsoleError } from "./helpers/stagingCatalogueConsolePolicy";
 
 const RUN_STAGING_CATALOGUE_GATES =
   process.env.MAIPROP_RUN_STAGING_CATALOGUE_GATES === "1";
@@ -148,7 +149,13 @@ function collectRuntimeEvidence(page: Page): RuntimeEvidence {
 
   page.on("pageerror", (error) => evidence.pageErrors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error") evidence.consoleErrors.push(message.text());
+    if (message.type() !== "error") return;
+    if (isExpectedNMinusOneCorsConsoleError({
+      text: message.text(),
+      sourceUrl: message.location().url,
+      stagingBaseUrl: STAGING_BASE_URL,
+    }, ALLOW_LEGACY_UUID_ONLY_AUCTION_ROUTES)) return;
+    evidence.consoleErrors.push(message.text());
   });
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;

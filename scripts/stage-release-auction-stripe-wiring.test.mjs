@@ -43,7 +43,8 @@ describe("stage release Stripe and auction proof wiring", () => {
 
   it("passes a distinct revealed service key to the promotion entitlement proof", () => {
     const step = workflow.jobs["staging-business-proofs"].steps.find(
-      (candidate) => candidate.name === "Run staged promotion entitlement proof",
+      (candidate) =>
+        candidate.name === "Run staged promotion entitlement proof",
     );
 
     expect(step.env.SUPABASE_ACCESS_TOKEN).toBeTruthy();
@@ -80,19 +81,36 @@ describe("stage release Stripe and auction proof wiring", () => {
     ]);
     expect(step.run).toContain("staging_catalog_initialized_by_stage_release");
     expect(step.run).toContain("/functions/v1/create-stripe-price");
-    expect(step.run).toContain('then .[0].id else empty end');
-    expect(step.run).toContain("grant_type=password");
-    expect(step.run).toContain("role == \"admin\"");
+    expect(step.run).toContain("then .[0].id else empty end");
+    expect(step.run).toContain('role == "admin"');
     expect(step.run).not.toContain("is_platform_admin");
     expect(step.run).toContain("repair_marked_catalog=true");
-    expect(step.run).toContain('.metadata.staging_catalog_initialized_by_stage_release == true');
+    expect(step.run).toContain(
+      ".metadata.staging_catalog_initialized_by_stage_release == true",
+    );
     expect(step.run).toContain('if [ "$repair_marked_catalog" = "true" ]');
-    expect(step.run).toContain("Existing unmarked staging pro catalog is not checkout-ready and was not overwritten");
-    expect(step.run).toContain(".metadata.stripe_product_id == $created[0].product_id");
-    expect(step.run).toContain(".metadata.stripe_price_id_monthly == $created[0].price_id");
+    expect(step.run).toContain(
+      "Existing unmarked staging pro catalog is not checkout-ready and was not overwritten",
+    );
+    expect(step.run).toContain(
+      ".metadata.stripe_product_id == $created[0].product_id",
+    );
+    expect(step.run).toContain(
+      ".metadata.stripe_price_id_monthly == $created[0].price_id",
+    );
     expect(step.run).not.toContain("pricing_configs?key=eq.pro&metadata=cs.");
-    expect(step.env.STAGING_ADMIN_EMAIL).toBe("${{ secrets.E2E_ADMIN_EMAIL }}");
-    expect(step.env.STAGING_ADMIN_PASSWORD).toBe("${{ secrets.E2E_DEMO_PASSWORD }}");
+    expect(step.env.STAGING_ADMIN_EMAIL).toBeUndefined();
+    expect(step.env.STAGING_ADMIN_PASSWORD).toBeUndefined();
+    expect(step.env.E2E_ADMIN_EMAIL).toBe("${{ secrets.E2E_ADMIN_EMAIL }}");
+    expect(step.run).toContain(
+      "scripts/staging-stripe-admin-fixture.mjs create",
+    );
+    expect(step.run).toContain(
+      "scripts/staging-stripe-admin-fixture.mjs cleanup",
+    );
+    expect(step.run).toContain(
+      'admin_token="$(jq -er .accessToken "$admin_fixture")"',
+    );
     expect(step.env.STRIPE_RESTRICTED_KEY).toBeUndefined();
     expect(step.run).not.toContain("VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY");
     expect(step.run).toContain("/api-keys?reveal=true");
