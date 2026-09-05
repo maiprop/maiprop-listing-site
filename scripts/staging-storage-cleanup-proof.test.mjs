@@ -15,6 +15,12 @@ test("Storage proof is staging-only and explicitly rejects production", () => {
   assert.match(source, /destructiveAck !== "staging-only"/);
 });
 
+test("Storage fixture uses the authorized onboarding procedure for its role", () => {
+  assert.match(source, /admin\.rpc\("complete_onboarding_role_for_user",/);
+  assert.match(source, /p_role: "developer"/);
+  assert.doesNotMatch(source, /\.upsert\(/);
+});
+
 test("Storage proof supplies the pinned ws transport to every Supabase client on Node 20", () => {
   const packageJson = JSON.parse(
     readFileSync(resolve(process.cwd(), "package.json"), "utf8"),

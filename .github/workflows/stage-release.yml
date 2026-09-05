@@ -2634,7 +2634,9 @@ jobs:
   staging-stripe-payment:
     name: Prove staged Stripe test payment
     environment: staging
-    needs: [validate-source, supabase-staging, cloudflare-staging]
+    # Security fixture preparation updates the authoritative admin password,
+    # which invalidates sessions. Finish it before creating the Stripe session.
+    needs: [validate-source, supabase-staging, cloudflare-staging, staging-live-security]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:

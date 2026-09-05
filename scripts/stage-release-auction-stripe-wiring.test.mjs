@@ -11,6 +11,10 @@ const workflow = yaml.load(
 );
 
 describe("stage release Stripe and auction proof wiring", () => {
+  it("finishes admin-mutating security fixtures before authenticating Stripe", () => {
+    expect(workflow.jobs["staging-stripe-payment"].needs).toContain("staging-live-security");
+    expect(workflow.jobs["staging-live-security"].needs).not.toContain("staging-stripe-payment");
+  });
   it("resolves a distinct revealed staging service key for storage cleanup", () => {
     const step = workflow.jobs["staging-business-proofs"].steps.find(
       (candidate) => candidate.name === "Run staged storage cleanup proof",
