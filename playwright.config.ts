@@ -62,8 +62,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Retry once locally and in CI — handles Supabase auth rate-limiting under parallel load */
   retries: 1,
-  /* Parallelism — cap at 3 locally to avoid Supabase auth rate-limiting under high parallel load */
-  workers: process.env.CI ? 2 : 3,
+  /* Timing gates must not compete with other test browsers for runner CPU.
+   * Keep functional tests parallel; preserve every performance threshold. */
+  workers: isPerformanceGate ? 1 : process.env.CI ? 2 : 3,
   outputDir,
   reporter: process.env.CI ? "github" : "list",
 
