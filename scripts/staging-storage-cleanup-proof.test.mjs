@@ -15,6 +15,21 @@ test("Storage proof is staging-only and explicitly rejects production", () => {
   assert.match(source, /destructiveAck !== "staging-only"/);
 });
 
+test("Storage proof supplies the pinned ws transport to every Supabase client on Node 20", () => {
+  const packageJson = JSON.parse(
+    readFileSync(resolve(process.cwd(), "package.json"), "utf8"),
+  );
+
+  assert.equal(packageJson.devDependencies.ws, "8.21.0");
+  assert.match(source, /import WebSocket from "ws";/);
+  assert.match(source, /realtime:\s*\{\s*transport:\s*WebSocket\s*\}/);
+  assert.equal(
+    [...source.matchAll(/createClient\([^;]+?,\s*supabaseClientOptions\s*\)/gs)].length,
+    2,
+    "Both the service-role and public clients must use the Node WebSocket transport",
+  );
+});
+
 test("Storage proof covers registration, leases, preservation, deletion scope, and teardown", () => {
   for (const requiredProof of [
     "register_new_building_storage_upload",

@@ -770,14 +770,16 @@ export const useOwnerProStatus = (
   ownerId?: string | null,
   options: UseOwnerProStatusOptions = {},
 ) => {
+  const { user } = useAuth();
   const hasListingId = Boolean(listingId);
   const hasOwnerId = Boolean(ownerId);
-  const enabled = (options.enabled ?? true) && hasListingId && hasOwnerId;
+  const isAuthenticated = Boolean(user);
+  const enabled = (options.enabled ?? true) && hasListingId && hasOwnerId && isAuthenticated;
 
   return useQuery({
-    queryKey: ["owner-pro-status", listingId, ownerId],
+    queryKey: ["owner-pro-status", user?.id ?? null, listingId, ownerId],
     queryFn: async () => {
-      if (!hasListingId || !hasOwnerId) return false;
+      if (!hasListingId || !hasOwnerId || !isAuthenticated) return false;
       const { data, error } = await supabase.functions.invoke("owner-pro-status", {
         body: { listingId },
       });

@@ -156,8 +156,10 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
 
   /** Clamp current page to total when filters reduce the result set. */
   useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [currentPage, totalPages, setCurrentPage]);
+    // A new page has no metadata until its request resolves. The display
+    // fallback of one page must not cancel that navigation.
+    if (pageMeta && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, pageMeta, totalPages, setCurrentPage]);
 
   const activeFilterCount = [
     filterType,

@@ -11,6 +11,14 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
+const { authState } = vi.hoisted(() => ({
+  authState: { user: { id: "authenticated-viewer" } as null | { id: string } },
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => authState,
+}));
+
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn(),
@@ -59,6 +67,7 @@ function mockTableQuery(resolved: { data: unknown; error: null }) {
 describe("useListing detail loading and owner Pro status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.user = { id: "authenticated-viewer" };
     vi.mocked(supabase.rpc).mockImplementation((fn: string) => {
       const viewByFunction: Record<string, string> = {
         get_public_listing_catalogue: "public_listing_catalogue",
@@ -125,6 +134,15 @@ describe("useListing detail loading and owner Pro status", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data).toBe(false);
+  });
+
+  it("does not request the authenticated owner status endpoint for a signed-out viewer", () => {
+    authState.user = null;
+
+    const { result } = renderHook(() => useOwnerProStatus(TEST_LISTING_ID, TEST_OWNER_ID), { wrapper });
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(supabase.functions.invoke).not.toHaveBeenCalled();
   });
 
   it("returns ownerIsPro=false when owner-pro-status returns null", async () => {
