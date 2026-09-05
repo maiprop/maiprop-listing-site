@@ -36,7 +36,13 @@ export const resolveCheckoutOrigin = (rawOrigin: string | null): string => {
     siteOrigin,
   ]);
   const origin = normalizeOrigin(rawOrigin);
-  if (origin && (allowed.has(origin) || CF_PAGES_ORIGIN_RE.test(origin))) {
+  // Match the staging origins accepted by the shared CORS policy, without
+  // allowing production Checkout to redirect to staging or arbitrary branches.
+  const isStagingOrigin = Deno.env.get("ENVIRONMENT") === "staging" &&
+    origin !== null &&
+    (origin === "https://maiprop-listing-site-staging.pages.dev" ||
+      /^https:\/\/[0-9a-f]{8}\.maiprop-listing-site-staging\.pages\.dev$/.test(origin));
+  if (origin && (allowed.has(origin) || CF_PAGES_ORIGIN_RE.test(origin) || isStagingOrigin)) {
     return origin;
   }
   return siteOrigin;
