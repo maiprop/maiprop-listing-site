@@ -2452,6 +2452,27 @@ describe("production release train", () => {
     }
   });
 
+  it("binds the staging Edge environment before deploying the attested functions", () => {
+    const staging = yaml.load(workflow("reusable-supabase-staging.yml"));
+    const deploy = staging.jobs["deploy-supabase-staging"].steps.find(
+      (candidate) => candidate.name === "Deploy edge functions to staging",
+    );
+
+    expect(deploy).toBeDefined();
+    const environmentBinding = deploy.run.indexOf(
+      "supabase --workdir release-candidate secrets set",
+    );
+    const edgeDeployment = deploy.run.indexOf("functions deploy");
+    expect(environmentBinding).toBeGreaterThan(
+      deploy.run.indexOf("assert-staging-mutation-target.mjs"),
+    );
+    expect(deploy.run).toContain("ENVIRONMENT=staging");
+    expect(environmentBinding).toBeLessThan(edgeDeployment);
+    expect(
+      deploy.run.slice(environmentBinding, edgeDeployment),
+    ).toContain("github-staging-lease");
+  });
+
   it("repairs only the exact reviewed staging migration aliases before dry-run", () => {
     const stagingSource = workflow("reusable-supabase-staging.yml");
     const staging = yaml.load(stagingSource);

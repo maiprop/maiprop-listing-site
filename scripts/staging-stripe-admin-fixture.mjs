@@ -2,6 +2,7 @@ import { chmod, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 import { assertStagingMutationTarget } from "./assert-staging-mutation-target.mjs";
 
 function requireEnv(name, env) {
@@ -166,7 +167,10 @@ function clients(env) {
       "Stripe admin session requires a non-public service credential.",
     );
   }
-  const options = { auth: { persistSession: false, autoRefreshToken: false } };
+  const options = {
+    auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { transport: WebSocket },
+  };
   return {
     admin: createClient(url, serviceKey, options),
     actor: createClient(url, publishableKey, options),

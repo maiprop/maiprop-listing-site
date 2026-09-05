@@ -5,6 +5,21 @@
 import { assertEquals, assertStrictEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { getCorsHeaders, handleCors } from "./cors.ts";
 
+function withEnvironment(
+  environment: string | undefined,
+  callback: () => void,
+): void {
+  const original = Deno.env.get("ENVIRONMENT");
+  try {
+    if (environment === undefined) Deno.env.delete("ENVIRONMENT");
+    else Deno.env.set("ENVIRONMENT", environment);
+    callback();
+  } finally {
+    if (original === undefined) Deno.env.delete("ENVIRONMENT");
+    else Deno.env.set("ENVIRONMENT", original);
+  }
+}
+
 // ── getCorsHeaders ────────────────────────────────────────────────────────────
 
 Deno.test("getCorsHeaders: reflects an allowed origin", () => {
@@ -96,6 +111,73 @@ Deno.test("getCorsHeaders: rejects other .pages.dev projects", () => {
   });
   const headers = getCorsHeaders(req);
   assertStrictEquals(headers["Access-Control-Allow-Origin"], "https://maiprop.co");
+});
+
+Deno.test("getCorsHeaders: staging permits its canonical Cloudflare Pages origin", () => {
+  withEnvironment("staging", () => {
+    const origin = "https://maiprop-listing-site-staging.pages.dev";
+    const headers = getCorsHeaders(
+      new Request("https://functions.example", {
+        headers: { origin },
+      }),
+    );
+    assertStrictEquals(headers["Access-Control-Allow-Origin"], origin);
+  });
+});
+
+Deno.test("getCorsHeaders: staging permits only hash previews of its Pages project", () => {
+  withEnvironment("staging", () => {
+    const allowedOrigin =
+      "https://56f85fcd.maiprop-listing-site-staging.pages.dev";
+    const allowedHeaders = getCorsHeaders(
+      new Request("https://functions.example", {
+        headers: { origin: allowedOrigin },
+      }),
+    );
+    assertStrictEquals(
+      allowedHeaders["Access-Control-Allow-Origin"],
+      allowedOrigin,
+    );
+
+    for (
+      const rejectedOrigin of [
+        "https://feature.maiprop-listing-site-staging.pages.dev",
+        "https://56f85fcd.evil-project.pages.dev",
+        "https://56f85fcd.maiprop-listing-site-staging.pages.dev.evil.example",
+      ]
+    ) {
+      const rejectedHeaders = getCorsHeaders(
+        new Request("https://functions.example", {
+          headers: { origin: rejectedOrigin },
+        }),
+      );
+      assertStrictEquals(
+        rejectedHeaders["Access-Control-Allow-Origin"],
+        "https://maiprop.co",
+      );
+    }
+  });
+});
+
+Deno.test("getCorsHeaders: production rejects staging Pages origins", () => {
+  withEnvironment("production", () => {
+    for (
+      const origin of [
+        "https://maiprop-listing-site-staging.pages.dev",
+        "https://56f85fcd.maiprop-listing-site-staging.pages.dev",
+      ]
+    ) {
+      const headers = getCorsHeaders(
+        new Request("https://functions.example", {
+          headers: { origin },
+        }),
+      );
+      assertStrictEquals(
+        headers["Access-Control-Allow-Origin"],
+        "https://maiprop.co",
+      );
+    }
+  });
 });
 
 // ── handleCors ────────────────────────────────────────────────────────────────
