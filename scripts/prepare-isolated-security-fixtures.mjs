@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { appendFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import WebSocket from "ws";
@@ -23,8 +24,8 @@ const REQUIRED_ENV = [
   "RLS_USER_A_EMAIL",
   "RLS_USER_B_EMAIL",
   "RLS_USER_PASSWORD",
-  "RLS_ADMIN_EMAIL",
   "RLS_ADMIN_PASSWORD",
+  "GITHUB_ENV",
   "ONBOARDING_TEST_EMAIL",
   "ONBOARDING_TEST_PASSWORD",
 ];
@@ -182,42 +183,67 @@ export async function assertExistingFixtureUsersAreSafe(
   }
 }
 
-export async function resetVerifiedPlatformAdmin(
-  admin,
-  existingUser,
-  email,
-  password,
-) {
-  if (!existingUser || existingUser.email?.toLowerCase() !== email) {
-    throw new Error(`Staging admin ${email} is not an existing platform admin.`);
-  }
-
-  const { data: profile, error: profileError } = await admin
+export async function discoverAndResetUniquePlatformAdmin(admin, password) {
+  const { data: profiles, error: profileError } = await admin
     .from("profiles")
-    .select("role")
-    .eq("user_id", existingUser.id)
-    .maybeSingle();
-  if (profileError) {
+    .select("user_id")
+    .eq("role", "admin")
+    .limit(2);
+  if (profileError || !Array.isArray(profiles)) {
     throw new Error(
-      `Could not verify staging platform admin ${email}: ${profileError.message}`,
+      `Could not discover the authoritative staging platform admin: ${
+        profileError?.message ?? "missing profiles result"
+      }`,
     );
   }
-  if (profile?.role !== "admin") {
-    throw new Error(`Staging admin ${email} is not an existing platform admin.`);
+  if (profiles.length !== 1) {
+    throw new Error(
+      `Expected exactly one authoritative staging platform admin; found ${profiles.length}.`,
+    );
   }
 
-  const { data, error } = await admin.auth.admin.updateUserById(existingUser.id, {
+  const userId = profiles[0]?.user_id;
+  if (!userId) {
+    throw new Error("Authoritative staging platform admin profile has no user ID.");
+  }
+  const { data: authData, error: authError } =
+    await admin.auth.admin.getUserById(userId);
+  const existingUser = authData?.user;
+  const email = existingUser?.email?.trim().toLowerCase();
+  if (authError || !existingUser || !email || /[\r\n]/.test(email)) {
+    throw new Error(
+      `Could not resolve the authoritative staging platform admin Auth email: ${
+        authError?.message ?? "missing valid Auth user email"
+      }`,
+    );
+  }
+
+  const { data, error } = await admin.auth.admin.updateUserById(userId, {
     password,
-    email_confirm: true,
   });
   if (error || !data.user) {
     throw new Error(
-      `Could not reset verified staging platform admin ${email}: ${
+      `Could not reset the verified staging platform admin: ${
         error?.message ?? "missing user"
       }`,
     );
   }
-  return data.user;
+  return { email, user: data.user };
+}
+
+export async function publishDiscoveredAdminEmail(
+  email,
+  githubEnvPath,
+  log = console.log,
+) {
+  if (!githubEnvPath) {
+    throw new Error("GITHUB_ENV is required to publish the staging admin email.");
+  }
+  if (!email || /[\r\n]/.test(email)) {
+    throw new Error("Discovered staging admin email is invalid.");
+  }
+  log(`::add-mask::${email}`);
+  await appendFile(githubEnvPath, `RLS_ADMIN_EMAIL=${email}\n`, "utf8");
 }
 
 async function ensureAuthUser(admin, existingUser, email, password, { replace = false } = {}) {
@@ -315,14 +341,14 @@ export async function prepareIsolatedSecurityFixtures({
   const userAEmail = requireEnv("RLS_USER_A_EMAIL", env).toLowerCase();
   const userBEmail = requireEnv("RLS_USER_B_EMAIL", env).toLowerCase();
   const onboardingEmail = requireEnv("ONBOARDING_TEST_EMAIL", env).toLowerCase();
-  const adminEmail = requireEnv("RLS_ADMIN_EMAIL", env).toLowerCase();
   const rlsPassword = requireEnv("RLS_USER_PASSWORD", env);
   const adminPassword = requireEnv("RLS_ADMIN_PASSWORD", env);
+  const githubEnvPath = requireEnv("GITHUB_ENV", env);
   const onboardingPassword = requireEnv("ONBOARDING_TEST_PASSWORD", env);
   const emails = [userAEmail, userBEmail, onboardingEmail];
 
-  if (new Set([...emails, adminEmail]).size !== emails.length + 1) {
-    throw new Error("RLS, onboarding, and admin staging emails must be distinct.");
+  if (new Set(emails).size !== emails.length) {
+    throw new Error("RLS and onboarding staging emails must be distinct.");
   }
 
   const admin = createAdminClient(url, serviceRoleKey, {
@@ -331,7 +357,7 @@ export async function prepareIsolatedSecurityFixtures({
   });
   const existingByEmail = await listUsersByEmail(
     admin,
-    new Set([...emails, adminEmail]),
+    new Set(emails),
   );
   const fixturesByEmail = new Map(
     emails
@@ -341,10 +367,8 @@ export async function prepareIsolatedSecurityFixtures({
   await assertExistingFixtureUsersAreSafe(admin, fixturesByEmail, {
     allowCanonicalDemoAdoption: true,
   });
-  await resetVerifiedPlatformAdmin(
+  const platformAdmin = await discoverAndResetUniquePlatformAdmin(
     admin,
-    existingByEmail.get(adminEmail),
-    adminEmail,
     adminPassword,
   );
 
@@ -361,6 +385,8 @@ export async function prepareIsolatedSecurityFixtures({
   await normalizeNonAdminIdentity(admin, userA);
   await normalizeNonAdminIdentity(admin, userB);
   await normalizeNonAdminIdentity(admin, onboardingUser, { requireIncompleteOnboarding: true });
+
+  await publishDiscoveredAdminEmail(platformAdmin.email, githubEnvPath);
 
   console.log(
     `Prepared three isolated staging security identities for project ${target.projectRef}.`,

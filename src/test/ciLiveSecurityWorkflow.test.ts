@@ -134,6 +134,10 @@ describe("release-train live security workflow", () => {
       stagingWorkflow.indexOf("- name: Prepare isolated staging security fixtures"),
       stagingWorkflow.indexOf("- name: Revalidate lease before destructive live security proof"),
     );
+    const proof = stagingWorkflow.slice(
+      stagingWorkflow.indexOf("- name: Run exact-SHA staging live security proof"),
+      stagingWorkflow.indexOf("- name: Upload staging live security proof"),
+    );
 
     expect(stagingWorkflow).toContain("staging-live-security:");
     expect(stagingWorkflow).toContain("name: Prove staged live security boundaries");
@@ -152,9 +156,10 @@ describe("release-train live security workflow", () => {
     expect(stagingWorkflow).toContain(
       "node scripts/prepare-isolated-security-fixtures.mjs",
     );
-    expect(preparation).toContain(
-      "RLS_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}",
-    );
+    expect(preparation).not.toContain("secrets.E2E_ADMIN_EMAIL");
+    expect(proof).not.toContain("secrets.E2E_ADMIN_EMAIL");
+    expect(preparation).not.toContain("RLS_ADMIN_EMAIL:");
+    expect(proof).not.toContain("RLS_ADMIN_EMAIL:");
     expect(preparation).toContain(
       "RLS_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}",
     );

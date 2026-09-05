@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   assertExistingFixtureUsersAreSafe,
   assertIsolatedStagingTarget,
+  discoverAndResetUniquePlatformAdmin,
   prepareIsolatedSecurityFixtures,
-  resetVerifiedPlatformAdmin,
+  publishDiscoveredAdminEmail,
 } from "./prepare-isolated-security-fixtures.mjs";
 import {
   PRODUCTION_PROJECT_REF,
@@ -28,8 +32,8 @@ function stagingEnv(overrides = {}) {
     RLS_USER_A_EMAIL: "buyer-a@example.test",
     RLS_USER_B_EMAIL: "seller-b@example.test",
     RLS_USER_PASSWORD: "not-a-secret",
-    RLS_ADMIN_EMAIL: "platform-admin@example.test",
     RLS_ADMIN_PASSWORD: "admin-not-a-secret",
+    GITHUB_ENV: "github-env-test-path",
     ONBOARDING_TEST_EMAIL: "onboarding@example.test",
     ONBOARDING_TEST_PASSWORD: "not-a-secret",
     ...overrides,
@@ -105,10 +109,10 @@ describe("isolated security fixture target guard", () => {
 });
 
 describe("isolated security fixture privilege gate", () => {
-  it("resets credentials only for an existing verified platform admin", async () => {
+  it("discovers the sole authoritative profile admin and resets only that Auth user", async () => {
     const adminUser = {
       id: "verified-admin-id",
-      email: "platform-admin@example.test",
+      email: "Actual-Admin@Example.test",
       app_metadata: { provider: "email", providers: ["email"] },
     };
     const updatedUser = { ...adminUser, email_confirmed_at: "2026-09-05T00:00:00Z" };
@@ -116,63 +120,130 @@ describe("isolated security fixture privilege gate", () => {
       data: { user: updatedUser },
       error: null,
     });
+    const getUserById = vi.fn().mockResolvedValue({
+      data: { user: adminUser },
+      error: null,
+    });
     const profileQuery = {
       select: vi.fn(() => profileQuery),
       eq: vi.fn(() => profileQuery),
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: { role: "admin", is_platform_admin: false },
+      limit: vi.fn().mockResolvedValue({
+        data: [{ user_id: adminUser.id }],
         error: null,
       }),
     };
     const admin = {
-      auth: { admin: { updateUserById } },
+      auth: { admin: { getUserById, updateUserById } },
       from: vi.fn(() => profileQuery),
     };
 
     await expect(
-      resetVerifiedPlatformAdmin(
-        admin,
-        adminUser,
-        "platform-admin@example.test",
-        "admin-not-a-secret",
-      ),
-    ).resolves.toBe(updatedUser);
+      discoverAndResetUniquePlatformAdmin(admin, "admin-not-a-secret"),
+    ).resolves.toEqual({
+      email: "actual-admin@example.test",
+      user: updatedUser,
+    });
+    expect(admin.from).toHaveBeenCalledWith("profiles");
+    expect(profileQuery.select).toHaveBeenCalledWith("user_id");
+    expect(profileQuery.eq).toHaveBeenCalledWith("role", "admin");
+    expect(profileQuery.limit).toHaveBeenCalledWith(2);
+    expect(getUserById).toHaveBeenCalledWith(adminUser.id);
     expect(updateUserById).toHaveBeenCalledWith(adminUser.id, {
       password: "admin-not-a-secret",
-      email_confirm: true,
     });
   });
 
-  it("does not create or promote an identity that is not already a platform admin", async () => {
+  it.each([
+    ["no", []],
+    ["multiple", [{ user_id: "admin-1" }, { user_id: "admin-2" }]],
+  ])("fails closed when staging has %s authoritative profile admins", async (_label, profiles) => {
     const mutation = vi.fn(() => {
       throw new Error("admin mutation must not run");
     });
     const profileQuery = {
       select: vi.fn(() => profileQuery),
       eq: vi.fn(() => profileQuery),
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: { role: "seller", is_platform_admin: true },
+      limit: vi.fn().mockResolvedValue({
+        data: profiles,
         error: null,
       }),
     };
     const admin = {
-      auth: { admin: { updateUserById: mutation, createUser: mutation } },
+      auth: {
+        admin: {
+          getUserById: mutation,
+          updateUserById: mutation,
+          createUser: mutation,
+        },
+      },
       from: vi.fn(() => profileQuery),
     };
 
     await expect(
-      resetVerifiedPlatformAdmin(
-        admin,
-        {
-          id: "ordinary-user-id",
-          email: "ordinary@example.test",
-          app_metadata: { provider: "email", providers: ["email"] },
-        },
-        "ordinary@example.test",
-        "admin-not-a-secret",
-      ),
-    ).rejects.toThrow(/not an existing platform admin/i);
+      discoverAndResetUniquePlatformAdmin(admin, "admin-not-a-secret"),
+    ).rejects.toThrow(/exactly one authoritative staging platform admin/i);
     expect(mutation).not.toHaveBeenCalled();
+  });
+
+  it("masks and publishes the discovered admin email for later workflow steps", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "maiprop-admin-env-"));
+    const githubEnvPath = join(directory, "github-env");
+    const log = vi.fn();
+
+    try {
+      await publishDiscoveredAdminEmail(
+        "actual-admin@example.test",
+        githubEnvPath,
+        log,
+      );
+
+      await expect(readFile(githubEnvPath, "utf8")).resolves.toBe(
+        "RLS_ADMIN_EMAIL=actual-admin@example.test\n",
+      );
+      expect(log).toHaveBeenCalledWith("::add-mask::actual-admin@example.test");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not expose the discovered admin email when the password reset fails", async () => {
+    const profileQuery = {
+      select: vi.fn(() => profileQuery),
+      eq: vi.fn(() => profileQuery),
+      limit: vi.fn().mockResolvedValue({
+        data: [{ user_id: "verified-admin-id" }],
+        error: null,
+      }),
+    };
+    const admin = {
+      auth: {
+        admin: {
+          getUserById: vi.fn().mockResolvedValue({
+            data: {
+              user: {
+                id: "verified-admin-id",
+                email: "private-admin@example.test",
+              },
+            },
+            error: null,
+          }),
+          updateUserById: vi.fn().mockResolvedValue({
+            data: { user: null },
+            error: { message: "reset denied" },
+          }),
+        },
+      },
+      from: vi.fn(() => profileQuery),
+    };
+
+    const error = await discoverAndResetUniquePlatformAdmin(
+      admin,
+      "admin-not-a-secret",
+    ).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toContain("reset denied");
+    expect(error.message).not.toContain("private-admin@example.test");
   });
 
   it("adopts only a non-admin canonical staging demo identity into server-owned metadata", async () => {

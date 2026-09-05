@@ -11,6 +11,36 @@ const workflow = yaml.load(
 );
 
 describe("stage release Stripe and auction proof wiring", () => {
+  it("resolves a distinct revealed staging service key for storage cleanup", () => {
+    const step = workflow.jobs["staging-business-proofs"].steps.find(
+      (candidate) => candidate.name === "Run staged storage cleanup proof",
+    );
+
+    expect(step.run).toContain("/api-keys?reveal=true");
+    expect(step.run).toContain('(.type // "") == "secret"');
+    expect(step.run).toContain('(.type // "") != "publishable"');
+    expect(step.run).toContain(
+      'sort_by(if (.type // "") == "secret" then 0 else 1 end)',
+    );
+    expect(step.run).toContain(
+      '[ -z "$service_role_key" ] || [ "$service_role_key" = "$STAGING_SUPABASE_ANON_KEY" ]',
+    );
+  });
+
+  it("passes a distinct revealed service key to authoritative project cleanup", () => {
+    const step = workflow.jobs["staging-business-proofs"].steps.find(
+      (candidate) => candidate.name === "Run staged project tenant proof",
+    );
+
+    expect(step.env.SUPABASE_ACCESS_TOKEN).toBeTruthy();
+    expect(step.run).toContain("/api-keys?reveal=true");
+    expect(step.run).toContain('(.type // "") != "publishable"');
+    expect(step.run).toContain('(.type // "") == "secret"');
+    expect(step.run).toContain(
+      'STAGING_SUPABASE_SERVICE_ROLE_KEY="$service_role_key"',
+    );
+  });
+
   it("selects exactly the intended described Stripe payment test", () => {
     const stripeSteps = workflow.jobs["staging-stripe-payment"].steps;
     const attestationStep = workflow.jobs["cloudflare-staging"].steps.find(
@@ -48,6 +78,14 @@ describe("stage release Stripe and auction proof wiring", () => {
     expect(step.env.STAGING_ADMIN_PASSWORD).toBe("${{ secrets.E2E_ADMIN_PASSWORD }}");
     expect(step.env.STRIPE_RESTRICTED_KEY).toBeUndefined();
     expect(step.run).not.toContain("VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY");
+    expect(step.run).toContain("/api-keys?reveal=true");
+    expect(step.run).toContain('(.type // "") == "secret"');
+    expect(step.run).toContain(
+      'sort_by(if (.type // "") == "secret" then 0 else 1 end)',
+    );
+    expect(step.run).toContain(
+      '[ -z "$service_role_key" ] || [ "$service_role_key" = "$STAGING_SUPABASE_PUBLISHABLE_KEY" ]',
+    );
     expect(attestationStep.run).not.toContain("stripe_price_binding_sha256");
     expect(attestationStep.run).not.toContain("participantMonthlyPrice");
 

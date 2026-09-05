@@ -117,7 +117,7 @@ SELECT
   'Athens Court', 'https://example.invalid/staging-auction-proof', fixture.tags,
   'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=70',
   now(), now(), false
-FROM fixtures
+FROM fixtures AS fixture
 CROSS JOIN fixture_owner
 ON CONFLICT (id) DO UPDATE SET
   owner_id = EXCLUDED.owner_id,

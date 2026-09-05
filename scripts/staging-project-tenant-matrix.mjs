@@ -6,6 +6,7 @@ const required = (name) => {
 
 const SUPABASE_URL = required("STAGING_SUPABASE_URL").replace(/\/+$/, "");
 const ANON_KEY = required("STAGING_SUPABASE_ANON_KEY");
+const SERVICE_ROLE_KEY = required("STAGING_SUPABASE_SERVICE_ROLE_KEY");
 const PASSWORD = required("STAGING_DEMO_PASSWORD");
 const RUN_ID = globalThis.crypto.randomUUID();
 const PREFIX = `ECAS project matrix ${RUN_ID}`;
@@ -30,6 +31,10 @@ const ids = {
   organizationB: globalThis.crypto.randomUUID(),
   projectA: globalThis.crypto.randomUUID(),
   projectB: globalThis.crypto.randomUUID(),
+  projectBeforeMembershipProbe: globalThis.crypto.randomUUID(),
+  projectForgedOwnerProbe: globalThis.crypto.randomUUID(),
+  projectIneligibleOwnerProbe: globalThis.crypto.randomUUID(),
+  projectFreeDeveloperProbe: globalThis.crypto.randomUUID(),
 };
 
 const authHeaders = (token) => ({
@@ -177,6 +182,30 @@ async function remove(account, table, id) {
   });
 }
 
+async function serviceRest(path, { method = "GET", prefer } = {}) {
+  const headers = {
+    apikey: SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    "Content-Type": "application/json",
+  };
+  if (prefer) headers.Prefer = prefer;
+  return parseResponse(await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method,
+    headers,
+  }));
+}
+
+async function removeProjectAsServiceRole(projectId) {
+  return serviceRest(`projects?id=eq.${projectId}`, {
+    method: "DELETE",
+    prefer: "return=minimal",
+  });
+}
+
+async function verifyProjectAbsentAsServiceRole(projectId) {
+  return serviceRest(`projects?select=id&id=eq.${projectId}&limit=1`);
+}
+
 const evidence = [];
 const record = (name) => evidence.push({ name, status: "passed" });
 const cleanupErrors = [];
@@ -190,24 +219,50 @@ const created = {
 async function cleanup() {
   if (!actors) return;
   const { developerA, developerB } = actors;
+  const reactivation = await rest(
+    developerB,
+    `organization_memberships?organization_id=eq.${ids.organizationB}&user_id=eq.${developerA.userId}`,
+    {
+      method: "PATCH",
+      prefer: "return=minimal",
+      body: { status: "active" },
+    },
+  );
+  if (!reactivation.ok) {
+    cleanupErrors.push(
+      `membership reactivation: ${boundedJson(reactivation.body)}`,
+    );
+  }
   for (const id of created.leads) {
-    const result = await remove(developerB, "project_leads", id);
+    const result = await remove(developerA, "project_leads", id);
     if (!result.ok) cleanupErrors.push(`lead ${id}: ${boundedJson(result.body)}`);
   }
   for (const id of created.media) {
-    const result = await remove(developerB, "project_media", id);
+    const result = await remove(developerA, "project_media", id);
     if (!result.ok) cleanupErrors.push(`media ${id}: ${boundedJson(result.body)}`);
   }
   for (const id of created.units) {
-    const result = await remove(developerB, "project_units", id);
+    const result = await remove(developerA, "project_units", id);
     if (!result.ok) cleanupErrors.push(`unit ${id}: ${boundedJson(result.body)}`);
   }
-  for (const [account, projectId] of [
-    [developerA, ids.projectA],
-    [developerB, ids.projectB],
+  for (const projectId of [
+    ids.projectBeforeMembershipProbe,
+    ids.projectForgedOwnerProbe,
+    ids.projectIneligibleOwnerProbe,
+    ids.projectFreeDeveloperProbe,
+    ids.projectA,
+    ids.projectB,
   ]) {
-    const result = await remove(account, "projects", projectId);
-    if (!result.ok) cleanupErrors.push(`project ${projectId}: ${boundedJson(result.body)}`);
+    const result = await removeProjectAsServiceRole(projectId);
+    if (!result.ok) {
+      cleanupErrors.push(`project ${projectId}: ${boundedJson(result.body)}`);
+    }
+    const verification = await verifyProjectAbsentAsServiceRole(projectId);
+    if (!verification.ok || !Array.isArray(verification.body) || verification.body.length > 0) {
+      cleanupErrors.push(
+        `project ${projectId} absence: ${boundedJson(verification.body)}`,
+      );
+    }
   }
 }
 
@@ -228,40 +283,50 @@ async function main() {
     await createOrganization(developerB, ids.organizationB, "B"),
     "Organization B creation",
   );
+  expectFailure(
+    await createProject(
+      developerA,
+      ids.projectBeforeMembershipProbe,
+      ids.organizationB,
+      "unauthorized before membership",
+    ),
+    "Unauthorized Organization B project creation",
+    /row-level security|permission denied/i,
+  );
   expectSuccess(
-    await rest(developerA, "organization_memberships", {
+    await rest(developerB, "organization_memberships", {
       method: "POST",
       prefer: "return=minimal",
       body: {
-        organization_id: ids.organizationA,
-        user_id: developerB.userId,
+        organization_id: ids.organizationB,
+        user_id: developerA.userId,
         role: "member",
         status: "active",
-        invited_by: developerA.userId,
+        invited_by: developerB.userId,
       },
     }),
-    "Cross-org member setup",
+    "Organization B Developer Pro membership setup",
   );
-  record("isolated organization fixtures with shared authorized manager");
+  record("isolated organization fixtures with an eligible shared developer");
 
   const projectA = expectSingle(
     await createProject(developerA, ids.projectA, ids.organizationA, "A"),
     "Project A creation",
   );
   const projectB = expectSingle(
-    await createProject(developerB, ids.projectB, ids.organizationB, "B"),
+    await createProject(developerA, ids.projectB, ids.organizationB, "B"),
     "Project B creation",
   );
   if (
     projectA.owner_id !== developerA.userId
-    || projectB.owner_id !== developerB.userId
+    || projectB.owner_id !== developerA.userId
   ) {
     throw new Error("Project ownership did not match the authenticated creators");
   }
   expectFailure(
     await createProject(
       developerA,
-      globalThis.crypto.randomUUID(),
+      ids.projectForgedOwnerProbe,
       ids.organizationA,
       "forged owner",
       { owner_id: developerB.userId },
@@ -270,17 +335,18 @@ async function main() {
   );
   expectFailure(
     await createProject(
-      developerA,
-      globalThis.crypto.randomUUID(),
+      developerB,
+      ids.projectIneligibleOwnerProbe,
       ids.organizationB,
-      "unauthorized organization",
+      "ineligible organization owner",
     ),
-    "Unauthorized organization project",
+    "Non-developer Organization B owner project creation",
+    /row-level security|permission denied/i,
   );
   expectFailure(
     await createProject(
       developerFree,
-      globalThis.crypto.randomUUID(),
+      ids.projectFreeDeveloperProbe,
       null,
       "free developer denied",
     ),
@@ -297,16 +363,16 @@ async function main() {
     "Own project Edge update",
   );
   expectFailure(
-    await edge(developerA, "project-management", {
+    await edge(developerB, "project-management", {
       action: "update_project",
       id: ids.projectB,
-      updates: { description: "cross-tenant update" },
+      updates: { description: "ineligible organization owner update" },
     }),
-    "Cross-tenant project Edge update",
-    /project_not_managed/,
+    "Non-developer Organization B owner Edge update",
+    /developer_role_required/,
   );
   expectFailure(
-    await patch(developerB, "projects", ids.projectA, {
+    await patch(developerA, "projects", ids.projectA, {
       organization_id: ids.organizationB,
     }),
     "Project organization reassignment while managing both organizations",
@@ -322,7 +388,7 @@ async function main() {
   record("own-project success and immutable cross-tenant project identity");
 
   const unitA = expectSingle(
-    await edge(developerB, "project-management", {
+    await edge(developerA, "project-management", {
       action: "create_unit",
       projectId: ids.projectA,
       unit: {
@@ -332,11 +398,11 @@ async function main() {
         availability_status: "available",
       },
     }),
-    "Authorized organization member unit creation",
+    "Organization A owner unit creation",
   );
   created.units.push(unitA.id);
   const unitB = expectSingle(
-    await edge(developerB, "project-management", {
+    await edge(developerA, "project-management", {
       action: "create_unit",
       projectId: ids.projectB,
       unit: {
@@ -346,11 +412,11 @@ async function main() {
         availability_status: "available",
       },
     }),
-    "Own tenant unit creation",
+    "Organization B authorized developer member unit creation",
   );
   created.units.push(unitB.id);
   const mediaA = expectSingle(
-    await edge(developerB, "project-management", {
+    await edge(developerA, "project-management", {
       action: "add_media",
       projectId: ids.projectA,
       media: {
@@ -363,7 +429,7 @@ async function main() {
   );
   created.media.push(mediaA.id);
   const leadA = expectSingle(
-    await edge(developerB, "project-management", {
+    await edge(developerA, "project-management", {
       action: "create_lead",
       projectId: ids.projectA,
       lead: {
@@ -382,25 +448,15 @@ async function main() {
     ["project_leads", leadA],
   ]) {
     expectFailure(
-      await patch(developerB, table, child.id, { project_id: ids.projectB }),
+      await patch(developerA, table, child.id, { project_id: ids.projectB }),
       `${table} project reassignment while managing both organizations`,
       /project child scope cannot be reassigned/,
     );
   }
-  expectFailure(
-    await edge(developerA, "project-management", {
-      action: "update_unit",
-      projectId: ids.projectB,
-      id: unitB.id,
-      updates: { price: 301000 },
-    }),
-    "Cross-tenant unit Edge update",
-    /project_not_managed/,
-  );
   record("project child mutation isolation and immutable child scope");
 
   expectSuccess(
-    await rest(developerA, `organization_memberships?organization_id=eq.${ids.organizationA}&user_id=eq.${developerB.userId}`, {
+    await rest(developerB, `organization_memberships?organization_id=eq.${ids.organizationB}&user_id=eq.${developerA.userId}`, {
       method: "PATCH",
       prefer: "return=minimal",
       body: { status: "suspended" },
@@ -408,16 +464,26 @@ async function main() {
     "Membership suspension",
   );
   expectFailure(
-    await edge(developerB, "project-management", {
+    await edge(developerA, "project-management", {
       action: "update_project",
-      id: ids.projectA,
+      id: ids.projectB,
       updates: { description: "stale-token suspended update" },
     }),
-    "Suspended stale-token project update",
+    "Suspended stale-token Project B update",
+    /project_not_managed/,
+  );
+  expectFailure(
+    await edge(developerA, "project-management", {
+      action: "update_unit",
+      projectId: ids.projectB,
+      id: unitB.id,
+      updates: { price: 301000 },
+    }),
+    "Suspended stale-token Project B unit update",
     /project_not_managed/,
   );
   expectSuccess(
-    await rest(developerA, `organization_memberships?organization_id=eq.${ids.organizationA}&user_id=eq.${developerB.userId}`, {
+    await rest(developerB, `organization_memberships?organization_id=eq.${ids.organizationB}&user_id=eq.${developerA.userId}`, {
       method: "PATCH",
       prefer: "return=minimal",
       body: { status: "active" },
@@ -425,9 +491,9 @@ async function main() {
     "Membership reactivation",
   );
   expectSingle(
-    await edge(developerB, "project-management", {
+    await edge(developerA, "project-management", {
       action: "update_project",
-      id: ids.projectA,
+      id: ids.projectB,
       updates: { description: `${PREFIX} reactivated` },
     }),
     "Reactivated member project update",

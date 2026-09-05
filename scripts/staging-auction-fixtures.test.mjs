@@ -84,6 +84,7 @@ describe("staging auction fixture SQL", () => {
     expect(sql).toContain("'source:maiprop-os'");
     expect(sql).toContain("'os_auction:stage-proof-os-auction'");
     expect(sql).toContain("'staging-auction-route:uuid'");
+    expect(sql).toMatch(/FROM fixtures AS fixture\s+CROSS JOIN fixture_owner/);
     expect(sql).toContain("SELECT private.publish_public_catalogue()");
   });
 
