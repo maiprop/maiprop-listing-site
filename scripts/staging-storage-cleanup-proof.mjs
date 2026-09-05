@@ -559,6 +559,7 @@ try {
     p_role: "developer",
     p_participant_type: "developer",
     p_display_name: `ECAS Storage ${runId.slice(0, 8)}`,
+    p_city: "Athens",
   });
   expectNoError(onboarding, "Complete disposable developer onboarding");
 
