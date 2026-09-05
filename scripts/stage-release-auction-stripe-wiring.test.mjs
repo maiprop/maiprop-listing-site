@@ -92,7 +92,7 @@ describe("stage release Stripe and auction proof wiring", () => {
     expect(step.run).toContain(".metadata.stripe_price_id_monthly == $created[0].price_id");
     expect(step.run).not.toContain("pricing_configs?key=eq.pro&metadata=cs.");
     expect(step.env.STAGING_ADMIN_EMAIL).toBe("${{ secrets.E2E_ADMIN_EMAIL }}");
-    expect(step.env.STAGING_ADMIN_PASSWORD).toBe("${{ secrets.E2E_ADMIN_PASSWORD }}");
+    expect(step.env.STAGING_ADMIN_PASSWORD).toBe("${{ secrets.E2E_DEMO_PASSWORD }}");
     expect(step.env.STRIPE_RESTRICTED_KEY).toBeUndefined();
     expect(step.run).not.toContain("VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY");
     expect(step.run).toContain("/api-keys?reveal=true");

@@ -1176,6 +1176,7 @@ jobs:
           CI=true \
           MAIPROP_RUN_STAGING_CATALOGUE_GATES=1 \
           MAIPROP_STAGING_RELEASE_SHA="$PREVIOUS_SHA" \
+          MAIPROP_STAGING_AUCTION_ROUTE_COMPATIBILITY=n-minus-one \
           MAIPROP_ALLOW_LOOPBACK_STAGING_CATALOGUE_GATE=1 \
           PLAYWRIGHT_BASE_URL="$local_origin" \
           PLAYWRIGHT_JSON_OUTPUT_FILE=n-minus-one/playwright-report.json \
@@ -2675,7 +2676,7 @@ jobs:
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
           STAGING_APP_URL: ${{ needs.cloudflare-staging.outputs.stable_url }}
           STAGING_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-          STAGING_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          STAGING_ADMIN_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
         run: |
           set -euo pipefail
           node scripts/assert-staging-mutation-target.mjs
