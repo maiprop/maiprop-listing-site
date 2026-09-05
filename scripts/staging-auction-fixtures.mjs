@@ -244,7 +244,8 @@ WITH fixture_owner AS (
         'os_auction:stage-proof-uuid-auction',
         'staging-auction-route:uuid',
         'auction_pool:' || to_char((now() AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD')
-      ]::text[]
+      ]::text[],
+      clock_timestamp() + interval '11 minutes'
     ),
     (
       '${osListingId}'::uuid,
@@ -254,9 +255,10 @@ WITH fixture_owner AS (
         'source:maiprop-os',
         'os_auction:${osProviderId}',
         'auction_pool:' || to_char((now() AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD')
-      ]::text[]
+      ]::text[],
+      clock_timestamp() + interval '10 minutes'
     )
-  ) AS fixture(id, title, city, tags)
+  ) AS fixture(id, title, city, tags, auction_date)
 )
 INSERT INTO public.listings (
   id, owner_id, title, description, address, city, region, postal_code,
@@ -271,7 +273,7 @@ SELECT
   '1 Staging Proof Avenue', fixture.city, 'Attica', '10557',
   37.98, 23.72, 125000, 1250, 100, 2, 1, 2, 5, 2005, 'B',
   'apartment'::public.property_type, 'auction'::public.listing_type,
-  'active'::public.listing_status, now() + interval '30 days', 100000,
+  'active'::public.listing_status, fixture.auction_date, 100000,
   'Athens Court', 'https://example.invalid/staging-auction-proof', fixture.tags,
   'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=70',
   date_trunc('minute', clock_timestamp()) - interval '1 minute',

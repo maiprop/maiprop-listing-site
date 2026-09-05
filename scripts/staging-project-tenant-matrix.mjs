@@ -10,6 +10,12 @@ const SERVICE_ROLE_KEY = required("STAGING_SUPABASE_SERVICE_ROLE_KEY");
 const PASSWORD = required("STAGING_DEMO_PASSWORD");
 const RUN_ID = globalThis.crypto.randomUUID();
 const PREFIX = `ECAS project matrix ${RUN_ID}`;
+const PROJECT_MEDIA_BYTES = Uint8Array.from(
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  ),
+  (character) => character.charCodeAt(0),
+);
 
 const accounts = {
   developerA: {
@@ -108,6 +114,35 @@ async function edge(account, name, body) {
     },
     body: JSON.stringify(body),
   }));
+}
+
+async function uploadProjectMediaObject(account, objectPath) {
+  return parseResponse(
+    await fetch(
+      `${SUPABASE_URL}/storage/v1/object/project-media/${objectPath}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: ANON_KEY,
+          Authorization: `Bearer ${account.accessToken}`,
+          "Content-Type": "image/png",
+          "cache-control": "max-age=3600",
+          "x-upsert": "false",
+        },
+        body: PROJECT_MEDIA_BYTES,
+      },
+    ),
+  );
+}
+
+async function removeProjectMediaObject(account, objectPath) {
+  return parseResponse(
+    await fetch(`${SUPABASE_URL}/storage/v1/object/project-media`, {
+      method: "DELETE",
+      headers: authHeaders(account.accessToken),
+      body: JSON.stringify({ prefixes: [objectPath] }),
+    }),
+  );
 }
 
 function expectSuccess(result, label) {
@@ -214,6 +249,7 @@ const created = {
   units: [],
   media: [],
   leads: [],
+  storageObjects: [],
 };
 
 async function cleanup() {
@@ -240,6 +276,14 @@ async function cleanup() {
   for (const id of created.media) {
     const result = await remove(developerA, "project_media", id);
     if (!result.ok) cleanupErrors.push(`media ${id}: ${boundedJson(result.body)}`);
+  }
+  for (const objectPath of created.storageObjects) {
+    const result = await removeProjectMediaObject(developerA, objectPath);
+    if (!result.ok) {
+      cleanupErrors.push(
+        `project media object ${objectPath}: ${boundedJson(result.body)}`,
+      );
+    }
   }
   for (const id of created.units) {
     const result = await remove(developerA, "project_units", id);
@@ -415,12 +459,31 @@ async function main() {
     "Organization B authorized developer member unit creation",
   );
   created.units.push(unitB.id);
+  const mediaObjectPath = `${developerA.userId}/${ids.projectA}/media/rendering-${RUN_ID}.png`;
+  const mediaObjectUrl = `${SUPABASE_URL}/storage/v1/object/public/project-media/${mediaObjectPath}`;
+  expectSuccess(
+    await rest(developerA, "rpc/register_new_building_storage_upload", {
+      method: "POST",
+      body: {
+        p_project_id: ids.projectA,
+        p_bucket: "project-media",
+        p_object_path: mediaObjectPath,
+        p_object_url: mediaObjectUrl,
+      },
+    }),
+    "Project media Storage registration",
+  );
+  expectSuccess(
+    await uploadProjectMediaObject(developerA, mediaObjectPath),
+    "Project media Storage upload",
+  );
+  created.storageObjects.push(mediaObjectPath);
   const mediaA = expectSingle(
     await edge(developerA, "project-management", {
       action: "add_media",
       projectId: ids.projectA,
       media: {
-        url: `https://example.invalid/${RUN_ID}/project-a.webp`,
+        url: mediaObjectUrl,
         media_type: "rendering",
         title: "ECAS staging media",
       },

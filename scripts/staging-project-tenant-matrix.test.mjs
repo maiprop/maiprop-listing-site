@@ -46,4 +46,38 @@ describe("staging project tenant actors", () => {
     expect(source).toContain("await removeProjectAsServiceRole(projectId)");
     expect(source).toContain("await verifyProjectAbsentAsServiceRole(projectId)");
   });
+
+  it("registers and uploads canonical project media before attaching it, then removes the object", () => {
+    expect(source).toContain('"rpc/register_new_building_storage_upload"');
+    expect(source).toContain('p_bucket: "project-media"');
+    expect(source).toContain(
+      "`${developerA.userId}/${ids.projectA}/media/rendering-${RUN_ID}.png`",
+    );
+    expect(source).toContain(
+      "`${SUPABASE_URL}/storage/v1/object/public/project-media/${mediaObjectPath}`",
+    );
+    expect(source).toContain(
+      "`${SUPABASE_URL}/storage/v1/object/project-media/${objectPath}`",
+    );
+    expect(source).toContain('"x-upsert": "false"');
+    expect(source).toContain("created.storageObjects.push(mediaObjectPath)");
+    expect(source).toContain(
+      "await removeProjectMediaObject(developerA, objectPath)",
+    );
+
+    const mediaSetup = source.indexOf("const mediaObjectPath =");
+    const registration = source.indexOf(
+      '"rpc/register_new_building_storage_upload"',
+      mediaSetup,
+    );
+    const upload = source.indexOf(
+      "await uploadProjectMediaObject(developerA, mediaObjectPath)",
+      mediaSetup,
+    );
+    const attachment = source.indexOf('action: "add_media"', mediaSetup);
+    expect(mediaSetup).toBeGreaterThan(-1);
+    expect(registration).toBeGreaterThan(-1);
+    expect(registration).toBeLessThan(upload);
+    expect(upload).toBeLessThan(attachment);
+  });
 });
