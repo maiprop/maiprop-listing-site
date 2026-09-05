@@ -39,6 +39,7 @@ describe("staging promotion durable subscription fixtures", () => {
     expect(source).toContain("developerA: globalThis.crypto.randomUUID()");
     expect(source).toContain("developerB: globalThis.crypto.randomUUID()");
     expect(source).toContain("async function cleanupBillingSubscriptionFixtures");
+    expect(source).toContain("async function cleanupPromotionAllocationFixtures");
     expect(source).toContain("async function cleanupPricingConfigFixtures");
     expect(source).toContain(
       'id=in.(${Object.values(billingSubscriptionIds).join(",")})',
@@ -47,14 +48,25 @@ describe("staging promotion durable subscription fixtures", () => {
     expect(source).not.toMatch(/billing_subscriptions[^\n]*user_id=eq/);
     expect(source).toContain("const insertedPricingConfigIds = new Set()");
     expect(source).toContain('id=in.(${[...insertedPricingConfigIds].join(",")})');
+    expect(source).toContain(
+      'billing_subscription_id: `in.(${Object.values(billingSubscriptionIds).join(",")})`',
+    );
+    expect(source).toContain('request_key: `like.${REQUEST_PREFIX}*`');
+    expect(source).toContain("!expectedSubscriptionIds.has(row.billing_subscription_id)");
+    expect(source).toContain("!row.request_key?.startsWith(REQUEST_PREFIX)");
+    expect(source).toContain('allocationFilter("id")');
   });
 
-  it("cleans dependent subscriptions before owned pricing rows", () => {
+  it("cleans owned allocations before subscriptions and owned pricing rows", () => {
+    const allocationCleanup = source.indexOf(
+      "await cleanupPromotionAllocationFixtures()",
+    );
     const subscriptionCleanup = source.indexOf(
       "await cleanupBillingSubscriptionFixtures()",
     );
     const pricingCleanup = source.indexOf("await cleanupPricingConfigFixtures()");
-    expect(subscriptionCleanup).toBeGreaterThan(-1);
+    expect(allocationCleanup).toBeGreaterThan(-1);
+    expect(subscriptionCleanup).toBeGreaterThan(allocationCleanup);
     expect(pricingCleanup).toBeGreaterThan(subscriptionCleanup);
   });
 

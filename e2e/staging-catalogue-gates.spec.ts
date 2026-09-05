@@ -7,6 +7,8 @@ const STAGING_BASE_URL = process.env.PLAYWRIGHT_BASE_URL?.trim().replace(/\/$/, 
 const EXPECTED_RELEASE_SHA = process.env.MAIPROP_STAGING_RELEASE_SHA?.trim().toLowerCase() ?? "";
 const ALLOW_LOOPBACK_HTTP =
   process.env.MAIPROP_ALLOW_LOOPBACK_STAGING_CATALOGUE_GATE === "1";
+const ALLOW_LEGACY_UUID_ONLY_AUCTION_ROUTES =
+  process.env.MAIPROP_STAGING_AUCTION_ROUTE_COMPATIBILITY === "n-minus-one";
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
@@ -77,6 +79,11 @@ function requireSafeStagingConfiguration(): void {
     ALLOW_LOOPBACK_HTTP &&
     target.protocol === "http:" &&
     LOOPBACK_HOSTS.has(target.hostname.toLowerCase());
+  if (ALLOW_LEGACY_UUID_ONLY_AUCTION_ROUTES && !isExplicitLoopbackHttp) {
+    throw new Error(
+      "N-1 auction-route compatibility is allowed only for the explicit loopback runtime.",
+    );
+  }
   if (target.protocol !== "https:" && !isExplicitLoopbackHttp) {
     throw new Error(
       "The staging catalogue proof requires HTTPS, except literal loopback HTTP with MAIPROP_ALLOW_LOOPBACK_STAGING_CATALOGUE_GATE=1.",
@@ -357,13 +364,18 @@ test.describe("exact-SHA staging catalogue proof", () => {
     const uuidHref = catalogueHrefs.find((href) => UUID_AUCTION_PATH.test(href));
     const osTagHref = catalogueHrefs.find((href) => !UUID_AUCTION_PATH.test(href));
     expect(uuidHref, "staging catalogue must expose a UUID auction for hard-reload proof").toBeTruthy();
-    expect(osTagHref, "staging catalogue must expose an OS-tag auction for hard-reload proof").toBeTruthy();
+    if (!ALLOW_LEGACY_UUID_ONLY_AUCTION_ROUTES) {
+      expect(osTagHref, "staging catalogue must expose an OS-tag auction for hard-reload proof").toBeTruthy();
+    }
 
     const deepLinkEvidence: Array<{ kind: "uuid" | "os-tag"; href: string; title: string }> = [];
-    for (const target of [
+    const deepLinkTargets: Array<{ kind: "uuid" | "os-tag"; href: string }> = [
       { kind: "uuid" as const, href: uuidHref ?? "" },
-      { kind: "os-tag" as const, href: osTagHref ?? "" },
-    ]) {
+    ];
+    if (osTagHref) {
+      deepLinkTargets.push({ kind: "os-tag", href: osTagHref });
+    }
+    for (const target of deepLinkTargets) {
       await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 30_000 });
       const directTitle = await expectVerifiedAuctionDetail(page, target.href);
 

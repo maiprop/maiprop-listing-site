@@ -253,6 +253,52 @@ async function seedBillingSubscriptionFixtures(pricingConfigs) {
   }
 }
 
+function allocationFilter(select) {
+  const filters = {
+    billing_subscription_id: `in.(${Object.values(billingSubscriptionIds).join(",")})`,
+    request_key: `like.${REQUEST_PREFIX}*`,
+  };
+  const parameters = new URLSearchParams({
+    ...(select ? { select } : {}),
+    ...filters,
+  });
+  return `listing_promotion_allocations?${parameters}`;
+}
+
+async function cleanupPromotionAllocationFixtures() {
+  const expectedSubscriptionIds = new Set(Object.values(billingSubscriptionIds));
+  const result = await serviceRequest(allocationFilter(), {
+    method: "DELETE",
+    prefer: "return=representation",
+  });
+  if (!result.ok) return result;
+  if (
+    !Array.isArray(result.body)
+    || result.body.some((row) => (
+      !expectedSubscriptionIds.has(row.billing_subscription_id)
+      || !row.request_key?.startsWith(REQUEST_PREFIX)
+    ))
+  ) {
+    return {
+      status: 500,
+      ok: false,
+      body: { error: "unexpected_promotion_allocation_cleanup_response" },
+    };
+  }
+  const remaining = await serviceRequest(allocationFilter("id"));
+  if (!remaining.ok || !Array.isArray(remaining.body) || remaining.body.length > 0) {
+    return {
+      status: remaining.status,
+      ok: false,
+      body: {
+        error: "promotion_allocation_cleanup_incomplete",
+        remaining: remaining.body,
+      },
+    };
+  }
+  return result;
+}
+
 async function cleanupBillingSubscriptionFixtures() {
   const expectedIds = new Set(Object.values(billingSubscriptionIds));
   const result = await serviceRequest(
@@ -407,13 +453,21 @@ async function cleanup() {
       }
     }
   }
-  const billingResult = await cleanupBillingSubscriptionFixtures();
-  if (!billingResult.ok) {
-    cleanupErrors.push(`delete billing fixtures: ${boundedJson(billingResult.body)}`);
-  }
-  const pricingResult = await cleanupPricingConfigFixtures();
-  if (!pricingResult.ok) {
-    cleanupErrors.push(`delete pricing fixtures: ${boundedJson(pricingResult.body)}`);
+  const allocationResult = await cleanupPromotionAllocationFixtures();
+  if (!allocationResult.ok) {
+    cleanupErrors.push(
+      `delete promotion allocations: ${boundedJson(allocationResult.body)}`,
+    );
+  } else {
+    const billingResult = await cleanupBillingSubscriptionFixtures();
+    if (!billingResult.ok) {
+      cleanupErrors.push(`delete billing fixtures: ${boundedJson(billingResult.body)}`);
+    } else {
+      const pricingResult = await cleanupPricingConfigFixtures();
+      if (!pricingResult.ok) {
+        cleanupErrors.push(`delete pricing fixtures: ${boundedJson(pricingResult.body)}`);
+      }
+    }
   }
 }
 
@@ -591,8 +645,9 @@ process.stdout.write(`${JSON.stringify({
   evidence,
   cleanup: {
     listings_and_active_projection: "passed",
+    promotion_allocation_history: "deleted",
     billing_subscription_fixtures: "deleted",
     inserted_pricing_config_fixtures: "deleted",
-    service_cleanup_required_for_allocation_history: true,
+    service_cleanup_required_for_allocation_history: false,
   },
 }, null, 2)}\n`);

@@ -77,6 +77,10 @@ describe("performance budget configuration", () => {
     expect(stagingCatalogueGateSpec).toContain("MAIPROP_RUN_STAGING_CATALOGUE_GATES");
     expect(stagingCatalogueGateSpec).toContain("MAIPROP_STAGING_RELEASE_SHA");
     expect(stagingCatalogueGateSpec).toContain("MAIPROP_ALLOW_LOOPBACK_STAGING_CATALOGUE_GATE");
+    expect(stagingCatalogueGateSpec).toContain("MAIPROP_STAGING_AUCTION_ROUTE_COMPATIBILITY");
+    expect(stagingCatalogueGateSpec).toContain(
+      "N-1 auction-route compatibility is allowed only for the explicit loopback runtime.",
+    );
     expect(stagingCatalogueGateSpec).toContain("PLAYWRIGHT_BASE_URL");
     expect(stagingCatalogueGateSpec).toContain("PRODUCTION_HOSTS");
     expect(stagingCatalogueGateSpec).toContain("LOOPBACK_HOSTS");

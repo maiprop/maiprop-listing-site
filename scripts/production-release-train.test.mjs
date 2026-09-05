@@ -2857,6 +2857,9 @@ describe("production release train", () => {
     expect(compatibilityRuntime.run).toContain(
       '--binding "MAIPROP_TURN_TTL_SECONDS=21600"',
     );
+    expect(compatibilityRuntime.run).toContain(
+      "MAIPROP_STAGING_AUCTION_ROUTE_COMPATIBILITY=n-minus-one",
+    );
     expect(compatibilitySource).toContain("check:production-deploy");
     expect(compatibilitySource).toContain("staging-catalogue-gates.spec.ts");
     expect(compatibilitySource).toContain(
