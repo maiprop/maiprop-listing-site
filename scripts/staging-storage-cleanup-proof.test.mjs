@@ -81,3 +81,10 @@ test("Storage proof exercises stale lease rejection and dead-job requeue", () =>
   assert.match(source, /stale lease tokens cannot finalize a reclaimed job/);
   assert.match(source, /dead cleanup jobs can be requeued and completed/);
 });
+
+test("Storage proof allows bounded async worker startup and reports the last job state", () => {
+  assert.match(source, /STORAGE_JOB_WAIT_TIMEOUT_MS = 60_000/);
+  assert.match(source, /let lastRow = null/);
+  assert.match(source, /last_job=\$\{bounded\(diagnosticJobState\(lastRow\)\)\}/);
+  assert.doesNotMatch(source, /last_job=\$\{bounded\(lastRow\)\}/);
+});

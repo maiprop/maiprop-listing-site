@@ -3,6 +3,7 @@ import WebSocket from "ws";
 
 const EXPECTED_STAGING_REF = "xsiehskfgeoqyazcgauv";
 const PRODUCTION_REF = "qvvicunqcrwpioqnvzxf";
+const STORAGE_JOB_WAIT_TIMEOUT_MS = 60_000;
 const PNG_BYTES = Uint8Array.from(
   Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=",
@@ -68,6 +69,19 @@ function bounded(value, maxLength = 800) {
   return serialized.length <= maxLength
     ? serialized
     : `${serialized.slice(0, maxLength)}...[truncated]`;
+}
+
+function diagnosticJobState(row) {
+  if (!row) return null;
+  return {
+    status: row.status,
+    attempts: row.attempts,
+    completed_at: row.completed_at,
+    next_attempt_at: row.next_attempt_at,
+    last_error: row.last_error,
+    lease_active: Boolean(row.lease_token),
+    lease_expires_at: row.lease_expires_at,
+  };
 }
 
 function expectNoError(result, label) {
@@ -168,13 +182,16 @@ async function makeJobDue(
 }
 
 async function waitForJob(bucket, objectPath, predicate, label) {
-  const deadline = Date.now() + 20_000;
+  const deadline = Date.now() + STORAGE_JOB_WAIT_TIMEOUT_MS;
+  let lastRow = null;
   while (Date.now() < deadline) {
-    const row = await readJob(bucket, objectPath);
-    if (row && predicate(row)) return row;
+    lastRow = await readJob(bucket, objectPath);
+    if (lastRow && predicate(lastRow)) return lastRow;
     await wait(300);
   }
-  throw new Error(`Timed out waiting for ${label}: ${bucket}/${objectPath}`);
+  throw new Error(
+    `Timed out waiting for ${label}: ${bucket}/${objectPath}; last_job=${bounded(diagnosticJobState(lastRow))}`,
+  );
 }
 
 async function invokeCleanupWorker() {
