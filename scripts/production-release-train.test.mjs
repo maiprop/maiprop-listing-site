@@ -2933,6 +2933,8 @@ describe("production release train", () => {
     expect(proofSource).toContain("staging-catalogue-gates.spec.ts");
     expect(proofSource).toContain("--reporter=json");
     expect(proofSource).toContain("check:production-deploy");
+    expect(proofSource).toContain("PRODUCTION_DEPLOY_CHECK_ATTEMPTS=12");
+    expect(proofSource).toContain("PRODUCTION_DEPLOY_CHECK_DELAY_MS=10000");
     expect(proofSource).toContain("--public-api");
     expect(proofSource).toContain("PLAYWRIGHT_BASE_URL");
     expect(proofSource).toContain("MAIPROP_RUN_STAGING_CATALOGUE_GATES");

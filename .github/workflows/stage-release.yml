@@ -3194,8 +3194,8 @@ jobs:
           mkdir -p staging-catalogue-performance
 
           PRODUCTION_DEPLOY_EXPECTED_SHA="$RELEASE_SHA" \
-          PRODUCTION_DEPLOY_CHECK_ATTEMPTS=4 \
-          PRODUCTION_DEPLOY_CHECK_DELAY_MS=2000 \
+          PRODUCTION_DEPLOY_CHECK_ATTEMPTS=12 \
+          PRODUCTION_DEPLOY_CHECK_DELAY_MS=10000 \
             npm run --silent check:production-deploy -- \
               "$DEPLOYMENT_URL" \
               "$STABLE_URL" \
