@@ -11,12 +11,13 @@ const report = {
     flaky: 0,
   },
   suites: [{
-    title: "e2e",
+    title: "stripe-payment-complete.spec.ts",
+    file: "stripe-payment-complete.spec.ts",
     suites: [],
     specs: [{
       title:
         "completes test-card subscription checkout and observes synced entitlement",
-      file: "e2e/stripe-payment-complete.spec.ts",
+      file: "stripe-payment-complete.spec.ts",
       ok: true,
       tests: [{
         projectName: "chromium",
@@ -54,7 +55,7 @@ describe("staging Stripe payment evidence", () => {
         stripe_mode: "test",
       },
       playwright: {
-        spec: "e2e/stripe-payment-complete.spec.ts",
+        spec: "stripe-payment-complete.spec.ts",
         test_title:
           "completes test-card subscription checkout and observes synced entitlement",
         project_name: "chromium",
@@ -88,6 +89,14 @@ describe("staging Stripe payment evidence", () => {
     expect(() => createStagingStripePaymentEvidence(input({
       report: wrongIdentity,
     }))).toThrow(/exact Stripe payment test/i);
+  });
+
+  it("rejects duplicate exact payment identities even when aggregate stats claim one test", () => {
+    const duplicate = structuredClone(report);
+    duplicate.suites[0].specs.push(structuredClone(duplicate.suites[0].specs[0]));
+    expect(() => createStagingStripePaymentEvidence(input({
+      report: duplicate,
+    }))).toThrow(/exactly one exact Stripe payment test identity/i);
   });
 
   it("rejects an exact payment test whose recorded result did not pass", () => {

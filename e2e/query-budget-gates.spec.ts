@@ -82,7 +82,7 @@ async function configureProtectedPagesContext(page: Page, baseURL: string | unde
   const appOrigin = getAppOrigin(baseURL);
   const accessHeaders = cloudflareAccessHeaders();
   if (Object.keys(accessHeaders).length > 0) {
-    await page.context().route(`${appOrigin}/**`, async (route) => {
+    await page.route(`${appOrigin}/**`, async (route) => {
       const response = await route.fetch({
         headers: { ...route.request().headers(), ...accessHeaders },
         maxRedirects: 0,
@@ -102,6 +102,10 @@ async function configureProtectedPagesContext(page: Page, baseURL: string | unde
       sameSite: "Lax",
     }]);
   }
+}
+
+async function drainProtectedPagesRoutes(page: Page): Promise<void> {
+  await page.unrouteAll({ behavior: "wait" });
 }
 
 const perfProfile = {
@@ -447,6 +451,10 @@ test.describe("authenticated query budget gates @perf", () => {
 
   test.beforeEach(async ({ page }, testInfo) => {
     await configureProtectedPagesContext(page, testInfo.project.use.baseURL);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await drainProtectedPagesRoutes(page);
   });
 
   for (const [path, budget] of Object.entries(QUERY_BUDGETS)) {
