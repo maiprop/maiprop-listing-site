@@ -327,7 +327,23 @@ export function validateReleaseCandidateAttestation({
       throw new Error(`Release candidate attestation has an invalid ${key} evidence digest.`);
     }
   }
-  if (!Array.isArray(attestation.provenance) || attestation.provenance.length === 0) {
+  const provenance = attestation.provenance;
+  if (
+    !provenance ||
+    typeof provenance !== "object" ||
+    Array.isArray(provenance) ||
+    provenance.schema_version !== 1 ||
+    provenance.evidence_type !==
+      "maiprop-release-artifact-binding-verification" ||
+    provenance.ok !== true ||
+    provenance.verification_mode !== "prior-run" ||
+    String(provenance.release_sha ?? "").toLowerCase() !== expectedSha ||
+    String(provenance.source_tree ?? "").toLowerCase() !== expectedSourceTree ||
+    String(provenance.workflow_sha ?? "").toLowerCase() !== expectedSha ||
+    String(provenance.run_id ?? "") !== String(attestation.source_run_id) ||
+    String(provenance.run_attempt ?? "") !==
+      String(attestation.source_run_attempt)
+  ) {
     throw new Error("Release candidate attestation is missing source provenance evidence.");
   }
   for (const [key, label] of [
