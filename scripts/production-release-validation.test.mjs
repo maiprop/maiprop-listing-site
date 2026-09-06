@@ -496,7 +496,17 @@ describe("production release validation", () => {
         n_minus_one: "2".repeat(64),
         catalogue_performance: "3".repeat(64),
       },
-      provenance: [{}],
+      provenance: {
+        schema_version: 1,
+        evidence_type: "maiprop-release-artifact-binding-verification",
+        ok: true,
+        verification_mode: "prior-run",
+        release_sha: sha,
+        source_tree: "b".repeat(40),
+        workflow_sha: sha,
+        run_id: "60",
+        run_attempt: "2",
+      },
       supabase: {
         release_sha: sha,
         artifact_sha256: digest,
