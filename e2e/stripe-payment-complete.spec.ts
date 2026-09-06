@@ -620,7 +620,6 @@ async function pollPaidInvoiceAndReceipt(
     paid_invoice: true,
     hosted_invoice_url: true,
     invoice_pdf: true,
-    receipt_url: true,
     automatic_tax_enabled: true,
     tax_amount_present: true,
   });
