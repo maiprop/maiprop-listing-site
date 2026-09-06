@@ -138,8 +138,9 @@ jobs:
         run: |
           set -euo pipefail
           export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)"
-          git fetch --no-tags origin main
-          export RELEASE_CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
+          export RELEASE_CURRENT_MAIN_SHA="$(
+            gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha'
+          )"
           node scripts/production-break-glass-validation.mjs validate-workflow \
             --out release-authorization.json \
             --github-output "$GITHUB_OUTPUT"
@@ -176,8 +177,9 @@ jobs:
             exit 1
           fi
 
-          git fetch --no-tags origin main
-          CURRENT_MAIN="$(git rev-parse origin/main)"
+          CURRENT_MAIN="$(
+            gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha'
+          )"
           if [ "$CURRENT_MAIN" != "$RELEASE_SHA" ]; then
             echo "::error::Release SHA $RELEASE_SHA is no longer current main ($CURRENT_MAIN). Start a new release."
             exit 1
@@ -678,8 +680,9 @@ jobs:
         run: |
           set -euo pipefail
           export RELEASE_CHECKOUT_SHA="$(git rev-parse HEAD)"
-          git fetch --no-tags origin main
-          export RELEASE_CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
+          export RELEASE_CURRENT_MAIN_SHA="$(
+            gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha'
+          )"
           node scripts/production-break-glass-validation.mjs validate-workflow \
             --out release-authorization.json \
             --github-output "$GITHUB_OUTPUT"
