@@ -544,7 +544,6 @@ async function pollSyncedSubscription(
       `${SUPABASE_URL}/functions/v1/check-subscription`,
       {
         headers: authedHeaders(token),
-        data: { refresh: true },
         failOnStatusCode: false,
       },
     );
