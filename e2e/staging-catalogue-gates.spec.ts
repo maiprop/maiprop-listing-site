@@ -49,12 +49,14 @@ const CATALOGUE_ROUTES = [
 type RuntimeEvidence = {
   pageErrors: string[];
   consoleErrors: string[];
+  httpErrors: Array<{ status: number; url: string }>;
   forbiddenAuthorityRequests: string[];
 };
 
 type EvidenceCheckpoint = {
   pageErrors: number;
   consoleErrors: number;
+  httpErrors: number;
   forbiddenAuthorityRequests: number;
 };
 
@@ -144,10 +146,24 @@ async function drainProtectedPagesRoutes(page: Page): Promise<void> {
   await page.unrouteAll({ behavior: "wait" });
 }
 
+function diagnosticResponseUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    const queryKeys = [...new Set(url.searchParams.keys())].sort();
+    const query = queryKeys.length > 0
+      ? `?${queryKeys.map((key) => encodeURIComponent(key)).join("&")}`
+      : "";
+    return `${url.origin}${url.pathname}${query}`;
+  } catch {
+    return "invalid-url";
+  }
+}
+
 function collectRuntimeEvidence(page: Page): RuntimeEvidence {
   const evidence: RuntimeEvidence = {
     pageErrors: [],
     consoleErrors: [],
+    httpErrors: [],
     forbiddenAuthorityRequests: [],
   };
 
@@ -160,6 +176,13 @@ function collectRuntimeEvidence(page: Page): RuntimeEvidence {
       stagingBaseUrl: STAGING_BASE_URL,
     }, ALLOW_LEGACY_UUID_ONLY_AUCTION_ROUTES)) return;
     evidence.consoleErrors.push(message.text());
+  });
+  page.on("response", (response) => {
+    if (response.status() < 400) return;
+    evidence.httpErrors.push({
+      status: response.status(),
+      url: diagnosticResponseUrl(response.url()),
+    });
   });
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
@@ -178,6 +201,7 @@ function checkpoint(evidence: RuntimeEvidence): EvidenceCheckpoint {
   return {
     pageErrors: evidence.pageErrors.length,
     consoleErrors: evidence.consoleErrors.length,
+    httpErrors: evidence.httpErrors.length,
     forbiddenAuthorityRequests: evidence.forbiddenAuthorityRequests.length,
   };
 }
@@ -188,6 +212,7 @@ function expectCleanRuntimeSince(
   label: string,
 ): void {
   expect(evidence.pageErrors.slice(since.pageErrors), `${label} page errors`).toEqual([]);
+  expect(evidence.httpErrors.slice(since.httpErrors), `${label} http errors`).toEqual([]);
   expect(evidence.consoleErrors.slice(since.consoleErrors), `${label} console errors`).toEqual([]);
   expect(
     evidence.forbiddenAuthorityRequests.slice(since.forbiddenAuthorityRequests),

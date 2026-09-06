@@ -26,6 +26,15 @@ test("protected staging routes drain without hiding active handler failures", ()
   assert.doesNotMatch(source, /ignoreErrors/);
 });
 
+test("catalogue failures record sanitized non-success response identities", () => {
+  assert.match(source, /httpErrors: Array<\{ status: number; url: string \}>/);
+  assert.match(source, /page\.on\("response", \(response\) =>/);
+  assert.match(source, /response\.status\(\) < 400/);
+  assert.match(source, /diagnosticResponseUrl\(response\.url\(\)\)/);
+  assert.match(source, /http errors`\)\.toEqual\(\[\]\)/);
+  assert.doesNotMatch(source, /url:\s*response\.url\(\)/);
+});
+
 test("performance proof routes drain before Playwright tears down each page", () => {
   for (const proofSource of [performanceSource, querySource]) {
     assert.match(proofSource, /await page\.route\(`\$\{appOrigin\}\/\*\*`/);

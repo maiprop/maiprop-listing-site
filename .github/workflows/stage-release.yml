@@ -1244,6 +1244,17 @@ jobs:
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
         run: node scripts/staging-auction-fixtures.mjs cleanup
 
+      - name: Upload failed N-1 diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: staging-n-minus-one-diagnostics-${{ needs.validate-source.outputs.release_sha }}-${{ github.run_attempt }}
+          path: |
+            n-minus-one/playwright-report.json
+            n-minus-one/deploy-verification.json
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload N-1 compatibility evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
