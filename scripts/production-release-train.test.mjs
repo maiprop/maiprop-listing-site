@@ -2833,6 +2833,9 @@ describe("production release train", () => {
     const compatibilityCleanup = compatibility.steps.find(
       (step) => step.name === "Cleanup exact-SHA staging auction proof fixtures",
     );
+    const compatibilityFailureDiagnostics = compatibility.steps.find(
+      (step) => step.name === "Upload failed N-1 diagnostics",
+    );
     expect(compatibility.steps.indexOf(compatibilityResolve)).toBeLessThan(
       compatibility.steps.indexOf(compatibilitySeed),
     );
@@ -2852,6 +2855,20 @@ describe("production release train", () => {
     expect(compatibilityCleanup.run).toBe(
       "node scripts/staging-auction-fixtures.mjs cleanup",
     );
+    expect(compatibilityFailureDiagnostics.if).toBe("failure()");
+    expect(compatibilityFailureDiagnostics.with.name).toContain(
+      "staging-n-minus-one-diagnostics-",
+    );
+    expect(compatibilityFailureDiagnostics.with.path).toContain(
+      "n-minus-one/playwright-report.json",
+    );
+    expect(compatibilityFailureDiagnostics.with.path).toContain(
+      "n-minus-one/deploy-verification.json",
+    );
+    expect(compatibilityFailureDiagnostics.with.path).not.toContain(
+      "wrangler-pages-dev.log",
+    );
+    expect(compatibilityFailureDiagnostics.with.path).not.toContain("trace.zip");
     expect(compatibilityRuntime.env.CLOUDFLARE_STAGING_TURN_KEY_ID).toBe(
       "${{ secrets.CLOUDFLARE_STAGING_TURN_KEY_ID }}",
     );
