@@ -47,10 +47,15 @@ function collectSpecs(suites, rows = []) {
   return rows;
 }
 
+function isExactPaymentSpecFile(value) {
+  const file = String(value ?? "").replaceAll("\\", "/");
+  return file === STRIPE_PAYMENT_SPEC ||
+    file.endsWith(`/e2e/${STRIPE_PAYMENT_SPEC}`);
+}
+
 function exactPaymentTest(report) {
   const matches = collectSpecs(report?.suites).filter((spec) =>
-    String(spec?.file ?? "").replaceAll("\\", "/")
-      .endsWith(`/${STRIPE_PAYMENT_SPEC}`) &&
+    isExactPaymentSpecFile(spec?.file) &&
     spec?.title === STRIPE_PAYMENT_TEST_TITLE
   );
   if (matches.length !== 1) {
@@ -75,7 +80,7 @@ function exactPaymentTest(report) {
     fail("exact Stripe payment test has a non-passing recorded result.");
   }
   return {
-    file: String(spec.file).replaceAll("\\", "/"),
+    file: STRIPE_PAYMENT_SPEC,
     title: spec.title,
     projectName: test.projectName,
     statuses,
