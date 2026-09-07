@@ -2135,6 +2135,18 @@ describe("production release train", () => {
     }
   });
 
+  it("resolves current main through the authenticated GitHub API during production deployment", () => {
+    const release = workflow("deploy-production-release.yml");
+
+    expect(release).not.toContain("git fetch --no-tags origin main");
+    expect(release).not.toContain("git rev-parse origin/main");
+    expect(
+      release.match(
+        /gh api "repos\/\$\{GITHUB_REPOSITORY\}\/branches\/main" --jq '\.commit\.sha'/g,
+      )?.length ?? 0,
+    ).toBeGreaterThanOrEqual(4);
+  });
+
   it("requires fresh signed Stripe readiness evidence before production mutation", () => {
     const release = workflow("deploy-production-release.yml");
     const parsed = yaml.load(release);
