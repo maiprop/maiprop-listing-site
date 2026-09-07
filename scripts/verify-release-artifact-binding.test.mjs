@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import yaml from "js-yaml";
 
 import { createReleaseArtifactBinding } from "./release-artifact-binding.mjs";
 
@@ -152,6 +153,42 @@ function args(f, { sameRun = false, trustedRunId = "77" } = {}) {
 }
 
 describe("verify release artifact binding CLI", () => {
+  for (const workflow of [
+    "deploy-supabase-production-db.yml",
+    "deploy-edge-functions.yml",
+    "reusable-cloudflare-production-deploy.yml",
+  ]) {
+    it(`${workflow} verifies receipts during the current deployment and rejects another run`, () => {
+      const parsed = yaml.load(readFileSync(join(".github/workflows", workflow), "utf8"));
+      const step = Object.values(parsed.jobs).flatMap((job) => job.steps ?? [])
+        .find((entry) => entry.run?.includes("evidence/consumption-binding-verification.json"));
+      const command = step.run.match(
+        /node scripts\/verify-release-artifact-binding\.mjs \\\n\s+--binding evidence\/consumption-binding\/release-artifact-binding\.json[\s\S]*? > evidence\/consumption-binding-verification\.json/,
+      )?.[0];
+      expect(command).toBeTruthy();
+      const trustedEnv = {
+        GITHUB_RUN_ID: "77",
+        GITHUB_RUN_ATTEMPT: "1",
+        GITHUB_ACTOR: "release-builder",
+        GITHUB_TRIGGERING_ACTOR: "release-builder",
+      };
+      const modeArgs = () => [...command.matchAll(
+        /--same-run|(--trusted-current-[\w-]+) "\$([A-Z_]+)"/g,
+      )].flatMap((match) => match[1] ? [match[1], trustedEnv[match[2]] ?? ""] : [match[0]]);
+      const f = fixture({ status: "in_progress", conclusion: null });
+      const verify = () => spawnSync(process.execPath, [...args(f), ...modeArgs()], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, RELEASE_EVIDENCE_SIGNING_KEY: KEY },
+      });
+      const current = verify();
+      expect(current.status, current.stderr).toBe(0);
+      expect(JSON.parse(current.stdout).verification_mode).toBe("same-run");
+      trustedEnv.GITHUB_RUN_ID = "78";
+      expect(verify().status).not.toBe(0);
+    });
+  }
+
   it("verifies API metadata and emits trusted outputs", () => {
     const f = fixture();
     const result = spawnSync(process.execPath, args(f), {
