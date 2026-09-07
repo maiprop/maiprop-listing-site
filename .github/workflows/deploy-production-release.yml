@@ -491,7 +491,7 @@ jobs:
             --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" \
             > approval-evidence/cryptographic-verification.json
           APPROVAL_ARTIFACT_DIGEST="$(jq -er '.digest' approval-binding-metadata/artifact.json)"
-          export STRIPE_READINESS_ACTOR APPROVAL_RUN_ID APPROVAL_RUN_ATTEMPT
+          export STRIPE_READINESS_ACTOR STRIPE_READINESS_RUN_ID APPROVAL_RUN_ID APPROVAL_RUN_ATTEMPT
           export approval_actor
           export PAGES_STAGING_RUN_ID="$(cat pages-staging/run-id)"
           export PAGES_STAGING_ACTOR="$(cat pages-staging/actor)"

@@ -37,6 +37,27 @@ function generatedShellBodies(source) {
 }
 
 describe("changed production release workflow Bash syntax", () => {
+  it("passes the selected Stripe proof run ID to the authorization validator", () => {
+    const parsed = yaml.load(readFileSync(
+      resolve(root, ".github/workflows/deploy-production-release.yml"), "utf8",
+    ));
+    const step = parsed.jobs.validate.steps.find(
+      (entry) => entry.name === "Require current main and final exact-SHA readiness",
+    );
+    const exports = step.run.match(/^export [A-Za-z_][A-Za-z_0-9 ]*$/gm) ?? [];
+    const source = [
+      "unset STRIPE_READINESS_RUN_ID",
+      "STRIPE_READINESS_RUN_ID=123456789",
+      ...exports,
+      "printenv STRIPE_READINESS_RUN_ID",
+    ].join("\n");
+    const command = process.platform === "win32" ? "wsl.exe" : "bash";
+    const args = process.platform === "win32" ? ["--exec", "bash"] : [];
+    const result = spawnSync(command, args, { input: source, encoding: "utf8" });
+    assert.equal(result.stdout.trim(), "123456789", result.stderr);
+    assert.equal(result.status, 0, result.stderr);
+  });
+
   it("parses every Bash run block and generated helper shell", { timeout: 180_000 }, () => {
     let runBlockCount = 0;
     let helperCount = 0;
