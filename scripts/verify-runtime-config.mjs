@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import {
   getCloudflareAccessHeaders,
@@ -182,29 +183,37 @@ export function validateProductionRuntimeConfig(
   };
 }
 
-async function fetchRuntimeConfig(baseUrl) {
+export async function fetchRuntimeConfig(
+  baseUrl,
+  { fetchImpl = globalThis.fetch, sleep = delay } = {},
+) {
   const password = getSiteLockPassword();
   const siteLockHeaders = password
     ? { Cookie: await getSiteLockCookieHeader(password) }
     : {};
-  const response = await fetchReleaseResource(
-    new URL("/runtime-config.js", baseUrl),
-    {
-      signal: AbortSignal.timeout(30_000),
-      headers: mergeHeaders(
-        { Accept: "application/javascript", "Cache-Control": "no-cache" },
-        getCloudflareAccessHeaders(),
-        siteLockHeaders,
-      ),
-    },
+  // Pages can acknowledge a deployment before its runtime route is available.
+  // Share one deadline across requests and waits; configuration errors never retry.
+  const signal = AbortSignal.timeout(60_000);
+  const headers = mergeHeaders(
+    { Accept: "application/javascript", "Cache-Control": "no-cache" },
+    getCloudflareAccessHeaders(),
+    siteLockHeaders,
   );
-  const source = await response.text();
-  if (!response.ok) {
+  for (let attempt = 1; ; attempt += 1) {
+    const response = await fetchReleaseResource(
+      new URL("/runtime-config.js", baseUrl),
+      { fetchImpl, signal, headers },
+    );
+    const source = await response.text();
+    if (response.ok) return parseRuntimeConfigScript(source);
+    if ([404, 502, 503, 504].includes(response.status) && attempt < 12) {
+      await sleep(5_000, undefined, { signal });
+      continue;
+    }
     throw new Error(
       `${baseUrl} runtime config returned HTTP ${response.status}: ${source.slice(0, 200)}`,
     );
   }
-  return parseRuntimeConfigScript(source);
 }
 
 async function main() {
