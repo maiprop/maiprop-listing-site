@@ -37,6 +37,47 @@ function generatedShellBodies(source) {
 }
 
 describe("changed production release workflow Bash syntax", () => {
+  it("makes every referenced production job output available through a direct dependency", () => {
+    const parsed = yaml.load(readFileSync(
+      resolve(root, ".github/workflows/deploy-production-release.yml"), "utf8",
+    ));
+    for (const [jobName, job] of Object.entries(parsed.jobs)) {
+      const dependencies = new Set([job.needs ?? []].flat());
+      for (const expression of JSON.stringify(job).matchAll(/\$\{\{([\s\S]*?)\}\}/g)) {
+        for (const reference of expression[1].matchAll(/\bneeds\.([\w-]+)\./g)) {
+          assert.ok(dependencies.has(reference[1]),
+            `${jobName} references ${reference[1]} without a direct dependency`);
+        }
+      }
+    }
+  });
+
+  for (const workflow of ["deploy-production-release.yml", "stage-release.yml"]) {
+    it(`${workflow} requests archive bytes with a single Accept header`, () => {
+      const parsed = yaml.load(readFileSync(
+        resolve(root, ".github/workflows", workflow), "utf8",
+      ));
+      const step = Object.values(parsed.jobs).flatMap((job) => job.steps ?? [])
+        .find((entry) => entry.run?.includes("github_api()"));
+      const helper = step.run.match(/^github_api\(\) \{\n[\s\S]*?^\}/m)?.[0];
+      assert.ok(helper, "archive API helper must exist");
+      const source = [
+        'gh() { printf "%s\\n" "$@"; }',
+        helper,
+        'github_api -H "Accept: application/octet-stream" "repos/example/app/releases/assets/123"',
+      ].join("\n");
+      const command = process.platform === "win32" ? "wsl.exe" : "bash";
+      const args = process.platform === "win32" ? ["--exec", "bash"] : [];
+      const result = spawnSync(command, args, { input: source, encoding: "utf8" });
+      assert.equal(result.status, 0, result.stderr);
+      const forwarded = result.stdout.trim().split("\n");
+      assert.deepEqual(forwarded.filter((arg) => arg.startsWith("Accept:")), [
+        "Accept: application/octet-stream",
+      ]);
+      assert.ok(forwarded.includes("X-GitHub-Api-Version: 2026-03-10"));
+    });
+  }
+
   it("passes the selected Stripe proof run ID to the authorization validator", () => {
     const parsed = yaml.load(readFileSync(
       resolve(root, ".github/workflows/deploy-production-release.yml"), "utf8",

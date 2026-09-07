@@ -4175,6 +4175,7 @@ describe("production release train", () => {
       "validate",
       "consume-break-glass-authorization",
       "deploy-production-database",
+      "renew-edge-mutation-lease",
       "deploy-production-edge",
     ]);
     expect(renewCloudflare.environment).toBeUndefined();
