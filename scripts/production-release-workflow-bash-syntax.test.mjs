@@ -37,6 +37,21 @@ function generatedShellBodies(source) {
 }
 
 describe("changed production release workflow Bash syntax", () => {
+  it("makes every referenced production job output available through a direct dependency", () => {
+    const parsed = yaml.load(readFileSync(
+      resolve(root, ".github/workflows/deploy-production-release.yml"), "utf8",
+    ));
+    for (const [jobName, job] of Object.entries(parsed.jobs)) {
+      const dependencies = new Set([job.needs ?? []].flat());
+      for (const expression of JSON.stringify(job).matchAll(/\$\{\{([\s\S]*?)\}\}/g)) {
+        for (const reference of expression[1].matchAll(/\bneeds\.([\w-]+)\./g)) {
+          assert.ok(dependencies.has(reference[1]),
+            `${jobName} references ${reference[1]} without a direct dependency`);
+        }
+      }
+    }
+  });
+
   for (const workflow of ["deploy-production-release.yml", "stage-release.yml"]) {
     it(`${workflow} requests archive bytes with a single Accept header`, () => {
       const parsed = yaml.load(readFileSync(

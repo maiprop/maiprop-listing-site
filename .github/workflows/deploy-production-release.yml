@@ -1815,7 +1815,7 @@ jobs:
 
   renew-cloudflare-mutation-lease:
     name: Renew Cloudflare mutation lease after backend promotion
-    needs: [validate, consume-break-glass-authorization, deploy-production-database, deploy-production-edge]
+    needs: [validate, consume-break-glass-authorization, deploy-production-database, renew-edge-mutation-lease, deploy-production-edge]
     if: ${{ needs.validate.result == 'success' && needs.consume-break-glass-authorization.result == 'success' && needs.deploy-production-database.result == 'success' && needs.deploy-production-edge.result == 'success' }}
     permissions:
       actions: read
