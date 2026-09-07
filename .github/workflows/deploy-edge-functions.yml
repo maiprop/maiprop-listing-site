@@ -527,7 +527,12 @@ jobs:
               --run-attempt "$PRODUCTION_RUN_ATTEMPT" --actor "$receipt_actor" \
               --triggering-actor "$receipt_triggering_actor" --artifact-id "$CONSUMPTION_ARTIFACT_ID" \
               --artifact-name "$receipt_name" --artifact-digest "$CONSUMPTION_ARTIFACT_DIGEST" \
-              --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" > evidence/consumption-binding-verification.json
+              --key-id "$RELEASE_EVIDENCE_SIGNING_KEY_ID" --same-run \
+              --trusted-current-run-id "$GITHUB_RUN_ID" \
+              --trusted-current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+              --trusted-current-actor "$GITHUB_ACTOR" \
+              --trusted-current-triggering-actor "$GITHUB_TRIGGERING_ACTOR" \
+              > evidence/consumption-binding-verification.json
             test "$(sha256sum evidence/consumption/production-break-glass-consumption.json | awk '{print $1}')" = "$CONSUMPTION_PAYLOAD_SHA256"
             node scripts/production-break-glass-consumption.mjs verify \
               --file evidence/consumption/production-break-glass-consumption.json \
