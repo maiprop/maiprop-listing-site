@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { HelmetProvider } from "react-helmet-async";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
@@ -174,18 +175,22 @@ const baseListing = {
   is_pre_sale: false,
 };
 
+const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 const renderPage = (entry = "/property/listing-1", state?: unknown) => render(
-  <HelmetProvider>
-    <MemoryRouter initialEntries={[{ pathname: entry, state }]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
-      <Routes>
-        <Route path="/property/:id" element={<PropertyDetail />} />
-        <Route path="/auction/:id" element={<PropertyDetail />} />
-      </Routes>
-    </MemoryRouter>
-  </HelmetProvider>,
+  <QueryClientProvider client={queryClient}>
+    <HelmetProvider>
+      <MemoryRouter initialEntries={[{ pathname: entry, state }]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+        <Routes>
+          <Route path="/property/:id" element={<PropertyDetail />} />
+          <Route path="/auction/:id" element={<PropertyDetail />} />
+        </Routes>
+      </MemoryRouter>
+    </HelmetProvider>
+  </QueryClientProvider>,
 );
 
 beforeEach(() => {
+  queryClient.clear();
   Object.values(mocks).forEach((value) => {
     if (typeof value === "function" && "mockReset" in value) value.mockReset();
   });

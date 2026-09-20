@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-20T21:11:28.116Z",
+  "baseSha": "44759128d5e8c88c1c21d1a20adfaa8667d6e1c8",
+  "scope": "Time-limited renewal of existing review exceptions for auction recovery. Existing size caps, parsing requirements and validation styles remain enforced. This is not a new full-project security or functionality review.",
+  "nextReviewBy": "2026-10-05",
+  "modules": [
+    {
+      "path": "src/pages/Dashboard.tsx",
+      "bytes": 56759,
+      "allowedMaxBytes": 58000,
+      "sha256": "47d5a3341065cf3e46addcbfc1d636e3704620cde0cdb39fa99032adf3b43da5",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/NewBuildDetail.tsx",
+      "bytes": 46445,
+      "allowedMaxBytes": 52000,
+      "sha256": "cfe4bf243e7abbb530ce69b8670bc5d2dff7b3d9cd84f1f174f11ee6190439ef",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/Pricing.tsx",
+      "bytes": 61607,
+      "allowedMaxBytes": 65000,
+      "sha256": "f3921a9629ac13656a5d441d61a97ca7b08059e9cf5eb3e57de20bdc27ce6a82",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/ProjectDetail.tsx",
+      "bytes": 50877,
+      "allowedMaxBytes": 60000,
+      "sha256": "172c35e2104803341a89a2fcda0cf989a3b8bdd85a474c920f216579f4535850",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/lib/professionalServiceCatalog.ts",
+      "bytes": 48996,
+      "allowedMaxBytes": 60000,
+      "sha256": "b44d239ecdeefe83f3f07b740c3dc33bb3645c8185909008a8029f0f9379b3c6",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/Listings.tsx",
+      "bytes": 51700,
+      "allowedMaxBytes": 55000,
+      "sha256": "6031968e6e69be66652dc3a81b69682647e5c497088a1a3b1fa4b0ab138505e3",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/CreateNewBuildingListing.tsx",
+      "bytes": 51497,
+      "allowedMaxBytes": 55000,
+      "sha256": "eef3cc0a002a0421abe87805f85f7bc343bb24a5828b87cbb8dbe6c508251007",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/components/OpenHouseRegistrationDialog.tsx",
+      "bytes": 45218,
+      "allowedMaxBytes": 55000,
+      "sha256": "2a9af8af81d4e90ee2a004e6c2860d7f20e7df5274ac0a2fe54584dd818e0d92",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/AdminPricing.tsx",
+      "bytes": 47621,
+      "allowedMaxBytes": 55000,
+      "sha256": "2cd5ea13a0a10f22ceab1b778c02b1739d0f69a070785fbaf695a00c8818ca0d",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/OpenHouseDetail.tsx",
+      "bytes": 45347,
+      "allowedMaxBytes": 52000,
+      "sha256": "86c4d31f4bffff4039c177bb3565bb6566328bcea53eec9da962b6d20c6e30e9",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/Onboarding.tsx",
+      "bytes": 49381,
+      "allowedMaxBytes": 50000,
+      "sha256": "de969bfbbdb96a8c05e2d59656524e0b7a65920662642ecc11ea884b7eefb9d3",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/lib/documentTemplateData.ts",
+      "bytes": 38329,
+      "allowedMaxBytes": 48000,
+      "sha256": "d1ca2190c85bc5bfbf30c21c3d0d9b403224cf62078a327c82fc479961fc0fe4",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/OpenHouses.tsx",
+      "bytes": 47283,
+      "allowedMaxBytes": 48000,
+      "sha256": "caf0ec165ad37d33f1431a9465afde1446ef38529deb0d808c6433ae371f9bee",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/components/OpenHouseAssetControlPanel.tsx",
+      "bytes": 39180,
+      "allowedMaxBytes": 48000,
+      "sha256": "7dd17fbab6e2553053a7f2c9f9490acda85b3c18da7befe5dc931f1c1af02f4f",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/InvestorDashboard.tsx",
+      "bytes": 39123,
+      "allowedMaxBytes": 46000,
+      "sha256": "d43b7fc9ed85d831e912b768c09d128aa047974955cf71465b6decccda860acf",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/components/BookConsultationModal.tsx",
+      "bytes": 36993,
+      "allowedMaxBytes": 46000,
+      "sha256": "cce07b5819aa846f424322535d105fd6da6e346c9b91696092e8b58f9bf18685",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/components/listings/ListingsAdvancedFilters.tsx",
+      "bytes": 36562,
+      "allowedMaxBytes": 46000,
+      "sha256": "0431c6d525af26bbe79899a821bbd1bd2fc80436439069f1050e9502a34b54f5",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/lib/mutationSchemas.ts",
+      "bytes": 36387,
+      "allowedMaxBytes": 46000,
+      "sha256": "89a88c419e442104a231985c6b9a48ae70605ffa06d225389462a8696e458957",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/ProfessionalProfile.tsx",
+      "bytes": 35299,
+      "allowedMaxBytes": 46000,
+      "sha256": "f2899e17dd1e12ae92f3bd70ba737efbfff98a5bc80256d554e76f7d3e2dd11b",
+      "unchangedFromMain": true,
+      "previousReviewBy": "2026-09-12"
+    },
+    {
+      "path": "src/pages/Auctions.tsx",
+      "bytes": 36936,
+      "allowedMaxBytes": 46000,
+      "sha256": "c6b4268669de8886cdbea0b5c61971acd9775268b9bf74891a32725b5ebe24f7",
+      "unchangedFromMain": false,
+      "previousReviewBy": "2026-09-12"
+    }
+  ],
+  "edgeRequestBoundaries": [
+    {
+      "path": "supabase/functions/admin-broadcast-notification/index.ts",
+      "sha256": "31c18bea60bbf095159a9d756e9f4bec8e5ccff50e6ae9a056ae9b8820749587",
+      "validationStyle": "admin-only-guarded",
+      "previousReviewBy": "2026-09-19",
+      "unchangedFromMain": true
+    },
+    {
+      "path": "supabase/functions/admin-content-report-action/index.ts",
+      "sha256": "ce2ad2bfcf5500c1f29d5a1939652dab9ef871f5636fceda66df409221a0f79a",
+      "validationStyle": "admin-only-guarded",
+      "previousReviewBy": "2026-09-19",
+      "unchangedFromMain": true
+    },
+    {
+      "path": "supabase/functions/admin-review-invitation/index.ts",
+      "sha256": "fb81d5585a73c823034192ce7404d938566a71b8d82f79cc5fea3dbc02a63b36",
+      "validationStyle": "admin-only-guarded",
+      "previousReviewBy": "2026-09-19",
+      "unchangedFromMain": true
+    },
+    {
+      "path": "supabase/functions/agent-data-input/index.ts",
+      "sha256": "c25d9b0b2f4ddde418b1e85789bb015c30acc6939878582db5025b845f799697",
+      "validationStyle": "typed-manual-guards",
+      "previousReviewBy": "2026-09-19",
+      "unchangedFromMain": true
+    },
+    {
+      "path": "supabase/functions/os-sales-coordinates/index.ts",
+      "sha256": "648a355d26b02ff4074f7e0f981886961717180d21cd72f42b8a5a32e55d1a46",
+      "validationStyle": "typed-manual-guards",
+      "previousReviewBy": "2026-09-19",
+      "unchangedFromMain": true
+    },
+    {
+      "path": "supabase/functions/owner-pro-status/index.ts",
+      "sha256": "ba177a872ad3b1dcc184b852435f72692f63edbf0bea6ff15b31b5e8268deb73",
+      "validationStyle": "typed-manual-guards",
+      "previousReviewBy": "2026-09-19",
+      "unchangedFromMain": true
+    },
+    {
+      "path": "supabase/functions/project-unit-prices/index.ts",
+      "sha256": "f2d4d196811f59d754f7cd98cbb6a57655486cec4bec61f5394638c7b36225a0",
+      "validationStyle": "typed-manual-guards",
+      "previousReviewBy": "2026-09-19",
+      "unchangedFromMain": true
+    },
+    {
+      "path": "supabase/functions/transfer-platform-admin/index.ts",
+      "sha256": "79243b587d5c55928dd0df52ca5d372015b1e02bbf694dde744e3bc9ca9c1b96",
+      "validationStyle": "admin-only-guarded",
+      "previousReviewBy": "2026-09-19",
+      "unchangedFromMain": true
+    }
+  ],
+  "validation": {
+    "existingEdgeTests": {
+      "passed": 48,
+      "failed": 0,
+      "networkPermission": false
+    },
+    "limitation": "The coordinates cap tests accept transport failure; this run is not proof of provider availability or successful transport. Agent input and admin-transfer guards were inspected; no dedicated tests exist in this candidate for these two handlers."
+  }
+}

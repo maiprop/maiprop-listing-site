@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense, useMemo } from "react";
 import { TrendingUp, AlertCircle, Loader2, Map as MapIcon, List, SlidersHorizontal, X, ChevronDown, Gavel, ExternalLink, MapPin } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,9 @@ import { useTranslation } from "react-i18next";
 const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { useAuth } from "@/contexts/AuthContext";
-import { useToggleFavorite } from "@/hooks/useFavorites";
+import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
+import { useListingReport } from "@/hooks/useListingReport";
+import { toast } from "sonner";
 import {
   BID_RANGES, YEAR_RANGES,
   type ViewMode,
@@ -96,7 +98,7 @@ const AuctionLoadError = ({
 const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinates filter state, map/list view state, pagination, and Pro upsells.
   const { user } = useAuth();
   const trackUserSearch = useTrackUserSearch();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -104,7 +106,6 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showFilters, setShowFilters] = useState(false);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
-  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
 
   // Standard filters
   const [filterType, setFilterType] = useState(searchParams.get("type") || "");
@@ -133,6 +134,20 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
   }, [searchParams]);
 
   const toggleFav = useToggleFavorite();
+  const favorites = useFavorites();
+  const favoritedIds = useMemo(
+    () => new Set((favorites.data ?? []).map((favorite) => favorite.listing_id)),
+    [favorites.data],
+  );
+  const report = useListingReport({
+    messages: {
+      signIn: t("auctions.card.signInToReport"),
+      error: t("auctions.card.errorReport"),
+      success: t("auctions.card.reportSubmitted"),
+      unavailable: t("auctions.card.actionUnavailable"),
+    },
+    onSignInRequired: () => navigate("/login"),
+  });
 
   const {
     isPro,
@@ -225,14 +240,14 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     visibleCount,
   ]);
 
-  const handleToggleFav = (id: string, isFav: boolean) => {
+  const handleToggleFav = (id: string | null, isFav: boolean) => {
     if (!user) {navigate("/login");return;}
+    if (!id) {
+      toast.error(t("auctions.card.actionUnavailable"));
+      return;
+    }
+    if (toggleFav.isPending) return;
     toggleFav.mutate({ listing_id: id, isFavorited: isFav });
-    setFavoritedIds((prev) => {
-      const next = new Set(prev);
-      if (isFav) next.delete(id);else next.add(id);
-      return next;
-    });
   };
 
   const clearFilters = () => {
@@ -580,7 +595,10 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 key={a.id}
                 a={a}
                 favoritedIds={favoritedIds}
-                onToggleFav={handleToggleFav} />
+                onToggleFav={handleToggleFav}
+                onReport={(listingId) => report.submit({ entityType: "listing", entityId: listingId })}
+                isFavoritePending={toggleFav.isPending}
+                isReportPending={report.isPending} />
 
               )}
                  </div>

@@ -3,7 +3,7 @@
  * toggle insert/delete logic, and disabled state when logged out.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -19,7 +19,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: vi.fn() }));
 
 import { useAuth } from "@/contexts/AuthContext";
-import { useFavorites } from "@/hooks/useFavorites";
+import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -74,5 +74,87 @@ describe("useFavorites", () => {
     expect(mockFrom).toHaveBeenCalledWith("public_listing_catalogue");
     expect(listingIn).toHaveBeenCalledWith("id", ["l1"]);
     expect(result.current.data?.[0].listings).toMatchObject({ id: "l1", title: "Test" });
+  });
+});
+
+describe("useToggleFavorite", () => {
+  it("rolls a failed optimistic save back to an absent cache", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: new Error("write denied") });
+    mockFrom.mockReturnValue({ insert });
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({ user: { id: "user-a" } });
+
+    const { result } = renderHook(() => useToggleFavorite(), { wrapper });
+    act(() => result.current.mutate({
+      listing_id: "d1000000-0000-4000-8000-000000000001",
+      isFavorited: false,
+    }));
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(qc.getQueryData(["favorites", "user-a"])).toBeUndefined();
+  });
+
+  it("keeps an in-flight write and rollback bound to the initiating account", async () => {
+    let finishWrite!: (value: { error: Error }) => void;
+    const insert = vi.fn().mockReturnValue(new Promise<{ error: Error }>((resolve) => {
+      finishWrite = resolve;
+    }));
+    mockFrom.mockReturnValue({ insert });
+    const authState = { user: { id: "user-a" } };
+    (useAuth as ReturnType<typeof vi.fn>).mockImplementation(() => authState);
+    qc.setQueryData(["favorites", "user-a"], []);
+    qc.setQueryData(["favorites", "user-b"], [{
+      listing_id: "b1000000-0000-4000-8000-000000000001",
+      user_id: "user-b",
+    }]);
+
+    const { result, rerender } = renderHook(() => useToggleFavorite(), { wrapper });
+    act(() => result.current.mutate({
+      listing_id: "d1000000-0000-4000-8000-000000000001",
+      isFavorited: false,
+    }));
+    await waitFor(() => expect(insert).toHaveBeenCalledWith(expect.objectContaining({ user_id: "user-a" })));
+
+    authState.user = { id: "user-b" };
+    rerender();
+    finishWrite({ error: new Error("write denied") });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(qc.getQueryData(["favorites", "user-a"])).toEqual([]);
+    expect(qc.getQueryData(["favorites", "user-b"])).toEqual([{
+      listing_id: "b1000000-0000-4000-8000-000000000001",
+      user_id: "user-b",
+    }]);
+  });
+
+  it("invalidates only the initiating account after an in-flight account switch", async () => {
+    let finishWrite!: (value: { error: null }) => void;
+    const insert = vi.fn().mockReturnValue(new Promise<{ error: null }>((resolve) => {
+      finishWrite = resolve;
+    }));
+    mockFrom.mockReturnValue({ insert });
+    const authState = { user: { id: "user-a" } };
+    (useAuth as ReturnType<typeof vi.fn>).mockImplementation(() => authState);
+    const invalidateQueries = vi.spyOn(qc, "invalidateQueries");
+
+    const { result, rerender } = renderHook(() => useToggleFavorite(), { wrapper });
+    act(() => result.current.mutate({
+      listing_id: "d1000000-0000-4000-8000-000000000001",
+      isFavorited: false,
+    }));
+    await waitFor(() => expect(insert).toHaveBeenCalledWith(expect.objectContaining({ user_id: "user-a" })));
+
+    authState.user = { id: "user-b" };
+    rerender();
+    finishWrite({ error: null });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["favorites", "user-a"],
+      exact: true,
+    });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ["favorites", "user-b"],
+      exact: true,
+    });
   });
 });

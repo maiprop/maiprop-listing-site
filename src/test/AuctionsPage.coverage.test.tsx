@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   user: { id: "user-1" } as { id: string } | null,
   navigate: vi.fn(),
   mutate: vi.fn(),
+  favoriteRows: [] as Array<{ listing_id: string }>,
+  reportSubmit: vi.fn(),
+  reportPending: false,
+  toastError: vi.fn(),
   pipeline: vi.fn(),
   refetch: vi.fn(),
   trackUserSearch: vi.fn(),
@@ -28,8 +32,18 @@ vi.mock("@/contexts/AuthContext", () => ({
 }));
 
 vi.mock("@/hooks/useFavorites", () => ({
-  useToggleFavorite: () => ({ mutate: mocks.mutate }),
+  useFavorites: () => ({ data: mocks.favoriteRows, isLoading: false }),
+  useToggleFavorite: () => ({ mutate: mocks.mutate, isPending: false }),
 }));
+
+vi.mock("@/hooks/useListingReport", () => ({
+  useListingReport: () => ({
+    submit: mocks.reportSubmit,
+    isPending: mocks.reportPending,
+  }),
+}));
+
+vi.mock("sonner", () => ({ toast: { error: mocks.toastError } }));
 
 vi.mock("@/hooks/useAuctionsPipeline", () => ({
   AUCTIONS_PAGE_SIZE: 2,
@@ -88,11 +102,18 @@ vi.mock("@/components/auctions/AuctionFiltersPanel", () => ({
   ),
 }));
 vi.mock("@/components/auctions/AuctionCard", () => ({
-  AuctionCard: ({ a, onToggleFav }: { a: { id: string; title: string }; onToggleFav: (id: string, isFav: boolean) => void }) => (
+  AuctionCard: ({ a, favoritedIds, onToggleFav, onReport }: {
+    a: { id: string; listing_id?: string; title: string };
+    favoritedIds: Set<string>;
+    onToggleFav: (id: string | null, isFav: boolean) => void;
+    onReport: (id: string | null) => void;
+  }) => (
     <article>
       <p>{a.title}</p>
-      <button onClick={() => onToggleFav(a.id, false)}>favorite {a.id}</button>
-      <button onClick={() => onToggleFav(a.id, true)}>unfavorite {a.id}</button>
+      <span>saved:{String(Boolean(a.listing_id && favoritedIds.has(a.listing_id)))}</span>
+      <button onClick={() => onToggleFav(a.listing_id ?? null, false)}>favorite {a.id}</button>
+      <button onClick={() => onToggleFav(a.listing_id ?? null, true)}>unfavorite {a.id}</button>
+      <button onClick={() => onReport(a.listing_id ?? null)}>report {a.id}</button>
     </article>
   ),
 }));
@@ -109,6 +130,7 @@ vi.mock("@/components/MapView", () => ({
 
 const auction = {
   id: "auction-1",
+  listing_id: "d1000000-0000-4000-8000-000000000001",
   title: "Athens Auction",
   city: "Athens",
   latitude: 37.98,
@@ -148,6 +170,8 @@ describe("Auctions page coverage", () => {
     mocks.search = "city=Athens&type=apartment";
     mocks.trackUserSearch.mockReset();
     mocks.trackUserSearch.mockResolvedValue(undefined);
+    mocks.favoriteRows = [];
+    mocks.reportPending = false;
     setPipeline();
   });
 
@@ -278,11 +302,36 @@ describe("Auctions page coverage", () => {
     const favoriteButton = screen.getAllByRole("button").find((button) => button.textContent === "favorite auction-1");
     expect(favoriteButton).toBeTruthy();
     fireEvent.click(favoriteButton!);
-    expect(mocks.mutate).toHaveBeenCalledWith({ listing_id: "auction-1", isFavorited: false });
+    expect(mocks.mutate).toHaveBeenCalledWith({ listing_id: "d1000000-0000-4000-8000-000000000001", isFavorited: false });
     fireEvent.click(screen.getByRole("button", { name: /unfavorite auction-1/i }));
-    expect(mocks.mutate).toHaveBeenCalledWith({ listing_id: "auction-1", isFavorited: true });
+    expect(mocks.mutate).toHaveBeenCalledWith({ listing_id: "d1000000-0000-4000-8000-000000000001", isFavorited: true });
+    fireEvent.click(screen.getByRole("button", { name: /report auction-1/i }));
+    expect(mocks.reportSubmit).toHaveBeenCalledWith({
+      entityType: "listing",
+      entityId: "d1000000-0000-4000-8000-000000000001",
+    });
     fireEvent.click(screen.getByRole("button", { name: /next page/i }));
   }, 15000);
+
+  it("restores canonical saved state from the shared user-scoped favorites query", () => {
+    mocks.favoriteRows = [{ listing_id: "d1000000-0000-4000-8000-000000000001" }];
+    renderWithProviders(<Auctions />);
+
+    expect(screen.getByText("saved:true")).toBeInTheDocument();
+  });
+
+  it("denies an auction action honestly when no canonical UUID is available", () => {
+    setPipeline({
+      visibleFiltered: [{ ...auction, id: "os-only", listing_id: undefined }],
+      paginated: [{ ...auction, id: "os-only", listing_id: undefined }],
+      mapListings: [],
+    });
+    renderWithProviders(<Auctions />);
+
+    fireEvent.click(screen.getByRole("button", { name: "favorite os-only" }));
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalledWith("auctions.card.actionUnavailable");
+  });
 
   it("redirects anonymous favorite and sign-in alert actions and renders no-results clearing", async () => {
     mocks.user = null;
@@ -295,6 +344,15 @@ describe("Auctions page coverage", () => {
     expect(clearButton).toBeTruthy();
     fireEvent.click(clearButton!);
     await waitFor(() => expect(screen.getByText(/No auctions match your filters/i)).toBeInTheDocument());
+  });
+
+  it("routes an anonymous auction save action to sign in without mutating favorites", () => {
+    mocks.user = null;
+    renderWithProviders(<Auctions />);
+
+    fireEvent.click(screen.getByRole("button", { name: "favorite auction-1" }));
+    expect(mocks.navigate).toHaveBeenCalledWith("/login");
+    expect(mocks.mutate).not.toHaveBeenCalled();
   });
 
   it("renders unavailable stats and a targeted retry without presenting stale auction cards", () => {

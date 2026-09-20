@@ -2,7 +2,6 @@ import { useState, useEffect, lazy, Suspense, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { useModal } from "@/hooks/useModal";
-import { supabase as supabaseClient } from "@/integrations/supabase/client";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import {
   ChevronRight,
@@ -49,8 +48,8 @@ import { PropertyValuationLockedCard } from "@/components/property/PropertyValua
 import { DeferredDetailPanel } from "@/components/DeferredDetailPanel";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { shouldUseNewBuildRoute } from "@/lib/listingRoutes";
-import { listingReportSchema, parseMutationInput } from "@/lib/mutationSchemas";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
+import { useListingReport } from "@/hooks/useListingReport";
 
 const safeExternalUrl = (url: string | null | undefined): string | null =>
   url && /^https?:\/\//i.test(url) ? url : null;
@@ -148,6 +147,14 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   const { data: favorites = [] } = useFavorites();
   const toggleFav = useToggleFavorite();
   const startConversation = useStartConversation();
+  const report = useListingReport({
+    messages: {
+      signIn: t("property.signInToReport"),
+      error: t("property.errorReport"),
+      success: t("property.reportSubmitted"),
+    },
+    onSignInRequired: () => navigate("/login"),
+  });
 
   const isFavorited = useMemo(() => favorites.some((f: { listing_id: string }) => f.listing_id === id), [favorites, id]);
 
@@ -630,18 +637,8 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
               <div className="text-center pt-1">
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (!user) { toast.error(t("property.signInToReport")); navigate("/login"); return; }
-                    if (!id) return;
-                    const payload = parseMutationInput(listingReportSchema, {
-                      entity_type: "listing",
-                      entity_id: id,
-                      reporter_id: user.id,
-                    }, "listing report");
-                    const { error } = await supabaseClient.from("listing_reports").insert(payload);
-                    if (error) toast.error(t("property.errorReport"));
-                    else toast.success(t("property.reportSubmitted"));
-                  }}
+                  onClick={() => report.submit({ entityType: "listing", entityId: id ?? null })}
+                  disabled={report.isPending}
                   className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto transition-colors"
                 >
                   <Info className="w-3 h-3" />{t("property.reportListingCta")}

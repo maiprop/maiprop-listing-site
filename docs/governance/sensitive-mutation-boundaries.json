@@ -120,12 +120,12 @@
       "rationale": "Saved searches are user-owned preferences."
     },
     {
-      "file": "src/pages/PropertyDetail.tsx",
+      "file": "src/hooks/useListingReport.ts",
       "table": "listing_reports",
       "operations": ["insert"],
       "boundary": "rls-scoped-browser",
-      "owner": "app-web",
-      "rationale": "Report submissions are append-only moderation inputs."
+      "owner": "data-access",
+      "rationale": "The shared listing-report hook validates append-only moderation inputs and captures the authenticated reporter before mutation; RLS enforces reporter ownership."
     },
     {
       "file": "src/pages/NewBuildDetail.tsx",
@@ -158,14 +158,6 @@
       "boundary": "rls-scoped-browser",
       "owner": "app-web",
       "rationale": "Invitation request submission is schema-validated and reviewed by admins."
-    },
-    {
-      "file": "src/components/PropertyCard.tsx",
-      "table": "listing_reports",
-      "operations": ["insert"],
-      "boundary": "rls-scoped-browser",
-      "owner": "app-web",
-      "rationale": "Report submissions are append-only moderation inputs."
     },
     {
       "file": "src/components/AdminContactSubmissions.tsx",

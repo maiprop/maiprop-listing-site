@@ -57,24 +57,37 @@ export function useFavorites() {
 
 type FavoriteRow = { listing_id: string; user_id: string; price_alert: boolean; price_when_saved: number | null; created_at?: string };
 
+type FavoriteToggleVariables = {
+  listing_id: string;
+  isFavorited: boolean;
+  priceAlert?: boolean;
+  price?: number;
+};
+
+type FavoriteToggleOperation = FavoriteToggleVariables & {
+  operationUserId: string | null;
+};
+
+type FavoriteMutationContext = {
+  queryKey: readonly ["favorites", string];
+  previous: FavoriteRow[] | undefined;
+  hadPrevious: boolean;
+};
+
 export function useToggleFavorite() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { t } = useTranslation();
 
-  return useMutation({
+  const mutation = useMutation<void, unknown, FavoriteToggleOperation, FavoriteMutationContext | undefined>({
     mutationFn: async ({
       listing_id,
       isFavorited,
       priceAlert,
       price,
-    }: {
-      listing_id: string;
-      isFavorited: boolean;
-      priceAlert?: boolean;
-      price?: number;
+      operationUserId,
     }) => {
-      if (!user) throw new Error("Must be logged in to save properties");
+      if (!operationUserId) throw new Error("Must be logged in to save properties");
       const payload = parseMutationInput(
         favoriteToggleSchema,
         { listing_id, isFavorited, priceAlert, price },
@@ -84,12 +97,12 @@ export function useToggleFavorite() {
         const { error } = await supabase
           .from("favorites")
           .delete()
-          .eq("user_id", user.id)
+          .eq("user_id", operationUserId)
           .eq("listing_id", payload.listing_id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("favorites").insert({
-          user_id: user.id,
+          user_id: operationUserId,
           listing_id: payload.listing_id,
           price_alert: payload.priceAlert ?? false,
           price_when_saved: payload.price ?? null,
@@ -97,9 +110,9 @@ export function useToggleFavorite() {
         if (error) throw error;
       }
     },
-    onMutate: async ({ listing_id, isFavorited, priceAlert, price }) => {
-      if (!user) return;
-      const qk = ["favorites", user.id];
+    onMutate: async ({ listing_id, isFavorited, priceAlert, price, operationUserId }) => {
+      if (!operationUserId) return undefined;
+      const qk = ["favorites", operationUserId] as const;
       // Cancel in-flight refetches to avoid overwriting the optimistic update
       await queryClient.cancelQueries({ queryKey: qk });
       const previous = queryClient.getQueryData<FavoriteRow[]>(qk);
@@ -108,22 +121,24 @@ export function useToggleFavorite() {
           return old.filter(f => f.listing_id !== listing_id);
         }
         return [
-          { listing_id, user_id: user.id, price_alert: priceAlert ?? false, price_when_saved: price ?? null },
+          { listing_id, user_id: operationUserId, price_alert: priceAlert ?? false, price_when_saved: price ?? null },
           ...old,
         ];
       });
-      return { previous };
+      return { queryKey: qk, previous, hadPrevious: previous !== undefined };
     },
     onError: (_err, _vars, context) => {
       // Roll back optimistic update
-      if (user && context?.previous !== undefined) {
-        queryClient.setQueryData(["favorites", user.id], context.previous);
+      if (context?.hadPrevious) {
+        queryClient.setQueryData(context.queryKey, context.previous);
+      } else if (context) {
+        queryClient.removeQueries({ queryKey: context.queryKey, exact: true });
       }
       toast.error(t("toasts.favorites.errorToggle"));
     },
-    onSuccess: (_, { isFavorited, priceAlert }) => {
+    onSuccess: (_, { isFavorited, priceAlert }, context) => {
       // Scope invalidation to this user only
-      queryClient.invalidateQueries({ queryKey: ["favorites", user?.id] });
+      if (context) queryClient.invalidateQueries({ queryKey: context.queryKey, exact: true });
       toast.success(
         isFavorited
           ? t("toasts.favorites.removed")
@@ -133,6 +148,17 @@ export function useToggleFavorite() {
       );
     },
   });
+
+  const bindOperation = (variables: FavoriteToggleVariables): FavoriteToggleOperation => ({
+    ...variables,
+    operationUserId: user?.id ?? null,
+  });
+
+  return {
+    ...mutation,
+    mutate: (variables: FavoriteToggleVariables) => mutation.mutate(bindOperation(variables)),
+    mutateAsync: (variables: FavoriteToggleVariables) => mutation.mutateAsync(bindOperation(variables)),
+  };
 }
 
 
