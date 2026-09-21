@@ -181,7 +181,54 @@ function applySecurityHeaders(headers: Headers): void {
   }
 }
 
-const inflightCacheMisses = new Map<string, Promise<Response>>();
+type SharedJsonResponse = {
+  body: string;
+  status: number;
+  headers: [string, string][];
+};
+
+// Workers response streams belong to the request that created them. Only plain
+// data may cross request boundaries when concurrent cache misses are coalesced.
+const inflightCacheMisses = new Map<string, {
+  promise: Promise<SharedJsonResponse>;
+  expiresAt: number;
+}>();
+
+function currentInflightCacheMiss(cacheId: string): Promise<SharedJsonResponse> | undefined {
+  const entry = inflightCacheMisses.get(cacheId);
+  if (!entry) return undefined;
+  // A cancelled request can lose its cleanup timer, including during refresh.
+  if (entry.expiresAt <= Date.now()) {
+    inflightCacheMisses.delete(cacheId);
+    return undefined;
+  }
+  return entry.promise;
+}
+
+function sharedJsonResponse(body: string, status: number, headers: Headers): SharedJsonResponse {
+  return { body, status, headers: [...headers.entries()] };
+}
+
+function responseFromSharedJson(response: SharedJsonResponse): Response {
+  return new Response(response.body, { status: response.status, headers: response.headers });
+}
+
+async function joinInflightCacheMiss(
+  pending: Promise<SharedJsonResponse>,
+  cache: CacheOptions,
+): Promise<SharedJsonResponse | null> {
+  // The creator's timers may disappear with its request context. Each waiter
+  // needs its own deadline so an orphaned promise cannot block this cache key.
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), cacheProducerTimeoutMs(cache) ?? INFLIGHT_CACHE_MISS_TTL_MS);
+  });
+  try {
+    return await Promise.race([pending, deadline]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -508,10 +555,10 @@ function putFreshAndStale(
   return guardedPut;
 }
 
-function trackInflightCacheMiss(cacheId: string, promise: Promise<Response>): void {
-  inflightCacheMisses.set(cacheId, promise);
+function trackInflightCacheMiss(cacheId: string, promise: Promise<SharedJsonResponse>): void {
+  inflightCacheMisses.set(cacheId, { promise, expiresAt: Date.now() + INFLIGHT_CACHE_MISS_TTL_MS });
   setTimeout(() => {
-    if (inflightCacheMisses.get(cacheId) === promise) inflightCacheMisses.delete(cacheId);
+    if (inflightCacheMisses.get(cacheId)?.promise === promise) inflightCacheMisses.delete(cacheId);
   }, INFLIGHT_CACHE_MISS_TTL_MS);
 
   void promise.catch(() => undefined);
@@ -520,7 +567,7 @@ function trackInflightCacheMiss(cacheId: string, promise: Promise<Response>): vo
 function scheduleBackgroundRefresh(
   ctx: PublicApiCtx,
   cacheId: string,
-  refresh: Promise<Response>,
+  refresh: Promise<SharedJsonResponse>,
   cacheSeedState: { promise: Promise<void> | null },
 ): void {
   const guardedRefresh = refresh.catch((error) => {
@@ -531,7 +578,7 @@ function scheduleBackgroundRefresh(
   ctx.waitUntil?.(refreshAndSeed);
   void refreshAndSeed
     .finally(() => {
-      if (inflightCacheMisses.get(cacheId) === refresh) inflightCacheMisses.delete(cacheId);
+      if (inflightCacheMisses.get(cacheId)?.promise === refresh) inflightCacheMisses.delete(cacheId);
     })
     .catch(() => undefined);
 }
@@ -563,7 +610,7 @@ export async function cachedJson(
   }
 
   const cacheId = cacheRequest.url;
-  const produceAndCache = async (): Promise<Response> => {
+  const produceAndCache = async (): Promise<SharedJsonResponse> => {
     const { response, lateResponse } = await producerWithTimeout(producer, cachePolicy);
     if (cacheApi && lateResponse) {
       const lateCacheSeed = lateResponse
@@ -591,12 +638,12 @@ export async function cachedJson(
     }
     if (cacheApi && TRANSIENT_UPSTREAM_STATUSES.has(response.status)) {
       const stale = await matchStaleFallback(cacheApi, cacheKey, cachePolicy);
-      if (stale) return stale;
+      if (stale) return sharedJsonResponse(await stale.text(), stale.status, stale.headers);
     }
 
     const headers = responseHeaders(response, cacheApi ? "MISS" : "BYPASS", cachePolicy);
     const body = await response.text();
-    const outbound = new Response(body, { status: response.status, headers });
+    const outbound = sharedJsonResponse(body, response.status, headers);
 
     if (cacheApi && response.ok) {
       cacheSeedState.promise = putFreshAndStale(
@@ -613,12 +660,12 @@ export async function cachedJson(
   };
 
   if (!cacheApi) {
-    return produceAndCache();
+    return responseFromSharedJson(await produceAndCache());
   }
 
   const stale = await matchStaleFallback(cacheApi, cacheKey, cachePolicy);
   if (stale) {
-    let refresh = inflightCacheMisses.get(cacheId);
+    let refresh = currentInflightCacheMiss(cacheId);
     if (!refresh) {
       refresh = produceAndCache();
       trackInflightCacheMiss(cacheId, refresh);
@@ -627,21 +674,43 @@ export async function cachedJson(
     return stale;
   }
 
-  const existing = inflightCacheMisses.get(cacheId);
+  const existing = currentInflightCacheMiss(cacheId);
   if (existing) {
-    const response = await existing;
-    const cacheState = response.headers.get("X-Maiprop-Cache") === "STALE" ? "STALE" : "COALESCED";
-    return cacheHeaderResponse(response, cacheState, cachePolicy);
+    let shared = await joinInflightCacheMiss(existing, cachePolicy);
+    if (!shared) {
+      // An earlier waiter may have finished recovery and removed its entry.
+      // Check its cached result before deciding whether another DB read is needed.
+      const recovered = await matchCacheWithinBudget(cacheApi, cacheRequest, cachePolicy);
+      if (recovered && cacheResponseIsWithinBusinessValidity(recovered)) {
+        return cacheHeaderResponse(recovered, "HIT", cachePolicy);
+      }
+      if (inflightCacheMisses.get(cacheId)?.promise === existing) {
+        inflightCacheMisses.delete(cacheId);
+      } else {
+        // Another waiter may already be recovering this key. Join that one
+        // replacement within a fresh deadline instead of multiplying DB reads.
+        const replacement = currentInflightCacheMiss(cacheId);
+        if (replacement) {
+          shared = await joinInflightCacheMiss(replacement, cachePolicy);
+          if (!shared) return upstreamUnavailable();
+        }
+      }
+    }
+    if (shared) {
+      const response = responseFromSharedJson(shared);
+      const cacheState = response.headers.get("X-Maiprop-Cache") === "STALE" ? "STALE" : "COALESCED";
+      return cacheHeaderResponse(response, cacheState, cachePolicy);
+    }
   }
 
   const pending = produceAndCache();
   trackInflightCacheMiss(cacheId, pending);
   try {
     const response = await pending;
-    return response.clone();
+    return responseFromSharedJson(response);
   } finally {
     const clearInflight = () => {
-      if (inflightCacheMisses.get(cacheId) === pending) inflightCacheMisses.delete(cacheId);
+      if (inflightCacheMisses.get(cacheId)?.promise === pending) inflightCacheMisses.delete(cacheId);
     };
     const cacheSeed = cacheSeedState.promise;
     if (cacheSeed) {

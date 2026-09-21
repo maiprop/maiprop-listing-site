@@ -982,6 +982,36 @@ describe("public API cache helpers", () => {
     expect([...cacheStore.keys()].some((key) => key.includes("__maiprop_stale=1"))).toBe(true);
   });
 
+  it.each([1, 4])("recovers when a coalesced cache miss loses its owner's timers (%i waiters)", async (waiters) => {
+    vi.useFakeTimers();
+    const url = new URL("https://portal.maiprop.co/api/public/open-houses?cancelled-owner=1");
+    let releaseOwner!: (response: Response) => void;
+    const owner = cachedJson(makeCtx(url.toString()), url, () => new Promise<Response>((resolve) => {
+      releaseOwner = resolve;
+    }), { producerTimeoutMs: 100 });
+    await vi.advanceTimersByTimeAsync(0);
+    // Workers can cancel timers when the originating request disconnects.
+    vi.clearAllTimers();
+    const recoveryProducer = vi.fn(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      return jsonResponse({ data: [], publicationId: 43 });
+    });
+    const recovered: Response[] = [];
+    const retries = Array.from({ length: waiters }, () =>
+      cachedJson(makeCtx(url.toString()), url, recoveryProducer, { producerTimeoutMs: 100 })
+        .then(response => { recovered.push(response); }));
+    try {
+      await vi.advanceTimersByTimeAsync(250);
+      expect(recovered.map(response => response.status)).toEqual(Array(waiters).fill(200));
+      expect(recoveryProducer).toHaveBeenCalledTimes(1);
+      for (const response of recovered) await expect(response.json()).resolves.toEqual({ data: [], publicationId: 43 });
+    } finally {
+      releaseOwner(jsonResponse({}, { headers: { "Cache-Control": "no-store" } }));
+      await Promise.all([owner, ...retries]);
+      vi.useRealTimers();
+    }
+  });
+
   it("coalesces concurrent cache misses for the same public API key", async () => {
     let releaseFetch!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -1013,6 +1043,78 @@ describe("public API cache helpers", () => {
     expect(secondRes.headers.get("X-Maiprop-Cache")).toBe("COALESCED");
     expect(fetchUrls("/rest/v1/rpc/query_public_catalogue")).toHaveLength(1);
     await expect(firstRes.json()).resolves.toEqual(await secondRes.clone().json());
+  });
+
+  it("reuses a completed recovery for waiters whose deadlines expire later", async () => {
+    vi.useFakeTimers();
+    const url = new URL("https://portal.maiprop.co/api/public/open-houses?staggered-recovery=1");
+    let releaseOwner!: (response: Response) => void;
+    const owner = cachedJson(makeCtx(url.toString()), url, () => new Promise<Response>(resolve => {
+      releaseOwner = resolve;
+    }), { producerTimeoutMs: 100 });
+    await vi.advanceTimersByTimeAsync(0);
+    vi.clearAllTimers();
+    const producer = vi.fn(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      return jsonResponse({ data: [] });
+    });
+    const first = cachedJson(makeCtx(url.toString()), url, producer, { producerTimeoutMs: 100 });
+    await vi.advanceTimersByTimeAsync(50);
+    const second = cachedJson(makeCtx(url.toString()), url, producer, { producerTimeoutMs: 100 });
+    try {
+      await vi.advanceTimersByTimeAsync(250);
+      const responses = await Promise.all([first, second]);
+      expect(producer).toHaveBeenCalledTimes(1);
+      expect(responses.map(response => response.status)).toEqual([200, 200]);
+    } finally {
+      releaseOwner(jsonResponse({}, { headers: { "Cache-Control": "no-store" } }));
+      await owner;
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a healthy multi-query producer coalesced for the full default inflight lease", async () => {
+    vi.useFakeTimers();
+    const url = new URL("https://portal.maiprop.co/api/public/listing?healthy-multi-query=1");
+    const producer = vi.fn(async () => {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      return jsonResponse({ detail: true });
+    });
+    try {
+      const first = cachedJson(makeCtx(url.toString()), url, producer);
+      const second = cachedJson(makeCtx(url.toString()), url, producer);
+      await vi.advanceTimersByTimeAsync(6000);
+      const responses = await Promise.all([first, second]);
+      expect(producer).toHaveBeenCalledTimes(1);
+      expect(responses.map(response => response.status)).toEqual([200, 200]);
+      expect(responses[1].headers.get("X-Maiprop-Cache")).toBe("COALESCED");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("expires an abandoned stale refresh even when its cleanup timer was cancelled", async () => {
+    vi.useFakeTimers();
+    const url = new URL("https://portal.maiprop.co/api/public/open-houses?abandoned-refresh=1");
+    const tasks: Promise<unknown>[] = [];
+    const ctx = makeCtx(url.toString(), { waitUntil: promise => tasks.push(promise) });
+    await cachedJson(ctx, url, async () => jsonResponse({ version: 1 }));
+    await Promise.all(tasks);
+    cacheStore.delete(url.toString());
+    let releaseOwner!: (response: Response) => void;
+    await cachedJson(ctx, url, () => new Promise<Response>(resolve => { releaseOwner = resolve; }), { producerTimeoutMs: 100 });
+    await vi.advanceTimersByTimeAsync(0);
+    vi.clearAllTimers();
+    await vi.advanceTimersByTimeAsync(10001);
+    const recovery = vi.fn(async () => jsonResponse({ version: 2 }));
+    try {
+      const stale = await cachedJson(ctx, url, recovery, { producerTimeoutMs: 100 });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(stale.headers.get("X-Maiprop-Cache")).toBe("STALE");
+      expect(recovery).toHaveBeenCalledTimes(1);
+    } finally {
+      releaseOwner(jsonResponse({}, { headers: { "Cache-Control": "no-store" } }));
+      await Promise.all(tasks);
+      vi.useRealTimers();
+    }
   });
 
   it("bounds cold cache miss latency when a producer stalls", async () => {
