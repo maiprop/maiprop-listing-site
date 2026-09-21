@@ -1,26 +1,10 @@
 BEGIN;
 
--- Additive recovery for environments missing the July public-directory repairs.
--- Keep the established 25-column public interface, including user_id and
--- license_number. Never grant anon the private admin helper or raw-table access.
--- The definer function below is deliberately constrained to that projection;
--- its invoker view checks caller grants, while owner/admin RLS protects raw rows.
-DROP POLICY IF EXISTS "Professionals are publicly viewable" ON public.professionals;
-DROP POLICY IF EXISTS "Professionals are viewable by owner or admin" ON public.professionals;
-DROP POLICY IF EXISTS "professionals_select" ON public.professionals;
-
-CREATE POLICY "professionals_select"
-  ON public.professionals
-  FOR SELECT
-  TO authenticated
-  USING (
-    (SELECT auth.uid()) = user_id
-    OR private.has_platform_admin((SELECT auth.uid()))
-  );
-
-REVOKE SELECT ON TABLE public.professionals FROM anon;
-GRANT SELECT ON TABLE public.professionals TO authenticated, service_role;
-
+-- Recovery phase 1: create the public interface before deploying the matching
+-- BrandedVideoRoom consumer. The existing raw-table policy is unchanged here.
+-- After the consumer rollout and legacy-tab refresh, apply the separately
+-- timestamped restrict_professionals_management_reads migration.
+-- This is the established fixed projection, including user_id/license_number.
 CREATE OR REPLACE FUNCTION public.get_public_professionals()
 RETURNS TABLE (
   id uuid,
