@@ -2543,8 +2543,8 @@
     },
     "interestCard": {
       "submittedTitle": "Interest registered!",
-      "submittedBody": "The developer has been notified. Expect a response within 1-2 business days with unit availability and pricing.",
-      "messageCopy": "A copy of your enquiry has been sent to your messages",
+      "submittedBody": "Your enquiry was saved successfully.",
+      "messageCopy": "A conversation with the developer is available in Messages",
       "startingFrom": "Starting from",
       "title": "Register your interest",
       "signInBody": "Sign in to register interest and receive full unit availability, floor plans and pricing from the developer.",
@@ -2555,6 +2555,7 @@
       "phonePlaceholder": "Phone number (optional)",
       "messagePlaceholder": "What are you looking for? (optional)",
       "submit": "Register Interest",
+      "submissionError": "We couldn't register your interest. Please try again.",
       "privacyNote": "Your enquiry is sent directly to the developer. No spam, no middlemen."
     }
   },

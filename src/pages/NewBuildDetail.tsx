@@ -126,7 +126,8 @@ const insertNewBuildLead = async ({
     notes: cleanOptionalText(form.message) ?? "",
     utm_source: "newbuild_detail_register",
   }, "new build lead");
-  await supabase.from("new_building_leads").insert(payload);
+  const { error } = await supabase.from("new_building_leads").insert(payload);
+  if (error) throw error;
 };
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -268,8 +269,11 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
 
   const handleRegisterInterest = async (form: RegisterInterestForm) => {
     const ownerId = listing?.owner_id;
-    if (!id || !ownerId) return;
-    if (!user) { navigate("/login"); return; }
+    if (!id || !ownerId) throw new Error("This listing cannot accept enquiries");
+    if (!user) {
+      navigate("/login");
+      throw new Error("You must sign in to register interest");
+    }
 
     const contactName = cleanOptionalText(form.name)
       ?? cleanOptionalText(profile?.display_name)

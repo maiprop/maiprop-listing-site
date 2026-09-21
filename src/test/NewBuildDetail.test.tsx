@@ -9,6 +9,7 @@ const {
   useIsFavoritedMock,
   toggleFavoriteMock,
   startConversationMock,
+  registerInterestCardPropsMock,
   navigateMock,
   fromMock,
   publicApiMock,
@@ -22,6 +23,7 @@ const {
   useIsFavoritedMock: vi.fn(),
   toggleFavoriteMock: vi.fn(),
   startConversationMock: vi.fn(),
+  registerInterestCardPropsMock: vi.fn(),
   navigateMock: vi.fn(),
   fromMock: vi.fn(),
   publicApiMock: vi.fn(),
@@ -151,18 +153,21 @@ vi.mock("@/components/new-build/RegisterInterestCard", () => ({
     user: { id: string } | null;
     onLogin: () => void;
     onContact: (form: { name: string; phone: string; message: string }) => Promise<void>;
-  }) => (
-    <div>
+  }) => {
+    registerInterestCardPropsMock({ user, onLogin, onContact });
+    return (
+      <div>
       <span>{user ? "signed in interest" : "signed out interest"}</span>
       <button type="button" onClick={onLogin}>interest login</button>
-      <button type="button" onClick={() => onContact({ name: "Form Name", phone: "555", message: "Send plans" })}>
+      <button type="button" onClick={() => void onContact({ name: "Form Name", phone: "555", message: "Send plans" }).catch(() => undefined)}>
         submit interest
       </button>
-      <button type="button" onClick={() => onContact({ name: " ", phone: " ", message: " " })}>
+      <button type="button" onClick={() => void onContact({ name: " ", phone: " ", message: " " }).catch(() => undefined)}>
         submit blank interest
       </button>
-    </div>
-  ),
+      </div>
+    );
+  },
 }));
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
@@ -280,6 +285,7 @@ beforeEach(() => {
     useIsFavoritedMock,
     toggleFavoriteMock,
     startConversationMock,
+    registerInterestCardPropsMock,
     navigateMock,
     fromMock,
     publicApiMock,
@@ -516,6 +522,94 @@ describe("NewBuildDetail", () => {
     expect(fromMock).toHaveBeenCalledWith("new_building_leads");
     expect(fromMock).not.toHaveBeenCalledWith("notifications");
     expect(toastMock.success).toHaveBeenCalledWith("Interest registered — the developer will be in touch");
+  });
+
+  it("rejects the interest callback when persistence rejects and never reports success", async () => {
+    const insertError = { code: "42501", message: "permission denied" };
+    const insertMock = vi.fn().mockResolvedValue({ data: null, error: insertError });
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One", phone: "555-1" },
+    });
+    fromMock.mockReturnValue({ insert: insertMock });
+
+    renderPage();
+    const onContact = registerInterestCardPropsMock.mock.lastCall?.[0].onContact as
+      | ((form: { name: string; phone: string; message: string }) => Promise<void>)
+      | undefined;
+
+    expect(onContact).toBeTypeOf("function");
+    await expect(onContact?.({ name: "Buyer One", phone: "555-1", message: "Send plans" }))
+      .rejects.toMatchObject(insertError);
+    expect(insertMock).toHaveBeenCalledOnce();
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it("rejects the interest callback when conversation creation rejects without inserting or reporting success", async () => {
+    const conversationError = new Error("conversation unavailable");
+    const insertMock = vi.fn().mockResolvedValue({ error: null });
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One", phone: "555-1" },
+    });
+    startConversationMock.mockRejectedValueOnce(conversationError);
+    fromMock.mockReturnValue({ insert: insertMock });
+
+    renderPage();
+    const onContact = registerInterestCardPropsMock.mock.lastCall?.[0].onContact as
+      | ((form: { name: string; phone: string; message: string }) => Promise<void>)
+      | undefined;
+
+    await expect(onContact?.({ name: "Buyer One", phone: "555-1", message: "Send plans" }))
+      .rejects.toThrow("conversation unavailable");
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it("rejects the interest callback when the listing has no enquiry recipient", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One", phone: "555-1" },
+    });
+    useQueryMock.mockReturnValue({
+      data: { ...listing, owner_id: null },
+      isLoading: false,
+      error: null,
+    });
+
+    renderPage();
+    const onContact = registerInterestCardPropsMock.mock.lastCall?.[0].onContact as
+      (form: { name: string; phone: string; message: string }) => Promise<void>;
+
+    await expect(onContact({ name: "Buyer One", phone: "555-1", message: "Send plans" }))
+      .rejects.toThrow("This listing cannot accept enquiries");
+    expect(startConversationMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalledWith("new_building_leads");
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it("allows retry after an ambiguous insert response without claiming exactly-once delivery", async () => {
+    const lostResponse = new Error("response lost after commit");
+    const insertMock = vi.fn()
+      .mockResolvedValueOnce({ data: null, error: lostResponse })
+      .mockResolvedValueOnce({ data: null, error: null });
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One", phone: "555-1" },
+    });
+    fromMock.mockReturnValue({ insert: insertMock });
+
+    renderPage();
+    const onContact = registerInterestCardPropsMock.mock.lastCall?.[0].onContact as
+      (form: { name: string; phone: string; message: string }) => Promise<void>;
+    const form = { name: "Buyer One", phone: "555-1", message: "Send plans" };
+
+    await expect(onContact(form)).rejects.toBe(lostResponse);
+    expect(toastMock.success).not.toHaveBeenCalled();
+
+    await expect(onContact(form)).resolves.toBeUndefined();
+    expect(insertMock).toHaveBeenCalledTimes(2);
+    expect(toastMock.success).toHaveBeenCalledOnce();
   });
 
   it("uses all project units as representative metrics for new-build valuation", async () => {

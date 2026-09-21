@@ -25,6 +25,7 @@ export function RegisterInterestCard({
   const [form, setForm] = useState({ name: "", phone: "", message: "" });
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const pricePerSqm = calculatePricePerSqm({
     price: listing.price,
     sqm: listing.sqm,
@@ -33,11 +34,17 @@ export function RegisterInterestCard({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmissionError(null);
     setLoading(true);
     try {
       await onContact(form);
       setForm({ name: "", phone: "", message: "" });
       setSubmitted(true);
+    } catch {
+      setSubmissionError(tr(
+        "newBuildDetail.interestCard.submissionError",
+        "We couldn't register your interest. Please try again.",
+      ));
     } finally {
       setLoading(false);
     }
@@ -129,6 +136,11 @@ export function RegisterInterestCard({
             onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
             className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors resize-none"
           />
+          {submissionError && (
+            <p role="alert" className="text-xs text-destructive leading-relaxed">
+              {submissionError}
+            </p>
+          )}
           <Button type="submit" className="w-full gap-2" disabled={loading}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
             {tr("newBuildDetail.interestCard.submit", "Register Interest")}
