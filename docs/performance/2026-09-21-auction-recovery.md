@@ -40,5 +40,6 @@ The current branch does not add the unfinished alert-delivery or enrichment work
 - Secret scan, lint and enterprise readiness checks passed.
 - Full regression suite: 529 files and 4,650 tests passed in 383.73 seconds.
 - A separate final check of the updated release inventories: 26 tests passed.
+- Final backend preflight: all 67 Edge Function entrypoints passed type checking and all 974 Deno tests passed. Four auction translations exposed a stale hard-coded catalogue-size assertion; the test now checks meaningful chunk and request-size bounds while preserving exact catalogue key coverage and bounded concurrency.
 
 Evidence: [sanitized live diagnosis](2026-09-21-auction-recovery-evidence.json), [time-limited release review](2026-09-21-auction-release-review.json).
