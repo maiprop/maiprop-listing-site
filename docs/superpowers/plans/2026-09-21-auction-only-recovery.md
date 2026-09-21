@@ -43,7 +43,7 @@
 ### 2. Bound the website release
 
 - [x] Inventory runtime changes between live SHA `5cf9ba49eafdc19d2e8746bc877f33b08bad0dae` and the candidate. The current full main artifact also contains a Pricing change; it cannot be called a strictly auction-only artifact.
-- [x] Prepare the reviewed 13-file source overlay with exact committed bytes and a complete source manifest. Preserve live Pricing, checkout, account-role and unrelated module sources. Shared favorites/cache/detail components remain necessary auction dependencies; this is not a claim that every non-auction bundle hash stays identical.
+- [x] Prepare the reviewed 14-file source overlay with exact committed bytes and a complete source manifest. Preserve live Pricing, checkout, account-role and unrelated module sources. Shared favorites/cache/detail/navigation components remain necessary auction dependencies; the navigation change defers closed notification details only on auctions to preserve the existing request budget. This is not a claim that every non-auction bundle hash stays identical.
 - [x] Build the scoped frontend and Pages worker, type-check both, and pass 203 focused page/action/API contract tests against the prepared source. The SQL harness separately passes 35 real PostgreSQL checks. These do not substitute for a deployed frontend-to-database staging smoke test.
 - [ ] Complete deployed staging verification of list, filters, pagination, UUID/OS details and authenticated actions with isolated fixtures.
 

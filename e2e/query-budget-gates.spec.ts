@@ -23,6 +23,7 @@ const CATALOGUE_AUTHORITY_ROUTES = new Set(["/", "/listings", "/auctions", "/ope
 type RequestCounts = {
   auth: number;
   rest: number;
+  restRequests: string[];
   functions: number;
   functionRequests: string[];
   forbiddenAuthorityRequests: string[];
@@ -238,6 +239,7 @@ function emptyCounts(): RequestCounts {
   return {
     auth: 0,
     rest: 0,
+    restRequests: [],
     functions: 0,
     functionRequests: [],
     forbiddenAuthorityRequests: [],
@@ -414,6 +416,7 @@ async function installAuthenticatedSupabaseMocks(page: Page, counts: RequestCoun
     counts.rest += 1;
     const request = route.request();
     const url = new URL(request.url());
+    counts.restRequests.push(`${request.method()} ${url.pathname}${url.search}`);
     const wantsObject = request.headers().accept?.includes("vnd.pgrst.object+json") ?? false;
 
     if (url.pathname.endsWith("/rest/v1/listings")) {
@@ -468,7 +471,7 @@ test.describe("authenticated query budget gates @perf", () => {
       recordQueryMeasurement(path, budget, counts);
 
       expect(counts.auth, `${path} auth requests`).toBeLessThanOrEqual(budget.auth);
-      expect(counts.rest, `${path} REST queries`).toBeLessThanOrEqual(budget.rest);
+      expect(counts.rest, `${path} REST queries (${counts.restRequests.join(", ")})`).toBeLessThanOrEqual(budget.rest);
       expect(
         counts.functions,
         `${path} function calls (${counts.functionRequests.join(", ") || "none"})`,

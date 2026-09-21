@@ -38,6 +38,7 @@ type NavLinkItem = { label: string; href: string; badge?: string; accent?: NavAc
 export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = {}) => { // skipcq: JS-R1005
   const [scrolled, setScrolled] = useState(forceScrolled);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuth();
@@ -67,7 +68,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
   });
 
   type NotifItem = { id: string; title: string; body: string | null; type: string; read: boolean; created_at: string; link: string | null };
-  const { data: notifItems = [] } = useQuery<NotifItem[]>({
+  const { data: notifItems = [], isLoading: notificationsLoading } = useQuery<NotifItem[]>({
     queryKey: ["notifications_list", user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -79,7 +80,9 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
         .limit(10);
       return (data ?? []) as NotifItem[];
     },
-    enabled: !!user,
+    // Auctions need saved-listing state on arrival; keep hidden notification
+    // details off that request path while retaining the live unread badge.
+    enabled: !!user && (location.pathname.replace(/\/$/, "") !== "/auctions" || notificationsOpen),
     refetchInterval: 120_000,
   });
 
@@ -253,7 +256,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
           </div>
           {user ? (
             <>
-              <DropdownMenu>
+              <DropdownMenu onOpenChange={setNotificationsOpen}>
                 <DropdownMenuTrigger className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors outline-none ${
                   forceLight
                     ? "text-white/80 hover:text-white hover:bg-white/10"
@@ -283,7 +286,9 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   {notifItems.length === 0 ? (
                     <div className="px-4 py-8 text-center">
                       <Bell className="w-8 h-8 text-muted-foreground/25 mx-auto mb-2" />
-                      <p className="text-xs text-muted-foreground">{t("notificationsPanel.empty")}</p>
+                      <p className="text-xs text-muted-foreground" role={notificationsLoading ? "status" : undefined}>
+                        {notificationsLoading ? t("common.loading") : t("notificationsPanel.empty")}
+                      </p>
                     </div>
                   ) : (
                     <div className="divide-y divide-border max-h-80 overflow-y-auto">

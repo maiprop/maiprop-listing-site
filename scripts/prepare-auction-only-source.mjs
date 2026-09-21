@@ -13,6 +13,7 @@ export const AUCTION_SOURCE_OVERLAYS = Object.freeze([
   "functions/api/public/_cache.ts",
   "functions/api/public/auctions.ts",
   "src/components/auctions/AuctionCard.tsx",
+  "src/components/Navbar.tsx",
   "src/hooks/useAuctionListings.ts",
   "src/hooks/useAuctionsPipeline.ts",
   "src/hooks/useFavorites.ts",
