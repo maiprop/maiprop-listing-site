@@ -521,7 +521,7 @@ describe("NewBuildDetail", () => {
     );
     expect(fromMock).toHaveBeenCalledWith("new_building_leads");
     expect(fromMock).not.toHaveBeenCalledWith("notifications");
-    expect(toastMock.success).toHaveBeenCalledWith("Interest registered — the developer will be in touch");
+    expect(toastMock.success).toHaveBeenCalledWith("Your enquiry was saved successfully.");
   });
 
   it("rejects the interest callback when persistence rejects and never reports success", async () => {

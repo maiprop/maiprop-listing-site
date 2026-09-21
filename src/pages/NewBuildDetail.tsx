@@ -281,7 +281,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
       ?? tr("newBuildDetail.fallbackInterestedBuyer", "Interested buyer");
     await startConv.mutateAsync({ other_user_id: ownerId, listing_id: id });
     await insertNewBuildLead({ listingId: id, user, profile, form, contactName });
-    toast.success(tr("newBuildDetail.toasts.interestRegistered", "Interest registered — the developer will be in touch"));
+    toast.success(tr("newBuildDetail.interestCard.submittedBody", "Your enquiry was saved successfully."));
   };
 
   const handleContact = async () => {
