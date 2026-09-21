@@ -16,8 +16,8 @@ import { isAiQuotaReached, useAiQuota } from "@/hooks/useAiQuota";
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface PriceTrend {
-  current: number; oneYearAgo: number; threeYearsAgo: number; fiveYearsAgo: number;
-  changeYoY: number; change5Y: number;
+  current: number | null; oneYearAgo: number | null; threeYearsAgo: number | null; fiveYearsAgo: number | null;
+  changeYoY: number | null; change5Y: number | null;
 }
 
 interface NoiseLevel {
@@ -36,14 +36,16 @@ interface DevProject {
 
 interface NeighbourhoodData {
   areaName: string;
-  walkabilityScore?: number;
+  walkabilityScore?: number | null;
   pricePerSqmTrend: PriceTrend;
-  noiseLevel: NoiseLevel;
-  safetyScore: SafetyScore;
+  noiseLevel: NoiseLevel | null;
+  safetyScore: SafetyScore | null;
   developmentProjects: DevProject[];
-  demographics: { primaryResidents: string; avgAge: number; tourismImpact: string };
-  investmentOutlook: { rating: string; summary: string };
+  demographics: { primaryResidents: string; avgAge: number | null; tourismImpact: string } | null;
+  investmentOutlook: { rating: string; summary: string } | null;
   areaHighlights: string[];
+  responseVersion?: number;
+  provenance?: { pricePerSqmTrend?: { current?: { privateSalesAverage?: number } | null } };
   generatedBy?: string;
   osMunicipalityStatus?: string;
   osMunicipalityName?: string;
@@ -90,6 +92,17 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
     { year: String(currentYear - 1), val: trend.oneYearAgo },
     { year: String(currentYear),     val: trend.current },
   ];
+  const available = points.filter((p): p is { year: string; val: number } => p.val != null);
+  if (available.length < 2) return (
+    <div className="text-xs text-muted-foreground">
+      <p>History: Unavailable</p>
+      {available.filter(p => p.year !== String(currentYear)).map(p => <p key={p.year}>{`${p.year}: €${p.val.toLocaleString()} (historical observation)`}</p>)}
+    </div>
+  );
+  return <PriceHistory points={available} currentYear={currentYear} />;
+}
+
+function PriceHistory({ points, currentYear }: { points: Array<{ year: string; val: number }>; currentYear: number }) {
   const vals = points.map(p => p.val);
   const minVal = Math.min(...vals);
   const maxVal = Math.max(...vals);
@@ -99,7 +112,7 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   const innerW = w - padX * 2;
   const innerH = h - padTop - padBottom;
 
-  const xs = points.map((_, i) => padX + (i / (points.length - 1)) * innerW);
+  const xs = points.map(p => padX + ((Number(p.year) - (currentYear - 5)) / 5) * innerW);
   const ys = points.map(p => padTop + innerH - ((p.val - minVal) / range) * innerH);
 
   const path = xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
@@ -110,7 +123,7 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
     "Z",
   ].join(" ");
 
-  const rising = trend.current >= trend.oneYearAgo;
+  const rising = points[points.length - 1].val >= points[0].val;
   const lineColour = rising ? "#22c55e" : "#ef4444";
 
   const clampX = (x: number, i: number) => {
@@ -122,6 +135,7 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   return (
     <div className="w-full overflow-visible">
       <svg
+        aria-label="Price history"
         width="100%"
         height={h}
         viewBox={`0 0 ${w} ${h}`}
@@ -193,11 +207,12 @@ const getBenchmarkSourceDescription = (data: NeighbourhoodData): string => {
   const isOsBacked = data.osMunicipalityStatus === "ok" || source.includes("maiprop_os") || source.endsWith("_os");
   if (isOsBacked) {
     const area = data.osMunicipalityName ?? data.osPrefectureName;
-    return `Source: mAI Prop OS municipality market report${area ? ` for ${area}` : ""}, interpreted with AI. This is municipality-level residential intelligence, not a new-build or street-level asking-price benchmark. Treat it as directional market context, not a certified valuation.`;
+    if (data.responseVersion === 2 && data.pricePerSqmTrend.current == null) return "Source: Unavailable. The municipality report supplied no usable current price observation.";
+    return `Source: mAI Prop OS municipality market report${area ? ` for ${area}` : ""}. This is municipality-level residential intelligence, not a new-build or street-level asking-price benchmark. Treat it as directional market context, not a certified valuation.`;
   }
 
   if (source.includes("fallback")) {
-    return "Source: fallback city-level market benchmark plus property and location context. This is directional market intelligence, not a new-build or street-level asking-price benchmark or certified valuation.";
+    return "Source: Unavailable. No market observation was supplied for this location.";
   }
 
   return "Source: AI-generated neighbourhood estimate from property type, address, coordinates, and available market context. Treat it as directional market intelligence, not a certified valuation.";
@@ -227,7 +242,7 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
       if (currentQuota && !currentQuota.allowed) return;
       const { data: result, error: fnErr } = await invokeAuthenticatedFunction<NeighbourhoodData & { error?: string }>("neighbourhood-report", {
         timeout: NEIGHBOURHOOD_REPORT_TIMEOUT_MS,
-        body: { city, address, region, municipality, propertyType, lat, lng, listingId },
+        body: { city, address, region, municipality, propertyType, lat, lng, listingId, responseVersion: 2 },
       });
       if (fnErr) throw fnErr;
       if (result?.error) throw new Error(result.error);
@@ -247,8 +262,8 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
     }
   };
 
-  const noiseColour = (s: number) => s <= 3 ? "#22c55e" : s <= 6 ? "#eab308" : "#ef4444";
-  const safeColour  = (s: number) => s >= 75 ? "#22c55e" : s >= 50 ? "#eab308" : "#ef4444";
+  const noiseColour = (s: number | undefined) => s == null ? "currentColor" : s <= 3 ? "#22c55e" : s <= 6 ? "#eab308" : "#ef4444";
+  const safeColour  = (s: number | undefined) => s == null ? "currentColor" : s >= 75 ? "#22c55e" : s >= 50 ? "#eab308" : "#ef4444";
 
   return (
     <div className="glass-card rounded-xl overflow-hidden border border-border">
@@ -316,6 +331,9 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
         {user && data && !loading && (
           <div className="space-y-6">
 
+            {data.generatedBy?.startsWith("openai") && (
+              <p className="text-xs text-muted-foreground">AI estimates: neighbourhood descriptions, scores, demographics and outlook are not independently verified. Market observations are sourced separately below.</p>
+            )}
             {/* Highlights */}
             {data.areaHighlights?.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -335,25 +353,22 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
                   <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Price / m² Trend</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-foreground">€{data.pricePerSqmTrend.current.toLocaleString()}</span>
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                    data.pricePerSqmTrend.changeYoY >= 0
-                      ? "bg-emerald-400/10 text-emerald-400"
-                      : "bg-red-400/10 text-red-400"
-                  }`}>
-                    {data.pricePerSqmTrend.changeYoY >= 0 ? "+" : ""}{data.pricePerSqmTrend.changeYoY.toFixed(1)}% YoY
+                  <span className="text-xs font-bold text-foreground">{data.pricePerSqmTrend.current == null ? "Unavailable" : `€${data.pricePerSqmTrend.current.toLocaleString()}`}</span>
+                  <span className="text-[10px] font-semibold">
+                    {data.pricePerSqmTrend.changeYoY == null ? "YoY: Unavailable" : `${data.pricePerSqmTrend.changeYoY >= 0 ? "+" : ""}${data.pricePerSqmTrend.changeYoY.toFixed(1)}% YoY`}
                   </span>
                 </div>
               </div>
-              <MiniChart trend={data.pricePerSqmTrend} />
+              <MiniChart trend={{ ...data.pricePerSqmTrend, current: data.responseVersion === 2 ? data.provenance?.pricePerSqmTrend?.current?.privateSalesAverage ?? null : data.pricePerSqmTrend.current }} />
+              {data.responseVersion === 2 && <p className="text-[10px] text-muted-foreground mt-2">History and changes compare achieved private sales from mAI Prop OS. The current benchmark may also include asking listings.</p>}
               <p className="text-[10px] text-muted-foreground mt-2">
-                5-year change: <span className={`font-semibold ${data.pricePerSqmTrend.change5Y >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                  {data.pricePerSqmTrend.change5Y >= 0 ? "+" : ""}{data.pricePerSqmTrend.change5Y.toFixed(1)}%
-                </span>
+                {data.pricePerSqmTrend.change5Y == null ? "5-year change: Unavailable" : `5-year change: ${data.pricePerSqmTrend.change5Y >= 0 ? "+" : ""}${data.pricePerSqmTrend.change5Y.toFixed(1)}%`}
+
               </p>
               <div className="mt-2 rounded-lg bg-secondary/70 border border-border px-3 py-2 text-[10px] text-muted-foreground leading-relaxed">
-                <span className="font-semibold text-foreground">How this is estimated: </span>
+                <span className="font-semibold text-foreground">Market evidence: </span>
                 {getBenchmarkSourceDescription(data)}
+                {data.responseVersion === 2 && data.osMunicipalityDetail && <p className="mt-1">{data.osMunicipalityDetail}</p>}
               </div>
             </div>
 
@@ -362,31 +377,34 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
               {/* Noise */}
               <div className="bg-secondary rounded-xl p-3.5">
                 <div className="flex items-center gap-1.5 mb-2">
-                  <Volume2 className="w-3.5 h-3.5" style={{ color: noiseColour(data.noiseLevel.score) }} />
+                  <Volume2 className="w-3.5 h-3.5" style={{ color: noiseColour(data.noiseLevel?.score) }} />
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Noise</span>
                 </div>
-                <p className="text-sm font-bold" style={{ color: noiseColour(data.noiseLevel.score) }}>
-                  {data.noiseLevel.label}
+                <p className="text-sm font-bold" style={{ color: noiseColour(data.noiseLevel?.score) }}>
+                  {data.noiseLevel?.label ?? "Unavailable"}
                 </p>
-                <ScoreBar score={data.noiseLevel.score} max={10} colour={noiseColour(data.noiseLevel.score)} />
-                <p className="text-[10px] text-muted-foreground mt-2 leading-tight">{data.noiseLevel.notes}</p>
+                {data.noiseLevel && <ScoreBar score={data.noiseLevel.score} max={10} colour={noiseColour(data.noiseLevel.score)} />}
+                <p className="text-[10px] text-muted-foreground mt-2 leading-tight">{data.noiseLevel?.notes}</p>
               </div>
 
               {/* Safety */}
               <div className="bg-secondary rounded-xl p-3.5">
                 <div className="flex items-center gap-1.5 mb-2">
-                  <Shield className="w-3.5 h-3.5" style={{ color: safeColour(data.safetyScore.score) }} />
+                  <Shield className="w-3.5 h-3.5" style={{ color: safeColour(data.safetyScore?.score) }} />
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Safety</span>
                 </div>
-                <p className="text-sm font-bold" style={{ color: safeColour(data.safetyScore.score) }}>
-                  {data.safetyScore.label}
+                <p className="text-sm font-bold" style={{ color: safeColour(data.safetyScore?.score) }}>
+                  {data.safetyScore?.label ?? "Unavailable"}
                 </p>
-                <ScoreBar score={data.safetyScore.score} colour={safeColour(data.safetyScore.score)} />
+                {data.safetyScore && <ScoreBar score={data.safetyScore.score} colour={safeColour(data.safetyScore.score)} />}
                 <p className="text-[10px] text-muted-foreground mt-2 leading-tight">
-                  {data.safetyScore.trend} · {data.safetyScore.notes}
+                  {data.safetyScore && `${data.safetyScore.trend} · ${data.safetyScore.notes}`}
                 </p>
               </div>
 
+              {data.responseVersion === 2 && data.walkabilityScore == null && (
+                <div className="bg-secondary rounded-xl p-3.5"><p className="text-xs font-bold">Walkability</p><p className="text-sm">Unavailable</p></div>
+              )}
               {/* Walkability */}
               {data.walkabilityScore != null && (
                 <div className="bg-secondary rounded-xl p-3.5">
@@ -409,6 +427,9 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
               )}
             </div>
 
+            {data.responseVersion === 2 && !data.developmentProjects?.length && (
+              <div><p className="text-xs font-bold uppercase text-muted-foreground">Development Projects</p><p className="text-sm">Unavailable</p><p className="text-[10px] text-muted-foreground">No independently supported project information was supplied.</p></div>
+            )}
             {/* Development projects */}
             {data.developmentProjects?.length > 0 && (
               <div>
@@ -442,11 +463,11 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Investment Outlook</span>
-                  <span className={`text-sm font-bold ${OUTLOOK_COLOUR[data.investmentOutlook.rating] || "text-primary"}`}>
-                    {data.investmentOutlook.rating}
+                  <span className={`text-sm font-bold ${OUTLOOK_COLOUR[data.investmentOutlook?.rating ?? ""] || "text-primary"}`}>
+                    {data.investmentOutlook?.rating ?? "Unavailable"}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{data.investmentOutlook.summary}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{data.investmentOutlook?.summary}</p>
               </div>
             </div>
 
@@ -454,16 +475,16 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
             <div className="flex items-center justify-between text-xs border-t border-border pt-3">
               <div>
                 <span className="text-muted-foreground">Residents: </span>
-                <span className="font-medium">{data.demographics.primaryResidents}</span>
+                <span className="font-medium">{data.demographics?.primaryResidents ?? "Unavailable"}</span>
               </div>
               <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
-                data.demographics.tourismImpact === "Low"
+                data.demographics?.tourismImpact === "Low"
                   ? "bg-emerald-400/10 border-emerald-400/20 text-emerald-400"
-                  : data.demographics.tourismImpact === "High"
+                  : data.demographics?.tourismImpact === "High"
                   ? "bg-orange-400/10 border-orange-400/20 text-orange-400"
                   : "bg-yellow-400/10 border-yellow-400/20 text-yellow-400"
               }`}>
-                {data.demographics.tourismImpact} tourism
+                {data.demographics ? `${data.demographics.tourismImpact} tourism` : "Unavailable"}
               </span>
             </div>
 

@@ -35,6 +35,7 @@ vi.mock("@/components/SignInForAI", () => ({
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
 
+import LegacyNeighbourhoodReport from "./fixtures/NeighbourhoodReport.legacy";
 import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 
 const loadReport = async () => {
@@ -324,4 +325,75 @@ describe("NeighbourhoodReport — full result UI", () => {
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
     expect(screen.queryByText(/Development Projects/i)).toBeNull();
   });
+});
+
+const unavailableData = {
+  areaName: "Fictionopolis", responseVersion: 2, generatedBy: "fallback",
+  walkabilityScore: null, noiseLevel: null, safetyScore: null, demographics: null,
+  investmentOutlook: null, developmentProjects: [], areaHighlights: [],
+  pricePerSqmTrend: { current: null, oneYearAgo: null, threeYearsAgo: null, fiveYearsAgo: null, changeYoY: null, change5Y: null },
+};
+describe("NeighbourhoodReport — evidence availability", () => {
+  it("requests version 2 and renders missing evidence without numeric charts or false labels", async () => {
+    mockQuotaAndReport(unavailableData);
+    const { container } = render(<NeighbourhoodReport {...baseProps} />);
+    await loadReport();
+    expect(await screen.findByText(/History: Unavailable/)).toBeInTheDocument();
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(5);
+    expect(screen.queryByText(/Quiet|Good|0%|€0|public realm improvements/)).toBeNull();
+    expect(container.querySelector('svg[aria-label="Price history"]')).toBeNull();
+    expect(reportCalls()[0][1].body.responseVersion).toBe(2);
+  });
+  it("shows an OS current observation while keeping history and changes unavailable", async () => {
+    mockQuotaAndReport({ ...unavailableData, osMunicipalityStatus: "ok", osMunicipalityName: "Fictionopolis", pricePerSqmTrend: { ...unavailableData.pricePerSqmTrend, current: 1819 }, provenance: { pricePerSqmTrend: { current: { source: "maiprop_os" } } } });
+    render(<NeighbourhoodReport {...baseProps} />);
+    await loadReport();
+    expect(await screen.findByText("€1,819")).toBeInTheDocument();
+    expect(screen.getByText(/History: Unavailable/)).toBeInTheDocument();
+    expect(screen.getByText(/YoY: Unavailable/)).toBeInTheDocument();
+    expect(screen.getByText(/5-year change: Unavailable/)).toBeInTheDocument();
+  });
+  it("labels successful AI analysis as unverified estimates", async () => {
+    mockQuotaAndReport({ ...fullData, responseVersion: 2, generatedBy: "openai" });
+    render(<NeighbourhoodReport {...baseProps} />);
+    await loadReport();
+    expect(await screen.findByText(/AI estimates.*not independently verified/i)).toBeInTheDocument();
+  });
+  it("the deployed baseline consumer handles the legacy unavailable envelope with Retry", async () => {
+    mockQuotaAndReport({ error: "Neighbourhood report data is unavailable. Please try again later.", code: "neighbourhood_data_unavailable" });
+    render(<LegacyNeighbourhoodReport {...baseProps} />);
+    await loadReport();
+    expect(await screen.findByText("Neighbourhood report data is unavailable. Please try again later.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(reportCalls()[0][1].body.responseVersion).toBeUndefined();
+  });
+});
+
+it("charts achieved-sales observations separately from the current blended benchmark", async () => {
+  mockQuotaAndReport({ ...unavailableData, osMunicipalityStatus: "ok", pricePerSqmTrend: { ...unavailableData.pricePerSqmTrend, current: 2600, oneYearAgo: 1600, changeYoY: 25 }, provenance: { pricePerSqmTrend: { current: { source: "maiprop_os", privateSalesAverage: 2000 } } } });
+  render(<NeighbourhoodReport {...baseProps} />);
+  await loadReport();
+  expect(await screen.findByText("€2,600")).toBeInTheDocument();
+  const chart = screen.getByLabelText("Price history");
+  expect(chart).toHaveTextContent("€2.0k");
+  expect(chart).not.toHaveTextContent("€2.6k");
+  expect(screen.getByText(/History and changes compare achieved private sales/)).toBeInTheDocument();
+});
+
+it("the deployed baseline consumer handles an actual non-2xx invoke error without numeric rendering", async () => {
+  const transportError = Object.assign(new Error("Edge Function returned a non-2xx status code"), { context: new Response(JSON.stringify({ error: "Neighbourhood report data is unavailable. Please try again later.", code: "neighbourhood_data_unavailable" }), { status: 503 }) });
+  invokeMock.mockImplementation(async (name: string) => name === "ai-quota-status" ? { data: quotaData, error: null } : { data: null, error: transportError });
+  render(<LegacyNeighbourhoodReport {...baseProps} />);
+  await loadReport();
+  expect(await screen.findByText("Edge Function returned a non-2xx status code")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  expect(screen.queryByText(/Price \/ m² Trend/)).toBeNull();
+});
+
+it("displays a lone sourced historical observation without inventing a chart", async () => {
+  mockQuotaAndReport({ ...unavailableData, pricePerSqmTrend: { ...unavailableData.pricePerSqmTrend, oneYearAgo: 1600 } });
+  render(<NeighbourhoodReport {...baseProps} />);
+  await loadReport();
+  expect(await screen.findByText(`${new Date().getFullYear() - 1}: €1,600 (historical observation)`)).toBeInTheDocument();
+  expect(screen.queryByLabelText("Price history")).toBeNull();
 });

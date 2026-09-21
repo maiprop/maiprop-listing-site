@@ -307,3 +307,28 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
     }));
   });
 });
+
+describe("CompareAIReports — partial neighbourhood evidence", () => {
+  it.each([null, {}, { responseVersion: 2, safetyScore: null, noiseLevel: null }, { error: "Neighbourhood report data is unavailable." }])("keeps missing sections unavailable for %j", async (report) => {
+    invokeMock.mockImplementation(async (name: string) => name === "neighbourhood-report" ? { data: report, error: null } : { data: null, error: null });
+    render(wrap(<CompareAIReports listings={[baseListing()]} />));
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
+    await waitFor(() => expect(screen.getAllByText("Unavailable")).toHaveLength(2));
+    expect(screen.queryByText(/70\/100|Moderate|Quiet/)).toBeNull();
+    expect(invokeMock).toHaveBeenCalledWith("neighbourhood-report", expect.objectContaining({ body: expect.objectContaining({ responseVersion: 2 }) }));
+  });
+  it("retains a valid AI safety estimate while noise stays unavailable", async () => {
+    invokeMock.mockImplementation(async (name: string) => name === "neighbourhood-report" ? { data: { responseVersion: 2, safetyScore: { score: 82 }, noiseLevel: null, provenance: { analysis: { source: "ai_estimate", independentlyVerified: false } } }, error: null } : { data: null, error: null });
+    render(wrap(<CompareAIReports listings={[baseListing()]} />));
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
+    expect(await screen.findByText(/82\/100/)).toBeInTheDocument();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/AI estimate.*not independently verified/)).toBeInTheDocument();
+  });
+  it("treats malformed numeric scores and unrecognized noise as unavailable", async () => {
+    invokeMock.mockImplementation(async (name: string) => name === "neighbourhood-report" ? { data: { safetyScore: { score: "bogus" }, noiseLevel: { label: 42 } }, error: null } : { data: null, error: null });
+    render(wrap(<CompareAIReports listings={[baseListing()]} />));
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
+    await waitFor(() => expect(screen.getAllByText("Unavailable")).toHaveLength(2));
+  });
+});

@@ -749,6 +749,7 @@ export const propertyValuationBodySchema = z.object({
 }).passthrough();
 
 export const neighbourhoodReportBodySchema = z.object({
+  responseVersion: z.literal(2).optional(),
   city: requiredString("neighbourhood city", 120),
   address: optionalString("neighbourhood address", 240).optional(),
   lat: optionalNumber("neighbourhood latitude", { min: -90, max: 90 }).optional(),

@@ -1,4 +1,3 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import {
@@ -104,6 +103,7 @@ const neighbourhoodReportRequestSchema = z.object({
   lat: optionalCoordinate("neighbourhood latitude", -90, 90),
   lng: optionalCoordinate("neighbourhood longitude", -180, 180),
   listingId: optionalListingId,
+  responseVersion: z.literal(2).optional(),
 }).strict().superRefine((body, ctx) => {
   if ((body.lat === undefined) !== (body.lng === undefined)) {
     const missing = body.lat === undefined ? "lat" : "lng";
@@ -196,33 +196,60 @@ const clampScore = (
   return numeric == null ? null : Math.round(clampNumber(numeric, min, max));
 };
 
-const normalizeNeighbourhoodReport = (report: JsonRecord): JsonRecord => {
-  const normalized = { ...report };
-  const walkabilityScore = clampScore(normalized.walkabilityScore, 0, 100);
-  if (walkabilityScore != null) normalized.walkabilityScore = walkabilityScore;
+const reportText = z.string().trim().min(1).max(2000);
+const nullableSection = <T>(schema: z.ZodType<T>, value: unknown): T | null => {
+  const result = schema.safeParse(value);
+  return result.success ? result.data : null;
+};
 
-  const noiseLevel = normalized.noiseLevel;
-  if (
-    noiseLevel && typeof noiseLevel === "object" && !Array.isArray(noiseLevel)
-  ) {
-    const score = clampScore((noiseLevel as JsonRecord).score, 1, 10);
-    if (score != null) {
-      normalized.noiseLevel = { ...(noiseLevel as JsonRecord), score };
-    }
-  }
-
-  const safetyScore = normalized.safetyScore;
-  if (
-    safetyScore && typeof safetyScore === "object" &&
-    !Array.isArray(safetyScore)
-  ) {
-    const score = clampScore((safetyScore as JsonRecord).score, 1, 100);
-    if (score != null) {
-      normalized.safetyScore = { ...(safetyScore as JsonRecord), score };
-    }
-  }
-
-  return normalized;
+// Model output is never evidence. Validate each section independently so a
+// malformed section cannot break the rest of a partial report.
+const normalizeNeighbourhoodReport = (
+  report: JsonRecord,
+  city: string,
+  address?: string,
+): JsonRecord => {
+  const noise = nullableSection(
+    z.object({ score: z.unknown(), label: reportText, notes: reportText }),
+    report.noiseLevel,
+  );
+  const safety = nullableSection(
+    z.object({
+      score: z.unknown(),
+      label: reportText,
+      trend: reportText,
+      notes: reportText,
+    }),
+    report.safetyScore,
+  );
+  const noiseScore = clampScore(noise?.score, 1, 10);
+  const safetyScore = clampScore(safety?.score, 1, 100);
+  return {
+    ...fallbackReport(city, address),
+    areaName: optionalString(report.areaName) ?? address ?? city,
+    walkabilityScore: clampScore(report.walkabilityScore, 0, 100),
+    noiseLevel: noise && noiseScore != null
+      ? { ...noise, score: noiseScore }
+      : null,
+    safetyScore: safety && safetyScore != null
+      ? { ...safety, score: safetyScore }
+      : null,
+    demographics: nullableSection(
+      z.object({
+        primaryResidents: reportText,
+        avgAge: z.number().finite().min(0).max(120).nullable(),
+        tourismImpact: reportText,
+      }),
+      report.demographics,
+    ),
+    investmentOutlook: nullableSection(
+      z.object({ rating: reportText, summary: reportText }),
+      report.investmentOutlook,
+    ),
+    areaHighlights:
+      nullableSection(z.array(reportText).max(4), report.areaHighlights) ?? [],
+    generatedBy: "openai",
+  };
 };
 
 const normalizeOsCategory = (value: unknown): string => {
@@ -513,64 +540,26 @@ const fetchOsMunicipalityContext = async (input: {
   };
 };
 
-const fallbackReport = (city: string, address?: string, region?: string) => { // skipcq: JS-R1005 - Deterministic fallback report keeps section defaults together when AI output is unavailable.
-  const areaName = address?.trim() || city.trim();
-  const isAthens = city.toLowerCase().includes("athens") ||
-    city.toLowerCase().includes("athina");
-  const current = isAthens ? 4200 : 2600;
-  return {
-    areaName,
-    walkabilityScore: isAthens ? 82 : 68,
-    pricePerSqmTrend: {
-      current,
-      oneYearAgo: Math.round(current * 0.94),
-      threeYearsAgo: Math.round(current * 0.82),
-      fiveYearsAgo: Math.round(current * 0.7),
-      changeYoY: 6.4,
-      change5Y: 42.9,
-    },
-    noiseLevel: {
-      score: isAthens ? 6 : 4,
-      label: isAthens ? "Moderate" : "Quiet",
-      notes:
-        "Generated from conservative city-level defaults after AI output could not be parsed.",
-    },
-    safetyScore: {
-      score: isAthens ? 74 : 78,
-      label: "Good",
-      trend: "Stable",
-      notes: "Use local due diligence for street-level validation.",
-    },
-    developmentProjects: [
-      {
-        name: `${city} public realm improvements`,
-        type: "public",
-        status: "planned",
-        impact: "positive",
-        estimatedCompletion: "2026",
-        distanceKm: 1.5,
-      },
-    ],
-    demographics: {
-      primaryResidents: "Mixed local residents, professionals, and families",
-      avgAge: 39,
-      tourismImpact: isAthens || region?.toLowerCase().includes("attica")
-        ? "Moderate"
-        : "Low",
-    },
-    investmentOutlook: {
-      rating: "Good",
-      summary:
-        "The area has resilient demand, but this report used fallback benchmarks because the AI provider returned malformed JSON. Validate street-level conditions before making an investment decision.",
-    },
-    areaHighlights: [
-      "City-level market benchmark available",
-      "Local amenities likely within normal urban range",
-      "Independent inspection recommended",
-    ],
-    generatedBy: "fallback",
-  };
-};
+const fallbackReport = (city: string, address?: string) => ({
+  responseVersion: 2,
+  areaName: address?.trim() || city.trim(),
+  walkabilityScore: null,
+  pricePerSqmTrend: {
+    current: null,
+    oneYearAgo: null,
+    threeYearsAgo: null,
+    fiveYearsAgo: null,
+    changeYoY: null,
+    change5Y: null,
+  },
+  noiseLevel: null,
+  safetyScore: null,
+  developmentProjects: [],
+  demographics: null,
+  investmentOutlook: null,
+  areaHighlights: [],
+  generatedBy: "fallback",
+});
 
 const extractOsAveragePrice = (
   marketReportText: string | undefined,
@@ -578,12 +567,12 @@ const extractOsAveragePrice = (
 ): number | null => {
   if (!marketReportText) return null;
   const pattern = new RegExp(
-    `${section}[\\s\\S]{0,160}?average price\\s+([\\d.,]+)`,
+    `${section}\\s*[-:]?\\s*average price\\s+([\\d.,]+)\\s*(?:EUR|€)\\s*\\/\\s*(?:sq\\.m\\.|m²)`,
     "i",
   );
   const match = marketReportText.match(pattern);
   const numeric = coerceFiniteNumber(match?.[1]);
-  return numeric == null ? null : Math.round(numeric);
+  return numeric == null || numeric <= 0 ? null : Math.round(numeric);
 };
 
 const blendedOsSaleAverage = (
@@ -605,11 +594,12 @@ const blendedOsSaleAverage = (
 
 const oneDecimal = (value: number): number => Math.round(value * 10) / 10;
 const percentChange = (
-  current: number,
-  previous: number,
-  fallback: number,
-): number =>
-  previous > 0 ? oneDecimal(((current - previous) / previous) * 100) : fallback;
+  current: number | null,
+  previous: number | null,
+): number | null =>
+  current != null && previous != null && previous > 0
+    ? oneDecimal(((current - previous) / previous) * 100)
+    : null;
 const osSourceDivergencePct = (
   privateSalesAverage: number | null,
   publicListingsAverage: number | null,
@@ -651,111 +641,131 @@ const osMarketDiagnostics = (marketReportText: string | undefined) => {
 
 const applyOsMunicipalityContext = (
   report: JsonRecord,
-  osMunicipalityContext: MunicipalityContext,
+  context: MunicipalityContext,
   source: "openai" | "fallback",
 ): JsonRecord => {
-  const enriched = report;
-  if (!optionalString(enriched.generatedBy)) {
-    enriched.generatedBy = osMunicipalityContext.status === "ok"
-      ? source === "fallback" ? "fallback_maiprop_os" : "openai_maiprop_os"
-      : source;
-  } else if (
-    source === "fallback" && enriched.generatedBy === "fallback" &&
-    osMunicipalityContext.status === "ok"
-  ) {
-    enriched.generatedBy = "fallback_maiprop_os";
-  }
-
-  enriched.osMunicipalityStatus = osMunicipalityContext.status;
-  if (osMunicipalityContext.municipalityName) {
-    enriched.osMunicipalityName = osMunicipalityContext.municipalityName;
-  }
-  if (osMunicipalityContext.prefectureName) {
-    enriched.osPrefectureName = osMunicipalityContext.prefectureName;
-  }
-  if (osMunicipalityContext.detail) {
-    enriched.osMunicipalityDetail = osMunicipalityContext.detail;
-  }
-  if (osMunicipalityContext.blendedSaleAverage != null) {
-    const parts = [
-      `OS blended benchmark: ${osMunicipalityContext.blendedSaleAverage} EUR/m²`,
-      osMunicipalityContext.privateSalesAverage != null
-        ? `private sales: ${osMunicipalityContext.privateSalesAverage}`
-        : null,
-      osMunicipalityContext.publicListingsAverage != null
-        ? `public listings: ${osMunicipalityContext.publicListingsAverage}`
-        : null,
-      osMunicipalityContext.sourceDivergencePct != null
-        ? `source divergence: ${osMunicipalityContext.sourceDivergencePct}%`
-        : null,
-    ].filter(Boolean);
-    enriched.osMunicipalityDetail = parts.join("; ");
-  }
-
-  if (osMunicipalityContext.status === "ok") {
-    const current = osMunicipalityContext.blendedSaleAverage ??
-      blendedOsSaleAverage(osMunicipalityContext.marketReportText);
-    if (current != null) {
-      const trend = enriched.pricePerSqmTrend &&
-          typeof enriched.pricePerSqmTrend === "object"
-        ? enriched.pricePerSqmTrend as JsonRecord
-        : {};
-      const oneYearAgo = coerceFiniteNumber(trend.oneYearAgo) ??
-        Math.round(current * 0.95);
-      const threeYearsAgo = coerceFiniteNumber(trend.threeYearsAgo) ??
-        Math.round(current * 0.84);
-      const fiveYearsAgo = coerceFiniteNumber(trend.fiveYearsAgo) ??
-        Math.round(current * 0.72);
-      enriched.pricePerSqmTrend = {
-        ...trend,
-        current,
-        oneYearAgo,
-        threeYearsAgo,
-        fiveYearsAgo,
-        changeYoY: percentChange(current, oneYearAgo, 0),
-        change5Y: percentChange(current, fiveYearsAgo, 0),
-      };
-    }
-  }
-
-  if (source === "fallback" && osMunicipalityContext.status === "ok") {
-    const highlights = Array.isArray(enriched.areaHighlights)
-      ? enriched.areaHighlights.filter((item): item is string =>
-        typeof item === "string"
+  const enriched = { ...report };
+  enriched.generatedBy = context.status === "ok"
+    ? `${source}_maiprop_os`
+    : source;
+  enriched.osMunicipalityStatus = context.status;
+  enriched.osMunicipalityName = context.municipalityName;
+  enriched.osPrefectureName = context.prefectureName;
+  const details = [
+    context.blendedSaleAverage != null
+      ? `OS blended benchmark: ${context.blendedSaleAverage} EUR/m²`
+      : null,
+    context.privateSalesAverage != null
+      ? `private sales: ${context.privateSalesAverage}`
+      : null,
+    context.publicListingsAverage != null
+      ? `public listings: ${context.publicListingsAverage}`
+      : null,
+    context.sourceDivergencePct != null
+      ? `source divergence: ${context.sourceDivergencePct}%`
+      : null,
+  ].filter(Boolean);
+  enriched.osMunicipalityDetail = details.join("; ");
+  const current = context.status === "ok"
+    ? context.blendedSaleAverage ?? null
+    : null;
+  const year = new Date().getFullYear();
+  const historical = (yearsAgo: number) =>
+    context.status === "ok"
+      ? extractOsAveragePrice(
+        context.marketReportText,
+        `Private Sales Municipality ${year - yearsAgo}`,
       )
-      : [];
-    if (!highlights.some((highlight) => highlight.includes("mAI Prop OS"))) {
-      highlights.unshift(
-        `mAI Prop OS municipality data available for ${osMunicipalityContext.municipalityName}`,
-      );
-    }
-    enriched.areaHighlights = highlights.slice(0, 4);
-
-    const outlook = enriched.investmentOutlook &&
-        typeof enriched.investmentOutlook === "object"
-      ? enriched.investmentOutlook as JsonRecord
-      : {};
-    enriched.investmentOutlook = {
-      ...outlook,
-      summary:
-        `Fallback report enriched with mAI Prop OS municipality data for ${osMunicipalityContext.municipalityName}. Use it as municipal market evidence, not street-level due diligence.`,
+      : null;
+  // Historical observations must be separately dated transaction evidence.
+  // Current asking-price pressure cannot reconstruct earlier transaction prices.
+  const oneYearAgo = historical(1),
+    threeYearsAgo = historical(3),
+    fiveYearsAgo = historical(5);
+  enriched.pricePerSqmTrend = {
+    current,
+    oneYearAgo,
+    threeYearsAgo,
+    fiveYearsAgo,
+    // Compare achieved sales with achieved sales, never the blended asking benchmark.
+    changeYoY: percentChange(context.privateSalesAverage ?? null, oneYearAgo),
+    change5Y: percentChange(context.privateSalesAverage ?? null, fiveYearsAgo),
+  };
+  const observation = (value: number | null, observationYear?: number) =>
+    value == null ? null : {
+      source: "maiprop_os",
+      scope: "municipality",
+      municipality: context.municipalityName,
+      ...(observationYear
+        ? { year: observationYear, method: "private_sales_average" }
+        : {
+          method: context.privateSalesAverage != null &&
+              context.publicListingsAverage != null
+            ? "70% private sales + 30% public asking listings"
+            : context.privateSalesAverage != null
+            ? "private_sales_average"
+            : "public_asking_average",
+          privateSalesAverage: context.privateSalesAverage,
+          publicListingsAverage: context.publicListingsAverage,
+        }),
     };
+  enriched.provenance = {
+    pricePerSqmTrend: {
+      current: observation(current),
+      oneYearAgo: observation(oneYearAgo, year - 1),
+      threeYearsAgo: observation(threeYearsAgo, year - 3),
+      fiveYearsAgo: observation(fiveYearsAgo, year - 5),
+      changeYoY: oneYearAgo != null && context.privateSalesAverage != null
+        ? { source: "derived", method: "private_sales_comparison" }
+        : null,
+      change5Y: fiveYearsAgo != null && context.privateSalesAverage != null
+        ? { source: "derived", method: "private_sales_comparison" }
+        : null,
+    },
+    analysis: source === "openai"
+      ? { source: "ai_estimate", independentlyVerified: false }
+      : null,
+    developmentProjects: null,
+  };
+  if (source === "fallback" && current != null) {
+    enriched.areaHighlights = [
+      `mAI Prop OS municipality data available for ${context.municipalityName}`,
+    ];
   }
-
   return enriched;
 };
 
 const fallbackReportWithOsContext = (
   city: string,
   address: string | undefined,
-  region: string | undefined,
-  osMunicipalityContext: MunicipalityContext,
+  _region: string | undefined,
+  context: MunicipalityContext,
 ): JsonRecord =>
   applyOsMunicipalityContext(
-    fallbackReport(city, address, region) as JsonRecord,
-    osMunicipalityContext,
+    fallbackReport(city, address),
+    context,
     "fallback",
   );
+
+const reportResponse = (
+  report: JsonRecord,
+  responseVersion: number | undefined,
+  corsHeaders: Record<string, string>,
+) => {
+  // The deployed consumer formats every price unconditionally and cannot show
+  // per-section estimate provenance. Negotiate v2 before returning partial data.
+  if (responseVersion !== 2) {
+    return errorResponse(
+      "Neighbourhood report data is unavailable. Please try again later.",
+      503,
+      corsHeaders,
+      { code: "neighbourhood_data_unavailable" },
+    );
+  }
+  return new Response(JSON.stringify(report), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+};
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider JSON parsing, fallback, and response shaping.
   const corsPreflightResponse = handleCors(req);
@@ -778,7 +788,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       propertyType,
       lat,
       lng,
-      listingId,
+      responseVersion,
     } = await parseJsonBody(req, neighbourhoodReportRequestSchema);
 
     const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
@@ -834,10 +844,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         osMunicipalityContext,
       );
       await recordAiCall(quota.userId, BUCKET);
-      return new Response(JSON.stringify(fallback), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return reportResponse(fallback, responseVersion, corsHeaders);
     }
 
     const prompt =
@@ -850,7 +857,7 @@ ${osMunicipalityContext.promptContext}
 
 Use mAI Prop OS municipality market data as primary local quantitative evidence when status is ok. If unavailable, clearly keep the report cautious and do not invent municipality-level figures.
 
-Return ONLY valid JSON, no markdown, no explanation. The JSON must be complete and parseable:
+Return ONLY valid JSON, no markdown, no explanation. The JSON must be parseable. Return null for unsupported sections and numeric observations. Current market evidence does not establish historical prices. All non-market analysis is an unverified AI estimate:
 {
   "areaName": "string (specific neighbourhood name, e.g. 'Kolonaki' or 'Nea Smyrni')",
   "walkabilityScore": number (0-100; 90+ = walker's paradise, 70-89 = very walkable, 50-69 = somewhat walkable, below 50 = car-dependent),
@@ -875,7 +882,7 @@ Return ONLY valid JSON, no markdown, no explanation. The JSON must be complete a
   },
   "developmentProjects": [
     {
-      "name": "string (realistic project name)",
+      "name": "string (project name quoted in the supplied source)",
       "type": "infrastructure" | "commercial" | "residential" | "transport" | "public",
       "status": "planned" | "under_construction" | "recently_completed",
       "impact": "positive" | "negative" | "neutral",
@@ -900,7 +907,9 @@ Rules:
 - walkabilityScore: reflect proximity to shops, public transport, restaurants, parks
 - developmentProjects: include only known or context-supported projects; if not confident, return an empty array
 - areaHighlights: 3-4 short cautious bullet points; do not invent exact amenities or distances
-- All numbers must be realistic for the Greek market
+- Unsupported price observations and history must be null. Never reconstruct history with percentages.
+- developmentProjects: return [] unless supplied provider text explicitly verifies the project.
+- The service currently omits development projects because the market feed has no structured project evidence contract.
 - Only return the JSON object
 - Do not include comments, trailing commas, prose, markdown, or incomplete arrays`;
 
@@ -928,14 +937,11 @@ Rules:
         osMunicipalityContext,
       );
       await recordAiCall(quota.userId, BUCKET);
-      return new Response(JSON.stringify(fallback), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return reportResponse(fallback, responseVersion, corsHeaders);
     }
 
-    const aiData = await response.json();
-    const raw = readOpenAITextContent(aiData)
+    const aiData = await readJsonSafely(response);
+    const raw = readOpenAITextContent(aiData ?? {})
       .replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
 
     // Extract only the outermost JSON object
@@ -948,8 +954,8 @@ Rules:
     // The shape of the AI's parsed JSON is unknown until we run the
     // downstream guardrails on it; intentionally typed broadly here and
     // narrowed at every read site.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let parsed: any;
+    let parsed: unknown;
+    let usedFallback = false;
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
@@ -971,6 +977,7 @@ Rules:
             sample: jsonStr.slice(0, 240),
           },
         );
+        usedFallback = true;
         parsed = fallbackReportWithOsContext(
           String(city),
           address,
@@ -980,46 +987,25 @@ Rules:
       }
     }
 
-    if (parsed && typeof parsed === "object") {
-      parsed = normalizeNeighbourhoodReport(
-        applyOsMunicipalityContext(
-          parsed as JsonRecord,
-          osMunicipalityContext,
-          "openai",
-        ),
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      parsed = fallbackReportWithOsContext(
+        String(city),
+        address,
+        region,
+        osMunicipalityContext,
+      );
+    } else if (!usedFallback) {
+      parsed = applyOsMunicipalityContext(
+        normalizeNeighbourhoodReport(parsed as JsonRecord, city, address),
+        osMunicipalityContext,
+        "openai",
       );
     }
 
-    // Persist neighbourhood scores back to the listing row so they can be filtered on.
-    // SECURITY: verify the caller owns the listing before writing scores.
-    if (listingId && parsed.walkabilityScore != null) {
-      const adminClient = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      );
-      const { data: listing } = await adminClient
-        .from("listings")
-        .select("owner_id")
-        .eq("id", listingId)
-        .single();
-      if (listing && listing.owner_id === quota.userId) {
-        await adminClient.from("listings").update({
-          walkability_score: parsed.walkabilityScore,
-          safety_score: parsed.safetyScore?.score,
-          noise_score: parsed.noiseLevel?.score,
-        }).eq("id", listingId);
-      } else {
-        log.warn("neighbourhood-report: listing ownership mismatch", {
-          listingId,
-          userId: quota.userId,
-        });
-      }
-    }
-
+    // No provider in this endpoint supplies measured listing-level scores.
+    // Model estimates and unavailable defaults must not enter listing filters.
     await recordAiCall(quota.userId, BUCKET);
-    return new Response(JSON.stringify(parsed), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return reportResponse(parsed as JsonRecord, responseVersion, corsHeaders);
   } catch (e) {
     if (e instanceof SchemaValidationError) {
       return errorResponse(e.message, 400, corsHeaders, {

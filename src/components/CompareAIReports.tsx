@@ -35,8 +35,8 @@ interface AIReport {
 }
 
 interface NeighbourhoodData {
-  safetyScore: number; // 0-100
-  noiseLevel: "low" | "moderate" | "high";
+  safetyScore: number | null; // 0-100, unverified AI estimate
+  noiseLevel: "low" | "moderate" | "high" | null;
 }
 
 interface PropertyAIData {
@@ -204,6 +204,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
         };
         const valuationBody = parseMutationInput(propertyValuationBodySchema, valBody, "property valuation");
         const neighbourhoodBody = parseMutationInput(neighbourhoodReportBodySchema, {
+          responseVersion: 2,
           city: raw.city,
           address: raw.address,
           lat: raw.latitude != null ? Number(raw.latitude) : undefined,
@@ -234,27 +235,18 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
         if (valFail ?? nbFail) reportError = getAiErrorMessage(null, { error: valFail ?? nbFail }, "AI analysis failed");
 
         let neighbourhood: NeighbourhoodData | null = null;
-        if (nbRes.status === "fulfilled" && !nbRes.value.error) {
+        if (nbRes.status === "fulfilled" && !nbRes.value.error && !nbRes.value.data?.error) {
           const nb = nbRes.value.data;
-          // safetyScore is returned as an object {score, label, trend, notes}
           const rawSafety = nb?.safetyScore ?? nb?.safety_score;
-          const safetyScore: number =
-            typeof rawSafety === "object" && rawSafety !== null
-              ? (rawSafety.score ?? 70)
-              : (rawSafety ?? 70);
-          // noiseLevel is returned as an object {score, label, notes}
+          const score = rawSafety && typeof rawSafety === "object" ? rawSafety.score : rawSafety;
+          const safetyScore = typeof score === "number" && Number.isFinite(score) && score >= 0 && score <= 100 ? score : null;
           const rawNoise = nb?.noiseLevel ?? nb?.noise_level;
-          const noiseLabelRaw: string =
-            typeof rawNoise === "object" && rawNoise !== null
-              ? (rawNoise.label ?? "Moderate")
-              : (rawNoise ?? "Moderate");
-          const noiseLevelNorm = noiseLabelRaw.toLowerCase();
-          const noiseLevel: "low" | "moderate" | "high" =
-            noiseLevelNorm.includes("quiet") || noiseLevelNorm === "low" || noiseLevelNorm === "very quiet"
-              ? "low"
-              : noiseLevelNorm.includes("busy") || noiseLevelNorm === "high" || noiseLevelNorm.includes("noisy")
-              ? "high"
-              : "moderate";
+          const label = rawNoise && typeof rawNoise === "object" ? rawNoise.label : rawNoise;
+          const noiseLabels: Record<string, NeighbourhoodData["noiseLevel"]> = {
+            "very quiet": "low", quiet: "low", low: "low", moderate: "moderate",
+            busy: "high", "very busy": "high", high: "high", noisy: "high",
+          };
+          const noiseLevel = typeof label === "string" ? noiseLabels[label.toLowerCase().trim()] ?? null : null;
           neighbourhood = { safetyScore, noiseLevel };
         }
 
@@ -404,9 +396,9 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
             <td key={l.id} className="px-4 py-3">
               {!r || r.loading
                 ? <Loader2 className="w-4 h-4 animate-spin text-primary mx-auto" />
-                : r.neighbourhood
-                ? <SafetyBar score={r.neighbourhood.safetyScore} />
-                : <span className="text-[10px] text-muted-foreground">—</span>
+                : r.neighbourhood?.safetyScore != null
+                ? <><SafetyBar score={r.neighbourhood.safetyScore} /><p className="text-[9px] text-muted-foreground mt-1">AI estimate · not independently verified</p></>
+                : <span className="text-[10px] text-muted-foreground">Unavailable</span>
               }
             </td>
           );
@@ -422,9 +414,9 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
             <td key={l.id} className="px-4 py-3 text-center">
               {!r || r.loading
                 ? <Loader2 className="w-4 h-4 animate-spin text-primary mx-auto" />
-                : r.neighbourhood
-                ? <NoiseBadge level={r.neighbourhood.noiseLevel} />
-                : <span className="text-[10px] text-muted-foreground">—</span>
+                : r.neighbourhood?.noiseLevel != null
+                ? <><NoiseBadge level={r.neighbourhood.noiseLevel} /><p className="text-[9px] text-muted-foreground mt-1">AI estimate · not independently verified</p></>
+                : <span className="text-[10px] text-muted-foreground">Unavailable</span>
               }
             </td>
           );

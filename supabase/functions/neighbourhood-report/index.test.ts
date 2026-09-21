@@ -9,9 +9,16 @@ import {
   req,
 } from "../_shared/testUtils.ts";
 
+let activeFetch: typeof fetch =
+  (() =>
+    Promise.reject(new Error("Unmocked external request"))) as typeof fetch;
+globalThis.fetch =
+  ((...args: Parameters<typeof fetch>) => activeFetch(...args)) as typeof fetch;
+
 const { handler, restore } = await captureHandler(
   import.meta.url,
   "./index.ts",
+  { MAIPROP_EDGE_TEST_AUTH_BYPASS: "false" },
 );
 
 const okJson = (body: unknown, status = 200): Response =>
@@ -31,8 +38,8 @@ const expectValidationError = async (
   body: Record<string, unknown>,
   expectedPath: string | null,
 ): Promise<void> => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (() =>
+  const originalFetch = activeFetch;
+  activeFetch = (() =>
     Promise.reject(
       new Error("request validation reached an external dependency"),
     )) as typeof fetch;
@@ -56,7 +63,7 @@ const expectValidationError = async (
       true,
     );
   } finally {
-    globalThis.fetch = originalFetch;
+    activeFetch = originalFetch;
   }
 };
 
@@ -64,12 +71,12 @@ const withQuotaAndProviderMock = async (
   providerResponse: Response,
   run: () => Promise<void>,
 ): Promise<void> => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+  const originalFetch = activeFetch;
+  activeFetch = ((input: string | URL | Request, _init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("/auth/v1/user")) {
       return Promise.resolve(
-        okJson({ user: { id: "user-1", email: "user@test.local" } }),
+        okJson({ id: "test-user-id", email: "user@test.local" }),
       );
     }
     if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
@@ -83,12 +90,18 @@ const withQuotaAndProviderMock = async (
     ) {
       return Promise.resolve(providerResponse.clone());
     }
-    return originalFetch(input, init);
+    if (url.endsWith("/auth/login")) {
+      return Promise.resolve(okJson({ token: "os-token" }));
+    }
+    if (url.endsWith("/municipalities")) {
+      return Promise.resolve(okJson({ data: [] }));
+    }
+    throw new Error(`Unexpected external request: ${url}`);
   }) as typeof fetch;
   try {
     await run();
   } finally {
-    globalThis.fetch = originalFetch;
+    activeFetch = originalFetch;
   }
 };
 
@@ -109,8 +122,17 @@ Deno.test("missing auth returns 401", async () => {
 });
 
 Deno.test("fake Bearer returns 401 from Supabase auth (not 500)", async () => {
-  const res = await handler(authedReq("POST", { city: "Athens" }));
-  assertEquals([401, 429].includes(res.status), true);
+  const previousFetch = activeFetch;
+  activeFetch = (() =>
+    Promise.resolve(
+      okJson({ message: "Invalid token" }, 401),
+    )) as typeof fetch;
+  try {
+    const res = await handler(authedReq("POST", { city: "Athens" }));
+    assertEquals(res.status, 401);
+  } finally {
+    activeFetch = previousFetch;
+  }
 });
 
 Deno.test("rejects unbounded neighbourhood prompt fields and invalid coordinates before external calls", async () => {
@@ -157,6 +179,7 @@ Deno.test("neighbourhood production rate limiting precedes body validation", asy
 Deno.test("provider usage limit returns fallback neighbourhood report", async () => {
   await withQuotaAndProviderMock(okJson({ error: "quota" }, 429), async () => {
     const res = await handler(req("POST", {
+      responseVersion: 2,
       city: "Athens",
       address: "Syntagma",
       propertyType: "storage",
@@ -178,9 +201,13 @@ Deno.test("provider server errors return fallback neighbourhood report", async (
     new Response("upstream unavailable", { status: 503 }),
     async () => {
       const res = await handler(
-        req("POST", { city: "Athens", address: "Syntagma" }, {
-          authorization: "Bearer test-valid-token",
-        }),
+        req(
+          "POST",
+          { responseVersion: 2, city: "Athens", address: "Syntagma" },
+          {
+            authorization: "Bearer test-valid-token",
+          },
+        ),
       );
       const body = await jsonBody(res) as {
         error?: string;
@@ -196,7 +223,7 @@ Deno.test("provider server errors return fallback neighbourhood report", async (
 });
 
 Deno.test("provider outage fallback keeps mAI Prop OS municipality market data", async () => {
-  const originalFetch = globalThis.fetch;
+  const originalFetch = activeFetch;
   const prevOsUrl = Deno.env.get("MAIPROP_OS_API_URL");
   const prevOsEmail = Deno.env.get("MAIPROP_OS_EMAIL");
   const prevOsPassword = Deno.env.get("MAIPROP_OS_PASSWORD");
@@ -209,11 +236,11 @@ Deno.test("provider outage fallback keeps mAI Prop OS municipality market data",
   Deno.env.delete("GEMINI_API_KEY");
 
   let marketReportCalled = false;
-  globalThis.fetch = ((input: string | URL | Request) => {
+  activeFetch = ((input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("/auth/v1/user")) {
       return Promise.resolve(
-        okJson({ user: { id: "user-1", email: "user@test.local" } }),
+        okJson({ id: "test-user-id", email: "user@test.local" }),
       );
     }
     if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
@@ -256,11 +283,12 @@ Deno.test("provider outage fallback keeps mAI Prop OS municipality market data",
         new Response("upstream unavailable", { status: 503 }),
       );
     }
-    return originalFetch(input);
+    throw new Error(`Unexpected external request: ${url}`);
   }) as typeof fetch;
 
   try {
     const res = await handler(req("POST", {
+      responseVersion: 2,
       city: "Agios Dimitrios",
       address: "Arpis 44",
       region: "South Athens",
@@ -272,7 +300,11 @@ Deno.test("provider outage fallback keeps mAI Prop OS municipality market data",
       osMunicipalityStatus?: string;
       osMunicipalityName?: string;
       osMunicipalityDetail?: string;
-      pricePerSqmTrend?: { current?: number };
+      pricePerSqmTrend?: {
+        current?: number;
+        oneYearAgo?: number | null;
+        changeYoY?: number | null;
+      };
       areaHighlights?: string[];
     };
 
@@ -282,6 +314,8 @@ Deno.test("provider outage fallback keeps mAI Prop OS municipality market data",
     assertEquals(body.osMunicipalityStatus, "ok");
     assertEquals(body.osMunicipalityName, "Agios Dimitrios");
     assertEquals(body.pricePerSqmTrend?.current, 1819);
+    assertEquals(body.pricePerSqmTrend?.oneYearAgo, null);
+    assertEquals(body.pricePerSqmTrend?.changeYoY, null);
     assertEquals(
       body.osMunicipalityDetail?.includes("private sales: 1268"),
       true,
@@ -301,7 +335,7 @@ Deno.test("provider outage fallback keeps mAI Prop OS municipality market data",
       true,
     );
   } finally {
-    globalThis.fetch = originalFetch;
+    activeFetch = originalFetch;
     if (prevOsUrl) Deno.env.set("MAIPROP_OS_API_URL", prevOsUrl);
     else Deno.env.delete("MAIPROP_OS_API_URL");
     if (prevOsEmail) Deno.env.set("MAIPROP_OS_EMAIL", prevOsEmail);
@@ -316,7 +350,7 @@ Deno.test("provider outage fallback keeps mAI Prop OS municipality market data",
 });
 
 Deno.test("uses mAI Prop OS municipality market data in the neighbourhood prompt", async () => {
-  const originalFetch = globalThis.fetch;
+  const originalFetch = activeFetch;
   const prevOsUrl = Deno.env.get("MAIPROP_OS_API_URL");
   const prevOsEmail = Deno.env.get("MAIPROP_OS_EMAIL");
   const prevOsPassword = Deno.env.get("MAIPROP_OS_PASSWORD");
@@ -332,11 +366,11 @@ Deno.test("uses mAI Prop OS municipality market data in the neighbourhood prompt
   let marketReportCalled = false;
   const agiosDimitriosGreek =
     "\u0391\u03b3\u03af\u03bf\u03c5 \u0394\u03b7\u03bc\u03b7\u03c4\u03c1\u03af\u03bf\u03c5";
-  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+  activeFetch = ((input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("/auth/v1/user")) {
       return Promise.resolve(
-        okJson({ user: { id: "user-1", email: "user@test.local" } }),
+        okJson({ id: "test-user-id", email: "user@test.local" }),
       );
     }
     if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
@@ -431,11 +465,18 @@ Deno.test("uses mAI Prop OS municipality market data in the neighbourhood prompt
         }],
       }));
     }
-    return originalFetch(input, init);
+    if (url.endsWith("/auth/login")) {
+      return Promise.resolve(okJson({ token: "os-token" }));
+    }
+    if (url.endsWith("/municipalities")) {
+      return Promise.resolve(okJson({ data: [] }));
+    }
+    throw new Error(`Unexpected external request: ${url}`);
   }) as typeof fetch;
 
   try {
     const res = await handler(req("POST", {
+      responseVersion: 2,
       city: "Agios Dimitrios",
       address: "Arpis 44",
       region: "South Athens",
@@ -449,7 +490,11 @@ Deno.test("uses mAI Prop OS municipality market data in the neighbourhood prompt
       generatedBy?: string;
       osMunicipalityStatus?: string;
       osMunicipalityName?: string;
-      pricePerSqmTrend?: { current?: number };
+      pricePerSqmTrend?: {
+        current?: number;
+        oneYearAgo?: number | null;
+        changeYoY?: number | null;
+      };
     };
 
     assertEquals(res.status, 200);
@@ -477,8 +522,10 @@ Deno.test("uses mAI Prop OS municipality market data in the neighbourhood prompt
     assertEquals(body.osMunicipalityStatus, "ok");
     assertEquals(body.osMunicipalityName, agiosDimitriosGreek);
     assertEquals(body.pricePerSqmTrend?.current, 1819);
+    assertEquals(body.pricePerSqmTrend?.oneYearAgo, null);
+    assertEquals(body.pricePerSqmTrend?.changeYoY, null);
   } finally {
-    globalThis.fetch = originalFetch;
+    activeFetch = originalFetch;
     if (prevOsUrl) Deno.env.set("MAIPROP_OS_API_URL", prevOsUrl);
     else Deno.env.delete("MAIPROP_OS_API_URL");
     if (prevOsEmail) Deno.env.set("MAIPROP_OS_EMAIL", prevOsEmail);
@@ -492,20 +539,20 @@ Deno.test("uses mAI Prop OS municipality market data in the neighbourhood prompt
   }
 });
 
-Deno.test("clamps AI neighbourhood scores before returning and persisting", async () => {
-  const originalFetch = globalThis.fetch;
+Deno.test("clamps and labels AI estimates without persisting unsupported scores", async () => {
+  const originalFetch = activeFetch;
   const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
   const prevGemini = Deno.env.get("GEMINI_API_KEY");
   Deno.env.set("OPENAI_API_KEY", "openai-test");
   Deno.env.delete("GEMINI_API_KEY");
 
   let updatePayload: Record<string, unknown> | null = null;
-  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+  activeFetch = ((input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     const method = input instanceof Request ? input.method : init?.method;
     if (url.includes("/auth/v1/user")) {
       return Promise.resolve(
-        okJson({ user: { id: "user-1", email: "user@test.local" } }),
+        okJson({ id: "test-user-id", email: "user@test.local" }),
       );
     }
     if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
@@ -575,6 +622,7 @@ Deno.test("clamps AI neighbourhood scores before returning and persisting", asyn
 
   try {
     const res = await handler(req("POST", {
+      responseVersion: 2,
       city: "Athens",
       address: "Syntagma",
       listingId: "11111111-1111-4111-8111-111111111111",
@@ -590,16 +638,269 @@ Deno.test("clamps AI neighbourhood scores before returning and persisting", asyn
     assertEquals(body.noiseLevel?.score, 10);
     assertEquals(body.safetyScore?.score, 1);
     const persistedScores = updatePayload as Record<string, unknown> | null;
-    assertEquals(persistedScores?.["walkability_score"], 100);
-    assertEquals(persistedScores?.["noise_score"], 10);
-    assertEquals(persistedScores?.["safety_score"], 1);
+    assertEquals(persistedScores, null);
   } finally {
-    globalThis.fetch = originalFetch;
+    activeFetch = originalFetch;
     if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
     else Deno.env.delete("OPENAI_API_KEY");
     if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
     else Deno.env.delete("GEMINI_API_KEY");
   }
+});
+
+// All provider/configuration paths use test doubles, never live services.
+const scenario = async (options: {
+  raw?: string;
+  failure?: boolean;
+  noConfig?: boolean;
+  noOsConfig?: boolean;
+  denied?: boolean;
+  version?: number;
+  marketText?: string;
+}) => {
+  const previousFetch = activeFetch;
+  const keys = [
+    "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
+    "MAIPROP_OS_API_URL",
+    "MAIPROP_OS_URL",
+    "MAIPROP_OS_EMAIL",
+    "MAIPROP_OS_PASSWORD",
+  ];
+  const previous = keys.map((key) => Deno.env.get(key));
+  let reservations = 0, providerCalls = 0, listingWrites = 0;
+  Deno.env.set("OPENAI_API_KEY", "test-key");
+  Deno.env.delete("GEMINI_API_KEY");
+  if (options.noConfig) Deno.env.delete("OPENAI_API_KEY");
+  Deno.env.set("MAIPROP_OS_API_URL", "https://os.test");
+  Deno.env.set("MAIPROP_OS_EMAIL", "test@example.test");
+  Deno.env.set("MAIPROP_OS_PASSWORD", "test-password");
+  if (options.noOsConfig) Deno.env.delete("MAIPROP_OS_PASSWORD");
+  activeFetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ id: "test-user-id" }));
+    }
+    if (url.includes("/reserve_ai_quota_for_user")) {
+      reservations++;
+      return Promise.resolve(
+        okJson({
+          allowed: !options.denied,
+          reason: options.denied ? "monthly_limit_reached" : null,
+          used: 1,
+          limit: 5,
+        }),
+      );
+    }
+    if (url.startsWith("https://os.test")) {
+      assertEquals(reservations, 1);
+      if (url.endsWith("/auth/login")) {
+        return Promise.resolve(okJson({ token: "token" }));
+      }
+      if (url.endsWith("/municipalities")) {
+        return Promise.resolve(okJson({
+          data: options.marketText
+            ? [{ municipalityId: 7, municipalityName: "Fictionopolis" }]
+            : [],
+        }));
+      }
+      return Promise.resolve(new Response(options.marketText));
+    }
+    if (url.includes("api.openai.com")) {
+      assertEquals(reservations, 1);
+      providerCalls++;
+      return Promise.resolve(
+        options.failure ? okJson({ error: "unavailable" }, 503) : okJson({
+          choices: [{ message: { content: options.raw ?? "not json" } }],
+        }),
+      );
+    }
+    if (url.includes("/listings")) {
+      if (init?.method === "PATCH") listingWrites++;
+      return Promise.resolve(okJson({ owner_id: "test-user-id" }));
+    }
+    throw new Error(`Unexpected external request: ${url}`);
+  }) as typeof fetch;
+  try {
+    validationRequestNumber++;
+    const res = await handler(req("POST", {
+      city: "Fictionopolis",
+      listingId: "11111111-1111-4111-8111-111111111111",
+      ...(options.version ? { responseVersion: options.version } : {}),
+    }, {
+      authorization: "Bearer test-valid-token",
+      "x-forwarded-for": `10.2.0.${validationRequestNumber}`,
+    }));
+    return {
+      status: res.status,
+      body: await jsonBody(res) as Record<string, unknown> & {
+        pricePerSqmTrend: Record<string, number | null>;
+        provenance: {
+          analysis: { source: string };
+          pricePerSqmTrend: Record<
+            string,
+            {
+              source?: string;
+              method?: string;
+              year?: number;
+              privateSalesAverage?: number;
+            }
+          >;
+        };
+      },
+      reservations,
+      providerCalls,
+      listingWrites,
+    };
+  } finally {
+    activeFetch = previousFetch;
+    keys.forEach((key, i) =>
+      previous[i] === undefined
+        ? Deno.env.delete(key)
+        : Deno.env.set(key, previous[i]!)
+    );
+  }
+};
+
+for (
+  const mode of [
+    "provider failure",
+    "malformed JSON",
+    "missing configuration",
+    "wrong JSON shape",
+  ] as const
+) {
+  Deno.test(`${mode}: fictional city has no invented facts or persisted scores`, async () => {
+    const result = await scenario({
+      version: 2,
+      failure: mode === "provider failure",
+      noConfig: mode === "missing configuration",
+      raw: mode === "wrong JSON shape" ? "[]" : undefined,
+    });
+    assertEquals(result.status, 200);
+    assertEquals(result.body.responseVersion, 2);
+    assertEquals(result.body.pricePerSqmTrend, {
+      current: null,
+      oneYearAgo: null,
+      threeYearsAgo: null,
+      fiveYearsAgo: null,
+      changeYoY: null,
+      change5Y: null,
+    });
+    assertEquals(result.body.walkabilityScore, null);
+    assertEquals(result.body.noiseLevel, null);
+    assertEquals(result.body.safetyScore, null);
+    assertEquals(result.body.demographics, null);
+    assertEquals(result.body.investmentOutlook, null);
+    assertEquals(result.body.developmentProjects, []);
+    assertEquals(result.body.areaHighlights, []);
+    assertEquals(result.reservations, 1);
+    assertEquals(result.listingWrites, 0);
+    assertEquals(
+      result.providerCalls,
+      mode === "missing configuration" ? 0 : 1,
+    );
+  });
+}
+
+Deno.test("legacy unavailable response uses the handled error envelope before numeric rendering", async () => {
+  const { status, body } = await scenario({ failure: true });
+  assertEquals(status, 503);
+  assertEquals<unknown>(body, {
+    error: "Neighbourhood report data is unavailable. Please try again later.",
+    code: "neighbourhood_data_unavailable",
+  });
+});
+
+Deno.test("denied quota performs no OS or AI work and no listing writes", async () => {
+  const result = await scenario({ version: 2, denied: true });
+  assertEquals(result.status, 429);
+  assertEquals(result.reservations, 1);
+  assertEquals(result.providerCalls, 0);
+  assertEquals(result.listingWrites, 0);
+});
+
+Deno.test("independently dated OS history survives AI failure without invented intermediate observations", async () => {
+  const year = new Date().getFullYear();
+  const { body } = await scenario({
+    version: 2,
+    failure: true,
+    marketText:
+      `Private Sales Municipality - average price 2,000 EUR / sq.m. Private Sales Municipality ${
+        year - 1
+      } - average price 1,600 EUR / sq.m. Private Sales Municipality ${
+        year - 5
+      } - average price 1,000 EUR / sq.m.`,
+  });
+  assertEquals(body.pricePerSqmTrend, {
+    current: 2000,
+    oneYearAgo: 1600,
+    threeYearsAgo: null,
+    fiveYearsAgo: 1000,
+    changeYoY: 25,
+    change5Y: 100,
+  });
+  assertEquals(
+    body.provenance.pricePerSqmTrend.oneYearAgo.source,
+    "maiprop_os",
+  );
+  assertEquals(body.provenance.pricePerSqmTrend.oneYearAgo.year, year - 1);
+});
+
+Deno.test("provider cannot claim trusted fallback provenance to bypass normalization", async () => {
+  const { body } = await scenario({
+    version: 2,
+    raw: JSON.stringify({
+      generatedBy: "fallback",
+      pricePerSqmTrend: { current: 98765 },
+      developmentProjects: [{ name: "Invented mall" }],
+    }),
+  });
+  assertEquals(body.pricePerSqmTrend.current, null);
+  assertEquals(body.developmentProjects, []);
+  assertEquals(body.provenance.analysis.source, "ai_estimate");
+});
+
+Deno.test("OS current asks and dated private sales have distinct provenance and comparable changes", async () => {
+  const year = new Date().getFullYear();
+  const { body } = await scenario({
+    version: 2,
+    noConfig: true,
+    marketText:
+      `Private Sales Municipality - average price 2,000 EUR / sq.m. Public Listings Municipality - average price 4,000 EUR / sq.m. Private Sales Municipality ${
+        year - 1
+      } - average price 1,600 EUR / sq.m.`,
+  });
+  assertEquals(body.pricePerSqmTrend.current, 2600);
+  assertEquals(body.pricePerSqmTrend.oneYearAgo, 1600);
+  assertEquals(body.pricePerSqmTrend.changeYoY, 25);
+  assertEquals(
+    body.provenance.pricePerSqmTrend.current.privateSalesAverage,
+    2000,
+  );
+  assertEquals(
+    body.provenance.pricePerSqmTrend.changeYoY.method,
+    "private_sales_comparison",
+  );
+});
+
+Deno.test("missing OS configuration leaves every market observation unavailable", async () => {
+  const { body } = await scenario({
+    version: 2,
+    noOsConfig: true,
+    raw: JSON.stringify({
+      pricePerSqmTrend: { current: 1234, oneYearAgo: 1000 },
+      demographics: "malformed",
+      noiseLevel: { score: "bogus" },
+      areaHighlights: [42],
+    }),
+  });
+  assertEquals(body.osMunicipalityStatus, "missing_config");
+  assertEquals(body.pricePerSqmTrend.current, null);
+  assertEquals(body.pricePerSqmTrend.oneYearAgo, null);
+  assertEquals(body.noiseLevel, null);
+  assertEquals(body.demographics, null);
+  assertEquals(body.areaHighlights, []);
 });
 
 restore();
