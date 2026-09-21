@@ -490,6 +490,27 @@ describe("NewBuildDetail", () => {
     expect(screen.getByText("A101 floor plan")).toBeInTheDocument();
   });
 
+  it("renders the public owner identity with neutral developer wording when no verification decision exists", () => {
+    useQueryMock.mockReturnValue({
+      data: {
+        ...listing,
+        profiles: {
+          user_id: "owner-1",
+          display_name: "Mai Developer",
+          avatar_url: null,
+        },
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    renderPage();
+
+    expect(screen.getByText("Mai Developer")).toBeInTheDocument();
+    expect(screen.getAllByText("Developer").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Verified developer")).not.toBeInTheDocument();
+  });
+
   it("starts conversations from contact affordances and writes interest records for signed-in users", async () => {
     useAuthMock.mockReturnValue({
       user: { id: "buyer-1", email: "buyer@example.com" },

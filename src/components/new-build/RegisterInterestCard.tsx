@@ -59,7 +59,7 @@ export function RegisterInterestCard({
           </div>
           <p className="font-display font-bold text-base mb-1">{tr("newBuildDetail.interestCard.submittedTitle", "Interest registered!")}</p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            {tr("newBuildDetail.interestCard.submittedBody", "The developer has been notified. Expect a response within 1-2 business days with unit availability and pricing.")}
+            {tr("newBuildDetail.interestCard.submittedBody", "Your enquiry was saved successfully.")}
           </p>
           <div className="mt-4 space-y-2">
             <div className="rounded-lg bg-secondary/60 border border-border px-3 py-2.5 text-xs text-muted-foreground flex items-center gap-2">

@@ -49,6 +49,9 @@ describe("RegisterInterestCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Register Interest" }));
 
     expect(await screen.findByText("Interest registered!")).toBeInTheDocument();
+    expect(screen.getByText("Your enquiry was saved successfully.")).toBeInTheDocument();
+    expect(screen.queryByText(/developer has been notified/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1-2 business days/i)).not.toBeInTheDocument();
     expect(onContact).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });

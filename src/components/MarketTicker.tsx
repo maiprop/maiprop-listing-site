@@ -1,33 +1,5 @@
-import { usePriceIndex } from "@/hooks/usePriceIndex";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPublicApi } from "@/lib/publicApi";
-import { useState, useEffect, useRef } from "react";
-
-// ── Sparkline paths – pre-generated organic waves per city ────────────────────
-const SPARKLINES: Record<string, string> = {
-  Athens: "M0,14 C4,10 8,18 12,12 C16,6 20,16 24,10 C28,4 32,14 36,8 C40,2 44,12 48,8",
-  Thessaloniki: "M0,12 C4,16 8,8 12,14 C16,20 20,10 24,16 C28,12 32,18 36,12 C40,8 44,14 48,10",
-  Mykonos: "M0,16 C4,8 8,14 12,6 C16,2 20,10 24,4 C28,8 32,4 36,10 C40,6 44,14 48,8",
-  Glyfada: "M0,10 C4,14 8,8 12,12 C16,16 20,8 24,14 C28,10 32,6 36,12 C40,8 44,12 48,6",
-  Rhodes: "M0,8 C4,12 8,4 12,10 C16,6 20,14 24,8 C28,4 32,10 36,6 C40,12 44,8 48,4",
-  Santorini: "M0,14 C4,10 8,16 12,8 C16,4 20,12 24,6 C28,10 32,4 36,8 C40,2 44,10 48,6",
-  Kifisia: "M0,12 C4,8 8,14 12,10 C16,6 20,12 24,8 C28,14 32,10 36,14 C40,8 44,12 48,10",
-  Piraeus: "M0,8 C4,12 8,10 12,14 C16,16 20,12 24,16 C28,14 32,16 36,18 C40,14 44,16 48,18",
-  Heraklion: "M0,12 C4,8 8,12 12,8 C16,6 20,10 24,8 C28,12 32,8 36,10 C40,6 44,10 48,8",
-};
-
-// ── Static trends per city ────────────────────────────────────────────────────
-const CITY_CHANGES: Record<string, { change: number; up: boolean }> = {
-  Athens: { change: 1.2, up: true },
-  Thessaloniki: { change: 0.8, up: true },
-  Mykonos: { change: 2.3, up: true },
-  Glyfada: { change: 1.7, up: true },
-  Rhodes: { change: 3.2, up: true },
-  Santorini: { change: 1.9, up: true },
-  Kifisia: { change: 0.6, up: true },
-  Piraeus: { change: -0.3, up: false },
-  Heraklion: { change: 1.4, up: true },
-};
 
 const DISPLAY_CITIES = [
   "Athens",
@@ -41,18 +13,6 @@ const DISPLAY_CITIES = [
   "Heraklion",
 ];
 
-const STATIC_PRICES: Record<string, number> = {
-  Athens: 2840,
-  Thessaloniki: 1920,
-  Mykonos: 6450,
-  Glyfada: 3760,
-  Rhodes: 2299,
-  Santorini: 5120,
-  Kifisia: 4180,
-  Piraeus: 1740,
-  Heraklion: 1880,
-};
-
 const MARKET_TREND_COLORS = {
   rise: {
     accent: "hsl(164 82% 52%)",
@@ -64,81 +24,91 @@ const MARKET_TREND_COLORS = {
     soft: "hsl(356 78% 62% / 0.12)",
     chip: "linear-gradient(135deg, hsl(356 72% 44%), hsl(346 76% 50%))",
   },
+  unavailable: {
+    accent: "hsl(220 12% 58%)",
+    soft: "hsl(220 12% 58% / 0.08)",
+    chip: "hsl(220 16% 22%)",
+  },
 };
 
-function getTrendColor(up: boolean) {
-  return up ? MARKET_TREND_COLORS.rise : MARKET_TREND_COLORS.fall;
+type MarketRow = {
+  city: string;
+  price: number | null;
+  priceKind: "observed" | "estimate" | "unavailable";
+  trendChange: number | null;
+  trendUp: boolean | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function Sparkline({ city, accent }: { city: string; accent: string }) {
-  const d = SPARKLINES[city] ?? SPARKLINES.Athens;
-  return (
-    <svg width="40" height="20" viewBox="0 0 48 22" fill="none" className="shrink-0">
-      <defs>
-        <linearGradient id={`spark-${city}-stroke`} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={accent} stopOpacity="0.5" />
-          <stop offset="100%" stopColor={accent} stopOpacity="1" />
-        </linearGradient>
-      </defs>
-      <path d={d} stroke={`url(#spark-${city}-stroke)`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+function buildMarketRow(data: unknown, city: string): MarketRow {
+  const raw = Array.isArray(data)
+    ? data.find((candidate) => isRecord(candidate) && candidate.city === city)
+    : undefined;
+  if (!isRecord(raw)) {
+    return { city, price: null, priceKind: "unavailable", trendChange: null, trendUp: null };
+  }
+
+  const listingCount = raw.listing_count;
+  const isLive = raw.is_live;
+  const price = raw.avg_price_per_sqm;
+  const validCount = Number.isSafeInteger(listingCount) && Number(listingCount) >= 0;
+  const validPrice =
+    validCount &&
+    typeof isLive === "boolean" &&
+    typeof price === "number" &&
+    Number.isFinite(price) &&
+    price > 0 &&
+    (!isLive || Number(listingCount) > 0);
+  const trendChange = raw.trend_change_pct;
+  const validTrend =
+    raw.trend_is_live === true &&
+    typeof trendChange === "number" &&
+    Number.isFinite(trendChange);
+
+  return {
+    city,
+    price: validPrice ? price : null,
+    priceKind: validPrice ? (isLive ? "observed" : "estimate") : "unavailable",
+    trendChange: validTrend ? trendChange : null,
+    trendUp: validTrend ? trendChange >= 0 : null,
+  };
 }
 
-// ── Live flicker hook ─────────────────────────────────────────────────────────
-function useLiveFlicker(basePrices: Record<string, number>) {
-  const [prices, setPrices] = useState<Record<string, number>>(basePrices);
-  const [flickeringCity, setFlickeringCity] = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+function getTrendColor(trendUp: boolean | null) {
+  if (trendUp == null) return MARKET_TREND_COLORS.unavailable;
+  return trendUp ? MARKET_TREND_COLORS.rise : MARKET_TREND_COLORS.fall;
+}
 
-  useEffect(() => {
-    const cities = Object.keys(basePrices);
-    const tick = () => {
-      const city = cities[Math.floor(Math.random() * cities.length)];
-      const base = basePrices[city];
-      const delta = base * (0.0005 + Math.random() * 0.002) * (Math.random() > 0.35 ? 1 : -1);
-      setPrices((prev) => ({ ...prev, [city]: Math.round(prev[city] + delta) }));
-      setFlickeringCity(city);
-      setTimeout(() => setFlickeringCity(null), 700);
-      timerRef.current = setTimeout(tick, 2800 + Math.random() * 600);
-    };
-    timerRef.current = setTimeout(tick, 1500);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+function formatPrice(value: number) {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
 
-  return { prices, flickeringCity };
+function formatAuctionCount(value: unknown): string | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value.toLocaleString()
+    : null;
 }
 
 export function MarketTicker() {
-  const { data: liveData, isLoading } = usePriceIndex();
+  const { data: marketData, isLoading: marketIsLoading } = useQuery({
+    queryKey: ["price-index"],
+    queryFn: ({ signal }) => fetchPublicApi<unknown>("/api/public/homepage?section=price-index", { signal }),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 
-  const { data: auctionCount } = useQuery({
+  const { data: auctionCount, isLoading: auctionCountIsLoading } = useQuery({
     queryKey: ["auction-count-today"],
-    queryFn: async ({ signal }) => {
-      return (await fetchPublicApi<number>("/api/public/homepage?section=auction-count", { signal })) ?? 47;
-    },
+    queryFn: ({ signal }) => fetchPublicApi<unknown>("/api/public/homepage?section=auction-count", { signal }),
     staleTime: 5 * 60 * 1000,
   });
 
-  const baseRows = DISPLAY_CITIES.map((city) => {
-    const live = liveData?.find((d) => d.city === city);
-    const price = live?.is_live ? live.avg_price_per_sqm : (STATIC_PRICES[city] ?? 0);
-    const fallbackTrend = CITY_CHANGES[city] ?? { change: 1.0, up: true };
-    const hasLiveTrend = live?.trend_is_live && typeof live.trend_change_pct === "number";
-    const trend = hasLiveTrend
-      ? { change: Math.abs(live.trend_change_pct ?? 0), up: live.trend_up ?? ((live.trend_change_pct ?? 0) >= 0) }
-      : fallbackTrend;
-    return { city, price, ...trend, isLive: live?.is_live ?? false, trendIsLive: Boolean(hasLiveTrend) };
-  });
-
-  const basePriceMap = Object.fromEntries(baseRows.map((r) => [r.city, r.price]));
-  const { prices: livePrices, flickeringCity } = useLiveFlicker(basePriceMap);
-  const rows = baseRows.map((r) => ({ ...r, price: livePrices[r.city] ?? r.price }));
-
-  // Duplicate rows for seamless infinite scroll
+  const rows = DISPLAY_CITIES.map((city) => buildMarketRow(marketData, city));
   const scrollRows = [...rows, ...rows];
+  const formattedAuctionCount = formatAuctionCount(auctionCount);
 
   return (
     <div
@@ -153,13 +123,11 @@ export function MarketTicker() {
           "0 0 0 1px hsl(0 0% 100% / 0.04), 0 16px 38px -12px hsl(220 60% 3% / 0.55)",
       }}
     >
-      {/* Subtle ambient glow */}
       <div
         className="absolute -inset-px rounded-2xl pointer-events-none"
         style={{ boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.08)" }}
       />
 
-      {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-2 border-b"
         style={{
@@ -168,52 +136,43 @@ export function MarketTicker() {
         }}
       >
         <div className="flex items-center gap-2">
-          <span className="relative flex w-2 h-2 shrink-0">
-            <span
-              className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40"
-              style={{ background: MARKET_TREND_COLORS.rise.accent }}
-            />
-            <span
-              className="relative inline-flex rounded-full w-2 h-2"
-              style={{ background: MARKET_TREND_COLORS.rise.accent }}
-            />
-          </span>
+          <span
+            className="relative inline-flex rounded-full w-2 h-2 shrink-0"
+            style={{ background: MARKET_TREND_COLORS.rise.accent }}
+          />
           <span
             className="text-[10px] font-black tracking-widest uppercase"
             style={{ color: MARKET_TREND_COLORS.rise.accent }}
           >
-            Live Market
+            Market data
           </span>
         </div>
         <div
           className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
           style={{ background: MARKET_TREND_COLORS.rise.soft, border: `1px solid ${MARKET_TREND_COLORS.rise.accent}` }}
         >
-          <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: MARKET_TREND_COLORS.rise.accent }} />
+          <span className="w-1 h-1 rounded-full" style={{ background: MARKET_TREND_COLORS.rise.accent }} />
           <span
             className="text-[8px] font-black tracking-widest uppercase"
             style={{ color: MARKET_TREND_COLORS.rise.accent }}
           >
-            {isLoading ? "…" : "LIVE"}
+            {marketIsLoading ? "…" : "Latest available"}
           </span>
         </div>
       </div>
 
-      {/* Scrolling city rows — clipped container */}
       <div className="overflow-hidden" style={{ height: "calc(7 * 36px)" }}>
         <div className="ticker-scroll-rows" style={{ animationPlayState: "running" }}>
-          {scrollRows.map((row, i) => {
-            const isFlickering = flickeringCity === row.city && i < rows.length;
-            const trend = getTrendColor(row.up);
+          {scrollRows.map((row, index) => {
+            const trend = getTrendColor(row.trendUp);
             return (
               <div
-                key={`${row.city}-${i}`}
+                key={`${row.city}-${index}`}
+                data-market-row
                 className="flex items-center gap-2.5 px-4 transition-all duration-300"
                 style={{
                   height: "36px",
-                  background: isFlickering
-                    ? trend.soft
-                    : `linear-gradient(90deg, ${trend.soft}, hsl(220 28% 7% / 0.50) 54%, hsl(220 24% 8% / 0.40))`,
+                  background: `linear-gradient(90deg, ${trend.soft}, hsl(220 28% 7% / 0.50) 54%, hsl(220 24% 8% / 0.40))`,
                   borderBottom: "1px solid hsl(0 0% 100% / 0.07)",
                 }}
               >
@@ -224,32 +183,35 @@ export function MarketTicker() {
                 />
                 <span
                   className="w-[5.5rem] text-[11px] font-semibold transition-colors duration-300 truncate"
-                  style={{ color: isFlickering ? "hsl(0 0% 100%)" : "hsl(220 20% 88%)" }}
+                  style={{ color: "hsl(220 20% 88%)" }}
                 >
                   {row.city}
                 </span>
 
-                <Sparkline city={row.city} accent={trend.accent} />
-
-                <span
-                  className="flex-1 text-right text-[11px] font-bold tabular-nums transition-colors duration-300"
-                  style={{ color: isFlickering ? "hsl(0 0% 100%)" : "hsl(0 0% 96%)" }}
-                >
-                  €{row.price.toLocaleString()}
-                  {!row.isLive && <span className="text-[8px] font-normal ml-0.5 opacity-50">est.</span>}
+                <span className="w-10 text-center text-[8px] uppercase tracking-wide" style={{ color: "hsl(220 16% 66%)" }}>
+                  {row.priceKind === "observed" ? "Observed" : row.priceKind === "estimate" ? "Estimate" : "—"}
                 </span>
 
                 <span
-                  className="w-14 text-right text-[10px] font-black tabular-nums px-1 py-0.5 rounded"
+                  className="flex-1 text-right text-[11px] font-bold tabular-nums transition-colors duration-300"
+                  style={{ color: "hsl(0 0% 96%)" }}
+                >
+                  {row.price == null ? "Unavailable" : `€${formatPrice(row.price)}`}
+                </span>
+
+                <span
+                  className="w-16 text-right text-[10px] font-black tabular-nums px-1 py-0.5 rounded"
                   style={{
                     color: "hsl(0 0% 100%)",
                     background: trend.chip,
-                    border: row.trendIsLive ? "1px solid hsl(0 0% 100% / 0.18)" : "1px solid hsl(0 0% 100% / 0.10)",
-                    opacity: row.trendIsLive ? 1 : 0.78,
+                    border: "1px solid hsl(0 0% 100% / 0.12)",
+                    opacity: row.trendChange == null ? 0.7 : 1,
                   }}
-                  title={row.trendIsLive ? "Live trend from recent listings" : "Estimated market signal"}
+                  title={row.trendChange == null ? "Trend unavailable" : "Observed trend from recent listings"}
                 >
-                  {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
+                  {row.trendChange == null
+                    ? "Unavailable"
+                    : `${row.trendUp ? "▲" : "▼"} ${Math.abs(row.trendChange).toFixed(1)}%`}
                 </span>
               </div>
             );
@@ -257,7 +219,6 @@ export function MarketTicker() {
         </div>
       </div>
 
-      {/* Footer */}
       <div
         className="px-4 py-2 flex items-center justify-between"
         style={{
@@ -275,11 +236,10 @@ export function MarketTicker() {
           className="text-[11px] font-black tabular-nums px-1.5 py-0.5 rounded"
           style={{ color: "hsl(0 0% 100%)", background: "hsl(0 0% 100% / 0.10)" }}
         >
-          {auctionCount ?? 47}
+          {auctionCountIsLoading ? "…" : formattedAuctionCount ?? "Unavailable"}
         </span>
       </div>
 
-      {/* Caption */}
       <div
         className="px-4 pb-2 pt-0.5 text-[8px] tracking-widest uppercase flex items-center gap-1.5"
         style={{ color: "hsl(220 16% 78% / 0.52)" }}

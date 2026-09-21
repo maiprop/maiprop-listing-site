@@ -23,15 +23,15 @@ export function OSSection() {
               <span className="gradient-text-primary">Data Gateway</span>
             </h2>
             <p className="text-muted-foreground leading-relaxed mb-6">
-              Every data on mAI prop is powered by mAI prop OS — our proprietary data platform aggregating Greek
-              cadastre records, judicial auctions, price indices, and predictive analytics into one live dashboard.
+              mAI Prop OS brings selected Greek property and auction datasets together with price analysis, mapping,
+              reporting, and portfolio tools.
             </p>
             <ul className="space-y-3 mb-8">
               {[
-                "Real-time €/m² indices for every Greek region",
-                "3,200+ monthly judicial & bank auctions",
-                "AI-powered investment scoring & portfolio tools",
-                "Automated property reports in minutes",
+                "Property and auction data for supported coverage areas",
+                "Price analysis, mapped data, and investment tools",
+                "Portfolio workflows and configurable reports",
+                "Tools for reviewing judicial and bank auction opportunities",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-sm text-muted-foreground">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />

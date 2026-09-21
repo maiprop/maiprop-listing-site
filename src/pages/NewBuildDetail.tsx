@@ -780,7 +780,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
                       )}
                       <div>
                         <p className="font-semibold text-sm">{owner.display_name ?? tr("newBuildDetail.sidebar.developer", "Developer")}</p>
-                        <p className="text-xs text-muted-foreground">{tr("newBuildDetail.sidebar.verifiedDeveloper", "Verified developer")}</p>
+                        <p className="text-xs text-muted-foreground">{tr("newBuildDetail.sidebar.developer", "Developer")}</p>
                       </div>
                     </div>
                   </div>

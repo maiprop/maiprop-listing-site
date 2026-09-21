@@ -1,25 +1,6 @@
-import { useState, useEffect } from "react";
-
-/** Animated mockup of the os.maiprop.co investment dashboard used in the hero section. */
+/** Static sample of the os.maiprop.co investment dashboard used in the homepage section. */
 export function OSDashboardMockup() {
-  const [flickeringIdx, setFlickeringIdx] = useState<number | null>(null);
-  const [prices, setPrices] = useState([2860, 1920, 6450, 3772, 2290, 5120, 4180]);
-
-  useEffect(() => {
-    const basePrices = [2860, 1920, 6450, 3772, 2290, 5120, 4180];
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      const idx = Math.floor(Math.random() * basePrices.length);
-      const base = basePrices[idx];
-      const delta = Math.round(base * (0.001 + Math.random() * 0.003) * (Math.random() > 0.35 ? 1 : -1));
-      setPrices((prev) => prev.map((p, i) => (i === idx ? p + delta : p)));
-      setFlickeringIdx(idx);
-      setTimeout(() => setFlickeringIdx(null), 700);
-      timer = setTimeout(tick, 2800 + Math.random() * 600);
-    };
-    timer = setTimeout(tick, 1500);
-    return () => clearTimeout(timer);
-  }, []);
+  const prices = [2860, 1920, 6450, 3772, 2290, 5120, 4180];
 
   const marketData = [
     { city: "Athens",       delta: "▲1.3%" },
@@ -64,6 +45,9 @@ export function OSDashboardMockup() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <div className="text-[7px] px-2 py-1 rounded-full font-bold" style={{ background: "hsl(183 100% 50% / 0.12)", color: "hsl(183 100% 70%)" }}>
+            Demo · Sample data
+          </div>
           <div className="text-[7px] px-2 py-1 rounded-full font-bold" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}>
             START FOR FREE
           </div>
@@ -110,34 +94,33 @@ export function OSDashboardMockup() {
           </div>
         </div>
 
-        {/* Right: Live Market widget */}
+        {/* Right: static sample market widget */}
         <div className="w-44 shrink-0 mr-4 mt-4 mb-4 rounded-xl overflow-hidden border flex flex-col" style={{ background: "hsl(220 30% 10%)", borderColor: "rgba(255,255,255,0.1)" }}>
           <div className="flex items-center justify-between px-2.5 py-1.5 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: "hsl(183 100% 50%)" }} />
-              <span className="text-[7px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.6)" }}>Live Market</span>
+              <span className="text-[7px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.6)" }}>Sample market data</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "hsl(183 100% 50%)" }} />
-              <span className="text-[6px] font-bold" style={{ color: "hsl(183 100% 60%)" }}>LIVE</span>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "hsl(183 100% 50%)" }} />
+              <span className="text-[6px] font-bold" style={{ color: "hsl(183 100% 60%)" }}>DEMO</span>
             </div>
           </div>
           <div className="flex-1 overflow-hidden">
             {marketData.map((row, i) => {
-              const isFlick = flickeringIdx === i;
               return (
                 <div
                   key={row.city}
-                  className="flex items-center gap-1 px-2.5 py-[3px] border-b last:border-0 transition-all duration-300"
-                  style={{ borderColor: "rgba(255,255,255,0.04)", background: isFlick ? "rgba(0,255,240,0.07)" : "transparent" }}
+                  className="flex items-center gap-1 px-2.5 py-[3px] border-b last:border-0"
+                  style={{ borderColor: "rgba(255,255,255,0.04)" }}
                 >
-                  <span className="text-[7px] w-16 truncate transition-colors duration-300" style={{ color: isFlick ? "hsl(183 100% 75%)" : "rgba(255,255,255,0.7)" }}>
+                  <span className="text-[7px] w-16 truncate" style={{ color: "rgba(255,255,255,0.7)" }}>
                     {row.city}
                   </span>
                   <svg viewBox="0 0 30 12" className="w-7 h-2.5 shrink-0" preserveAspectRatio="none">
                     <path d={sparklines[i]} fill="none" stroke="hsl(183 100% 50%)" strokeWidth="1.2" strokeLinecap="round" />
                   </svg>
-                  <span className="text-[7px] font-bold ml-auto transition-colors duration-300" style={{ color: isFlick ? "hsl(183 100% 70%)" : "rgba(255,255,255,0.9)" }}>
+                  <span className="text-[7px] font-bold ml-auto" style={{ color: "rgba(255,255,255,0.9)" }}>
                     {prices[i].toLocaleString()}
                   </span>
                   <span className="text-[6px] font-bold w-8 text-right" style={{ color: "hsl(142 70% 55%)" }}>
@@ -151,12 +134,12 @@ export function OSDashboardMockup() {
             <div className="flex items-center justify-between mb-0.5">
               <div className="flex items-center gap-1">
                 <span className="text-[8px]">⚡</span>
-                <span className="text-[6px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.4)" }}>New Auctions Today</span>
+                <span className="text-[6px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.4)" }}>Sample Auctions</span>
               </div>
               <span className="text-[11px] font-black" style={{ color: "hsl(183 100% 60%)" }}>47</span>
             </div>
             <div className="text-[6px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-              Latest: <span style={{ color: "rgba(255,255,255,0.6)" }}>Apartment · Athens</span>
+              Example: <span style={{ color: "rgba(255,255,255,0.6)" }}>Apartment · Athens</span>
             </div>
             <div className="text-[7px] font-bold mt-0.5" style={{ color: "hsl(183 100% 50%)" }}>€128,000</div>
           </div>
