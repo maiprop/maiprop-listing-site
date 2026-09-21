@@ -50,7 +50,7 @@
 ### 3. Release readiness
 
 - [x] Obtain a fresh independent review of the local SQL/source preparation and its boundaries. Two public-RPC authorization issues were reproduced RED, corrected and verified GREEN; final scoped preparation review passes.
-- [ ] Bind the scoped database migration and matching website artifact to the same reviewed source and immutable digests, using the existing release authorization, staging, evidence and rollback requirements.
+- [x] Bind the scoped database migration and matching website artifact to the same reviewed source and immutable digests, using the existing release authorization, staging, evidence and rollback requirements. The manual auction workflow retains the production lock and takes the shared staging lock. It requires original successful main CI and one dispatch per reviewed control SHA. Deployment verification remains pending.
 - [ ] Run one controlled release only after local and staging proof. Stop on a failed gate without repeated paid attempts.
 - [ ] Verify a non-empty production auction response and the live page. Record actual timings. Do not describe local preparation as live restoration.
 

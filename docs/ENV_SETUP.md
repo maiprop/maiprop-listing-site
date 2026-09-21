@@ -491,3 +491,8 @@ CI intentionally uses **stub** Supabase URL + key (format-valid placeholders in 
 - **"No such price" during Stripe checkout** — the Stripe key is pointed at the wrong account for the configured price IDs. Run `npm run check:stripe-account`; test/staging prices must be from `acct_1TnuLbGfkWWBWEyh`, while live prices must be from `acct_1TnuLTGfOEgBOxtl`.
 - **Sentry never receives events** — `VITE_SENTRY_DSN` must be set at **build** time; Vite inlines it. Re-deploy after changing.
 - **Seed script refuses to run** — the prod guard triggered. See the script output for the override flag, and verify you actually meant to target that project.
+# Auction-only recovery tooling
+
+`GITHUB_REF` is supplied by GitHub Actions and must be `refs/heads/main` for the scoped recovery. `PG_BIN` optionally points the disposable local auction SQL test to PostgreSQL binaries; the test always creates its own local database and does not accept a remote database URL.
+
+The manual auction workflow supplies `AUCTION_CI_RUN_ID`, `AUCTION_ARTIFACT`, `AUCTION_PAGES_PROJECT`, and `AUCTION_PAGES_PROJECT_ID` from the reviewed release and existing project configuration. `AUCTION_STAGING_ANON_KEY` and `AUCTION_STAGING_SERVICE_KEY` are resolved only for the fixed isolated staging project, masked, kept within that run, and excluded from evidence. The production Pages deployment receives no service-role binding.

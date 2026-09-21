@@ -2,11 +2,14 @@
 // Starts its own disposable local database. Never accepts a remote connection URL.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { auctionCapabilitiesSql, AUCTION_UNRELATED_SCHEMA_SQL } from "./auction-recovery-release.mjs";
+import { auctionFixtureSql } from "./auction-recovery-fixtures.mjs";
+import { randomUUID } from "node:crypto";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoot = resolve(tmpdir());
@@ -39,7 +42,10 @@ const port = await new Promise((resolvePort, reject) => {
   });
 });
 const baseArgs = ["-X", "-h", "127.0.0.1", "-p", String(port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-qAt"];
-const sql = (query, expected = 0) => command("psql", [...baseArgs, "-c", query], expected).stdout.trim();
+const sql = (query, expected = 0) => {
+  if(query.length<8000) return command("psql", [...baseArgs,"-c",query],expected).stdout.trim();
+  const path=join(workspace,"query.sql");writeFileSync(path,query);return command("psql",[...baseArgs,"-f",path],expected).stdout.trim();
+};
 const file = (path, expected = 0) => command("psql", [...baseArgs, "-1", "-f", path], expected);
 const envelope = "public.get_visible_auction_candidate_envelope";
 function asRole(role, sub, query) {
@@ -62,11 +68,14 @@ try {
   command("pg_ctl", ["-D", dataDir, "-l", join(workspace, "postgres.log"), "-o", `-h 127.0.0.1 -p ${port}`, "-w", "start"]);
   started = true;
   file(join(repo, "supabase/tests/auction_only_recovery_fixture.sql"));
-  const before = sql(untouched);
+  let before = sql(untouched);
+  const schemaBefore = sql(AUCTION_UNRELATED_SCHEMA_SQL);
   const red = command("psql", [...baseArgs, "-c", `SELECT * FROM ${envelope}()`], "failure");
   assert.match(red.stderr, /does not exist/);
   console.log("RED reproduced missing auction reader");
   file(migration);
+  check("release fingerprint preserves unrelated schema", sql(AUCTION_UNRELATED_SCHEMA_SQL), schemaBefore);
+  check("release capability probe verifies deployed bodies and permissions", sql(auctionCapabilitiesSql(readFileSync(migration,"utf8"))), "t");
   const anon = query => asRole("anon", "", query);
   const free = query => asRole("authenticated", "00000000-0000-4000-8000-000000000060", query);
   const paid = query => asRole("authenticated", "00000000-0000-4000-8000-000000000600", query);
@@ -103,6 +112,27 @@ try {
   check("public caller cannot revive expired auctions with a backdated clock", anon(`SELECT count(*) FROM ${envelope}(p_today=>'1900-01-01'),jsonb_array_elements(visible_rows) r WHERE r->>'title'='Excluded fixture 5'`), "0");
   check("public caller cannot reclassify priority with a future clock", anon(`SELECT total_raw FROM ${envelope}(p_stream=>'priority',p_now=>'2999-01-01')`), "10");
   check("null public clock retains current eligible auctions", anon(`SELECT total_raw FROM ${envelope}(p_today=>NULL,p_now=>NULL)`), "600");
+  sql("GRANT EXECUTE ON FUNCTION public.get_public_auction_candidates(INTEGER,TEXT,DATE,TIMESTAMPTZ,TEXT) TO anon");
+  sql(auctionCapabilitiesSql(readFileSync(migration,"utf8")),"failure");checks++;
+  file(migration);
+  // Exercise real fixture INSERT/DELETE statements against local tables. The publication
+  // mock tests scope and SQL syntax; actual publication behavior is a staging gate.
+  sql(`ALTER TABLE public.listings ADD COLUMN owner_id uuid, ADD COLUMN description text, ADD COLUMN postal_code text, ADD COLUMN created_at timestamptz, ADD COLUMN updated_at timestamptz;
+    CREATE TABLE public.profiles(user_id uuid PRIMARY KEY,role text,participant_type text,force_pro_access boolean,display_name text);
+    CREATE TABLE public.listing_reports(reporter_id uuid,entity_id uuid);
+    CREATE TABLE public.favorites(user_id uuid,listing_id uuid);
+    CREATE FUNCTION public.get_public_catalogue_publication(bigint) RETURNS TABLE(snapshot_minute timestamptz) LANGUAGE sql AS $$ SELECT now()-interval '1 day' $$;
+    CREATE FUNCTION private.publish_public_catalogue() RETURNS TABLE(publication_id bigint) LANGUAGE sql AS $$ SELECT 1::bigint $$;
+    CREATE FUNCTION public.get_public_catalogue_listing(bigint,uuid,text) RETURNS TABLE(id uuid) LANGUAGE sql AS $$ SELECT id FROM public.listings WHERE id=$2 $$;`);
+  const fixtureState={run_id:"123456",tag:"auction-recovery:123456",listings:Array.from({length:650},()=>randomUUID()),users:["free","paid"].map(tier=>({id:randomUUID(),tier,email:`auction-123456-${tier}@maiprop.demo`}))};
+  sql(`INSERT INTO public.profiles(user_id) VALUES ${fixtureState.users.map(u=>`('${u.id}')`).join(",")}`);
+  const existingCount=sql("SELECT count(*) FROM public.listings");
+  sql(auctionFixtureSql(fixtureState,"seed"));
+  check("staging SQL creates 650 run-owned auction fixtures",sql("SELECT count(*) FROM public.listings WHERE tags @> ARRAY['auction-recovery:123456']"),"650");
+  check("staging profiles preserve tier distinction",sql("SELECT string_agg(force_pro_access::text,',' ORDER BY display_name) FROM public.profiles"),"false,true");
+  sql(auctionFixtureSql(fixtureState,"cleanup"));
+  check("fixture cleanup preserves all earlier auction records",sql("SELECT count(*) FROM public.listings"),existingCount);
+  before=sql(untouched);
   sql(`DROP FUNCTION public.get_visible_auction_candidate_envelope(INTEGER,TEXT,DATE,TIMESTAMPTZ,TEXT,TEXT,TEXT,TEXT,NUMERIC,NUMERIC,INTEGER,INTEGER,NUMERIC,NUMERIC,TEXT,TEXT,TEXT);
     DROP FUNCTION public.get_current_auction_listing_visible_limit();
     DROP FUNCTION public.get_public_auction_candidates(INTEGER,TEXT,DATE,TIMESTAMPTZ,TEXT);
@@ -118,7 +148,7 @@ try {
   sql("REVOKE EXECUTE ON FUNCTION public.get_auction_listing_visible_limit(UUID) FROM anon; DROP FUNCTION public.get_auction_listing_visible_limit(UUID)");
   const missingHelper = file(migration, "failure");
   assert.match(missingHelper.stderr, /auction_recovery_dependency_missing/); checks++;
-  console.log(`Auction-only PostgreSQL recovery: ${checks} checks passed, migration applied twice.`);
+  console.log(`Auction-only PostgreSQL recovery: ${checks} checks passed, including repeat application.`);
 } catch (error) {
   if (started) {
     const log = readFileSync(join(workspace, "postgres.log"), "utf8");

@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import yaml from "js-yaml";
 import { checkSlsaReadiness } from "./check-slsa-readiness.mjs";
+import { auctionRecoveryWorkflowViolations } from "./auction-recovery-workflow-contract.mjs";
 import {
   cloudflareHttpMutationViolation as cloudflarePolicyViolation,
   findCloudflareHttpMutations as findPolicyCloudflareHttpMutations,
@@ -1182,6 +1183,7 @@ export function scanWorkflows() {
   }
 
   const authorizedMutationWorkflows = new Set([
+    ".github/workflows/deploy-auction-recovery.yml",
     ".github/workflows/deploy-catalogue-performance-hotfix.yml",
     ".github/workflows/deploy-edge-functions.yml",
     ".github/workflows/deploy-supabase-production-db.yml",
@@ -1217,6 +1219,8 @@ export function scanWorkflows() {
 
   const catalogueHotfixWorkflow =
     ".github/workflows/deploy-catalogue-performance-hotfix.yml";
+  const auctionWorkflow=".github/workflows/deploy-auction-recovery.yml";
+  violations.push(...auctionRecoveryWorkflowViolations({parsed:workflowYaml[auctionWorkflow],text:workflowText[auctionWorkflow]??"",driver:read(join(root,"scripts/auction-recovery-target.sh")),control:read(join(root,"scripts/auction-recovery-control.mjs")),pages:read(join(root,"scripts/auction-recovery-pages.mjs")),database:read(join(root,"scripts/auction-recovery-db.sh"))}));
   const catalogueHotfixText = workflowText[catalogueHotfixWorkflow] ?? "";
   if (!catalogueHotfixText) {
     violations.push(`${catalogueHotfixWorkflow} is missing`);

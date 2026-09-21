@@ -25,8 +25,17 @@ export const AUCTION_SOURCE_OVERLAYS = Object.freeze([
 ]);
 
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
+// Hooks export repository-local Git variables. A caller-selected repository must
+// never inherit those paths (particularly when a test creates a disposable repo).
+export function auctionGitEnvironment(environment = process.env) {
+  return Object.fromEntries(Object.entries(environment).filter(([name]) => !name.startsWith("GIT_")));
+}
 function run(repository, executable, args) {
-  const result = spawnSync(executable, args, { cwd: repository, windowsHide: true, maxBuffer: 32 * 1024 * 1024 });
+  // Git Bash puts GNU tar first on PATH; it reads C: as a remote archive host.
+  const binary = executable === "tar" && process.platform === "win32"
+    ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe")
+    : executable;
+  const result = spawnSync(binary, args, { cwd: repository, env: auctionGitEnvironment(), windowsHide: true, maxBuffer: 32 * 1024 * 1024 });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${executable} failed: ${result.stderr.toString()}`);
   return result.stdout;

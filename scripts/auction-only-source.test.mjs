@@ -2,12 +2,12 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { afterEach, describe, expect, it } from "vitest";
-import { AUCTION_SOURCE_OVERLAYS, prepareAuctionSource } from "./prepare-auction-only-source.mjs";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AUCTION_SOURCE_OVERLAYS, prepareAuctionSource, auctionGitEnvironment } from "./prepare-auction-only-source.mjs";
 
 const roots = [];
 const git = (cwd, ...args) => {
-  const result = spawnSync("git", args, { cwd, encoding: "utf8", windowsHide: true });
+  const result = spawnSync("git", args, { cwd, env:auctionGitEnvironment(), encoding: "utf8", windowsHide: true });
   if (result.status !== 0) throw new Error(result.stderr);
   return result.stdout.trim();
 };
@@ -31,8 +31,19 @@ function fixture() {
   git(repository, "add", "."); git(repository, "commit", "-qm", "candidate");
   return { root, repository, baseSha, sourceSha: git(repository, "rev-parse", "HEAD"), output: join(root, "prepared") };
 }
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
+afterEach(() => { vi.unstubAllEnvs(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 describe("auction-only source boundary", () => {
+  it("does not inherit a hook's repository, index or configuration overrides",()=>{
+    expect(auctionGitEnvironment({PATH:"keep",GIT_DIR:"wrong",GIT_COMMON_DIR:"wrong",GIT_WORK_TREE:"wrong",GIT_INDEX_FILE:"wrong",GIT_CONFIG_COUNT:"1",GIT_CONFIG_KEY_0:"core.bare",GIT_CONFIG_VALUE_0:"true"})).toEqual({PATH:"keep"});
+  });
+  it("prepares the requested repository even inside another repository's hook",()=>{
+    const input=fixture();
+    vi.stubEnv("GIT_DIR",join(input.root,"unrelated-repository.git"));
+    vi.stubEnv("GIT_WORK_TREE",join(input.root,"unrelated-worktree"));
+    vi.stubEnv("GIT_INDEX_FILE",join(input.root,"unrelated-index"));
+    expect(prepareAuctionSource(input).source_sha).toBe(input.sourceSha);
+    expect(git(input.repository,"config","--get","user.name")).toBe("Test Fixture");
+  });
   it("overlays auction fixes while preserving live Pricing and checkout", () => {
     const input = fixture();
     const result = prepareAuctionSource(input);
