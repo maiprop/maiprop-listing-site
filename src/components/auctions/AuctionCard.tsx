@@ -7,6 +7,7 @@ import { daysUntil, countdownBadge, getPropertyTypeLabel } from "@/lib/auctionUt
 import { APP_ORIGIN } from "@/lib/config";
 import { AUCTION_FALLBACK_LOGO_URL, getAuctionImageList } from "@/lib/auctionStreetView";
 import { switchImageToNextFallback, switchImageToNextFallbackIfEmpty } from "@/lib/imageFallbacks";
+import { resolveAuctionMutationListingId } from "@/lib/auctionActionIdentity";
 
 export const PremiumBadge = () => (
   <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-primary text-primary-foreground border border-primary/30">
@@ -18,7 +19,10 @@ type AuctionCardProps = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   a: any;
   favoritedIds: Set<string>;
-  onToggleFav: (id: string, isFav: boolean) => void;
+  onToggleFav: (id: string | null, isFav: boolean) => void;
+  onReport: (id: string | null) => void;
+  isFavoritePending: boolean;
+  isReportPending: boolean;
 };
 
 type AuctionCountdownBadge = ReturnType<typeof countdownBadge>;
@@ -31,11 +35,11 @@ type AuctionCardCopy = {
   startingBid: string;
   save: string;
   saved: string;
+  removeSaved: string;
   share: string;
   report: string;
   eAuction: string;
   linkCopied: string;
-  reportSubmitted: string;
 };
 
 const formatAuctionCardDate = (value: string, isGreek: boolean) => {
@@ -279,16 +283,24 @@ const AuctionActions = ({
   a,
   isFav,
   onToggleFav,
+  onReport,
+  mutationListingId,
+  isFavoritePending,
+  isReportPending,
   copy,
 }: {
   a: AuctionCardProps["a"];
   isFav: boolean;
   onToggleFav: AuctionCardProps["onToggleFav"];
+  onReport: AuctionCardProps["onReport"];
+  mutationListingId: string | null;
+  isFavoritePending: boolean;
+  isReportPending: boolean;
   copy: AuctionCardCopy;
 }) => {
   const handleFavorite = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    onToggleFav(a.id, isFav);
+    onToggleFav(mutationListingId, isFav);
   };
 
   const handleShare = async (e: MouseEvent<HTMLButtonElement>) => {
@@ -298,17 +310,18 @@ const AuctionActions = ({
 
   const handleReport = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    toast.info(copy.reportSubmitted);
+    onReport(mutationListingId);
   };
 
   return (
     <div className="mt-auto pt-3 border-t border-border flex items-center gap-2">
       <button
         onClick={handleFavorite}
+        disabled={isFavoritePending}
         className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
           isFav ? "bg-rose-500/15 border-rose-500/30 text-rose-400" : "bg-secondary border-border text-muted-foreground hover:text-foreground"
         }`}
-        aria-label={copy.save}
+        aria-label={isFav ? copy.removeSaved : copy.save}
       >
         <Heart className={`w-3.5 h-3.5 ${isFav ? "fill-current text-rose-400" : ""}`} />
         {isFav ? copy.saved : copy.save}
@@ -323,6 +336,7 @@ const AuctionActions = ({
       </button>
       <button
         onClick={handleReport}
+        disabled={isReportPending}
         className="ml-auto p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary transition-all"
         aria-label={copy.report}
       >
@@ -333,7 +347,14 @@ const AuctionActions = ({
   );
 };
 
-const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps) => { // skipcq: JS-R1005 - Auction cards compose independent image, date, and action affordances.
+const AuctionCardComponent = ({
+  a,
+  favoritedIds,
+  onToggleFav,
+  onReport,
+  isFavoritePending,
+  isReportPending,
+}: AuctionCardProps) => { // skipcq: JS-R1005 - Auction cards compose independent image, date, and action affordances.
   const { t, i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const locale = isGreek ? "el" : "en";
@@ -345,17 +366,18 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
     startingBid: t("auctions.startingBid"),
     save: t("auctions.card.save"),
     saved: t("auctions.card.saved"),
+    removeSaved: t("auctions.card.removeSaved"),
     share: t("auctions.card.share"),
     report: t("auctions.card.report"),
     eAuction: t("auctions.card.eAuction"),
     linkCopied: t("auctions.card.linkCopied"),
-    reportSubmitted: t("auctions.card.reportSubmitted"),
   };
   const badge = countdownBadge(daysUntil(a.auction_date), locale);
   const imageChain = getAuctionImageList(a);
   const imgSrc = imageChain[0] ?? AUCTION_FALLBACK_LOGO_URL;
   const isLogoFallback = imgSrc === AUCTION_FALLBACK_LOGO_URL;
-  const isFav = favoritedIds.has(a.id);
+  const mutationListingId = resolveAuctionMutationListingId(a);
+  const isFav = mutationListingId !== null && favoritedIds.has(mutationListingId);
   const propertyTypeLabel = getPropertyTypeLabel(a, locale);
   const price = a.auction_starting_bid ?? a.price ?? 0;
   const floor = getAuctionFloor(a);
@@ -386,7 +408,16 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
         </div>
         <AuctionPrice amount={price} label={copy.startingBid} />
         <AuctionCourt court={a.auction_court} />
-        <AuctionActions a={a} isFav={isFav} onToggleFav={onToggleFav} copy={copy} />
+        <AuctionActions
+          a={a}
+          isFav={isFav}
+          onToggleFav={onToggleFav}
+          onReport={onReport}
+          mutationListingId={mutationListingId}
+          isFavoritePending={isFavoritePending}
+          isReportPending={isReportPending}
+          copy={copy}
+        />
       </div>
     </div>
   );

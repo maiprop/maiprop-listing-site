@@ -152,6 +152,25 @@ describe("PropertyCard behavior", () => {
     expect(toastSuccess).toHaveBeenCalledWith("propertyCard.reportSubmitted");
   });
 
+  it("disables reporting while persistence is pending and ignores a double click", async () => {
+    let finishReport!: (value: { data: null; error: null; status: number }) => void;
+    insertMock.mockReturnValue(new Promise((resolve) => {
+      finishReport = resolve;
+    }));
+    authMock.mockReturnValue({ user: { id: "reporter-1" }, profile: null, loading: false });
+    const { PropertyCard } = await import("@/components/PropertyCard");
+    renderWithProviders(<PropertyCard property={baseProperty()} />);
+
+    const reportButton = screen.getByRole("button", { name: "propertyCard.actions.report" });
+    fireEvent.click(reportButton);
+    await waitFor(() => expect(reportButton).toBeDisabled());
+    fireEvent.click(reportButton);
+    expect(insertMock).toHaveBeenCalledTimes(1);
+
+    finishReport({ data: null, error: null, status: 201 });
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("propertyCard.reportSubmitted"));
+  });
+
   it("covers open-house countdowns, universal specs, and image error fallback", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
     const soon = new Date(Date.now() + 90 * 60_000).toISOString();

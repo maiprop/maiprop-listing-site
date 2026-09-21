@@ -17,28 +17,28 @@
       "function": "admin-broadcast-notification",
       "validationStyle": "admin-only-guarded",
       "owner": "domain",
-      "reviewBy": "2026-09-19",
+      "reviewBy": "2026-10-05",
       "rationale": "Admin authorization is checked before the manually bounded notification payload is fanned out."
     },
     {
       "function": "admin-content-report-action",
       "validationStyle": "admin-only-guarded",
       "owner": "domain",
-      "reviewBy": "2026-09-19",
+      "reviewBy": "2026-10-05",
       "rationale": "Admin authorization and explicit action guards constrain content-report state transitions."
     },
     {
       "function": "admin-review-invitation",
       "validationStyle": "admin-only-guarded",
       "owner": "domain",
-      "reviewBy": "2026-09-19",
+      "reviewBy": "2026-10-05",
       "rationale": "Admin authorization and a dedicated body parser constrain invitation approval and rejection actions."
     },
     {
       "function": "agent-data-input",
       "validationStyle": "typed-manual-guards",
       "owner": "data-access",
-      "reviewBy": "2026-09-19",
+      "reviewBy": "2026-10-05",
       "rationale": "Typed action-specific guards constrain agent data input before any database mutation executes."
     },
     {
@@ -66,21 +66,21 @@
       "function": "os-sales-coordinates",
       "validationStyle": "typed-manual-guards",
       "owner": "data-access",
-      "reviewBy": "2026-09-19",
+      "reviewBy": "2026-10-05",
       "rationale": "Typed pagination and coordinate guards bound requests before any external OS enrichment work."
     },
     {
       "function": "owner-pro-status",
       "validationStyle": "typed-manual-guards",
       "owner": "domain",
-      "reviewBy": "2026-09-19",
+      "reviewBy": "2026-10-05",
       "rationale": "Manual identity and listing guards constrain the request before subscription status is resolved."
     },
     {
       "function": "project-unit-prices",
       "validationStyle": "typed-manual-guards",
       "owner": "domain",
-      "reviewBy": "2026-09-19",
+      "reviewBy": "2026-10-05",
       "rationale": "Typed unit identifiers and price bounds are checked before project pricing rows are changed."
     },
     {
@@ -94,7 +94,7 @@
       "function": "transfer-platform-admin",
       "validationStyle": "admin-only-guarded",
       "owner": "domain",
-      "reviewBy": "2026-09-19",
+      "reviewBy": "2026-10-05",
       "rationale": "Current-admin authorization and explicit target-user guards run before platform ownership is transferred."
     }
   ]

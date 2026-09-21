@@ -7,10 +7,11 @@ vi.unmock("react-i18next");
 
 const toastSuccess = vi.fn();
 const toastInfo = vi.fn();
+const toastError = vi.fn();
 const imageListMock = vi.fn();
 
 vi.mock("sonner", () => ({
-  toast: { success: toastSuccess, info: toastInfo },
+  toast: { success: toastSuccess, info: toastInfo, error: toastError },
 }));
 
 vi.mock("@/lib/config", () => ({
@@ -24,6 +25,7 @@ vi.mock("@/lib/auctionStreetView", () => ({
 
 const auction = (overrides: Record<string, unknown> = {}) => ({
   id: "a1",
+  listing_id: "d1000000-0000-4000-8000-000000000001",
   title: "Auction Apartment",
   address: "Court St 5",
   city: "Athens",
@@ -60,7 +62,14 @@ describe("AuctionCard behavior", () => {
     const onToggleFav = vi.fn();
 
     renderWithProviders(
-      <AuctionCard a={auction()} favoritedIds={new Set(["a1"])} onToggleFav={onToggleFav} />,
+      <AuctionCard
+        a={auction()}
+        favoritedIds={new Set(["d1000000-0000-4000-8000-000000000001"])}
+        onToggleFav={onToggleFav}
+        onReport={vi.fn()}
+        isFavoritePending={false}
+        isReportPending={false}
+      />,
     );
 
     expect(screen.getByText("Spotlight")).toBeInTheDocument();
@@ -71,17 +80,25 @@ describe("AuctionCard behavior", () => {
     expect(screen.getByText("Athens Court")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /eauction/i })).toHaveAttribute("href", "https://auction.example.test");
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(onToggleFav).toHaveBeenCalledWith("a1", true);
+    fireEvent.click(screen.getByRole("button", { name: "Remove from saved" }));
+    expect(onToggleFav).toHaveBeenCalledWith("d1000000-0000-4000-8000-000000000001", true);
   });
 
-  it("copies auction links when Web Share is unavailable and reports via toast", async () => {
+  it("copies the OS route link and delegates reports with the canonical listing UUID", async () => {
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: writeTextMock } });
     const { AuctionCard } = await import("@/components/auctions/AuctionCard");
+    const onReport = vi.fn();
 
     renderWithProviders(
-      <AuctionCard a={auction({ id: "copy-me", is_featured: false })} favoritedIds={new Set()} onToggleFav={vi.fn()} />,
+      <AuctionCard
+        a={auction({ id: "copy-me", is_featured: false })}
+        favoritedIds={new Set()}
+        onToggleFav={vi.fn()}
+        onReport={onReport}
+        isFavoritePending={false}
+        isReportPending={false}
+      />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Share" }));
@@ -89,7 +106,51 @@ describe("AuctionCard behavior", () => {
     expect(toastSuccess).toHaveBeenCalledWith("Link copied to clipboard");
 
     fireEvent.click(screen.getByRole("button", { name: "Report" }));
-    expect(toastInfo).toHaveBeenCalledWith("Report submitted. Our team will review it.");
+    expect(onReport).toHaveBeenCalledWith("d1000000-0000-4000-8000-000000000001");
+    expect(toastInfo).not.toHaveBeenCalled();
+  });
+
+  it("uses a legacy UUID route identity and exposes pending action boundaries", async () => {
+    const { AuctionCard } = await import("@/components/auctions/AuctionCard");
+    const legacyId = "a1000000-0000-4000-8000-000000000001";
+    const onToggleFav = vi.fn();
+    const onReport = vi.fn();
+
+    renderWithProviders(
+      <AuctionCard
+        a={auction({ id: legacyId, listing_id: undefined })}
+        favoritedIds={new Set()}
+        onToggleFav={onToggleFav}
+        onReport={onReport}
+        isFavoritePending
+        isReportPending
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Report" })).toBeDisabled();
+  });
+
+  it("passes a missing mutation identity through for an honest caller denial", async () => {
+    const { AuctionCard } = await import("@/components/auctions/AuctionCard");
+    const onToggleFav = vi.fn();
+    const onReport = vi.fn();
+
+    renderWithProviders(
+      <AuctionCard
+        a={auction({ id: "os-only", listing_id: "invalid" })}
+        favoritedIds={new Set()}
+        onToggleFav={onToggleFav}
+        onReport={onReport}
+        isFavoritePending={false}
+        isReportPending={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Report" }));
+    expect(onToggleFav).toHaveBeenCalledWith(null, false);
+    expect(onReport).toHaveBeenCalledWith(null);
   });
 
   it("swallows cancelled native share and falls back from broken street-view images", async () => {

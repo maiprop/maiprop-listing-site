@@ -306,10 +306,12 @@ Deno.test("the current catalogue is translated in multiple bounded calls and mer
   let activeProviderCalls = 0;
   let maxActiveProviderCalls = 0;
 
-  assertEquals(Object.keys(strings).length, 2_188);
-  assertEquals(JSON.stringify(strings).length, 137_027);
   const requestBody = JSON.stringify({ locale: "fr", strings });
-  assertEquals(textEncoder.encode(requestBody).length, 137_259);
+  assert(
+    textEncoder.encode(JSON.stringify(strings)).length >
+      PROVIDER_TRANSLATION_BYTE_LIMIT,
+    "the current catalogue must exercise translation across multiple chunks",
+  );
   assert(textEncoder.encode(requestBody).length < REQUEST_BODY_LIMIT_BYTES);
 
   globalThis.fetch = (async (

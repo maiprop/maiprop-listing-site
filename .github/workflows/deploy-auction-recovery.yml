@@ -1,0 +1,152 @@
+name: Deploy Auction Only Recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha: { description: "Reviewed current main SHA with Auction-Only routing marker", required: true, type: string }
+      ci_run_id: { description: "Successful original CI run for that main SHA", required: true, type: string }
+      confirm: { description: "Exact configured production break-glass confirmation", required: true, type: string }
+      incident_id: { description: "Configured auction incident ID", required: true, type: string }
+      reason: { description: "Operator-held auction recovery reason", required: true, type: string }
+
+permissions: { contents: read, actions: read }
+concurrency: { group: maiprop-production-release, cancel-in-progress: false }
+
+jobs:
+  recover:
+    concurrency: { group: maiprop-staging-release, cancel-in-progress: false }
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.actor == github.triggering_actor && vars.PRODUCTION_RELEASE_ENABLED == 'true' && vars.STAGING_RELEASE_ENABLED == 'true'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      AUCTION_CI_RUN_ID: ${{ inputs.ci_run_id }}
+      AUCTION_ARTIFACT: auction-artifact
+      RELEASE_AUTHORIZATION_ACTION: production-deploy
+      RELEASE_STANDARD_CONFIRMATION: DEPLOY_AUCTION_ONLY_RECOVERY
+      RELEASE_SINGLE_ADMIN_BREAK_GLASS: 'true'
+      RELEASE_INCIDENT_ID: ${{ inputs.incident_id }}
+      RELEASE_REASON: ${{ inputs.reason }}
+      RELEASE_CONFIRM: ${{ inputs.confirm }}
+      PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+      PRODUCTION_BREAK_GLASS_ACTOR: ${{ vars.PRODUCTION_BREAK_GLASS_ACTOR }}
+      PRODUCTION_BREAK_GLASS_RELEASE_SHA: ${{ vars.PRODUCTION_BREAK_GLASS_RELEASE_SHA }}
+      PRODUCTION_BREAK_GLASS_INCIDENT_ID: ${{ vars.PRODUCTION_BREAK_GLASS_INCIDENT_ID }}
+      PRODUCTION_BREAK_GLASS_EXPIRES_AT: ${{ vars.PRODUCTION_BREAK_GLASS_EXPIRES_AT }}
+      STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+      RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with: { ref: '${{ inputs.release_sha }}', fetch-depth: 0, persist-credentials: false }
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with: { node-version-file: .node-version, cache: npm }
+      - run: npm ci --ignore-scripts --prefer-offline --no-audit
+      - name: Verify exact source and current authorization
+        run: node scripts/auction-recovery-control.mjs authorize
+      - name: Build bounded auction source
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          prepared="$RUNNER_TEMP/auction-source"
+          node scripts/prepare-auction-only-source.mjs "$prepared"
+          cd "$prepared"
+          npm ci --ignore-scripts --prefer-offline --no-audit
+          npm run typecheck:functions
+          npm run build
+          npm run build:cloudflare-pages-worker
+          npm run check:bundle-size
+          npm sbom --sbom-format cyclonedx --package-lock-only > sbom.cdx.json
+          cd "$GITHUB_WORKSPACE"
+          node scripts/auction-recovery-release.mjs package "$prepared" "$AUCTION_ARTIFACT" "$RELEASE_SHA" "$(git rev-parse 'HEAD^{tree}')" "$GITHUB_RUN_ID"
+          npx --no-install playwright install chromium
+      - name: Upload immutable auction artifact
+        id: artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: auction-recovery-${{ inputs.release_sha }}-${{ github.run_id }}
+          path: auction-artifact/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Sign immutable auction artifact
+        env:
+          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.artifact.outputs.artifact-digest }}
+        run: node scripts/auction-recovery-control.mjs sign "$AUCTION_ARTIFACT" auction-artifact-binding.json "$ARTIFACT_ID" "auction-recovery-$RELEASE_SHA-$GITHUB_RUN_ID" "$ARTIFACT_DIGEST"
+      - name: Restore staging auction database only
+        env: &staging
+          TARGET_KIND: staging
+          TARGET_PROJECT_REF: xsiehskfgeoqyazcgauv
+          TARGET_API_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          TARGET_ANON_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_PAGES_EDIT_TOKEN }}
+          AUCTION_PAGES_PROJECT: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT }}
+          AUCTION_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_STAGING_PAGES_PROJECT_ID }}
+          SITE_LOCK_PASSWORD: ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+        run: bash scripts/auction-recovery-target.sh database
+      - name: Resolve isolated staging credentials
+        env: *staging
+        run: node scripts/auction-recovery-pages.mjs staging-keys
+      - name: Create temporary auction fixtures
+        id: fixtures
+        env: *staging
+        run: bash scripts/catalogue-hotfix-with-database-login.sh node scripts/auction-recovery-fixtures.mjs seed
+      - name: Deploy and exercise staging auctions
+        id: staging
+        env: *staging
+        run: bash scripts/auction-recovery-target.sh website
+      - name: Remove only this run's staging fixtures
+        if: always() && steps.fixtures.outcome != 'skipped'
+        id: cleanup
+        env: *staging
+        run: bash scripts/catalogue-hotfix-with-database-login.sh node scripts/auction-recovery-fixtures.mjs cleanup
+      - name: Upload staging proof
+        id: proof
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: auction-staging-proof-${{ inputs.release_sha }}-${{ github.run_id }}
+          path: auction-evidence/staging/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Sign staging proof
+        env:
+          ARTIFACT_ID: ${{ steps.proof.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.proof.outputs.artifact-digest }}
+        run: node scripts/auction-recovery-control.mjs sign auction-evidence/staging auction-staging-binding.json "$ARTIFACT_ID" "auction-staging-proof-$RELEASE_SHA-$GITHUB_RUN_ID" "$ARTIFACT_DIGEST"
+      - name: Restore production auction database only
+        env: &production
+          TARGET_KIND: production
+          TARGET_PROJECT_REF: qvvicunqcrwpioqnvzxf
+          TARGET_API_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          TARGET_ANON_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_EDIT_TOKEN }}
+          AUCTION_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+          AUCTION_PAGES_PROJECT_ID: ${{ vars.CLOUDFLARE_PAGES_PROJECT_ID }}
+        run: bash scripts/auction-recovery-target.sh database
+      - name: Deploy and verify production auctions
+        env: *production
+        run: bash scripts/auction-recovery-target.sh website
+      - name: Upload bounded release evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: auction-recovery-evidence-${{ inputs.release_sha }}-${{ github.run_id }}
+          path: |
+            auction-evidence/
+            auction-artifact-binding.json
+            auction-staging-binding.json
+          if-no-files-found: ignore
+          retention-days: 30

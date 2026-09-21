@@ -167,6 +167,24 @@ describe("Navbar behavior", () => {
     expect(screen.queryByText("common.proActive")).not.toBeInTheDocument();
   });
 
+  it("keeps the auctions unread badge live and loads notification details only when opened", async () => {
+    authState = { user: { id: "u-notif" }, profile: { role: "buyer" } };
+    const { Navbar } = await import("@/components/Navbar");
+    renderWithProviders(<Navbar forceScrolled />, { initialPath: "/auctions" });
+
+    await waitFor(() => expect(screen.getByTitle("notificationsPanel.title")).toHaveTextContent("1"));
+    expect(fromMock).toHaveBeenCalledTimes(1);
+    expect(fromMock.mock.results[0].value.select).toHaveBeenCalledWith("*", { count: "exact", head: true });
+
+    fireEvent.pointerDown(screen.getByTitle("notificationsPanel.title"), { button: 0, ctrlKey: false });
+    expect(await screen.findByText("New viewing")).toBeInTheDocument();
+    expect(fromMock).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByText("New viewing"));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/dashboard?tab=viewings"));
+    const updateChain = fromMock.mock.results.map(result => result.value).find(chain => chain.update.mock.calls.length);
+    expect(updateChain.eq).toHaveBeenCalledWith("user_id", "u-notif");
+  });
+
   it("marks notifications read with a user ownership filter", async () => {
     authState = {
       user: { id: "u-notif", email: "agent@example.com" },

@@ -10,11 +10,10 @@ import {
 import { getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { useToggleFavorite, useIsFavorited } from "@/hooks/useFavorites";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { APP_ORIGIN } from "@/lib/config";
 import { formatPrice } from "@/lib/format";
-import { listingReportSchema, parseMutationInput } from "@/lib/mutationSchemas";
+import { useListingReport } from "@/hooks/useListingReport";
 import {
   MAIPROP_LOGO_FALLBACK_URL,
   getImageFallbackChain,
@@ -178,6 +177,14 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const navigate = useNavigate();
   const { data: isFavorited = false } = useIsFavorited(property.id);
   const toggleFav = useToggleFavorite();
+  const report = useListingReport({
+    messages: {
+      signIn: t("propertyCard.signInToReport"),
+      error: t("propertyCard.errorReport"),
+      success: t("propertyCard.reportSubmitted"),
+    },
+    onSignInRequired: () => navigate("/login"),
+  });
   const imageChain = getImageFallbackChain(property.images);
 
   const handleFavorite = (e: React.MouseEvent) => {
@@ -225,19 +232,11 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     }
   };
 
-  const handleReport = async (e: React.MouseEvent) => {
+  const handleReport = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!user) { toast.error(t("propertyCard.signInToReport")); navigate("/login"); return; }
     const entityType = property.listingType === "firesale" ? "firesale_request" : "listing";
-    const payload = parseMutationInput(listingReportSchema, {
-      entity_type: entityType,
-      entity_id: property.id,
-      reporter_id: user.id,
-    }, "listing report");
-    const { error } = await supabase.from("listing_reports").insert(payload);
-    if (error) toast.error(t("propertyCard.errorReport"));
-    else toast.success(t("propertyCard.reportSubmitted"));
+    report.submit({ entityType, entityId: property.id });
   };
 
   const getBadge = () => { // skipcq: JS-R1005 - Badge priority intentionally checks mutually exclusive listing states in order.
@@ -603,6 +602,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             </button>
             <button
               onClick={handleReport}
+              disabled={report.isPending}
               className="flex h-9 w-9 md:h-8 md:w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-muted-foreground/50 transition-all hover:text-muted-foreground"
               aria-label={t("propertyCard.actions.report")}
             >

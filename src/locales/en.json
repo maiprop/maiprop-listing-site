@@ -348,11 +348,15 @@
       "built": "Built",
       "save": "Save",
       "saved": "Saved",
+      "removeSaved": "Remove from saved",
       "share": "Share",
       "report": "Report",
       "eAuction": "eAuction",
       "linkCopied": "Link copied to clipboard",
-      "reportSubmitted": "Report submitted. Our team will review it."
+      "reportSubmitted": "Report submitted. Our team will review it.",
+      "signInToReport": "Sign in to report this auction",
+      "errorReport": "Could not submit report",
+      "actionUnavailable": "This action is unavailable because the auction listing record could not be identified."
     },
     "detail": {
       "verifyingCached": "Showing cached auction details while we verify the latest information.",

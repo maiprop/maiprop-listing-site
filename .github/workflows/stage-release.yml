@@ -20,6 +20,7 @@ jobs:
     if: >-
       github.workflow_sha == github.event.workflow_run.head_sha &&
       github.event.workflow_run.conclusion == 'success' &&
+      !contains(github.event.workflow_run.head_commit.message, '[Auction-Only]') &&
       github.run_attempt == 1 &&
       github.actor == github.triggering_actor &&
       github.event.workflow_run.run_attempt == 1 &&

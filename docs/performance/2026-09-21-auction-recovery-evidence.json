@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-20T21:12:12Z",
+  "scope": "Read-only auction incident diagnosis; no production mutation or deployment performed.",
+  "production": {
+    "origin": "https://portal.maiprop.co",
+    "releaseSha": "5cf9ba49eafdc19d2e8746bc877f33b08bad0dae",
+    "auctionApi": {
+      "status": 503,
+      "error": "Supabase runtime is not configured"
+    },
+    "runtimeConfig": {
+      "status": 200,
+      "publicSupabaseKeyPresent": true,
+      "projectRef": "qvvicunqcrwpioqnvzxf"
+    },
+    "database": {
+      "migrationCount": 420,
+      "latestRecordedMigration": "20260831171515",
+      "auctionRecordCount": 53460,
+      "auctionRecordsDatedTodayOrLater": 29487,
+      "countsAreNotPublishedCatalogueCounts": true,
+      "missingFunctions": [
+        "get_public_auction_candidates",
+        "get_current_auction_listing_visible_limit",
+        "get_visible_auction_candidate_envelope"
+      ],
+      "publicEnvelopeProbe": {
+        "status": 404,
+        "code": "PGRST202"
+      }
+    }
+  },
+  "staging": {
+    "origin": "https://maiprop-listing-site-staging.pages.dev",
+    "releaseSha": "fd13c83dcd1f2ac5a496abde11b419d0cc4eb1e1",
+    "migrationCount": 450,
+    "latestRecordedMigration": "20260901180000",
+    "requiredAuctionFunctionsPresent": true,
+    "underlyingCandidateFunctionAnonymousExecute": false,
+    "envelopeAnonymousExecute": true,
+    "auctionApi": {
+      "status": 200,
+      "rows": 0,
+      "meaning": "Shows working empty response on current staging data, not production catalogue functionality or a latency benchmark"
+    }
+  },
+  "baseSha": "44759128d5e8c88c1c21d1a20adfaa8667d6e1c8",
+  "migrationVersionsAbsentFromProductionHistory": [
+    {
+      "file": "supabase/migrations/20260726175234_allow_abandoned_trial_checkout_retry.sql",
+      "version": "20260726175234"
+    },
+    {
+      "file": "supabase/migrations/20260726180252_canonicalize_listing_promotion_subscription_source.sql",
+      "version": "20260726180252"
+    },
+    {
+      "file": "supabase/migrations/20260726181627_align_project_tenant_authorization.sql",
+      "version": "20260726181627"
+    },
+    {
+      "file": "supabase/migrations/20260726182342_align_org_listing_mutation_authorization.sql",
+      "version": "20260726182342"
+    },
+    {
+      "file": "supabase/migrations/20260726182846_create_new_building_atomic_boundary.sql",
+      "version": "20260726182846"
+    },
+    {
+      "file": "supabase/migrations/20260726184938_protect_public_professional_projection.sql",
+      "version": "20260726184938"
+    },
+    {
+      "file": "supabase/migrations/20260726201049_public_auction_candidate_boundary.sql",
+      "version": "20260726201049"
+    },
+    {
+      "file": "supabase/migrations/20260726202759_public_auction_candidate_indexes.sql",
+      "version": "20260726202759"
+    },
+    {
+      "file": "supabase/migrations/20260726204345_harden_public_auction_boundary_and_index.sql",
+      "version": "20260726204345"
+    },
+    {
+      "file": "supabase/migrations/20260726205309_fix_owned_public_storage_cleanup.sql",
+      "version": "20260726205309"
+    },
+    {
+      "file": "supabase/migrations/20260726211816_harden_listing_tenant_and_auction_provenance.sql",
+      "version": "20260726211816"
+    },
+    {
+      "file": "supabase/migrations/20260726215356_enforce_project_child_scope_immutability.sql",
+      "version": "20260726215356"
+    },
+    {
+      "file": "supabase/migrations/20260726220701_correct_active_listing_quota_and_managed_catalogue.sql",
+      "version": "20260726220701"
+    },
+    {
+      "file": "supabase/migrations/20260726221523_require_listing_owner_for_public_promotion_rpc.sql",
+      "version": "20260726221523"
+    },
+    {
+      "file": "supabase/migrations/20260726222529_add_storage_cleanup_outbox.sql",
+      "version": "20260726222529"
+    },
+    {
+      "file": "supabase/migrations/20260726224342_harden_storage_cleanup_lifecycle.sql",
+      "version": "20260726224342"
+    },
+    {
+      "file": "supabase/migrations/20260726233830_use_current_service_role_claim.sql",
+      "version": "20260726233830"
+    },
+    {
+      "file": "supabase/migrations/20260726234925_harden_storage_cleanup_transitions_and_active_drafts.sql",
+      "version": "20260726234925"
+    },
+    {
+      "file": "supabase/migrations/20260728093154_align_managed_catalogue_and_promotion_principal.sql",
+      "version": "20260728093154"
+    },
+    {
+      "file": "supabase/migrations/20260728162743_harden_listing_promotion_allocation_identity.sql",
+      "version": "20260728162743"
+    },
+    {
+      "file": "supabase/migrations/20260729094658_authorize_video_room_turn_credentials.sql",
+      "version": "20260729094658"
+    },
+    {
+      "file": "supabase/migrations/20260729101259_consolidate_project_and_role_select_policies.sql",
+      "version": "20260729101259"
+    },
+    {
+      "file": "supabase/migrations/20260729145205_replace_public_professional_definer_view.sql",
+      "version": "20260729145205"
+    },
+    {
+      "file": "supabase/migrations/20260812102335_enforce_role_switch_audit_integrity.sql",
+      "version": "20260812102335"
+    },
+    {
+      "file": "supabase/migrations/20260812102338_finalize_role_switch_audit_integrity.sql",
+      "version": "20260812102338"
+    },
+    {
+      "file": "supabase/migrations/20260812102340_reconcile_agent_data_input_invoice_credits.sql",
+      "version": "20260812102340"
+    },
+    {
+      "file": "supabase/migrations/20260812102342_reconcile_legacy_migration_effects.sql",
+      "version": "20260812102342"
+    },
+    {
+      "file": "supabase/migrations/20260901120000_repair_subsecond_release_capabilities.sql",
+      "version": "20260901120000"
+    },
+    {
+      "file": "supabase/migrations/20260901130000_add_visible_auction_candidate_envelopes.sql",
+      "version": "20260901130000"
+    },
+    {
+      "file": "supabase/migrations/20260901180000_index_auction_quarantine_canonical_fk.sql",
+      "version": "20260901180000"
+    }
+  ],
+  "releaseBlockers": {
+    "previousProductionRun": "34139852362",
+    "previousFailure": "Release artifact binding prior-run metadata must be completed with a successful conclusion.",
+    "alreadyCommittedFix": "22becf9824b54067e2405e4c754cdda7cf2fa0ce",
+    "configuredSingleAdminAuthorizationExpiredAt": "2026-09-08T06:30:00Z",
+    "newExactShaStagingAndApprovalRequired": true
+  },
+  "limitations": [
+    "No current production restoration claim.",
+    "No provider API called.",
+    "No current whole-project coverage percentage calculated.",
+    "Historical migration identity anomalies require the existing signed reconciliation; absent versions alone are not proof every associated schema effect is absent."
+  ]
+}
