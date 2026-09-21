@@ -118,18 +118,37 @@ try {
   // Exercise real fixture INSERT/DELETE statements against local tables. The publication
   // mock tests scope and SQL syntax; actual publication behavior is a staging gate.
   sql(`ALTER TABLE public.listings ADD COLUMN owner_id uuid, ADD COLUMN description text, ADD COLUMN postal_code text, ADD COLUMN created_at timestamptz, ADD COLUMN updated_at timestamptz;
-    CREATE TABLE public.profiles(user_id uuid PRIMARY KEY,role text,participant_type text,force_pro_access boolean,display_name text);
+    CREATE TYPE public.user_role AS ENUM ('buyer','seller','agent','developer','professional','admin','investor','institutional');
+    CREATE TABLE public.profiles(user_id uuid PRIMARY KEY,role public.user_role,participant_type text,force_pro_access boolean,display_name text,
+      is_platform_admin boolean DEFAULT false,role_switch_in_progress_at timestamptz,role_switch_audit_id uuid,city text,phone text,updated_at timestamptz);
+    CREATE FUNCTION public.has_platform_admin(uuid) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT false $$;
+    CREATE FUNCTION public.unarchive_role_data(uuid,text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$;
     CREATE TABLE public.listing_reports(reporter_id uuid,entity_id uuid);
     CREATE TABLE public.favorites(user_id uuid,listing_id uuid);
     CREATE FUNCTION public.get_public_catalogue_publication(bigint) RETURNS TABLE(snapshot_minute timestamptz) LANGUAGE sql AS $$ SELECT now()-interval '1 day' $$;
     CREATE FUNCTION private.publish_public_catalogue() RETURNS TABLE(publication_id bigint) LANGUAGE sql AS $$ SELECT 1::bigint $$;
     CREATE FUNCTION public.get_public_catalogue_listing(bigint,uuid,text) RETURNS TABLE(id uuid) LANGUAGE sql AS $$ SELECT id FROM public.listings WHERE id=$2 $$;`);
+  // Execute the real profile guard and onboarding routine, including the staging
+  // defaults (null role/participant), instead of a permissive profile-table mock.
+  const installRoutine=(migrationName,name)=>{
+    const text=readFileSync(join(repo,"supabase/migrations",migrationName),"utf8");
+    const start=text.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+    assert(start>=0);const end=text.indexOf("$$;",start);assert(end>start);sql(text.slice(start,end+3));
+  };
+  installRoutine("20260707171000_allow_owner_auth_trigger_signup.sql","profiles_guard_admin_and_role");
+  installRoutine("20260812102335_enforce_role_switch_audit_integrity.sql","complete_onboarding_role_for_user");
+  sql("CREATE TRIGGER profile_role_guard BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.profiles_guard_admin_and_role()");
   const fixtureState={run_id:"123456",tag:"auction-recovery:123456",listings:Array.from({length:650},()=>randomUUID()),users:["free","paid"].map(tier=>({id:randomUUID(),tier,email:`auction-123456-${tier}@maiprop.demo`}))};
   sql(`INSERT INTO public.profiles(user_id) VALUES ${fixtureState.users.map(u=>`('${u.id}')`).join(",")}`);
+  const directProfileUpdate=command("psql",[...baseArgs,"-c",`UPDATE public.profiles SET role='buyer',participant_type='buyer' WHERE user_id='${fixtureState.users[0].id}'`],"failure");
+  assert.match(directProfileUpdate.stderr,/role_change_via_direct_update_not_permitted/);checks++;
   const existingCount=sql("SELECT count(*) FROM public.listings");
   sql(auctionFixtureSql(fixtureState,"seed"));
   check("staging SQL creates 650 run-owned auction fixtures",sql("SELECT count(*) FROM public.listings WHERE tags @> ARRAY['auction-recovery:123456']"),"650");
+  check("new fixture accounts complete guarded onboarding",sql("SELECT count(*) FROM public.profiles WHERE role='buyer' AND participant_type='buyer'"),"2");
   check("staging profiles preserve tier distinction",sql("SELECT string_agg(force_pro_access::text,',' ORDER BY display_name) FROM public.profiles"),"false,true");
+  const guardAfterSeed=command("psql",[...baseArgs,"-c",`UPDATE public.profiles SET role='agent',participant_type='agent' WHERE user_id='${fixtureState.users[0].id}'`],"failure");
+  assert.match(guardAfterSeed.stderr,/role_change_via_direct_update_not_permitted/);checks++;
   sql(auctionFixtureSql(fixtureState,"cleanup"));
   check("fixture cleanup preserves all earlier auction records",sql("SELECT count(*) FROM public.listings"),existingCount);
   before=sql(untouched);

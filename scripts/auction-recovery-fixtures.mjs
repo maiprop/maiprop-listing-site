@@ -35,7 +35,8 @@ export function auctionFixtureSql(s, action) {
   if(action!=="seed" || s.users.length!==2) throw Error("Auction seed requires exactly two new accounts");
   return `BEGIN; SET LOCAL app.ecas_load_test='true'; SET LOCAL statement_timeout='120s';
  SELECT pg_advisory_xact_lock(hashtextextended('private.publish_public_catalogue',0));
- ${s.users.map(u=>`UPDATE public.profiles SET role='buyer',participant_type='buyer',force_pro_access=${u.tier==="paid"},display_name='Auction recovery ${u.tier}' WHERE user_id='${u.id}'::uuid;`).join("\n")}
+ ${s.users.map(u=>`SELECT public.complete_onboarding_role_for_user('${u.id}'::uuid,'buyer'::public.user_role,'buyer','Auction recovery ${u.tier}',NULL,NULL);
+ UPDATE public.profiles SET force_pro_access=${u.tier==="paid"} WHERE user_id='${u.id}'::uuid;`).join("\n")}
  INSERT INTO public.listings (id,owner_id,title,description,address,city,region,postal_code,latitude,longitude,price,price_per_sqm,sqm,bedrooms,bathrooms,floor,total_floors,year_built,energy_class,property_type,listing_type,status,auction_date,auction_starting_bid,auction_court,website_url,tags,created_at,updated_at,is_off_market)
  SELECT id,NULL,'Auction recovery property '||n,'Temporary isolated staging auction','1 Recovery Avenue','AuctionProof${s.run_id}','Attica','10557',37.98,23.72,125000,1250,100,2,1,2,5,2005,'B','apartment','auction','active',(date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')+n*interval '1 millisecond',100000,'Athens Court','https://example.invalid/auction-recovery',ARRAY['source:maiprop-os','os_auction:recovery-${s.run_id}-'||n,'${s.tag}','auction_pool:'||to_char((now() AT TIME ZONE 'UTC')::date,'YYYY-MM-DD'),'round:1','ownership:full'],date_trunc('minute',now())-interval '1 minute',now(),false
  FROM unnest(ARRAY[${ids}]) WITH ORDINALITY f(id,n);
