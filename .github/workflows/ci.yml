@@ -159,22 +159,17 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
-        env:
-          # The components smoke-test file alone renders ~150 React components
-          # in one process; with the default 2 GB Node heap on Linux runners
-          # the V8 GC starts thrashing and OOM-kills the worker. 4 GB leaves
-          # comfortable head-room. Pair this with `pool: 'forks'` in
-          # vitest.config.ts so other files run in fresh processes.
-          NODE_OPTIONS: --max-old-space-size=4096
-
       - name: Test catalogue hotfix release contracts
         run: npm run test:catalogue-hotfix
 
       - name: Coverage
         run: npm run test:coverage
         env:
+          # The components smoke-test file alone renders ~150 React components
+          # in one process; with the default 2 GB Node heap on Linux runners
+          # the V8 GC starts thrashing and OOM-kills the worker. 4 GB leaves
+          # comfortable head-room. Pair this with `pool: 'forks'` in
+          # vitest.config.ts so other files run in fresh processes.
           NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Check generated types freshness
@@ -330,9 +325,6 @@ jobs:
         # our CI smoke tests. Avoid --with-deps here because it enters apt and
         # can stall on external package mirrors before tests ever start.
         run: npx playwright install chromium
-
-      - name: Build app
-        run: npm run build
 
       - name: Run authenticated performance gates
         run: npm run test:perf
