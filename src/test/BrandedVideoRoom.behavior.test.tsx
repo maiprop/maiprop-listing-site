@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
     meeting_type: "video",
   },
   currentUserId: "owner-1",
+  professionalArchived: false,
   consultationAuthorized: false,
   queryError: null as Error | null,
   queryPending: false,
@@ -67,7 +68,11 @@ vi.mock("@/integrations/supabase/client", () => ({
         maybeSingle: vi.fn(async () => {
           if (table === "professionals") {
             if (mocks.queryError) return { data: null, error: mocks.queryError };
-            return { data: mocks.professional, error: null };
+            return { data: mocks.currentUserId === mocks.professional.user_id ? mocks.professional : null, error: null };
+          }
+          if (table === "public_professionals") {
+            if (mocks.queryError) return { data: null, error: mocks.queryError };
+            return { data: mocks.professionalArchived ? null : mocks.professional, error: null };
           }
           return {
             data: mocks.consultationAuthorized && mocks.consultation.meeting_type === "video" ? mocks.consultation : null,
@@ -149,6 +154,7 @@ describe("BrandedVideoRoom", () => {
       meeting_type: "video",
     };
     mocks.currentUserId = "owner-1";
+    mocks.professionalArchived = false;
     mocks.consultationAuthorized = false;
     mocks.queryError = null;
     mocks.channel = null;
@@ -193,7 +199,7 @@ describe("BrandedVideoRoom", () => {
     expect(screen.queryByText(/mAI prop video room/i)).not.toBeInTheDocument();
   });
 
-  it("scopes buyer access and signaling to a confirmed video consultation", async () => {
+  it("uses public professional branding when raw RLS denies a confirmed consultation buyer", async () => {
     mocks.currentUserId = "buyer-1";
     mocks.consultationId = "33333333-3333-4333-8333-333333333333";
     mocks.consultationAuthorized = true;
@@ -211,6 +217,23 @@ describe("BrandedVideoRoom", () => {
     expect(supabase.channel).toHaveBeenCalledWith("video:consultation:33333333-3333-4333-8333-333333333333", expect.objectContaining({
       config: expect.objectContaining({ private: true }),
     }));
+  });
+
+  it("preserves an archived professional owner's management room", async () => {
+    mocks.professionalArchived = true;
+    renderRoom();
+
+    expect(await screen.findByText(/mAI prop video room/i)).toBeInTheDocument();
+  });
+
+  it("does not expose an archived professional room to a consultation buyer", async () => {
+    mocks.professionalArchived = true;
+    mocks.currentUserId = "buyer-1";
+    mocks.consultationId = "33333333-3333-4333-8333-333333333333";
+    mocks.consultationAuthorized = true;
+    renderRoom();
+
+    expect(await screen.findByText("Professional not found.")).toBeInTheDocument();
   });
 
   it("rejects scoped in-person consultations before exposing the room", async () => {

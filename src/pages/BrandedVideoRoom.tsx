@@ -50,12 +50,25 @@ export default function BrandedVideoRoom() {
     queryKey: ["professional-video-room", professionalId, consultationId, user?.id],
     queryFn: async () => {
       if (!isUuid(professionalId) || (consultationId && !isUuid(consultationId)) || !user?.id) return null;
-      const { data, error: queryError } = await supabase
-        .from("professionals")
+      const { data: publicProfessional, error: queryError } = await supabase
+        .from("public_professionals")
         .select("id, user_id, display_name, avatar_url, title, category, video_link")
         .eq("id", professionalId)
         .maybeSingle();
       if (queryError) throw queryError;
+      let data = publicProfessional;
+      if (!data) {
+        // Archived profiles stay private, but their owners retain management
+        // rooms. Consultation guests only need the public branding projection.
+        const { data: ownedProfessional, error: ownerError } = await supabase
+          .from("professionals")
+          .select("id, user_id, display_name, avatar_url, title, category, video_link")
+          .eq("id", professionalId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (ownerError) throw ownerError;
+        data = ownedProfessional;
+      }
       if (!data) return null;
       const professional = data as ProfessionalVideoProfile;
       const isProfessionalOwner = professional.user_id === user.id;
