@@ -3900,13 +3900,25 @@
   "groupReadiness": {
     "A1": {
       "ready": false,
+      "localImplementation": {
+        "head": "823f8095",
+        "review": "spec and quality approved; local SQL phases/repeat, 70 focused client tests and typecheck passed; browser/PostgREST/staging pending"
+      },
+      "rollout": [
+        "Apply only 20260921163903_restore_public_professionals_contract.sql and verify the public view/RPC through PostgREST.",
+        "Deploy the reviewed BrandedVideoRoom public-projection consumer and verify owner/confirmed-buyer consultation rooms.",
+        "Refresh legacy clients before 20260921164512_restrict_professionals_management_reads.sql; retain the consumer patch in any frontend rollback.",
+        "Apply policy hardening and verify public reads plus raw-table allow/deny boundaries and video journeys."
+      ],
       "needs": [
-        "forward routine/view migration",
-        "anonymous and owner/admin runtime proof"
+        "scoped staging/PostgREST and real-browser evidence",
+        "compatible frontend rollback artifact retaining the room caller fix",
+        "legacy-client transition confirmation"
       ],
       "doesNotNeed": [
         "anon raw-table grant",
-        "Edge deployment"
+        "Edge deployment",
+        "A6 project/storage/billing changes"
       ]
     },
     "A2": {
@@ -3989,7 +4001,8 @@
       "A3 exactly-once lost-response retry unresolved",
       "A6b cleanup relations unprobed",
       "A6c columns/FK/indexes unprobed"
-    ]
+    ],
+    "A1": "Coordinated projection -> room consumer -> legacy refresh -> raw-policy hardening. The obsolete guest raw-table query blocks the entire video room after hardening; frontend rollback must retain the reviewed public-projection caller."
   },
   "localEvidence": {
     "openHouseSourceProof": {
