@@ -320,3 +320,10 @@ These tasks address newly verified active paths from the current agent audit. Re
 - [ ] Validate backward compatibility and rollout order; old clients must keep working through the additive rollout, without claiming their retries become exactly once.
 - [ ] Run meaningful local SQL and form/page behavior tests before marking the full A3 retry requirement complete.
 
+### Task 19 — H8/A3 fallback — Keep developer and enquiry claims evidence based
+
+**Files:** NewBuildDetail, RegisterInterestCard, their focused behavior tests and necessary locale entries.
+- [ ] Remove the unconditional verified-developer claim: the public owner projection supplies identity, not a developer-verification decision, and creation checks role rather than verification. Preserve the owner/contact card with neutral Developer wording unless an existing authoritative verification contract can be demonstrated.
+- [ ] Correct the submitted-body translation fallback to the same factual saved-enquiry outcome as the translations. A missing translation must not resurrect the notification or response-time promise.
+- [ ] Test the actual owner card with no verification evidence, and successful submission when translation lookup returns the missing key. Preserve existing error/retry and contact behavior.
+- [ ] Run focused tests and type checking. No new verification workflow, expanded public-profile fields or release changes are required.
