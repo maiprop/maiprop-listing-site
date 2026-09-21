@@ -1,0 +1,4033 @@
+{
+  "schemaVersion": 1,
+  "purpose": "A0 bounded read-only dependency map; not production authorization.",
+  "source": {
+    "workspaceHead": "94e5ba58c8a641a0a7ab681253c83a222a14aa24",
+    "callSiteSnapshotCommit": "ef2046572107fe1cda3b7aacb769af563c819760",
+    "workingTree": "dirty: concurrent A3 implementation; immutable candidate SHA unresolved",
+    "observationNote": "Workspace SHA/state above describe the mapper input snapshot, not the current remediation branch head."
+  },
+  "baseline": {
+    "checkedAt": {
+      "database": "2026-09-21T15:45:32.417092+00:00",
+      "productionCapabilities": "2026-09-21T16:09:57.175848+00:00",
+      "website": "2026-09-21T15:51:14.511Z"
+    },
+    "serverVersion": "17.6",
+    "appliedMigrationCount": 421,
+    "latestAppliedMigration": "20260921055243",
+    "appliedMigrations": [
+      {
+        "name": "fb487914-ce34-4cc3-8fd3-eb1ca344b71c",
+        "version": "20260216201611"
+      },
+      {
+        "name": "13bbbd12-5d26-48e3-ad40-f91e49d8c8e7",
+        "version": "20260216205631"
+      },
+      {
+        "name": "64be143a-b70b-45e4-a73d-3e0de3ae5771",
+        "version": "20260216225334"
+      },
+      {
+        "name": "6ce201d9-a46b-4365-854e-e5b1e7885e38",
+        "version": "20260217111851"
+      },
+      {
+        "name": "4eeb7efa-4152-462b-af68-864e1e7c76dc",
+        "version": "20260217122144"
+      },
+      {
+        "name": "533c010e-0b53-45a9-b116-9918db513be5",
+        "version": "20260217130251"
+      },
+      {
+        "name": "ce857d33-7897-4fd6-845a-e35f1314fe25",
+        "version": "20260219001012"
+      },
+      {
+        "name": "c4505e8c-2eb1-42e5-a18b-989178b27f54",
+        "version": "20260219091605"
+      },
+      {
+        "name": "38ae5916-cc1a-4718-a6ec-9a5846e03bc0",
+        "version": "20260219091955"
+      },
+      {
+        "name": "b3c12a68-229a-48ac-8c10-d1312f1d078d",
+        "version": "20260222102644"
+      },
+      {
+        "name": "dddfc8ba-f80d-43b0-a47c-e7d03a11d707",
+        "version": "20260308133126"
+      },
+      {
+        "name": "220de78e-59aa-47f7-af49-8d799c48ae97",
+        "version": "20260222105146"
+      },
+      {
+        "name": "560d4702-4725-4fc5-a02c-14dcd232478b",
+        "version": "20260222110727"
+      },
+      {
+        "name": "4c7b7466-a27f-403a-baad-c238008513e3",
+        "version": "20260222114335"
+      },
+      {
+        "name": "6c862e8a-6966-4140-8783-a2afd2d41244",
+        "version": "20260222124042"
+      },
+      {
+        "name": "257d10f7-a840-40a3-91e4-15c15fba64d7",
+        "version": "20260222203714"
+      },
+      {
+        "name": "ecfab04d-2985-4f83-8f56-931c8ba4635f",
+        "version": "20260223170900"
+      },
+      {
+        "name": "6251bd14-cdb0-4b91-8ecb-305b9fe85e75",
+        "version": "20260228230651"
+      },
+      {
+        "name": "0286d48c-7fa1-4be6-b5de-46da76230b59",
+        "version": "20260304084545"
+      },
+      {
+        "name": "5f5b20b6-fa26-403a-b10f-39c9e51bdf4f",
+        "version": "20260306223545"
+      },
+      {
+        "name": "bdedef40-cd13-4cfa-ac27-76deba669d23",
+        "version": "20260306223609"
+      },
+      {
+        "name": "dd5c1e13-3880-4db5-a804-504063287c5a",
+        "version": "20260308000833"
+      },
+      {
+        "name": "89ca84f5-3920-48de-bde2-a1cbdcba0c87",
+        "version": "20260316160014"
+      },
+      {
+        "name": "663d874f-45fc-4dde-8d01-dba5c2319e0e",
+        "version": "20260308000924"
+      },
+      {
+        "name": "cb975a37-7e0b-430f-8869-54aeccf09085",
+        "version": "20260308001003"
+      },
+      {
+        "name": "0891643a-78b7-412c-b648-cbd9c0d2d1c3",
+        "version": "20260308001447"
+      },
+      {
+        "name": "913a6ca3-50df-4731-bb5b-b43dc9f356be",
+        "version": "20260308002837"
+      },
+      {
+        "name": "f1a8dd0e-d667-4bea-9806-2c0971d5fa9d",
+        "version": "20260308134826"
+      },
+      {
+        "name": "b0508ab6-7107-4543-b6b6-217abf6f56bd",
+        "version": "20260308200949"
+      },
+      {
+        "name": "ac8d72c2-7bb0-453c-ba33-b954c022bb58",
+        "version": "20260308203929"
+      },
+      {
+        "name": "158b18f8-8c70-4352-8200-af28acdd80a7",
+        "version": "20260309112105"
+      },
+      {
+        "name": "05abca75-5574-49cc-aba7-26fe6946168a",
+        "version": "20260309120114"
+      },
+      {
+        "name": "8af2c65d-c3e3-4b8f-ac3a-353d13d1e8b0",
+        "version": "20260309144438"
+      },
+      {
+        "name": "delete_auctions_past_and_today",
+        "version": "20260317120000"
+      },
+      {
+        "name": "add_service_role_switch_audit_rpc",
+        "version": "20260602037000"
+      },
+      {
+        "name": "e04dc11c-c716-4ae4-8bdb-fea2b55dd7c0",
+        "version": "20260309180652"
+      },
+      {
+        "name": "40f0c882-d2c9-43e1-9583-0a67a1903189",
+        "version": "20260309194824"
+      },
+      {
+        "name": "c4f5687d-5392-4a51-a28f-4979c3197ae4",
+        "version": "20260311232309"
+      },
+      {
+        "name": "c5695ab6-84e0-444a-ae4d-f48f4ea3f515",
+        "version": "20260311232347"
+      },
+      {
+        "name": "3fdf2877-d501-40f8-9462-75b8d337bfb4",
+        "version": "20260311232446"
+      },
+      {
+        "name": "d2a0393c-df16-4622-a67d-a92d5f0cbe84",
+        "version": "20260312105839"
+      },
+      {
+        "name": "560b9816-f162-4d9e-ab15-68d8619a75f8",
+        "version": "20260312174300"
+      },
+      {
+        "name": "a0ebe93e-c31a-4010-9a0d-327b32f925dc",
+        "version": "20260312220432"
+      },
+      {
+        "name": "fix_listings_rls_and_public_read",
+        "version": "20260313120000"
+      },
+      {
+        "name": "restrict_legacy_role_switch_audit_rpc",
+        "version": "20260602038000"
+      },
+      {
+        "name": "1df27cbb-0a65-443e-b2a4-f3daf20f08c6",
+        "version": "20260315093949"
+      },
+      {
+        "name": "c3be5b68-2cbf-4499-a61a-d359247ace2d",
+        "version": "20260315094057"
+      },
+      {
+        "name": "add_seller_landlord_role",
+        "version": "20260315120000"
+      },
+      {
+        "name": "add_pricing_configs",
+        "version": "20260316100000"
+      },
+      {
+        "name": "70585fd8-1610-4e5c-98a9-839f3b703990",
+        "version": "20260316154327"
+      },
+      {
+        "name": "59e02058-0b49-45f5-baab-b67a987e66c3",
+        "version": "20260316154820"
+      },
+      {
+        "name": "add_service_ai_quota_reservation_rpc",
+        "version": "20260602039000"
+      },
+      {
+        "name": "fix_pricing_configs_rls_agent_only",
+        "version": "20260318120000"
+      },
+      {
+        "name": "email_infra",
+        "version": "20260318134556"
+      },
+      {
+        "name": "security_fix_consultations_firesale_admin_and_ai_auth",
+        "version": "20260318140000"
+      },
+      {
+        "name": "security_fixes",
+        "version": "20260319120000"
+      },
+      {
+        "name": "fix_critical_security_issues",
+        "version": "20260320120000"
+      },
+      {
+        "name": "extensions_schema_optional",
+        "version": "20260320130000"
+      },
+      {
+        "name": "add_open_house_listing_type",
+        "version": "20260405120000"
+      },
+      {
+        "name": "open_house_asset_control",
+        "version": "20260406120000"
+      },
+      {
+        "name": "restrict_legacy_reserve_ai_quota_rpc",
+        "version": "20260602040000"
+      },
+      {
+        "name": "linter_security_definer_and_rls",
+        "version": "20260321120000"
+      },
+      {
+        "name": "fix_profiles_sync_log_listings_rls",
+        "version": "20260322120000"
+      },
+      {
+        "name": "add_missing_features",
+        "version": "20260323120000"
+      },
+      {
+        "name": "investor_subscriptions_no_self_grant",
+        "version": "20260324120000"
+      },
+      {
+        "name": "profiles_video_link",
+        "version": "20260325120000"
+      },
+      {
+        "name": "single_platform_admin",
+        "version": "20260326120000"
+      },
+      {
+        "name": "allow_professional_seller_upgrades",
+        "version": "20260327120000"
+      },
+      {
+        "name": "developer_projects_full",
+        "version": "20260328120000"
+      },
+      {
+        "name": "project_leads_and_analytics",
+        "version": "20260328130000"
+      },
+      {
+        "name": "sync_log_service_role_only",
+        "version": "20260414130000"
+      },
+      {
+        "name": "add_service_admin_report_moderation_rpcs",
+        "version": "20260601144500"
+      },
+      {
+        "name": "adjust_listings_select_policy_roles",
+        "version": "20260605160131"
+      },
+      {
+        "name": "analytics_crm_messages_improvements",
+        "version": "20260329000000"
+      },
+      {
+        "name": "agent_kpis_professionals",
+        "version": "20260330120000"
+      },
+      {
+        "name": "restructure_roles",
+        "version": "20260331120000"
+      },
+      {
+        "name": "disconnect_agent_from_admin",
+        "version": "20260401120000"
+      },
+      {
+        "name": "set_kr_maiprop_platform_admin",
+        "version": "20260402120000"
+      },
+      {
+        "name": "add_listing_features",
+        "version": "20260403120000"
+      },
+      {
+        "name": "open_house_asset_control_fixes",
+        "version": "20260406130000"
+      },
+      {
+        "name": "firesale_investor_access_and_cron",
+        "version": "20260412120000"
+      },
+      {
+        "name": "add_admin_enum",
+        "version": "20260413115500"
+      },
+      {
+        "name": "admin_role_unified",
+        "version": "20260413120000"
+      },
+      {
+        "name": "investor_subscriptions_tiers",
+        "version": "20260413130000"
+      },
+      {
+        "name": "seed_agent_role_rpc",
+        "version": "20260414120000"
+      },
+      {
+        "name": "seed_grant_role_generic",
+        "version": "20260414120001"
+      },
+      {
+        "name": "firesale_published_to_investors",
+        "version": "20260415120000"
+      },
+      {
+        "name": "listing_reports",
+        "version": "20260416120000"
+      },
+      {
+        "name": "invitation_requests",
+        "version": "20260417120000"
+      },
+      {
+        "name": "invitation_requests_extended",
+        "version": "20260418120000"
+      },
+      {
+        "name": "security_audit_fixes",
+        "version": "20260419120000"
+      },
+      {
+        "name": "security_linter_comprehensive",
+        "version": "20260420120000"
+      },
+      {
+        "name": "add_leads_table",
+        "version": "20260425120000"
+      },
+      {
+        "name": "allow_self_assign_agent_investor",
+        "version": "20260426120000"
+      },
+      {
+        "name": "invitation_requests_own_read",
+        "version": "20260426120001"
+      },
+      {
+        "name": "plan_limits_usage_tables",
+        "version": "20260517120000"
+      },
+      {
+        "name": "quick_sale_eligible_buyers_only",
+        "version": "20260518000000"
+      },
+      {
+        "name": "performance_optimizations",
+        "version": "20260522000000"
+      },
+      {
+        "name": "participant_type_column",
+        "version": "20260522100000"
+      },
+      {
+        "name": "firesale_requests_ownership_guard",
+        "version": "20260613000001"
+      },
+      {
+        "name": "add_listings_public_count_property_type_index",
+        "version": "20260605160246"
+      },
+      {
+        "name": "notifications_table",
+        "version": "20260523000000"
+      },
+      {
+        "name": "open_house_screening",
+        "version": "20260523100000"
+      },
+      {
+        "name": "gating_and_type_fixes",
+        "version": "20260524000000"
+      },
+      {
+        "name": "seed_bypass_listing_trigger",
+        "version": "20260525000000"
+      },
+      {
+        "name": "seed_bypass_viewing_trigger",
+        "version": "20260526000000"
+      },
+      {
+        "name": "seed_bypass_saved_search_trigger",
+        "version": "20260527000000"
+      },
+      {
+        "name": "seed_bypass_auction_alert_trigger",
+        "version": "20260528000000"
+      },
+      {
+        "name": "extend_property_types",
+        "version": "20260704000000"
+      },
+      {
+        "name": "featured_ads_expiry",
+        "version": "20260529100000"
+      },
+      {
+        "name": "featured_ads_expiry",
+        "version": "20260529000000"
+      },
+      {
+        "name": "cron_saved_search_alerts",
+        "version": "20260530000000"
+      },
+      {
+        "name": "rls_pro_product_ids",
+        "version": "20260601120000"
+      },
+      {
+        "name": "listing_neighbourhood_scores",
+        "version": "20260602120000"
+      },
+      {
+        "name": "security_linter_search_path_and_policies",
+        "version": "20260603120000"
+      },
+      {
+        "name": "performance_rls_initplan_and_dedup",
+        "version": "20260604120000"
+      },
+      {
+        "name": "professional_reviews",
+        "version": "20260605120000"
+      },
+      {
+        "name": "increment_listing_views_rpc",
+        "version": "20260404140000"
+      },
+      {
+        "name": "contact_submissions",
+        "version": "20260606120000"
+      },
+      {
+        "name": "block_investor_institutional_self_assign",
+        "version": "20260607120000"
+      },
+      {
+        "name": "role_switch_history",
+        "version": "20260607120001"
+      },
+      {
+        "name": "rename_roles_buyer_seller",
+        "version": "20260608120000"
+      },
+      {
+        "name": "enable_featured_cron",
+        "version": "20260612000001"
+      },
+      {
+        "name": "listing_plan_limits",
+        "version": "20260612000002"
+      },
+      {
+        "name": "schema_alignment",
+        "version": "20260614000000"
+      },
+      {
+        "name": "clean_duplicate_conversation_participants",
+        "version": "20260417000000"
+      },
+      {
+        "name": "fix_stale_enum_refs_and_admin_checks",
+        "version": "20260615000000"
+      },
+      {
+        "name": "fix_messages_read_and_cleanup",
+        "version": "20260616000000"
+      },
+      {
+        "name": "fix_schema_gaps",
+        "version": "20260617000000"
+      },
+      {
+        "name": "invitation_requests_extended",
+        "version": "20260418120100"
+      },
+      {
+        "name": "strict_release_owner_pro_status_edge_grant",
+        "version": "20260507150143"
+      },
+      {
+        "name": "oh_pof_verified_status",
+        "version": "20260427000000"
+      },
+      {
+        "name": "final_security_cleanup",
+        "version": "20260618000000"
+      },
+      {
+        "name": "audit_security_fixes",
+        "version": "20260619000000"
+      },
+      {
+        "name": "cron_secret_auth",
+        "version": "20260620000000"
+      },
+      {
+        "name": "audit_findings_fix",
+        "version": "20260621000000"
+      },
+      {
+        "name": "onboarding_role_explicit",
+        "version": "20260622000000"
+      },
+      {
+        "name": "onboarding_completion_rpc",
+        "version": "20260622010000"
+      },
+      {
+        "name": "rate_limit_counters",
+        "version": "20260623120000"
+      },
+      {
+        "name": "authoritative_role",
+        "version": "20260623130000"
+      },
+      {
+        "name": "onboarding_rpc_only_role",
+        "version": "20260623140000"
+      },
+      {
+        "name": "plan_limit_enforcement",
+        "version": "20260623150000"
+      },
+      {
+        "name": "ai_usage_tracking",
+        "version": "20260623160000"
+      },
+      {
+        "name": "audit_remediations",
+        "version": "20260627000000"
+      },
+      {
+        "name": "fix_profiles_rls_recursion",
+        "version": "20260628000000"
+      },
+      {
+        "name": "strict_release_rls_performance_policy_cleanup",
+        "version": "20260507152505"
+      },
+      {
+        "name": "drop_unused_listings_public_count_property_type_index",
+        "version": "20260605160430"
+      },
+      {
+        "name": "add_listing_and_favorites_indexes",
+        "version": "20260628010000"
+      },
+      {
+        "name": "rls_null_guards_all_admin_policies",
+        "version": "20260629000000"
+      },
+      {
+        "name": "critical_security_fixes",
+        "version": "20260627200000"
+      },
+      {
+        "name": "agent_data_inputs",
+        "version": "20260703120000"
+      },
+      {
+        "name": "expire_past_auctions_cron",
+        "version": "20260506000000"
+      },
+      {
+        "name": "medium_audit_fixes",
+        "version": "20260628100000"
+      },
+      {
+        "name": "advisor_safe_wins",
+        "version": "20260630000000"
+      },
+      {
+        "name": "agent_data_inputs",
+        "version": "20260703000000"
+      },
+      {
+        "name": "critical_security_advisor_fixes",
+        "version": "20260507154337"
+      },
+      {
+        "name": "strict_release_security_policy_fixes",
+        "version": "20260507090742"
+      },
+      {
+        "name": "strict_release_fk_index_fixes",
+        "version": "20260507090757"
+      },
+      {
+        "name": "strict_release_security_definer_grants",
+        "version": "20260507091004"
+      },
+      {
+        "name": "strict_release_storage_listing_policy_fixes",
+        "version": "20260507091053"
+      },
+      {
+        "name": "strict_release_anon_rpc_and_usage_indexes",
+        "version": "20260507091527"
+      },
+      {
+        "name": "strict_release_remove_unused_rpc_grants",
+        "version": "20260507144803"
+      },
+      {
+        "name": "strict_release_edge_only_rpc_grants",
+        "version": "20260507145130"
+      },
+      {
+        "name": "strict_release_listing_view_edge_grants",
+        "version": "20260507145403"
+      },
+      {
+        "name": "strict_release_onboarding_edge_grant",
+        "version": "20260507145617"
+      },
+      {
+        "name": "strict_release_pr_review_followups",
+        "version": "20260507200151"
+      },
+      {
+        "name": "strict_release_record_listing_view_invoker",
+        "version": "20260507200409"
+      },
+      {
+        "name": "strict_release_edge_rpc_auth_context",
+        "version": "20260507201245"
+      },
+      {
+        "name": "strict_release_rls_performance_policy_cleanup",
+        "version": "20260507152253"
+      },
+      {
+        "name": "review_findings_fixes",
+        "version": "20260510083000"
+      },
+      {
+        "name": "closing_date_check_to_trigger",
+        "version": "20260703130000"
+      },
+      {
+        "name": "strict_release_advisor_fixes",
+        "version": "20260705000000"
+      },
+      {
+        "name": "drop_redundant_unused_indexes",
+        "version": "20260510100000"
+      },
+      {
+        "name": "typology_switch_cleanup",
+        "version": "20260510120000"
+      },
+      {
+        "name": "projects_archive_aware_select",
+        "version": "20260706000000"
+      },
+      {
+        "name": "restore_storage_grants_drift",
+        "version": "20260706120000"
+      },
+      {
+        "name": "handle_new_user_trigger",
+        "version": "20260707000000"
+      },
+      {
+        "name": "handle_new_user_trigger",
+        "version": "20260511183000"
+      },
+      {
+        "name": "fix_linked_lint_failures_apply",
+        "version": "20260707010000"
+      },
+      {
+        "name": "serialize_agent_data_input_quota",
+        "version": "20260707020000"
+      },
+      {
+        "name": "harden_open_house_offer_workflow",
+        "version": "20260514142236"
+      },
+      {
+        "name": "firesale_interest_reservation_workflow",
+        "version": "20260514150000"
+      },
+      {
+        "name": "admin_review_invitation_workflow",
+        "version": "20260514172000"
+      },
+      {
+        "name": "admin_update_firesale_pipeline_workflow",
+        "version": "20260514172151"
+      },
+      {
+        "name": "fix_firesale_publication_status_ambiguity",
+        "version": "20260514180344"
+      },
+      {
+        "name": "high_trust_role_invite_activation",
+        "version": "20260514180443"
+      },
+      {
+        "name": "harden_open_house_registration_updates",
+        "version": "20260514185213"
+      },
+      {
+        "name": "activate_high_trust_profile_roles_from_paid_subscriptions",
+        "version": "20260514190054"
+      },
+      {
+        "name": "persist_invitation_rejection_reason",
+        "version": "20260514193651"
+      },
+      {
+        "name": "include_force_pro_in_sql_is_pro",
+        "version": "20260518193100"
+      },
+      {
+        "name": "repair_invitation_rejection_reason_rpc",
+        "version": "20260514194208"
+      },
+      {
+        "name": "restore_public_agent_developer_onboarding",
+        "version": "20260707030000"
+      },
+      {
+        "name": "ai_reports_signed_in_quota",
+        "version": "20260707040000"
+      },
+      {
+        "name": "open_house_registration_contact_verification",
+        "version": "20260515092259"
+      },
+      {
+        "name": "firesale_interest_base_table",
+        "version": "20260514145900"
+      },
+      {
+        "name": "harden_paid_role_limits_and_pricing_audience",
+        "version": "20260515144500"
+      },
+      {
+        "name": "enforce_professional_pro_consultation_requests",
+        "version": "20260515173000"
+      },
+      {
+        "name": "serialize_open_house_registration_capacity",
+        "version": "20260515200905"
+      },
+      {
+        "name": "reserve_ai_quota",
+        "version": "20260707050000"
+      },
+      {
+        "name": "explicit_data_api_grants",
+        "version": "20260707060000"
+      },
+      {
+        "name": "audience_scoped_pro_entitlements",
+        "version": "20260707070000"
+      },
+      {
+        "name": "harden_participant_type_entitlement_audience",
+        "version": "20260707080000"
+      },
+      {
+        "name": "guard_record_listing_view_public_visibility",
+        "version": "20260707090000"
+      },
+      {
+        "name": "property_report_cache",
+        "version": "20260516175334"
+      },
+      {
+        "name": "protect_admin_from_self_onboarding",
+        "version": "20260518091806"
+      },
+      {
+        "name": "add_video_room_realtime_policies",
+        "version": "20260518193239"
+      },
+      {
+        "name": "repair_video_room_realtime_authorization",
+        "version": "20260518211500"
+      },
+      {
+        "name": "use_jwt_claims_for_video_room_realtime",
+        "version": "20260518212500"
+      },
+      {
+        "name": "require_auth_for_professional_requests",
+        "version": "20260707100000"
+      },
+      {
+        "name": "drop_legacy_anon_consultation_policy",
+        "version": "20260707110000"
+      },
+      {
+        "name": "set_core_ai_pro_quota_50",
+        "version": "20260707120000"
+      },
+      {
+        "name": "professional_verification_columns",
+        "version": "20260524190114"
+      },
+      {
+        "name": "fix_cron_and_open_house_notify_wiring",
+        "version": "20260707130000"
+      },
+      {
+        "name": "interaction_notifications",
+        "version": "20260524150533"
+      },
+      {
+        "name": "auto_capture_interaction_leads",
+        "version": "20260524160000"
+      },
+      {
+        "name": "harden_video_room_authorization",
+        "version": "20260524165932"
+      },
+      {
+        "name": "auto_capture_new_build_project_leads",
+        "version": "20260524171039"
+      },
+      {
+        "name": "contact_task_due_notifications",
+        "version": "20260524185657"
+      },
+      {
+        "name": "notify_new_build_interest_from_trigger",
+        "version": "20260524185805"
+      },
+      {
+        "name": "audit_notification_and_open_house_flow_fixes",
+        "version": "20260524185903"
+      },
+      {
+        "name": "restrict_professional_review_helper_rpc",
+        "version": "20260602035000"
+      },
+      {
+        "name": "validate_consultation_availability_preferences",
+        "version": "20260524190143"
+      },
+      {
+        "name": "enforce_remaining_plan_limits_and_listing_lifecycle",
+        "version": "20260525071300"
+      },
+      {
+        "name": "admin_cross_user_workflow_fixes",
+        "version": "20260525081328"
+      },
+      {
+        "name": "business_logic_role_review_agent_fixes",
+        "version": "20260525082517"
+      },
+      {
+        "name": "firesale_pipeline_business_logic",
+        "version": "20260525082723"
+      },
+      {
+        "name": "ensure_professional_notes_live_schema",
+        "version": "20260525161505"
+      },
+      {
+        "name": "subscription_lifecycle_grace_and_lapse",
+        "version": "20260525171000"
+      },
+      {
+        "name": "scope_consultation_video_rooms_and_contact_admin_fields",
+        "version": "20260526073830"
+      },
+      {
+        "name": "fix_video_room_uuid_guards",
+        "version": "20260526143000"
+      },
+      {
+        "name": "hide_off_market_from_public_select",
+        "version": "20260526171502"
+      },
+      {
+        "name": "harden_supabase_advisor_security",
+        "version": "20260707140000"
+      },
+      {
+        "name": "consolidate_public_media_rls",
+        "version": "20260707143000"
+      },
+      {
+        "name": "fix_open_house_capacity_ambiguity",
+        "version": "20260527085858"
+      },
+      {
+        "name": "enforce_remaining_plan_limits_and_listing_lifecycle",
+        "version": "20260525070738"
+      },
+      {
+        "name": "scope_consultation_video_rooms_and_contact_admin_fields",
+        "version": "20260526145936"
+      },
+      {
+        "name": "restrict_trigger_function_rpc_exposure",
+        "version": "20260526152558"
+      },
+      {
+        "name": "restrict_unused_public_role_group_helpers",
+        "version": "20260602036000"
+      },
+      {
+        "name": "private_message_attachments_bucket",
+        "version": "20260602005745"
+      },
+      {
+        "name": "harden_firesale_reservation_release_rpc",
+        "version": "20260602005746"
+      },
+      {
+        "name": "scope_authoritative_role_lookup",
+        "version": "20260602005747"
+      },
+      {
+        "name": "storage_bucket_limits",
+        "version": "20260602005748"
+      },
+      {
+        "name": "restrict_open_house_capacity_rpc",
+        "version": "20260602030000"
+      },
+      {
+        "name": "restrict_legacy_onboarding_role_rpcs",
+        "version": "20260602031000"
+      },
+      {
+        "name": "index_remaining_foreign_keys",
+        "version": "20260602032000"
+      },
+      {
+        "name": "restrict_plan_limit_helper_rpcs",
+        "version": "20260602033000"
+      },
+      {
+        "name": "restrict_agent_data_input_submit_rpcs",
+        "version": "20260602034000"
+      },
+      {
+        "name": "add_service_ai_quota_status_rpc",
+        "version": "20260602041000"
+      },
+      {
+        "name": "restrict_legacy_check_ai_quota_rpc",
+        "version": "20260602042000"
+      },
+      {
+        "name": "add_service_begin_role_switch_rpc",
+        "version": "20260602043000"
+      },
+      {
+        "name": "restrict_legacy_begin_role_switch_rpc",
+        "version": "20260602044000"
+      },
+      {
+        "name": "add_service_open_house_edge_rpcs",
+        "version": "20260601140611"
+      },
+      {
+        "name": "restrict_legacy_open_house_edge_rpcs",
+        "version": "20260601140627"
+      },
+      {
+        "name": "restrict_legacy_admin_report_moderation_rpcs",
+        "version": "20260601144512"
+      },
+      {
+        "name": "allow_service_admin_report_moderation_guard",
+        "version": "20260601144524"
+      },
+      {
+        "name": "add_service_admin_broadcast_rpc",
+        "version": "20260601145500"
+      },
+      {
+        "name": "restrict_legacy_admin_broadcast_rpc",
+        "version": "20260601145512"
+      },
+      {
+        "name": "add_service_admin_firesale_rpcs",
+        "version": "20260601150500"
+      },
+      {
+        "name": "consolidate_firesale_advisor_policies",
+        "version": "20260707153000"
+      },
+      {
+        "name": "restrict_legacy_admin_firesale_rpcs",
+        "version": "20260601150512"
+      },
+      {
+        "name": "add_service_firesale_interest_submit_rpc",
+        "version": "20260601151500"
+      },
+      {
+        "name": "restrict_legacy_firesale_interest_submit_rpc",
+        "version": "20260601151512"
+      },
+      {
+        "name": "rewrite_role_helper_policies",
+        "version": "20260601152500"
+      },
+      {
+        "name": "canonical_lead_upsert_and_contact_inbox",
+        "version": "20260525082323"
+      },
+      {
+        "name": "drop_duplicate_contact_submission_index",
+        "version": "20260602092500"
+      },
+      {
+        "name": "validate_role_switch_cleanup_role_param",
+        "version": "20260602093000"
+      },
+      {
+        "name": "reduce_advisor_policy_noise",
+        "version": "20260707150000"
+      },
+      {
+        "name": "reduce_remaining_low_risk_policy_noise",
+        "version": "20260707151000"
+      },
+      {
+        "name": "consolidate_open_house_advisor_policies",
+        "version": "20260707152000"
+      },
+      {
+        "name": "reassert_internal_security_helper_grants",
+        "version": "20260602134200"
+      },
+      {
+        "name": "allow_participant_type_firesale_interest_access",
+        "version": "20260603053003"
+      },
+      {
+        "name": "guard_viewing_status_transitions",
+        "version": "20260707154000"
+      },
+      {
+        "name": "isolate_firesale_proof_documents",
+        "version": "20260707155000"
+      },
+      {
+        "name": "add_ai_translate_usage_limit",
+        "version": "20260605154852"
+      },
+      {
+        "name": "lock_listing_quota_checks",
+        "version": "20260707156000"
+      },
+      {
+        "name": "addon_purchase_and_investor_payment_ledger",
+        "version": "20260707157000"
+      },
+      {
+        "name": "resolve_hardening_advisor_unknowns",
+        "version": "20260707158000"
+      },
+      {
+        "name": "standardize_daily_auction_pool_sync",
+        "version": "20260603174928"
+      },
+      {
+        "name": "increase_poll_os_auctions_cron_timeout",
+        "version": "20260603201131"
+      },
+      {
+        "name": "optimize_firesale_reservation_expiry",
+        "version": "20260629142217"
+      },
+      {
+        "name": "fix_staging_advisor_drift",
+        "version": "20260707159000"
+      },
+      {
+        "name": "dedupe_user_roles_select_policy",
+        "version": "20260604032056"
+      },
+      {
+        "name": "repair_seed_role_guard_trigger",
+        "version": "20260604044347"
+      },
+      {
+        "name": "block_investor_mode_self_update",
+        "version": "20260604094000"
+      },
+      {
+        "name": "fix_realtime_video_room_auth_uid_policy",
+        "version": "20260707160000"
+      },
+      {
+        "name": "fix_investor_feed_select_policy",
+        "version": "20260707161000"
+      },
+      {
+        "name": "add_admin_user_activity_analytics",
+        "version": "20260707162000"
+      },
+      {
+        "name": "lock_user_search_events_anon_privileges",
+        "version": "20260707163000"
+      },
+      {
+        "name": "add_user_auth_activity_events",
+        "version": "20260707164000"
+      },
+      {
+        "name": "listing_promotion_entitlements",
+        "version": "20260714112834"
+      },
+      {
+        "name": "harden_user_search_telemetry_guards",
+        "version": "20260707165000"
+      },
+      {
+        "name": "add_listings_active_public_updated_at_index",
+        "version": "20260605124518"
+      },
+      {
+        "name": "add_listings_public_property_type_index",
+        "version": "20260605125106"
+      },
+      {
+        "name": "enable_pg_trgm_for_listing_city_search",
+        "version": "20260605125403"
+      },
+      {
+        "name": "add_listings_public_city_trgm_index",
+        "version": "20260605125422"
+      },
+      {
+        "name": "add_listings_active_auction_tags_gin_index",
+        "version": "20260605130045"
+      },
+      {
+        "name": "drop_listings_active_auction_tags_gin_index",
+        "version": "20260605130122"
+      },
+      {
+        "name": "fix_sync_log_constraint_and_followups_cron_secret",
+        "version": "20260605134307"
+      },
+      {
+        "name": "harden_public_child_reads_and_drop_open_house_duplicate_index",
+        "version": "20260605142907"
+      },
+      {
+        "name": "consolidate_public_child_select_policies",
+        "version": "20260605143251"
+      },
+      {
+        "name": "split_listings_select_policy_for_public_counts",
+        "version": "20260605155912"
+      },
+      {
+        "name": "rewrite_late_public_helper_policies",
+        "version": "20260605190858"
+      },
+      {
+        "name": "harden_project_delete_and_firesale_seller_policy",
+        "version": "20260611070723"
+      },
+      {
+        "name": "audit_critical_remediations",
+        "version": "20260612001436"
+      },
+      {
+        "name": "rewrite_late_public_helper_policies",
+        "version": "20260605190000"
+      },
+      {
+        "name": "harden_project_delete_and_firesale_seller_policy",
+        "version": "20260611065918"
+      },
+      {
+        "name": "audit_critical_remediations",
+        "version": "20260707166000"
+      },
+      {
+        "name": "harden_auth_activity_rpc_only",
+        "version": "20260612070500"
+      },
+      {
+        "name": "canonical_project_listing_classification",
+        "version": "20260612060714"
+      },
+      {
+        "name": "developer_only_new_builds",
+        "version": "20260707167000"
+      },
+      {
+        "name": "harden_project_delete_listing_detach",
+        "version": "20260612110536"
+      },
+      {
+        "name": "cleanup_stale_advisor_indexes",
+        "version": "20260707168000"
+      },
+      {
+        "name": "split_project_select_policy",
+        "version": "20260614083852"
+      },
+      {
+        "name": "add_open_house_transaction_type",
+        "version": "20260614091438"
+      },
+      {
+        "name": "revoke_future_public_default_grants",
+        "version": "20260614145537"
+      },
+      {
+        "name": "dedupe_project_select_policies",
+        "version": "20260614145554"
+      },
+      {
+        "name": "active_listing_quota_alignment",
+        "version": "20260612163000"
+      },
+      {
+        "name": "enterprise_tenant_sso_procurement",
+        "version": "20260614155000"
+      },
+      {
+        "name": "add_subscription_trial_claims",
+        "version": "20260615171755"
+      },
+      {
+        "name": "drop_open_house_registration_all_policy",
+        "version": "20260615190500"
+      },
+      {
+        "name": "harden_trial_and_enterprise_advisor_indexes",
+        "version": "20260615192000"
+      },
+      {
+        "name": "restore_firesale_seller_insert_gate",
+        "version": "20260616165000"
+      },
+      {
+        "name": "20260617072520_consolidate_enterprise_rls_policies",
+        "version": "20260616072910"
+      },
+      {
+        "name": "project_unit_price_edge_rpc",
+        "version": "20260707169000"
+      },
+      {
+        "name": "org_permission_audit_foundation",
+        "version": "20260620093614"
+      },
+      {
+        "name": "addon_purchase_credit_delivery",
+        "version": "20260628193711"
+      },
+      {
+        "name": "fix_ai_addon_credit_reservation",
+        "version": "20260628203708"
+      },
+      {
+        "name": "grant_service_role_org_tables",
+        "version": "20260620142838"
+      },
+      {
+        "name": "cleanup_low_risk_advisor_indexes",
+        "version": "20260621085826"
+      },
+      {
+        "name": "lock_firesale_request_edge_boundary",
+        "version": "20260622072139"
+      },
+      {
+        "name": "fix_live_supabase_advisor_drift",
+        "version": "20260628215500"
+      },
+      {
+        "name": "stripe_billing_state",
+        "version": "20260628120000"
+      },
+      {
+        "name": "grant_service_role_addon_purchases",
+        "version": "20260629055249"
+      },
+      {
+        "name": "align_agent_data_input_stripe_credit_columns",
+        "version": "20260707170000"
+      },
+      {
+        "name": "add_role_switch_preflight_rpc",
+        "version": "20260629142237"
+      },
+      {
+        "name": "idempotent_property_report_charges",
+        "version": "20260630123000"
+      },
+      {
+        "name": "restrict_addon_purchases_browser_privileges",
+        "version": "20260630072117"
+      },
+      {
+        "name": "reconcile_remote_migration_history",
+        "version": "20260629231100"
+      },
+      {
+        "name": "reconcile_remote_migration_history",
+        "version": "20260629231101"
+      },
+      {
+        "name": "update_spotlight_priority_notification_copy",
+        "version": "20260630060000"
+      },
+      {
+        "name": "fix_ai_bundle_credit_reservation_limit",
+        "version": "20260630121222"
+      },
+      {
+        "name": "fix_ai_bundle_credit_trigger_limit",
+        "version": "20260630121353"
+      },
+      {
+        "name": "ecas_privacy_governance",
+        "version": "20260701144229"
+      },
+      {
+        "name": "enforce_investor_subscription_expiry",
+        "version": "20260701144610"
+      },
+      {
+        "name": "optimize_privacy_rls_initplans",
+        "version": "20260701192240"
+      },
+      {
+        "name": "exclude_synthetic_admin_activity",
+        "version": "20260702040225"
+      },
+      {
+        "name": "pin_synthetic_admin_activity_search_path",
+        "version": "20260702112614"
+      },
+      {
+        "name": "allow_owner_auth_trigger_signup",
+        "version": "20260707171000"
+      },
+      {
+        "name": "fix_billing_advisor_followup",
+        "version": "20260707172000"
+      },
+      {
+        "name": "enterprise_tenant_resource_ownership",
+        "version": "20260702180854"
+      },
+      {
+        "name": "fix_investor_feed_select_policy_current",
+        "version": "20260702190809"
+      },
+      {
+        "name": "drop_legacy_project_authenticated_select_policy",
+        "version": "20260702235107"
+      },
+      {
+        "name": "complete_stripe_billing_refunds_runtime_current",
+        "version": "20260703073249"
+      },
+      {
+        "name": "scope_addon_credit_runtime",
+        "version": "20260703073514"
+      },
+      {
+        "name": "harden_current_investor_subscription_rpc",
+        "version": "20260703064337"
+      },
+      {
+        "name": "add_listing_location_search_text",
+        "version": "20260709072309"
+      },
+      {
+        "name": "fix_listing_location_search_text_normalizer",
+        "version": "20260709072653"
+      },
+      {
+        "name": "preserve_deleted_listing_promotion_audit",
+        "version": "20260716113200"
+      },
+      {
+        "name": "enforce_stripe_runtime_livemode_consistency",
+        "version": "20260709093750"
+      },
+      {
+        "name": "expand_listing_location_search_greeklish",
+        "version": "20260709161307"
+      },
+      {
+        "name": "expand_location_search_aliases",
+        "version": "20260709170500"
+      },
+      {
+        "name": "ecas_no_upgrade_hardening",
+        "version": "20260711180343"
+      },
+      {
+        "name": "account_deletion_jobs",
+        "version": "20260711181306"
+      },
+      {
+        "name": "consolidate_project_select_policies",
+        "version": "20260712111352"
+      },
+      {
+        "name": "restore_anon_safe_project_select_policies",
+        "version": "20260712222044"
+      },
+      {
+        "name": "harden_repaired_quota_helper_grants",
+        "version": "20260713131930"
+      },
+      {
+        "name": "private_billing_runtime_config",
+        "version": "20260714114313"
+      },
+      {
+        "name": "promotion_rpc_invoker_boundaries",
+        "version": "20260714120200"
+      },
+      {
+        "name": "correct_promotion_entitlement_runtime",
+        "version": "20260714122405"
+      },
+      {
+        "name": "batch_ai_quota_durable_entitlement",
+        "version": "20260714130310"
+      },
+      {
+        "name": "harden_messaging_realtime_and_profile_summaries",
+        "version": "20260714130731"
+      },
+      {
+        "name": "remediate_promotion_entitlements",
+        "version": "20260714132859"
+      },
+      {
+        "name": "harden_durable_billing_entitlements",
+        "version": "20260714143110"
+      },
+      {
+        "name": "enforce_promotion_and_ownership_integrity",
+        "version": "20260714144321"
+      },
+      {
+        "name": "add_listing_promotion_fk_indexes",
+        "version": "20260714150126"
+      },
+      {
+        "name": "reconcile_addon_refund_events",
+        "version": "20260714153937"
+      },
+      {
+        "name": "align_past_due_promotion_allowance",
+        "version": "20260714155044"
+      },
+      {
+        "name": "reassert_scoped_authoritative_role",
+        "version": "20260714170523"
+      },
+      {
+        "name": "reassert_promotion_lock_order",
+        "version": "20260714172636"
+      },
+      {
+        "name": "resolve_subscription_state_rpc",
+        "version": "20260716110618"
+      },
+      {
+        "name": "harden_property_report_access_and_idempotency",
+        "version": "20260716234353"
+      },
+      {
+        "name": "preserve_lead_origin_context_on_resource_deletion",
+        "version": "20260717003310"
+      },
+      {
+        "name": "harden_investor_feed_grants",
+        "version": "20260716113451"
+      },
+      {
+        "name": "authorize_typing_presence_channels",
+        "version": "20260716122630"
+      },
+      {
+        "name": "align_investor_runtime_entitlements",
+        "version": "20260716142646"
+      },
+      {
+        "name": "unify_durable_entitlement_contract",
+        "version": "20260716172217"
+      },
+      {
+        "name": "unify_plan_limit_enforcement",
+        "version": "20260716184226"
+      },
+      {
+        "name": "add_message_delivery_identity",
+        "version": "20260716184229"
+      },
+      {
+        "name": "grant_message_delivery_identity_insert",
+        "version": "20260716190025"
+      },
+      {
+        "name": "consolidate_remaining_rls_policies",
+        "version": "20260722032631"
+      },
+      {
+        "name": "harden_entitlement_advisor_surface",
+        "version": "20260716191848"
+      },
+      {
+        "name": "restore_caller_scoped_investor_rpc",
+        "version": "20260716192607"
+      },
+      {
+        "name": "harden_message_delivery_transaction",
+        "version": "20260716200004"
+      },
+      {
+        "name": "close_entitlement_promotion_audit_gaps",
+        "version": "20260716200005"
+      },
+      {
+        "name": "restore_browser_safe_admin_policy_predicates",
+        "version": "20260716211023"
+      },
+      {
+        "name": "enforce_report_and_viewing_entitlements",
+        "version": "20260716221706"
+      },
+      {
+        "name": "preauthorize_property_report_generation",
+        "version": "20260716223355"
+      },
+      {
+        "name": "repair_property_report_preauthorization",
+        "version": "20260716224312"
+      },
+      {
+        "name": "enforce_pro_only_ai_and_pricing_contract",
+        "version": "20260716233924"
+      },
+      {
+        "name": "retire_unfulfilled_extra_priority_and_align_promotion_plan",
+        "version": "20260717083505"
+      },
+      {
+        "name": "serialize_property_report_generation",
+        "version": "20260717084044"
+      },
+      {
+        "name": "repair_property_report_generation_lease_boolean_return",
+        "version": "20260717130453"
+      },
+      {
+        "name": "enforce_durable_developer_pro_entitlements",
+        "version": "20260718124557"
+      },
+      {
+        "name": "report_promotion_campaign_truth_and_block_open_houses",
+        "version": "20260719061629"
+      },
+      {
+        "name": "guard_open_house_listing_type_transition",
+        "version": "20260719065521"
+      },
+      {
+        "name": "secure_admin_promotion_campaign_rpc",
+        "version": "20260719074135"
+      },
+      {
+        "name": "preserve_listing_promotion_campaign_history",
+        "version": "20260719100653"
+      },
+      {
+        "name": "enforce_public_data_boundaries",
+        "version": "20260721193854"
+      },
+      {
+        "name": "enforce_listing_management_boundaries",
+        "version": "20260722034703"
+      },
+      {
+        "name": "add_scoped_listing_reference_catalogue",
+        "version": "20260722040036"
+      },
+      {
+        "name": "secure_listing_mutation_boundary",
+        "version": "20260722041222"
+      },
+      {
+        "name": "replace_definer_listing_views_with_scoped_rpcs",
+        "version": "20260722060307"
+      },
+      {
+        "name": "quarantine_invalid_os_auction_identity",
+        "version": "20260728115959"
+      },
+      {
+        "name": "prepare_batched_os_duplicate_quarantine",
+        "version": "20260728115960"
+      },
+      {
+        "name": "recover_catalogue_duplicate_preparation",
+        "version": "20260831170625"
+      },
+      {
+        "name": "canonicalize_os_auction_identity",
+        "version": "20260728120000"
+      },
+      {
+        "name": "collapse_os_duplicate_quarantine_canonicals",
+        "version": "20260831171515"
+      },
+      {
+        "name": "repair_exact_os_auction_identity_prefix",
+        "version": "20260728121500"
+      },
+      {
+        "name": "materialize_public_catalogue_snapshots",
+        "version": "20260728123058"
+      },
+      {
+        "name": "harden_public_catalogue_exact_lookup_and_cache",
+        "version": "20260729120405"
+      },
+      {
+        "name": "restore_auction_only_reader_capabilities",
+        "version": "20260921055243"
+      }
+    ],
+    "liveWebsiteMarker": {
+      "schema_version": 1,
+      "release_sha": "4827491050953d063e44c02c56c9c55842d71ba0",
+      "source_tree": "0d57b64eb9efb6f86f56b708500a5dd3acb773d7",
+      "source_run_id": "35608468102",
+      "source_run_attempt": "1",
+      "payload_sha256": "bcdd269874d7bc397952b104f5a6c6a158a38906de6dc9d2a8af56e77992710e"
+    },
+    "liveApiMarker": {
+      "schema_version": 1,
+      "release_sha": "4827491050953d063e44c02c56c9c55842d71ba0",
+      "source_tree": "0d57b64eb9efb6f86f56b708500a5dd3acb773d7",
+      "source_run_id": "35608468102",
+      "source_run_attempt": "1",
+      "payload_sha256": "bcdd269874d7bc397952b104f5a6c6a158a38906de6dc9d2a8af56e77992710e"
+    },
+    "markerAgreement": true,
+    "deployedEdgeServices": [
+      {
+        "slug": "process-email-queue",
+        "version": 62,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "77f5392a4253ace0f50b053c60fbde55ff3e10693788b81d120a8cedd8165dee"
+      },
+      {
+        "slug": "send-saved-search-alerts",
+        "version": 60,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "aa527a6a00dfe06450a2e07805d5f26ef0805f387cbdca2e1e8b23d9f353a13b"
+      },
+      {
+        "slug": "auth-email-hook",
+        "version": 63,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "9be4c1f1b2ddd26ff1d736686837292224bfb3b837f396dca5a9382b6d45ab67"
+      },
+      {
+        "slug": "fetch-past-deals-from-os",
+        "version": 66,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "137e64b09a9892da0b6d698eeb2fc9e2a3d421058f7c3661e3ea20b458928096"
+      },
+      {
+        "slug": "smart-filters",
+        "version": 74,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "bfc83b08e90491cfe212ef2cf6e6724f4d919129bbdc2408126e6e68ca2f9669"
+      },
+      {
+        "slug": "streetview-proxy",
+        "version": 69,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "110a833d8a6b4495777c5f8381b0df694b988568e6a86139340fc365fdc21d53"
+      },
+      {
+        "slug": "check-subscription",
+        "version": 88,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "62790b48d92cb36a9c87c3e5c87c0695506f7ce76d40f4551d7b58a9b7820c8c"
+      },
+      {
+        "slug": "create-checkout",
+        "version": 93,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "d729e01be458d2f540342c1a8c11ef5d60cde5cdb92b5d1f30c03c6a2ad001dc"
+      },
+      {
+        "slug": "create-stripe-price",
+        "version": 77,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "3a4266eb4a9f1055180956922365d6a5fbe16e21380601eaa27ae7c653fe6c41"
+      },
+      {
+        "slug": "customer-portal",
+        "version": 78,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "088cae4ca087e9a63ca38360067c7b1fab179d8af3e94f3c7a29712c2e4f07d0"
+      },
+      {
+        "slug": "listing-ai-assist",
+        "version": 80,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "f3559f9d3e9ccfdffce4633afd9ef140b6222279ece739d17a79e72205a6a212"
+      },
+      {
+        "slug": "neighbourhood-report",
+        "version": 101,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "653a65f4a299049b19e41a403ae44d218f3f742127348fa6a57640cb27d9d377"
+      },
+      {
+        "slug": "oh-registration-notify",
+        "version": 60,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "57e48357d3e6f9895d59d4cdc455ce8be56c8054a883a77797e0cb0049a16a6c"
+      },
+      {
+        "slug": "property-chat",
+        "version": 80,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "50a94cf738060aa4e4fa1d9beb9d5bc78b32340825ae8cde315b92ad28f4e874"
+      },
+      {
+        "slug": "fetch-report-from-os",
+        "version": 70,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "0fde279a1b7ba5e12e4dc678d56ff84e2dfbd81b34bb4cdb58746ae230047a46"
+      },
+      {
+        "slug": "full-sync-from-os",
+        "version": 60,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "0d081da55b6072d84945637ab9d11c83004eb6ef35bb27dfd1919832add08c84"
+      },
+      {
+        "slug": "property-pois",
+        "version": 90,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "bda2727a89ed01d90d9c5067bab921833483b6e5fbec7c0a0da7881c5f39e772"
+      },
+      {
+        "slug": "receive-from-os",
+        "version": 58,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "a04d79e4b38456cf23e02cf9c9b8eebcb6987f8feca2761049e577a5ec4e3d06"
+      },
+      {
+        "slug": "sync-firesale-to-os",
+        "version": 59,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "6b87e76050b98ab742ee5d432f5f5f8948a5ffd1074efc966330e98cfc84c6f5"
+      },
+      {
+        "slug": "sync-to-os",
+        "version": 59,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "a8ef584ff96369dbccd895f6cf062d6ff024ba83842914701e4bc9de0e6fdd94"
+      },
+      {
+        "slug": "ai-search",
+        "version": 72,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "2fb43a689612eebc6d5e1c51a825ac1b7a1cf4d6b9283f12443c5a253b1c02e6"
+      },
+      {
+        "slug": "ai-service-match",
+        "version": 76,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "7f74b0fcf3e9d6e27b132dc982d066657c148c442dc0c87bc93c3b393b07c1f1"
+      },
+      {
+        "slug": "invitation-notify",
+        "version": 65,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "2cd388d06fc0cded91b2b3bd38bd883ccd099643662d823f7a6f0f7f11777bfb"
+      },
+      {
+        "slug": "os-diagnose",
+        "version": 61,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "a937cb40e67becaf4b588fbceea10a940e0d2fbd45ab3aa4eb6f2f1b50bd2b26"
+      },
+      {
+        "slug": "poll-os-auctions",
+        "version": 68,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "ad0bfd34d8f6afc00e408c30d936cc527775c975de5b9316cd2586d509c6a4be"
+      },
+      {
+        "slug": "pro-ai-tools",
+        "version": 78,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "59a5f3d6081c262a2fac10f31fdde3deb2e0bf08324d5f919816f9668451e4a8"
+      },
+      {
+        "slug": "sync-stripe-pricing",
+        "version": 83,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "c32639d07bbb0e25ad302b5be38c0e7064921ae4becf133187e0ca84a7d07ed4"
+      },
+      {
+        "slug": "get-invoices",
+        "version": 88,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "6cae5749922fcb958358acb4e6c8541fb05281e88b7952fbc0eceee994ca76f4"
+      },
+      {
+        "slug": "followup-lead",
+        "version": 61,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "b23c44f5a234121c52f55dd82a26f254d6629c764ca5b9be2fb82996ebb71681"
+      },
+      {
+        "slug": "sitemap",
+        "version": 65,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "5314360a8b7c8e2d50bb2b951d4cd282bb3adc309a8d5510ad9cfbdd7d4459dc"
+      },
+      {
+        "slug": "scheduled-followups",
+        "version": 54,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "5cfcd7ee79c238623ce26525c826bbf5bf329f211e32900a7c5f6d6681a5e7ea"
+      },
+      {
+        "slug": "stripe-webhook",
+        "version": 91,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "0da395160238ab41e24f1e906049b944a4e56bcf108c036ae6f6dedb2832176c"
+      },
+      {
+        "slug": "os-sales-coordinates",
+        "version": 58,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "df7d0f2e4276b8189994d5cf3925762d9607ca3ce4db8e634fe19eebebe27a11"
+      },
+      {
+        "slug": "delete-account",
+        "version": 77,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "721d050fd3f0ecd9d4752f809b1df3b9055c1a5896ce7505718a79461d7612b8"
+      },
+      {
+        "slug": "log-role-switch",
+        "version": 78,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "7d288ed98b7b391398095f054cef77682ba9e48aabddcd6a15f9f1df7c4af67e"
+      },
+      {
+        "slug": "ai-translate",
+        "version": 65,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "1cbaf852286288833039d93336a0f27b500e765e53c238cd45e5c92029103b70"
+      },
+      {
+        "slug": "healthz",
+        "version": 55,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "16580fae0699e451219f87dd4d0d68dfb7eb8aa23bd87b2a51247426e8d69921"
+      },
+      {
+        "slug": "agent-data-input",
+        "version": 55,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "7b09c6d5dd892c007d6d68e5d03af4db6729e32425964dae94353cd510403d16"
+      },
+      {
+        "slug": "apply-data-input-credit",
+        "version": 65,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "695b1cee5edda068758a9498c6548ead22a8bbcf6ea97e58450892129822b2bf"
+      },
+      {
+        "slug": "csp-report",
+        "version": 45,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "4d056a3bfe2eeaf8721beffd0bf5707c446b5977c97078e2b4583db157c863c0"
+      },
+      {
+        "slug": "flag-auction-on-os",
+        "version": 49,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "4535294d6f912d2596adb7bc0cb72e15f2be8643e91fa522b9780425b45e18c1"
+      },
+      {
+        "slug": "fetch-auction-enrichment",
+        "version": 55,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "2aa337a7209f041aef9dc22909618e2fee4730920d6573c9d5d3061667f71f98"
+      },
+      {
+        "slug": "fetch-os-auctions",
+        "version": 61,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "8dbed76d9894158050c8cd843b0b3a620c9cd63e0397780f01d70b948490bf0b"
+      },
+      {
+        "slug": "transfer-platform-admin",
+        "version": 46,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "90b269e66719768c8dedb2f1f73cbbb3eab239e694a00a3a1df2b5fd88e629b4"
+      },
+      {
+        "slug": "record-listing-view",
+        "version": 47,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "0b2f6d3a17fff413098154b40ec8a7fdd583ef015c511c40274245e95e27ddda"
+      },
+      {
+        "slug": "complete-onboarding-role",
+        "version": 52,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "5e9b100a41d4608cac905f7bdb6ca6e1b86f0606b581019619835118f446b228"
+      },
+      {
+        "slug": "owner-pro-status",
+        "version": 48,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "5df9481eda164d5ea954380382fe015cc8bdd3d55971a435840853139999daf8"
+      },
+      {
+        "slug": "admin-review-invitation",
+        "version": 42,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "1301f2b9e4513d509c0185b8210487f04effc172a44e563138c7c8093fa244e9"
+      },
+      {
+        "slug": "property-valuation",
+        "version": 81,
+        "updatedAt": 1789982838958,
+        "verifyJwt": false,
+        "ezbrSha256": "ee0149a8f9e367b691f4a89a0194c0dcb243eca0e54998654ba8de72e35d9afa"
+      },
+      {
+        "slug": "ai-quota-status",
+        "version": 30,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "8fe29e65ca4e8b187190a40c8035ab5bb77fcc246260fc15cfd9606339cbc263"
+      },
+      {
+        "slug": "begin-role-switch",
+        "version": 32,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "e64e00b0e3764c1fbc16c2a7d4dd4ab41baba325eb9b1d9c36d2973081bea905"
+      },
+      {
+        "slug": "open-house-capacity",
+        "version": 27,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "ebb11ec54e4ba9af570b0d1c22e2ffc0cb3479aadad53c189d50ffc2af27f64c"
+      },
+      {
+        "slug": "open-house-registration",
+        "version": 28,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "fec90b7e04b9b4e7443d85a789ebf18cffc488ee8d45672b38df622a830628f7"
+      },
+      {
+        "slug": "admin-content-report-action",
+        "version": 27,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "d48780c6399f78b3ff2a621a23a48f8be2662d620a426a76bd9334ccb066f966"
+      },
+      {
+        "slug": "admin-broadcast-notification",
+        "version": 27,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "f4e2401153abfffb9a4269ec500a03d672be529e30c60dcf1ac5303d9a6fb6fe"
+      },
+      {
+        "slug": "admin-firesale-action",
+        "version": 27,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "31240103ab6ea592a3bb92e05ab152493f6220da5660de3dca633e7d0bf280c6"
+      },
+      {
+        "slug": "submit-firesale-interest",
+        "version": 27,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "4bf6760d4025fd3275945f0609d0ba0a85eafeea745b884e035671d4198ea6fe"
+      },
+      {
+        "slug": "project-unit-prices",
+        "version": 23,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "584863b96265ecd6a885afa4da81d7d3dc8eeafa3c97e256a905de5c5e102d19"
+      },
+      {
+        "slug": "admin-pricing-config",
+        "version": 22,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "e3663b343e87aeaa05f54844773a03a9ed3d0fae895c452b13b572c4c7a1d79a"
+      },
+      {
+        "slug": "admin-featured-listing-action",
+        "version": 23,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "4e188da05cad3be1ca9d642e4b96288ff860961596ef8af45b58d47d1410c86e"
+      },
+      {
+        "slug": "save-professional-onboarding",
+        "version": 22,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "dd348b3bf570027d867ff38ce90474d8790a1576ec78cebf989ff4251a09e8c6"
+      },
+      {
+        "slug": "submit-firesale-request",
+        "version": 22,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "5e9dd0a92665aaad8754417aa0e0040d9659f78857919c96d045aa15a4f94d2d"
+      },
+      {
+        "slug": "create-new-building-listing",
+        "version": 25,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "65a614a944bff0f6090466db5baaca35acc04105603c14c6add9c6c95f5c474f"
+      },
+      {
+        "slug": "project-management",
+        "version": 24,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "af4bc3c03cead5ed085175d94f0e78a8164b5e6c5c54b32f12dc323a69c71320"
+      },
+      {
+        "slug": "create-investor-payment",
+        "version": 43,
+        "updatedAt": 1789982838958,
+        "verifyJwt": true,
+        "ezbrSha256": "051120e13b23955e66998de089a3a4f1a1b74ca1e64b599eb0b6f1eb3449d885"
+      }
+    ],
+    "relevantDeployedServiceContracts": [
+      {
+        "name": "create-new-building-listing",
+        "version": 25,
+        "updatedAt": "2026-09-21T09:27:18.958Z",
+        "entrypoint": "functions/create-new-building-listing/index.ts",
+        "rpcs": [],
+        "mutationOutline": [
+          {
+            "line": 310,
+            "text": "const profileQuery = supabase.from(\"profiles\") as ProfileLookupQuery;"
+          },
+          {
+            "line": 346,
+            "text": "await supabase.from(\"listings\").delete().eq(\"id\", listingId).eq(\"owner_id\", userId);"
+          },
+          {
+            "line": 348,
+            "text": "await supabase.from(\"projects\").delete().eq(\"id\", projectId).eq(\"owner_id\", userId);"
+          },
+          {
+            "line": 401,
+            "text": ".from(\"projects\")"
+          },
+          {
+            "line": 402,
+            "text": ".insert(projectRow);"
+          },
+          {
+            "line": 409,
+            "text": ".from(\"project_units\")"
+          },
+          {
+            "line": 410,
+            "text": ".insert(withComputedPricePerSqm({ ...unitPayload, project_id: projectId }))"
+          },
+          {
+            "line": 419,
+            "text": ".from(\"project_media\")"
+          },
+          {
+            "line": 420,
+            "text": ".insert(payload.projectMedia.map((media) => ({ ...media, project_id: projectId })));"
+          },
+          {
+            "line": 425,
+            "text": ".from(\"listings\")"
+          },
+          {
+            "line": 426,
+            "text": ".insert(withComputedPricePerSqm({"
+          },
+          {
+            "line": 441,
+            "text": ".from(\"project_units\")"
+          },
+          {
+            "line": 442,
+            "text": ".update({ listing_id: listingId })"
+          },
+          {
+            "line": 450,
+            "text": ".from(\"listing_images\")"
+          },
+          {
+            "line": 451,
+            "text": ".insert(payload.additionalImageUrls.map((url, idx) => ({"
+          }
+        ]
+      },
+      {
+        "name": "project-management",
+        "version": 24,
+        "updatedAt": "2026-09-21T09:27:18.958Z",
+        "entrypoint": "functions/project-management/index.ts",
+        "rpcs": [],
+        "mutationOutline": [
+          {
+            "line": 307,
+            "text": ".from(\"profiles\")"
+          },
+          {
+            "line": 322,
+            "text": ".from(\"projects\")"
+          },
+          {
+            "line": 340,
+            "text": ".from(\"project_units\")"
+          },
+          {
+            "line": 357,
+            "text": ".from(\"project_units\")"
+          },
+          {
+            "line": 375,
+            "text": "case \"update_project\": {"
+          },
+          {
+            "line": 378,
+            "text": ".from(\"projects\")"
+          },
+          {
+            "line": 379,
+            "text": ".update(payload.updates)"
+          },
+          {
+            "line": 395,
+            "text": "case \"delete_project\": {"
+          },
+          {
+            "line": 398,
+            "text": ".from(\"listings\")"
+          },
+          {
+            "line": 399,
+            "text": ".update({"
+          },
+          {
+            "line": 409,
+            "text": ".from(\"projects\")"
+          },
+          {
+            "line": 410,
+            "text": ".delete()"
+          },
+          {
+            "line": 425,
+            "text": "case \"update_listing_cover\": {"
+          },
+          {
+            "line": 428,
+            "text": ".from(\"listings\")"
+          },
+          {
+            "line": 429,
+            "text": ".update({ cover_image_url: payload.coverImageUrl })"
+          },
+          {
+            "line": 446,
+            "text": "case \"create_unit\": {"
+          },
+          {
+            "line": 449,
+            "text": ".from(\"project_units\")"
+          },
+          {
+            "line": 450,
+            "text": ".insert(withComputedUnitPricePerSqm({ ...payload.unit, project_id: payload.projectId }))"
+          },
+          {
+            "line": 464,
+            "text": "case \"update_unit\": {"
+          },
+          {
+            "line": 469,
+            "text": ".from(\"project_units\")"
+          },
+          {
+            "line": 470,
+            "text": ".update(unitUpdates)"
+          },
+          {
+            "line": 486,
+            "text": "case \"delete_unit\": {"
+          },
+          {
+            "line": 489,
+            "text": ".from(\"project_units\")"
+          },
+          {
+            "line": 490,
+            "text": ".delete()"
+          },
+          {
+            "line": 506,
+            "text": "case \"add_media\": {"
+          },
+          {
+            "line": 509,
+            "text": ".from(\"project_media\")"
+          },
+          {
+            "line": 510,
+            "text": ".insert({"
+          },
+          {
+            "line": 529,
+            "text": "case \"delete_media\": {"
+          },
+          {
+            "line": 532,
+            "text": ".from(\"project_media\")"
+          },
+          {
+            "line": 533,
+            "text": ".delete()"
+          },
+          {
+            "line": 549,
+            "text": "case \"create_lead\": {"
+          },
+          {
+            "line": 553,
+            "text": ".from(\"project_leads\")"
+          },
+          {
+            "line": 554,
+            "text": ".insert({ ...payload.lead, project_id: payload.projectId })"
+          },
+          {
+            "line": 568,
+            "text": "case \"update_lead\": {"
+          },
+          {
+            "line": 572,
+            "text": ".from(\"project_leads\")"
+          },
+          {
+            "line": 573,
+            "text": ".update(payload.updates)"
+          },
+          {
+            "line": 589,
+            "text": "case \"delete_lead\": {"
+          },
+          {
+            "line": 592,
+            "text": ".from(\"project_leads\")"
+          },
+          {
+            "line": 593,
+            "text": ".delete()"
+          }
+        ]
+      },
+      {
+        "name": "log-role-switch",
+        "version": 78,
+        "updatedAt": "2026-09-21T09:27:18.958Z",
+        "entrypoint": "functions/log-role-switch/index.ts",
+        "rpcs": [
+          {
+            "name": "record_role_switch_audit_for_user",
+            "line": 216
+          }
+        ],
+        "mutationOutline": [
+          {
+            "line": 55,
+            "text": "const { data, error } = await (supabase.from(\"billing_customers\") as {"
+          },
+          {
+            "line": 191,
+            "text": "await stripe.subscriptions.update(sub.id, { cancel_at_period_end: true });"
+          },
+          {
+            "line": 216,
+            "text": "const { error: insertError } = await supabaseAdmin.rpc(\"record_role_switch_audit_for_user\", {"
+          }
+        ]
+      }
+    ],
+    "rollbackArtifact": {
+      "directory": ".tmp/open-house-live-base-artifact",
+      "cloudflareDeploymentId": "7748af45-d23c-47cd-97b2-44a925ecb346",
+      "releaseSha": "4827491050953d063e44c02c56c9c55842d71ba0",
+      "sourceTree": "0d57b64eb9efb6f86f56b708500a5dd3acb773d7",
+      "runId": "35608468102",
+      "runAttempt": "1",
+      "payloadSha256": "bcdd269874d7bc397952b104f5a6c6a158a38906de6dc9d2a8af56e77992710e",
+      "supabaseSha256": "34d7a10dfcbcfd9ea414e6b20bb551b149ca7f2ebd5f3de5e4aab0651a94c15c",
+      "artifactSha256": "5402e012a46802775c02914bd1c261cd6ce5f7fb3703d2aaa15a8706bae12475",
+      "workerSha256": "ab9194109a80208b5f4fcd66beb5039378f08175d4a2fa2d5a695a92c22d5da5",
+      "verifiedLocally": true
+    }
+  },
+  "capabilities": [
+    {
+      "kind": "relation",
+      "consumer": "useProfessionals owner/admin boundaries",
+      "signature": "public.professionals (29 live columns, including private moderation/calendar fields)",
+      "requiredRoles": "authenticated, service_role; no anon raw-table grant",
+      "livePresent": true,
+      "sourceMigration": "historical; partial effects of 20260726184938",
+      "releaseGroup": "A1",
+      "validationEvidence": [
+        "fresh professional_columns/policies",
+        "anonymous raw read observed 401"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "public professional directory",
+      "signature": "public.get_public_professionals() RETURNS fixed 25-column public projection",
+      "requiredRoles": "anon, authenticated, service_role",
+      "livePresent": false,
+      "sourceMigration": "20260729145205; repeated by 20260901120000",
+      "releaseGroup": "A1",
+      "validationEvidence": [
+        "absent from live routine inventory"
+      ],
+      "publicColumns": [
+        {
+          "udt": "uuid",
+          "name": "id",
+          "nullable": "NO",
+          "data_type": "uuid"
+        },
+        {
+          "udt": "uuid",
+          "name": "user_id",
+          "nullable": "NO",
+          "data_type": "uuid"
+        },
+        {
+          "udt": "professional_category",
+          "name": "category",
+          "nullable": "NO",
+          "data_type": "USER-DEFINED"
+        },
+        {
+          "udt": "text",
+          "name": "title",
+          "nullable": "NO",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "bio",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "city",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "int4",
+          "name": "experience_years",
+          "nullable": "YES",
+          "data_type": "integer"
+        },
+        {
+          "udt": "text",
+          "name": "license_number",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "bool",
+          "name": "verified",
+          "nullable": "NO",
+          "data_type": "boolean"
+        },
+        {
+          "udt": "numeric",
+          "name": "rating",
+          "nullable": "YES",
+          "data_type": "numeric"
+        },
+        {
+          "udt": "int4",
+          "name": "reviews_count",
+          "nullable": "YES",
+          "data_type": "integer"
+        },
+        {
+          "udt": "int4",
+          "name": "projects_count",
+          "nullable": "YES",
+          "data_type": "integer"
+        },
+        {
+          "udt": "_text",
+          "name": "specialties",
+          "nullable": "YES",
+          "data_type": "ARRAY"
+        },
+        {
+          "udt": "_text",
+          "name": "languages",
+          "nullable": "YES",
+          "data_type": "ARRAY"
+        },
+        {
+          "udt": "numeric",
+          "name": "hourly_rate",
+          "nullable": "YES",
+          "data_type": "numeric"
+        },
+        {
+          "udt": "text",
+          "name": "avatar_url",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "website_url",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "timestamptz",
+          "name": "created_at",
+          "nullable": "NO",
+          "data_type": "timestamp with time zone"
+        },
+        {
+          "udt": "timestamptz",
+          "name": "updated_at",
+          "nullable": "NO",
+          "data_type": "timestamp with time zone"
+        },
+        {
+          "udt": "text",
+          "name": "display_name",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "video_link",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "subscription_tier",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "average_deal_size",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "average_portfolio_asset_size",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "timestamptz",
+          "name": "verified_at",
+          "nullable": "YES",
+          "data_type": "timestamp with time zone"
+        }
+      ],
+      "excludedPrivateColumns": [
+        "archived_at",
+        "calendar_notes",
+        "notes",
+        "rejection_reason"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "src/hooks/useProfessionals.ts",
+      "signature": "public.public_professionals security_barrier=true security_invoker=true; 25 public columns",
+      "requiredRoles": "SELECT anon, authenticated, service_role",
+      "livePresent": false,
+      "sourceMigration": "20260729145205; repeated by 20260901120000",
+      "releaseGroup": "A1",
+      "validationEvidence": [
+        "fresh professionals_view=null",
+        "absent from live view_options"
+      ],
+      "publicColumns": [
+        {
+          "udt": "uuid",
+          "name": "id",
+          "nullable": "NO",
+          "data_type": "uuid"
+        },
+        {
+          "udt": "uuid",
+          "name": "user_id",
+          "nullable": "NO",
+          "data_type": "uuid"
+        },
+        {
+          "udt": "professional_category",
+          "name": "category",
+          "nullable": "NO",
+          "data_type": "USER-DEFINED"
+        },
+        {
+          "udt": "text",
+          "name": "title",
+          "nullable": "NO",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "bio",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "city",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "int4",
+          "name": "experience_years",
+          "nullable": "YES",
+          "data_type": "integer"
+        },
+        {
+          "udt": "text",
+          "name": "license_number",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "bool",
+          "name": "verified",
+          "nullable": "NO",
+          "data_type": "boolean"
+        },
+        {
+          "udt": "numeric",
+          "name": "rating",
+          "nullable": "YES",
+          "data_type": "numeric"
+        },
+        {
+          "udt": "int4",
+          "name": "reviews_count",
+          "nullable": "YES",
+          "data_type": "integer"
+        },
+        {
+          "udt": "int4",
+          "name": "projects_count",
+          "nullable": "YES",
+          "data_type": "integer"
+        },
+        {
+          "udt": "_text",
+          "name": "specialties",
+          "nullable": "YES",
+          "data_type": "ARRAY"
+        },
+        {
+          "udt": "_text",
+          "name": "languages",
+          "nullable": "YES",
+          "data_type": "ARRAY"
+        },
+        {
+          "udt": "numeric",
+          "name": "hourly_rate",
+          "nullable": "YES",
+          "data_type": "numeric"
+        },
+        {
+          "udt": "text",
+          "name": "avatar_url",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "website_url",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "timestamptz",
+          "name": "created_at",
+          "nullable": "NO",
+          "data_type": "timestamp with time zone"
+        },
+        {
+          "udt": "timestamptz",
+          "name": "updated_at",
+          "nullable": "NO",
+          "data_type": "timestamp with time zone"
+        },
+        {
+          "udt": "text",
+          "name": "display_name",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "video_link",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "subscription_tier",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "average_deal_size",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "text",
+          "name": "average_portfolio_asset_size",
+          "nullable": "YES",
+          "data_type": "text"
+        },
+        {
+          "udt": "timestamptz",
+          "name": "verified_at",
+          "nullable": "YES",
+          "data_type": "timestamp with time zone"
+        }
+      ],
+      "excludedPrivateColumns": [
+        "archived_at",
+        "calendar_notes",
+        "notes",
+        "rejection_reason"
+      ]
+    },
+    {
+      "kind": "worker",
+      "consumer": "functions/api/public/_cache.ts",
+      "signature": "Pages public API worker with independent Response per waiter and bounded producer/waiter lifetime",
+      "requiredRoles": "public HTTP; server-side upstream credentials",
+      "livePresent": false,
+      "sourceMigration": null,
+      "releaseGroup": "A2",
+      "validationEvidence": [
+        "live worker ab9194109a80208b5f4fcd66beb5039378f08175d4a2fa2d5a695a92c22d5da5",
+        "candidate worker 484fd359153c7538049d77e6b570ab15b39822273a31739341be11660b4110a9",
+        "only _worker.js changed; 202 files identical",
+        "local packaged smoke passed"
+      ],
+      "liveAlternative": {
+        "releaseSha": "4827491050953d063e44c02c56c9c55842d71ba0",
+        "workerSha256": "ab9194109a80208b5f4fcd66beb5039378f08175d4a2fa2d5a695a92c22d5da5"
+      },
+      "candidate": {
+        "sourceCommit": "ef2046572107fe1cda3b7aacb769af563c819760",
+        "publishable": false
+      }
+    },
+    {
+      "kind": "relation",
+      "consumer": "NewBuildDetail conversation creation",
+      "signature": "public.conversations INSERT/SELECT plus owner-lead trigger",
+      "requiredRoles": "authenticated",
+      "livePresent": true,
+      "sourceMigration": "historical applied schema",
+      "releaseGroup": "A3",
+      "validationEvidence": [
+        "live conversations policies",
+        "live conversations_create_owner_lead trigger"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "NewBuildDetail insertNewBuildLead",
+      "signature": "INSERT public.new_building_leads(new_building_id,user_id,email,full_name,phone,investment_budget,notes,utm_source)",
+      "requiredRoles": "authenticated own-user INSERT",
+      "livePresent": true,
+      "sourceMigration": "historical applied schema",
+      "releaseGroup": "A3",
+      "validationEvidence": [
+        "live own-insert policy",
+        "live project-lead and notification triggers"
+      ]
+    },
+    {
+      "kind": "worker",
+      "consumer": "RegisterInterestCard/NewBuildDetail",
+      "signature": "onContact(form): Promise<void>; reject keeps values and shows alert; resolve only after lead insert",
+      "requiredRoles": "signed-in browser user",
+      "livePresent": false,
+      "sourceMigration": null,
+      "releaseGroup": "A3",
+      "validationEvidence": [
+        "working tree A3 changes are uncommitted",
+        "focused UI/DB trigger proof pending"
+      ],
+      "dataCompatibility": "basic fix needs no schema; lost committed-response retry identity unresolved"
+    },
+    {
+      "kind": "worker",
+      "consumer": "neighbourhood-report + NeighbourhoodReport",
+      "signature": "POST JSON; unavailable facts must not become fabricated numbers/projects; old client must accept revised shape",
+      "requiredRoles": "verify_jwt=false HTTP; internal quota/auth rules",
+      "livePresent": false,
+      "sourceMigration": null,
+      "releaseGroup": "A4",
+      "validationEvidence": [
+        "live v101 ezbr 653a65f4a299049b19e41a403ae44d218f3f742127348fa6a57640cb27d9d377",
+        "current source still builds fallback facts",
+        "old-client compatibility unproven"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "managed listing readers",
+      "signature": "public.listing_management_catalogue security_invoker=true security_barrier=true",
+      "requiredRoles": "scoped RPC access",
+      "livePresent": true,
+      "sourceMigration": "20260722060307 (applied)",
+      "releaseGroup": "A6a",
+      "validationEvidence": [
+        "live view_options"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "managed page/summary",
+      "signature": "private.has_org_permission(uuid,text,uuid) RETURNS boolean",
+      "requiredRoles": "internal",
+      "livePresent": true,
+      "sourceMigration": "historical applied",
+      "releaseGroup": "A6a",
+      "validationEvidence": [
+        "exact live routine"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "dynamic legacy management branch",
+      "signature": "public.get_listing_management_catalogue() RETURNS SETOF public.listing_management_catalogue",
+      "requiredRoles": "authenticated",
+      "livePresent": true,
+      "sourceMigration": "20260722060307 (applied)",
+      "releaseGroup": "A6a",
+      "validationEvidence": [
+        "exact live overload"
+      ],
+      "compatibility": "retain for previous website"
+    },
+    {
+      "kind": "routine",
+      "consumer": "dynamic manageableScope branch",
+      "signature": "public.get_manageable_listing_catalogue() RETURNS SETOF public.listing_management_catalogue",
+      "requiredRoles": "authenticated",
+      "livePresent": false,
+      "sourceMigration": "20260726220701; final 20260728093154",
+      "releaseGroup": "A6a",
+      "validationEvidence": [
+        "dynamic call at useListings.ts:240",
+        "absent live"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "fetchManageableListingsPage",
+      "signature": "public.get_manageable_listing_catalogue_page(integer,timestamptz,uuid) RETURNS TABLE(data jsonb,total_count bigint,next_created_at timestamptz,next_id uuid)",
+      "requiredRoles": "authenticated",
+      "livePresent": false,
+      "sourceMigration": "20260728093154; repeated 20260901120000",
+      "releaseGroup": "A6a",
+      "validationEvidence": [
+        "fresh required_routines=false",
+        "useListings.ts:864"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "useManageableListingSummary",
+      "signature": "public.get_manageable_listing_summary() RETURNS jsonb",
+      "requiredRoles": "authenticated",
+      "livePresent": false,
+      "sourceMigration": "20260728093154; repeated 20260901120000",
+      "releaseGroup": "A6a",
+      "validationEvidence": [
+        "fresh required_routines=false",
+        "useListings.ts:917"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "create-new-building-listing/project-management",
+      "signature": "public.projects",
+      "requiredRoles": "existing browser policies plus service_role services",
+      "livePresent": true,
+      "sourceMigration": "historical; candidate policy/trigger alignment in unrecorded July migrations",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "live policies/routines prove base graph",
+        "candidate bodies/triggers require runtime proof"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "create-new-building-listing/project-management",
+      "signature": "public.project_units",
+      "requiredRoles": "existing browser policies plus service_role services",
+      "livePresent": true,
+      "sourceMigration": "historical; candidate policy/trigger alignment in unrecorded July migrations",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "live policies/routines prove base graph",
+        "candidate bodies/triggers require runtime proof"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "create-new-building-listing/project-management",
+      "signature": "public.project_media",
+      "requiredRoles": "existing browser policies plus service_role services",
+      "livePresent": true,
+      "sourceMigration": "historical; candidate policy/trigger alignment in unrecorded July migrations",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "live policies/routines prove base graph",
+        "candidate bodies/triggers require runtime proof"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "create-new-building-listing/project-management",
+      "signature": "public.project_leads",
+      "requiredRoles": "existing browser policies plus service_role services",
+      "livePresent": true,
+      "sourceMigration": "historical; candidate policy/trigger alignment in unrecorded July migrations",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "live policies/routines prove base graph",
+        "candidate bodies/triggers require runtime proof"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "create-new-building-listing/project-management",
+      "signature": "public.listings",
+      "requiredRoles": "existing browser policies plus service_role services",
+      "livePresent": true,
+      "sourceMigration": "historical; candidate policy/trigger alignment in unrecorded July migrations",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "live policies/routines prove base graph",
+        "candidate bodies/triggers require runtime proof"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "create-new-building-listing/project-management",
+      "signature": "public.listing_images",
+      "requiredRoles": "existing browser policies plus service_role services",
+      "livePresent": true,
+      "sourceMigration": "historical; candidate policy/trigger alignment in unrecorded July migrations",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "live policies/routines prove base graph",
+        "candidate bodies/triggers require runtime proof"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "browser uploads/services/cleanup",
+      "signature": "storage buckets listing-images and project-media with owned project/create paths",
+      "requiredRoles": "authenticated upload; service_role verify/remove",
+      "livePresent": true,
+      "sourceMigration": "historical storage config",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "literal bucket calls",
+        "cleanup worker dynamic job.bucket is typed to two buckets"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "cleanup worker/outbox",
+      "signature": "public.storage_cleanup_jobs lease/status/attempt/object identity",
+      "requiredRoles": "service_role",
+      "livePresent": null,
+      "sourceMigration": "20260726222529 evolved through 20260726234925",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "relation not freshly probed",
+        "all cleanup RPCs absent"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "cleanup cron reconciliation",
+      "signature": "public.storage_cleanup_invocations",
+      "requiredRoles": "service_role",
+      "livePresent": null,
+      "sourceMigration": "20260726234925",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "relation not freshly probed",
+        "invoke/reconcile routines absent"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "project-management authorization",
+      "signature": "public.get_project_management_context_for_service(uuid,uuid) RETURNS TABLE(id uuid,owner_id uuid,organization_id uuid)",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260726181627",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "fresh false",
+        "project-management.ts:467"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "project deletion",
+      "signature": "public.delete_project_for_service(uuid,uuid) RETURNS boolean",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260726181627",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "fresh false",
+        "project-management.ts:530"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "upload registration",
+      "signature": "public.register_new_building_storage_upload(uuid,text,text,text) RETURNS uuid",
+      "requiredRoles": "authenticated",
+      "livePresent": false,
+      "sourceMigration": "final 20260726234925",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "fresh false",
+        "buildingListingUploads.ts:44"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "creation/deletion compensation",
+      "signature": "public.stage_storage_cleanup_jobs_for_service(uuid,uuid,text,jsonb,text,text) RETURNS integer",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260726234925",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "fresh false",
+        "two literal call sites"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "project deletion compensation",
+      "signature": "public.settle_storage_cleanup_jobs_for_service(uuid,uuid,jsonb,text) RETURNS integer",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260726234925",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "fresh false",
+        "project-management.ts:435"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "cleanup worker",
+      "signature": "public.claim_storage_cleanup_jobs(integer) RETURNS SETOF public.storage_cleanup_jobs",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "final 20260726234925",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "fresh false",
+        "process-storage-cleanup.ts:39"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "cleanup worker",
+      "signature": "public.prepare_storage_cleanup_delete(uuid,uuid) RETURNS text",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "final 20260726234925",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "fresh false",
+        "process-storage-cleanup.ts:55"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "atomic building graph",
+      "signature": "public.create_new_building_listing_with_storage_for_service(uuid,uuid,text,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb) RETURNS jsonb",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "final 20260726234925",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "fresh false",
+        "create-new-building-listing.ts:853"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "project media",
+      "signature": "public.attach_project_media_for_service(uuid,uuid,jsonb) RETURNS jsonb",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260726234925",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "fresh false",
+        "project-management.ts:705"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "project cover",
+      "signature": "public.update_listing_cover_with_storage_for_service(uuid,uuid,uuid,text) RETURNS jsonb",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260726234925",
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "fresh false",
+        "project-management.ts:627"
+      ]
+    },
+    {
+      "kind": "worker",
+      "consumer": "create-new-building-listing",
+      "signature": "POST; current source uses stage + atomic RPCs",
+      "requiredRoles": "authenticated HTTP; service_role DB",
+      "livePresent": false,
+      "sourceMigration": null,
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "live v25 ezbr 65a614a944bff0f6090466db5baaca35acc04105603c14c6add9c6c95f5c474f",
+        "deployed contract has no RPCs",
+        "current entrypoint sha256 5cca06b175435fa90788938814a9eb68ba5f04a2a27ce1874851f2cb1a959948"
+      ],
+      "compatibility": "add DB first; preserve direct mutation path"
+    },
+    {
+      "kind": "worker",
+      "consumer": "project-management",
+      "signature": "POST action service; current source uses context/delete/storage/media/cover RPCs",
+      "requiredRoles": "authenticated HTTP; service_role DB",
+      "livePresent": false,
+      "sourceMigration": null,
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "live v24 ezbr af4bc3c03cead5ed085175d94f0e78a8164b5e6c5c54b32f12dc323a69c71320",
+        "deployed contract has no RPCs",
+        "current entrypoint sha256 87267184a225187c64bda1dfea35e7e5b38c0839924ddd0275d875f08761252d"
+      ]
+    },
+    {
+      "kind": "worker",
+      "consumer": "process-storage-cleanup",
+      "signature": "POST cron-secret; claim/prepare/delete/lease settle",
+      "requiredRoles": "cron secret; service_role DB/storage",
+      "livePresent": false,
+      "sourceMigration": null,
+      "releaseGroup": "A6b",
+      "validationEvidence": [
+        "source entrypoint undeployed",
+        "sha256 9725e6b6dc014dbe96c10b31aff60b831968fc39f05c53ca277b0edf8a117196"
+      ]
+    },
+    {
+      "kind": "relation",
+      "consumer": "role switching/reconciliation",
+      "signature": "role_switch_history; profiles.role_switch_audit_id; reconciliation columns/FK/indexes",
+      "requiredRoles": "service_role writes; existing RLS reads",
+      "livePresent": null,
+      "sourceMigration": "20260812102335 + 20260812102338",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "base relation live",
+        "new columns/FK/indexes not freshly probed"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "deployed log-role-switch",
+      "signature": "public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean) RETURNS uuid",
+      "requiredRoles": "service_role",
+      "livePresent": true,
+      "sourceMigration": "20260602037000 applied",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "exact live overload",
+        "deployed worker calls name"
+      ],
+      "compatibility": "retain through rollout"
+    },
+    {
+      "kind": "routine",
+      "consumer": "current log-role-switch",
+      "signature": "public.record_role_switch_audit_for_user(uuid,uuid,text,text,text) RETURNS uuid",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260812102335",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "only six-arg overload live"
+      ],
+      "compatibility": "source migration drops old overload; forward SQL must not"
+    },
+    {
+      "kind": "routine",
+      "consumer": "current log-role-switch",
+      "signature": "public.finalize_role_switch_audit_for_user(uuid,uuid,boolean,text,text,integer,integer) RETURNS void",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260812102335",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "fresh false",
+        "log-role-switch.ts:225"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "begin-role-switch validation branch",
+      "signature": "public.validate_role_switch_for_user(uuid) RETURNS void",
+      "requiredRoles": "service_role",
+      "livePresent": true,
+      "sourceMigration": "20260629142237 applied",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "exact live overload"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "deployed begin-role-switch",
+      "signature": "public.begin_role_switch_for_user(uuid) RETURNS void",
+      "requiredRoles": "service_role",
+      "livePresent": true,
+      "sourceMigration": "20260602043000 applied",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "exact live overload"
+      ],
+      "compatibility": "retain through rollout"
+    },
+    {
+      "kind": "routine",
+      "consumer": "current begin-role-switch",
+      "signature": "public.begin_role_switch_for_user(uuid,uuid) RETURNS void",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260812102335",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "dynamic branch passes audit id",
+        "only one-arg overload live"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "complete-onboarding service",
+      "signature": "public.complete_onboarding_role_for_user(uuid,user_role,text,text,text,text) RETURNS void",
+      "requiredRoles": "service_role",
+      "livePresent": true,
+      "sourceMigration": "signature historical; body replaced by 20260812102335",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "signature live",
+        "hardened body unverified"
+      ],
+      "livePresentDetail": "signature only"
+    },
+    {
+      "kind": "routine",
+      "consumer": "reconciliation imported constant",
+      "signature": "public.claim_role_switch_reconciliation_batch(uuid,integer,integer) RETURNS TABLE(audit_id uuid,user_id uuid,lock_token uuid,attempt_count integer)",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260812102335",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "dynamic call",
+        "absent live"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "reconciliation imported constant",
+      "signature": "public.release_role_switch_reconciliation_claims(uuid,uuid[]) RETURNS integer",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260812102335",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "dynamic call",
+        "absent live"
+      ]
+    },
+    {
+      "kind": "routine",
+      "consumer": "reconciliation imported constant",
+      "signature": "public.complete_role_switch_reconciliation_attempt(uuid,uuid,uuid,text,text,boolean,integer,integer,integer) RETURNS void",
+      "requiredRoles": "service_role",
+      "livePresent": false,
+      "sourceMigration": "20260812102335",
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "dynamic call",
+        "absent live"
+      ]
+    },
+    {
+      "kind": "worker",
+      "consumer": "log-role-switch",
+      "signature": "POST durable audit/billing finalization",
+      "requiredRoles": "authenticated HTTP; service_role DB; Stripe secret",
+      "livePresent": false,
+      "sourceMigration": null,
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "live v78 ezbr 7d288ed98b7b391398095f054cef77682ba9e48aabddcd6a15f9f1df7c4af67e",
+        "current entrypoint sha256 503512fc4fe9c441ab62bfa571b5413522856b566a746f4ec240e048018b3fbe"
+      ]
+    },
+    {
+      "kind": "worker",
+      "consumer": "begin-role-switch",
+      "signature": "POST dynamic validate/begin RPC",
+      "requiredRoles": "authenticated HTTP; service_role DB",
+      "livePresent": false,
+      "sourceMigration": null,
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "live v32 ezbr e64e00b0e3764c1fbc16c2a7d4dd4ab41baba325eb9b1d9c36d2973081bea905",
+        "current entrypoint sha256 3e293566b48e441a841dbaadcdad0341a22acfa3423feed91a343612b9bbb1c7"
+      ]
+    },
+    {
+      "kind": "worker",
+      "consumer": "reconcile-role-switch-billing",
+      "signature": "POST cron-secret; imported claim/complete/release; Stripe audit-id identity",
+      "requiredRoles": "cron secret; service_role DB; Stripe secret",
+      "livePresent": false,
+      "sourceMigration": null,
+      "releaseGroup": "A6c",
+      "validationEvidence": [
+        "source entrypoint undeployed",
+        "sha256 3e3d367a484e6f3106ba5ca8f0557c3a87e552703a21e015fd2ed6d43961d31f"
+      ],
+      "scheduler": "source cron is created inactive; activation separate"
+    }
+  ],
+  "knownMissingCallSites": [
+    {
+      "file": "src/hooks/useListings.ts",
+      "line": 864,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "get_manageable_listing_catalogue_page",
+      "literal": true,
+      "signature": "public.get_manageable_listing_catalogue_page(integer,timestamptz,uuid) RETURNS TABLE(data jsonb,total_count bigint,next_created_at timestamptz,next_id uuid)",
+      "requiredRoles": [
+        "authenticated"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6a"
+    },
+    {
+      "file": "src/hooks/useListings.ts",
+      "line": 917,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "get_manageable_listing_summary",
+      "literal": true,
+      "signature": "public.get_manageable_listing_summary() RETURNS jsonb",
+      "requiredRoles": [
+        "authenticated"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6a"
+    },
+    {
+      "file": "src/lib/buildingListingUploads.ts",
+      "line": 44,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "register_new_building_storage_upload",
+      "literal": true,
+      "signature": "public.register_new_building_storage_upload(uuid,text,text,text) RETURNS uuid",
+      "requiredRoles": [
+        "authenticated"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    },
+    {
+      "file": "supabase/functions/create-new-building-listing/index.ts",
+      "line": 555,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "stage_storage_cleanup_jobs_for_service",
+      "literal": true,
+      "signature": "public.stage_storage_cleanup_jobs_for_service(uuid,uuid,text,jsonb,text,text) RETURNS integer",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    },
+    {
+      "file": "supabase/functions/create-new-building-listing/index.ts",
+      "line": 853,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "create_new_building_listing_with_storage_for_service",
+      "literal": true,
+      "signature": "public.create_new_building_listing_with_storage_for_service(uuid,uuid,text,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb) RETURNS jsonb",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    },
+    {
+      "file": "supabase/functions/log-role-switch/index.ts",
+      "line": 225,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "finalize_role_switch_audit_for_user",
+      "literal": true,
+      "signature": "public.finalize_role_switch_audit_for_user(uuid,uuid,boolean,text,text,integer,integer) RETURNS void",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6c"
+    },
+    {
+      "file": "supabase/functions/process-storage-cleanup/index.ts",
+      "line": 39,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "claim_storage_cleanup_jobs",
+      "literal": true,
+      "signature": "public.claim_storage_cleanup_jobs(integer) RETURNS SETOF public.storage_cleanup_jobs",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    },
+    {
+      "file": "supabase/functions/process-storage-cleanup/index.ts",
+      "line": 55,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "prepare_storage_cleanup_delete",
+      "literal": true,
+      "signature": "public.prepare_storage_cleanup_delete(uuid,uuid) RETURNS text",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    },
+    {
+      "file": "supabase/functions/project-management/index.ts",
+      "line": 414,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "stage_storage_cleanup_jobs_for_service",
+      "literal": true,
+      "signature": "public.stage_storage_cleanup_jobs_for_service(uuid,uuid,text,jsonb,text,text) RETURNS integer",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    },
+    {
+      "file": "supabase/functions/project-management/index.ts",
+      "line": 435,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "settle_storage_cleanup_jobs_for_service",
+      "literal": true,
+      "signature": "public.settle_storage_cleanup_jobs_for_service(uuid,uuid,jsonb,text) RETURNS integer",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    },
+    {
+      "file": "supabase/functions/project-management/index.ts",
+      "line": 467,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "get_project_management_context_for_service",
+      "literal": true,
+      "signature": "public.get_project_management_context_for_service(uuid,uuid) RETURNS TABLE(id uuid,owner_id uuid,organization_id uuid)",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    },
+    {
+      "file": "supabase/functions/project-management/index.ts",
+      "line": 530,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "delete_project_for_service",
+      "literal": true,
+      "signature": "public.delete_project_for_service(uuid,uuid) RETURNS boolean",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    },
+    {
+      "file": "supabase/functions/project-management/index.ts",
+      "line": 627,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "update_listing_cover_with_storage_for_service",
+      "literal": true,
+      "signature": "public.update_listing_cover_with_storage_for_service(uuid,uuid,uuid,text) RETURNS jsonb",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    },
+    {
+      "file": "supabase/functions/project-management/index.ts",
+      "line": 705,
+      "kind": "rpc",
+      "expression": "supabase.rpc",
+      "target": "attach_project_media_for_service",
+      "literal": true,
+      "signature": "public.attach_project_media_for_service(uuid,uuid,jsonb) RETURNS jsonb",
+      "requiredRoles": [
+        "service_role"
+      ],
+      "livePresent": false,
+      "releaseGroup": "A6b"
+    }
+  ],
+  "missingNamedRoutineCount": 13,
+  "dynamicCallSites": [
+    {
+      "consumer": "useListings.ts:240",
+      "targets": [
+        {
+          "signature": "get_manageable_listing_catalogue()",
+          "livePresent": false,
+          "releaseGroup": "A6a"
+        },
+        {
+          "signature": "get_listing_management_catalogue()",
+          "livePresent": true,
+          "releaseGroup": "baseline-retain"
+        }
+      ]
+    },
+    {
+      "consumer": "begin-role-switch.ts:100",
+      "targets": [
+        {
+          "signature": "validate_role_switch_for_user(uuid)",
+          "livePresent": true,
+          "releaseGroup": "A6c"
+        },
+        {
+          "signature": "begin_role_switch_for_user(uuid,uuid)",
+          "livePresent": false,
+          "releaseGroup": "A6c"
+        },
+        {
+          "signature": "live alternative begin_role_switch_for_user(uuid)",
+          "livePresent": true,
+          "releaseGroup": "baseline-retain"
+        }
+      ]
+    },
+    {
+      "consumer": "reconcile-role-switch-billing.ts:115,166,182 imported constants",
+      "targets": [
+        {
+          "signature": "claim_role_switch_reconciliation_batch(uuid,integer,integer)",
+          "livePresent": false,
+          "releaseGroup": "A6c"
+        },
+        {
+          "signature": "complete_role_switch_reconciliation_attempt(uuid,uuid,uuid,text,text,boolean,integer,integer,integer)",
+          "livePresent": false,
+          "releaseGroup": "A6c"
+        },
+        {
+          "signature": "release_role_switch_reconciliation_claims(uuid,uuid[])",
+          "livePresent": false,
+          "releaseGroup": "A6c"
+        }
+      ]
+    },
+    {
+      "consumer": "admin-content-report-action.ts:126 dynamic rpcName",
+      "targets": [
+        {
+          "signature": "admin_resolve_listing_report_for_user(uuid,uuid)",
+          "livePresent": true,
+          "releaseGroup": "baseline-retain"
+        },
+        {
+          "signature": "admin_suspend_reported_listing_for_user(uuid,uuid,text)",
+          "livePresent": true,
+          "releaseGroup": "baseline-retain"
+        },
+        {
+          "signature": "admin_ban_reported_content_owner_for_user(uuid,uuid,text)",
+          "livePresent": true,
+          "releaseGroup": "baseline-retain"
+        }
+      ]
+    },
+    {
+      "consumer": "admin-firesale-action.ts:190 dynamic rpcName",
+      "targets": [
+        {
+          "signature": "admin_update_firesale_pipeline_deal_for_user(uuid,uuid,text,text,numeric,text,numeric)",
+          "livePresent": true,
+          "releaseGroup": "baseline-retain"
+        },
+        {
+          "signature": "admin_set_firesale_investor_publication_for_user(uuid,uuid,boolean)",
+          "livePresent": true,
+          "releaseGroup": "baseline-retain"
+        },
+        {
+          "signature": "admin_update_firesale_interest_workflow_for_user(uuid,uuid,text,integer,boolean,text,numeric)",
+          "livePresent": true,
+          "releaseGroup": "baseline-retain"
+        }
+      ]
+    },
+    {
+      "consumer": "process-storage-cleanup.ts:75 dynamic bucket",
+      "targets": [
+        {
+          "signature": "listing-images",
+          "livePresent": true,
+          "releaseGroup": "A6b"
+        },
+        {
+          "signature": "project-media",
+          "livePresent": true,
+          "releaseGroup": "A6b"
+        }
+      ]
+    }
+  ],
+  "unrecordedMigrationEffects": [
+    {
+      "file": "supabase/migrations/20260726175234_allow_abandoned_trial_checkout_retry.sql",
+      "status": "unverified",
+      "evidence": "trial constraints/index"
+    },
+    {
+      "file": "supabase/migrations/20260726180252_canonicalize_listing_promotion_subscription_source.sql",
+      "status": "partial",
+      "evidence": "active-plan helper live; current subscription helper/guard absent"
+    },
+    {
+      "file": "supabase/migrations/20260726181627_align_project_tenant_authorization.sql",
+      "status": "partial",
+      "evidence": "service RPCs/can_manage_project absent; old policies live"
+    },
+    {
+      "file": "supabase/migrations/20260726182342_align_org_listing_mutation_authorization.sql",
+      "status": "partial",
+      "evidence": "can_manage_listing absent; older update/delete helpers exist"
+    },
+    {
+      "file": "supabase/migrations/20260726182846_create_new_building_atomic_boundary.sql",
+      "status": "absent",
+      "evidence": "old atomic RPC absent; superseded by with-storage RPC"
+    },
+    {
+      "file": "supabase/migrations/20260726184938_protect_public_professional_projection.sql",
+      "status": "partial",
+      "evidence": "raw policy/grant effects visible; view absent"
+    },
+    {
+      "file": "supabase/migrations/20260726201049_public_auction_candidate_boundary.sql",
+      "status": "present-equivalent",
+      "evidence": "restored by applied 20260921055243"
+    },
+    {
+      "file": "supabase/migrations/20260726202759_public_auction_candidate_indexes.sql",
+      "status": "superseded-present",
+      "evidence": "final order index applied by 20260921055243"
+    },
+    {
+      "file": "supabase/migrations/20260726204345_harden_public_auction_boundary_and_index.sql",
+      "status": "present-equivalent",
+      "evidence": "exact grant/index verified by 20260921055243"
+    },
+    {
+      "file": "supabase/migrations/20260726205309_fix_owned_public_storage_cleanup.sql",
+      "status": "absent",
+      "evidence": "both helpers absent; policy body unverified"
+    },
+    {
+      "file": "supabase/migrations/20260726211816_harden_listing_tenant_and_auction_provenance.sql",
+      "status": "partial",
+      "evidence": "older helpers exist; key tenant/quota helpers absent/bodies unverified"
+    },
+    {
+      "file": "supabase/migrations/20260726215356_enforce_project_child_scope_immutability.sql",
+      "status": "absent",
+      "evidence": "helper/triggers absent"
+    },
+    {
+      "file": "supabase/migrations/20260726220701_correct_active_listing_quota_and_managed_catalogue.sql",
+      "status": "absent",
+      "evidence": "quota-owner and manageable catalogue RPC absent"
+    },
+    {
+      "file": "supabase/migrations/20260726221523_require_listing_owner_for_public_promotion_rpc.sql",
+      "status": "body-unverified",
+      "evidence": "exact activation overloads live; owner body unverified"
+    },
+    {
+      "file": "supabase/migrations/20260726222529_add_storage_cleanup_outbox.sql",
+      "status": "absent",
+      "evidence": "all routines absent; relation unprobed"
+    },
+    {
+      "file": "supabase/migrations/20260726224342_harden_storage_cleanup_lifecycle.sql",
+      "status": "absent",
+      "evidence": "all lifecycle routines absent"
+    },
+    {
+      "file": "supabase/migrations/20260726233830_use_current_service_role_claim.sql",
+      "status": "absent",
+      "evidence": "service-role helper and updated routines absent"
+    },
+    {
+      "file": "supabase/migrations/20260726234925_harden_storage_cleanup_transitions_and_active_drafts.sql",
+      "status": "absent",
+      "evidence": "final cleanup/media/cover routine set absent"
+    },
+    {
+      "file": "supabase/migrations/20260728093154_align_managed_catalogue_and_promotion_principal.sql",
+      "status": "partial",
+      "evidence": "manageable routines absent; promotion bodies unverified"
+    },
+    {
+      "file": "supabase/migrations/20260728162743_harden_listing_promotion_allocation_identity.sql",
+      "status": "partial",
+      "evidence": "admin setter live; guard routines/triggers absent"
+    },
+    {
+      "file": "supabase/migrations/20260729094658_authorize_video_room_turn_credentials.sql",
+      "status": "absent",
+      "evidence": "can_access_video_room absent; policies unverified"
+    },
+    {
+      "file": "supabase/migrations/20260729101259_consolidate_project_and_role_select_policies.sql",
+      "status": "absent",
+      "evidence": "legacy project policies still live"
+    },
+    {
+      "file": "supabase/migrations/20260729145205_replace_public_professional_definer_view.sql",
+      "status": "absent",
+      "evidence": "routine/view absent"
+    },
+    {
+      "file": "supabase/migrations/20260812102335_enforce_role_switch_audit_integrity.sql",
+      "status": "overload-mismatch",
+      "evidence": "old record/begin live; new/finalize/reconciliation absent"
+    },
+    {
+      "file": "supabase/migrations/20260812102338_finalize_role_switch_audit_integrity.sql",
+      "status": "unverified",
+      "evidence": "indexes/FK validation unprobed"
+    },
+    {
+      "file": "supabase/migrations/20260812102340_reconcile_agent_data_input_invoice_credits.sql",
+      "status": "overload-mismatch",
+      "evidence": "old 2-arg discount live; new 4-arg absent"
+    },
+    {
+      "file": "supabase/migrations/20260812102342_reconcile_legacy_migration_effects.sql",
+      "status": "partial",
+      "evidence": "most names live; exact bodies/overload cleanup unproved"
+    },
+    {
+      "file": "supabase/migrations/20260901120000_repair_subsecond_release_capabilities.sql",
+      "status": "partial",
+      "evidence": "auction effects live; A1/A6a effects absent"
+    },
+    {
+      "file": "supabase/migrations/20260901130000_add_visible_auction_candidate_envelopes.sql",
+      "status": "present-equivalent",
+      "evidence": "exact envelope restored by 20260921055243"
+    },
+    {
+      "file": "supabase/migrations/20260901180000_index_auction_quarantine_canonical_fk.sql",
+      "status": "unverified",
+      "evidence": "index not freshly inventoried"
+    }
+  ],
+  "groupReadiness": {
+    "A1": {
+      "ready": false,
+      "needs": [
+        "forward routine/view migration",
+        "anonymous and owner/admin runtime proof"
+      ],
+      "doesNotNeed": [
+        "anon raw-table grant",
+        "Edge deployment"
+      ]
+    },
+    "A2": {
+      "ready": false,
+      "needs": [
+        "new accurate signed marker/manifest",
+        "protected website staging"
+      ],
+      "doesNotNeed": [
+        "DB migration",
+        "Supabase Edge deployment",
+        "fixtures"
+      ]
+    },
+    "A3": {
+      "ready": false,
+      "needs": [
+        "immutable SHA",
+        "UI + DB trigger proof",
+        "lost-response retry decision"
+      ],
+      "doesNotNeed": [
+        "schema for basic error propagation",
+        "Edge deployment"
+      ]
+    },
+    "A4": {
+      "ready": false,
+      "needs": [
+        "honest partial/error contract",
+        "old-client compatibility or versioning",
+        "Edge deployment"
+      ],
+      "doesNotNeed": [
+        "DB unless persisted scores change"
+      ]
+    },
+    "A6a": {
+      "ready": false,
+      "needs": [
+        "three missing manageable RPCs",
+        "tenant matrix",
+        "frontend"
+      ],
+      "doesNotNeed": [
+        "Edge deployment"
+      ]
+    },
+    "A6b": {
+      "ready": false,
+      "needs": [
+        "coherent forward SQL",
+        "two changed + one new service",
+        "reviewed scheduler",
+        "failure/race/tenant proof"
+      ],
+      "doesNotNeed": [
+        "all 30 migrations"
+      ]
+    },
+    "A6c": {
+      "ready": false,
+      "needs": [
+        "forward SQL retaining old overloads",
+        "log/begin/reconcile services",
+        "separate cron activation",
+        "Stripe idempotency proof"
+      ],
+      "doesNotNeed": [
+        "dropping old overloads first"
+      ]
+    }
+  },
+  "compatibility": {
+    "previousWebsite": "Keep current marker/payload and legacy catalogue RPC through additive DB rollout.",
+    "A6b": "Live v25/v24 services use direct service-role mutations; add DB RPCs first and preserve tables/columns.",
+    "A6c": "Live log service needs record(uuid,text,text,text,boolean,boolean); live begin service needs begin(uuid). Historical 20260812102335 drops both and is unsafe as phase one.",
+    "A4": "Older consumer handling of null/omitted numbers is unresolved.",
+    "dataLimits": [
+      "A3 exactly-once lost-response retry unresolved",
+      "A6b cleanup relations unprobed",
+      "A6c columns/FK/indexes unprobed"
+    ]
+  },
+  "localEvidence": {
+    "openHouseSourceProof": {
+      "baseRelease": "4827491050953d063e44c02c56c9c55842d71ba0",
+      "changedSourcePaths": [
+        "functions/api/public/_cache.ts"
+      ],
+      "changedArtifactPaths": [
+        "_worker.js"
+      ],
+      "unchangedFiles": 202,
+      "cacheSha256": "406cd1c1c09b3560558766d0b74c55dc18c49c9549447e5f410e8150a13487e8",
+      "workerSha256": "484fd359153c7538049d77e6b570ab15b39822273a31739341be11660b4110a9",
+      "releaseMarker": "Retains base marker for local validation; not a publishable signed release"
+    },
+    "openHousePackagedSmoke": {
+      "compiledUpcomingApiStatus": 200,
+      "upcomingEmptyState": true,
+      "pastListingVisible": true,
+      "localRenderMs": 435,
+      "externalBrowserRequestsBlocked": true,
+      "databaseRequestsMocked": true
+    },
+    "artifactVerification": "passed",
+    "testsRunByThisSlot": []
+  },
+  "preparationDecision": "FAIL_CLOSED",
+  "blockers": [
+    "dirty A3 tree has no immutable candidate SHA",
+    "required A1/A6a/A6b/A6c capabilities absent or unverified",
+    "A6c historical migration is not additive against live overloads",
+    "A4 old-client response compatibility unproven",
+    "A2 local proof retains old marker and is not publishable"
+  ],
+  "phase": "dependency-audit",
+  "candidate": {
+    "commit": null,
+    "ready": false,
+    "reason": "Local remediation continues; each selected release group needs its own immutable payload and completed evidence."
+  }
+}
