@@ -1,3 +1,5 @@
+import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { resolveOptionalUserId } from "../_shared/optionalAuth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import {
@@ -747,25 +749,50 @@ const fallbackReportWithOsContext = (
     "fallback",
   );
 
-const reportResponse = (
-  report: JsonRecord,
-  responseVersion: number | undefined,
+const legacyCompatibilityResponse = async (
+  req: Request,
   corsHeaders: Record<string, string>,
-) => {
-  // The deployed consumer formats every price unconditionally and cannot show
-  // per-section estimate provenance. Negotiate v2 before returning partial data.
-  if (responseVersion !== 2) {
+): Promise<Response> => {
+  // Authenticate incompatible clients without reserving quota for a report
+  // they cannot render. The rate limiter and request validation run first.
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.toLowerCase().startsWith("bearer ")) {
+    return errorResponse("Authentication required", 401, corsHeaders);
+  }
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) {
     return errorResponse(
-      "Neighbourhood report data is unavailable. Please try again later.",
+      "Authentication service unavailable",
       503,
       corsHeaders,
-      { code: "neighbourhood_data_unavailable" },
     );
   }
-  return new Response(JSON.stringify(report), {
+  const client = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const userId = await resolveOptionalUserId(
+    authHeader.slice(7).trim(),
+    (token) => client.auth.getUser(token),
+  );
+  if (!userId) {
+    return errorResponse("Invalid or expired token", 401, corsHeaders);
+  }
+  return errorResponse(
+    "Neighbourhood report data is unavailable. Please try again later.",
+    503,
+    corsHeaders,
+    { code: "neighbourhood_data_unavailable" },
+  );
+};
+
+const reportResponse = (
+  report: JsonRecord,
+  corsHeaders: Record<string, string>,
+) =>
+  new Response(JSON.stringify(report), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-};
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider JSON parsing, fallback, and response shaping.
   const corsPreflightResponse = handleCors(req);
@@ -790,6 +817,10 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       lng,
       responseVersion,
     } = await parseJsonBody(req, neighbourhoodReportRequestSchema);
+
+    if (responseVersion !== 2) {
+      return await legacyCompatibilityResponse(req, corsHeaders);
+    }
 
     const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
     if (quota.errorResponse) return quota.errorResponse;
@@ -844,7 +875,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         osMunicipalityContext,
       );
       await recordAiCall(quota.userId, BUCKET);
-      return reportResponse(fallback, responseVersion, corsHeaders);
+      return reportResponse(fallback, corsHeaders);
     }
 
     const prompt =
@@ -937,7 +968,7 @@ Rules:
         osMunicipalityContext,
       );
       await recordAiCall(quota.userId, BUCKET);
-      return reportResponse(fallback, responseVersion, corsHeaders);
+      return reportResponse(fallback, corsHeaders);
     }
 
     const aiData = await readJsonSafely(response);
@@ -1005,7 +1036,7 @@ Rules:
     // No provider in this endpoint supplies measured listing-level scores.
     // Model estimates and unavailable defaults must not enter listing filters.
     await recordAiCall(quota.userId, BUCKET);
-    return reportResponse(parsed as JsonRecord, responseVersion, corsHeaders);
+    return reportResponse(parsed as JsonRecord, corsHeaders);
   } catch (e) {
     if (e instanceof SchemaValidationError) {
       return errorResponse(e.message, 400, corsHeaders, {

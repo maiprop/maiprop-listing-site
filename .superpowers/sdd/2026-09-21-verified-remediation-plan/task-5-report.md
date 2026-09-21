@@ -103,3 +103,36 @@ The default npm Deno wrapper grants broad network/write permissions; the direct 
 Verified nullable reads, no zero substitution, no synthetic projects, service-controlled provenance, compatibility envelope, both current direct consumers, no score persistence, and quota ordering. Review caught and fixed metadata spoofing, source mixing in charts, and loss of a single historical point. Auth/rate-limit/request validation and the intentional recordAiCall no-op remain unchanged. Legacy fixture lives under the already excluded test tree, so it does not inflate production coverage.
 
 Limitations: no live OS/currentness verification was requested or performed; history acceptance is narrow and unknown provider layouts remain unavailable. Public asking-history series are not asserted to be achieved-price history. Existing stored scores are untouched. AI prose remains model output with clear estimate labeling. Legacy cached clients cannot receive complete report UI until updated. A separate independent review follows this implementation commit.
+
+
+## Independent-review fix round 1 / 5
+
+Fix base: `c0efd6ad`. Addressed the two Important findings from `task-5-review.md` verbatim:
+
+1. **Reject unsupported legacy response versions before doing work that cannot be delivered.** Moved the legacy branch after the existing rate limiter and request validation but before `enforceAiQuota`, OS lookup, and AI work. The branch still requires a Bearer token, available Supabase auth configuration, and an actual authenticated user via `auth.getUser`; it uses the existing bounded `resolveOptionalUserId` helper. Authentication failure remains fail-closed. Authenticated incompatible requests receive the same handled compatibility envelope without reserving quota. The version 2 path keeps the original combined auth/permission/quota gate unchanged, including plan-denial and monthly-denial behavior before paid work. No report data or permission is granted to legacy callers. This supersedes the initial implementation's late legacy response check: cached-client retries now cost neither an AI quota attempt nor OS/AI provider work.
+2. **Use an own-key lookup for noise-label validation.** Replaced the ordinary-object noise allowlist with a Map containing only the supported labels. `constructor` and `__proto__` now resolve unavailable; valid safety remains visible and labelled as an unverified AI estimate. Existing supported noise labels continue passing their component tests.
+
+Added behavioral coverage for a configured, successful-provider legacy request (zero quota reservation, zero AI calls, zero OS calls, no listing writes, one verified-auth lookup), missing/invalid legacy authentication, repeated legacy rate limiting before authentication, version 2 plan-denial permissions, and both inherited-key noise labels with an independently usable safety section.
+
+### RED and GREEN commands/results
+
+```powershell
+node scripts/project-runtime.mjs -- 'C:/Users/K R/.deno/bin/deno.exe' test --config supabase/functions/deno.json --frozen --cached-only --node-modules-dir=none --allow-env --allow-read --deny-net supabase/functions/neighbourhood-report/index.test.ts
+```
+
+RED: **23 passed, 2 failed**, proving legacy successful-provider requests and retries still reserved quota (actual 1, expected 0). GREEN after the fix: **25 passed, 0 failed**, exit 0.
+
+```powershell
+node scripts/project-runtime.mjs -- node node_modules/vitest/vitest.mjs run src/test/CompareAIReports.test.tsx
+```
+
+RED: **17 passed, 2 failed**, plus the reproduced two uncaught `NoiseBadge` errors reading `cfg.bg` for inherited keys. GREEN: **19 passed, 0 failed**, no uncaught errors, exit 0.
+
+```powershell
+node scripts/project-runtime.mjs -- 'C:/Users/K R/.deno/bin/deno.exe' check --config supabase/functions/deno.json --frozen --no-remote --deny-import --node-modules-dir=none supabase/functions/neighbourhood-report/index.ts
+node scripts/project-runtime.mjs -- node node_modules/eslint/bin/eslint.js src/components/CompareAIReports.tsx src/test/CompareAIReports.test.tsx supabase/functions/neighbourhood-report/index.ts supabase/functions/neighbourhood-report/index.test.ts
+```
+
+Both exit 0. `git diff --check` passes. Only the four covering application/test files and this report are in the fix commit. Frozen cached dependencies remain unchanged. No provider/network experiments, installs, broad test suites, full builds, or GitHub/production actions ran. Commit hooks use the previously documented scoped-check procedure.
+
+Self-review: no valid version 2 request bypasses its permission/quota gate; legacy auth verification cannot deliver protected report data or reserve quota; IP rate limiting still precedes auth/validation; supported noise values remain usable; Map lookup cannot return inherited values. The two Minor review findings (chart fill interval and expected warning-log capture) are deliberately unchanged and retained for controller final triage, as instructed.

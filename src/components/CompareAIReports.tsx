@@ -242,11 +242,11 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           const safetyScore = typeof score === "number" && Number.isFinite(score) && score >= 0 && score <= 100 ? score : null;
           const rawNoise = nb?.noiseLevel ?? nb?.noise_level;
           const label = rawNoise && typeof rawNoise === "object" ? rawNoise.label : rawNoise;
-          const noiseLabels: Record<string, NeighbourhoodData["noiseLevel"]> = {
-            "very quiet": "low", quiet: "low", low: "low", moderate: "moderate",
-            busy: "high", "very busy": "high", high: "high", noisy: "high",
-          };
-          const noiseLevel = typeof label === "string" ? noiseLabels[label.toLowerCase().trim()] ?? null : null;
+          const noiseLabels = new Map<string, NeighbourhoodData["noiseLevel"]>([
+            ["very quiet", "low"], ["quiet", "low"], ["low", "low"], ["moderate", "moderate"],
+            ["busy", "high"], ["very busy", "high"], ["high", "high"], ["noisy", "high"],
+          ]);
+          const noiseLevel = typeof label === "string" ? noiseLabels.get(label.toLowerCase().trim()) ?? null : null;
           neighbourhood = { safetyScore, noiseLevel };
         }
 

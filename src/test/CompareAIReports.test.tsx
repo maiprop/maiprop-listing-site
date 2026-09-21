@@ -332,3 +332,13 @@ describe("CompareAIReports — partial neighbourhood evidence", () => {
     await waitFor(() => expect(screen.getAllByText("Unavailable")).toHaveLength(2));
   });
 });
+
+it.each(["constructor", "__proto__"])("rejects inherited noise key %s while keeping valid safety usable", async (label) => {
+  invokeMock.mockImplementation(async (name: string) => name === "neighbourhood-report" ? { data: { responseVersion: 2, safetyScore: { score: 82 }, noiseLevel: { label } }, error: null } : { data: null, error: null });
+  render(wrap(<CompareAIReports listings={[baseListing()]} />));
+  fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
+  expect(await screen.findByText(/82\/100/)).toBeInTheDocument();
+  expect(screen.getByText("Unavailable")).toBeInTheDocument();
+  expect(screen.getByText(/AI estimate.*not independently verified/)).toBeInTheDocument();
+  expect(screen.queryByText(/Quiet|Moderate|Noisy/)).toBeNull();
+});

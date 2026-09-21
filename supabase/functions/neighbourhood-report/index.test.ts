@@ -655,6 +655,9 @@ const scenario = async (options: {
   noConfig?: boolean;
   noOsConfig?: boolean;
   denied?: boolean;
+  deniedReason?: string;
+  auth?: "missing" | "invalid";
+  ip?: string;
   version?: number;
   marketText?: string;
 }) => {
@@ -668,7 +671,11 @@ const scenario = async (options: {
     "MAIPROP_OS_PASSWORD",
   ];
   const previous = keys.map((key) => Deno.env.get(key));
-  let reservations = 0, providerCalls = 0, listingWrites = 0;
+  let reservations = 0,
+    providerCalls = 0,
+    listingWrites = 0,
+    authCalls = 0,
+    osCalls = 0;
   Deno.env.set("OPENAI_API_KEY", "test-key");
   Deno.env.delete("GEMINI_API_KEY");
   if (options.noConfig) Deno.env.delete("OPENAI_API_KEY");
@@ -679,20 +686,28 @@ const scenario = async (options: {
   activeFetch = ((input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("/auth/v1/user")) {
-      return Promise.resolve(okJson({ id: "test-user-id" }));
+      authCalls++;
+      return Promise.resolve(
+        options.auth === "invalid"
+          ? okJson({ message: "Invalid token" }, 401)
+          : okJson({ id: "test-user-id" }),
+      );
     }
     if (url.includes("/reserve_ai_quota_for_user")) {
       reservations++;
       return Promise.resolve(
         okJson({
           allowed: !options.denied,
-          reason: options.denied ? "monthly_limit_reached" : null,
+          reason: options.denied
+            ? options.deniedReason ?? "monthly_limit_reached"
+            : null,
           used: 1,
           limit: 5,
         }),
       );
     }
     if (url.startsWith("https://os.test")) {
+      osCalls++;
       assertEquals(reservations, 1);
       if (url.endsWith("/auth/login")) {
         return Promise.resolve(okJson({ token: "token" }));
@@ -728,8 +743,10 @@ const scenario = async (options: {
       listingId: "11111111-1111-4111-8111-111111111111",
       ...(options.version ? { responseVersion: options.version } : {}),
     }, {
-      authorization: "Bearer test-valid-token",
-      "x-forwarded-for": `10.2.0.${validationRequestNumber}`,
+      ...(options.auth === "missing"
+        ? {}
+        : { authorization: "Bearer test-valid-token" }),
+      "x-forwarded-for": options.ip ?? `10.2.0.${validationRequestNumber}`,
     }));
     return {
       status: res.status,
@@ -751,6 +768,8 @@ const scenario = async (options: {
       reservations,
       providerCalls,
       listingWrites,
+      authCalls,
+      osCalls,
     };
   } finally {
     activeFetch = previousFetch;
@@ -901,6 +920,66 @@ Deno.test("missing OS configuration leaves every market observation unavailable"
   assertEquals(body.noiseLevel, null);
   assertEquals(body.demographics, null);
   assertEquals(body.areaHighlights, []);
+});
+
+Deno.test("legacy requests authenticate but do not reserve quota or call configured successful providers", async () => {
+  const result = await scenario({
+    raw: JSON.stringify({
+      areaName: "Fictionopolis",
+      safetyScore: {
+        score: 82,
+        label: "Good",
+        trend: "Stable",
+        notes: "Estimate",
+      },
+    }),
+    marketText: "Private Sales Municipality - average price 2,000 EUR / sq.m.",
+  });
+  assertEquals(result.status, 503);
+  assertEquals(result.body.code, "neighbourhood_data_unavailable");
+  assertEquals(result.authCalls, 1);
+  assertEquals(result.reservations, 0);
+  assertEquals(result.providerCalls, 0);
+  assertEquals(result.osCalls, 0);
+  assertEquals(result.listingWrites, 0);
+});
+
+for (const auth of ["missing", "invalid"] as const) {
+  Deno.test(`legacy ${auth} authentication remains denied without quota or provider work`, async () => {
+    const result = await scenario({ auth, raw: "{}" });
+    assertEquals(result.status, 401);
+    assertEquals(result.authCalls, auth === "missing" ? 0 : 1);
+    assertEquals(result.reservations, 0);
+    assertEquals(result.providerCalls, 0);
+    assertEquals(result.osCalls, 0);
+  });
+}
+
+Deno.test("legacy retries remain rate limited before authentication without quota charges", async () => {
+  const ip = "10.9.7.1";
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const result = await scenario({ ip, raw: "{}" });
+    assertEquals(result.status, 503);
+    assertEquals(result.reservations, 0);
+  }
+  const result = await scenario({ ip, raw: "{}" });
+  assertEquals(result.status, 429);
+  assertEquals(result.authCalls, 0);
+  assertEquals(result.reservations, 0);
+  assertEquals(result.providerCalls, 0);
+  assertEquals(result.osCalls, 0);
+});
+
+Deno.test("version 2 still enforces plan permissions before provider work", async () => {
+  const result = await scenario({
+    version: 2,
+    denied: true,
+    deniedReason: "plan_does_not_include_feature",
+  });
+  assertEquals(result.status, 402);
+  assertEquals(result.reservations, 1);
+  assertEquals(result.providerCalls, 0);
+  assertEquals(result.osCalls, 0);
 });
 
 restore();
