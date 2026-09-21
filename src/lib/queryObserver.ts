@@ -6,11 +6,11 @@
  * `__sentryClient` global is undefined).
  *
  * Thresholds:
- *   - A query that takes longer than SLOW_QUERY_MS is logged as a Sentry
- *     breadcrumb + a warning-level event (so Sentry's alerting can surface it).
+ *   - A query fetch lifecycle that takes longer than SLOW_QUERY_MS is logged
+ *     as a warning-level event (so Sentry's alerting can surface it).
  *   - All query errors produce a Sentry error event with the query key.
  */
-import { QueryCache, MutationCache } from "@tanstack/react-query";
+import { QueryCache, MutationCache, isCancelledError } from "@tanstack/react-query";
 
 // React Query's callback generics default error to `unknown` — we accept a
 // permissive shape and let TS widen via inference.
@@ -51,25 +51,45 @@ export const queryCache = new QueryCache({
       extra: { queryKey: keyStr, state: query.state.status },
     });
   },
-  onSuccess: (_data, query: AnyQuery) => {
-    const started = query.state.dataUpdatedAt - (query.state.fetchFailureCount > 0 ? 0 : 0);
-    // React Query doesn't directly expose the "fetch started" timestamp, but
-    // `state.fetchStatus` transitions give us a decent proxy via performance
-    // marks. Skip unless we have the timing.
-    const perfEntry = performance
-      .getEntriesByType("measure")
-      .find((e) => e.name === `rq:${queryKeyToString(query.queryKey)}`);
-    const duration = perfEntry?.duration ?? 0;
-    if (duration > SLOW_QUERY_MS) {
-      const sentry = getSentry();
-      const msg = `Slow query (${Math.round(duration)}ms): ${queryKeyToString(query.queryKey)}`;
-      sentry?.captureMessage(msg, { level: "warning", tags: { source: "react-query-slow" } });
-      if (import.meta.env.DEV) {
-        console.warn("[react-query slow]", msg);
-      }
-    }
-    void started;
-  },
+});
+
+const fetchStartedAt = new WeakMap<object, number>();
+
+queryCache.subscribe((event) => {
+  if (event.type === "removed") {
+    fetchStartedAt.delete(event.query);
+    return;
+  }
+  if (event.type !== "updated") return;
+
+  if (event.action.type === "fetch") {
+    fetchStartedAt.set(event.query, performance.now());
+    return;
+  }
+
+  let wasCancelled = false;
+  if (event.action.type === "error") {
+    wasCancelled = isCancelledError(event.action.error);
+  } else if (!(event.action.type === "success" && event.query.state.fetchStatus === "idle")) {
+    return;
+  }
+
+  const startedAt = fetchStartedAt.get(event.query);
+  fetchStartedAt.delete(event.query);
+  if (startedAt === undefined || wasCancelled) return;
+
+  const durationMs = performance.now() - startedAt;
+  if (durationMs <= SLOW_QUERY_MS) return;
+
+  const message = `Slow React Query fetch (${Math.round(durationMs)}ms)`;
+  getSentry()?.captureMessage(message, {
+    level: "warning",
+    tags: { source: "react-query-slow", route: "application" },
+    extra: { durationMs, lifecycle: "fetch-to-terminal" },
+  });
+  if (import.meta.env.DEV) {
+    console.warn("[react-query slow]", message);
+  }
 });
 
 export const mutationCache = new MutationCache({

@@ -449,11 +449,18 @@ export async function renderListingDetailSeo(ctx: {
   params: { id?: string | string[] };
   next?: (input?: Request | string, init?: RequestInit) => Promise<Response>;
 }): Promise<Response> {
-  const index = await fetchIndexHtml(ctx);
-  const html = await index.text();
   const rawId = ctx.params.id;
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
-  const listing = await fetchActiveListingById(ctx.env, id ?? "");
+  const indexPromise = fetchIndexHtml(ctx);
+  const listingResultPromise = fetchActiveListingById(ctx.env, id ?? "").then(
+    (listing) => ({ ok: true as const, listing }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+  const index = await indexPromise;
+  const html = await index.text();
+  const listingResult = await listingResultPromise;
+  if (!listingResult.ok) throw listingResult.error;
+  const listing = listingResult.listing;
 
   if (!listing) {
     return new Response(html, {

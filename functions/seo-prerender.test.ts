@@ -113,6 +113,20 @@ function firstSupabaseRequestUrl(): URL {
   return new URL(firstSupabaseUrl());
 }
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 beforeEach(() => {
   globalThis.fetch = vi.fn().mockImplementation(() =>
     Promise.resolve(
@@ -147,6 +161,81 @@ describe("SEO Pages Functions", () => {
       apikey: "publishable_test_key",
       Authorization: "Bearer publishable_test_key",
     });
+  });
+
+  it("starts detail metadata before the deferred app shell response and body complete", async () => {
+    const shellResponse = deferred<Response>();
+    const shellBody = deferred<string>();
+    const metadataResponse = deferred<Response>();
+    const ctx = makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" });
+    const assetFetch = ctx.env.ASSETS!.fetch as FetchMock;
+    const shellText = vi.fn(() => shellBody.promise);
+    assetFetch.mockReturnValue(shellResponse.promise);
+    fetchMock().mockReturnValue(metadataResponse.promise);
+
+    const pendingResponse = propertyRequest(ctx);
+
+    expect(assetFetch).toHaveBeenCalledTimes(1);
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
+
+    shellResponse.resolve({
+      status: 200,
+      headers: new Headers({ "Content-Type": "text/html; charset=utf-8" }),
+      text: shellText,
+    } as unknown as Response);
+    await vi.waitFor(() => expect(shellText).toHaveBeenCalledTimes(1));
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
+
+    metadataResponse.resolve(
+      new Response(JSON.stringify([listing]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    shellBody.resolve(htmlShell);
+
+    const response = await pendingResponse;
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Athens Penthouse With Acropolis View - mAI prop");
+  });
+
+  it("keeps an early metadata rejection attached and rethrows it after the shell body is available", async () => {
+    const metadataError = new Error("invalid metadata payload");
+    const metadataJson = deferred<unknown>();
+    const shellBody = deferred<string>();
+    const ctx = makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" });
+    const assetFetch = ctx.env.ASSETS!.fetch as FetchMock;
+    const parseMetadata = vi.fn(() => metadataJson.promise);
+    assetFetch.mockResolvedValueOnce({
+      status: 200,
+      headers: new Headers({ "Content-Type": "text/html; charset=utf-8" }),
+      text: vi.fn(() => shellBody.promise),
+    } as unknown as Response);
+    fetchMock().mockResolvedValueOnce({
+      ok: true,
+      json: parseMetadata,
+    } as unknown as Response);
+
+    const responsePromise = propertyRequest(ctx);
+    await vi.waitFor(() => expect(parseMetadata).toHaveBeenCalledTimes(1));
+    metadataJson.reject(metadataError);
+    await Promise.resolve();
+    shellBody.resolve(htmlShell);
+
+    await expect(responsePromise).rejects.toBe(metadataError);
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves a thrown shell error while bounding the prompt metadata request to one call", async () => {
+    const shellError = new Error("shell unavailable");
+    const ctx = makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" });
+    const assetFetch = ctx.env.ASSETS!.fetch as FetchMock;
+    assetFetch.mockRejectedValueOnce(shellError);
+
+    await expect(propertyRequest(ctx)).rejects.toBe(shellError);
+
+    expect(assetFetch).toHaveBeenCalledTimes(1);
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
   });
 
   it("uses canonical auction and new-build detail URLs when listing type requires it", async () => {
