@@ -327,3 +327,20 @@ These tasks address newly verified active paths from the current agent audit. Re
 - [ ] Correct the submitted-body translation fallback to the same factual saved-enquiry outcome as the translations. A missing translation must not resurrect the notification or response-time promise.
 - [ ] Test the actual owner card with no verification evidence, and successful submission when translation lookup returns the missing key. Preserve existing error/retry and contact behavior.
 - [ ] Run focused tests and type checking. No new verification workflow, expanded public-profile fields or release changes are required.
+
+### Task 20 — H9 — Label the OS dashboard illustration honestly
+
+**Files:** src/components/index/OSDashboardMockup.tsx, OSSection.tsx and focused tests.
+- [ ] Preserve the OS promotional section, illustration and external links, but label the illustration visibly as a demo with sample data. Code comments and a component named Mockup are not user-visible disclosure.
+- [ ] Replace the illustration's Live Market/LIVE labels with sample-data wording and remove random numeric mutation timers. Static illustrative rows/charts may remain under the clear demo label.
+- [ ] Replace unsupported blanket claims that every platform datum comes from OS, every region has a real-time index, and a fixed monthly auction count with accurate descriptions of the integration's capabilities. Do not invent alternative counts or freshness guarantees.
+- [ ] Test visible demo wording, stable numbers when timers advance, absence of a live-data claim in the illustration, and preserved external navigation.
+
+### Task 21 — POF review — Keep administrative results current and explicit
+
+**Files:** src/components/POFVerificationPanel.tsx and its focused behavior tests; query boundary only as necessary.
+- [ ] Reproduce refreshing a populated result into an empty response: current code assigns entries only when rows.length is positive and incorrectly retains old documents and capital totals.
+- [ ] Apply empty successful results, show fetch failures as errors with retry rather than clean empty success, and prevent stale responses from replacing the current deal's result.
+- [ ] Verify that an approve/reject action changes an authorized existing row before confirming success; reproduce a concurrently deleted or no-longer-authorized row instead of treating an error-free zero-row response as persistence.
+- [ ] Keep documents, tabs, verification permissions and admin workflow intact. Use local fixtures; no real financial documents or production writes.
+- [ ] Cover empty refresh, error/retry, deal switch race, successful mutation and zero-row/denied mutation with actual component behavior tests.
