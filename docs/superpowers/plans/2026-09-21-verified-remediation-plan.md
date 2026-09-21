@@ -267,3 +267,56 @@ All 27 original IDs map to actions above. The six compatibility entries are grou
 
 No blanket deployment, paid-provider experiment, historical migration deletion or unsupported performance promise is needed to execute the local preparation. Completion is measured by working behavior and preserved access, not files deleted, coverage-test count or workflow length.
 
+## Expanded audit repairs
+
+These tasks address newly verified active paths from the current agent audit. Reports in the local SDD workspace retain evidence and dismissed candidates; no orphan code or labeled mock is counted as a live defect.
+
+### Task 14 — H1 — Render actual market observations
+
+**Files:** src/components/MarketTicker.tsx, its focused tests, and only necessary locale entries.
+- [ ] Remove random price mutations, static city trends, fabricated sparklines and the fallback auction count.
+- [ ] Render the latest validated API observations directly; late query completion/refetch must update displayed values.
+- [ ] Distinguish sourced price/trend observations, estimates and unavailable data; do not label fabricated changes LIVE.
+- [ ] Preserve the market ticker module and responsive scrolling presentation; decorative animation may not alter numeric facts.
+- [ ] Test delayed data, refetch, absent/invalid data, zero auction count and elapsed timers. No fake facts appear from timer advancement or missing responses.
+- [ ] Run focused tests and type checking; document removed background timer work without inventing measured page-speed improvement.
+
+### Task 15 — H2/H3 — Preserve POI and walk-score provenance
+
+**Files:** supabase/functions/property-pois/index.ts and tests; src/components/PropertyMiniMap.tsx; src/pages/PropertyDetail.tsx; affected score components/tests.
+- [ ] Replace generic named/distance fallback amenities with an honest unavailable response or empty evidence set.
+- [ ] Draw geographic POI markers only when coordinates are verified and supplied by the source. Do not invent coordinates from category offsets or list order.
+- [ ] Keep supported nearby-place text and property location functionality. Qualify uncertain provider-generated suggestions appropriately.
+- [ ] Never derive/persist/display a walk score from fallback/example amenities; preserve a genuinely sourced stored score and represent unknown separately from zero.
+- [ ] Test provider/configuration/malformed failure, provenance through the real UI, no fallback-score overwrite, and stable coordinates when filters change.
+- [ ] Check the current older client before changing the service shape; use compatible handled errors or negotiated new semantics where needed.
+
+### Task 16 — H4 — Remove unsupported valuation fallback claims
+
+**Files:** supabase/functions/property-valuation/index.ts and tests; src/components/PropertyValuation.tsx and AI insight consumers as needed.
+- [ ] Trace the valid OS and AI evidence path and retain supported valuations.
+- [ ] Remove unsupported current-year benchmark claims and financial/legal/planning/liquidity/yield constants on no-evidence paths.
+- [ ] No external evidence means explicit unavailable fields or the existing handled error, not a fabricated valuation with a low-confidence badge.
+- [ ] Do not reconstruct history or legal certainty from a current market average.
+- [ ] Preserve quota reservation before paid work; inspect attempt/success/refund policy before changing billing semantics, and test no duplicate reservation or paid call after denial.
+- [ ] Test no OS/no AI, valid OS-only evidence, malformed/provider failure, partial evidence and older-client compatibility with focused behavior tests.
+
+### Task 17 — H5/H6/H7 — Confirm only durable workflow outcomes
+
+**Files:** admin professional verification and notes workflow, onboarding ProVideoStep, Pricing checkout confirmation; related hooks/locales/tests only where needed.
+- [ ] Verify request-more-information's actual side effect. Persist a real applicant-facing request using existing notification infrastructure if this is the intended current action, or accurately label an internal note. Preserve useful admin workflow and permissions.
+- [ ] Verify whether Pro launch interest remains a supported business requirement. A localStorage flag cannot confirm future notification enrollment. Reuse a current durable workflow or present the actual available action without an unsupported delivery promise.
+- [ ] Wait for checkout/entitlement verification before announcing payment or plan activation. Keep pending/error/retry states and retain the checkout identity until verification is established.
+- [ ] Test failures and retries through each real user action. A query parameter must not trigger an activation success by itself. Labeled mock billing remains clearly distinct.
+- [ ] Preserve current modules and avoid inventing a marketing queue or duplicate billing system solely to repair wording.
+
+### Task 18 — A3b — Make enquiry replay durable
+
+**Files:** additive new-build enquiry submission migration/RPC, generated interface types if required, NewBuildDetail and RegisterInterestCard, behavior and SQL tests.
+- [ ] Inspect current raw lead, CRM, project-lead and notification identity rules; record a lost-response retry reproduction.
+- [ ] Introduce stable client submission identity with a constrained database replay path. The same user/listing/key must return the same stored submission and emit no second trigger effects.
+- [ ] Preserve the key through ambiguous failures; rotate after confirmed completion/new submission. Verify same-key different-payload handling and caller authorization explicitly.
+- [ ] Protect against cross-user replay and double-click races. Definite permission/validation failures still reject; no blanket conflict swallowing.
+- [ ] Validate backward compatibility and rollout order; old clients must keep working through the additive rollout, without claiming their retries become exactly once.
+- [ ] Run meaningful local SQL and form/page behavior tests before marking the full A3 retry requirement complete.
+
