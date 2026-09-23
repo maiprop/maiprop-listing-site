@@ -67,6 +67,18 @@ queryCache.subscribe((event) => {
     return;
   }
 
+  if (event.action.type === "setState" && event.query.state.fetchStatus === "idle") {
+    fetchStartedAt.delete(event.query);
+    return;
+  }
+
+  if (event.action.type === "success" && event.action.manual) {
+    if (event.query.state.fetchStatus === "idle") {
+      fetchStartedAt.delete(event.query);
+    }
+    return;
+  }
+
   let wasCancelled = false;
   if (event.action.type === "error") {
     wasCancelled = isCancelledError(event.action.error);

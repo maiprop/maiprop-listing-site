@@ -29,6 +29,14 @@ function clearSentryStub() {
   delete (window as unknown as { __sentryClient?: SentryStub }).__sentryClient;
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 describe("queryObserver.queryCache.onError", () => {
   // Type inferred from the assignment in beforeEach — vitest's spyOn generics
   // change between versions and a hand-rolled annotation here brittle.
@@ -281,6 +289,51 @@ describe("queryObserver query fetch lifecycle timing", () => {
         return "new Query instance";
       },
     });
+
+    expect(stub.captureMessage).toHaveBeenCalledTimes(1);
+    expect(stub.captureMessage.mock.calls[0]?.[0]).toBe("Slow React Query fetch (1500ms)");
+  });
+
+  it("clears timing when default cancellation reverts a retained Query to idle", async () => {
+    const stub = installSentryStub();
+    client.setQueryData(["retained"], "cached");
+    const pending = client.fetchQuery({
+      queryKey: ["retained"],
+      staleTime: 0,
+      queryFn: ({ signal }) =>
+        new Promise<string>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        }),
+    });
+    const settled = pending.catch((error: unknown) => error);
+
+    now = 1_500;
+    await client.cancelQueries({ queryKey: ["retained"] });
+    await settled;
+    expect(client.getQueryState(["retained"])?.fetchStatus).toBe("idle");
+
+    now = 2_000;
+    client.setQueryData(["retained"], "manual update after cancellation");
+
+    expect(stub.captureMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps timing an active fetch across a manual cache update", async () => {
+    const stub = installSentryStub();
+    const fetchResult = deferred<string>();
+    const pending = client.fetchQuery({
+      queryKey: ["manual-during-fetch"],
+      queryFn: () => fetchResult.promise,
+    });
+
+    now = 1_200;
+    client.setQueryData(["manual-during-fetch"], "optimistic value");
+    expect(client.getQueryState(["manual-during-fetch"])?.fetchStatus).toBe("fetching");
+    expect(stub.captureMessage).not.toHaveBeenCalled();
+
+    now = 1_500;
+    fetchResult.resolve("server value");
+    await expect(pending).resolves.toBe("server value");
 
     expect(stub.captureMessage).toHaveBeenCalledTimes(1);
     expect(stub.captureMessage.mock.calls[0]?.[0]).toBe("Slow React Query fetch (1500ms)");
