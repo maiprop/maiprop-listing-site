@@ -78,6 +78,35 @@ describe("rental AI valuation labels", () => {
     expect(screen.queryByText("€0/mo")).not.toBeInTheDocument();
   });
 
+  it("renders returned new-build density with derived source and selected basis", () => {
+    const report = valuationV2({
+      pricePerSqmEstimate: 5250,
+      evidence: { ...valuationV2().evidence, fields: { ...valuationV2().evidence.fields, pricePerSqmEstimate: "derived_ai", estimatedValue: "ai_estimate" } },
+    });
+    renderWithProviders(
+      <PropertyAIInsightsSection user={rentalUser} isPro loading={false} listingType="new_build" data={{
+        vsMarket: null, rentalYield: null, estimatedValue: 400000, pricePerSqmEstimate: 5250,
+        marketComparison: null, confidenceLabel: "High", estimateSource: "ai_estimate", estimateUnit: "EUR", valuation: report,
+      }} />,
+    );
+    expect(screen.getByText(/Valuation density: €5,250\/m².*derived from unverified AI estimate.*market value basis/i)).toBeInTheDocument();
+  });
+
+  it("keeps unavailable new-build density explicit", () => {
+    const base = valuationV2();
+    const report = valuationV2({
+      pricePerSqmEstimate: null,
+      evidence: { ...base.evidence, fields: { ...base.evidence.fields, pricePerSqmEstimate: "unavailable" } },
+    });
+    renderWithProviders(
+      <PropertyAIInsightsSection user={rentalUser} isPro loading={false} listingType="new_build" data={{
+        vsMarket: null, rentalYield: null, estimatedValue: 400000,
+        marketComparison: null, confidenceLabel: "High", estimateSource: "os_prediction", estimateUnit: "EUR", valuation: report,
+      }} />,
+    );
+    expect(screen.getByText(/Valuation density: Unavailable/i)).toBeInTheDocument();
+  });
+
   it("uses the selected response unit and preserves a useful text-only report", () => {
     const base = valuationV2();
     const partial = valuationV2({

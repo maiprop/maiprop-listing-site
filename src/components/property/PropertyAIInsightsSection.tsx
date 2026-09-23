@@ -139,6 +139,9 @@ export function PropertyAIInsightsSection({
       : formatPrice(data.estimatedValue);
   const compactMoney = (value: number, unit: "EUR" | "EUR/month" = "EUR") =>
     `€${value.toLocaleString(numberLocale)}${unit === "EUR/month" ? `/${monthUnit}` : ""}`;
+  const densityText = report?.pricePerSqmEstimate == null
+    ? "Valuation density: Unavailable"
+    : `Valuation density: €${report.pricePerSqmEstimate.toLocaleString(numberLocale, { maximumFractionDigits: 2 })}/m²${report.valueUnit === "EUR/month" ? "/month" : ""} · ${report.evidence.fields.pricePerSqmEstimate === "derived_os" ? "derived from OS model prediction" : "derived from unverified AI estimate"}${selectedPrimary ? ` · ${selectedPrimary.basis.replace(/_/g, " ")} basis` : ""}`;
 
   return (
     <Section>
@@ -273,6 +276,7 @@ export function PropertyAIInsightsSection({
             {report && (
               <div className="mt-3 space-y-2 rounded-xl border border-border bg-secondary/30 p-4 text-xs text-muted-foreground">
                 {selectedPrimary && <p><strong>Basis:</strong> {selectedPrimary.source === "os_prediction" ? "OS model prediction" : "Unverified AI estimate"} · {selectedPrimary.basis.replace(/_/g, " ")}{report.transaction === "auction" && selectedPrimary.basis === "market_value" ? " · clear-title assumption; documents not verified" : ""}</p>}
+                {!isRental && <p>{densityText}</p>}
                 {selectedPrimary?.rangeLow != null && selectedPrimary.rangeHigh != null && <p><strong>Range:</strong> {compactMoney(selectedPrimary.rangeLow, selectedPrimary.unit)} – {compactMoney(selectedPrimary.rangeHigh, selectedPrimary.unit)}</p>}
                 {report.providerPrediction?.unit === null && <p><strong>Rental model observation:</strong> {compactMoney(report.providerPrediction.value)} · rental period unavailable</p>}
                 {report.transaction === "auction" && report.providerPrediction?.model === "auction" && selectedPrimary?.basis === "market_value" && <p><strong>Separate OS auction-model estimate:</strong> {compactMoney(report.providerPrediction.value)} · not clean-market, bid, or execution value</p>}

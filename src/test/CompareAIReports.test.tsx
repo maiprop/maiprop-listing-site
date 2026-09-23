@@ -23,7 +23,7 @@ describe("CompareAIReports v2", () => {
       : Promise.resolve({ data: { safetyScore: { score: 0 }, noiseLevel: { label: "Quiet" } }, error: null }));
     render(wrap(<CompareAIReports listings={[listing()]} />)); run();
     expect(await screen.findByText(/€400,000/)).toBeInTheDocument();
-    expect(screen.getByText(/OS model prediction/)).toBeInTheDocument();
+    expect(screen.getByText(/^OS model prediction · market value$/)).toBeInTheDocument();
     expect(screen.getByText(/Asking versus estimate: -20%/)).toBeInTheDocument();
     expect(screen.getByText("Score 0")).toBeInTheDocument();
     expect(screen.getByText(/Stored listing data.*not independently verified/i)).toBeInTheDocument();
@@ -62,6 +62,29 @@ describe("CompareAIReports v2", () => {
     render(wrap(<CompareAIReports listings={[listing()]} />)); run();
     expect(await screen.findByText("Useful qualitative report")).toBeInTheDocument();
     expect(screen.getByText("Unavailable", { selector: "span.font-display" })).toBeInTheDocument();
+    expect(screen.getByText(/Valuation density: Unavailable/i)).toBeInTheDocument();
+  });
+
+  it("renders returned sale density with its derived source and selected basis", async () => {
+    const density = valuationV2({
+      pricePerSqmEstimate: 5250,
+      evidence: { ...valuationV2().evidence, fields: { ...valuationV2().evidence.fields, pricePerSqmEstimate: "derived_ai", estimatedValue: "ai_estimate" } },
+    });
+    invokeMock.mockImplementation((name: string) => Promise.resolve({ data: name === "property-valuation" ? density : {}, error: null }));
+    render(wrap(<CompareAIReports listings={[listing()]} />)); run();
+    expect(await screen.findByText(/Valuation density: €5,250\/m².*derived from unverified AI estimate.*market value basis/i)).toBeInTheDocument();
+  });
+
+  it("renders returned rental density with the monthly unit and basis", async () => {
+    const base = valuationV2();
+    const density = valuationV2({
+      transaction: "rent", valueUnit: "EUR/month", estimateBasis: "monthly_rent", estimatedValue: 1600,
+      rangeLow: null, rangeHigh: null, rangeBasis: null, pricePerSqmEstimate: 20,
+      evidence: { ...base.evidence, fields: { ...base.evidence.fields, estimatedValue: "ai_estimate", rangeLow: "unavailable", rangeHigh: "unavailable", pricePerSqmEstimate: "derived_ai" } },
+    });
+    invokeMock.mockImplementation((name: string) => Promise.resolve({ data: name === "property-valuation" ? density : {}, error: null }));
+    render(wrap(<CompareAIReports listings={[listing({ listing_type: "rent", price: 1600 })]} />)); run();
+    expect(await screen.findByText(/Valuation density: €20\/m²\/month.*derived from unverified AI estimate.*monthly rent basis/i)).toBeInTheDocument();
   });
 
   it("renders factors, renovation, and tax text from a numberless partial report", async () => {

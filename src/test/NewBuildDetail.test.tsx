@@ -935,7 +935,7 @@ describe("NewBuildDetail", () => {
 
   it("keeps optional valuation fields unavailable instead of inventing defaults", async () => {
     useAuthMock.mockReturnValue({ user: { id: "buyer-1" }, profile: { display_name: "Buyer" } });
-    functionsInvokeMock.mockResolvedValue({ data: valuationV2({ estimatedValue: 430000, confidence: null, confidenceLabel: null, rentalYieldEstimate: null, evidence: { ...valuationV2().evidence, fields: { ...valuationV2().evidence.fields, estimatedValue: "ai_estimate", confidence: "unavailable", rentalYieldEstimate: "unavailable" }, analysis: "ai_estimate" } }), error: null });
+    functionsInvokeMock.mockResolvedValue({ data: valuationV2({ estimatedValue: 430000, pricePerSqmEstimate: 5250, confidence: null, confidenceLabel: null, rentalYieldEstimate: null, evidence: { ...valuationV2().evidence, fields: { ...valuationV2().evidence.fields, estimatedValue: "ai_estimate", pricePerSqmEstimate: "derived_ai", confidence: "unavailable", rentalYieldEstimate: "unavailable" }, analysis: "ai_estimate" } }), error: null });
 
     renderPage();
 
@@ -944,6 +944,7 @@ describe("NewBuildDetail", () => {
     expect(await screen.findByText("AI Estimate")).toBeInTheDocument();
     expect(screen.getByText(/430\.000/)).toBeInTheDocument();
     expect(screen.getByText("Confidence: Unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/Valuation density: €5,250\/m².*derived from unverified AI estimate.*market value basis/i)).toBeInTheDocument();
   });
 
   it("renders useful numberless new-build analysis instead of empty metric cards only", async () => {
@@ -964,10 +965,11 @@ describe("NewBuildDetail", () => {
 
   it("ignores an old actor's rejected valuation after the new actor has a result", async () => {
     let rejectOld!: (reason?: unknown) => void;
+    let oldRequestSettled = false;
     let valuationCalls = 0;
     functionsInvokeMock.mockImplementation(() => {
       valuationCalls += 1;
-      if (valuationCalls === 1) return new Promise((_resolve, reject) => { rejectOld = reject; });
+      if (valuationCalls === 1) return new Promise((_resolve, reject) => { rejectOld = reject; }).finally(() => { oldRequestSettled = true; });
       return Promise.resolve({ data: valuationV2({ estimatedValue: 510000 }), error: null });
     });
     useAuthMock.mockReturnValue({ user: { id: "buyer-1" }, profile: null });
@@ -978,9 +980,12 @@ describe("NewBuildDetail", () => {
     view.rerender(page());
     fireEvent.click(screen.getByRole("button", { name: "Load AI insights" }));
     expect(await screen.findByText(/510\.000/)).toBeInTheDocument();
-    rejectOld(new Error("old actor provider timeout"));
-    await waitFor(() => expect(screen.queryByText(/old actor provider timeout/)).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /Refresh AI insights/i })).toBeInTheDocument();
+    rejectOld(new Error("monthly_limit_reached"));
+    await waitFor(() => expect(oldRequestSettled).toBe(true));
     expect(screen.getByText(/510\.000/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Refresh AI insights/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Buy AI add-on/i })).not.toBeInTheDocument();
   });
 
   it("supports native sharing and exposes the developer phone only when supplied", async () => {
