@@ -195,6 +195,7 @@ Deno.test("explicit reconciliation retrieves the exact session and heals missing
   }> = [];
   const billingRows: Array<Record<string, unknown>> = [];
   const billingWrites: Array<Record<string, unknown>> = [];
+  const billingEvents: string[] = [];
   const result = await resolveSubscriptionCheck(
     mockSupabase({
       profileRole: "buyer",
@@ -202,6 +203,7 @@ Deno.test("explicit reconciliation retrieves the exact session and heals missing
       investorStatus: null,
       billingRows,
       billingWrites,
+      billingEvents,
       pricingRows: [{
         key: "pro",
         audience: "participant",
@@ -269,9 +271,24 @@ Deno.test("explicit reconciliation retrieves the exact session and heals missing
   assertEquals(result.state.sync_status, "synced");
   assertEquals(result.state.subscribed, true);
   assertEquals(result.state.product_id, "prod_participant");
+  assertEquals(result.state.verified_checkout, {
+    checkout_session_id: "cs_test_exact_session",
+    user_id: "00000000-0000-4000-8000-000000000021",
+    kind: "subscription",
+    product_id: "prod_participant",
+    plan_key: "pro",
+    audience: "participant",
+    status: "active",
+    subscription_end: "2100-01-01T00:00:00.000Z",
+  });
   assertEquals(billingRows.length, 1);
   assertEquals(
     billingWrites.some(({ table }) => table === "billing_subscriptions"),
+    true,
+  );
+  assertEquals(
+    billingEvents.lastIndexOf("write:billing_subscriptions") <
+      billingEvents.lastIndexOf("read:billing_subscriptions"),
     true,
   );
 });
@@ -358,6 +375,9 @@ const mockSupabase = (
     investorError = null,
     billingError = null,
     stallBillingLookup = false,
+    addonRows = [],
+    ignoreBillingSubscriptionWrites = false,
+    billingEvents = [],
   }: {
     profileProductId?: string | null;
     profileRole?: string | null;
@@ -374,6 +394,9 @@ const mockSupabase = (
     investorError?: { message: string } | null;
     billingError?: { message: string } | null;
     stallBillingLookup?: boolean;
+    addonRows?: Array<Record<string, unknown>>;
+    ignoreBillingSubscriptionWrites?: boolean;
+    billingEvents?: string[];
   },
 ) => ({
   marker: "this-aware-supabase-mock",
@@ -382,11 +405,13 @@ const mockSupabase = (
       throw new Error("from called without Supabase client binding");
     }
     let rowLimit: number | null = null;
+    const filters = new Map<string, unknown>();
     const chain = {
       select() {
         return chain;
       },
-      eq() {
+      eq(column: string, value: unknown) {
+        filters.set(column, value);
         return chain;
       },
       in() {
@@ -401,7 +426,8 @@ const mockSupabase = (
       },
       upsert(payload: Record<string, unknown>) {
         billingWrites.push({ table, payload });
-        if (table === "billing_subscriptions") {
+        billingEvents.push(`write:${table}`);
+        if (table === "billing_subscriptions" && !ignoreBillingSubscriptionWrites) {
           const id = payload.stripe_subscription_id;
           const index = billingRows.findIndex((row) =>
             row.stripe_subscription_id === id
@@ -419,6 +445,7 @@ const mockSupabase = (
               role: profileRole,
               participant_type: participantType,
               subscription_product_id: profileProductId,
+              is_platform_admin: profileRole === "admin",
             },
             error: profileError,
           });
@@ -437,6 +464,12 @@ const mockSupabase = (
             error: billingError,
           });
         }
+        if (table === "addon_purchases") {
+          const data = addonRows.find((row) =>
+            [...filters].every(([key, value]) => row[key] === value)
+          ) ?? null;
+          return Promise.resolve({ data, error: null });
+        }
         return Promise.resolve({ data: null, error: null });
       },
       then(resolve: (value: unknown) => void) {
@@ -452,6 +485,7 @@ const mockSupabase = (
         }
         if (table === "billing_subscriptions") {
           if (stallBillingLookup) return;
+          billingEvents.push("read:billing_subscriptions");
           resolve({
             data: rowLimit === null
               ? billingRows
@@ -546,13 +580,19 @@ function completedAddonSession(
     livemode?: boolean;
     checkoutType?: string;
     addonKey?: string;
+    mode?: "payment" | "subscription";
+    module?: string;
+    audience?: string;
+    unit?: string;
+    quantity?: string;
   } = {},
 ) {
+  const mode = overrides.mode ?? "payment";
   return {
     id: overrides.livemode
       ? "cs_live_addon_reconciliation"
       : "cs_test_addon_reconciliation",
-    mode: "payment",
+    mode,
     status: "complete",
     payment_status: overrides.paymentStatus ?? "paid",
     livemode: overrides.livemode ?? false,
@@ -563,13 +603,15 @@ function completedAddonSession(
       checkout_type: overrides.checkoutType ?? "addon",
       user_id: userId,
       addon_key: overrides.addonKey ?? "featured_listing",
-      module: "adhoc_charges",
-      audience: "participant",
-      unit: "per_listing",
-      quantity: "1",
+      module: overrides.module ?? "adhoc_charges",
+      audience: overrides.audience ?? "participant",
+      unit: overrides.unit ?? "per_listing",
+      quantity: overrides.quantity ?? "1",
       runtime_mode: overrides.livemode ? "live" : "test",
     },
-    subscription: null,
+    subscription: mode === "subscription"
+      ? { id: "sub_addon_reconciliation" }
+      : null,
   };
 }
 
@@ -579,9 +621,24 @@ Deno.test("exact payment-mode reconciliation fulfills a paid promotion add-on", 
   const fulfilledSessions: string[] = [];
   const result = await resolveSubscriptionCheck(
     mockSupabase({
-      profileRole: "buyer",
-      participantType: "buyer",
+      profileRole: "seller",
+      participantType: "seller",
       investorStatus: null,
+      addonRows: [{
+        stripe_session_id: session.id,
+        user_id: userId,
+        addon_key: "featured_listing",
+        module: "adhoc_charges",
+        audience: "participant",
+        unit: "per_listing",
+        quantity: 1,
+        checkout_mode: "payment",
+        status: "paid",
+        stripe_subscription_id: null,
+        stripe_customer_id: "cus_addon_owner",
+        runtime_mode: "test",
+        livemode: false,
+      }],
     }),
     userId,
     { checkout_session_id: session.id },
@@ -598,6 +655,99 @@ Deno.test("exact payment-mode reconciliation fulfills a paid promotion add-on", 
   assertEquals(result.httpStatus, 200);
   assertEquals(result.state.sync_status, "synced");
   assertEquals(result.state.subscribed, false);
+  assertEquals(result.state.verified_checkout, {
+    checkout_session_id: session.id,
+    user_id: userId,
+    kind: "addon",
+    addon_key: "featured_listing",
+    audience: "participant",
+    quantity: 1,
+  });
+});
+
+Deno.test("exact add-on reconciliation stays pending when the durable row conflicts", async () => {
+  const userId = "00000000-0000-4000-8000-000000000034";
+  const session = completedAddonSession(userId);
+  const result = await resolveSubscriptionCheck(
+    mockSupabase({
+      profileRole: "seller",
+      participantType: "seller",
+      investorStatus: null,
+      addonRows: [{
+        stripe_session_id: session.id,
+        user_id: userId,
+        addon_key: "featured_listing",
+        module: "adhoc_charges",
+        audience: "participant",
+        unit: "per_listing",
+        quantity: 2,
+        checkout_mode: "payment",
+        status: "paid",
+        stripe_subscription_id: null,
+        stripe_customer_id: "cus_addon_owner",
+        runtime_mode: "test",
+        livemode: false,
+      }],
+    }),
+    userId,
+    { checkout_session_id: session.id },
+    {
+      ...stripeOptionsForSession(session),
+      fulfillAddonCheckout: () => Promise.resolve("fulfilled" as const),
+    } as never,
+  );
+
+  assertEquals(result.httpStatus, 202);
+  assertEquals(result.state.sync_status, "pending");
+  assertEquals(result.state.verified_checkout, undefined);
+});
+
+Deno.test("an existing fulfilled recurring cross-role report add-on is observed without another grant", async () => {
+  const userId = "00000000-0000-4000-8000-000000000035";
+  const session = completedAddonSession(userId, {
+    mode: "subscription",
+    addonKey: "property_report_single",
+    module: "valuation_reports",
+    unit: "per_report",
+  });
+  let fulfillmentCalls = 0;
+  const result = await resolveSubscriptionCheck(
+    mockSupabase({
+      profileRole: "agent",
+      participantType: "agent",
+      investorStatus: null,
+      addonRows: [{
+        stripe_session_id: session.id,
+        user_id: userId,
+        addon_key: "property_report_single",
+        module: "valuation_reports",
+        audience: "participant",
+        unit: "per_report",
+        quantity: 1,
+        checkout_mode: "subscription",
+        status: "active",
+        stripe_subscription_id: "sub_addon_reconciliation",
+        stripe_customer_id: "cus_addon_owner",
+        runtime_mode: "test",
+        livemode: false,
+      }],
+    }),
+    userId,
+    { checkout_session_id: session.id },
+    {
+      ...stripeOptionsForSession(session),
+      fulfillAddonCheckout: () => {
+        fulfillmentCalls += 1;
+        return Promise.resolve("fulfilled" as const);
+      },
+    } as never,
+  );
+
+  assertEquals(fulfillmentCalls, 0);
+  assertEquals(result.httpStatus, 200);
+  const receipt = result.state.verified_checkout;
+  assertEquals(receipt?.kind, "addon");
+  assertEquals(receipt?.kind === "addon" ? receipt.addon_key : null, "property_report_single");
 });
 
 Deno.test("exact add-on reconciliation rejects foreign, unpaid, wrong-runtime, and unsupported sessions", async () => {
@@ -833,6 +983,47 @@ Deno.test("explicit reconciliation idempotently refreshes an existing durable ro
   assertEquals(result.state.product_id, "prod_participant");
   assertEquals(
     billingWrites.some(({ table }) => table === "billing_subscriptions"),
+    true,
+  );
+});
+
+Deno.test("an accepted write followed by a conflicting durable reread cannot issue a checkout receipt", async () => {
+  const userId = "00000000-0000-4000-8000-000000000036";
+  const session = completedSubscriptionSession(userId);
+  const billingEvents: string[] = [];
+  const result = await resolveSubscriptionCheck(
+    mockSupabase({
+      profileRole: "buyer",
+      participantType: "buyer",
+      investorStatus: null,
+      ignoreBillingSubscriptionWrites: true,
+      billingEvents,
+      billingRows: [{
+        stripe_subscription_id: "sub_validation",
+        status: "active",
+        stripe_product_id: "prod_conflicting",
+        current_period_end: "2099-06-30T00:00:00.000Z",
+        plan_key: "conflicting_plan",
+        audience: "participant",
+        billing_cycle: "monthly",
+      }],
+      pricingRows: [{
+        key: "pro",
+        audience: "participant",
+        metadata: { stripe_product_id: "prod_participant" },
+      }],
+    }),
+    userId,
+    { checkout_session_id: session.id },
+    stripeOptionsForSession(session),
+  );
+
+  assertEquals(result.httpStatus, 202);
+  assertEquals(result.state.sync_status, "pending");
+  assertEquals(result.state.verified_checkout, undefined);
+  assertEquals(
+    billingEvents.lastIndexOf("write:billing_subscriptions") <
+      billingEvents.lastIndexOf("read:billing_subscriptions"),
     true,
   );
 });

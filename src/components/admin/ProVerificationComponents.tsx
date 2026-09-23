@@ -91,7 +91,7 @@ interface VerificationModalProps {
   pro: ProCard;
   onClose: () => void;
   onApprove: (id: string, licenseNumber: string, notes: string) => void;
-  onRequestInfo: (id: string, notes: string) => void;
+  onSaveNote: (id: string, notes: string) => void;
   onReject: (id: string, notes: string) => void;
 }
 
@@ -99,7 +99,7 @@ export function VerificationModal({
   pro,
   onClose,
   onApprove,
-  onRequestInfo,
+  onSaveNote,
   onReject,
 }: VerificationModalProps) {
   const dialogRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
@@ -200,15 +200,18 @@ export function VerificationModal({
           {/* Admin notes */}
           <div>
             <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-              Admin Review Notes
+              Admin Review Note / Rejection Reason
             </label>
             <textarea
               rows={3}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Internal notes or message to the applicant..."
+              placeholder="Internal review note or rejection reason..."
               className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
             />
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              Saving this note keeps it internal. Rejecting shares it with the applicant as the rejection reason.
+            </p>
           </div>
         </div>
 
@@ -224,9 +227,9 @@ export function VerificationModal({
           <Button
             className="flex-1 gap-2"
             variant="outline"
-            onClick={() => onRequestInfo(pro.id, notes)}
+            onClick={() => onSaveNote(pro.id, notes)}
           >
-            <FileText className="w-4 h-4" /> Request More Info
+            <FileText className="w-4 h-4" /> Save Internal Note
           </Button>
           <Button
             className="flex-1 gap-2 bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20"

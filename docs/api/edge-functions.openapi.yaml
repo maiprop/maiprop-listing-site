@@ -73,6 +73,48 @@ components:
               message:
                 type: string
 
+    SubscriptionCheckoutReceipt:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [checkout_session_id, user_id, kind, product_id, plan_key, audience, status, subscription_end]
+          properties:
+            checkout_session_id: { type: string, pattern: '^cs_(test|live)_[A-Za-z0-9_]+$' }
+            user_id: { type: string, format: uuid }
+            kind: { type: string, const: subscription }
+            product_id: { type: string }
+            plan_key: { type: string }
+            audience: { type: string }
+            status: { type: string, enum: [active, trialing] }
+            subscription_end: { type: string, format: date-time }
+        - type: object
+          additionalProperties: false
+          required: [checkout_session_id, user_id, kind, addon_key, audience, quantity]
+          properties:
+            checkout_session_id: { type: string, pattern: '^cs_(test|live)_[A-Za-z0-9_]+$' }
+            user_id: { type: string, format: uuid }
+            kind: { type: string, const: addon }
+            addon_key: { type: string }
+            audience: { type: string }
+            quantity: { type: integer, minimum: 1 }
+
+    SubscriptionCheckState:
+      type: object
+      required: [subscribed, product_id, subscription_end, sync_status]
+      properties:
+        subscribed: { type: boolean }
+        product_id: { type: string, nullable: true }
+        plan_key: { type: string, nullable: true }
+        audience: { type: string, nullable: true }
+        billing_cycle: { type: string, nullable: true }
+        status: { type: string, nullable: true }
+        subscription_end: { type: string, format: date-time, nullable: true }
+        source: { type: string, enum: [billing_state, investor, database, stripe, reconciliation, deadline] }
+        sync_status: { type: string, enum: [synced, pending, timeout] }
+        verified_checkout:
+          description: Present only after this exact Checkout session is verified against its durable subscription or add-on record.
+          $ref: '#/components/schemas/SubscriptionCheckoutReceipt'
+
     FullSyncFromOsRequest:
       type: object
       additionalProperties: false
@@ -649,7 +691,8 @@ paths:
   /check-subscription:
     get:
       operationId: checkSubscription
-      summary: Returns the user's current subscription tier and status
+      summary: Returns the authenticated user's current subscription state
+      description: An ordinary empty refresh. A synced entitlement is not proof of a new Checkout session.
       security: [{ SupabaseJWT: [] }]
       responses:
         '200':
@@ -657,11 +700,50 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  tier: { type: string }
-                  status: { type: string }
-                  current_period_end: { type: string, format: date-time, nullable: true }
+                $ref: '#/components/schemas/SubscriptionCheckState'
+    post:
+      operationId: reconcileCheckoutSubscription
+      summary: Refresh subscription state and optionally reconcile one exact Checkout session
+      description: |
+        An empty JSON object performs the supported ordinary refresh. Providing checkout_session_id
+        requests exact-session reconciliation. A 200 response confirms that Checkout only when
+        verified_checkout is present and matches the request; receipt absence does not invalidate
+        otherwise usable entitlement state. Pending provider or durable-state observation returns 202.
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                checkout_session_id:
+                  type: string
+                  pattern: '^cs_(test|live)_[A-Za-z0-9_]+$'
+      responses:
+        '200':
+          description: Current state; exact Checkout is confirmed only when verified_checkout is present
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionCheckState'
+        '202':
+          description: Checkout reconciliation remains pending or cannot yet be durably verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionCheckState'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Missing or invalid authenticated session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /customer-portal:
     post:

@@ -1729,6 +1729,213 @@ describe("AuthProvider auth API methods", () => {
     expect(result.current.subscription.source).toBe("investor");
   });
 
+  it("returns the same verified exact-session outcome to concurrent callers", async () => {
+    const sess = sessionFixture("u-receipt", "session-receipt");
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: sess } });
+    supabaseMock.from.mockImplementation((table: string) => {
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({
+          data: table === "profiles"
+            ? { user_id: "u-receipt", role: "buyer", participant_type: "buyer" }
+            : null,
+          error: null,
+        }),
+        then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve),
+      };
+      return chain;
+    });
+    const exact = deferred<{ data: Record<string, unknown>; error: null }>();
+    supabaseMock.functions.invoke
+      .mockResolvedValueOnce({ data: { subscribed: false, product_id: null, subscription_end: null, source: "database", sync_status: "synced" }, error: null })
+      .mockImplementationOnce(() => exact.promise);
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await act(async () => authStateCallbackHolder.current?.("INITIAL_SESSION", sess));
+    await waitFor(() => expect(result.current.profile?.participant_type).toBe("buyer"));
+
+    let first!: ReturnType<typeof result.current.refreshSubscription>;
+    let second!: ReturnType<typeof result.current.refreshSubscription>;
+    act(() => {
+      first = result.current.refreshSubscription("cs_test_verified_receipt");
+      second = result.current.refreshSubscription("cs_test_verified_receipt");
+    });
+    await act(async () => {
+      exact.resolve({
+        data: {
+          subscribed: true,
+          product_id: "prod_participant",
+          plan_key: "pro",
+          audience: "participant",
+          status: "active",
+          subscription_end: "2099-01-01T00:00:00.000Z",
+          source: "billing_state",
+          sync_status: "synced",
+          verified_checkout: {
+            checkout_session_id: "cs_test_verified_receipt",
+            user_id: "u-receipt",
+            kind: "subscription",
+            product_id: "prod_participant",
+            plan_key: "pro",
+            audience: "participant",
+            status: "active",
+            subscription_end: "2099-01-01T00:00:00.000Z",
+          },
+        },
+        error: null,
+      });
+    });
+    const [firstOutcome, secondOutcome] = await Promise.all([first, second]);
+    expect(firstOutcome).toEqual(secondOutcome);
+    expect(firstOutcome).toMatchObject({
+      status: "verified",
+      checkoutSessionId: "cs_test_verified_receipt",
+      userId: "u-receipt",
+      receipt: { kind: "subscription", status: "active" },
+    });
+    const exactCalls = supabaseMock.functions.invoke.mock.calls.filter(
+      ([, options]) => (options as { body?: { checkout_session_id?: string } } | undefined)?.body?.checkout_session_id === "cs_test_verified_receipt",
+    );
+    expect(exactCalls).toHaveLength(1);
+  });
+
+  it("keeps an old service response without an exact receipt pending", async () => {
+    const sess = sessionFixture("u-old-service", "session-old-service");
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: sess } });
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await act(async () => authStateCallbackHolder.current?.("INITIAL_SESSION", sess));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    supabaseMock.functions.invoke.mockResolvedValue({
+      data: {
+        subscribed: true,
+        product_id: "prod_existing",
+        subscription_end: "2099-01-01T00:00:00.000Z",
+        source: "billing_state",
+      },
+      error: null,
+    });
+
+    let outcome!: Awaited<ReturnType<typeof result.current.refreshSubscription>>;
+    await act(async () => {
+      outcome = await result.current.refreshSubscription("cs_test_old_service");
+    });
+    expect(outcome).toEqual({
+      status: "pending",
+      checkoutSessionId: "cs_test_old_service",
+      userId: "u-old-service",
+      reason: "receipt_unavailable",
+    });
+    expect(result.current.subscription.subscribed).toBe(true);
+  });
+
+  it("makes an exact checkout outcome stale when the current profile audience changes", async () => {
+    const sess = sessionFixture("u-role-change", "session-role-change");
+    let currentProfile = {
+      user_id: "u-role-change",
+      role: "buyer",
+      participant_type: "buyer",
+    };
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: sess } });
+    supabaseMock.from.mockImplementation((table: string) => {
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockImplementation(async () => ({
+          data: table === "profiles" ? currentProfile : null,
+          error: null,
+        })),
+        then: (resolve: (value: unknown) => unknown) =>
+          Promise.resolve({ data: [], error: null }).then(resolve),
+      };
+      return chain;
+    });
+    supabaseMock.functions.invoke.mockResolvedValue({
+      data: {
+        subscribed: false,
+        product_id: null,
+        subscription_end: null,
+        source: "database",
+        sync_status: "synced",
+      },
+      error: null,
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await act(async () => authStateCallbackHolder.current?.("INITIAL_SESSION", sess));
+    await waitFor(() => expect(result.current.profile?.participant_type).toBe("buyer"));
+
+    const exact = deferred<{ data: Record<string, unknown>; error: null }>();
+    supabaseMock.functions.invoke.mockImplementationOnce(() => exact.promise);
+    let outcomePromise!: ReturnType<typeof result.current.refreshSubscription>;
+    act(() => {
+      outcomePromise = result.current.refreshSubscription("cs_test_role_change");
+    });
+    await waitFor(() => expect(supabaseMock.functions.invoke).toHaveBeenLastCalledWith(
+      "check-subscription",
+      { body: { checkout_session_id: "cs_test_role_change" } },
+    ));
+
+    currentProfile = {
+      user_id: "u-role-change",
+      role: "agent",
+      participant_type: "agent",
+    };
+    await act(async () => result.current.refreshProfile());
+    await waitFor(() => expect(result.current.profile?.participant_type).toBe("agent"));
+
+    exact.resolve({
+      data: {
+        subscribed: true,
+        product_id: "prod_participant",
+        plan_key: "pro",
+        audience: "participant",
+        status: "active",
+        subscription_end: "2099-01-01T00:00:00.000Z",
+        source: "billing_state",
+        sync_status: "synced",
+        verified_checkout: {
+          checkout_session_id: "cs_test_role_change",
+          user_id: "u-role-change",
+          kind: "subscription",
+          product_id: "prod_participant",
+          plan_key: "pro",
+          audience: "participant",
+          status: "active",
+          subscription_end: "2099-01-01T00:00:00.000Z",
+        },
+      },
+      error: null,
+    });
+    let outcome!: Awaited<typeof outcomePromise>;
+    await act(async () => {
+      outcome = await outcomePromise;
+    });
+
+    expect(outcome).toEqual({
+      status: "stale",
+      checkoutSessionId: "cs_test_role_change",
+      userId: "u-role-change",
+    });
+    expect(result.current.subscription.subscribed).toBe(false);
+  });
+
+  it("rejects an explicit malformed checkout id without downgrading to an ordinary refresh", async () => {
+    const sess = sessionFixture("u-invalid-checkout", "session-invalid-checkout");
+    supabaseMock.auth.getSession.mockResolvedValue({ data: { session: sess } });
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await act(async () => authStateCallbackHolder.current?.("INITIAL_SESSION", sess));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    supabaseMock.functions.invoke.mockClear();
+
+    let outcome!: Awaited<ReturnType<typeof result.current.refreshSubscription>>;
+    await act(async () => {
+      outcome = await result.current.refreshSubscription("not-a-checkout");
+    });
+    expect(outcome).toMatchObject({ status: "error", reason: "invalid_checkout_id" });
+    expect(supabaseMock.functions.invoke).not.toHaveBeenCalled();
+  });
+
   it("does not reconcile an old checkout session against a newly signed-in account", async () => {
     const { result } = renderHook(() => useAuth(), { wrapper: wrap });
     await waitFor(() => expect(result.current.loading).toBe(false));

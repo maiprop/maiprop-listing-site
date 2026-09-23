@@ -1,6 +1,9 @@
 import type { Session } from "@supabase/supabase-js";
 import type { Tables } from "@/integrations/supabase/types";
-import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
+import {
+  getExplicitParticipantTypeFromProfile,
+  type PricingAudienceId,
+} from "@/lib/participantConfig";
 
 export type Profile = Tables<"profiles">;
 
@@ -176,6 +179,119 @@ export interface SubscriptionState {
   loading: boolean;
 }
 
+export type SubscriptionCheckoutReceipt = {
+  checkout_session_id: string;
+  user_id: string;
+  kind: "subscription";
+  product_id: string;
+  plan_key: string;
+  audience: PricingAudienceId;
+  status: "active" | "trialing";
+  subscription_end: string;
+};
+
+export type AddonCheckoutReceipt = {
+  checkout_session_id: string;
+  user_id: string;
+  kind: "addon";
+  addon_key: string;
+  audience: PricingAudienceId;
+  quantity: number;
+};
+
+export type CheckoutReceipt = SubscriptionCheckoutReceipt | AddonCheckoutReceipt;
+
+export type SubscriptionRefreshOutcome =
+  | { status: "verified"; checkoutSessionId: string; userId: string; receipt: CheckoutReceipt }
+  | { status: "pending"; checkoutSessionId: string; userId: string; reason: "pending" | "timeout" | "receipt_unavailable" }
+  | { status: "error"; checkoutSessionId: string | null; userId: string | null; reason: "invalid_checkout_id" | "missing_checkout_id" | "unauthenticated" | "request_failed" | "invalid_response" }
+  | { status: "stale"; checkoutSessionId: string | null; userId: string | null }
+  | { status: "refreshed"; checkoutSessionId: null; userId: string | null };
+
+export type CheckoutReturnIdentity =
+  | { status: "valid"; checkoutSessionId: string }
+  | { status: "missing" | "invalid" | "conflict"; checkoutSessionId: null };
+
+const PRICING_AUDIENCES = new Set<PricingAudienceId>([
+  "participant", "agent", "developer", "professional", "investor", "institutional",
+]);
+const CHECKOUT_RECEIPT_ADDON_KEYS = new Set([
+  "valuation_single", "valuation_bundle", "property_report_single",
+  "neighbourhood_report_single", "neighbourhood_report_bundle",
+  "featured_listing", "priority_placement", "featured_priority_bundle",
+]);
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+const isPricingAudience = (value: unknown): value is PricingAudienceId =>
+  typeof value === "string" && PRICING_AUDIENCES.has(value as PricingAudienceId);
+
+export function checkoutOutcomeFromResponse({
+  data,
+  error,
+  checkoutSessionId,
+  userId,
+  audience,
+}: {
+  data: unknown;
+  error: unknown;
+  checkoutSessionId: string;
+  userId: string;
+  audience: PricingAudienceId | null;
+}): SubscriptionRefreshOutcome {
+  if (error) return { status: "error", checkoutSessionId, userId, reason: "request_failed" };
+  if (!isRecord(data)) return { status: "error", checkoutSessionId, userId, reason: "invalid_response" };
+  if (data.sync_status === "timeout") return { status: "pending", checkoutSessionId, userId, reason: "timeout" };
+  if (data.sync_status === "pending") return { status: "pending", checkoutSessionId, userId, reason: "pending" };
+  const rawReceipt = data.verified_checkout;
+  if (rawReceipt === undefined && data.sync_status !== "synced") {
+    return { status: "pending", checkoutSessionId, userId, reason: "receipt_unavailable" };
+  }
+  if (rawReceipt === undefined) {
+    return { status: "pending", checkoutSessionId, userId, reason: "receipt_unavailable" };
+  }
+  if (data.sync_status !== "synced" || !isRecord(rawReceipt) ||
+      rawReceipt.checkout_session_id !== checkoutSessionId || rawReceipt.user_id !== userId ||
+      !isPricingAudience(rawReceipt.audience)) {
+    return { status: "error", checkoutSessionId, userId, reason: "invalid_response" };
+  }
+
+  if (rawReceipt.kind === "subscription") {
+    const end = isNonEmptyString(rawReceipt.subscription_end)
+      ? Date.parse(rawReceipt.subscription_end)
+      : Number.NaN;
+    if (
+      !audience || rawReceipt.audience !== audience ||
+      !isNonEmptyString(rawReceipt.product_id) || !isNonEmptyString(rawReceipt.plan_key) ||
+      (rawReceipt.status !== "active" && rawReceipt.status !== "trialing") ||
+      !Number.isFinite(end) || end <= Date.now() || data.source !== "billing_state" ||
+      data.subscribed !== true || data.product_id !== rawReceipt.product_id ||
+      data.plan_key !== rawReceipt.plan_key || data.audience !== rawReceipt.audience ||
+      data.status !== rawReceipt.status || data.subscription_end !== rawReceipt.subscription_end
+    ) return { status: "error", checkoutSessionId, userId, reason: "invalid_response" };
+    return {
+      status: "verified",
+      checkoutSessionId,
+      userId,
+      receipt: rawReceipt as SubscriptionCheckoutReceipt,
+    };
+  }
+
+  if (
+    rawReceipt.kind !== "addon" ||
+    !isNonEmptyString(rawReceipt.addon_key) ||
+    !CHECKOUT_RECEIPT_ADDON_KEYS.has(rawReceipt.addon_key) ||
+    !Number.isInteger(rawReceipt.quantity) || Number(rawReceipt.quantity) < 1
+  ) return { status: "error", checkoutSessionId, userId, reason: "invalid_response" };
+  return {
+    status: "verified",
+    checkoutSessionId,
+    userId,
+    receipt: rawReceipt as AddonCheckoutReceipt,
+  };
+}
+
 export const emptySubscriptionState = (): SubscriptionState => ({
   subscribed: false,
   productId: null,
@@ -251,9 +367,24 @@ export const checkoutSessionIdForReconciliation = (): string | null => {
     params.get("pro") === "success";
   if (!checkoutSucceeded) return null;
 
-  const sessionId = params.get("checkout_session_id") ??
-    params.get("session_id");
-  return isCheckoutSessionId(sessionId) ? sessionId : null;
+  const identity = checkoutReturnIdentity(params);
+  return identity.status === "valid" ? identity.checkoutSessionId : null;
+};
+
+export const checkoutReturnIdentity = (
+  params: URLSearchParams,
+): CheckoutReturnIdentity => {
+  const checkoutSessionId = params.get("checkout_session_id");
+  const sessionId = params.get("session_id");
+  if (checkoutSessionId && sessionId && checkoutSessionId !== sessionId) {
+    return { status: "conflict", checkoutSessionId: null };
+  }
+  const candidate = checkoutSessionId ?? sessionId;
+  if (!candidate) return { status: "missing", checkoutSessionId: null };
+  const normalized = candidate.trim();
+  return isCheckoutSessionId(normalized)
+    ? { status: "valid", checkoutSessionId: normalized }
+    : { status: "invalid", checkoutSessionId: null };
 };
 
 export const isCheckoutSessionId = (

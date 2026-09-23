@@ -123,8 +123,8 @@ export function useApproveProfessional() {
 }
 
 /**
- * Save admin notes against a professional record without changing their
- * verification status. Used by the "Request more info" path.
+ * Save internal admin notes against a professional record without changing
+ * verification status or notifying the applicant.
  *
  * The generated schema includes the admin-only `notes` column, so the
  * payload remains checked against the Supabase update type.
@@ -138,11 +138,17 @@ export function useUpdateProfessionalNotes() {
         { id, updates: { notes: notes || null } },
         "professional notes",
       );
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("professionals")
         .update(payload.updates as ProfessionalUpdate)
-        .eq("id", payload.id);
+        .eq("id", payload.id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data || data.id !== payload.id) {
+        throw new Error("Internal note was not saved");
+      }
+      return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });

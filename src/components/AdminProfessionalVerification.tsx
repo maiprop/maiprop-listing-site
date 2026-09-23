@@ -42,7 +42,7 @@ export function AdminProfessionalVerification() {
           // Persist the admin's verification notes alongside the approval.
           // useApproveProfessional only writes verified/license/rejection_reason;
           // the notes column lives separately and is updated via the same hook
-          // used by the "Request more info" flow. If the notes save fails we
+          // used by the internal-note flow. If the notes save fails we
           // surface a soft warning rather than failing the approval.
           if (notes.trim()) {
             requestInfoMutation.mutate(
@@ -61,15 +61,14 @@ export function AdminProfessionalVerification() {
     );
   };
 
-  const handleRequestInfo = (id: string, notes: string) => {
+  const handleSaveInternalNote = (id: string, notes: string) => {
     const pro = professionals.find((p) => p.id === id);
     if (!pro) return;
     requestInfoMutation.mutate(
       { id, notes },
       {
         onSuccess: () => {
-          toast.success(`Request for more info sent to ${pro.display_name}.`);
-          if (notes.trim()) toast.info(`Note: "${notes.trim()}"`);
+          toast.success(`Internal note saved for ${pro.display_name}.`);
           setModalPro(null);
         },
         onError: () => toast.error("Failed to save note. Please try again."),
@@ -208,7 +207,7 @@ export function AdminProfessionalVerification() {
           pro={modalPro}
           onClose={() => setModalPro(null)}
           onApprove={handleApprove}
-          onRequestInfo={handleRequestInfo}
+          onSaveNote={handleSaveInternalNote}
           onReject={handleReject}
         />
       )}

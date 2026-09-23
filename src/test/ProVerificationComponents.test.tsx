@@ -100,7 +100,7 @@ describe("VerificationModal", () => {
   it("requires notes before rejection and passes license/notes to every action", () => {
     const onClose = vi.fn();
     const onApprove = vi.fn();
-    const onRequestInfo = vi.fn();
+    const onSaveNote = vi.fn();
     const onReject = vi.fn();
 
     renderWithProviders(
@@ -108,7 +108,7 @@ describe("VerificationModal", () => {
         pro={makePro()}
         onClose={onClose}
         onApprove={onApprove}
-        onRequestInfo={onRequestInfo}
+        onSaveNote={onSaveNote}
         onReject={onReject}
       />,
     );
@@ -118,15 +118,17 @@ describe("VerificationModal", () => {
     fireEvent.change(screen.getByPlaceholderText("e.g. ARK-2019-4521"), {
       target: { value: "LAW-999" },
     });
-    fireEvent.change(screen.getByPlaceholderText(/Internal notes/i), {
+    fireEvent.change(screen.getByPlaceholderText(/Internal review note/i), {
       target: { value: "Documents verified" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Approve & Verify/i }));
     expect(onApprove).toHaveBeenCalledWith("pro-1", "LAW-999", "Documents verified");
 
-    fireEvent.click(screen.getByRole("button", { name: /Request More Info/i }));
-    expect(onRequestInfo).toHaveBeenCalledWith("pro-1", "Documents verified");
+    expect(screen.getByText(/Saving this note keeps it internal/i)).toBeInTheDocument();
+    expect(screen.getByText(/Rejecting shares it with the applicant as the rejection reason/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Save Internal Note/i }));
+    expect(onSaveNote).toHaveBeenCalledWith("pro-1", "Documents verified");
 
     fireEvent.click(screen.getByRole("button", { name: /Reject/i }));
     expect(onReject).toHaveBeenCalledWith("pro-1", "Documents verified");

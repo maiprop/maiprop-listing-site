@@ -22,6 +22,7 @@ import {
   signUpProfileUpdateMutationSchema,
 } from "@/lib/mutationSchemas";
 import { appQueryClient } from "@/lib/appQueryClient";
+import { getPricingAudienceFromProfile, type PricingAudienceId } from "@/lib/participantConfig";
 import {
   transitionQueryAuthorization,
   transitionQueryIdentity,
@@ -29,6 +30,7 @@ import {
 import {
   authSessionIdentityFor,
   buildAuthorizationFingerprint,
+  checkoutOutcomeFromResponse,
   checkoutSessionIdForReconciliation,
   deferredAuthSessionFor,
   emptySubscriptionState,
@@ -45,6 +47,7 @@ import type {
   PendingAuthSignOut,
   Profile,
   ProfileFetchMode,
+  SubscriptionRefreshOutcome,
   SubscriptionState,
 } from "./authContextSupport";
 
@@ -84,7 +87,7 @@ interface AuthContextType {
     updates: Partial<Profile>,
   ) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
-  refreshSubscription: (checkoutSessionId?: string | null) => Promise<void>;
+  refreshSubscription: (checkoutSessionId?: string | null) => Promise<SubscriptionRefreshOutcome>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -99,6 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionState>(emptySubscriptionState);
+  const subscriptionAudienceRef = useRef<PricingAudienceId | null>(null);
+  subscriptionAudienceRef.current = profile ? getPricingAudienceFromProfile(profile) : null;
 
   useEffect(() => {
     const staleUntil = subscription.staleUntil;
@@ -133,13 +138,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const subscriptionRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const subscriptionRetryAttemptRef = useRef(0);
   const checkSubscriptionRef = useRef<
-    ((currentSession: Session | null, checkoutSessionId?: string | null) => Promise<void>) | null
+    ((currentSession: Session | null, checkoutSessionId?: string | null) => Promise<SubscriptionRefreshOutcome>) | null
   >(null);
   const subCheckInProgressRef = useRef<{
     userId: string;
     generation: number;
+    authSessionEpoch: number;
+    authSessionIdentity: AuthSessionIdentity | null;
+    audience: PricingAudienceId | null;
     checkoutSessionId: string | null;
-    promise: Promise<void>;
+    promise: Promise<SubscriptionRefreshOutcome>;
   } | null>(null);
   const authEventGenerationRef = useRef(0);
   // This is intentionally independent from profile fetch generations. A profile
@@ -363,39 +371,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (
       currentSession: Session | null,
       checkoutSessionId: string | null = null,
-    ) => {
+    ): Promise<SubscriptionRefreshOutcome> => {
       if (!currentSession) {
         adoptSubscriptionUser(null);
-        return;
+        return checkoutSessionId
+          ? { status: "error", checkoutSessionId, userId: null, reason: "unauthenticated" }
+          : { status: "refreshed", checkoutSessionId: null, userId: null };
       }
       const userId = currentSession.user.id;
       const generation = subscriptionGenerationRef.current;
-      if (expectedSubscriptionUserIdRef.current !== userId) return;
+      const authSessionEpoch = authSessionEpochRef.current;
+      const authSessionIdentity = authSessionIdentityRef.current;
+      const audience = subscriptionAudienceRef.current;
+      const staleOutcome = (): SubscriptionRefreshOutcome => ({
+        status: "stale",
+        checkoutSessionId,
+        userId,
+      });
+      const isCurrent = () => {
+        if (
+          expectedSubscriptionUserIdRef.current !== userId ||
+          subscriptionGenerationRef.current !== generation ||
+          authSessionEpochRef.current !== authSessionEpoch ||
+          subscriptionAudienceRef.current !== audience
+        ) return false;
+        const currentIdentity = authSessionIdentityRef.current;
+        if (!authSessionIdentity || !currentIdentity) {
+          return authSessionIdentity === currentIdentity;
+        }
+        return !isDefinitelyDifferentAuthSession(authSessionIdentity, currentIdentity);
+      };
+      if (!isCurrent()) return staleOutcome();
 
       while (true) {
         const inFlight = subCheckInProgressRef.current;
         if (
           !inFlight ||
           inFlight.userId !== userId ||
-          inFlight.generation !== generation
+          inFlight.generation !== generation ||
+          inFlight.authSessionEpoch !== authSessionEpoch ||
+          inFlight.audience !== audience ||
+          isDefinitelyDifferentAuthSession(inFlight.authSessionIdentity, authSessionIdentity)
         ) break;
-        if (!checkoutSessionId) return;
+        if (!checkoutSessionId) {
+          return { status: "refreshed", checkoutSessionId: null, userId };
+        }
         const sameExactSession = inFlight.checkoutSessionId === checkoutSessionId;
-        await inFlight.promise;
-        if (
-          expectedSubscriptionUserIdRef.current !== userId ||
-          subscriptionGenerationRef.current !== generation
-        ) return;
-        if (sameExactSession) return;
+        const priorOutcome = await inFlight.promise;
+        if (!isCurrent()) return staleOutcome();
+        if (sameExactSession) return priorOutcome;
       }
 
-      let releaseCheck = () => {};
-      const currentCheck = new Promise<void>((resolve) => {
+      let releaseCheck!: (outcome: SubscriptionRefreshOutcome) => void;
+      const currentCheck = new Promise<SubscriptionRefreshOutcome>((resolve) => {
         releaseCheck = resolve;
       });
       const currentWork = {
         userId,
         generation,
+        authSessionEpoch,
+        authSessionIdentity,
+        audience,
         checkoutSessionId,
         promise: currentCheck,
       };
@@ -403,6 +439,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelSubscriptionRetry();
       setSubscription((prev) => ({ ...prev, loading: true }));
       let shouldRetry = false;
+      let outcome: SubscriptionRefreshOutcome = checkoutSessionId
+        ? { status: "pending", checkoutSessionId, userId, reason: "receipt_unavailable" }
+        : { status: "refreshed", checkoutSessionId: null, userId };
       try {
         const { data, error } = await withSubscriptionDeadline(
           supabase.functions.invoke(
@@ -412,11 +451,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               : {},
           ),
         );
-        if (
-          expectedSubscriptionUserIdRef.current !== userId ||
-          subscriptionGenerationRef.current !== generation
-        ) return;
-        if (!error && data) {
+        if (!isCurrent()) {
+          outcome = staleOutcome();
+        } else if (!error && data) {
           if (data.source === "deadline" && data.sync_status === "timeout") {
             shouldRetry = true;
             setSubscription((prev) => unavailableSubscriptionState(prev));
@@ -453,9 +490,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setSubscription(nextSubscription);
             }
           }
+          if (checkoutSessionId) {
+            outcome = checkoutOutcomeFromResponse({
+              data,
+              error: null,
+              checkoutSessionId,
+              userId,
+              audience,
+            });
+          }
         } else {
           shouldRetry = true;
           setSubscription((prev) => unavailableSubscriptionState(prev));
+          if (checkoutSessionId) {
+            outcome = checkoutOutcomeFromResponse({
+              data,
+              error,
+              checkoutSessionId,
+              userId,
+              audience,
+            });
+          } else {
+            outcome = { status: "error", checkoutSessionId: null, userId, reason: "request_failed" };
+          }
         }
       } catch (err: unknown) {
         shouldRetry = true;
@@ -463,21 +520,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           "[AuthContext] checkSubscription failed:",
           err instanceof Error ? err.message : err,
         );
-        if (
-          expectedSubscriptionUserIdRef.current === userId &&
-          subscriptionGenerationRef.current === generation
-        ) {
+        if (isCurrent()) {
           setSubscription((prev) => unavailableSubscriptionState(prev));
         }
+        if (checkoutSessionId) {
+          outcome = err instanceof Error && /timed out/i.test(err.message)
+            ? { status: "pending", checkoutSessionId, userId, reason: "timeout" }
+            : { status: "error", checkoutSessionId, userId, reason: "request_failed" };
+        } else {
+          outcome = { status: "error", checkoutSessionId: null, userId, reason: "request_failed" };
+        }
       } finally {
+        if (!isCurrent()) outcome = staleOutcome();
         if (subCheckInProgressRef.current === currentWork) {
           subCheckInProgressRef.current = null;
         }
-        releaseCheck();
-        if (shouldRetry) {
+        releaseCheck(outcome);
+        if (shouldRetry && isCurrent()) {
           scheduleSubscriptionRetry(currentSession, userId, generation);
         }
       }
+      return outcome;
     },
     [
       adoptSubscriptionUser,
@@ -883,22 +946,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshSubscription = useCallback(async (requestedSessionId?: string | null) => {
     const expectedUserId = expectedSubscriptionUserIdRef.current;
     const expectedGeneration = subscriptionGenerationRef.current;
-    const checkoutSessionId = requestedSessionId === undefined
-      ? checkoutSessionIdForReconciliation()
-      : isCheckoutSessionId(requestedSessionId)
-        ? requestedSessionId
-        : null;
-    const {
-      data: { session: sess },
-    } = await supabase.auth.getSession();
+    const expectedAuthSessionEpoch = authSessionEpochRef.current;
+    const expectedAuthSessionIdentity = authSessionIdentityRef.current;
+    const expectedAudience = subscriptionAudienceRef.current;
+    let checkoutSessionId: string | null;
+    if (requestedSessionId === undefined) {
+      checkoutSessionId = checkoutSessionIdForReconciliation();
+    } else if (requestedSessionId === null) {
+      checkoutSessionId = null;
+    } else {
+      const normalized = requestedSessionId.trim();
+      if (!isCheckoutSessionId(normalized)) {
+        return {
+          status: "error",
+          checkoutSessionId: requestedSessionId,
+          userId: expectedUserId,
+          reason: "invalid_checkout_id",
+        } as const;
+      }
+      checkoutSessionId = normalized;
+    }
+    let sess: Session | null;
+    try {
+      const result = await supabase.auth.getSession();
+      sess = result.data.session;
+    } catch {
+      return {
+        status: "error",
+        checkoutSessionId,
+        userId: expectedUserId,
+        reason: "request_failed",
+      } as const;
+    }
+    const returnedIdentity = authSessionIdentityFor(sess);
     if (
       expectedSubscriptionUserIdRef.current !== expectedUserId ||
       subscriptionGenerationRef.current !== expectedGeneration ||
-      sess?.user.id !== expectedUserId
+      authSessionEpochRef.current !== expectedAuthSessionEpoch ||
+      subscriptionAudienceRef.current !== expectedAudience ||
+      sess?.user.id !== expectedUserId ||
+      isDefinitelyDifferentAuthSession(expectedAuthSessionIdentity, returnedIdentity)
     ) {
-      return;
+      return { status: "stale", checkoutSessionId, userId: expectedUserId } as const;
     }
-    await checkSubscription(sess, checkoutSessionId);
+    if (!sess || !expectedUserId) {
+      return {
+        status: "error",
+        checkoutSessionId,
+        userId: expectedUserId,
+        reason: "unauthenticated",
+      } as const;
+    }
+    return checkSubscription(sess, checkoutSessionId);
   }, [checkSubscription]);
 
   const needsOnboarding = profileNeedsOnboarding(profile);

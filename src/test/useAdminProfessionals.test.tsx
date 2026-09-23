@@ -205,8 +205,28 @@ describe("useApproveProfessional()", () => {
 });
 
 describe("useUpdateProfessionalNotes()", () => {
+  it("rejects a zero-row update instead of acknowledging an unsaved internal note", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const select = vi.fn().mockReturnValue({ maybeSingle });
+    const eq = vi.fn().mockReturnValue({ select });
+    const update = vi.fn().mockReturnValue({ eq });
+    fromMock.mockReturnValue({ update });
+
+    const { result } = renderHookWithQuery(() => useUpdateProfessionalNotes());
+    await expect(
+      act(async () => {
+        await result.current.mutateAsync({ id: "missing-pro", notes: "Private follow-up" });
+      }),
+    ).rejects.toThrow(/not saved/i);
+
+    expect(select).toHaveBeenCalledWith("id");
+    expect(maybeSingle).toHaveBeenCalledTimes(1);
+  });
+
   it("nulls notes when an empty string is passed", async () => {
-    const eq = vi.fn().mockResolvedValue({ error: null });
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "p1" }, error: null });
+    const select = vi.fn().mockReturnValue({ maybeSingle });
+    const eq = vi.fn().mockReturnValue({ select });
     const update = vi.fn().mockReturnValue({ eq });
     fromMock.mockReturnValue({ update });
 
@@ -216,5 +236,6 @@ describe("useUpdateProfessionalNotes()", () => {
     });
 
     expect(update).toHaveBeenCalledWith({ notes: null });
+    expect(select).toHaveBeenCalledWith("id");
   });
 });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -21,6 +21,10 @@ import { usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import {
+  checkoutReturnIdentity,
+  type SubscriptionRefreshOutcome,
+} from "@/contexts/authContextSupport";
 
 // ── Audience config ────────────────────────────────────────────────────────────
 
@@ -214,8 +218,17 @@ const PRICING_EL: Record<string, string> = {
   "Not on OS yet?": "Δεν χρησιμοποιείτε ακόμα OS;",
   "Talk to sales": "Μιλήστε με την ομάδα πωλήσεων",
   "Mock checkout completed. No live payment or subscription entitlement was created.": "Το δοκιμαστικό checkout ολοκληρώθηκε. Δεν δημιουργήθηκε πραγματική πληρωμή ή δικαίωμα συνδρομής.",
-  "Payment successful! Your plan has been activated.": "Η πληρωμή ολοκληρώθηκε! Το πλάνο σας ενεργοποιήθηκε.",
-  "Checkout cancelled — no charge was made.": "Το checkout ακυρώθηκε — δεν έγινε καμία χρέωση.",
+  "Checkout cancelled.": "Το checkout ακυρώθηκε.",
+  "Confirming your subscription…": "Γίνεται επιβεβαίωση της συνδρομής σας…",
+  "Your subscription is not confirmed yet.": "Η συνδρομή σας δεν έχει επιβεβαιωθεί ακόμη.",
+  "We couldn't confirm your subscription. Try again.": "Δεν ήταν δυνατή η επιβεβαίωση της συνδρομής σας. Δοκιμάστε ξανά.",
+  "Checkout confirmation link is missing.": "Λείπει ο σύνδεσμος επιβεβαίωσης του checkout.",
+  "Checkout confirmation link is invalid.": "Ο σύνδεσμος επιβεβαίωσης του checkout δεν είναι έγκυρος.",
+  "Sign in to confirm your subscription.": "Συνδεθείτε για να επιβεβαιώσετε τη συνδρομή σας.",
+  "Subscription confirmed": "Η συνδρομή επιβεβαιώθηκε",
+  "Trial confirmed": "Η δοκιμαστική περίοδος επιβεβαιώθηκε",
+  "Purchase confirmed": "Η αγορά επιβεβαιώθηκε",
+  "Check again": "Έλεγχος ξανά",
   "Checkout failed": "Το checkout απέτυχε",
   "Could not start checkout": "Δεν ήταν δυνατή η έναρξη checkout",
   "Checking availability": "Έλεγχος διαθεσιμότητας",
@@ -462,6 +475,18 @@ export default function Pricing() {
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutConfirmation, setCheckoutConfirmation] = useState<{
+    status: "idle" | "checking" | "pending" | "error" | "verified";
+    checkoutSessionId: string | null;
+    message: string | null;
+  }>({ status: "idle", checkoutSessionId: null, message: null });
+  const checkoutAttemptRef = useRef(0);
+  const checkoutToastRef = useRef<string | null>(null);
+  const checkoutMountedRef = useRef(true);
+  useEffect(() => {
+    checkoutMountedRef.current = true;
+    return () => { checkoutMountedRef.current = false; };
+  }, []);
 
   const PLAN_KEYS: Record<AudienceId, string> = {
     participant:   ROLE_PLAN_MAP.participant.planKey,
@@ -472,6 +497,16 @@ export default function Pricing() {
     institutional: ROLE_PLAN_MAP.institutional.planKey,
   };
   const currentAudience = profile ? getPricingAudienceFromProfile(profile) : null;
+  const checkoutContextRef = useRef({
+    userId: user?.id ?? null,
+    audience: currentAudience,
+    search: searchParams.toString(),
+  });
+  checkoutContextRef.current = {
+    userId: user?.id ?? null,
+    audience: currentAudience,
+    search: searchParams.toString(),
+  };
   const isCrossAudienceSelection = Boolean(
     user &&
     profile &&
@@ -558,33 +593,174 @@ export default function Pricing() {
     }
   };
 
+  const clearCheckoutReturn = useCallback((expectedCheckoutSessionId: string | null) => {
+    const currentParams = new URLSearchParams(checkoutContextRef.current.search);
+    if (expectedCheckoutSessionId) {
+      const currentIdentity = checkoutReturnIdentity(currentParams);
+      if (currentIdentity.status !== "valid" ||
+          currentIdentity.checkoutSessionId !== expectedCheckoutSessionId) return;
+    }
+    ["checkout", "pro", "billing_mode", "plan", "billing_cycle", "checkout_session_id", "session_id"]
+      .forEach((key) => currentParams.delete(key));
+    setSearchParams(currentParams, { replace: true });
+  }, [setSearchParams]);
+
+  const confirmCheckout = useCallback(async (
+    checkoutSessionId: string,
+    isActive: () => boolean = () => true,
+  ) => {
+    const requestContext = {
+      userId: user?.id ?? null,
+      audience: currentAudience,
+      checkoutSessionId,
+    };
+    const attempt = ++checkoutAttemptRef.current;
+    setCheckoutConfirmation({
+      status: "checking",
+      checkoutSessionId,
+      message: "Confirming your subscription…",
+    });
+
+    let outcome: SubscriptionRefreshOutcome | undefined;
+    try {
+      outcome = await refreshSubscription(checkoutSessionId);
+    } catch {
+      outcome = {
+        status: "error",
+        checkoutSessionId,
+        userId: requestContext.userId,
+        reason: "request_failed",
+      };
+    }
+
+    const currentContext = checkoutContextRef.current;
+    const currentIdentity = checkoutReturnIdentity(new URLSearchParams(currentContext.search));
+    if (!checkoutMountedRef.current || !isActive() || attempt !== checkoutAttemptRef.current ||
+        currentContext.userId !== requestContext.userId ||
+        currentContext.audience !== requestContext.audience ||
+        currentIdentity.status !== "valid" ||
+        currentIdentity.checkoutSessionId !== checkoutSessionId) return;
+
+    if (outcome?.status === "stale") {
+      setCheckoutConfirmation({
+        status: "pending",
+        checkoutSessionId,
+        message: "Your subscription is not confirmed yet.",
+      });
+      return;
+    }
+
+    // Older deployed check-subscription responses are safe to retry, but cannot
+    // confirm a Checkout return without an exact durable receipt.
+    if (!outcome || outcome.status === "pending" || outcome.status === "refreshed") {
+      setCheckoutConfirmation({
+        status: "pending",
+        checkoutSessionId,
+        message: "Your subscription is not confirmed yet.",
+      });
+      return;
+    }
+
+    if (outcome.status === "error") {
+      setCheckoutConfirmation({
+        status: "error",
+        checkoutSessionId,
+        message: "We couldn't confirm your subscription. Try again.",
+      });
+      return;
+    }
+
+    if (outcome.userId !== requestContext.userId ||
+        outcome.checkoutSessionId !== checkoutSessionId) return;
+    const message = outcome.receipt.kind === "addon"
+      ? "Purchase confirmed"
+      : outcome.receipt.status === "trialing"
+      ? "Trial confirmed"
+      : "Subscription confirmed";
+    setCheckoutConfirmation({ status: "verified", checkoutSessionId, message });
+    const toastKey = `${outcome.userId}:${checkoutSessionId}:${message}`;
+    if (checkoutToastRef.current !== toastKey) {
+      checkoutToastRef.current = toastKey;
+      toast.success(tr(message));
+    }
+    clearCheckoutReturn(checkoutSessionId);
+  }, [clearCheckoutReturn, currentAudience, refreshSubscription, tr, user?.id]);
+
+  const checkoutMarker = searchParams.get("checkout");
+  const legacyProMarker = searchParams.get("pro");
+  const checkoutSessionParam = searchParams.get("checkout_session_id");
+  const legacySessionParam = searchParams.get("session_id");
+  const billingMode = searchParams.get("billing_mode");
+
   useEffect(() => {
-    const checkoutStatus = searchParams.get("checkout");
-    const checkoutSessionId = searchParams.get("checkout_session_id") ??
-      searchParams.get("session_id");
-    // A cold Checkout return can render before AuthContext adopts the session.
-    // Keep the reconciliation ID in the URL until the correct user is ready.
-    if (checkoutStatus === "success" && searchParams.get("billing_mode") !== "mock" &&
-      (authLoading || !user)) return;
-    if (checkoutStatus === "success") {
-      if (searchParams.get("billing_mode") === "mock") {
-        toast.info(tr("Mock checkout completed. No live payment or subscription entitlement was created."));
-      } else {
-        toast.success(tr("Payment successful! Your plan has been activated."));
-        void refreshSubscription(checkoutSessionId);
+    const checkoutSucceeded = checkoutMarker === "success" ||
+      checkoutMarker === "trial_started" || legacyProMarker === "success";
+    if (checkoutMarker === "cancelled") {
+      const toastKey = `cancelled:${checkoutContextRef.current.search}`;
+      if (checkoutToastRef.current !== toastKey) {
+        checkoutToastRef.current = toastKey;
+        toast.info("Checkout cancelled.");
       }
-    } else if (checkoutStatus === "cancelled") {
-      toast.info(tr("Checkout cancelled — no charge was made."));
-    } else {
+      clearCheckoutReturn(null);
+      return undefined;
+    }
+    if (!checkoutSucceeded) return undefined;
+    if (billingMode === "mock") {
+      const toastKey = `mock:${checkoutContextRef.current.search}`;
+      if (checkoutToastRef.current !== toastKey) {
+        checkoutToastRef.current = toastKey;
+        toast.info(tr("Mock checkout completed. No live payment or subscription entitlement was created."));
+      }
+      clearCheckoutReturn(null);
       return undefined;
     }
 
-    const nextParams = new URLSearchParams(searchParams);
-    ["checkout", "billing_mode", "plan", "billing_cycle", "checkout_session_id", "session_id"].forEach((key) => nextParams.delete(key));
-    setSearchParams(nextParams, { replace: true });
+    const identity = checkoutReturnIdentity(searchParams);
+    if (identity.status === "missing") {
+      setCheckoutConfirmation({
+        status: "error",
+        checkoutSessionId: null,
+        message: "Checkout confirmation link is missing.",
+      });
+      return undefined;
+    }
+    if (identity.status !== "valid") {
+      setCheckoutConfirmation({
+        status: "error",
+        checkoutSessionId: null,
+        message: "Checkout confirmation link is invalid.",
+      });
+      return undefined;
+    }
+    // A cold Checkout return can render before AuthContext adopts the session
+    // and profile. Keep the exact ID in the URL until both are ready.
+    if (authLoading || profileLoading) return undefined;
+    if (!user) {
+      setCheckoutConfirmation({
+        status: "error",
+        checkoutSessionId: identity.checkoutSessionId,
+        message: "Sign in to confirm your subscription.",
+      });
+      return undefined;
+    }
 
-    return undefined;
-  }, [authLoading, user, refreshSubscription, searchParams, setSearchParams, tr]);
+    let active = true;
+    void confirmCheckout(identity.checkoutSessionId, () => active);
+    return () => { active = false; };
+  }, [
+    authLoading,
+    billingMode,
+    checkoutMarker,
+    checkoutSessionParam,
+    confirmCheckout,
+    legacyProMarker,
+    legacySessionParam,
+    profileLoading,
+    searchParams,
+    tr,
+    user,
+    clearCheckoutReturn,
+  ]);
 
   useEffect(() => {
     if (hasAutoSelected) return;
@@ -646,6 +822,35 @@ export default function Pricing() {
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
       <main id="main-content" className="pt-16">
+        {checkoutConfirmation.status !== "idle" && (
+          <div
+            role="status"
+            className="border-b border-border bg-card"
+          >
+            <div className="container max-w-5xl px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                {checkoutConfirmation.status === "checking" && (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+                )}
+                {checkoutConfirmation.status === "verified" && (
+                  <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+                )}
+                <span>{checkoutConfirmation.message ? tr(checkoutConfirmation.message) : null}</span>
+              </div>
+              {(checkoutConfirmation.status === "pending" || checkoutConfirmation.status === "error") &&
+                checkoutConfirmation.checkoutSessionId && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void confirmCheckout(checkoutConfirmation.checkoutSessionId!)}
+                  >
+                    {tr("Check again")}
+                  </Button>
+                )}
+            </div>
+          </div>
+        )}
 
         {/* ── Hero ──────────────────────────────────────────────────────────── */}
         <div className="border-b border-border bg-card/60 py-12 sm:py-16">

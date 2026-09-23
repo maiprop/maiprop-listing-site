@@ -26,6 +26,8 @@ import {
   type AddonCheckoutFulfillmentResult,
   reconcileAddonCheckoutSession,
 } from "../_shared/addonFulfillment.ts";
+import { isCheckoutAddonAudienceAllowed } from "../create-checkout/pricing.ts";
+import type { CheckoutProfileRow } from "../create-checkout/types.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("check-subscription");
@@ -83,8 +85,27 @@ export type FallbackSubscriptionState = {
 
 export type SubscriptionSyncStatus = "synced" | "pending" | "timeout";
 
+export type VerifiedCheckoutReceipt = {
+  checkout_session_id: string;
+  user_id: string;
+  kind: "subscription";
+  product_id: string;
+  plan_key: string;
+  audience: string;
+  status: "active" | "trialing";
+  subscription_end: string;
+} | {
+  checkout_session_id: string;
+  user_id: string;
+  kind: "addon";
+  addon_key: string;
+  audience: string;
+  quantity: number;
+};
+
 export type SubscriptionCheckState = FallbackSubscriptionState & {
   sync_status: SubscriptionSyncStatus;
+  verified_checkout?: VerifiedCheckoutReceipt;
 };
 
 type SubscriptionCheckOptions = {
@@ -220,6 +241,136 @@ type ProfileSubscriptionRow = {
   role?: string | null;
   participant_type?: string | null;
 };
+
+type DurableAddonPurchaseRow = {
+  stripe_session_id?: string | null;
+  user_id?: string | null;
+  addon_key?: string | null;
+  module?: string | null;
+  audience?: string | null;
+  unit?: string | null;
+  quantity?: number | null;
+  checkout_mode?: string | null;
+  status?: string | null;
+  stripe_subscription_id?: string | null;
+  stripe_customer_id?: string | null;
+  runtime_mode?: string | null;
+  livemode?: boolean | null;
+};
+
+const stripeObjectId = (
+  value: string | { id?: string | null } | null | undefined,
+): string | null => typeof value === "string" ? value : value?.id ?? null;
+
+function checkoutMetadataQuantity(value: string | null | undefined): number | null {
+  const quantity = Number(value);
+  return Number.isInteger(quantity) && quantity >= 1 && quantity <= 10_000
+    ? quantity
+    : null;
+}
+
+async function verifiedAddonCheckoutReceipt(
+  supabaseClient: unknown,
+  userId: string,
+  session: Stripe.Checkout.Session,
+): Promise<VerifiedCheckoutReceipt | null> {
+  const metadata = session.metadata ?? {};
+  const addonKey = metadata.addon_key;
+  const addonModule = metadata.module;
+  const addonUnit = metadata.unit;
+  const addonAudience = normalizeEntitlementAudience(metadata.audience);
+  const quantity = checkoutMetadataQuantity(metadata.quantity);
+  const customerId = stripeObjectId(session.customer);
+  const runtimeMode = getStripeRuntimeMode();
+  const checkoutMode = session.mode === "payment" || session.mode === "subscription"
+    ? session.mode
+    : null;
+  const subscriptionId = stripeObjectId(session.subscription);
+  if (
+    !addonKey || !addonModule || !addonUnit || !addonAudience ||
+    !quantity || !customerId || !checkoutMode
+  ) return null;
+
+  const client = supabaseClient as SubscriptionDatabaseClient;
+  const [{ data: profile, error: profileError }, { data: row, error: rowError }] =
+    await Promise.all([
+      client.from("profiles")
+        .select("role, participant_type, is_platform_admin")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      client.from("addon_purchases")
+        .select(
+          "stripe_session_id, user_id, addon_key, module, audience, unit, quantity, checkout_mode, status, stripe_subscription_id, stripe_customer_id, runtime_mode, livemode",
+        )
+        .eq("stripe_session_id", session.id)
+        .eq("user_id", userId)
+        .eq("runtime_mode", runtimeMode)
+        .eq("livemode", session.livemode)
+        .maybeSingle(),
+    ]);
+  if (profileError || rowError || !row) return null;
+  if (!isCheckoutAddonAudienceAllowed(
+    addonKey,
+    addonAudience,
+    addonModule,
+    profile as CheckoutProfileRow | null,
+  )) return null;
+
+  const durable = row as DurableAddonPurchaseRow;
+  const expectedStatus = checkoutMode === "payment" ? "paid" : "active";
+  if (
+    durable.stripe_session_id !== session.id || durable.user_id !== userId ||
+    durable.addon_key !== addonKey || durable.module !== addonModule ||
+    normalizeEntitlementAudience(durable.audience) !== addonAudience ||
+    durable.unit !== addonUnit || durable.quantity !== quantity ||
+    durable.checkout_mode !== checkoutMode || durable.status !== expectedStatus ||
+    durable.stripe_customer_id !== customerId ||
+    durable.runtime_mode !== runtimeMode || durable.livemode !== session.livemode ||
+    (checkoutMode === "subscription" &&
+      (!subscriptionId || durable.stripe_subscription_id !== subscriptionId))
+  ) return null;
+
+  return {
+    checkout_session_id: session.id,
+    user_id: userId,
+    kind: "addon",
+    addon_key: addonKey,
+    audience: addonAudience,
+    quantity,
+  };
+}
+
+function verifiedSubscriptionCheckoutReceipt(
+  state: FallbackSubscriptionState,
+  sessionId: string,
+  userId: string,
+  entitlement: { productId: string; planKey: string; audience: string },
+): VerifiedCheckoutReceipt | null {
+  const status = state.status === "active" || state.status === "trialing"
+    ? state.status
+    : null;
+  const audience = normalizeEntitlementAudience(state.audience);
+  const end = state.subscription_end;
+  const endTime = end ? Date.parse(end) : Number.NaN;
+  if (
+    state.source !== "billing_state" || state.subscribed !== true || !status ||
+    !state.product_id || !state.plan_key || !audience || !end ||
+    !Number.isFinite(endTime) || endTime <= Date.now() ||
+    state.product_id !== entitlement.productId ||
+    state.plan_key !== entitlement.planKey || audience !== entitlement.audience
+  ) return null;
+
+  return {
+    checkout_session_id: sessionId,
+    user_id: userId,
+    kind: "subscription",
+    product_id: state.product_id,
+    plan_key: state.plan_key,
+    audience,
+    status,
+    subscription_end: end,
+  };
+}
 
 function isValidDurableBillingSubscription(
   row: DurableBillingSubscriptionRow | null,
@@ -466,12 +617,11 @@ async function resolveSubscriptionCheckWithinDeadline(
       state: { ...cachedState, sync_status: "pending" },
     };
   }
-  const customerId = typeof session.customer === "string"
-    ? session.customer
-    : session.customer?.id ?? null;
+  const customerId = stripeObjectId(session.customer);
   const expectedLivemode = runtimeMode === "live";
   const isExactAddonCandidate = session.id === checkoutSessionId &&
-    session.mode === "payment" && session.status === "complete" &&
+    (session.mode === "payment" || session.mode === "subscription") &&
+    session.status === "complete" &&
     session.payment_status === "paid" &&
     session.metadata?.checkout_type === "addon" &&
     session.metadata?.user_id === userId &&
@@ -479,20 +629,37 @@ async function resolveSubscriptionCheckWithinDeadline(
     session.metadata?.runtime_mode === runtimeMode &&
     session.livemode === expectedLivemode;
 
-  if (session.mode === "payment") {
+  if (session.metadata?.checkout_type === "addon" || session.mode === "payment") {
     if (!isExactAddonCandidate) {
       return {
         httpStatus: 202,
         state: { ...cachedState, sync_status: "pending" },
       };
     }
-    const fulfillAddon = options.fulfillAddonCheckout ??
-      reconcileAddonCheckoutSession;
-    const fulfillment = await fulfillAddon(supabaseClient, session);
-    return fulfillment === "fulfilled"
+    if (session.mode === "payment") {
+      const fulfillAddon = options.fulfillAddonCheckout ??
+        reconcileAddonCheckoutSession;
+      const fulfillment = await fulfillAddon(supabaseClient, session);
+      if (fulfillment !== "fulfilled") {
+        return {
+          httpStatus: 202,
+          state: { ...cachedState, sync_status: "pending" },
+        };
+      }
+    }
+    const receipt = await verifiedAddonCheckoutReceipt(
+      supabaseClient,
+      userId,
+      session,
+    );
+    return receipt
       ? {
         httpStatus: 200,
-        state: { ...cachedState, sync_status: "synced" },
+        state: {
+          ...cachedState,
+          sync_status: "synced",
+          verified_checkout: receipt,
+        },
       }
       : {
         httpStatus: 202,
@@ -586,9 +753,21 @@ async function resolveSubscriptionCheckWithinDeadline(
       state: { ...cachedState, sync_status: "pending" },
     };
   }
+  const receipt = verifiedSubscriptionCheckoutReceipt(
+    state,
+    session.id,
+    userId,
+    entitlement,
+  );
+  if (!receipt) {
+    return {
+      httpStatus: 202,
+      state: { ...state, sync_status: "pending" },
+    };
+  }
   return {
     httpStatus: 200,
-    state: { ...state, sync_status: "synced" },
+    state: { ...state, sync_status: "synced", verified_checkout: receipt },
   };
 }
 

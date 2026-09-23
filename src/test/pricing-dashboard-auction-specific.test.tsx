@@ -1,6 +1,6 @@
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "@/test/utils";
 
@@ -619,7 +619,9 @@ describe("Pricing focused page behavior", () => {
 
   it("preserves Checkout reconciliation until the returning user's auth is restored", async () => {
     const { default: Pricing } = await import("@/pages/Pricing");
-    const refreshSubscription = vi.fn().mockResolvedValue(undefined);
+    const refreshSubscription = vi.fn().mockResolvedValue({
+      status: "pending", checkoutSessionId: "cs_test_delayed_auth", userId: "returning-user", reason: "pending",
+    });
     mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, refreshSubscription });
     mocks.useAuthMock.mockReturnValue({ user: null, profile: null, loading: true, profileLoading: true });
     const view = renderWithProviders(<Pricing />, {
@@ -632,11 +634,11 @@ describe("Pricing focused page behavior", () => {
     view.rerender(<Pricing />);
     await waitFor(() => expect(refreshSubscription).toHaveBeenCalledWith("cs_test_delayed_auth"));
     expect(refreshSubscription).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/subscription is not confirmed yet/i)).toBeInTheDocument();
   });
 
   it.each([
     ["/pricing?checkout=success&billing_mode=mock", "info", /Mock checkout completed/i],
-    ["/pricing?checkout=success", "success", /Payment successful/i],
     ["/pricing?checkout=cancelled", "info", /Checkout cancelled/i],
   ] as const)("handles the Stripe return state for %s", async (initialPath, toastKind, message) => {
     mocks.useAuthMock.mockReturnValue({ user: { id: "returning-user" }, profile: null, loading: false, profileLoading: false });
@@ -652,17 +654,21 @@ describe("Pricing focused page behavior", () => {
     renderWithProviders(<Pricing />, { initialPath });
 
     await waitFor(() => expect(mocks.toast[toastKind]).toHaveBeenCalledWith(expect.stringMatching(message)));
-    if (initialPath.includes("success") && !initialPath.includes("billing_mode=mock")) {
-      expect(refreshSubscription).toHaveBeenCalledTimes(1);
-    } else {
-      expect(refreshSubscription).not.toHaveBeenCalled();
-    }
+    expect(refreshSubscription).not.toHaveBeenCalled();
   });
 
-  it("reconciles the exact Stripe session once without a stale delayed retry", async () => {
-    mocks.useAuthMock.mockReturnValue({ user: { id: "returning-user" }, profile: null, loading: false, profileLoading: false });
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const refreshSubscription = vi.fn().mockResolvedValue(undefined);
+  it("keeps an exact pending checkout identity for a manual retry", async () => {
+    mocks.useAuthMock.mockReturnValue({ user: { id: "returning-user" }, profile: { role: "buyer", participant_type: "buyer" }, loading: false, profileLoading: false });
+    const refreshSubscription = vi.fn()
+      .mockResolvedValueOnce({ status: "pending", checkoutSessionId: "cs_test_pricing_return", userId: "returning-user", reason: "pending" })
+      .mockResolvedValueOnce({
+        status: "verified", checkoutSessionId: "cs_test_pricing_return", userId: "returning-user",
+        receipt: {
+          checkout_session_id: "cs_test_pricing_return", user_id: "returning-user", kind: "subscription",
+          product_id: "prod_participant", plan_key: "pro", audience: "participant", status: "active",
+          subscription_end: "2099-01-01T00:00:00.000Z",
+        },
+      });
     mocks.useSubscriptionMock.mockReturnValue({
       isPro: false,
       loading: false,
@@ -675,12 +681,147 @@ describe("Pricing focused page behavior", () => {
       initialPath: "/pricing?checkout=success&session_id=cs_test_pricing_return",
     });
 
-    await waitFor(() => {
-      expect(refreshSubscription).toHaveBeenCalledWith("cs_test_pricing_return");
-    });
-    await vi.advanceTimersByTimeAsync(2_500);
+    expect(await screen.findByText(/subscription is not confirmed yet/i)).toBeInTheDocument();
     expect(refreshSubscription).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
+    fireEvent.click(screen.getByRole("button", { name: /Check again/i }));
+    expect(await screen.findByText(/Subscription confirmed/i)).toBeInTheDocument();
+    expect(refreshSubscription).toHaveBeenCalledTimes(2);
+    expect(refreshSubscription).toHaveBeenLastCalledWith("cs_test_pricing_return");
+    expect(mocks.toast.success).toHaveBeenCalledWith(expect.stringMatching(/Subscription confirmed/i));
+    expect(mocks.toast.success).not.toHaveBeenCalledWith(expect.stringMatching(/Payment successful/i));
+  });
+
+  it("keeps a rejected checkout identity available for a successful manual retry", async () => {
+    mocks.useAuthMock.mockReturnValue({ user: { id: "returning-user" }, profile: { role: "buyer", participant_type: "buyer" }, loading: false, profileLoading: false });
+    const refreshSubscription = vi.fn()
+      .mockResolvedValueOnce({ status: "error", checkoutSessionId: "cs_test_retry_error", userId: "returning-user", reason: "request_failed" })
+      .mockResolvedValueOnce({
+        status: "verified",
+        checkoutSessionId: "cs_test_retry_error",
+        userId: "returning-user",
+        receipt: {
+          checkout_session_id: "cs_test_retry_error",
+          user_id: "returning-user",
+          kind: "addon",
+          addon_key: "property_report_single",
+          audience: "participant",
+          quantity: 1,
+        },
+      });
+    mocks.useSubscriptionMock.mockReturnValue({
+      isPro: false,
+      loading: false,
+      hasStripeBilling: false,
+      refreshSubscription,
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, {
+      initialPath: "/pricing?checkout=success&session_id=cs_test_retry_error",
+    });
+
+    expect(await screen.findByText(/couldn't confirm your subscription/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Check again/i }));
+    expect(await screen.findByText(/Purchase confirmed/i)).toBeInTheDocument();
+    expect(refreshSubscription).toHaveBeenCalledTimes(2);
+    expect(refreshSubscription).toHaveBeenLastCalledWith("cs_test_retry_error");
+  });
+
+  it.each([
+    ["trialing", "Trial confirmed"],
+    ["addon", "Purchase confirmed"],
+  ] as const)("uses truthful %s receipt copy", async (kind, message) => {
+    mocks.useAuthMock.mockReturnValue({ user: { id: "returning-user" }, profile: { role: "buyer", participant_type: "buyer" }, loading: false, profileLoading: false });
+    const receipt = kind === "addon"
+      ? { checkout_session_id: "cs_test_receipt_copy", user_id: "returning-user", kind: "addon", addon_key: "property_report_single", audience: "participant", quantity: 1 }
+      : { checkout_session_id: "cs_test_receipt_copy", user_id: "returning-user", kind: "subscription", product_id: "prod_participant", plan_key: "pro", audience: "participant", status: "trialing", subscription_end: "2099-01-01T00:00:00.000Z" };
+    const refreshSubscription = vi.fn().mockResolvedValue({
+      status: "verified", checkoutSessionId: "cs_test_receipt_copy", userId: "returning-user", receipt,
+    });
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, hasStripeBilling: false, refreshSubscription });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?checkout=success&session_id=cs_test_receipt_copy" });
+    expect(await screen.findByText(new RegExp(message, "i"))).toBeInTheDocument();
+    expect(mocks.toast.success).toHaveBeenCalledWith(expect.stringMatching(new RegExp(message, "i")));
+  });
+
+  it("does not reconcile a missing or conflicting checkout return identity", async () => {
+    mocks.useAuthMock.mockReturnValue({ user: { id: "returning-user" }, profile: { role: "buyer", participant_type: "buyer" }, loading: false, profileLoading: false });
+    const refreshSubscription = vi.fn();
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, hasStripeBilling: false, refreshSubscription });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    const view = renderWithProviders(<Pricing />, { initialPath: "/pricing?checkout=success" });
+    expect(await screen.findByText(/confirmation link is missing/i)).toBeInTheDocument();
+    expect(refreshSubscription).not.toHaveBeenCalled();
+
+    view.unmount();
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?checkout=success&session_id=cs_test_one&checkout_session_id=cs_test_two" });
+    expect(await screen.findByText(/confirmation link is invalid/i)).toBeInTheDocument();
+    expect(refreshSubscription).not.toHaveBeenCalled();
+  });
+
+  it("does not publish an old actor's delayed checkout confirmation", async () => {
+    let resolveActorA!: (value: unknown) => void;
+    const actorAOutcome = new Promise((resolve) => { resolveActorA = resolve; });
+    const refreshSubscription = vi.fn()
+      .mockImplementationOnce(() => actorAOutcome)
+      .mockResolvedValueOnce({
+        status: "pending",
+        checkoutSessionId: "cs_test_actor_change",
+        userId: "actor-b",
+        reason: "pending",
+      });
+    mocks.useSubscriptionMock.mockReturnValue({
+      isPro: false,
+      loading: false,
+      hasStripeBilling: false,
+      refreshSubscription,
+    });
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "actor-a" },
+      profile: { role: "buyer", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+    const view = renderWithProviders(<Pricing />, {
+      initialPath: "/pricing?checkout=success&session_id=cs_test_actor_change",
+    });
+    await waitFor(() => expect(refreshSubscription).toHaveBeenCalledTimes(1));
+
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "actor-b" },
+      profile: { role: "buyer", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+    });
+    view.rerender(<Pricing />);
+    await waitFor(() => expect(refreshSubscription).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/subscription is not confirmed yet/i)).toBeInTheDocument();
+
+    await act(async () => {
+      resolveActorA({
+        status: "verified",
+        checkoutSessionId: "cs_test_actor_change",
+        userId: "actor-a",
+        receipt: {
+          checkout_session_id: "cs_test_actor_change",
+          user_id: "actor-a",
+          kind: "subscription",
+          product_id: "prod_participant",
+          plan_key: "pro",
+          audience: "participant",
+          status: "active",
+          subscription_end: "2099-01-01T00:00:00.000Z",
+        },
+      });
+      await actorAOutcome;
+    });
+
+    expect(screen.getByText(/subscription is not confirmed yet/i)).toBeInTheDocument();
+    expect(mocks.toast.success).not.toHaveBeenCalled();
   });
 
   it("shows the active invite-only investor entitlement as a dashboard action", async () => {
