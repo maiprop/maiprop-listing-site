@@ -215,3 +215,65 @@ Pricing stores no token or receipt in browser persistence. The lifecycle key use
 No handler, schema, OpenAPI, H5/H6, provider, database, dependency, build, full suite, deployment, GitHub, or production operation changed or ran in this round. The unchanged 49-test Deno and initial H5/H6 evidence was not repeated. The known repository-wide artifact lint limitation remains Task 9 scope; only all changed source/test files were linted.
 
 These checks prove the bounded local lifecycle transitions. They do not establish deployed service/site ordering, real provider/webhook behavior, cross-tab deduplication, or the prepared browser-after gate. Independent scoped rereview remains required.
+
+## Fix round 2 — checkout-owned Sonner toast lifecycle
+
+Date: 2026-09-23
+
+Fix base: `179ab644b3f7ccb834187b86ee9a7a0f41df1efd`
+
+Authority: `task-17-browser-toast-adjudication.md`, residual Important I2, informed by `task-17-lifecycle-browser-after-report.md`
+
+### Disposition
+
+Pricing now keeps the identity returned by its verified-checkout `toast.success` call separately from its duplicate-notification key. Actor, known-session, audience, and return-context invalidation dismiss exactly that owned success toast before clearing the corresponding local confirmation. Pricing lifecycle disposal also dismisses its owned toast. Cancellation, mock-return, and unrelated notification identities are never adopted or dismissed by this path.
+
+The existing successful URL cleanup remains a valid completed context and therefore does not dismiss or reissue its success toast. A token refresh within the same known auth session also preserves the confirmation and toast without another exact reconciliation. A later return-context replacement invalidates both the inline confirmation and the owned toast.
+
+### RED evidence
+
+With only the focused regression assertions added and production still at the fix base:
+
+```powershell
+npm run runtime -- npm exec vitest -- run src/test/pricing-dashboard-auction-specific.test.tsx -t "clears a completed checkout|keeps completed checkout state|clears pending retry state|preserves its own successful cleanup|dismisses only its owned checkout toast"
+```
+
+Result: `1` file failed; `6` tests failed, `4` passed, and `37` were skipped. All six failures observed zero calls to `toast.dismiss`: the four completed identity transitions, later return-context replacement, and Pricing unmount. The same-known-session, initial successful cleanup, and pending-without-owned-toast controls passed.
+
+### GREEN verification
+
+The identical focused command passed: `1` file passed; `10` tests passed and `37` were skipped. The assertions require the exact returned checkout toast id, reject dismissal of a synthetic unrelated toast id, and keep the no-owned-toast and same-known-session controls dismissal-free.
+
+Complete amended Pricing regression file:
+
+```powershell
+npm run runtime -- npm exec vitest -- run src/test/pricing-dashboard-auction-specific.test.tsx
+```
+
+Result: `1` file passed; `47` tests passed and `0` failed.
+
+Type check:
+
+```powershell
+npm run runtime -- npm run typecheck
+```
+
+Result: exit 0; `tsc --noEmit -p tsconfig.app.json` reported no errors.
+
+Scoped lint:
+
+```powershell
+npm run runtime -- npm exec eslint -- src/pages/Pricing.tsx src/test/pricing-dashboard-auction-specific.test.tsx
+```
+
+Result: exit 0; no warnings or errors.
+
+`git diff --check` passed.
+
+### Self-review and limits
+
+The checkout success id is retained only in memory and contains no actor, billing, token, provider, or receipt data. The duplicate key still prevents repeated announcements, while dismissal addresses only the live Sonner instance owned by the verified checkout. Invalidation nulls the retained id after dismissal, so later cleanup cannot target the same toast again. No global dismissal or notification-framework change was introduced.
+
+This round did not change or rerun AuthContext, the handler, Deno tests, H5/H6, schemas, OpenAPI, provider or database behavior. It made no install, build, full-suite, deployment, GitHub, production, customer, or snapshot operation. The unchanged AuthContext `116`-test and handler `49`-test results remain prior evidence, not results from this round. The repository-wide `eslint .` hook remains excluded under the recorded Task 9 artifact ruling; every file changed in this round received scoped lint.
+
+The local component proof does not establish actual browser rendering, Sonner timing in a deployed site, or production auth transitions. The prepared actor-only body-visible browser gate and independent scoped rereview remain required.

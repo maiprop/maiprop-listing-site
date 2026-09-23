@@ -20,7 +20,12 @@ const mocks = vi.hoisted(() => ({
   useStartConversationMock: vi.fn(),
   useModalMock: vi.fn(),
   invokeMock: vi.fn(),
-  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+  toast: {
+    success: vi.fn(() => "checkout-toast-id"),
+    error: vi.fn(),
+    info: vi.fn(() => "unrelated-toast-id"),
+    dismiss: vi.fn(),
+  },
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -927,6 +932,8 @@ describe("Pricing focused page behavior", () => {
       expect(screen.queryByText(/Subscription confirmed/i)).not.toBeInTheDocument();
     });
     expect(refreshSubscription).toHaveBeenCalledTimes(1);
+    expect(mocks.toast.dismiss).toHaveBeenCalledWith("checkout-toast-id");
+    expect(mocks.toast.dismiss).not.toHaveBeenCalledWith("unrelated-toast-id");
   });
 
   it("keeps completed checkout state across a token refresh in the same known session", async () => {
@@ -968,6 +975,8 @@ describe("Pricing focused page behavior", () => {
 
     expect(screen.getByText(/Subscription confirmed/i)).toBeInTheDocument();
     expect(refreshSubscription).toHaveBeenCalledTimes(1);
+    expect(mocks.toast.success).toHaveBeenCalledTimes(1);
+    expect(mocks.toast.dismiss).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1007,6 +1016,7 @@ describe("Pricing focused page behavior", () => {
       expect(screen.queryByText(/Confirming your subscription/i)).not.toBeInTheDocument();
     });
     expect(refreshSubscription).toHaveBeenCalledTimes(1);
+    expect(mocks.toast.dismiss).not.toHaveBeenCalled();
   });
 
   it("preserves its own successful cleanup but clears completion after a later URL context change", async () => {
@@ -1051,6 +1061,46 @@ describe("Pricing focused page behavior", () => {
       expect(screen.queryByText(/Subscription confirmed/i)).not.toBeInTheDocument();
     });
     expect(refreshSubscription).toHaveBeenCalledTimes(1);
+    expect(mocks.toast.dismiss).toHaveBeenCalledWith("checkout-toast-id");
+    expect(mocks.toast.dismiss).not.toHaveBeenCalledWith("unrelated-toast-id");
+  });
+
+  it("dismisses only its owned checkout toast when the Pricing lifecycle unmounts", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "actor-a" },
+      session: pricingSession("actor-a", "known-session-a"),
+      profile: { role: "buyer", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+    });
+    const refreshSubscription = vi.fn().mockResolvedValue({
+      status: "verified",
+      checkoutSessionId: "cs_test_unmount_toast",
+      userId: "actor-a",
+      receipt: {
+        checkout_session_id: "cs_test_unmount_toast",
+        user_id: "actor-a",
+        kind: "subscription",
+        product_id: "prod_participant",
+        plan_key: "pro",
+        audience: "participant",
+        status: "active",
+        subscription_end: "2099-01-01T00:00:00.000Z",
+      },
+    });
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, refreshSubscription });
+    const { default: Pricing } = await import("@/pages/Pricing");
+    const view = renderWithProviders(<Pricing />, {
+      initialPath: "/pricing?checkout=success&session_id=cs_test_unmount_toast",
+    });
+    expect(await screen.findByText(/Subscription confirmed/i)).toBeInTheDocument();
+    const unrelatedToastId = mocks.toast.info("Unrelated notice");
+
+    view.unmount();
+
+    expect(mocks.toast.dismiss).toHaveBeenCalledTimes(1);
+    expect(mocks.toast.dismiss).toHaveBeenCalledWith("checkout-toast-id");
+    expect(mocks.toast.dismiss).not.toHaveBeenCalledWith(unrelatedToastId);
   });
 
   it("shows the active invite-only investor entitlement as a dashboard action", async () => {

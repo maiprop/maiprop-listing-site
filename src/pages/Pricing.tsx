@@ -485,7 +485,8 @@ export default function Pricing() {
   const checkoutConfirmationRef = useRef(checkoutConfirmation);
   checkoutConfirmationRef.current = checkoutConfirmation;
   const checkoutAttemptRef = useRef(0);
-  const checkoutToastRef = useRef<string | null>(null);
+  const checkoutToastKeyRef = useRef<string | null>(null);
+  const checkoutSuccessToastIdRef = useRef<string | number | null>(null);
   const completedCheckoutRef = useRef<{
     contextKey: string;
     checkoutSessionId: string;
@@ -494,7 +495,13 @@ export default function Pricing() {
   const checkoutMountedRef = useRef(true);
   useEffect(() => {
     checkoutMountedRef.current = true;
-    return () => { checkoutMountedRef.current = false; };
+    return () => {
+      checkoutMountedRef.current = false;
+      if (checkoutSuccessToastIdRef.current !== null) {
+        toast.dismiss(checkoutSuccessToastIdRef.current);
+        checkoutSuccessToastIdRef.current = null;
+      }
+    };
   }, []);
 
   const PLAN_KEYS: Record<AudienceId, string> = {
@@ -621,7 +628,11 @@ export default function Pricing() {
   const invalidateCheckoutConfirmation = useCallback(() => {
     checkoutAttemptRef.current += 1;
     completedCheckoutRef.current = null;
-    checkoutToastRef.current = null;
+    checkoutToastKeyRef.current = null;
+    if (checkoutSuccessToastIdRef.current !== null) {
+      toast.dismiss(checkoutSuccessToastIdRef.current);
+      checkoutSuccessToastIdRef.current = null;
+    }
     publishCheckoutConfirmation({
       status: "idle",
       checkoutSessionId: null,
@@ -742,9 +753,9 @@ export default function Pricing() {
       contextKey: requestContext.contextKey,
     });
     const toastKey = `${requestContext.contextKey}:${checkoutSessionId}:${message}`;
-    if (checkoutToastRef.current !== toastKey) {
-      checkoutToastRef.current = toastKey;
-      toast.success(tr(message));
+    if (checkoutToastKeyRef.current !== toastKey) {
+      checkoutToastKeyRef.current = toastKey;
+      checkoutSuccessToastIdRef.current = toast.success(tr(message));
     }
     clearCheckoutReturn(checkoutSessionId, requestContext.contextKey);
   }, [
@@ -790,8 +801,8 @@ export default function Pricing() {
 
     if (checkoutMarker === "cancelled") {
       const toastKey = `cancelled:${checkoutContextRef.current.search}`;
-      if (checkoutToastRef.current !== toastKey) {
-        checkoutToastRef.current = toastKey;
+      if (checkoutToastKeyRef.current !== toastKey) {
+        checkoutToastKeyRef.current = toastKey;
         toast.info("Checkout cancelled.");
       }
       clearCheckoutReturn(null);
@@ -800,8 +811,8 @@ export default function Pricing() {
     if (!checkoutSucceeded) return undefined;
     if (billingMode === "mock") {
       const toastKey = `mock:${checkoutContextRef.current.search}`;
-      if (checkoutToastRef.current !== toastKey) {
-        checkoutToastRef.current = toastKey;
+      if (checkoutToastKeyRef.current !== toastKey) {
+        checkoutToastKeyRef.current = toastKey;
         toast.info(tr("Mock checkout completed. No live payment or subscription entitlement was created."));
       }
       clearCheckoutReturn(null);
