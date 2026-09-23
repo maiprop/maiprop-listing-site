@@ -1,7 +1,7 @@
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useSearchParams } from "react-router-dom";
 import { renderWithProviders } from "@/test/utils";
 
 const mocks = vi.hoisted(() => ({
@@ -272,6 +272,30 @@ const auction = (overrides: Record<string, unknown> = {}) => ({
   tags: ["ownership:partial", "ownership_pct:50"],
   ...overrides,
 });
+
+function pricingSession(userId: string, sessionId: string, tokenVersion = "one") {
+  const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  return {
+    access_token: [
+      encode({ alg: "none", typ: "JWT" }),
+      encode({ session_id: sessionId, token_version: tokenVersion }),
+      encode({ signature: "fixture" }),
+    ].join("."),
+    user: { id: userId },
+  };
+}
+
+function ReplacePricingSearch({ next }: { next: string }) {
+  const [, setSearchParams] = useSearchParams();
+  return (
+    <button type="button" onClick={() => setSearchParams(new URLSearchParams(next))}>
+      replace pricing search
+    </button>
+  );
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -822,6 +846,211 @@ describe("Pricing focused page behavior", () => {
 
     expect(screen.getByText(/subscription is not confirmed yet/i)).toBeInTheDocument();
     expect(mocks.toast.success).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "sign-out while auth is loading",
+      { user: null, session: null, profile: null, loading: true, profileLoading: true },
+    ],
+    [
+      "different actor",
+      {
+        user: { id: "actor-b" },
+        session: pricingSession("actor-b", "known-session-b"),
+        profile: { role: "buyer", participant_type: "buyer" },
+        loading: false,
+        profileLoading: false,
+      },
+    ],
+    [
+      "different audience",
+      {
+        user: { id: "actor-a" },
+        session: pricingSession("actor-a", "known-session-a"),
+        profile: { role: "agent", participant_type: "agent" },
+        loading: false,
+        profileLoading: false,
+      },
+    ],
+    [
+      "new known session for the same actor",
+      {
+        user: { id: "actor-a" },
+        session: pricingSession("actor-a", "known-session-a-2"),
+        profile: { role: "buyer", participant_type: "buyer" },
+        loading: false,
+        profileLoading: false,
+      },
+    ],
+  ] as const)("clears a completed checkout when its %s context is replaced", async (_label, nextAuth) => {
+    const initialAuth = {
+      user: { id: "actor-a" },
+      session: pricingSession("actor-a", "known-session-a"),
+      profile: { role: "buyer", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+    };
+    mocks.useAuthMock.mockReturnValue(initialAuth);
+    const refreshSubscription = vi.fn().mockResolvedValue({
+      status: "verified",
+      checkoutSessionId: "cs_test_completed_context",
+      userId: "actor-a",
+      receipt: {
+        checkout_session_id: "cs_test_completed_context",
+        user_id: "actor-a",
+        kind: "subscription",
+        product_id: "prod_participant",
+        plan_key: "pro",
+        audience: "participant",
+        status: "active",
+        subscription_end: "2099-01-01T00:00:00.000Z",
+      },
+    });
+    mocks.useSubscriptionMock.mockReturnValue({
+      isPro: false,
+      loading: false,
+      hasStripeBilling: false,
+      refreshSubscription,
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+    const view = renderWithProviders(<Pricing />, {
+      initialPath: "/pricing?checkout=success&session_id=cs_test_completed_context",
+    });
+    expect(await screen.findByText(/Subscription confirmed/i)).toBeInTheDocument();
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
+
+    mocks.useAuthMock.mockReturnValue(nextAuth);
+    view.rerender(<Pricing />);
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Subscription confirmed/i)).not.toBeInTheDocument();
+    });
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps completed checkout state across a token refresh in the same known session", async () => {
+    const auth = {
+      user: { id: "actor-a" },
+      session: pricingSession("actor-a", "known-session-a", "one"),
+      profile: { role: "buyer", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+    };
+    mocks.useAuthMock.mockReturnValue(auth);
+    const refreshSubscription = vi.fn().mockResolvedValue({
+      status: "verified",
+      checkoutSessionId: "cs_test_token_refresh",
+      userId: "actor-a",
+      receipt: {
+        checkout_session_id: "cs_test_token_refresh",
+        user_id: "actor-a",
+        kind: "subscription",
+        product_id: "prod_participant",
+        plan_key: "pro",
+        audience: "participant",
+        status: "active",
+        subscription_end: "2099-01-01T00:00:00.000Z",
+      },
+    });
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, refreshSubscription });
+    const { default: Pricing } = await import("@/pages/Pricing");
+    const view = renderWithProviders(<Pricing />, {
+      initialPath: "/pricing?checkout=success&session_id=cs_test_token_refresh",
+    });
+    expect(await screen.findByText(/Subscription confirmed/i)).toBeInTheDocument();
+
+    mocks.useAuthMock.mockReturnValue({
+      ...auth,
+      session: pricingSession("actor-a", "known-session-a", "two"),
+    });
+    view.rerender(<Pricing />);
+
+    expect(screen.getByText(/Subscription confirmed/i)).toBeInTheDocument();
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["no return", "audience=participant"],
+    ["cancel return", "checkout=cancelled"],
+    ["mock return", "checkout=success&billing_mode=mock"],
+  ])("clears pending retry state when the URL changes to a %s context", async (_label, nextSearch) => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "actor-a" },
+      session: pricingSession("actor-a", "known-session-a"),
+      profile: { role: "buyer", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+    });
+    const refreshSubscription = vi.fn().mockResolvedValue({
+      status: "pending",
+      checkoutSessionId: "cs_test_removed_return",
+      userId: "actor-a",
+      reason: "pending",
+    });
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, refreshSubscription });
+    const { default: Pricing } = await import("@/pages/Pricing");
+    renderWithProviders(
+      <>
+        <Pricing />
+        <ReplacePricingSearch next={nextSearch} />
+      </>,
+      { initialPath: "/pricing?checkout=success&session_id=cs_test_removed_return" },
+    );
+    expect(await screen.findByRole("button", { name: /Check again/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /replace pricing search/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /Check again/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/subscription is not confirmed yet/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Confirming your subscription/i)).not.toBeInTheDocument();
+    });
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves its own successful cleanup but clears completion after a later URL context change", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "actor-a" },
+      session: pricingSession("actor-a", "known-session-a"),
+      profile: { role: "buyer", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+    });
+    const refreshSubscription = vi.fn().mockResolvedValue({
+      status: "verified",
+      checkoutSessionId: "cs_test_own_cleanup",
+      userId: "actor-a",
+      receipt: {
+        checkout_session_id: "cs_test_own_cleanup",
+        user_id: "actor-a",
+        kind: "subscription",
+        product_id: "prod_participant",
+        plan_key: "pro",
+        audience: "participant",
+        status: "active",
+        subscription_end: "2099-01-01T00:00:00.000Z",
+      },
+    });
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, refreshSubscription });
+    const { default: Pricing } = await import("@/pages/Pricing");
+    renderWithProviders(
+      <>
+        <Pricing />
+        <ReplacePricingSearch next="audience=participant&view=other" />
+      </>,
+      {
+        initialPath: "/pricing?audience=participant&checkout=success&session_id=cs_test_own_cleanup",
+      },
+    );
+
+    expect(await screen.findByText(/Subscription confirmed/i)).toBeInTheDocument();
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /replace pricing search/i }));
+    await waitFor(() => {
+      expect(screen.queryByText(/Subscription confirmed/i)).not.toBeInTheDocument();
+    });
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
   });
 
   it("shows the active invite-only investor entitlement as a dashboard action", async () => {

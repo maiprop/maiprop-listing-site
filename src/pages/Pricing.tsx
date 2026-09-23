@@ -22,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import {
+  authSessionIdentityFor,
   checkoutReturnIdentity,
   type SubscriptionRefreshOutcome,
 } from "@/contexts/authContextSupport";
@@ -452,7 +453,7 @@ const getCheckoutErrorMessage = async (
 };
 
 export default function Pricing() {
-  const { user, profile, profileLoading, loading: authLoading } = useAuth();
+  const { session, user, profile, profileLoading, loading: authLoading } = useAuth();
   const { isPro, loading: subLoading, refreshSubscription, hasStripeBilling } = useSubscription();
   const { i18n } = useTranslation();
   const navigate = useNavigate();
@@ -479,9 +480,17 @@ export default function Pricing() {
     status: "idle" | "checking" | "pending" | "error" | "verified";
     checkoutSessionId: string | null;
     message: string | null;
-  }>({ status: "idle", checkoutSessionId: null, message: null });
+    contextKey: string | null;
+  }>({ status: "idle", checkoutSessionId: null, message: null, contextKey: null });
+  const checkoutConfirmationRef = useRef(checkoutConfirmation);
+  checkoutConfirmationRef.current = checkoutConfirmation;
   const checkoutAttemptRef = useRef(0);
   const checkoutToastRef = useRef<string | null>(null);
+  const completedCheckoutRef = useRef<{
+    contextKey: string;
+    checkoutSessionId: string;
+    cleanedSearch: string;
+  } | null>(null);
   const checkoutMountedRef = useRef(true);
   useEffect(() => {
     checkoutMountedRef.current = true;
@@ -497,14 +506,20 @@ export default function Pricing() {
     institutional: ROLE_PLAN_MAP.institutional.planKey,
   };
   const currentAudience = profile ? getPricingAudienceFromProfile(profile) : null;
+  const currentSessionIdentity = authSessionIdentityFor(session);
+  const checkoutContextKey = [
+    user?.id ?? "anonymous",
+    currentSessionIdentity && currentSessionIdentity.userId === user?.id
+      ? currentSessionIdentity.sessionId ?? "unknown-session"
+      : "no-session",
+    currentAudience ?? "unknown-audience",
+  ].join(":");
   const checkoutContextRef = useRef({
-    userId: user?.id ?? null,
-    audience: currentAudience,
+    contextKey: checkoutContextKey,
     search: searchParams.toString(),
   });
   checkoutContextRef.current = {
-    userId: user?.id ?? null,
-    audience: currentAudience,
+    contextKey: checkoutContextKey,
     search: searchParams.toString(),
   };
   const isCrossAudienceSelection = Boolean(
@@ -593,15 +608,48 @@ export default function Pricing() {
     }
   };
 
-  const clearCheckoutReturn = useCallback((expectedCheckoutSessionId: string | null) => {
+  const publishCheckoutConfirmation = useCallback((next: {
+    status: "idle" | "checking" | "pending" | "error" | "verified";
+    checkoutSessionId: string | null;
+    message: string | null;
+    contextKey: string | null;
+  }) => {
+    checkoutConfirmationRef.current = next;
+    setCheckoutConfirmation(next);
+  }, []);
+
+  const invalidateCheckoutConfirmation = useCallback(() => {
+    checkoutAttemptRef.current += 1;
+    completedCheckoutRef.current = null;
+    checkoutToastRef.current = null;
+    publishCheckoutConfirmation({
+      status: "idle",
+      checkoutSessionId: null,
+      message: null,
+      contextKey: null,
+    });
+  }, [publishCheckoutConfirmation]);
+
+  const clearCheckoutReturn = useCallback((
+    expectedCheckoutSessionId: string | null,
+    expectedContextKey: string | null = null,
+  ) => {
     const currentParams = new URLSearchParams(checkoutContextRef.current.search);
     if (expectedCheckoutSessionId) {
       const currentIdentity = checkoutReturnIdentity(currentParams);
       if (currentIdentity.status !== "valid" ||
-          currentIdentity.checkoutSessionId !== expectedCheckoutSessionId) return;
+          currentIdentity.checkoutSessionId !== expectedCheckoutSessionId ||
+          checkoutContextRef.current.contextKey !== expectedContextKey) return;
     }
     ["checkout", "pro", "billing_mode", "plan", "billing_cycle", "checkout_session_id", "session_id"]
       .forEach((key) => currentParams.delete(key));
+    if (expectedCheckoutSessionId && expectedContextKey) {
+      completedCheckoutRef.current = {
+        contextKey: expectedContextKey,
+        checkoutSessionId: expectedCheckoutSessionId,
+        cleanedSearch: currentParams.toString(),
+      };
+    }
     setSearchParams(currentParams, { replace: true });
   }, [setSearchParams]);
 
@@ -609,16 +657,24 @@ export default function Pricing() {
     checkoutSessionId: string,
     isActive: () => boolean = () => true,
   ) => {
+    const initialContext = checkoutContextRef.current;
+    const initialIdentity = checkoutReturnIdentity(new URLSearchParams(initialContext.search));
+    if (
+      initialContext.contextKey !== checkoutContextKey ||
+      initialIdentity.status !== "valid" ||
+      initialIdentity.checkoutSessionId !== checkoutSessionId
+    ) return;
     const requestContext = {
       userId: user?.id ?? null,
-      audience: currentAudience,
+      contextKey: checkoutContextKey,
       checkoutSessionId,
     };
     const attempt = ++checkoutAttemptRef.current;
-    setCheckoutConfirmation({
+    publishCheckoutConfirmation({
       status: "checking",
       checkoutSessionId,
       message: "Confirming your subscription…",
+      contextKey: requestContext.contextKey,
     });
 
     let outcome: SubscriptionRefreshOutcome | undefined;
@@ -636,16 +692,16 @@ export default function Pricing() {
     const currentContext = checkoutContextRef.current;
     const currentIdentity = checkoutReturnIdentity(new URLSearchParams(currentContext.search));
     if (!checkoutMountedRef.current || !isActive() || attempt !== checkoutAttemptRef.current ||
-        currentContext.userId !== requestContext.userId ||
-        currentContext.audience !== requestContext.audience ||
+        currentContext.contextKey !== requestContext.contextKey ||
         currentIdentity.status !== "valid" ||
         currentIdentity.checkoutSessionId !== checkoutSessionId) return;
 
     if (outcome?.status === "stale") {
-      setCheckoutConfirmation({
+      publishCheckoutConfirmation({
         status: "pending",
         checkoutSessionId,
         message: "Your subscription is not confirmed yet.",
+        contextKey: requestContext.contextKey,
       });
       return;
     }
@@ -653,19 +709,21 @@ export default function Pricing() {
     // Older deployed check-subscription responses are safe to retry, but cannot
     // confirm a Checkout return without an exact durable receipt.
     if (!outcome || outcome.status === "pending" || outcome.status === "refreshed") {
-      setCheckoutConfirmation({
+      publishCheckoutConfirmation({
         status: "pending",
         checkoutSessionId,
         message: "Your subscription is not confirmed yet.",
+        contextKey: requestContext.contextKey,
       });
       return;
     }
 
     if (outcome.status === "error") {
-      setCheckoutConfirmation({
+      publishCheckoutConfirmation({
         status: "error",
         checkoutSessionId,
         message: "We couldn't confirm your subscription. Try again.",
+        contextKey: requestContext.contextKey,
       });
       return;
     }
@@ -677,14 +735,26 @@ export default function Pricing() {
       : outcome.receipt.status === "trialing"
       ? "Trial confirmed"
       : "Subscription confirmed";
-    setCheckoutConfirmation({ status: "verified", checkoutSessionId, message });
-    const toastKey = `${outcome.userId}:${checkoutSessionId}:${message}`;
+    publishCheckoutConfirmation({
+      status: "verified",
+      checkoutSessionId,
+      message,
+      contextKey: requestContext.contextKey,
+    });
+    const toastKey = `${requestContext.contextKey}:${checkoutSessionId}:${message}`;
     if (checkoutToastRef.current !== toastKey) {
       checkoutToastRef.current = toastKey;
       toast.success(tr(message));
     }
-    clearCheckoutReturn(checkoutSessionId);
-  }, [clearCheckoutReturn, currentAudience, refreshSubscription, tr, user?.id]);
+    clearCheckoutReturn(checkoutSessionId, requestContext.contextKey);
+  }, [
+    checkoutContextKey,
+    clearCheckoutReturn,
+    publishCheckoutConfirmation,
+    refreshSubscription,
+    tr,
+    user?.id,
+  ]);
 
   const checkoutMarker = searchParams.get("checkout");
   const legacyProMarker = searchParams.get("pro");
@@ -695,6 +765,29 @@ export default function Pricing() {
   useEffect(() => {
     const checkoutSucceeded = checkoutMarker === "success" ||
       checkoutMarker === "trial_started" || legacyProMarker === "success";
+    const realCheckoutSucceeded = checkoutSucceeded && billingMode !== "mock";
+    const currentIdentity = realCheckoutSucceeded
+      ? checkoutReturnIdentity(searchParams)
+      : null;
+    const confirmation = checkoutConfirmationRef.current;
+    const completed = completedCheckoutRef.current;
+    const preservesCompletedCleanup = confirmation.status === "verified" &&
+      confirmation.contextKey === checkoutContextKey &&
+      completed?.contextKey === checkoutContextKey &&
+      completed.checkoutSessionId === confirmation.checkoutSessionId &&
+      completed.cleanedSearch === searchParams.toString();
+    const matchesCurrentReturn = realCheckoutSucceeded &&
+      currentIdentity?.status === "valid" &&
+      confirmation.contextKey === checkoutContextKey &&
+      confirmation.checkoutSessionId === currentIdentity.checkoutSessionId;
+    if (
+      confirmation.status !== "idle" &&
+      !preservesCompletedCleanup &&
+      !matchesCurrentReturn
+    ) {
+      invalidateCheckoutConfirmation();
+    }
+
     if (checkoutMarker === "cancelled") {
       const toastKey = `cancelled:${checkoutContextRef.current.search}`;
       if (checkoutToastRef.current !== toastKey) {
@@ -717,29 +810,32 @@ export default function Pricing() {
 
     const identity = checkoutReturnIdentity(searchParams);
     if (identity.status === "missing") {
-      setCheckoutConfirmation({
+      publishCheckoutConfirmation({
         status: "error",
         checkoutSessionId: null,
         message: "Checkout confirmation link is missing.",
+        contextKey: checkoutContextKey,
       });
       return undefined;
     }
     if (identity.status !== "valid") {
-      setCheckoutConfirmation({
+      publishCheckoutConfirmation({
         status: "error",
         checkoutSessionId: null,
         message: "Checkout confirmation link is invalid.",
+        contextKey: checkoutContextKey,
       });
       return undefined;
     }
     // A cold Checkout return can render before AuthContext adopts the session
     // and profile. Keep the exact ID in the URL until both are ready.
     if (authLoading || profileLoading) return undefined;
-    if (!user) {
-      setCheckoutConfirmation({
+    if (!user?.id) {
+      publishCheckoutConfirmation({
         status: "error",
         checkoutSessionId: identity.checkoutSessionId,
         message: "Sign in to confirm your subscription.",
+        contextKey: checkoutContextKey,
       });
       return undefined;
     }
@@ -751,14 +847,17 @@ export default function Pricing() {
     authLoading,
     billingMode,
     checkoutMarker,
+    checkoutContextKey,
     checkoutSessionParam,
     confirmCheckout,
+    invalidateCheckoutConfirmation,
     legacyProMarker,
     legacySessionParam,
     profileLoading,
+    publishCheckoutConfirmation,
     searchParams,
     tr,
-    user,
+    user?.id,
     clearCheckoutReturn,
   ]);
 

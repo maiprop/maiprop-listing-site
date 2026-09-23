@@ -1829,6 +1829,138 @@ describe("AuthProvider auth API methods", () => {
     expect(result.current.subscription.subscribed).toBe(true);
   });
 
+  it.each([
+    {
+      label: "success",
+      staleResult: {
+        data: {
+          subscribed: true,
+          product_id: "prod_participant",
+          audience: "participant",
+          subscription_end: "2099-01-01T00:00:00.000Z",
+          source: "billing_state",
+          sync_status: "synced",
+        },
+        error: null,
+      },
+      replacementResult: {
+        data: {
+          subscribed: true,
+          product_id: "prod_participant",
+          audience: "participant",
+          subscription_end: "2099-01-01T00:00:00.000Z",
+          source: "billing_state",
+          sync_status: "synced",
+        },
+        error: null,
+      },
+      expectedSyncStatus: "synced",
+      expectedSubscribed: true,
+    },
+    {
+      label: "failure",
+      staleResult: { data: null, error: { message: "service unavailable" } },
+      replacementResult: {
+        data: {
+          subscribed: false,
+          product_id: null,
+          subscription_end: null,
+          source: "database",
+          sync_status: "synced",
+        },
+        error: null,
+      },
+      expectedSyncStatus: "synced",
+      expectedSubscribed: false,
+    },
+    {
+      label: "timeout",
+      staleResult: {
+        data: {
+          subscribed: false,
+          product_id: null,
+          subscription_end: null,
+          source: "deadline",
+          sync_status: "timeout",
+        },
+        error: null,
+      },
+      replacementResult: {
+        data: {
+          subscribed: false,
+          product_id: null,
+          subscription_end: null,
+          source: "deadline",
+          sync_status: "timeout",
+        },
+        error: null,
+      },
+      expectedSyncStatus: "timeout",
+      expectedSubscribed: false,
+    },
+  ])("hands off an initial ordinary $label result after the profile audience arrives", async ({
+    staleResult,
+    replacementResult,
+    expectedSyncStatus,
+    expectedSubscribed,
+  }) => {
+    const sess = sessionFixture("u-initial-audience", "session-initial-audience");
+    const profileResult = deferred<{
+      data: { user_id: string; role: string; participant_type: string };
+      error: null;
+    }>();
+    supabaseMock.from.mockImplementation((table: string) => {
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn(() => table === "profiles"
+          ? profileResult.promise
+          : Promise.resolve({ data: null, error: null })),
+        then: (resolve: (value: unknown) => unknown) =>
+          Promise.resolve({ data: [], error: null }).then(resolve),
+      };
+      return chain;
+    });
+    const staleCheck = deferred<typeof staleResult>();
+    supabaseMock.functions.invoke.mockReset();
+    supabaseMock.functions.invoke
+      .mockImplementationOnce(() => staleCheck.promise)
+      .mockResolvedValueOnce(replacementResult);
+
+    const { result, unmount } = renderHook(() => useAuth(), { wrapper: wrap });
+    await act(async () => authStateCallbackHolder.current?.("INITIAL_SESSION", sess));
+    await waitFor(() => expect(supabaseMock.functions.invoke).toHaveBeenCalledTimes(1));
+    expect(result.current.subscription.loading).toBe(true);
+
+    await act(async () => {
+      profileResult.resolve({
+        data: {
+          user_id: "u-initial-audience",
+          role: "buyer",
+          participant_type: "buyer",
+        },
+        error: null,
+      });
+      await profileResult.promise;
+    });
+    await waitFor(() => expect(result.current.profile?.participant_type).toBe("buyer"));
+
+    await act(async () => {
+      staleCheck.resolve(staleResult);
+      await staleCheck.promise;
+    });
+
+    await waitFor(() => expect(supabaseMock.functions.invoke).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.subscription.loading).toBe(false));
+    expect(result.current.subscription.syncStatus).toBe(expectedSyncStatus);
+    expect(result.current.subscription.subscribed).toBe(expectedSubscribed);
+    expect(supabaseMock.functions.invoke.mock.calls[1]).toEqual([
+      "check-subscription",
+      {},
+    ]);
+    unmount();
+  });
+
   it("makes an exact checkout outcome stale when the current profile audience changes", async () => {
     const sess = sessionFixture("u-role-change", "session-role-change");
     let currentProfile = {
@@ -1864,9 +1996,23 @@ describe("AuthProvider auth API methods", () => {
     const { result } = renderHook(() => useAuth(), { wrapper: wrap });
     await act(async () => authStateCallbackHolder.current?.("INITIAL_SESSION", sess));
     await waitFor(() => expect(result.current.profile?.participant_type).toBe("buyer"));
+    await waitFor(() => expect(supabaseMock.functions.invoke).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.subscription.loading).toBe(false));
 
     const exact = deferred<{ data: Record<string, unknown>; error: null }>();
-    supabaseMock.functions.invoke.mockImplementationOnce(() => exact.promise);
+    supabaseMock.functions.invoke.mockReset();
+    supabaseMock.functions.invoke
+      .mockImplementationOnce(() => exact.promise)
+      .mockResolvedValue({
+        data: {
+          subscribed: false,
+          product_id: null,
+          subscription_end: null,
+          source: "database",
+          sync_status: "synced",
+        },
+        error: null,
+      });
     let outcomePromise!: ReturnType<typeof result.current.refreshSubscription>;
     act(() => {
       outcomePromise = result.current.refreshSubscription("cs_test_role_change");
@@ -1917,6 +2063,12 @@ describe("AuthProvider auth API methods", () => {
       checkoutSessionId: "cs_test_role_change",
       userId: "u-role-change",
     });
+    await waitFor(() => expect(supabaseMock.functions.invoke).toHaveBeenCalledTimes(2));
+    expect(supabaseMock.functions.invoke.mock.calls[1]).toEqual([
+      "check-subscription",
+      {},
+    ]);
+    await waitFor(() => expect(result.current.subscription.loading).toBe(false));
     expect(result.current.subscription.subscribed).toBe(false);
   });
 

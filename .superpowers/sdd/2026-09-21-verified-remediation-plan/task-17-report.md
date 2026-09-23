@@ -133,3 +133,85 @@ Self-review checked that receipts are populated from the owned retrieved session
 The repository-wide `eslint .` commit hook was not rerun because its known residual benchmark-artifact traversal remains Task 9 scope. Scoped lint covers every changed TypeScript/TSX file. No install, build, full suite, coverage collection, deployment, GitHub action, provider call, or snapshot move/delete occurred.
 
 This evidence is local and synthetic. It does not establish provider delivery, webhook operation in production, deployed service/site ordering, cross-tab request deduplication, payment settlement, future subscription continuity, or browser-after behavior. The receipt proves only that this request observed a matching durable active/trial subscription or fulfilled add-on row. Independent full-diff review and the prepared H7 browser gate remain required.
+
+## Fix round 1 — entitlement handoff and checkout lifecycle identity
+
+Date: 2026-09-23
+
+Fix base: `d7ce4ddd697960d34e7fdaccaa84c4fb5d03366f`
+
+Review authority: `task-17-review.md`, Important I1 and I2
+
+### I1 — ordinary entitlement handoff after audience publication
+
+Subscription work continues to reject a stale actor, generation, known auth session, or audience. The current check now distinguishes auth identity validity from audience equality. When the same current identity's profile establishes or changes its audience while any subscription request is in flight, the stale request still publishes a `stale` outcome and cannot emit a checkout receipt. After releasing only its own in-flight record, it starts one ordinary check for the current audience.
+
+This handoff covers the intentional startup race where profile and subscription loading begin together. A stale successful response cannot apply its old audience state; a stale failure or deadline cannot suppress recovery. The current ordinary request either settles normally or enters the unchanged timeout/grace/retry path. If a current-audience exact request is already in flight, the ordinary handoff attaches to that current work and does not duplicate the exact request. Actor, generation, and known-session changes do not use this audience-only handoff.
+
+### I2 — Pricing confirmation ownership and return context
+
+Pricing confirmation state now carries a lifecycle key derived from the current actor, known auth session id, and current profile audience. The key deliberately ignores access-token bytes, so a token refresh in the same known session does not invalidate or restart a completed transaction. Sign-out, another actor, a proven new same-user session, and an audience change invalidate the old completed/pending state and notification marker immediately, including while auth/profile loading is in progress.
+
+Pending and error state remains tied to the exact current return id. Manual retry validates the current lifecycle key and exact URL identity before entering `checking`, so a retained DOM callback cannot restart removed or replaced work. A no-return, cancel, mock, or different exact return clears old retry state and advances the local attempt sequence.
+
+Successful confirmation records the exact cleaned query string immediately before its guarded URL replacement. The verified banner survives that one matching cleanup for the same lifecycle identity, including unrelated parameters retained by the cleanup. A later URL-context change no longer inherits the completed banner.
+
+### RED evidence
+
+I1 production code with the stabilized delayed profile fixtures:
+
+```powershell
+npm run runtime -- npm exec vitest -- run src/test/AuthContext.test.tsx -t "hands off an initial ordinary|makes an exact checkout outcome stale"
+```
+
+Result before the fix: `4` failed and `66` skipped. All three ordinary success/failure/timeout cases observed only the stale request instead of the required current-audience handoff. The strengthened exact audience-change case returned stale but observed no ordinary handoff, leaving subscription loading unresolved.
+
+I2 production code:
+
+```powershell
+npm run runtime -- npm exec vitest -- run src/test/pricing-dashboard-auction-specific.test.tsx -t "clears a completed checkout|keeps completed checkout state|clears pending retry state|preserves its own successful cleanup"
+```
+
+Result before the fix: `8` failed, `1` passed, and `37` skipped. Completed state survived sign-out/loading, actor, audience, known-session, and later URL-context changes. Pending retry state survived no-return, cancel, and mock replacements. The same-known-session token-refresh control passed before the fix and remains required.
+
+### GREEN verification
+
+The identical I1 command passed: `4` passed and `66` skipped.
+
+The identical I2 command passed: `9` passed and `37` skipped.
+
+Complete amended test files:
+
+```powershell
+npm run runtime -- npm exec vitest -- run src/test/AuthContext.test.tsx src/test/pricing-dashboard-auction-specific.test.tsx
+```
+
+Result: `2` files passed, `116` tests passed, `0` failed. Existing exact receipt coalescing, old-service compatibility, account races, timeout/grace behavior, pricing return copy, manual retries, checkout actions, and catalog/page behavior remain active.
+
+Type check:
+
+```powershell
+npm run runtime -- npm run typecheck
+```
+
+Result: exit 0; `tsc --noEmit -p tsconfig.app.json` reported no errors.
+
+Scoped lint:
+
+```powershell
+npm run runtime -- npm exec eslint -- src/contexts/AuthContext.tsx src/pages/Pricing.tsx src/test/AuthContext.test.tsx src/test/pricing-dashboard-auction-specific.test.tsx
+```
+
+Result: exit 0; no warnings or errors. An intermediate run identified one exhaustive-deps warning after the lifecycle change; the effect now reads `user?.id`, matching its dependency, and the final command is clean.
+
+`git diff --check` passed.
+
+### Self-review and limits
+
+The ordinary handoff happens only when the same actor/generation/known-session identity remains current and the audience changed. It clears only its own in-flight slot, never a newer request. Exact old-audience callers still receive `stale`; the handoff is ordinary and cannot manufacture or reuse a receipt. Failure and timeout behavior after handoff uses the existing retry delays and grace semantics without changing their budgets.
+
+Pricing stores no token or receipt in browser persistence. The lifecycle key uses only the actor id, parsed known session id (or a bounded unknown/no-session marker), and normalized current audience. Successful cleanup is retained only for the exact resulting query string and same lifecycle key. Manual retry checks URL and lifecycle before changing visible state. Test actors, sessions, responses, and query changes are synthetic.
+
+No handler, schema, OpenAPI, H5/H6, provider, database, dependency, build, full suite, deployment, GitHub, or production operation changed or ran in this round. The unchanged 49-test Deno and initial H5/H6 evidence was not repeated. The known repository-wide artifact lint limitation remains Task 9 scope; only all changed source/test files were linted.
+
+These checks prove the bounded local lifecycle transitions. They do not establish deployed service/site ordering, real provider/webhook behavior, cross-tab deduplication, or the prepared browser-after gate. Independent scoped rereview remains required.

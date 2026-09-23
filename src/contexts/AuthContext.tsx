@@ -388,12 +388,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         checkoutSessionId,
         userId,
       });
-      const isCurrent = () => {
+      const isCurrentIdentity = () => {
         if (
           expectedSubscriptionUserIdRef.current !== userId ||
           subscriptionGenerationRef.current !== generation ||
-          authSessionEpochRef.current !== authSessionEpoch ||
-          subscriptionAudienceRef.current !== audience
+          authSessionEpochRef.current !== authSessionEpoch
         ) return false;
         const currentIdentity = authSessionIdentityRef.current;
         if (!authSessionIdentity || !currentIdentity) {
@@ -401,6 +400,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return !isDefinitelyDifferentAuthSession(authSessionIdentity, currentIdentity);
       };
+      const isCurrent = () =>
+        isCurrentIdentity() && subscriptionAudienceRef.current === audience;
       if (!isCurrent()) return staleOutcome();
 
       while (true) {
@@ -532,11 +533,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } finally {
         if (!isCurrent()) outcome = staleOutcome();
+        const handoffAudienceChange = isCurrentIdentity() &&
+          subscriptionAudienceRef.current !== audience;
         if (subCheckInProgressRef.current === currentWork) {
           subCheckInProgressRef.current = null;
         }
         releaseCheck(outcome);
-        if (shouldRetry && isCurrent()) {
+        if (handoffAudienceChange) {
+          // Profile loading and entitlement loading start in parallel. If the
+          // profile establishes or changes the current audience while this
+          // request is in flight, settle the current entitlement with one
+          // ordinary check. The stale request still cannot publish a receipt.
+          void checkSubscriptionRef.current?.(currentSession, null);
+        } else if (shouldRetry && isCurrent()) {
           scheduleSubscriptionRetry(currentSession, userId, generation);
         }
       }
