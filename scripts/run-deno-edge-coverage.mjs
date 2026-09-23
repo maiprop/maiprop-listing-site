@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -11,9 +11,10 @@ import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
-  assertCoverageThreshold,
-  discoverRuntimeManifest,
+  captureCoverageInputs,
+  finalizeCoverageResult,
   mergeRuntimeCoverage,
+  renderInventoryHarness,
 } from "./deno-edge-coverage-lib.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "..");
@@ -61,10 +62,6 @@ function run(command, args, { cwd = functionsDir, quiet = false } = {}) {
   return result.stdout ?? "";
 }
 
-function sha256(contents) {
-  return createHash("sha256").update(contents).digest("hex");
-}
-
 function writeLcov(path, records) {
   const text = records.map((record) => {
     const hit = record.lines.filter(([, count]) => count > 0).length;
@@ -88,80 +85,33 @@ function summarizeOfficialLcov(text) {
   return { records: [...text.matchAll(/^SF:/gm)].length, hit, found };
 }
 
-const manifest = discoverRuntimeManifest({ root: repoRoot, functionsDir });
-const included = manifest.included.map(({ path }) => {
-  const bytes = readFileSync(resolve(repoRoot, ...path.split("/")));
-  return { path, sha256: sha256(bytes) };
+const reproducibilityPaths = [
+  "scripts/deno-edge-coverage-lib.mjs",
+  "scripts/run-deno-edge-coverage.mjs",
+  "supabase/functions/coverage-import-map.json",
+  "supabase/functions/deno.json",
+  "supabase/functions/deno.lock",
+];
+const initialInputs = captureCoverageInputs({
+  root: repoRoot,
+  functionsDir,
+  reproducibilityPaths,
 });
-const excluded = manifest.excluded.map(({ path, reason }) => {
-  const bytes = readFileSync(resolve(repoRoot, ...path.split("/")));
-  return { path, reason, sha256: sha256(bytes) };
-});
-const sourceSetSha256 = sha256(included.map(({ path, sha256: hash }) => `${path}\0${hash}\n`).join(""));
+const { included, excluded, sourceSetSha256 } = initialInputs;
 const manifestPath = resolve(outputDir, "runtime-manifest.json");
-writeFileSync(manifestPath, `${JSON.stringify({ sourceSetSha256, included, excluded }, null, 2)}\n`);
+writeFileSync(manifestPath, `${JSON.stringify(initialInputs, null, 2)}\n`);
 
-const testFiles = manifest.excluded
+const testFiles = excluded
   .filter(({ reason }) => reason === "test")
   .map(({ path }) => resolve(repoRoot, ...path.split("/")))
   .sort();
 
 const inventoryTest = resolve(outputDir, "runtime-inventory.ts");
-const inventoryImports = included.map(({ path }) => {
-  const url = pathToFileURL(resolve(repoRoot, ...path.split("/"))).href;
-  return `  await import(${JSON.stringify(url)});`;
-}).join("\n");
-writeFileSync(inventoryTest, `
-const originalServe = Deno.serve;
-const originalEnvGet = Deno.env.get.bind(Deno.env);
-const originalEnvSet = Deno.env.set.bind(Deno.env);
-const originalEnvDelete = Deno.env.delete.bind(Deno.env);
-const originalFetch = globalThis.fetch;
-const originalSetTimeout = globalThis.setTimeout;
-const originalSetInterval = globalThis.setInterval;
-const values = new Map<string, string>([
-  ["SUPABASE_URL", "https://inventory.test"],
-  ["SUPABASE_ANON_KEY", "inventory-anon-key"],
-  ["SUPABASE_SERVICE_ROLE_KEY", "inventory-service-role-key"],
-  ["STRIPE_SECRET_KEY", "sk_test_inventory"],
-  ["FRONTEND_URL", "https://inventory.test"],
-  ["SITE_URL", "https://inventory.test"],
-  ["ENVIRONMENT", "test"],
-  ["RATE_LIMIT_FORCE_MEMORY", "true"],
-]);
-const env = Deno.env as typeof Deno.env & {
-  get: typeof Deno.env.get;
-  set: typeof Deno.env.set;
-  delete: typeof Deno.env.delete;
-};
-env.get = ((key: string) => values.get(key) ?? (/(?:URL|ORIGIN)$/.test(key) ? "https://inventory.test" : "inventory-value")) as typeof Deno.env.get;
-env.set = ((key: string, value: string) => { values.set(key, value); }) as typeof Deno.env.set;
-env.delete = ((key: string) => { values.delete(key); }) as typeof Deno.env.delete;
-(Deno as typeof Deno & { serve: typeof Deno.serve }).serve = (() => ({
-  finished: Promise.resolve(),
-  shutdown: () => Promise.resolve(),
-  ref: () => {},
-  unref: () => {},
-  addr: { transport: "tcp", hostname: "127.0.0.1", port: 0 },
-})) as unknown as typeof Deno.serve;
-globalThis.fetch = (() => { throw new Error("inventory transport blocked"); }) as typeof fetch;
-globalThis.setTimeout = (() => 0) as typeof setTimeout;
-globalThis.setInterval = (() => 0) as typeof setInterval;
-
-try {
-${inventoryImports}
-} finally {
-  globalThis.fetch = originalFetch;
-  globalThis.setTimeout = originalSetTimeout;
-  globalThis.setInterval = originalSetInterval;
-  (Deno as typeof Deno & { serve: typeof Deno.serve }).serve = originalServe;
-  env.get = originalEnvGet;
-  env.set = originalEnvSet;
-  env.delete = originalEnvDelete;
-}
-
-Deno.test("imports every runtime source without transport", () => {});
-`);
+writeFileSync(inventoryTest, renderInventoryHarness({
+  moduleUrls: included.map(({ path }) => (
+    pathToFileURL(resolve(repoRoot, ...path.split("/"))).href
+  )),
+}));
 
 process.stdout.write(`[inventory] importing ${included.length} runtime sources\n`);
 run(deno, [
@@ -225,7 +175,6 @@ const merged = mergeRuntimeCoverage({
   inventoryLcov,
 });
 const mergedPath = resolve(outputDir, "runtime-merged.lcov");
-writeLcov(mergedPath, merged.records);
 const zeroHitRuntimePaths = merged.records
   .filter(({ lines }) => lines.every(([, count]) => count === 0))
   .map(({ path }) => path);
@@ -244,6 +193,12 @@ const result = {
   outputDir: relative(repoRoot, outputDir).replaceAll("\\", "/"),
   runtime: { node: process.version, deno: denoVersion },
   sourceSetSha256,
+  measurementInputs: {
+    harnessSetSha256: initialInputs.harnessSetSha256,
+    measurementInputSha256: initialInputs.measurementInputSha256,
+    reproducibility: initialInputs.reproducibility,
+    reverifiedBeforeFinalization: true,
+  },
   manifest: {
     included: included.length,
     excluded: excluded.length,
@@ -279,6 +234,18 @@ const result = {
   },
 };
 const resultPath = resolve(outputDir, "result.json");
-writeFileSync(resultPath, `${JSON.stringify(result, null, 2)}\n`);
+const finalInputs = captureCoverageInputs({
+  root: repoRoot,
+  functionsDir,
+  reproducibilityPaths,
+});
+finalizeCoverageResult({
+  initialInputs,
+  currentInputs: finalInputs,
+  resultPath,
+  result,
+  summary: merged.summary,
+  threshold,
+  writeAcceptedArtifacts: () => writeLcov(mergedPath, merged.records),
+});
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-if (threshold !== undefined) assertCoverageThreshold(merged.summary, threshold);

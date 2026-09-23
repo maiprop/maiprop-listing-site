@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,12 +10,16 @@ import {
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 
 import {
   assertCoverageThreshold,
+  captureCoverageInputs,
   discoverRuntimeManifest,
+  finalizeCoverageResult,
   mergeRuntimeCoverage,
+  renderInventoryHarness,
 } from "./deno-edge-coverage-lib.mjs";
 import { collectDenoTestFiles } from "./deno-test-discovery-lib.mjs";
 
@@ -83,6 +88,166 @@ test("runtime manifest includes future TS/TSX files and classifies every explici
     assert.throws(
       () => discoverRuntimeManifest({ root, functionsDir }),
       /declared type-only source emits runtime code/i,
+    );
+  });
+});
+
+test("runtime manifest rejects direct, re-exported, and dynamic test-support dependencies", () => {
+  withTempRoot("maiprop-deno-boundary-", (root) => {
+    const functionsDir = join(root, "supabase", "functions");
+    write(functionsDir, "_shared/coverage-test-support/fake.ts");
+
+    for (const source of [
+      "import { value } from '../_shared/coverage-test-support/fake.ts';\nexport { value };\n",
+      "export { value } from '../_shared/coverage-test-support/fake.ts';\n",
+      "export const loaded = await import('../_shared/coverage-test-support/fake.ts');\n",
+    ]) {
+      write(functionsDir, "example/index.ts", source);
+      assert.throws(
+        () => discoverRuntimeManifest({ root, functionsDir }),
+        /runtime source imports excluded test support.*example\/index\.ts/i,
+      );
+    }
+  });
+});
+
+test("runtime manifest permits dependency replacement only through a scoped test import map", () => {
+  withTempRoot("maiprop-deno-test-map-", (root) => {
+    const functionsDir = join(root, "supabase", "functions");
+    write(functionsDir, "_shared/coverage-test-support/fake.ts", "export const value = 42;\n");
+    write(functionsDir, "example/index.ts", [
+      "import { value } from 'test-provider';",
+      "export const actual = value;",
+      "",
+    ].join("\n"));
+    write(functionsDir, "example/index.test.ts", [
+      "import { actual } from './index.ts';",
+      "Deno.test('uses scoped replacement', () => {",
+      "  if (actual !== 42) throw new Error('scoped replacement was not applied');",
+      "});",
+      "",
+    ].join("\n"));
+    const importMap = write(functionsDir, "coverage-import-map.json", `${JSON.stringify({
+      scopes: {
+        "./example/": {
+          "test-provider": "./_shared/coverage-test-support/fake.ts",
+        },
+      },
+    }, null, 2)}\n`);
+
+    const manifest = discoverRuntimeManifest({ root, functionsDir });
+    assert.deepEqual(manifest.included, [{ path: "supabase/functions/example/index.ts" }]);
+    assert.doesNotThrow(() => execFileSync(deno, [
+      "test",
+      "--no-config",
+      "--cached-only",
+      "--deny-net",
+      `--import-map=${importMap}`,
+      "example/index.test.ts",
+    ], { cwd: functionsDir, stdio: "pipe" }));
+  });
+});
+
+test("finalization rejects source drift before writing an accepted result", () => {
+  withTempRoot("maiprop-deno-finalization-", (root) => {
+    const functionsDir = join(root, "supabase", "functions");
+    write(functionsDir, "example/index.ts", "export const value = 1;\n");
+    write(functionsDir, "example/index.test.ts", "Deno.test('example', () => {});\n");
+    write(functionsDir, "_shared/coverage-test-support/fake.ts");
+    write(functionsDir, "coverage-import-map.json", "{\"imports\":{}}\n");
+    write(functionsDir, "deno.json", "{\"nodeModulesDir\":\"none\"}\n");
+    const reproducibilityPaths = [
+      "supabase/functions/coverage-import-map.json",
+      "supabase/functions/deno.json",
+    ];
+    const initialInputs = captureCoverageInputs({ root, functionsDir, reproducibilityPaths });
+    assert.equal(
+      initialInputs.excluded.find((entry) => entry.reason === "coverage-test-support")?.sha256.length,
+      64,
+    );
+    assert.deepEqual(
+      initialInputs.reproducibility.map((entry) => entry.path),
+      reproducibilityPaths,
+    );
+    assert.equal(initialInputs.harnessSetSha256.length, 64);
+
+    const resultPath = join(root, "accepted-result.json");
+    const assertFinalizationRejected = (pattern) => {
+      let acceptedArtifactsWritten = false;
+      const currentInputs = captureCoverageInputs({ root, functionsDir, reproducibilityPaths });
+      assert.throws(
+        () => finalizeCoverageResult({
+          initialInputs,
+          currentInputs,
+          resultPath,
+          result: { coverage: { hit: 1, found: 1, percent: 100 } },
+          summary: { hit: 1, found: 1, percent: 100 },
+          threshold: 0,
+          writeAcceptedArtifacts: () => { acceptedArtifactsWritten = true; },
+        }),
+        pattern,
+      );
+      assert.equal(acceptedArtifactsWritten, false);
+      assert.equal(existsSync(resultPath), false);
+    };
+
+    write(functionsDir, "example/index.ts", "export const value = 2;\n");
+    assertFinalizationRejected(/coverage inputs changed.*example\/index\.ts changed in included/i);
+
+    write(functionsDir, "example/index.ts", "export const value = 1;\n");
+    write(functionsDir, "future/new-runtime.ts");
+    assertFinalizationRejected(/coverage inputs changed.*future\/new-runtime\.ts was added to included/i);
+    rmSync(join(functionsDir, "future"), { recursive: true, force: true });
+
+    write(functionsDir, "coverage-import-map.json", "{\"imports\":{\"changed\":\"./changed.ts\"}}\n");
+    assertFinalizationRejected(/coverage inputs changed.*coverage-import-map\.json changed in reproducibility/i);
+    write(functionsDir, "coverage-import-map.json", "{\"imports\":{}}\n");
+
+    write(functionsDir, "_shared/coverage-test-support/fake.ts", "export const value = 2;\n");
+    assertFinalizationRejected(/coverage inputs changed.*fake\.ts changed in excluded/i);
+  });
+});
+
+test("inventory harness rejects a fetch attempt even when the imported module catches it", () => {
+  withTempRoot("maiprop-deno-inventory-transport-", (root) => {
+    const safeModulePath = write(root, "safe.ts", "export const loaded = true;\n");
+    const safeHarnessPath = write(root, "safe-inventory.ts", renderInventoryHarness({
+      moduleUrls: [pathToFileURL(safeModulePath).href],
+    }));
+    assert.doesNotThrow(() => execFileSync(deno, [
+      "test",
+      "--no-config",
+      "--cached-only",
+      "--allow-env",
+      "--allow-read",
+      "--deny-net",
+      safeHarnessPath,
+    ], { cwd: root, encoding: "utf8", stdio: "pipe" }));
+
+    const modulePath = write(root, "caught-fetch.ts", [
+      "try {",
+      "  await fetch('https://inventory-transport.invalid');",
+      "} catch {",
+      "  // Optional initialization must not hide that transport was attempted.",
+      "}",
+      "export const loaded = true;",
+      "",
+    ].join("\n"));
+    const harnessPath = write(root, "runtime-inventory.ts", renderInventoryHarness({
+      moduleUrls: [pathToFileURL(modulePath).href],
+    }));
+
+    assert.throws(
+      () => execFileSync(deno, [
+        "test",
+        "--no-config",
+        "--cached-only",
+        "--allow-env",
+        "--allow-read",
+        "--deny-net",
+        harnessPath,
+      ], { cwd: root, encoding: "utf8", stdio: "pipe" }),
+      (error) => /inventory transport attempted.*fetch/i.test(`${error.stdout ?? ""}${error.stderr ?? ""}`),
     );
   });
 });
