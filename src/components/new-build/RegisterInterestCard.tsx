@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MessageSquare, Loader2, CheckCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,13 @@ export function RegisterInterestCard({
     sqm: listing.sqm,
     storedPricePerSqm: listing.price_per_sqm,
   });
+
+  useEffect(() => {
+    if (submissionStatus === "confirmed") {
+      setForm({ name: "", phone: "", message: "" });
+      setSubmitted(true);
+    }
+  }, [submissionStatus]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

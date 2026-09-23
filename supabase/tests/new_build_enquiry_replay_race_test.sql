@@ -16,6 +16,7 @@ INSERT INTO public.listings (id, owner_id, title, city, price, sqm, property_typ
 VALUES ('e1870000-0000-4000-8000-000000000001', 'e1850000-0000-4000-8000-000000000001', 'Task18 race listing', 'Athens', 430000, 86, 'apartment', 'new_build', 'active', 'e1860000-0000-4000-8000-000000000001');
 COMMIT;
 
+BEGIN;
 SELECT plan(10);
 SELECT dblink_connect('race_a', 'dbname=' || current_database());
 SELECT dblink_connect('race_b', 'dbname=' || current_database());
@@ -87,6 +88,7 @@ SELECT is((SELECT count(*)::integer FROM public.notifications WHERE user_id='e18
 SELECT dblink_disconnect('race_a');
 SELECT dblink_disconnect('race_b');
 SELECT * FROM finish();
+ROLLBACK;
 
 BEGIN;
 SET LOCAL session_replication_role = replica;

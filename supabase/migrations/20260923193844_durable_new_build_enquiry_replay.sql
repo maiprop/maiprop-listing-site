@@ -5,11 +5,21 @@ DECLARE
   v_policy_count integer;
   v_known_count integer;
   v_insert_count integer;
+  v_total_policy_count integer;
   v_policy record;
   v_insert_policy record;
 BEGIN
   IF to_regprocedure('private.current_user_owns_listing(uuid)') IS NOT NULL THEN
     RAISE EXCEPTION 'unexpected_existing_current_user_owns_listing';
+  END IF;
+
+  SELECT count(*)::integer INTO v_total_policy_count
+  FROM pg_policies
+  WHERE schemaname = 'public'
+    AND tablename = 'new_building_leads';
+
+  IF v_total_policy_count <> 2 THEN
+    RAISE EXCEPTION 'unsupported_new_building_leads_complete_policy_set';
   END IF;
 
   SELECT count(*)::integer INTO v_policy_count
@@ -35,7 +45,7 @@ BEGIN
     AND tablename = 'new_building_leads'
     AND cmd = 'SELECT';
 
-  IF v_policy.permissive <> 'PERMISSIVE' THEN
+  IF v_policy.permissive IS DISTINCT FROM 'PERMISSIVE' THEN
     RAISE EXCEPTION 'unsupported_new_building_leads_select_policy_mode';
   END IF;
 
@@ -55,23 +65,23 @@ BEGIN
     AND tablename = 'new_building_leads'
     AND cmd = 'INSERT';
 
-  IF v_insert_policy.permissive <> 'PERMISSIVE'
-     OR v_insert_policy.roles <> ARRAY['authenticated']::name[]
+  IF v_insert_policy.permissive IS DISTINCT FROM 'PERMISSIVE'
+     OR v_insert_policy.roles IS DISTINCT FROM ARRAY['authenticated']::name[]
      OR v_insert_policy.qual IS NOT NULL
-     OR md5(v_insert_policy.with_check) <> '6a6b7c2a3a520c44377894171204e8d2' THEN
+     OR md5(v_insert_policy.with_check) IS DISTINCT FROM '6a6b7c2a3a520c44377894171204e8d2' THEN
     RAISE EXCEPTION 'unsupported_new_building_leads_insert_policy';
   END IF;
 
   IF v_policy.policyname = 'user_or_owner_select_new_building_lead' THEN
-    IF v_policy.roles <> ARRAY['public']::name[]
-       OR v_insert_policy.policyname <> 'user_insert_own_new_building_lead'
-       OR md5(v_policy.qual) <> 'dd9324abcc8bc1db9b3c46b517875070' THEN
+    IF v_policy.roles IS DISTINCT FROM ARRAY['public']::name[]
+       OR v_insert_policy.policyname IS DISTINCT FROM 'user_insert_own_new_building_lead'
+       OR md5(v_policy.qual) IS DISTINCT FROM 'dd9324abcc8bc1db9b3c46b517875070' THEN
       RAISE EXCEPTION 'unexpected_captured_new_building_leads_select_policy';
     END IF;
   ELSIF v_policy.policyname = 'new_building_leads_select' THEN
-    IF v_policy.roles <> ARRAY['authenticated']::name[]
-       OR v_insert_policy.policyname <> 'new_building_leads_insert'
-       OR md5(v_policy.qual) <> '7565a7e5fb289a7df690040f1c3acddb' THEN
+    IF v_policy.roles IS DISTINCT FROM ARRAY['authenticated']::name[]
+       OR v_insert_policy.policyname IS DISTINCT FROM 'new_building_leads_insert'
+       OR md5(v_policy.qual) IS DISTINCT FROM '7565a7e5fb289a7df690040f1c3acddb' THEN
       RAISE EXCEPTION 'unexpected_source_new_building_leads_select_policy';
     END IF;
   ELSE

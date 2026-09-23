@@ -15,12 +15,25 @@ BEGIN
     RAISE EXCEPTION 'captured_upgrade_raw_columns_drift: %', v_columns;
   END IF;
 
-  IF (SELECT array_agg(conname ORDER BY conname) FROM pg_constraint WHERE conrelid='public.new_building_leads'::regclass)
-     IS DISTINCT FROM ARRAY['new_building_leads_new_building_id_fkey','new_building_leads_pkey','new_building_leads_user_id_fkey']::name[] THEN
+  IF (
+    SELECT md5(string_agg(
+      conname || ':' || convalidated::text || ':' || pg_get_constraintdef(oid, true),
+      ',' ORDER BY conname
+    ))
+    FROM pg_constraint
+    WHERE conrelid='public.new_building_leads'::regclass
+  ) IS DISTINCT FROM '9471e1aa8cc12f5842d65a261675a0aa' THEN
     RAISE EXCEPTION 'captured_upgrade_raw_constraints_drift';
   END IF;
-  IF (SELECT array_agg(indexrelid::regclass::text ORDER BY indexrelid::regclass::text) FROM pg_index WHERE indrelid='public.new_building_leads'::regclass)
-     IS DISTINCT FROM ARRAY['new_building_leads_building_idx','new_building_leads_pkey','new_building_leads_user_idx']::text[] THEN
+  IF (
+    SELECT md5(string_agg(
+      c.relname || ':' || i.indisvalid::text || ':' || pg_get_indexdef(i.indexrelid),
+      ',' ORDER BY c.relname
+    ))
+    FROM pg_index AS i
+    JOIN pg_class AS c ON c.oid=i.indexrelid
+    WHERE i.indrelid='public.new_building_leads'::regclass
+  ) IS DISTINCT FROM '8e1c12a57e72ba920186af1d89a3e3f3' THEN
     RAISE EXCEPTION 'captured_upgrade_raw_indexes_drift';
   END IF;
   IF md5(pg_get_functiondef('private.create_new_build_project_leads()'::regprocedure)) <> '55c21aa1fb29891a96f6645a0fa467c5'
@@ -32,7 +45,14 @@ BEGIN
      OR md5(pg_get_functiondef('private.sync_project_lead_to_owner_lead()'::regprocedure)) <> '50cb297c75f1fba7db7cf928632046e1' THEN
     RAISE EXCEPTION 'captured_upgrade_downstream_helper_body_drift';
   END IF;
-  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='public.new_building_leads'::regclass AND NOT tgisinternal) <> 2 THEN
+  IF (
+    SELECT md5(string_agg(
+      t.tgname || ':' || t.tgenabled::text || ':' || pg_get_triggerdef(t.oid, true),
+      ',' ORDER BY t.tgname
+    ))
+    FROM pg_trigger AS t
+    WHERE t.tgrelid='public.new_building_leads'::regclass AND NOT t.tgisinternal
+  ) IS DISTINCT FROM 'b1793e9c7e2f73dc1cf95e204e58aead' THEN
     RAISE EXCEPTION 'captured_upgrade_raw_trigger_set_drift';
   END IF;
 END

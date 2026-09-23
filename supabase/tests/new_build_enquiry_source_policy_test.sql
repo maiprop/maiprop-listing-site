@@ -1,6 +1,18 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(4);
+CREATE EXTENSION IF NOT EXISTS dblink;
+SELECT plan(6);
+SELECT is(dblink_get_connections(), NULL::text[], 'prior race proof disconnected every dblink session');
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM public.new_building_leads
+    WHERE user_id::text LIKE 'e1850000-%'
+       OR new_building_id::text LIKE 'e1870000-%'
+  ),
+  0,
+  'prior race proof left zero enquiry fixtures'
+);
 SELECT is((SELECT policyname FROM pg_policies WHERE schemaname='public' AND tablename='new_building_leads' AND cmd='SELECT'), 'new_building_leads_select', 'source SELECT policy name is preserved');
 SELECT is((SELECT roles::text FROM pg_policies WHERE schemaname='public' AND tablename='new_building_leads' AND cmd='SELECT'), '{authenticated}', 'source SELECT policy remains authenticated-only');
 SELECT ok((SELECT qual ILIKE '%private.has_platform_admin%' AND qual ILIKE '%current_user_owns_listing%' FROM pg_policies WHERE schemaname='public' AND tablename='new_building_leads' AND cmd='SELECT'), 'source SELECT retains private admin and corrected exact-owner terms');

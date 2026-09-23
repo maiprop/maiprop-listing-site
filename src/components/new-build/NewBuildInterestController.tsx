@@ -70,6 +70,7 @@ export function NewBuildInterestController({
   const attemptRef = useRef<FrozenAttempt | null>(null);
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
+  const successToastIdRef = useRef<string | number | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -77,6 +78,10 @@ export function NewBuildInterestController({
       mountedRef.current = false;
       attemptRef.current = null;
       inFlightRef.current = false;
+      if (successToastIdRef.current != null) {
+        toast.dismiss(successToastIdRef.current);
+        successToastIdRef.current = null;
+      }
     };
   }, []);
 
@@ -140,7 +145,10 @@ export function NewBuildInterestController({
       attemptRef.current = null;
       setStatus("confirmed");
       setError(null);
-      toast.success(successMessage);
+      if (successToastIdRef.current != null) {
+        toast.dismiss(successToastIdRef.current);
+      }
+      successToastIdRef.current = toast.success(successMessage);
       return "confirmed";
     } catch (rpcFailure) {
       if (!mountedRef.current || attemptRef.current !== attempt) return "rejected";

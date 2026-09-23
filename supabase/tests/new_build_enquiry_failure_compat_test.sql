@@ -1,6 +1,6 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(18);
+SELECT plan(23);
 SET LOCAL session_replication_role=replica;
 INSERT INTO auth.users(id) VALUES ('e18a0000-0000-4000-8000-000000000001'),('e18a0000-0000-4000-8000-000000000002');
 INSERT INTO public.profiles(user_id,role) VALUES ('e18a0000-0000-4000-8000-000000000001','developer'),('e18a0000-0000-4000-8000-000000000002','buyer');
@@ -30,6 +30,32 @@ SET LOCAL ROLE authenticated;
 SELECT throws_ok($$SELECT * FROM public.submit_new_build_enquiry('e18e0000-0000-4000-8000-000000000003','e18a0000-0000-4000-8000-000000000002','e18c0000-0000-4000-8000-000000000001','buyer@example.com','Buyer',NULL,'Details')$$,'42501','enquiry_actor_mismatch','authenticated role without a subject is rejected');
 RESET ROLE;
 SELECT is((SELECT count(*)::integer FROM public.new_building_leads WHERE submission_key IN ('e18e0000-0000-4000-8000-000000000001','e18e0000-0000-4000-8000-000000000002','e18e0000-0000-4000-8000-000000000003')),0,'definite failures consume no key');
+
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.new_building_leads(id,new_building_id,user_id,email,full_name,notes,utm_source)
+VALUES ('e18d0000-0000-4000-8000-000000000003','e18c0000-0000-4000-8000-000000000001','e18a0000-0000-4000-8000-000000000002','existing-unique@example.com','Existing Unique','Unique failure','newbuild_detail_register');
+SET LOCAL session_replication_role=origin;
+CREATE UNIQUE INDEX task18_unrelated_notes_unique
+  ON public.new_building_leads (notes)
+  WHERE notes='Unique failure';
+SELECT set_config('request.jwt.claims','{"sub":"e18a0000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+SELECT throws_ok(
+  $$SELECT * FROM public.submit_new_build_enquiry('e18e0000-0000-4000-8000-000000000007','e18a0000-0000-4000-8000-000000000002','e18c0000-0000-4000-8000-000000000001','buyer@example.com','Buyer',NULL,'Unique failure')$$,
+  '23505', NULL, 'an unrelated unique constraint violation remains a definite database error'
+);
+RESET ROLE;
+SELECT is((SELECT count(*)::integer FROM public.new_building_leads WHERE notes='Unique failure'),1,'unrelated unique failure leaves the pre-existing row unchanged');
+SELECT is((SELECT count(*)::integer FROM public.new_building_leads WHERE submission_key='e18e0000-0000-4000-8000-000000000007'),0,'unrelated unique failure consumes no submission key');
+DROP INDEX task18_unrelated_notes_unique;
+SELECT set_config('request.jwt.claims','{"sub":"e18a0000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+SELECT lives_ok(
+  $$SELECT * FROM public.submit_new_build_enquiry('e18e0000-0000-4000-8000-000000000007','e18a0000-0000-4000-8000-000000000002','e18c0000-0000-4000-8000-000000000001','buyer@example.com','Buyer',NULL,'Unique failure')$$,
+  'the same key succeeds after the unrelated unique cause is removed'
+);
+RESET ROLE;
+SELECT is((SELECT count(*)::integer FROM public.new_building_leads WHERE submission_key='e18e0000-0000-4000-8000-000000000007'),1,'unrelated unique recovery persists one keyed row');
 
 CREATE FUNCTION pg_temp.task18_hard_failure() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE EXCEPTION 'task18_hard_failure'; END$$;
 CREATE TRIGGER task18_00_hard_failure BEFORE INSERT ON public.new_building_leads FOR EACH ROW WHEN (NEW.notes='Hard failure') EXECUTE FUNCTION pg_temp.task18_hard_failure();

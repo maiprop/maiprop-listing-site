@@ -34,7 +34,7 @@ const {
   publicApiMock: vi.fn(),
   functionsInvokeMock: vi.fn(),
   useAiQuotaMock: vi.fn(),
-  toastMock: { error: vi.fn(), success: vi.fn() },
+  toastMock: { error: vi.fn(), success: vi.fn(), dismiss: vi.fn() },
   miniMapPropsMock: vi.fn(),
   scorePropsMock: vi.fn(),
 }));
@@ -305,6 +305,7 @@ beforeEach(() => {
     useAiQuotaMock,
     toastMock.error,
     toastMock.success,
+    toastMock.dismiss,
     miniMapPropsMock,
     scorePropsMock,
   ].forEach((mock) => mock.mockReset());
@@ -329,6 +330,7 @@ beforeEach(() => {
     }],
     error: null,
   });
+  toastMock.success.mockReturnValue("interest-toast-1");
   functionsInvokeMock.mockResolvedValue({
     data: valuationV2({ estimatedValue: 500000, marketComparisonPct: 19, marketComparison: "above_market", pricingPosition: "overpriced", confidence: 80, confidenceLabel: "High", evidence: { ...valuationV2().evidence, fields: { ...valuationV2().evidence.fields, estimatedValue: "ai_estimate", pricePerSqmEstimate: "derived_ai", marketComparisonPct: "derived_ai" }, analysis: "ai_estimate" } }),
     error: null,
@@ -770,6 +772,83 @@ describe("NewBuildDetail", () => {
     await expect(pending).resolves.toBe("rejected");
     expect(toastMock.success).not.toHaveBeenCalled();
     expect(registerInterestCardPropsMock.mock.lastCall?.[0].submissionStatus).toBe("editing");
+  });
+
+  it("dismisses only its completed success toast when the actor scope changes", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    const view = renderPage();
+    const props = registerInterestCardPropsMock.mock.lastCall?.[0];
+
+    await expect(props.onContact({ name: "Buyer One", phone: "", message: "Send plans" }))
+      .resolves.toBe("confirmed");
+    expect(toastMock.success).toHaveBeenCalledOnce();
+
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-2", email: "buyer2@example.com" },
+      profile: { display_name: "Buyer Two" },
+    });
+    view.rerender(page());
+
+    expect(toastMock.dismiss).toHaveBeenCalledOnce();
+    expect(toastMock.dismiss).toHaveBeenCalledWith("interest-toast-1");
+    expect(toastMock.dismiss).not.toHaveBeenCalledWith("unrelated-toast");
+  });
+
+  it("dismisses its completed success toast on listing replacement and unmount", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    const view = renderPage();
+    let props = registerInterestCardPropsMock.mock.lastCall?.[0];
+    await props.onContact({ name: "Buyer One", phone: "", message: "First listing" });
+
+    useQueryMock.mockReturnValue({ data: { ...listing, id: "listing-2" }, isLoading: false, error: null });
+    view.rerender(page());
+    expect(toastMock.dismiss).toHaveBeenCalledWith("interest-toast-1");
+
+    toastMock.success.mockReturnValue("interest-toast-2");
+    rpcMock.mockResolvedValue({
+      data: [{
+        id: "e1800000-0000-4000-8000-000000000009",
+        new_building_id: "listing-2",
+        created_at: "2026-09-23T19:20:00.000Z",
+      }],
+      error: null,
+    });
+    props = registerInterestCardPropsMock.mock.lastCall?.[0];
+    await props.onContact({ name: "Buyer One", phone: "", message: "Second listing" });
+    view.unmount();
+
+    expect(toastMock.dismiss).toHaveBeenCalledWith("interest-toast-2");
+  });
+
+  it("replaces an earlier owned confirmation when the same scope submits again", async () => {
+    toastMock.success
+      .mockReturnValueOnce("interest-toast-1")
+      .mockReturnValueOnce("interest-toast-2");
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    const view = renderPage();
+    let props = registerInterestCardPropsMock.mock.lastCall?.[0];
+
+    await props.onContact({ name: "Buyer One", phone: "", message: "First" });
+    await waitFor(() => expect(registerInterestCardPropsMock.mock.lastCall?.[0].submissionStatus).toBe("confirmed"));
+    props = registerInterestCardPropsMock.mock.lastCall?.[0];
+    props.onStartNew();
+    await waitFor(() => expect(registerInterestCardPropsMock.mock.lastCall?.[0].submissionStatus).toBe("editing"));
+    props = registerInterestCardPropsMock.mock.lastCall?.[0];
+    await props.onContact({ name: "Buyer One", phone: "", message: "Second" });
+
+    expect(toastMock.dismiss).toHaveBeenCalledTimes(1);
+    expect(toastMock.dismiss).toHaveBeenCalledWith("interest-toast-1");
+    view.unmount();
+    expect(toastMock.dismiss).toHaveBeenLastCalledWith("interest-toast-2");
   });
 
   it("rotates the key only after an explicit new-enquiry action", async () => {

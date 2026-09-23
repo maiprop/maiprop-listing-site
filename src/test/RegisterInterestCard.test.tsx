@@ -167,4 +167,43 @@ describe("RegisterInterestCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Make another enquiry" }));
     expect(onStartNew).toHaveBeenCalledOnce();
   });
+
+  it("clears a retry-confirmed form before making another enquiry", () => {
+    const onStartNew = vi.fn();
+    const view = renderCard(vi.fn(), {
+      submissionStatus: "uncertain",
+      onStartNew,
+    });
+    fillForm();
+
+    view.rerender(
+      <RegisterInterestCard
+        listing={listing}
+        user={{ id: "buyer-1", email: "buyer@example.com" }}
+        onLogin={vi.fn()}
+        onContact={vi.fn()}
+        submissionStatus="confirmed"
+        submissionError={null}
+        onRetry={vi.fn()}
+        onStartNew={onStartNew}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Make another enquiry" }));
+    view.rerender(
+      <RegisterInterestCard
+        listing={listing}
+        user={{ id: "buyer-1", email: "buyer@example.com" }}
+        onLogin={vi.fn()}
+        onContact={vi.fn()}
+        submissionStatus="editing"
+        submissionError={null}
+        onRetry={vi.fn()}
+        onStartNew={onStartNew}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText("Your name")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Phone number (optional)")).toHaveValue("");
+    expect(screen.getByPlaceholderText("What are you looking for? (optional)")).toHaveValue("");
+  });
 });
