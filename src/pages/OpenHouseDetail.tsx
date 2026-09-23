@@ -73,7 +73,6 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   const [editingDate, setEditingDate] = useState(false);
   const [dateInput, setDateInput] = useState("");
   const [currentImage, setCurrentImage] = useState(0);
-  const [walkScore, setWalkScore] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const { data: assetSettings } = useOpenHouseSettings(listingIdParam || undefined);
@@ -88,6 +87,10 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   }, [listingIdParam, !!listing]);
 
   const db = listing as ListingWithJoins;
+  const rawStoredWalkScore = db?.walkability_score == null ? Number.NaN : Number(db.walkability_score);
+  const storedWalkScore = Number.isFinite(rawStoredWalkScore) && rawStoredWalkScore >= 0 && rawStoredWalkScore <= 100
+    ? rawStoredWalkScore
+    : null;
   const {
     aiInsightsData,
     aiInsightsLoading,
@@ -439,7 +442,6 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                     title={db.title}
                     latitude={db.latitude}
                     longitude={db.longitude}
-                    onWalkScoreChange={setWalkScore}
                   />
                 </Suspense>
               </div>
@@ -574,8 +576,8 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
               </div>
 
               {/* Walk Score */}
-              {(walkScore !== null || db?.walkability_score != null) && (() => {
-                const score = walkScore ?? Number(db?.walkability_score);
+              {storedWalkScore !== null && (() => {
+                const score = storedWalkScore;
                 const colour = walkScoreColour(score);
                 const label = walkScoreLabel(score);
                 const r = 20, c = 2 * Math.PI * r;
@@ -593,7 +595,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                     <div>
                       <p className="text-sm font-bold" style={{ color: colour }}>{label}</p>
                       <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{isGreek ? "Βαθμός πεζής πρόσβασης" : "Walk Score"}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{isGreek ? "Με βάση κοντινές παροχές" : "Based on nearby amenities"}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{isGreek ? "Αποθηκευμένα δεδομένα αγγελίας · μη ανεξάρτητα επαληθευμένα" : "Stored listing data · not independently verified"}</p>
                     </div>
                   </div>
                 );

@@ -2,15 +2,14 @@
  * Tests for the `CompareAIReports` row component. The component renders
  * inline as <tr> rows so we wrap it in a <table>/<tbody>. We mock
  * supabase.functions.invoke for the three edge functions (valuation,
- * neighbourhood-report, property-pois) and the auth + walk score libs.
+ * neighbourhood-report) and the auth + walk score display helpers.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-const { useAuthMock, invokeMock, computeWalkScoreMock, getAiErrMock } = vi.hoisted(() => ({
+const { useAuthMock, invokeMock, getAiErrMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   invokeMock: vi.fn(),
-  computeWalkScoreMock: vi.fn(),
   getAiErrMock: vi.fn(),
 }));
 
@@ -20,7 +19,6 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("@/lib/aiErrorUtils", () => ({ getAiErrorMessage: (...a: unknown[]) => getAiErrMock(...a) }));
 vi.mock("@/lib/walkScore", () => ({
-  computeWalkScore: (...a: unknown[]) => computeWalkScoreMock(...a),
   walkScoreLabel: (s: number) => `Score ${s}`,
   walkScoreColour: () => "#16a34a",
 }));
@@ -63,10 +61,8 @@ const baseListing = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   useAuthMock.mockReset();
   invokeMock.mockReset();
-  computeWalkScoreMock.mockReset();
   getAiErrMock.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
-  computeWalkScoreMock.mockReturnValue(82);
   getAiErrMock.mockImplementation((_e: unknown, x: { error?: string } | null, fb: string) =>
     x?.error || fb,
   );
@@ -95,7 +91,7 @@ describe("CompareAIReports — gated empty state", () => {
 });
 
 describe("CompareAIReports — Run AI Analysis happy path", () => {
-  it("invokes the 3 edge functions, then renders valuation + walk + safety + noise rows", async () => {
+  it("renders independent valuation and neighbourhood data without requesting unsupported POI scores", async () => {
     invokeMock.mockImplementation((name: string) => {
       if (name === "property-valuation")
         return Promise.resolve({
@@ -119,8 +115,6 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
           },
           error: null,
         });
-      if (name === "property-pois")
-        return Promise.resolve({ data: { pois: [{ distanceKm: 0.3, category: "supermarket" }] }, error: null });
       throw new Error("unexpected " + name);
     });
     render(wrap(<CompareAIReports listings={[baseListing()]} />));
@@ -130,8 +124,7 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
     await waitFor(() => expect(screen.getByText(/300,000/)).toBeInTheDocument());
     expect(screen.getByText(/Above Mkt/i)).toBeInTheDocument();
     expect(screen.getByText(/Yield:/i)).toBeInTheDocument();
-    // Walk score badge text uses our mocked label.
-    expect(screen.getByText("Score 82")).toBeInTheDocument();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
     // Safety bar shows the score "/100".
     expect(screen.getByText(/88\/100/)).toBeInTheDocument();
     // Noise badge is "Quiet".
@@ -141,14 +134,10 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
       body: expect.objectContaining({ city: "Athens", sqm: 90, propertyType: "apartment" }),
     }));
     expect(invokeMock).toHaveBeenCalledWith("neighbourhood-report", expect.any(Object));
-    expect(invokeMock).toHaveBeenCalledWith("property-pois", expect.any(Object));
+    expect(invokeMock).not.toHaveBeenCalledWith("property-pois", expect.any(Object));
   });
 
-  it("renders valuation before a slower POI enrichment finishes", async () => {
-    let resolvePois: ((value: { data: { pois: never[] }; error: null }) => void) | undefined;
-    const poisPromise = new Promise<{ data: { pois: never[] }; error: null }>((resolve) => {
-      resolvePois = resolve;
-    });
+  it("preserves supported stored scores, including zero, with an explicit unverified-source qualifier", async () => {
     invokeMock.mockImplementation((name: string) => {
       if (name === "property-valuation") {
         return Promise.resolve({
@@ -168,19 +157,53 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
       if (name === "neighbourhood-report") {
         return Promise.resolve({ data: { safety_score: 88, noise_level: "low" }, error: null });
       }
-      if (name === "property-pois") return poisPromise;
+      throw new Error("unexpected " + name);
+    });
+
+    const zeroListing = baseListing({ walkability_score: 0 });
+    const highListing = {
+      ...baseListing({ walkability_score: 82 }),
+      id: "l-2",
+      _raw: { ...baseListing({ walkability_score: 82 })._raw, id: "l-2" },
+    };
+    render(wrap(<CompareAIReports listings={[zeroListing, highListing]} />));
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
+
+    expect(await screen.findByText("Score 0")).toBeInTheDocument();
+    expect(screen.getByText("Score 82")).toBeInTheDocument();
+    expect(screen.getAllByText(/Stored listing data.*not independently verified/i)).toHaveLength(2);
+    expect(invokeMock).not.toHaveBeenCalledWith("property-pois", expect.any(Object));
+  });
+
+  it("does not convert the preserved legacy fallback payload into a comparison score", async () => {
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "property-valuation") return { data: { estimatedValue: 240_000 }, error: null };
+      if (name === "neighbourhood-report") {
+        return { data: { responseVersion: 2, safetyScore: null, noiseLevel: null }, error: null };
+      }
+      if (name === "property-pois") {
+        return {
+          data: {
+            generatedBy: "fallback",
+            pois: Array.from({ length: 12 }, (_, index) => ({
+              name: `Fallback ${index}`,
+              category: "cafe",
+              distanceKm: 0.2,
+              walkMinutes: 3,
+              isFallbackEstimate: true,
+            })),
+          },
+          error: null,
+        };
+      }
       throw new Error("unexpected " + name);
     });
 
     render(wrap(<CompareAIReports listings={[baseListing()]} />));
     fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
-
-    await waitFor(() => expect(screen.getByText(/300,000/)).toBeInTheDocument());
-    expect(screen.getByText(/Above Mkt/i)).toBeInTheDocument();
-    await act(async () => {
-      resolvePois?.({ data: { pois: [] }, error: null });
-      await poisPromise;
-    });
+    await waitFor(() => expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0));
+    expect(screen.queryByText(/Score 79|Score 82/)).not.toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalledWith("property-pois", expect.any(Object));
   });
 
   it("supports primitive safetyScore + noise strings (legacy edge fn shape)", async () => {
@@ -313,7 +336,7 @@ describe("CompareAIReports — partial neighbourhood evidence", () => {
     invokeMock.mockImplementation(async (name: string) => name === "neighbourhood-report" ? { data: report, error: null } : { data: null, error: null });
     render(wrap(<CompareAIReports listings={[baseListing()]} />));
     fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
-    await waitFor(() => expect(screen.getAllByText("Unavailable")).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText("Unavailable")).toHaveLength(3));
     expect(screen.queryByText(/70\/100|Moderate|Quiet/)).toBeNull();
     expect(invokeMock).toHaveBeenCalledWith("neighbourhood-report", expect.objectContaining({ body: expect.objectContaining({ responseVersion: 2 }) }));
   });
@@ -322,14 +345,14 @@ describe("CompareAIReports — partial neighbourhood evidence", () => {
     render(wrap(<CompareAIReports listings={[baseListing()]} />));
     fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
     expect(await screen.findByText(/82\/100/)).toBeInTheDocument();
-    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText(/AI estimate.*not independently verified/)).toBeInTheDocument();
   });
   it("treats malformed numeric scores and unrecognized noise as unavailable", async () => {
     invokeMock.mockImplementation(async (name: string) => name === "neighbourhood-report" ? { data: { safetyScore: { score: "bogus" }, noiseLevel: { label: 42 } }, error: null } : { data: null, error: null });
     render(wrap(<CompareAIReports listings={[baseListing()]} />));
     fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
-    await waitFor(() => expect(screen.getAllByText("Unavailable")).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText("Unavailable")).toHaveLength(3));
   });
 });
 
@@ -338,7 +361,7 @@ it.each(["constructor", "__proto__"])("rejects inherited noise key %s while keep
   render(wrap(<CompareAIReports listings={[baseListing()]} />));
   fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
   expect(await screen.findByText(/82\/100/)).toBeInTheDocument();
-  expect(screen.getByText("Unavailable")).toBeInTheDocument();
+  expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(2);
   expect(screen.getByText(/AI estimate.*not independently verified/)).toBeInTheDocument();
   expect(screen.queryByText(/Quiet|Moderate|Noisy/)).toBeNull();
 });

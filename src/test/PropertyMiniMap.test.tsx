@@ -11,13 +11,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const { invokeMock, useAuthMock } = vi.hoisted(() => ({
+const { fromMock, invokeMock, useAuthMock } = vi.hoisted(() => ({
+  fromMock: vi.fn(),
   invokeMock: vi.fn(),
   useAuthMock: vi.fn(),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
+    from: (...a: unknown[]) => fromMock(...a),
     functions: { invoke: (...a: unknown[]) => invokeMock(...a) },
   },
 }));
@@ -31,6 +33,8 @@ vi.mock("@/components/SignInForAI", () => ({
 interface MapMockProps {
   children?: React.ReactNode;
   mapboxAccessToken?: unknown;
+  latitude?: number;
+  longitude?: number;
   onLoad?: () => void;
 }
 
@@ -46,8 +50,8 @@ vi.mock("react-map-gl", () => {
       </div>
     );
   });
-  const Marker = React.forwardRef<HTMLDivElement, MapMockProps>(function MockMarker({ children }, ref) {
-    return <div ref={ref} data-testid="mapbox-marker">{children}</div>;
+  const Marker = React.forwardRef<HTMLDivElement, MapMockProps>(function MockMarker({ children, latitude, longitude }, ref) {
+    return <div ref={ref} data-testid="mapbox-marker" data-latitude={latitude} data-longitude={longitude}>{children}</div>;
   });
   const NavigationControl = React.forwardRef<HTMLDivElement>(function MockNavigationControl(_props, ref) {
     return <div ref={ref} data-testid="nav-control" />;
@@ -64,16 +68,34 @@ type InvokeResult = { data?: unknown; error?: unknown };
 let quotaInvokeResult: InvokeResult;
 let poisInvokeResult: InvokeResult;
 
+const suggestionResponse = (pois: unknown[]) => ({
+  responseVersion: 2,
+  pois,
+  generatedBy: "ai",
+  warning: "AI-generated nearby-place suggestions are not independently verified. Confirm names and distances before relying on them.",
+  provenance: {
+    source: "ai_model_suggestion",
+    independentlyVerified: false,
+    coordinatesProvided: false,
+  },
+});
+
 const invokeCallsFor = (functionName: string) =>
   invokeMock.mock.calls.filter((call: unknown[]) => call[0] === functionName);
 
 beforeEach(() => {
   invokeMock.mockReset();
+  fromMock.mockReset();
   quotaInvokeResult = {
     data: { allowed: true, reason: null, used: 1, limit: 5, remaining: 4 },
     error: null,
   };
-  poisInvokeResult = { data: { pois: [] }, error: null };
+  poisInvokeResult = {
+    data: suggestionResponse([
+      { name: "Possible nearby cafe", category: "cafe", distanceKm: 0.2, walkMinutes: 3 },
+    ]),
+    error: null,
+  };
   invokeMock.mockImplementation(async (functionName: string) => {
     if (functionName === "ai-quota-status") return quotaInvokeResult;
     return poisInvokeResult;
@@ -203,52 +225,95 @@ describe("PropertyMiniMap", () => {
     });
     expect(invokeCallsFor("property-pois")[0]).toEqual([
       "property-pois",
-      { body: { address: "Kolonaki 12", city: "Athens", lat: 37.98, lng: 23.73 } },
+      { body: { responseVersion: 2, address: "Kolonaki 12", city: "Athens", lat: 37.98, lng: 23.73 } },
     ]);
   });
 
-  it("hydrates POIs and notifies the parent of a walk score via onWalkScoreChange", async () => {
+  it("renders qualified model suggestions without deriving, displaying, or writing a walk score", async () => {
     poisInvokeResult = {
-      data: {
-        pois: [
+      data: suggestionResponse([
           { name: "St Nicholas School", category: "school", distanceKm: 0.4, walkMinutes: 5 },
           { name: "Athens Metro", category: "transit", distanceKm: 0.3, walkMinutes: 4 },
           { name: "Café del Lungo", category: "cafe", distanceKm: 0.2, walkMinutes: 3 },
-        ],
-      },
+        ]),
       error: null,
     };
-    const onWalkScoreChange = vi.fn();
-    render(<PropertyMiniMap {...baseProps} onWalkScoreChange={onWalkScoreChange} />);
+    render(<PropertyMiniMap {...baseProps} />);
     await waitFor(() => expect(screen.getByText("St Nicholas School")).toBeInTheDocument());
-    expect(onWalkScoreChange).toHaveBeenCalled();
-    // 3 unique-category POIs feed at least 3 markers (some may be more from
-    // category offsets) — assert a non-zero count.
     expect(screen.getByText("Athens Metro")).toBeInTheDocument();
+    expect(screen.getByText(/not independently verified/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Walk Score · out of 100/i)).not.toBeInTheDocument();
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("filters POI badges and map markers by selected category", async () => {
+  it("keeps the sourced property marker stable while suggestion filters change", async () => {
     poisInvokeResult = {
-      data: {
-        pois: [
+      data: suggestionResponse([
           { name: "St Nicholas School", category: "school", distanceKm: 0.4, walkMinutes: 5 },
           { name: "Athens Metro", category: "transit", distanceKm: 0.3, walkMinutes: 4 },
           { name: "Cafe del Lungo", category: "cafe", distanceKm: 0.2, walkMinutes: 3 },
-        ],
-      },
+        ]),
       error: null,
     };
 
     render(<PropertyMiniMap {...baseProps} />);
     await waitFor(() => expect(screen.getByText("St Nicholas School")).toBeInTheDocument());
-    expect(screen.getByTitle("Cafe del Lungo")).toBeInTheDocument();
+    const markerBefore = screen.getAllByTestId("mapbox-marker");
+    expect(markerBefore).toHaveLength(1);
+    expect(markerBefore[0]).toHaveAttribute("data-latitude", "37.98");
+    expect(markerBefore[0]).toHaveAttribute("data-longitude", "23.73");
 
     fireEvent.click(screen.getByRole("button", { name: /Caf/i }));
 
     expect(screen.queryByText("St Nicholas School")).not.toBeInTheDocument();
     expect(screen.queryByText("Athens Metro")).not.toBeInTheDocument();
     expect(screen.getByText("Cafe del Lungo")).toBeInTheDocument();
-    expect(screen.getByTitle("Cafe del Lungo")).toBeInTheDocument();
+    const markerAfter = screen.getAllByTestId("mapbox-marker");
+    expect(markerAfter).toHaveLength(1);
+    expect(markerAfter[0]).toHaveAttribute("data-latitude", "37.98");
+    expect(markerAfter[0]).toHaveAttribute("data-longitude", "23.73");
+  });
+
+  it("accepts zero-valued source coordinates without treating them as missing", async () => {
+    render(<PropertyMiniMap {...baseProps} latitude={0} longitude={0} />);
+    expect(await screen.findByTestId("mapbox-map")).toBeInTheDocument();
+    await waitFor(() => expect(invokeCallsFor("property-pois")).toHaveLength(1));
+    expect(invokeCallsFor("property-pois")[0]).toEqual([
+      "property-pois",
+      { body: { responseVersion: 2, address: "Kolonaki 12", city: "Athens", lat: 0, lng: 0 } },
+    ]);
+  });
+
+  it("ignores a late POI response after the property location changes", async () => {
+    let resolveAthens: ((value: InvokeResult) => void) | undefined;
+    const athensResponse = new Promise<InvokeResult>((resolve) => { resolveAthens = resolve; });
+    invokeMock.mockImplementation(async (functionName: string, options?: { body?: { city?: string } }) => {
+      if (functionName === "ai-quota-status") return quotaInvokeResult;
+      if (options?.body?.city === "Athens") return athensResponse;
+      return {
+        data: suggestionResponse([
+          { name: "Piraeus suggestion", category: "transit", distanceKm: 0.3, walkMinutes: 4 },
+        ]),
+        error: null,
+      };
+    });
+
+    const { rerender } = render(<PropertyMiniMap {...baseProps} />);
+    await waitFor(() => expect(invokeCallsFor("property-pois")).toHaveLength(1));
+    rerender(<PropertyMiniMap {...baseProps} address="Piraeus 1" city="Piraeus" latitude={37.94} longitude={23.64} />);
+    expect(await screen.findByText("Piraeus suggestion")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveAthens?.({
+        data: suggestionResponse([
+          { name: "Stale Athens suggestion", category: "cafe", distanceKm: 0.2, walkMinutes: 3 },
+        ]),
+        error: null,
+      });
+      await athensResponse;
+    });
+    expect(screen.queryByText("Stale Athens suggestion")).not.toBeInTheDocument();
+    expect(screen.getByText("Piraeus suggestion")).toBeInTheDocument();
   });
 
   it("renders an inline error message when property-pois fails (message via error.message)", async () => {
@@ -285,5 +350,26 @@ describe("PropertyMiniMap", () => {
       const card = document.body.textContent ?? "";
       expect(card).toMatch(/Invalid response|Failed to load nearby/i);
     });
+  });
+
+  it("rejects legacy fallback and malformed suggestion payloads as unavailable SDK input", async () => {
+    for (const data of [
+      {
+        pois: [{ name: "School proximity estimate", category: "school", distanceKm: 0.4, walkMinutes: 5, isFallbackEstimate: true }],
+        generatedBy: "fallback",
+      },
+      suggestionResponse([
+        { name: "Impossible distance", category: "school", distanceKm: Number.POSITIVE_INFINITY, walkMinutes: 5 },
+      ]),
+    ]) {
+      poisInvokeResult = { data, error: null };
+      const { unmount } = render(<PropertyMiniMap {...baseProps} />);
+      await waitFor(() => expect(document.body.textContent).toMatch(/Failed to load nearby places/i));
+      expect(screen.queryByText("School proximity estimate")).not.toBeInTheDocument();
+      expect(screen.queryByText("Impossible distance")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Walk Score · out of 100/i)).not.toBeInTheDocument();
+      unmount();
+      invokeMock.mockClear();
+    }
   });
 });

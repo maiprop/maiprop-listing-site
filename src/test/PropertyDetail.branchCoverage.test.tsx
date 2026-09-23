@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   modalClose: vi.fn(),
   reportInsert: vi.fn(),
   streetView: vi.fn(),
+  miniMapProps: vi.fn(),
+  scoreProps: vi.fn(),
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
 }));
 
@@ -135,11 +137,11 @@ vi.mock("@/components/property/PropertyTitleSection", () => ({ PropertyTitleSect
 vi.mock("@/components/property/PropertyDescriptionSection", () => ({ PropertyDescriptionSection: ({ description }: { description: string }) => <p>{description}</p> }));
 vi.mock("@/components/property/PropertyDetailsAndEnergy", () => ({ PropertyDetailsAndEnergy: () => <div>details</div> }));
 vi.mock("@/components/property/PropertyFeatureList", () => ({ default: () => <div>features</div> }));
-vi.mock("@/components/property/PropertyScoresSection", () => ({ PropertyScoresSection: () => <div>scores</div> }));
+vi.mock("@/components/property/PropertyScoresSection", () => ({ PropertyScoresSection: (props: Record<string, unknown>) => { mocks.scoreProps(props); return <div>scores</div>; } }));
 vi.mock("@/components/property/PropertyReportCard", () => ({ PropertyReportCard: () => <div>report card</div> }));
 vi.mock("@/components/property/PropertyAIInsightsSection", () => ({ PropertyAIInsightsSection: () => <div>ai insights</div> }));
 vi.mock("@/components/DeferredDetailPanel", () => ({ DeferredDetailPanel: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
-vi.mock("@/components/PropertyMiniMap", () => ({ default: () => <div>mini map</div> }));
+vi.mock("@/components/PropertyMiniMap", () => ({ default: (props: Record<string, unknown>) => { mocks.miniMapProps(props); return <div>mini map</div>; } }));
 vi.mock("@/components/NeighbourhoodReport", () => ({ default: () => <div>neighbourhood</div> }));
 vi.mock("@/components/PropertyCard", () => ({ PropertyCard: ({ property }: { property: { title: string } }) => <div>similar:{property.title}</div> }));
 vi.mock("@/components/ViewingDialog", () => ({ default: () => <div>viewing dialog</div> }));
@@ -217,6 +219,22 @@ beforeEach(() => {
 });
 
 describe("PropertyDetail business branches", () => {
+  it("keeps stored zero while omitting runtime POI score callbacks", async () => {
+    mocks.listing.mockReturnValue({
+      data: { ...baseListing, walkability_score: 0 },
+      isLoading: false,
+      isFetching: false,
+      isPlaceholderData: false,
+      isError: false,
+    });
+    renderPage();
+
+    expect(await screen.findByText("mini map")).toBeInTheDocument();
+    expect(mocks.miniMapProps.mock.calls.at(-1)?.[0]).not.toHaveProperty("onWalkScoreChange");
+    expect(mocks.scoreProps.mock.calls.at(-1)?.[0]).toMatchObject({ walkabilityScore: 0 });
+    expect(mocks.scoreProps.mock.calls.at(-1)?.[0]).not.toHaveProperty("walkScore");
+  });
+
   it("keeps signed-out save, contact, viewing, video and report actions behind authentication", async () => {
     renderPage();
 

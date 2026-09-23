@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   streetView: vi.fn(),
   publicApi: vi.fn(),
   mapMounts: 0,
+  miniMapProps: vi.fn(),
 }));
 
 const TEST_OPEN_HOUSE_ID = "11111111-1111-4111-8111-111111111111";
@@ -148,11 +149,7 @@ vi.mock("@/components/OpenHouseAssetControlPanel", () => ({
   ),
 }));
 vi.mock("@/components/PropertyMiniMap", () => ({
-  default: ({ onWalkScoreChange }: { onWalkScoreChange: (score: number) => void }) => (
-    <button type="button" onClick={() => onWalkScoreChange(88)}>
-      Set walk score
-    </button>
-  ),
+  default: (props: Record<string, unknown>) => { mocks.miniMapProps(props); return <div data-testid="property-mini-map" />; },
 }));
 vi.mock("@/components/PropertyValuation", () => ({ default: () => <div data-testid="property-valuation" /> }));
 vi.mock("@/components/property/PropertyValuationLockedCard", () => ({
@@ -1254,8 +1251,24 @@ describe("OpenHouseDetail page behavior", () => {
     await renderOpenHouseDetail();
 
     expect(await screen.findByText("Very Walkable")).toBeInTheDocument();
+    expect(screen.getByText(/Stored listing data.*not independently verified/i)).toBeInTheDocument();
+    expect(mocks.miniMapProps.mock.calls.at(-1)?.[0]).not.toHaveProperty("onWalkScoreChange");
     expect(screen.getByText("Moderate")).toBeInTheDocument();
     expect(screen.getByText("Quiet")).toBeInTheDocument();
+  });
+
+  it("keeps stored zero distinct from missing and rejects malformed open-house walk scores", async () => {
+    mocks.listing = createListing({ walkability_score: 0 });
+    const first = await renderOpenHouseDetail();
+    expect(await screen.findByText("Car Dependent")).toBeInTheDocument();
+    expect(screen.getByText(/Stored listing data.*not independently verified/i)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/NaN/);
+    first.unmount();
+
+    mocks.listing = createListing({ walkability_score: "not-a-score" });
+    await renderOpenHouseDetail();
+    expect(screen.queryByText("Car Dependent")).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/NaN/);
   });
 
   it("lets an owner edit, pause, and delete an open house", async () => {

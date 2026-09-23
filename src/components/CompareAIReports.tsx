@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
-import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
+import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { getPrimaryValuationEstimate } from "@/lib/valuationResult";
 import {
   neighbourhoodReportBodySchema,
@@ -12,6 +12,7 @@ import {
   propertyValuationBodySchema,
 } from "@/lib/mutationSchemas";
 import { calculatePercentDelta, calculatePricePerSqm } from "@/lib/priceCalculations";
+import { useTranslation } from "react-i18next";
 
 // Compare drawer is fed both the formatted card view and the raw listing row
 // from useListings. Both shapes have ~80 columns between them and a tighter
@@ -22,7 +23,6 @@ import { calculatePercentDelta, calculatePricePerSqm } from "@/lib/priceCalculat
 type Listing = Record<string, any>;
 
 const AI_REPORT_TIMEOUT_MS = 45_000;
-const PROPERTY_POIS_TIMEOUT_MS = 20_000;
 
 interface AIReport {
   estimatedValue: number;
@@ -44,9 +44,13 @@ interface PropertyAIData {
   walkScore: number | null;
   neighbourhood: NeighbourhoodData | null;
   loading: boolean;
-  walkScoreLoading: boolean;
   error: string | null;
 }
+
+const normaliseStoredWalkScore = (value: unknown): number | null => {
+  const score = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : Number.NaN;
+  return Number.isFinite(score) && score >= 0 && score <= 100 ? score : null;
+};
 
 const normalizeValuationReport = (data: unknown, fallbackPrice: number): AIReport => {
   const source = data && typeof data === "object" ? data as Partial<AIReport> : {};
@@ -151,6 +155,7 @@ function ValuationCell({ data, price }: { data: AIReport; price: number }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export function CompareAIReports({ listings }: { listings: Listing[] }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [reports, setReports] = useState<Record<string, PropertyAIData>>({});
   const [triggered, setTriggered] = useState(false);
@@ -165,7 +170,6 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
         walkScore: null,
         neighbourhood: null,
         loading: true,
-        walkScoreLoading: true,
         error: null,
       };
     });
@@ -173,6 +177,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
 
     await Promise.all(listings.map(async (listing) => {
       const raw = listing._raw ?? listing;
+      const storedWalkScore = normaliseStoredWalkScore(raw.walkability_score);
       try {
         // Valuation
         const pricePerSqm = calculatePricePerSqm({
@@ -250,53 +255,14 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           neighbourhood = { safetyScore, noiseLevel };
         }
 
-        const hasCoordinates = raw.latitude != null && raw.longitude != null;
         setReports(prev => ({
           ...prev,
           [listing.id]: {
             valuation,
-            walkScore: null,
+            walkScore: storedWalkScore,
             neighbourhood,
             loading: false,
-            walkScoreLoading: hasCoordinates,
             error: reportError,
-          },
-        }));
-
-        // POI enrichment is secondary. It must not delay completed valuation
-        // and neighbourhood results.
-        let walkScore: number | null = null;
-        if (hasCoordinates) {
-          const poisRes = await supabase.functions.invoke("property-pois", {
-            body: { latitude: raw.latitude, longitude: raw.longitude, city: raw.city },
-            timeout: PROPERTY_POIS_TIMEOUT_MS,
-          });
-          if (!poisRes.error && poisRes.data?.pois) {
-            const pois = poisRes.data.pois as Array<{
-              distanceKm?: number;
-              distance_km?: number;
-              category?: string;
-            }>;
-            walkScore = computeWalkScore(
-              pois.map((p) => ({
-                distanceKm: p.distanceKm ?? p.distance_km ?? 0.5,
-                category: (p.category ?? "").toLowerCase(),
-              })),
-            );
-          }
-        }
-
-        setReports(prev => ({
-          ...prev,
-          [listing.id]: {
-            ...(prev[listing.id] ?? {
-              valuation,
-              neighbourhood,
-              loading: false,
-              error: reportError,
-            }),
-            walkScore,
-            walkScoreLoading: false,
           },
         }));
       } catch (e: unknown) {
@@ -304,10 +270,9 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           ...prev,
           [listing.id]: {
             valuation: null,
-            walkScore: null,
+            walkScore: storedWalkScore,
             neighbourhood: null,
             loading: false,
-            walkScoreLoading: false,
             error: getAiErrorMessage(e, null, "AI analysis failed"),
           },
         }));
@@ -337,7 +302,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
                 <Sparkles className="w-3.5 h-3.5" />
                 Run AI Analysis for All Properties
               </button>
-              <p className="text-[10px] text-muted-foreground mt-1.5">Valuation · Walk Score · Safety · Noise</p>
+              <p className="text-[10px] text-muted-foreground mt-1.5">Valuation · Stored Walk Score · Safety · Noise</p>
             </>
           )}
         </td>
@@ -376,11 +341,11 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           const r = reports[l.id];
           return (
             <td key={l.id} className="px-4 py-3 text-center">
-              {!r || r.loading || r.walkScoreLoading
+              {!r || r.loading
                 ? <Loader2 className="w-4 h-4 animate-spin text-primary mx-auto" />
                 : r.walkScore != null
-                ? <div className="flex justify-center"><WalkBadge score={r.walkScore} /></div>
-                : <span className="text-[10px] text-muted-foreground">—</span>
+                ? <div className="flex flex-col items-center gap-1"><WalkBadge score={r.walkScore} /><p className="text-[9px] text-muted-foreground">{t("poiProvenance.storedScoreSource", { defaultValue: "Stored listing data · not independently verified" })}</p></div>
+                : <span className="text-[10px] text-muted-foreground">{t("poiProvenance.unavailable", { defaultValue: "Unavailable" })}</span>
               }
             </td>
           );

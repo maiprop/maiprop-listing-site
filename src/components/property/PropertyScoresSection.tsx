@@ -7,11 +7,12 @@
  */
 
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
+import { useTranslation } from "react-i18next";
 
 interface Props {
-  /** Runtime walk score from POIs API (null if not yet fetched) */
-  walkScore: number | null;
-  /** DB fallback walk score from neighbourhood report */
+  /** Deprecated runtime POI score input; deliberately ignored. */
+  walkScore?: number | null;
+  /** Existing score stored on the listing; its source is not independently verified. */
   walkabilityScore: number | null;
   /** Safety score 0-100 (null if not stored) */
   safetyScore: number | null;
@@ -63,17 +64,20 @@ function ScoreRing({
 }
 
 // skipcq: JS-0067 - Exported React component is intentionally module-scoped.
-export function PropertyScoresSection({ walkScore, walkabilityScore, safetyScore, noiseScore }: Props) { // skipcq: JS-R1005 - Score cards intentionally render optional walk, safety, and noise sections together.
-  const resolvedWalkScore = walkScore ?? walkabilityScore;
-  const hasWalk = resolvedWalkScore !== null;
+export function PropertyScoresSection({ walkabilityScore, safetyScore, noiseScore }: Props) { // skipcq: JS-R1005 - Score cards intentionally render optional walk, safety, and noise sections together.
+  const { t } = useTranslation();
+  const storedWalkScore = typeof walkabilityScore === "number" && Number.isFinite(walkabilityScore) && walkabilityScore >= 0 && walkabilityScore <= 100
+    ? walkabilityScore
+    : null;
+  const hasWalk = storedWalkScore !== null;
   const hasSafetyOrNoise = safetyScore !== null || noiseScore !== null;
 
   if (!hasWalk && !hasSafetyOrNoise) return null;
 
   return (
     <>
-      {resolvedWalkScore !== null && (() => {
-        const score = resolvedWalkScore;
+      {storedWalkScore !== null && (() => {
+        const score = storedWalkScore;
         const colour = walkScoreColour(score);
         const label = walkScoreLabel(score);
         return (
@@ -84,7 +88,7 @@ export function PropertyScoresSection({ walkScore, walkabilityScore, safetyScore
               colour={colour}
               label={label}
               subtitle="Walk Score"
-              note="Based on nearby amenities"
+              note={t("poiProvenance.storedScoreSource", { defaultValue: "Stored listing data · not independently verified" })}
             />
           </div>
         );

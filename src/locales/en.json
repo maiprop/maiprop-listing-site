@@ -97,6 +97,12 @@
       "openHousesEmptyDetail": "New Open House viewings are added regularly."
     }
   },
+  "poiProvenance": {
+    "suggestionsTitle": "AI Nearby Place Suggestions",
+    "aiWarning": "AI-generated nearby-place suggestions are not independently verified. Confirm names and distances before relying on them.",
+    "storedScoreSource": "Stored listing data · not independently verified",
+    "unavailable": "Unavailable"
+  },
   "propertyAIInsights": {
     "title": "AI Market Insights",
     "poweredBy": "Powered by mAI Prop OS",

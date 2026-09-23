@@ -16,6 +16,8 @@ const {
   functionsInvokeMock,
   useAiQuotaMock,
   toastMock,
+  miniMapPropsMock,
+  scorePropsMock,
 } = vi.hoisted(() => ({
   useQueryMock: vi.fn(),
   useAuthMock: vi.fn(),
@@ -30,6 +32,8 @@ const {
   functionsInvokeMock: vi.fn(),
   useAiQuotaMock: vi.fn(),
   toastMock: { error: vi.fn(), success: vi.fn() },
+  miniMapPropsMock: vi.fn(),
+  scorePropsMock: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", async () => {
@@ -60,9 +64,7 @@ vi.mock("@/hooks/useMessages", () => ({ useStartConversation: () => ({ mutateAsy
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
 vi.mock("@/components/Footer", () => ({ Footer: () => <footer data-testid="footer" /> }));
 vi.mock("@/components/PropertyMiniMap", () => ({
-  default: ({ onWalkScoreChange }: { onWalkScoreChange?: (score: number) => void }) => (
-    <button type="button" onClick={() => onWalkScoreChange?.(88)}>mini map</button>
-  ),
+  default: (props: Record<string, unknown>) => { miniMapPropsMock(props); return <div>mini map</div>; },
 }));
 vi.mock("@/components/PropertyValuation", () => ({
   default: (props: { price: number; sqm: number; pricePerSqm?: number | null; propertyType?: string | null }) => (
@@ -86,7 +88,7 @@ vi.mock("@/components/NeighbourhoodReport", () => ({
   ),
 }));
 vi.mock("@/components/property/PropertyScoresSection", () => ({
-  PropertyScoresSection: ({ walkScore }: { walkScore: number | null }) => <div data-testid="scores">walk:{walkScore ?? "none"}</div>,
+  PropertyScoresSection: (props: Record<string, unknown>) => { scorePropsMock(props); return <div data-testid="scores" />; },
 }));
 vi.mock("@/components/new-build/PropertyGallery", () => ({
   PropertyGallery: ({
@@ -293,6 +295,8 @@ beforeEach(() => {
     useAiQuotaMock,
     toastMock.error,
     toastMock.success,
+    miniMapPropsMock,
+    scorePropsMock,
   ].forEach((mock) => mock.mockReset());
 
   useAuthMock.mockReturnValue({ user: null, profile: null });
@@ -324,6 +328,15 @@ beforeEach(() => {
 });
 
 describe("NewBuildDetail", () => {
+  it("passes only the stored walk score and no runtime POI score callback", async () => {
+    renderPage();
+
+    expect(await screen.findByText("mini map")).toBeInTheDocument();
+    expect(miniMapPropsMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("onWalkScoreChange");
+    expect(scorePropsMock.mock.calls.at(-1)?.[0]).toMatchObject({ walkabilityScore: 70 });
+    expect(scorePropsMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("walkScore");
+  });
+
   it("loads public listing details with the owner profile from the public API", async () => {
     const publicProfile = { user_id: "owner-1", display_name: "Mai Developer", avatar_url: null };
     publicApiMock.mockResolvedValue({

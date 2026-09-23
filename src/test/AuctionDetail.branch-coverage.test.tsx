@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   writeText: vi.fn(),
   toastSuccess: vi.fn(),
   toastInfo: vi.fn(),
+  miniMapProps: vi.fn(),
+  scoreProps: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -110,7 +112,7 @@ vi.mock("@/components/property/PropertyValuationLockedCard", () => ({
   PropertyValuationLockedCard: () => <div data-testid="valuation-locked" />,
 }));
 vi.mock("@/components/property/PropertyScoresSection", () => ({
-  PropertyScoresSection: ({ walkScore }: { walkScore: number | null }) => <div data-testid="scores">{walkScore ?? "none"}</div>,
+  PropertyScoresSection: (props: Record<string, unknown>) => { mocks.scoreProps(props); return <div data-testid="scores" />; },
 }));
 vi.mock("@/components/property/PropertyReportCard", () => ({
   PropertyReportCard: ({ listingId }: { listingId: string }) => <div data-testid="report">{listingId}</div>,
@@ -140,7 +142,7 @@ vi.mock("@/components/AIAssistantWidget", () => ({
   default: ({ propertyContext }: { propertyContext: { title: string } }) => <div data-testid="assistant">{propertyContext.title}</div>,
 }));
 vi.mock("@/components/PropertyMiniMap", () => ({
-  default: ({ latitude, longitude }: { latitude: number; longitude: number }) => <div data-testid="mini-map">{latitude},{longitude}</div>,
+  default: (props: { latitude: number; longitude: number } & Record<string, unknown>) => { mocks.miniMapProps(props); return <div data-testid="mini-map">{props.latitude},{props.longitude}</div>; },
 }));
 vi.mock("@/components/NeighbourhoodReport", () => ({
   default: ({ city }: { city: string }) => <div data-testid="neighbourhood">{city}</div>,
@@ -256,6 +258,8 @@ describe("AuctionDetail branch coverage", () => {
     expect(screen.getAllByText("Athens Auction Flat").length).toBeGreaterThan(0);
     expect(screen.getByTestId("gallery")).toHaveTextContent("2 images");
     expect(await screen.findByTestId("mini-map")).toHaveTextContent("37.98,23.72");
+    expect(mocks.miniMapProps.mock.calls.at(-1)?.[0]).not.toHaveProperty("onWalkScoreChange");
+    expect(mocks.scoreProps.mock.calls.at(-1)?.[0]).not.toHaveProperty("walkScore");
     expect(screen.getByTestId("property-valuation")).toHaveTextContent("auction:150000:80:50");
     expect(screen.queryByTestId("valuation-locked")).not.toBeInTheDocument();
     expect(screen.getByTestId("details")).toHaveTextContent("First Offer Price");

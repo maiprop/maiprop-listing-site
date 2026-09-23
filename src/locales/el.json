@@ -97,6 +97,12 @@
       "openHousesEmptyDetail": "Νέες επισκέψεις προστίθενται τακτικά."
     }
   },
+  "poiProvenance": {
+    "suggestionsTitle": "Προτάσεις AI για κοντινά σημεία",
+    "aiWarning": "Οι προτάσεις AI για κοντινά σημεία δεν έχουν επαληθευτεί ανεξάρτητα. Επιβεβαιώστε ονόματα και αποστάσεις πριν βασιστείτε σε αυτές.",
+    "storedScoreSource": "Αποθηκευμένα δεδομένα αγγελίας · μη ανεξάρτητα επαληθευμένα",
+    "unavailable": "Μη διαθέσιμο"
+  },
   "propertyAIInsights": {
     "title": "AI ανάλυση αγοράς",
     "poweredBy": "Powered by mAI Prop OS",

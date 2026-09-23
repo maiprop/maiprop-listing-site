@@ -1,11 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { ComponentType } from "react";
-import {
-  computeWalkScore,
-  walkScoreLabel,
-  walkScoreColour,
-} from "@/lib/walkScore";
 import type { MapRef } from "react-map-gl";
 import {
   MapPin,
@@ -29,6 +24,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { AIQuotaStatus } from "@/components/AIQuotaStatus";
 import { isAiQuotaReached, useAiQuota } from "@/hooks/useAiQuota";
+import { useTranslation } from "react-i18next";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -38,14 +34,23 @@ export interface POI {
   distanceKm: number;
   walkMinutes: number;
   description?: string;
-  isFallbackEstimate?: boolean;
 }
 
 type PoiResponse = {
+  responseVersion: 2;
   pois: POI[];
-  generatedBy?: "ai" | "fallback";
-  warning?: string;
+  generatedBy: "ai";
+  warning: string;
+  provenance: {
+    source: "ai_model_suggestion";
+    independentlyVerified: false;
+    coordinatesProvided: false;
+  };
 };
+
+const POI_CATEGORIES = new Set<POI["category"]>([
+  "school", "transit", "cafe", "hospital", "shopping", "park",
+]);
 
 const CATEGORY_META: Record<
   POI["category"],
@@ -103,16 +108,6 @@ const isMapNearViewport = (el: Element): boolean => {
   return rect.top < viewportH + 450 && rect.bottom > -250;
 };
 
-// Approximate offset for map marker placement (since we don't have real coords for POIs)
-const CATEGORY_OFFSETS: Record<POI["category"], [number, number]> = {
-  school: [0.003, 0.004],
-  transit: [-0.002, 0.002],
-  cafe: [0.004, -0.003],
-  hospital: [-0.005, -0.002],
-  shopping: [0.001, -0.005],
-  park: [-0.003, 0.005],
-};
-
 // ── Edge-function caller ───────────────────────────────────────────────────────
 
 async function fetchPOIs(
@@ -122,7 +117,7 @@ async function fetchPOIs(
   lng: number,
 ): Promise<PoiResponse> {
   const { data, error } = await supabase.functions.invoke("property-pois", {
-    body: { address, city, lat, lng },
+    body: { responseVersion: 2, address, city, lat, lng },
   });
   if (error) {
     // FunctionsHttpError.message is always the generic SDK string.
@@ -140,16 +135,72 @@ async function fetchPOIs(
     }
     throw new Error(msg);
   }
-  // Some usage-limit paths return HTTP 200 with { error: "..." } in the body.
   if (typeof data?.error === "string") throw new Error(data.error);
-  if (!Array.isArray(data?.pois))
+
+  const provenance = data?.provenance;
+  if (
+    data?.responseVersion !== 2 ||
+    data?.generatedBy !== "ai" ||
+    typeof data?.warning !== "string" ||
+    !data.warning.trim() ||
+    provenance?.source !== "ai_model_suggestion" ||
+    provenance?.independentlyVerified !== false ||
+    provenance?.coordinatesProvided !== false ||
+    !Array.isArray(data?.pois) ||
+    data.pois.length === 0 ||
+    data.pois.length > 15
+  ) {
     throw new Error("Failed to load nearby places");
+  }
+
+  const pois = data.pois.map((candidate: unknown): POI => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      throw new Error("Failed to load nearby places");
+    }
+    const poi = candidate as Record<string, unknown>;
+    const hasCoordinates = ["latitude", "longitude", "lat", "lng"].some((key) => key in poi);
+    if (
+      hasCoordinates ||
+      "isFallbackEstimate" in poi ||
+      typeof poi.name !== "string" ||
+      !poi.name.trim() ||
+      typeof poi.category !== "string" ||
+      !POI_CATEGORIES.has(poi.category as POI["category"]) ||
+      typeof poi.distanceKm !== "number" ||
+      !Number.isFinite(poi.distanceKm) ||
+      poi.distanceKm < 0 ||
+      poi.distanceKm > 5 ||
+      typeof poi.walkMinutes !== "number" ||
+      !Number.isInteger(poi.walkMinutes) ||
+      poi.walkMinutes < 0 ||
+      poi.walkMinutes > 120 ||
+      (poi.description !== undefined && (typeof poi.description !== "string" || !poi.description.trim()))
+    ) {
+      throw new Error("Failed to load nearby places");
+    }
+    return {
+      name: poi.name.trim(),
+      category: poi.category as POI["category"],
+      distanceKm: poi.distanceKm,
+      walkMinutes: poi.walkMinutes,
+      ...(typeof poi.description === "string" ? { description: poi.description.trim() } : {}),
+    };
+  });
+
   return {
-    pois: data.pois as POI[],
-    generatedBy: data.generatedBy === "fallback" ? "fallback" : "ai",
-    warning: typeof data.warning === "string" ? data.warning : undefined,
+    responseVersion: 2,
+    pois,
+    generatedBy: "ai",
+    warning: data.warning,
+    provenance,
   };
 }
+
+const normaliseCoordinate = (value: number | null | undefined, min: number, max: number): number | null => {
+  if (value === null || value === undefined) return null;
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) && coordinate >= min && coordinate <= max ? coordinate : null;
+};
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
@@ -238,7 +289,6 @@ interface PropertyMiniMapProps {
   address: string;
   city: string;
   title: string;
-  onWalkScoreChange?: (score: number) => void;
 }
 
 export default function PropertyMiniMap({
@@ -247,13 +297,13 @@ export default function PropertyMiniMap({
   address,
   city,
   title: _title,
-  onWalkScoreChange,
 }: PropertyMiniMapProps) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const mapRef = useRef<MapRef>(null);
   const mapShellRef = useRef<HTMLDivElement>(null);
-  const lat = latitude ? Number(latitude) : null;
-  const lng = longitude ? Number(longitude) : null;
+  const lat = normaliseCoordinate(latitude, -90, 90);
+  const lng = normaliseCoordinate(longitude, -180, 180);
   const fallbackLocationQuery = [address, city, "Greece"].filter(Boolean).join(", ");
 
   const [pois, setPois] = useState<POI[] | null>(null);
@@ -263,8 +313,8 @@ export default function PropertyMiniMap({
   const [activeCategory, setActiveCategory] = useState<POI["category"] | "all">(
     "all",
   );
-  const [mapLoaded, setMapLoaded] = useState(false);
   const [shouldLoadMap, setShouldLoadMap] = useState(false);
+  const activePoiRequest = useRef(0);
   const [MapComponents, setMapComponents] = useState<{
     Map: ComponentType<any>;
     Marker: ComponentType<any>;
@@ -275,17 +325,25 @@ export default function PropertyMiniMap({
     quotaLoading: poiQuotaLoading,
     quotaChecked: poiQuotaChecked,
     refreshQuota: refreshPoiQuota,
-  } = useAiQuota("property-pois", user, { enabled: Boolean(lat && lng && shouldLoadMap) });
+  } = useAiQuota("property-pois", user, { enabled: lat !== null && lng !== null && shouldLoadMap });
   const poiQuotaReached = isAiQuotaReached(poiQuota);
 
   useEffect(() => {
     setShouldLoadMap(false);
-    setMapLoaded(false);
     setMapComponents(null);
   }, [lat, lng]);
 
   useEffect(() => {
-    if (!MAPBOX_TOKEN || !lat || !lng || shouldLoadMap) return;
+    activePoiRequest.current += 1;
+    setPois(null);
+    setPoiError(null);
+    setPoiWarning(null);
+    setLoadingPOIs(false);
+    setActiveCategory("all");
+  }, [address, city, lat, lng]);
+
+  useEffect(() => {
+    if (!MAPBOX_TOKEN || lat === null || lng === null || shouldLoadMap) return;
     const el = mapShellRef.current;
     if (!el || typeof IntersectionObserver === "undefined" || isMapNearViewport(el)) {
       setShouldLoadMap(true);
@@ -308,7 +366,7 @@ export default function PropertyMiniMap({
   }, [lat, lng, shouldLoadMap]);
 
   useEffect(() => {
-    if (!MAPBOX_TOKEN || !lat || !lng || !shouldLoadMap || MapComponents) return;
+    if (!MAPBOX_TOKEN || lat === null || lng === null || !shouldLoadMap || MapComponents) return;
     let cancelled = false;
     const loadMap = async () => {
       const mapModule = await import("react-map-gl");
@@ -329,23 +387,23 @@ export default function PropertyMiniMap({
 
   // Auto-load POIs when coords are available (requires auth)
   const loadPOIs = useCallback(async () => {
-    if (!lat || !lng || !user || !shouldLoadMap) return;
+    if (lat === null || lng === null || !user || !shouldLoadMap) return;
+    const requestId = ++activePoiRequest.current;
     setLoadingPOIs(true);
     setPoiError(null);
     setPoiWarning(null);
     try {
       if (poiQuota && !poiQuota.allowed) {
-        setPois(null);
+        if (requestId === activePoiRequest.current) setPois(null);
         return;
       }
       const data = await fetchPOIs(address, city, lat, lng);
+      if (requestId !== activePoiRequest.current) return;
       setPois(data.pois);
-      setPoiWarning(data.generatedBy === "fallback" ? data.warning ?? "Generic nearby-place estimates used." : null);
-      // Compute walk score and notify parent
-      const score = computeWalkScore(data.pois);
-      onWalkScoreChange?.(score);
+      setPoiWarning(data.warning);
       await refreshPoiQuota();
     } catch (e: unknown) {
+      if (requestId !== activePoiRequest.current) return;
       if (isAiMonthlyLimitError(e, null)) {
         await refreshPoiQuota();
         setPoiError(null);
@@ -353,14 +411,14 @@ export default function PropertyMiniMap({
         setPoiError(getAiErrorMessage(e, null, "Failed to load nearby places"));
       }
     } finally {
-      setLoadingPOIs(false);
+      if (requestId === activePoiRequest.current) setLoadingPOIs(false);
     }
-  }, [address, city, lat, lng, shouldLoadMap, user, poiQuota, onWalkScoreChange, refreshPoiQuota]);
+  }, [address, city, lat, lng, shouldLoadMap, user, poiQuota, refreshPoiQuota]);
 
   useEffect(() => {
     if (
-      !lat ||
-      !lng ||
+      lat === null ||
+      lng === null ||
       !user ||
       !shouldLoadMap ||
       pois ||
@@ -389,16 +447,16 @@ export default function PropertyMiniMap({
 
   // Street view URL — opens Google Maps street view mode
   const streetViewUrl =
-    lat && lng
+    lat !== null && lng !== null
       ? `https://www.google.com/maps?q=${lat},${lng}&layer=c&cbll=${lat},${lng}&cbp=12,0,,0,0`
       : `https://www.google.com/maps/search/${encodeURIComponent(fallbackLocationQuery)}`;
 
   const googleMapsUrl =
-    lat && lng
+    lat !== null && lng !== null
       ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
       : `https://www.google.com/maps/search/${encodeURIComponent(fallbackLocationQuery)}`;
 
-  if (!lat || !lng) {
+  if (lat === null || lng === null) {
     // Fallback: Google Maps embed when no lat/lng
     return (
       <div className="glass-card rounded-xl overflow-hidden border border-border">
@@ -507,7 +565,6 @@ export default function PropertyMiniMap({
             initialViewState={{ longitude: lng, latitude: lat, zoom: 15 }}
             style={{ width: "100%", height: "100%" }}
             mapStyle="mapbox://styles/mapbox/dark-v11"
-            onLoad={() => setMapLoaded(true)}
             scrollZoom={false}
             dragPan={true}
           >
@@ -526,32 +583,6 @@ export default function PropertyMiniMap({
                 <div className="w-1 h-2 bg-primary rounded-b-full" />
               </div>
             </MapComponents.Marker>
-
-            {/* POI markers on map */}
-            {mapLoaded &&
-              filteredPOIs.map((poi, idx) => {
-                const offset = CATEGORY_OFFSETS[poi.category];
-                const poiLng = lng + offset[0] * (1 + (idx % 3) * 0.3);
-                const poiLat = lat + offset[1] * (1 + (idx % 2) * 0.4);
-                const meta = CATEGORY_META[poi.category];
-                const Icon = meta.icon;
-                return (
-                  <MapComponents.Marker
-                    key={getPoiKey(poi)}
-                    longitude={poiLng}
-                    latitude={poiLat}
-                    anchor="center"
-                  >
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center shadow-md border border-white/30"
-                      style={{ background: meta.markerColour }}
-                      title={poi.name}
-                    >
-                      <Icon className="w-3 h-3 text-background" />
-                    </div>
-                  </MapComponents.Marker>
-                );
-              })}
           </MapComponents.Map>
         )}
 
@@ -571,7 +602,7 @@ export default function PropertyMiniMap({
               <div className="flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  AI Nearby Places
+                   {t("poiProvenance.suggestionsTitle", { defaultValue: "AI Nearby Place Suggestions" })}
                 </span>
                 {loadingPOIs && (
                   <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
@@ -653,74 +684,11 @@ export default function PropertyMiniMap({
               </div>
             )}
 
-            {/* Disclaimer */}
-            {pois && (
-              <>
-                {/* Walk Score summary */}
-                {(() => {
-                  const ws = computeWalkScore(pois);
-                  const label = walkScoreLabel(ws);
-                  const colour = walkScoreColour(ws);
-                  const r = 14,
-                    c = 2 * Math.PI * r;
-                  return (
-                    <div className="flex items-center gap-3 px-3 py-3 bg-secondary rounded-xl border border-border mt-2">
-                      <svg width="44" height="44" viewBox="0 0 44 44">
-                        <circle
-                          cx="22"
-                          cy="22"
-                          r={r}
-                          fill="none"
-                          stroke="hsl(var(--border))"
-                          strokeWidth="3.5"
-                        />
-                        <circle
-                          cx="22"
-                          cy="22"
-                          r={r}
-                          fill="none"
-                          stroke={colour}
-                          strokeWidth="3.5"
-                          strokeDasharray={`${(c * ws) / 100} ${c * (1 - ws / 100)}`}
-                          strokeLinecap="round"
-                          transform="rotate(-90 22 22)"
-                        />
-                        <text
-                          x="22"
-                          y="26"
-                          textAnchor="middle"
-                          fontSize="11"
-                          fontWeight="700"
-                          fill={colour}
-                        >
-                          {ws}
-                        </text>
-                      </svg>
-                      <div>
-                        <p
-                          className="text-xs font-bold"
-                          style={{ color: colour }}
-                        >
-                          {label}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          Walk Score · out of 100
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })()}
-                <p className="text-[10px] text-muted-foreground mt-3 text-center">
-                  AI estimates based on property location — distances are
-                  approximate walking distances
-                </p>
-                {poiWarning && (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-[10px] leading-relaxed text-amber-900">
-                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-                    <span>{poiWarning} Verify exact place names and distances before relying on them.</span>
-                  </div>
-                )}
-              </>
+            {pois && poiWarning && (
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-[10px] leading-relaxed text-amber-900">
+                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                <span>{t("poiProvenance.aiWarning", { defaultValue: "AI-generated nearby-place suggestions are not independently verified. Confirm names and distances before relying on them." })}</span>
+              </div>
             )}
           </>
         )}

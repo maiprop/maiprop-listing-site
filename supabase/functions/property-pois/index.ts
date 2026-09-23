@@ -15,6 +15,8 @@ const VETTED_POI_RULES = buildVettedAnswerRules({
   scope: "nearby points-of-interest estimates",
   timeSensitiveTopics: ["business hours", "school names", "transit stops", "healthcare facilities", "shop availability"],
 });
+const POI_CATEGORIES = ["school", "transit", "cafe", "hospital", "shopping", "park"] as const;
+const AI_SUGGESTION_WARNING = "AI-generated nearby-place suggestions are not independently verified. Confirm names and distances before relying on them.";
 
 const optionalBoundedText = (label: string, maxLength: number) =>
   z.preprocess(
@@ -40,6 +42,7 @@ const optionalCoordinate = (label: string, min: number, max: number) =>
   );
 
 const propertyPoisRequestSchema = z.object({
+  responseVersion: z.unknown().optional(),
   address: optionalBoundedText("property address", 240),
   city: optionalBoundedText("property city", 120),
   lat: optionalCoordinate("property latitude", -90, 90),
@@ -61,43 +64,26 @@ const propertyPoisRequestSchema = z.object({
   }
 });
 
-type FallbackPoi = {
-  name: string;
-  category: "school" | "transit" | "cafe" | "hospital" | "shopping" | "park";
-  distanceKm: number;
-  walkMinutes: number;
-  description: string;
-  isFallbackEstimate: true;
-};
+const providerPoiSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  category: z.enum(POI_CATEGORIES),
+  distanceKm: z.number().finite().min(0).max(5),
+  walkMinutes: z.number().finite().int().min(0).max(120),
+  description: z.string().trim().min(1).max(240).optional(),
+}).strict();
 
-const fallbackPois = (city: string): FallbackPoi[] => {
-  const area = city?.trim() || "the area";
-  return [
-    { name: "School proximity estimate", category: "school", distanceKm: 0.45, walkMinutes: 5, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Secondary-school proximity estimate", category: "school", distanceKm: 1.35, walkMinutes: 16, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Transit-stop proximity estimate", category: "transit", distanceKm: 0.18, walkMinutes: 2, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Transit-hub proximity estimate", category: "transit", distanceKm: 1.1, walkMinutes: 13, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Cafe proximity estimate", category: "cafe", distanceKm: 0.28, walkMinutes: 3, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Daily convenience proximity estimate", category: "cafe", distanceKm: 0.62, walkMinutes: 7, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Healthcare proximity estimate", category: "hospital", distanceKm: 1.4, walkMinutes: 17, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Pharmacy proximity estimate", category: "hospital", distanceKm: 0.35, walkMinutes: 4, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Shopping proximity estimate", category: "shopping", distanceKm: 0.5, walkMinutes: 6, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Retail-cluster proximity estimate", category: "shopping", distanceKm: 1.8, walkMinutes: 22, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Green-space proximity estimate", category: "park", distanceKm: 0.75, walkMinutes: 9, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-    { name: "Public-square proximity estimate", category: "park", distanceKm: 1.2, walkMinutes: 14, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
-  ];
-};
+const providerPoisSchema = z.object({
+  pois: z.array(providerPoiSchema).min(1).max(15),
+}).strict();
 
-const fallbackPoisResponse = (
-  city: string,
+const unavailableResponse = (
   corsHeaders: Record<string, string>,
   reason: string,
 ): Response => {
-  log.warn("property-pois: using fallback POIs", { city, reason });
-  return new Response(
-    JSON.stringify({ pois: fallbackPois(city), generatedBy: "fallback", warning: reason }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-  );
+  log.warn("property-pois: nearby-place evidence unavailable", { reason });
+  return errorResponse("Nearby-place evidence unavailable", 503, corsHeaders, {
+    code: "poi_unavailable",
+  });
 };
 
 const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, listing context, AI parsing, and response shaping.
@@ -114,20 +100,28 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     const lat = body.lat ?? body.latitude;
     const lng = body.lng ?? body.longitude;
 
-    const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
-    if (quota.errorResponse) return quota.errorResponse;
+    // Older clients turn any successful POI array into guessed markers and a
+    // fabricated walk score. Reject them before configuration, quota, or paid
+    // provider work. Only v2 clients understand suggestion-only semantics.
+    if (body.responseVersion !== 2) {
+      return unavailableResponse(corsHeaders, "Unsupported property-pois response version");
+    }
 
     if (!hasAIProviderCredentials()) {
-      return fallbackPoisResponse(
-        String(city ?? ""),
+      return unavailableResponse(
         corsHeaders,
-        "AI provider is not configured; deterministic nearby-place fallback used",
+        "AI provider is not configured",
       );
     }
 
-    const prompt = `You are a Greek real estate assistant. Given a property at address "${address}" in ${city}, Greece (coordinates: ${lat}, ${lng}), generate up to 12 cautious nearby points-of-interest estimates that a prospective buyer would care about.
+    const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+    if (quota.errorResponse) return quota.errorResponse;
+
+    const prompt = `You are a Greek real estate assistant. Given a property at address "${address}" in ${city}, Greece (coordinates: ${lat}, ${lng}), suggest up to 12 possible nearby points of interest that a prospective buyer may want to verify.
 
 ${VETTED_POI_RULES}
+
+These are model suggestions, not independently verified geographic evidence. Do not provide coordinates and do not imply that a suggested place or distance has been verified.
 
 Return ONLY valid JSON. Use this example shape exactly:
 {
@@ -145,9 +139,9 @@ Return ONLY valid JSON. Use this example shape exactly:
 Rules:
 - Do not invent exact school, business, transit, hospital, or park names. Use a precise real name only if it is a stable, widely known landmark for the supplied area; otherwise use generic labels such as "Nearby primary school" or "${city} transit stop".
 - Allowed categories: school, transit, cafe, hospital, shopping, park
-- Include at least one item per allowed category
-- Distances are estimates only; spread them realistically from 50m to 2.5km and mention uncertainty in descriptions when names are generic
-- walkMinutes = Math.round(distanceKm * 12) approximately
+- Omit categories for which you cannot provide a useful suggestion
+- Distances and walk times are estimates only; mention that uncertainty in each description
+- Do not include latitude, longitude, lat, lng, or any other marker coordinates
 - Return only the JSON object, nothing else
 - The JSON must be complete and parseable`;
 
@@ -161,14 +155,18 @@ Rules:
       const status = response.status;
       const text = await response.text();
       log.error("AI gateway error", { status, body: text.slice(0, 500) });
-      return fallbackPoisResponse(
-        String(city ?? ""),
+      return unavailableResponse(
         corsHeaders,
-        `AI provider returned ${status}; deterministic nearby-place fallback used`,
+        `AI provider returned ${status}`,
       );
     }
 
-    const aiData = await response.json();
+    let aiData: unknown;
+    try {
+      aiData = await response.json();
+    } catch {
+      return unavailableResponse(corsHeaders, "AI provider returned a non-JSON response");
+    }
     const content = readOpenAITextContent(aiData);
 
     // Strip markdown code fences if present
@@ -184,74 +182,37 @@ Rules:
       jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
     }
 
-    type RawPoi = {
-      name?: unknown;
-      category?: unknown;
-      distanceKm?: unknown;
-      walkMinutes?: unknown;
-      description?: unknown;
-      isFallbackEstimate?: unknown;
-    };
-    let parsed: { pois: RawPoi[] };
-    let fallbackReason: string | null = null;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
-      // Attempt to repair common AI JSON glitches
-      const repaired = jsonStr
-        .replace(/,\s*}/g, "}")          // trailing commas in objects
-        .replace(/,\s*]/g, "]")          // trailing commas in arrays
-        .replace(/\)\s*\}/g, "}")        // stray ) before closing brace
-        .replace(/\)\s*,/g, ",")         // stray ) before commas
-        // eslint-disable-next-line no-control-regex
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ""); // control chars
-
-      try {
-        parsed = JSON.parse(repaired);
-      } catch {
-        log.warn("property-pois: AI returned invalid JSON; using fallback POIs", {
-          city,
-          response: jsonStr?.slice(0, 500),
-        });
-        fallbackReason = "AI provider returned invalid nearby-place JSON; generic category estimates used";
-        parsed = { pois: fallbackPois(String(city ?? "")) };
-      }
+      log.warn("property-pois: AI returned invalid JSON", {
+        city,
+        response: jsonStr?.slice(0, 500),
+      });
+      return unavailableResponse(corsHeaders, "AI provider returned invalid nearby-place JSON");
     }
 
-    if (!Array.isArray(parsed.pois)) {
-      log.warn("property-pois: invalid AI response shape; using fallback POIs", { city });
-      fallbackReason = "AI provider returned an invalid nearby-place shape; generic category estimates used";
-      parsed = { pois: fallbackPois(String(city ?? "")) };
+    const providerResult = providerPoisSchema.safeParse(parsed);
+    if (!providerResult.success) {
+      log.warn("property-pois: invalid AI response shape", {
+        city,
+        issues: providerResult.error.issues.map((issue) => ({ path: issue.path, code: issue.code })),
+      });
+      return unavailableResponse(corsHeaders, "AI provider returned an invalid nearby-place shape");
     }
-
-    // Validate and sanitise
-    const categories = ["school", "transit", "cafe", "hospital", "shopping", "park"];
-    const pois = parsed.pois
-      .filter(
-        (p) =>
-          typeof p.name === "string" &&
-          typeof p.category === "string" &&
-          categories.includes(p.category) &&
-          typeof p.distanceKm === "number",
-      )
-      .map((p) => {
-        const distanceKm = Math.max(0.05, Math.min(5, Number(p.distanceKm)));
-        const fallbackWalk = Math.round(distanceKm * 12);
-        return {
-          name: String(p.name).slice(0, 60),
-          category: p.category as string,
-          distanceKm,
-          walkMinutes: Math.max(1, Math.min(60, Number(p.walkMinutes ?? fallbackWalk))),
-          description: p.description ? String(p.description).slice(0, 40) : undefined,
-          isFallbackEstimate: p.isFallbackEstimate === true ? true : undefined,
-        };
-      })
-      .slice(0, 15);
 
     await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify({
-      pois,
-      ...(fallbackReason ? { generatedBy: "fallback", warning: fallbackReason } : { generatedBy: "ai" }),
+      responseVersion: 2,
+      pois: providerResult.data.pois,
+      generatedBy: "ai",
+      warning: AI_SUGGESTION_WARNING,
+      provenance: {
+        source: "ai_model_suggestion",
+        independentlyVerified: false,
+        coordinatesProvided: false,
+      },
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

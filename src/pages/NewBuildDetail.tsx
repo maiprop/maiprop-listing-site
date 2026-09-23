@@ -147,7 +147,6 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
   const startConv = useStartConversation();
   const [contactLoading, setContactLoading] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
-  const [walkScore, setWalkScore] = useState<number | null>(null);
 
   const { data: isFavorited = false } = useIsFavorited(id ?? "");
   const toggleFav = useToggleFavorite();
@@ -688,7 +687,6 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
                     address={displayAddress}
                     city={displayCity}
                     title={displayTitle}
-                    onWalkScoreChange={setWalkScore}
                   />
                 </Suspense>
               </div>
@@ -874,7 +872,6 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
 
               {/* Walk Score + Safety + Noise */}
               <PropertyScoresSection
-                walkScore={walkScore}
                 walkabilityScore={listing?.walkability_score != null ? Number(listing.walkability_score) : null}
                 safetyScore={listing?.safety_score != null ? Number(listing.safety_score) : null}
                 noiseScore={listing?.noise_score != null ? Number(listing.noise_score) : null}

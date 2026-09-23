@@ -5,7 +5,7 @@
  * AuctionRouter. This page intentionally mirrors that same detail layout so
  * auctions opened from /dashboard and /auctions feel like one product surface.
  */
-import { Suspense, lazy, useMemo, useState } from "react";
+import { Suspense, lazy, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation, useParams } from "react-router-dom";
@@ -255,7 +255,6 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const locale = isGreek ? "el" : "en";
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: AuctionRouteState };
-  const [walkScore, setWalkScore] = useState<number | null>(null);
   const { user } = useAuth();
   const { isPro } = useSubscription();
   const translate: AuctionDetailTranslate = (key, options) => t(key, options);
@@ -610,7 +609,6 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
                       title={title}
                       address={address ?? ""}
                       city={city}
-                      onWalkScoreChange={setWalkScore}
                     />
                   </Suspense>
                 </div>
@@ -663,7 +661,7 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
                 )}
               </div>
 
-              <PropertyScoresSection walkScore={walkScore} walkabilityScore={null} safetyScore={null} noiseScore={null} />
+              <PropertyScoresSection walkabilityScore={null} safetyScore={null} noiseScore={null} />
 
               {isPro ? (
                 <PropertyValuation

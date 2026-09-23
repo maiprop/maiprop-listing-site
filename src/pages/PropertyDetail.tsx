@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense, useMemo } from "react";
+import { useEffect, lazy, Suspense, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { useModal } from "@/hooks/useModal";
@@ -127,7 +127,6 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   }, [dbListing, id, navigate]);
 
   const modal = useModal<"viewing" | "auctionAlert">();
-  const [walkScore, setWalkScore] = useState<number | null>(null);
 
   // AI Market Insights — quota is checked on load, and provider work only runs after user action.
   const {
@@ -475,7 +474,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
                     address={address}
                     city={city}
                     title={title}
-                    onWalkScoreChange={setWalkScore} />
+                  />
                 </Suspense>
               </DeferredDetailPanel>
 
@@ -528,7 +527,6 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
 
               {/* ② Walk Score + Safety + Noise scores */}
               <PropertyScoresSection
-                walkScore={walkScore}
                 walkabilityScore={db?.walkability_score != null ? Number(db.walkability_score) : null}
                 safetyScore={db?.safety_score != null ? Number(db.safety_score) : null}
                 noiseScore={db?.noise_score != null ? Number(db.noise_score) : null}
