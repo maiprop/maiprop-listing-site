@@ -2562,6 +2562,16 @@
       "messagePlaceholder": "What are you looking for? (optional)",
       "submit": "Register Interest",
       "submissionError": "We couldn't register your interest. Please try again.",
+      "conversationError": "Could not start conversation.",
+      "recipientUnavailable": "This listing cannot accept enquiries.",
+      "invalidReceipt": "The server returned an invalid enquiry receipt.",
+      "responseUnavailable": "The enquiry response is unavailable.",
+      "uncertain": "We couldn't confirm whether your enquiry was saved. Retry these details to check without creating another enquiry. Keep this page open until it is confirmed.",
+      "retry": "Retry these details",
+      "startNew": "Start a new enquiry",
+      "startNewWarning": "The previous enquiry may already be saved. Starting a new enquiry can create another enquiry and owner notification.",
+      "confirmNew": "Confirm new enquiry",
+      "makeAnother": "Make another enquiry",
       "privacyNote": "Your enquiry is sent directly to the developer. No spam, no middlemen."
     }
   },

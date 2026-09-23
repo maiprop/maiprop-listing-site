@@ -2299,6 +2299,7 @@ export type Database = {
           new_building_id: string
           notes: string
           phone: string | null
+          submission_key: string | null
           updated_at: string
           user_id: string
           utm_source: string | null
@@ -2312,6 +2313,7 @@ export type Database = {
           new_building_id: string
           notes?: string
           phone?: string | null
+          submission_key?: string | null
           updated_at?: string
           user_id: string
           utm_source?: string | null
@@ -2325,6 +2327,7 @@ export type Database = {
           new_building_id?: string
           notes?: string
           phone?: string | null
+          submission_key?: string | null
           updated_at?: string
           user_id?: string
           utm_source?: string | null
@@ -7622,6 +7625,22 @@ export type Database = {
           p_transaction_type: string
         }
         Returns: string
+      }
+      submit_new_build_enquiry: {
+        Args: {
+          p_email: string
+          p_full_name: string
+          p_new_building_id: string
+          p_notes: string
+          p_phone: string | null
+          p_submission_key: string
+          p_user_id: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          new_building_id: string
+        }[]
       }
       submit_firesale_interest: {
         Args: {

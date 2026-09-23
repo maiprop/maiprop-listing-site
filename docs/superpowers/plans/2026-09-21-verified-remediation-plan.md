@@ -313,6 +313,9 @@ These tasks address newly verified active paths from the current agent audit. Re
 ### Task 18 — A3b — Make enquiry replay durable
 
 **Files:** additive new-build enquiry submission migration/RPC, generated interface types if required, NewBuildDetail and RegisterInterestCard, behavior and SQL tests.
+
+The later local actual-role INSERT RETURNING and own-row SELECT probe exposed a dependency in the prospective invoker replay design: the enquiry SELECT policy reads explicitly denied raw listing columns. Preserve the old simple-insert baseline; do not call this a reproduced deployed form failure. Keep the submit routine SECURITY INVOKER and all actor/key/INSERT/trigger rules. Add only `private.current_user_owns_listing(uuid)`, an exact current-caller owner predicate, and a guarded alteration of the one supported SELECT policy's raw-listing subquery. Preserve captured PUBLIC/no-admin versus source authenticated/private-admin policy names, roles and terms, plus existing table/schema ACLs; reject unknown drift and prove both supported baselines. Task 23 reuses the exact helper body and adds only its needed `service_role` EXECUTE grant; it must not create a duplicate wrapper. No raw-listing regrant or whole-RPC definer shortcut is part of this repair.
+
 - [ ] Inspect current raw lead, CRM, project-lead and notification identity rules; record a lost-response retry reproduction.
 - [ ] Introduce stable client submission identity with a constrained database replay path. The same user/listing/key must return the same stored submission and emit no second trigger effects.
 - [ ] Preserve the key through ambiguous failures; rotate after confirmed completion/new submission. Verify same-key different-payload handling and caller authorization explicitly.
@@ -344,3 +347,35 @@ These tasks address newly verified active paths from the current agent audit. Re
 - [ ] Verify that an approve/reject action changes an authorized existing row before confirming success; reproduce a concurrently deleted or no-longer-authorized row instead of treating an error-free zero-row response as persistence.
 - [ ] Keep documents, tabs, verification permissions and admin workflow intact. Use local fixtures; no real financial documents or production writes.
 - [ ] Cover empty refresh, error/retry, deal switch race, successful mutation and zero-row/denied mutation with actual component behavior tests.
+
+### Task 22 — Open Houses — Enforce the existing RSVP limit on the active service path
+
+**Files:** one new forward migration replacing the existing monthly-limit trigger; focused SQL regression/race proof and existing hook/service error compatibility tests. Exact requirements: `task-22-brief.md` in this plan's SDD workspace.
+
+- [ ] Preserve the verified local RED: a free buyer's actual limit is three, but the active service/no-sub explicit-actor RPC accepted four; the legacy actor-context RPC rejected the fourth. Bind the six effective definitions and retain the rollback evidence.
+- [ ] Enforce the existing quota for the admitted requester carried by the current RPC marker, without injecting a JWT, duplicating the quota algorithm, changing limits, widening grants or editing historical migrations.
+- [ ] Preserve Pro/nonbuyer limits, excluded statuses/month boundaries, existing registration retries, capacity checks and authenticated requester mismatch denial.
+- [ ] Verify actual roles and state under normal triggers, then prove one-buyer/two-different-listings concurrency at the quota boundary using bounded local sessions and explicit cleanup.
+- [ ] Verify existing error/UI mapping and a scoped prior-source upgrade. Reconcile exact deployed capabilities separately before release selection; local source evidence is not proof of live parity.
+
+### Task 23 — Open Houses — Reconcile the supported workflow with private listing storage
+
+**Files:** selected forward SQL capabilities and the directly coupled Open Houses/admin-POF readers and mutation callers, as constrained by `task-23-design.md` and `task-23-brief.md` in this plan's SDD workspace.
+
+- [ ] Preserve the actual authenticated attended-bidder submit failure: SQLSTATE 42501 on listings, despite valid RPC EXECUTE and offer-table access. Bind final routine bodies and the explicit July 22 raw-listing revocations. Acceptance/reopen were not reached and remain unproved.
+- [ ] Reproduce each named coupled read/embed/policy/mutation failure before its repair. Keep current supported fields, host/requester/bidder boundaries, deadlines, guards, status transitions, retry and concurrency semantics. Use the smallest coherent scoped interfaces and keep raw listing storage private.
+- [ ] Preserve the intended platform-admin POF module through a narrow authoritative admin read/review boundary only after actual authority and denial proof. Limit output to panel needs and writes to existing POF review fields. Do not add general administrator/organization bypasses to registration/offer RLS.
+- [ ] Reuse Task 18's exact `private.current_user_owns_listing(uuid)` body/security contract. Add only the needed `service_role` EXECUTE grant while preserving Task 18's anon/authenticated grants; do not redefine it or add a synonymous module helper.
+- [ ] Execute actual-role and local HTTP contracts, including outsider/nonadmin denial, private-field protection, failed/zero-row/conflicting actions, rollback, and original bidder-submit/host-reveal/accept/reopen flows. Keep synthetic browser proof distinct from backend authorization proof.
+- [ ] Verify compatible SQL/service/client order, retained old interfaces where needed and truthful older-client behavior. Do not restore broad grants, delete historical migrations, invent provider actions or apply a migration backlog.
+
+### Task 24 — AI credits — Keep reservation admission consistent with spendable credits
+
+**Files:** one new forward migration replacing only the explicit-actor reservation calculation, focused SQL role/state and two-session race tests. Exact scope is `task-24-brief.md` in this plan's SDD workspace.
+
+- [ ] Retain executed local source evidence: with base 5 and 2 valid credits, calls 1–6 succeed but 7/8 reject while batch status allows use and one credit remains. Normal triggers and actual service/no-sub context; full rollback 0.
+- [ ] Reuse existing `get_ai_call_monthly_limit` under the unchanged actor/bucket/month lock; preserve signature/grants/JSON, eligibility, runtime, UTC month, legacy reservation and trigger-only consumption. No new entitlement algorithm or second credit charge.
+- [ ] Prove both credits usable, exhausted denial/status agreement, prior-month consumption, other actor/bucket/runtime isolation and rollback, then a genuine two-session one-credit race with exact cleanup.
+- [ ] Keep a selected forward-only upgrade and exact deployed helper/body compatibility gate; no provider call, production parity claim, historical usage rewrite or migration backlog.
+
+Execute Tasks 22/23 after Task 21 and Task 24 after Task 23, all before D0/final coverage. Their focused proofs supplement D1; do not rerun old baselines or count historical source text as coverage. Final all-source and selected-upgrade evidence still bind the complete current candidate. These remain planned work, not completed repairs.

@@ -2,8 +2,6 @@
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -13,7 +11,7 @@ import {
   ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine, Phone,
   Loader2, Maximize2, FileImage,
 } from "lucide-react";
-import { useAuth, type Profile } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useIsFavorited, useToggleFavorite } from "@/hooks/useFavorites";
 import { PropertyScoresSection } from "@/components/property/PropertyScoresSection";
@@ -31,14 +29,14 @@ import { ConstructionTimeline } from "@/components/new-build/ConstructionTimelin
 import { FloorPlanSection } from "@/components/new-build/FloorPlanSection";
 import { ConstructionSpecs } from "@/components/new-build/ConstructionSpecs";
 import { UnitShowcase } from "@/components/new-build/UnitShowcase";
-import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCard";
+import { NewBuildInterestController } from "@/components/new-build/NewBuildInterestController";
 import { ProjectOverview } from "@/components/new-build/ProjectOverview";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { getAiErrorMessage, isAiMonthlyLimitError } from "@/lib/aiErrorUtils";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
-import { newBuildLeadSchema, parseMutationInput, propertyValuationBodySchema } from "@/lib/mutationSchemas";
+import { parseMutationInput, propertyValuationBodySchema } from "@/lib/mutationSchemas";
 import { buildNewBuildValuationContext } from "@/lib/newBuildValuationContext";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
 import { useListing } from "@/hooks/useListings";
@@ -69,31 +67,12 @@ const EnergyBadge = ({ cls }: { cls: string }) => {
   );
 };
 
-type RegisterInterestForm = {
-  name: string;
-  phone: string;
-  message: string;
-};
-
-type RegisterInterestPayload = {
-  listingId: string;
-  user: User;
-  profile: Profile | null;
-  form: RegisterInterestForm;
-  contactName: string;
-};
-
 type AIInsightsResponse = {
   error?: string;
   [key: string]: unknown;
 };
 
 const AI_TIMEOUT_MS = 45_000;
-
-const cleanOptionalText = (value: string | null | undefined) => {
-  const trimmed = value?.trim();
-  return trimmed || undefined;
-};
 
 const getListingTags = (listing: NewBuildListing | null | undefined): string[] =>
   Array.isArray(listing?.tags)
@@ -102,31 +81,6 @@ const getListingTags = (listing: NewBuildListing | null | undefined): string[] =
 
 const isRenovationProjectListing = (listing: NewBuildListing | null | undefined): boolean =>
   getListingTags(listing).includes("renovation_project");
-
-const getInterestPhone = (form: RegisterInterestForm, profile: Profile | null) => {
-  return cleanOptionalText(form.phone) ?? cleanOptionalText(profile?.phone) ?? null;
-};
-
-const insertNewBuildLead = async ({
-  listingId,
-  user,
-  profile,
-  form,
-  contactName,
-}: RegisterInterestPayload) => {
-  const payload = parseMutationInput(newBuildLeadSchema, {
-    new_building_id: listingId,
-    user_id: user.id,
-    email: user.email ?? "",
-    full_name: contactName,
-    phone: getInterestPhone(form, profile),
-    investment_budget: 0,
-    notes: cleanOptionalText(form.message) ?? "",
-    utm_source: "newbuild_detail_register",
-  }, "new build lead");
-  const { error } = await supabase.from("new_building_leads").insert(payload);
-  if (error) throw error;
-};
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 // skipcq: JS-0067 - React route component is intentionally module-scoped.
@@ -266,23 +220,6 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
     layoutLabel,
     vatSummary,
   });
-
-  const handleRegisterInterest = async (form: RegisterInterestForm) => {
-    const ownerId = listing?.owner_id;
-    if (!id || !ownerId) throw new Error("This listing cannot accept enquiries");
-    if (!user) {
-      navigate("/login");
-      throw new Error("You must sign in to register interest");
-    }
-
-    const contactName = cleanOptionalText(form.name)
-      ?? cleanOptionalText(profile?.display_name)
-      ?? cleanOptionalText(profile?.first_name)
-      ?? tr("newBuildDetail.fallbackInterestedBuyer", "Interested buyer");
-    await startConv.mutateAsync({ other_user_id: ownerId, listing_id: id });
-    await insertNewBuildLead({ listingId: id, user, profile, form, contactName });
-    toast.success(tr("newBuildDetail.interestCard.submittedBody", "Your enquiry was saved successfully."));
-  };
 
   const handleContact = async () => {
     if (!user) { navigate("/login"); return; }
@@ -769,11 +706,15 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
             {/* ── Right: sticky sidebar ───────────────────────────── */}
             <div className="min-w-0 space-y-4 self-start lg:sticky lg:top-24">
                 {/* Register Interest card */}
-                <RegisterInterestCard
+                <NewBuildInterestController
+                  key={`${user?.id ?? "anonymous"}:${listing.id}`}
                   listing={listing as Record<string, unknown>}
                   user={user}
+                  profile={profile}
+                  ownerId={listing.owner_id ?? ""}
                   onLogin={() => navigate("/login")}
-                  onContact={handleRegisterInterest}
+                  startConversation={(input) => startConv.mutateAsync(input)}
+                  successMessage={tr("newBuildDetail.interestCard.submittedBody", "Your enquiry was saved successfully.")}
                 />
 
                 {/* Call button (always accessible) */}

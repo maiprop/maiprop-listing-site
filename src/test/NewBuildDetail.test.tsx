@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { valuationV2 } from "@/test/valuationV2Fixture";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 const {
@@ -13,6 +13,7 @@ const {
   registerInterestCardPropsMock,
   navigateMock,
   fromMock,
+  rpcMock,
   publicApiMock,
   functionsInvokeMock,
   useAiQuotaMock,
@@ -29,6 +30,7 @@ const {
   registerInterestCardPropsMock: vi.fn(),
   navigateMock: vi.fn(),
   fromMock: vi.fn(),
+  rpcMock: vi.fn(),
   publicApiMock: vi.fn(),
   functionsInvokeMock: vi.fn(),
   useAiQuotaMock: vi.fn(),
@@ -44,6 +46,7 @@ vi.mock("@tanstack/react-query", async () => {
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args),
     functions: { invoke: functionsInvokeMock },
   },
 }));
@@ -152,12 +155,17 @@ vi.mock("@/components/new-build/RegisterInterestCard", () => ({
     user,
     onLogin,
     onContact,
+    ...submissionProps
   }: {
     user: { id: string } | null;
     onLogin: () => void;
-    onContact: (form: { name: string; phone: string; message: string }) => Promise<void>;
+    onContact: (form: { name: string; phone: string; message: string }) => Promise<unknown>;
+    submissionStatus?: string;
+    submissionError?: string | null;
+    onRetry?: () => Promise<void>;
+    onStartNew?: () => void;
   }) => {
-    registerInterestCardPropsMock({ user, onLogin, onContact });
+    registerInterestCardPropsMock({ user, onLogin, onContact, ...submissionProps });
     return (
       <div>
       <span>{user ? "signed in interest" : "signed out interest"}</span>
@@ -291,6 +299,7 @@ beforeEach(() => {
     registerInterestCardPropsMock,
     navigateMock,
     fromMock,
+    rpcMock,
     publicApiMock,
     functionsInvokeMock,
     useAiQuotaMock,
@@ -312,6 +321,14 @@ beforeEach(() => {
   useQueryMock.mockReturnValue({ data: listing, isLoading: false, error: null });
   startConversationMock.mockResolvedValue("conv-1");
   fromMock.mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) });
+  rpcMock.mockResolvedValue({
+    data: [{
+      id: "e1800000-0000-4000-8000-000000000001",
+      new_building_id: "listing-1",
+      created_at: "2026-09-23T19:00:00.000Z",
+    }],
+    error: null,
+  });
   functionsInvokeMock.mockResolvedValue({
     data: valuationV2({ estimatedValue: 500000, marketComparisonPct: 19, marketComparison: "above_market", pricingPosition: "overpriced", confidence: 80, confidenceLabel: "High", evidence: { ...valuationV2().evidence, fields: { ...valuationV2().evidence.fields, estimatedValue: "ai_estimate", pricePerSqmEstimate: "derived_ai", marketComparisonPct: "derived_ai" }, analysis: "ai_estimate" } }),
     error: null,
@@ -548,19 +565,26 @@ describe("NewBuildDetail", () => {
     await waitFor(() =>
       expect(startConversationMock).toHaveBeenCalledWith({ other_user_id: "owner-1", listing_id: "listing-1" }),
     );
-    expect(fromMock).toHaveBeenCalledWith("new_building_leads");
+    expect(rpcMock).toHaveBeenCalledWith("submit_new_build_enquiry", expect.objectContaining({
+      p_user_id: "buyer-1",
+      p_new_building_id: "listing-1",
+      p_email: "buyer@example.com",
+      p_full_name: "Form Name",
+      p_phone: "555",
+      p_notes: "Send plans",
+    }));
+    expect(fromMock).not.toHaveBeenCalledWith("new_building_leads");
     expect(fromMock).not.toHaveBeenCalledWith("notifications");
     expect(toastMock.success).toHaveBeenCalledWith("Your enquiry was saved successfully.");
   });
 
   it("rejects the interest callback when persistence rejects and never reports success", async () => {
     const insertError = { code: "42501", message: "permission denied" };
-    const insertMock = vi.fn().mockResolvedValue({ data: null, error: insertError });
     useAuthMock.mockReturnValue({
       user: { id: "buyer-1", email: "buyer@example.com" },
       profile: { display_name: "Buyer One", phone: "555-1" },
     });
-    fromMock.mockReturnValue({ insert: insertMock });
+    rpcMock.mockResolvedValue({ data: null, error: insertError });
 
     renderPage();
     const onContact = registerInterestCardPropsMock.mock.lastCall?.[0].onContact as
@@ -568,30 +592,34 @@ describe("NewBuildDetail", () => {
       | undefined;
 
     expect(onContact).toBeTypeOf("function");
-    await expect(onContact?.({ name: "Buyer One", phone: "555-1", message: "Send plans" }))
-      .rejects.toMatchObject(insertError);
-    expect(insertMock).toHaveBeenCalledOnce();
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await onContact?.({ name: "Buyer One", phone: "555-1", message: "Send plans" });
+    });
+    expect(outcome).toBe("rejected");
+    expect(rpcMock).toHaveBeenCalledOnce();
     expect(toastMock.success).not.toHaveBeenCalled();
   });
 
   it("rejects the interest callback when conversation creation rejects without inserting or reporting success", async () => {
     const conversationError = new Error("conversation unavailable");
-    const insertMock = vi.fn().mockResolvedValue({ error: null });
     useAuthMock.mockReturnValue({
       user: { id: "buyer-1", email: "buyer@example.com" },
       profile: { display_name: "Buyer One", phone: "555-1" },
     });
     startConversationMock.mockRejectedValueOnce(conversationError);
-    fromMock.mockReturnValue({ insert: insertMock });
 
     renderPage();
     const onContact = registerInterestCardPropsMock.mock.lastCall?.[0].onContact as
       | ((form: { name: string; phone: string; message: string }) => Promise<void>)
       | undefined;
 
-    await expect(onContact?.({ name: "Buyer One", phone: "555-1", message: "Send plans" }))
-      .rejects.toThrow("conversation unavailable");
-    expect(insertMock).not.toHaveBeenCalled();
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await onContact?.({ name: "Buyer One", phone: "555-1", message: "Send plans" });
+    });
+    expect(outcome).toBe("rejected");
+    expect(rpcMock).not.toHaveBeenCalled();
     expect(toastMock.success).not.toHaveBeenCalled();
   });
 
@@ -610,35 +638,204 @@ describe("NewBuildDetail", () => {
     const onContact = registerInterestCardPropsMock.mock.lastCall?.[0].onContact as
       (form: { name: string; phone: string; message: string }) => Promise<void>;
 
-    await expect(onContact({ name: "Buyer One", phone: "555-1", message: "Send plans" }))
-      .rejects.toThrow("This listing cannot accept enquiries");
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await onContact({ name: "Buyer One", phone: "555-1", message: "Send plans" });
+    });
+    expect(outcome).toBe("rejected");
     expect(startConversationMock).not.toHaveBeenCalled();
     expect(fromMock).not.toHaveBeenCalledWith("new_building_leads");
     expect(toastMock.success).not.toHaveBeenCalled();
   });
 
   it("allows retry after an ambiguous insert response without claiming exactly-once delivery", async () => {
-    const lostResponse = new Error("response lost after commit");
-    const insertMock = vi.fn()
+    const lostResponse = { code: "FETCH_ERROR", message: "response lost after commit" };
+    rpcMock
       .mockResolvedValueOnce({ data: null, error: lostResponse })
-      .mockResolvedValueOnce({ data: null, error: null });
+      .mockResolvedValueOnce({
+        data: [{ id: "e1800000-0000-4000-8000-000000000002", new_building_id: "listing-1", created_at: "2026-09-23T19:01:00.000Z" }],
+        error: null,
+      });
     useAuthMock.mockReturnValue({
       user: { id: "buyer-1", email: "buyer@example.com" },
       profile: { display_name: "Buyer One", phone: "555-1" },
     });
-    fromMock.mockReturnValue({ insert: insertMock });
 
-    renderPage();
-    const onContact = registerInterestCardPropsMock.mock.lastCall?.[0].onContact as
-      (form: { name: string; phone: string; message: string }) => Promise<void>;
+    const view = renderPage();
+    let props = registerInterestCardPropsMock.mock.lastCall?.[0] as {
+      onContact: (form: { name: string; phone: string; message: string }) => Promise<unknown>;
+      onRetry: () => Promise<void>;
+      submissionStatus: string;
+    };
     const form = { name: "Buyer One", phone: "555-1", message: "Send plans" };
 
-    await expect(onContact(form)).rejects.toBe(lostResponse);
+    await expect(props.onContact(form)).resolves.toBe("uncertain");
     expect(toastMock.success).not.toHaveBeenCalled();
+    await waitFor(() => {
+      props = registerInterestCardPropsMock.mock.lastCall?.[0];
+      expect(props.submissionStatus).toBe("uncertain");
+    });
 
-    await expect(onContact(form)).resolves.toBeUndefined();
-    expect(insertMock).toHaveBeenCalledTimes(2);
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "changed@example.com" },
+      profile: { display_name: "Changed Profile", phone: "999" },
+    });
+    view.rerender(page());
+    props = registerInterestCardPropsMock.mock.lastCall?.[0];
+
+    await expect(props.onRetry()).resolves.toBeUndefined();
+    expect(rpcMock).toHaveBeenCalledTimes(2);
+    expect(rpcMock.mock.calls[0]).toEqual(rpcMock.mock.calls[1]);
+    expect(rpcMock.mock.calls[0]?.[0]).toBe("submit_new_build_enquiry");
+    expect(rpcMock.mock.calls[0]?.[1]).toMatchObject({
+      p_user_id: "buyer-1",
+      p_new_building_id: "listing-1",
+      p_email: "buyer@example.com",
+      p_full_name: "Buyer One",
+      p_phone: "555-1",
+      p_notes: "Send plans",
+    });
+    expect(rpcMock.mock.calls[0]?.[1].p_submission_key).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(startConversationMock).toHaveBeenCalledOnce();
     expect(toastMock.success).toHaveBeenCalledOnce();
+    expect(fromMock).not.toHaveBeenCalledWith("new_building_leads");
+  });
+
+  it("keeps an ambiguous attempt frozen when a later retry is definitely rejected", async () => {
+    rpcMock
+      .mockResolvedValueOnce({ data: null, error: { code: "FETCH_ERROR", message: "response lost" } })
+      .mockResolvedValueOnce({ data: null, error: { code: "42501", message: "permission denied" } });
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One", phone: "555-1" },
+    });
+    renderPage();
+    let props = registerInterestCardPropsMock.mock.lastCall?.[0];
+
+    await expect(props.onContact({ name: "Buyer One", phone: "555-1", message: "Send plans" }))
+      .resolves.toBe("uncertain");
+    await waitFor(() => {
+      props = registerInterestCardPropsMock.mock.lastCall?.[0];
+      expect(props.submissionStatus).toBe("uncertain");
+    });
+    await props.onRetry();
+
+    expect(rpcMock.mock.calls[0]).toEqual(rpcMock.mock.calls[1]);
+    expect(registerInterestCardPropsMock.mock.lastCall?.[0].submissionStatus).toBe("uncertain");
+    expect(registerInterestCardPropsMock.mock.lastCall?.[0].submissionError).toBe("permission denied");
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it("admits only one mounted-controller submission while conversation creation is pending", async () => {
+    let resolveConversation!: (value: string) => void;
+    startConversationMock.mockReturnValue(new Promise((resolve) => { resolveConversation = resolve; }));
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    renderPage();
+    const props = registerInterestCardPropsMock.mock.lastCall?.[0];
+    const form = { name: "Buyer One", phone: "", message: "Send plans" };
+
+    const first = props.onContact(form);
+    await waitFor(() => expect(startConversationMock).toHaveBeenCalledOnce());
+    await expect(props.onContact(form)).resolves.toBe("rejected");
+    expect(startConversationMock).toHaveBeenCalledOnce();
+    expect(rpcMock).not.toHaveBeenCalled();
+
+    resolveConversation("conv-1");
+    await expect(first).resolves.toBe("confirmed");
+    expect(rpcMock).toHaveBeenCalledOnce();
+  });
+
+  it("discards a late receipt after the actor scope changes", async () => {
+    let resolveRpc!: (value: unknown) => void;
+    rpcMock.mockReturnValue(new Promise((resolve) => { resolveRpc = resolve; }));
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    const view = renderPage();
+    const firstProps = registerInterestCardPropsMock.mock.lastCall?.[0];
+    const pending = firstProps.onContact({ name: "Buyer One", phone: "", message: "Send plans" });
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledOnce());
+
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-2", email: "buyer2@example.com" },
+      profile: { display_name: "Buyer Two" },
+    });
+    view.rerender(page());
+    expect(registerInterestCardPropsMock.mock.lastCall?.[0].submissionStatus).toBe("editing");
+    resolveRpc({ data: [{ id: "e1800000-0000-4000-8000-000000000003", new_building_id: "listing-1", created_at: "2026-09-23T19:10:00.000Z" }], error: null });
+    await expect(pending).resolves.toBe("rejected");
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(registerInterestCardPropsMock.mock.lastCall?.[0].submissionStatus).toBe("editing");
+  });
+
+  it("rotates the key only after an explicit new-enquiry action", async () => {
+    rpcMock
+      .mockResolvedValueOnce({ data: null, error: { code: "FETCH_ERROR", message: "lost" } })
+      .mockResolvedValueOnce({ data: [{ id: "e1800000-0000-4000-8000-000000000004", new_building_id: "listing-1", created_at: "2026-09-23T19:11:00.000Z" }], error: null });
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    renderPage();
+    let props = registerInterestCardPropsMock.mock.lastCall?.[0];
+    await props.onContact({ name: "Buyer One", phone: "", message: "Original details" });
+    await waitFor(() => {
+      props = registerInterestCardPropsMock.mock.lastCall?.[0];
+      expect(props.submissionStatus).toBe("uncertain");
+    });
+    props.onStartNew();
+    await waitFor(() => expect(registerInterestCardPropsMock.mock.lastCall?.[0].submissionStatus).toBe("editing"));
+    props = registerInterestCardPropsMock.mock.lastCall?.[0];
+    await props.onContact({ name: "Buyer One", phone: "", message: "Changed details" });
+
+    const firstArgs = rpcMock.mock.calls[0]?.[1];
+    const secondArgs = rpcMock.mock.calls[1]?.[1];
+    expect(firstArgs.p_submission_key).not.toBe(secondArgs.p_submission_key);
+    expect(firstArgs.p_notes).toBe("Original details");
+    expect(secondArgs.p_notes).toBe("Changed details");
+    expect(startConversationMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats an empty RPC success payload as uncertain and never falls back to a raw insert", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One", phone: "555-1" },
+    });
+    renderPage();
+    const onContact = registerInterestCardPropsMock.mock.lastCall?.[0].onContact as
+      (form: { name: string; phone: string; message: string }) => Promise<unknown>;
+
+    await expect(onContact({ name: "Buyer One", phone: "555-1", message: "Send plans" }))
+      .resolves.toBe("uncertain");
+    expect(rpcMock).toHaveBeenCalledOnce();
+    expect(fromMock).not.toHaveBeenCalledWith("new_building_leads");
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed receipt identity instead of confirming an enquiry", async () => {
+    rpcMock.mockResolvedValue({
+      data: [{ id: "not-a-uuid", new_building_id: "listing-1", created_at: "2026-09-23T19:12:00.000Z" }],
+      error: null,
+    });
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    renderPage();
+    const props = registerInterestCardPropsMock.mock.lastCall?.[0];
+
+    await expect(props.onContact({ name: "Buyer One", phone: "", message: "Send plans" }))
+      .resolves.toBe("uncertain");
+
+    expect(registerInterestCardPropsMock.mock.lastCall?.[0].submissionError)
+      .toBe("The server returned an invalid enquiry receipt.");
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalledWith("new_building_leads");
   });
 
   it("uses all project units as representative metrics for new-build valuation", async () => {
@@ -911,24 +1108,21 @@ describe("NewBuildDetail", () => {
   });
 
   it("uses profile identity and phone fallbacks for a blank signed-in interest form", async () => {
-    const insertMock = vi.fn().mockResolvedValue({ error: null });
     useAuthMock.mockReturnValue({
       user: { id: "buyer-2", email: "buyer2@example.com" },
       profile: { display_name: " ", first_name: "Dimitra", phone: " 6900000000 " },
     });
-    fromMock.mockReturnValue({ insert: insertMock });
 
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "submit blank interest" }));
 
-    await waitFor(() => expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
-      new_building_id: "listing-1",
-      user_id: "buyer-2",
-      email: "buyer2@example.com",
-      full_name: "Dimitra",
-      phone: "6900000000",
-      notes: "",
-      investment_budget: 0,
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith("submit_new_build_enquiry", expect.objectContaining({
+      p_new_building_id: "listing-1",
+      p_user_id: "buyer-2",
+      p_email: "buyer2@example.com",
+      p_full_name: "Dimitra",
+      p_phone: "6900000000",
+      p_notes: "",
     })));
     expect(startConversationMock).toHaveBeenCalledWith({ other_user_id: "owner-1", listing_id: "listing-1" });
   });

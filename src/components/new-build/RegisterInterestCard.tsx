@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { MessageSquare, Loader2, CheckCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -11,12 +11,20 @@ export function RegisterInterestCard({
   user,
   onLogin,
   onContact,
+  submissionStatus = "editing",
+  submissionError,
+  onRetry,
+  onStartNew,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   listing: Record<string, any>;
   user: { id: string; email?: string } | null;
   onLogin: () => void;
-  onContact: (form: { name: string; phone: string; message: string }) => Promise<void>;
+  onContact: (form: { name: string; phone: string; message: string }) => Promise<"confirmed" | "uncertain" | "rejected" | void>;
+  submissionStatus?: "editing" | "sending" | "uncertain" | "confirmed";
+  submissionError?: string | null;
+  onRetry?: () => Promise<void> | void;
+  onStartNew?: () => void;
 }) {
   const { t } = useTranslation();
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
@@ -25,7 +33,9 @@ export function RegisterInterestCard({
   const [form, setForm] = useState({ name: "", phone: "", message: "" });
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [localSubmissionError, setLocalSubmissionError] = useState<string | null>(null);
+  const [confirmingNewEnquiry, setConfirmingNewEnquiry] = useState(false);
+  const submittingRef = useRef(false);
   const pricePerSqm = calculatePricePerSqm({
     price: listing.price,
     sqm: listing.sqm,
@@ -34,23 +44,35 @@ export function RegisterInterestCard({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmissionError(null);
+    if (submittingRef.current || submissionStatus !== "editing") return;
+    submittingRef.current = true;
+    setLocalSubmissionError(null);
     setLoading(true);
     try {
-      await onContact(form);
-      setForm({ name: "", phone: "", message: "" });
-      setSubmitted(true);
+      const outcome = await onContact(form);
+      if (outcome === undefined || outcome === "confirmed") {
+        setForm({ name: "", phone: "", message: "" });
+        setSubmitted(true);
+      }
     } catch {
-      setSubmissionError(tr(
+      setLocalSubmissionError(tr(
         "newBuildDetail.interestCard.submissionError",
         "We couldn't register your interest. Please try again.",
       ));
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
 
-  if (submitted) {
+  const handleStartNew = () => {
+    setConfirmingNewEnquiry(false);
+    setSubmitted(false);
+    setLocalSubmissionError(null);
+    onStartNew?.();
+  };
+
+  if (submitted || submissionStatus === "confirmed") {
     return (
       <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
         <div className="text-center py-3">
@@ -64,13 +86,20 @@ export function RegisterInterestCard({
           <div className="mt-4 space-y-2">
             <div className="rounded-lg bg-secondary/60 border border-border px-3 py-2.5 text-xs text-muted-foreground flex items-center gap-2">
               <MessageSquare className="w-3.5 h-3.5 shrink-0 text-primary" />
-              {tr("newBuildDetail.interestCard.messageCopy", "A copy of your enquiry has been sent to your messages")}
+              {tr("newBuildDetail.interestCard.messageCopy", "A conversation with the developer is available in Messages")}
             </div>
+            <Button type="button" variant="outline" className="w-full" onClick={handleStartNew}>
+              {tr("newBuildDetail.interestCard.makeAnother", "Make another enquiry")}
+            </Button>
           </div>
         </div>
       </div>
     );
   }
+
+  const frozen = submissionStatus === "uncertain" || submissionStatus === "sending";
+  const busy = loading || submissionStatus === "sending";
+  const visibleError = submissionError ?? localSubmissionError;
 
   if (!user) {
     return (
@@ -120,6 +149,7 @@ export function RegisterInterestCard({
             placeholder={tr("newBuildDetail.interestCard.namePlaceholder", "Your name")}
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            readOnly={frozen}
             className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
           />
           <input
@@ -127,6 +157,7 @@ export function RegisterInterestCard({
             placeholder={tr("newBuildDetail.interestCard.phonePlaceholder", "Phone number (optional)")}
             value={form.phone}
             onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+            readOnly={frozen}
             className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
           />
           <textarea
@@ -134,17 +165,54 @@ export function RegisterInterestCard({
             rows={3}
             value={form.message}
             onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
+            readOnly={frozen}
             className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors resize-none"
           />
-          {submissionError && (
+          {submissionStatus === "uncertain" && (
+            <div role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed">
+              <p>{tr(
+                "newBuildDetail.interestCard.uncertain",
+                "We couldn't confirm whether your enquiry was saved. Retry these details to check without creating another enquiry. Keep this page open until it is confirmed.",
+              )}</p>
+              {visibleError && <p className="mt-1 text-muted-foreground">{visibleError}</p>}
+            </div>
+          )}
+          {submissionStatus !== "uncertain" && visibleError && (
             <p role="alert" className="text-xs text-destructive leading-relaxed">
-              {submissionError}
+              {visibleError}
             </p>
           )}
-          <Button type="submit" className="w-full gap-2" disabled={loading}>
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-            {tr("newBuildDetail.interestCard.submit", "Register Interest")}
-          </Button>
+          {submissionStatus === "uncertain" ? (
+            <div className="space-y-2">
+              <Button type="button" className="w-full" disabled={busy} onClick={() => void onRetry?.()}>
+                {tr("newBuildDetail.interestCard.retry", "Retry these details")}
+              </Button>
+              <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={() => setConfirmingNewEnquiry(true)}>
+                {tr("newBuildDetail.interestCard.startNew", "Start a new enquiry")}
+              </Button>
+              {confirmingNewEnquiry && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs leading-relaxed">
+                  <p>{tr(
+                    "newBuildDetail.interestCard.startNewWarning",
+                    "The previous enquiry may already be saved. Starting a new enquiry can create another enquiry and owner notification.",
+                  )}</p>
+                  <div className="mt-3 flex gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setConfirmingNewEnquiry(false)}>
+                      {tr("common.cancel", "Cancel")}
+                    </Button>
+                    <Button type="button" variant="destructive" size="sm" onClick={handleStartNew}>
+                      {tr("newBuildDetail.interestCard.confirmNew", "Confirm new enquiry")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Button type="submit" className="w-full gap-2" disabled={busy}>
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+              {tr("newBuildDetail.interestCard.submit", "Register Interest")}
+            </Button>
+          )}
         </form>
         <p className="text-[10px] text-muted-foreground text-center mt-3 leading-relaxed">
           {tr("newBuildDetail.interestCard.privacyNote", "Your enquiry is sent directly to the developer. No spam, no middlemen.")}
