@@ -1,0 +1,71 @@
+{
+  "scopes": {
+    "./admin-broadcast-notification/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/admin-broadcast-notification-supabase.ts"
+    },
+    "./admin-content-report-action/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/admin-content-report-action-supabase.ts"
+    },
+    "./admin-featured-listing-action/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/admin-featured-listing-action-supabase.ts"
+    },
+    "./admin-firesale-action/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/admin-firesale-action-supabase.ts"
+    },
+    "./admin-review-invitation/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/admin-review-invitation-supabase.ts"
+    },
+    "./agent-data-input/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/agent-data-input-supabase.ts"
+    },
+    "./ai-quota-status/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/ai-quota-status-supabase.ts"
+    },
+    "./begin-role-switch/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/begin-role-switch-supabase.ts"
+    },
+    "./complete-onboarding-role/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/complete-onboarding-role-supabase.ts",
+      "./_shared/auditLog.ts": "./_shared/coverage-test-support/complete-onboarding-role-audit.ts"
+    },
+    "./create-new-building-listing/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/create-new-building-listing-supabase.ts",
+      "./_shared/auditLog.ts": "./_shared/coverage-test-support/create-new-building-listing-audit.ts",
+      "./_shared/proGate.ts": "./_shared/coverage-test-support/create-new-building-listing-pro-gate.ts"
+    },
+    "./invitation-notify/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/invitation-notify-supabase.ts"
+    },
+    "./open-house-capacity/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/open-house-capacity-supabase.ts"
+    },
+    "./open-house-registration/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/open-house-registration-supabase.ts"
+    },
+    "./owner-pro-status/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/owner-pro-status-supabase.ts"
+    },
+    "./process-storage-cleanup/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/process-storage-cleanup-supabase.ts"
+    },
+    "./project-management/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/project-management-supabase.ts",
+      "./_shared/auditLog.ts": "./_shared/coverage-test-support/project-management-audit.ts",
+      "./_shared/proGate.ts": "./_shared/coverage-test-support/project-management-pro-gate.ts"
+    },
+    "./project-unit-prices/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/project-unit-prices-supabase.ts",
+      "./_shared/proGate.ts": "./_shared/coverage-test-support/project-unit-prices-pro-gate.ts"
+    },
+    "./save-professional-onboarding/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/save-professional-onboarding-supabase.ts",
+      "./_shared/auditLog.ts": "./_shared/coverage-test-support/save-professional-onboarding-audit.ts"
+    },
+    "./submit-firesale-interest/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/submit-firesale-interest-supabase.ts"
+    },
+    "./submit-firesale-request/": {
+      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/submit-firesale-request-supabase.ts"
+    }
+  }
+}

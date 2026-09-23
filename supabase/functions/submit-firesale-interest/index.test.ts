@@ -13,79 +13,9 @@ declare global {
   var __submitFiresaleInterestScenario: MockScenario;
 }
 
-const functionSource = await Deno.readTextFile(
-  new URL("./index.ts", import.meta.url),
-);
-const tempDir = await Deno.makeTempDir({
-  prefix: "submit-firesale-interest-test-",
-});
-const mockClientPath = `${tempDir}/mockSupabase.ts`;
-const transformedPath = `${tempDir}/index.ts`;
-const dbLimiterTransformedPath = `${tempDir}/index-db-limiter.ts`;
-
-function fileUrl(path: string) {
-  return `file:///${path.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1:")}`;
-}
-
-await Deno.writeTextFile(
-  mockClientPath,
-  `
-export function createClient() {
-  const scenario = globalThis.__submitFiresaleInterestScenario;
-  return {
-    auth: {
-      getUser: async (token: string) => {
-        scenario.calls.push({ name: "getUser", args: { token } });
-        if (scenario.authError) {
-          return { data: { user: null }, error: { message: scenario.authError } };
-        }
-        return {
-          data: { user: scenario.user ?? { id: "user-1", email: "user@test.local" } },
-          error: null,
-        };
-      },
-    },
-    rpc: async (name: string, args: unknown) => {
-      scenario.calls.push({ name: "rpc", args: { name, args } });
-      if (scenario.rpcError) {
-        return { data: null, error: scenario.rpcError };
-      }
-      return {
-        data: scenario.interest ?? { id: "interest-1", status: "prioritized" },
-        error: null,
-      };
-    },
-  };
-}
-`,
-);
-
-const shared = (name: string) =>
-  new URL(`../_shared/${name}`, import.meta.url).href;
-const transformedSource = functionSource
-  .replace(
-    'import { createClient } from "npm:@supabase/supabase-js@2.57.2";',
-    `import { createClient } from "${fileUrl(mockClientPath)}";`,
-  )
-  .replace('from "../_shared/auth.ts"', `from "${shared("auth.ts")}"`)
-  .replace('from "../_shared/cors.ts"', `from "${shared("cors.ts")}"`)
-  .replace('from "../_shared/logger.ts"', `from "${shared("logger.ts")}"`)
-  .replace('from "../_shared/schema.ts"', `from "${shared("schema.ts")}"`)
-  .replace(
-    'from "../_shared/rateLimit.ts"',
-    `from "${shared("rateLimit.ts")}"`,
-  )
-  .replace(
-    'from "./request.ts"',
-    `from "${new URL("./request.ts", import.meta.url).href}"`,
-  );
-
-await Deno.writeTextFile(transformedPath, transformedSource);
-await Deno.writeTextFile(dbLimiterTransformedPath, transformedSource);
-
 const { handler, restore } = await captureHandler(
   import.meta.url,
-  fileUrl(transformedPath),
+  "./index.ts",
   { RATE_LIMIT_FORCE_MEMORY: "true" },
 );
 restore();
@@ -93,11 +23,10 @@ restore();
 const { handler: dbLimiterHandler, restore: restoreDbLimiter } =
   await captureHandler(
     import.meta.url,
-    fileUrl(dbLimiterTransformedPath),
+    "./index.ts?db-limiter",
     { RATE_LIMIT_FORCE_MEMORY: "false" },
   );
 restoreDbLimiter();
-
 const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__submitFiresaleInterestScenario = {
     calls: [],

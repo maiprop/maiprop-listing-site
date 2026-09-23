@@ -15,72 +15,13 @@ declare global {
   var __beginRoleSwitchScenario: MockScenario;
 }
 
-const functionSource = await Deno.readTextFile(
-  new URL("./index.ts", import.meta.url),
-);
-const tempDir = await Deno.makeTempDir({ prefix: "begin-role-switch-test-" });
-const mockClientPath = `${tempDir}/mockSupabase.ts`;
-const transformedPath = `${tempDir}/index.ts`;
-
-function fileUrl(path: string) {
-  return `file:///${path.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1:")}`;
-}
-
-await Deno.writeTextFile(
-  mockClientPath,
-  `
-export function createClient() {
-  const scenario = globalThis.__beginRoleSwitchScenario;
-  return {
-    auth: {
-      getUser: async (token: string) => {
-        scenario.calls.push({ name: "getUser", args: { token } });
-        if (scenario.authError) {
-          return { data: { user: null }, error: { message: scenario.authError } };
-        }
-        return {
-          data: { user: scenario.user ?? { id: "user-1", email: "user@test.local" } },
-          error: null,
-        };
-      },
-    },
-    rpc: async (name: string, args: unknown) => {
-      scenario.calls.push({ name: "rpc", args: { name, args } });
-      if (scenario.rpcError) {
-        return { data: null, error: { message: scenario.rpcError } };
-      }
-      return { data: null, error: null };
-    },
-  };
-}
-`,
-);
-
-const shared = (name: string) =>
-  new URL(`../_shared/${name}`, import.meta.url).href;
-const transformedSource = functionSource
-  .replace(
-    'import { createClient } from "npm:@supabase/supabase-js@2.57.2";',
-    `import { createClient } from "${fileUrl(mockClientPath)}";`,
-  )
-  .replace('from "../_shared/auth.ts"', `from "${shared("auth.ts")}"`)
-  .replace('from "../_shared/cors.ts"', `from "${shared("cors.ts")}"`)
-  .replace('from "../_shared/logger.ts"', `from "${shared("logger.ts")}"`)
-  .replace('from "../_shared/schema.ts"', `from "${shared("schema.ts")}"`)
-  .replace(
-    'from "../_shared/rateLimit.ts"',
-    `from "${shared("rateLimit.ts")}"`,
-  );
-
-await Deno.writeTextFile(transformedPath, transformedSource);
-
 const { handler, restore } = await captureHandler(
   import.meta.url,
-  fileUrl(transformedPath),
+  "./index.ts",
   { RATE_LIMIT_FORCE_MEMORY: "true" },
 );
 restore();
-const beginRoleSwitchModule = await import(fileUrl(transformedPath));
+const beginRoleSwitchModule = await import("./index.ts");
 
 const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__beginRoleSwitchScenario = {

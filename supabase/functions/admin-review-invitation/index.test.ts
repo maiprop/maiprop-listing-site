@@ -15,56 +15,7 @@ declare global {
   var __adminReviewInvitationScenario: MockScenario;
 }
 
-const functionSource = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
-const tempDir = await Deno.makeTempDir({ prefix: "admin-review-invitation-test-" });
-const mockClientPath = `${tempDir}/mockSupabase.ts`;
-const transformedPath = `${tempDir}/index.ts`;
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function fileUrl(path: string) {
-  return `file:///${path.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1:")}`;
-}
-
-await Deno.writeTextFile(
-  mockClientPath,
-  `
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-export function createClient() {
-  const scenario = globalThis.__adminReviewInvitationScenario;
-  return {
-    auth: {
-      getUser: async (token) => {
-        scenario.calls.push({ name: "getUser", args: { token } });
-        return {
-          data: { user: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email: "admin@test.local" } },
-          error: null,
-        };
-      },
-    },
-    rpc: async (name, args) => {
-      scenario.calls.push({ name: "rpc", args: { name, args } });
-      return scenario.rpcError
-        ? { data: null, error: { message: scenario.rpcError } }
-        : { data: scenario.rpcData ?? { subscription_status: "pending_payment" }, error: null };
-    },
-  };
-}
-`,
-);
-
-const shared = (name: string) => new URL(`../_shared/${name}`, import.meta.url).href;
-const transformedSource = functionSource
-  .replace(
-    'import { createClient } from "npm:@supabase/supabase-js@2.57.2";',
-    `import { createClient } from "${fileUrl(mockClientPath)}";`,
-  )
-  .replace('from "../_shared/auth.ts"', `from "${shared("auth.ts")}"`)
-  .replace('from "../_shared/cors.ts"', `from "${shared("cors.ts")}"`)
-  .replace('from "../_shared/logger.ts"', `from "${shared("logger.ts")}"`);
-
-await Deno.writeTextFile(transformedPath, transformedSource);
-
-const { handler, restore } = await captureHandler(import.meta.url, fileUrl(transformedPath));
+const { handler, restore } = await captureHandler(import.meta.url, "./index.ts");
 
 const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__adminReviewInvitationScenario = { calls: [], ...overrides };

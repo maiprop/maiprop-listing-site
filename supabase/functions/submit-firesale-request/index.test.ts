@@ -24,87 +24,9 @@ declare global {
   var __submitFiresaleRequestScenario: MockScenario;
 }
 
-const functionSource = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
-const tempDir = await Deno.makeTempDir({ prefix: "submit-firesale-request-test-" });
-const mockClientPath = `${tempDir}/mockSupabase.ts`;
-const transformedPath = `${tempDir}/index.ts`;
-
-function fileUrl(path: string) {
-  return `file:///${path.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1:")}`;
-}
-
-await Deno.writeTextFile(
-  mockClientPath,
-  `
-export function createClient() {
-  const scenario = globalThis.__submitFiresaleRequestScenario;
-  return {
-    auth: {
-      getUser: async (token) => {
-        scenario.calls.push({ name: "getUser", args: { token } });
-        if (scenario.authError) {
-          return { data: { user: null }, error: { message: scenario.authError } };
-        }
-        return {
-          data: { user: scenario.user ?? { id: "seller-1", email: "seller@test.local" } },
-          error: null,
-        };
-      },
-    },
-    from: (table) => ({
-      select: (columns) => ({
-        eq: (_column, value) => ({
-          maybeSingle: async () => {
-            scenario.tableCalls.push({ table, operation: "select", payload: columns, filters: [["user_id", value]] });
-            return { data: { role: scenario.role ?? "seller", role_switch_in_progress_at: scenario.roleSwitchInProgress ? "2026-06-01T00:00:00Z" : null }, error: null };
-          },
-        }),
-      }),
-      insert: (payload) => ({
-        select: (columns) => ({
-          single: async () => {
-            scenario.tableCalls.push({ table, operation: "insert", payload: { payload, columns } });
-            if (scenario.insertError) return { data: null, error: { message: scenario.insertError } };
-            return { data: { id: "fire-1" }, error: null };
-          },
-        }),
-      }),
-      delete: () => ({
-        eq: (firstColumn, firstValue) => ({
-          eq: async (secondColumn, secondValue) => {
-            scenario.tableCalls.push({
-              table,
-              operation: "delete",
-              filters: [[firstColumn, firstValue], [secondColumn, secondValue]],
-            });
-            if (scenario.deleteError) return { error: { message: scenario.deleteError } };
-            return { error: null };
-          },
-        }),
-      }),
-    }),
-  };
-}
-`,
-);
-
-const shared = (name: string) => new URL(`../_shared/${name}`, import.meta.url).href;
-const transformedSource = functionSource
-  .replace(
-    'import { createClient } from "npm:@supabase/supabase-js@2.57.2";',
-    `import { createClient } from "${fileUrl(mockClientPath)}";`,
-  )
-  .replace('from "../_shared/auth.ts"', `from "${shared("auth.ts")}"`)
-  .replace('from "../_shared/cors.ts"', `from "${shared("cors.ts")}"`)
-  .replace('from "../_shared/logger.ts"', `from "${shared("logger.ts")}"`)
-  .replace('from "../_shared/rateLimit.ts"', `from "${shared("rateLimit.ts")}"`)
-  .replace('from "../_shared/schema.ts"', `from "${shared("schema.ts")}"`);
-
-await Deno.writeTextFile(transformedPath, transformedSource);
-
 const { handler, restore } = await captureHandler(
   import.meta.url,
-  fileUrl(transformedPath),
+  "./index.ts",
   { RATE_LIMIT_FORCE_MEMORY: "true" },
 );
 restore();

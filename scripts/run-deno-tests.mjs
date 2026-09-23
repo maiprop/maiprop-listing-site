@@ -1,24 +1,20 @@
 import { spawnSync } from "node:child_process";
-import { readdirSync, statSync } from "node:fs";
-import { relative, resolve, sep } from "node:path";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, relative, resolve, sep } from "node:path";
+
+import { collectDenoTestFiles } from "./deno-test-discovery-lib.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const functionsDir = resolve(repoRoot, "supabase/functions");
 const requested = process.argv.slice(2);
-
-function collectTestFiles(dir, files = []) {
-  for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules") continue;
-    const fullPath = resolve(dir, entry);
-    const stat = statSync(fullPath);
-    if (stat.isDirectory()) {
-      collectTestFiles(fullPath, files);
-    } else if (entry.endsWith(".test.ts")) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
+const standardDeno = join(
+  homedir(),
+  ".deno",
+  "bin",
+  process.platform === "win32" ? "deno.exe" : "deno",
+);
+const deno = process.env.MAIPROP_DENO ?? (existsSync(standardDeno) ? standardDeno : "deno");
 
 function toFunctionRelativePath(input) {
   const normalized = input.replaceAll("\\", "/");
@@ -31,17 +27,19 @@ function toFunctionRelativePath(input) {
 
 const testFiles = (requested.length > 0
   ? requested.map((file) => resolve(functionsDir, toFunctionRelativePath(file)))
-  : collectTestFiles(functionsDir)
+  : collectDenoTestFiles(functionsDir)
 ).sort();
 
 for (const file of testFiles) {
   const testPath = relative(functionsDir, file);
   console.log(`\n> deno test ${testPath}`);
   const result = spawnSync(
-    "deno",
+    deno,
     [
       "test",
       "--node-modules-dir=none",
+      "--frozen",
+      "--import-map=coverage-import-map.json",
       "--allow-env",
       "--allow-net",
       "--allow-read",

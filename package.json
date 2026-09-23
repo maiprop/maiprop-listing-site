@@ -106,6 +106,7 @@
     "test:e2e:live-ai-quota": "playwright test e2e/live-ai-quota.spec.ts --project=chromium",
     "test:e2e:ui": "playwright test --ui",
     "test:deno": "node scripts/run-deno-tests.mjs",
+    "test:deno:coverage": "node scripts/run-deno-edge-coverage.mjs",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "check:load-test-contract": "node scripts/check-load-test-contract.mjs",
     "check:perf-evidence": "node scripts/perf-evidence-contract.mjs",

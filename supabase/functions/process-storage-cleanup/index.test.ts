@@ -23,83 +23,9 @@ declare global {
   var __storageCleanupScenario: Scenario;
 }
 
-const functionSource = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
-const tempDir = await Deno.makeTempDir({ prefix: "process-storage-cleanup-test-" });
-const mockClientPath = `${tempDir}/mockSupabase.ts`;
-const transformedPath = `${tempDir}/index.ts`;
-
-const fileUrl = (path: string) =>
-  `file:///${path.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1:")}`;
-
-await Deno.writeTextFile(
-  mockClientPath,
-  `
-export function createClient() {
-  const scenario = globalThis.__storageCleanupScenario;
-  return {
-    rpc: async (name, args) => {
-      scenario.calls.push({ name: "rpc", args: { name, args } });
-      if (name === "claim_storage_cleanup_jobs") {
-        return { data: scenario.jobs, error: null };
-      }
-       if (name === "prepare_storage_cleanup_delete") {
-         return {
-           data: scenario.prepareResults?.[args.p_job_id] ?? "delete",
-           error: null,
-         };
-       }
-      return { data: null, error: { message: "unexpected rpc" } };
-    },
-    storage: {
-      from: (bucket) => ({
-        remove: async (paths) => {
-          scenario.calls.push({ name: "remove", args: { bucket, paths } });
-          const failed = paths.some((path) => scenario.removeFailurePaths?.includes(path));
-          return {
-            data: null,
-            error: failed ? { message: "storage unavailable" } : null,
-          };
-        },
-      }),
-    },
-    from: (table) => ({
-      update: (payload) => {
-        const filters = [];
-        const builder = {
-          eq: (column, value) => {
-            filters.push({ column, value });
-            return builder;
-          },
-          then: (resolve) => {
-            scenario.calls.push({ name: "update", args: { table, payload, filters } });
-            return Promise.resolve(resolve({ data: null, error: null }));
-          },
-          select: (_columns) => {
-            scenario.calls.push({ name: "update", args: { table, payload, filters } });
-            const jobId = filters.find((filter) => filter.column === "id")?.value;
-            return Promise.resolve({
-              data: scenario.lostLeaseJobIds?.includes(jobId) ? [] : [{ id: jobId }],
-              error: null,
-            });
-          },
-        };
-        return builder;
-      },
-    }),
-  };
-}
-`,
-);
-
-const transformedSource = functionSource.replace(
-  'import { createClient } from "npm:@supabase/supabase-js@2.57.2";',
-  `import { createClient } from "${fileUrl(mockClientPath)}";`,
-);
-await Deno.writeTextFile(transformedPath, transformedSource);
-
 const { handler, restore } = await captureHandler(
   import.meta.url,
-  fileUrl(transformedPath),
+  "./index.ts",
   {
     CRON_SECRET: "test-cron-secret",
     SUPABASE_URL: "https://test-project.supabase.co",

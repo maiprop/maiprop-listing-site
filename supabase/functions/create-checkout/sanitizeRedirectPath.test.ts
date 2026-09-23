@@ -6,6 +6,8 @@
  * would break the handler-level integration tests in `index.test.ts`).
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { sanitizeRedirectPath, withCheckoutSessionId } from "./redirects.ts";
+import { resolveCheckoutOrigin } from "./origins.ts";
 import {
   getStripePriceEnvKey,
   getStripePriceEnvKeys,
@@ -14,10 +16,7 @@ import {
   isSupportedCheckoutPlan,
   normalizeBillingCycle,
   normalizePlanKey,
-  resolveCheckoutOrigin,
-  sanitizeRedirectPath,
-  withCheckoutSessionId,
-} from "./index.ts";
+} from "./pricing.ts";
 
 Deno.test("sanitizeRedirectPath: accepts a same-origin path", () => {
   assertEquals(sanitizeRedirectPath("/dashboard"), "/dashboard");
