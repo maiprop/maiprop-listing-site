@@ -414,7 +414,7 @@ export const firesaleRequestSchema = z.object({
   contact_email: z.string().trim().toLowerCase().email("Invalid quick sale email").max(320, "Invalid quick sale email"),
   contact_phone: optionalString("quick sale phone", 60),
   notes: optionalString("quick sale notes", 4000),
-  ai_estimate: z.number().finite("Invalid quick sale estimate").min(0, "Invalid quick sale estimate"),
+  ai_estimate: z.number().finite("Invalid quick sale estimate").min(0, "Invalid quick sale estimate").nullable(),
   user_id: rowIdSchema("user id"),
   status: z.literal("pending"),
 }).strict() satisfies z.ZodType<Pick<
@@ -442,7 +442,7 @@ const firesaleRequestCreatePayloadSchema = z.object({
   contactEmail: z.string().trim().toLowerCase().email("Invalid quick sale email").max(320, "Invalid quick sale email"),
   contactPhone: optionalString("quick sale phone", 60),
   notes: optionalString("quick sale notes", 4000),
-  aiEstimate: z.number().finite("Invalid quick sale estimate").min(0, "Invalid quick sale estimate"),
+  aiEstimate: z.number().finite("Invalid quick sale estimate").min(0, "Invalid quick sale estimate").nullable(),
 }).strict();
 
 export const firesaleRequestCreateBodySchema = z.object({
@@ -743,6 +743,7 @@ export const proAiToolsBodySchema = z.object({
 }).strict();
 
 export const propertyValuationBodySchema = z.object({
+  responseVersion: z.literal(2),
   city: requiredString("valuation city", 120),
   price: z.number().finite("Invalid valuation price").positive("Invalid valuation price"),
   sqm: z.number().finite("Invalid valuation size").positive("Invalid valuation size"),

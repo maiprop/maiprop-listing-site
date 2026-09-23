@@ -114,7 +114,7 @@ const createRequestSchema = z.object({
     }),
     contactPhone: schemaString("contactPhone", 60),
     notes: schemaString("notes", 4000),
-    aiEstimate: nonNegativeNumber("aiEstimate", 100_000_000),
+    aiEstimate: nonNegativeNumber("aiEstimate", 100_000_000).nullable(),
   }).strict(),
 }).strict();
 

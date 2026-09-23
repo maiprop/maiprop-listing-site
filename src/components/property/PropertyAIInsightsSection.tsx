@@ -17,11 +17,13 @@ import type { TFunction } from "i18next";
 
 interface AIInsightsData {
   vsMarket: number | null;
-  rentalYield: number;
+  rentalYield: number | null;
   estimatedValue: number | null;
   pricePerSqmEstimate?: number;
   marketComparison: string | null;
-  confidenceLabel: string;
+  confidenceLabel: string | null;
+  estimateSource?: string | null;
+  estimateUnit?: "EUR" | "EUR/month" | null;
 }
 
 interface Props {
@@ -136,7 +138,7 @@ export function PropertyAIInsightsSection({
       <SectionHeader
         icon={Zap}
         title={t("propertyAIInsights.title", "AI Market Insights")}
-        badge={<span className="text-[10px] text-muted-foreground">{t("propertyAIInsights.poweredBy", "Powered by mAI Prop OS")}</span>}
+        badge={<span className="text-[10px] text-muted-foreground">{t("propertyAIInsights.provenance", "Source-labelled analysis")}</span>}
       />
       <div className="p-5 space-y-4">
         {!user && <SignInForAI feature={t("propertyAIInsights.title", "AI Market Insights")} />}
@@ -234,7 +236,7 @@ export function PropertyAIInsightsSection({
                     : t("propertyAIInsights.labels.rentalYield", "Rental Yield")}
                 </p>
                 <div className="flex items-baseline gap-1">
-                  <span className="font-display font-black text-3xl text-primary">{isRental ? rentPerSqm : `${data.rentalYield}%`}</span>
+                  <span className="font-display font-black text-3xl text-primary">{isRental ? rentPerSqm : data.rentalYield == null ? unavailable : `${data.rentalYield}%`}</span>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
                   {isRental
@@ -255,8 +257,9 @@ export function PropertyAIInsightsSection({
                   </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  {t("propertyAIInsights.labels.confidence", "Confidence")}: {localizeConfidence(t, data.confidenceLabel)}
+                  {t("propertyAIInsights.labels.confidence", "Confidence")}: {data.confidenceLabel ? localizeConfidence(t, data.confidenceLabel) : unavailable}
                 </p>
+                <p className="text-[10px] text-muted-foreground">{data.estimateSource === "os_prediction" ? t("propertyAIInsights.source.os", "OS model prediction") : data.estimateSource === "ai_estimate" ? t("propertyAIInsights.source.ai", "Unverified AI estimate") : unavailable}</p>
               </div>
             </div>
           );

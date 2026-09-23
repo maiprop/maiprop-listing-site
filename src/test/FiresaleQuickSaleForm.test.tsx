@@ -49,6 +49,7 @@ vi.stubGlobal("fetch", fetchStub);
 
 import { FiresaleQuickSaleForm } from "@/components/firesale/FiresaleQuickSaleForm";
 import { isValidKaek, normalizeKaek, toFiresalePropertyType } from "@/lib/firesaleValidation";
+import { valuationV2 } from "@/test/valuationV2Fixture";
 
 const getPropertyTypeSelect = (): HTMLSelectElement => {
   const select = document.querySelector("select");
@@ -66,6 +67,18 @@ const getPhotoInput = (): HTMLInputElement => {
   return input;
 };
 
+const fillValidQuickSale = () => {
+  fireEvent.change(screen.getByPlaceholderText(/Kifisia, Dekelia/i), { target: { value: "Kolonaki 12, Athens" } });
+  fireEvent.change(screen.getByPlaceholderText(/050240601001/i), { target: { value: "050240601001/0/1" } });
+  fireEvent.change(getPropertyTypeSelect(), { target: { value: "apartment" } });
+  fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 120$/i), { target: { value: "95" } });
+  fireEvent.change(screen.getByPlaceholderText(/Your target/i), { target: { value: "350000" } });
+  fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 1998$/i), { target: { value: "2010" } });
+  fireEvent.change(screen.getByPlaceholderText(/Legal issues, urgent timeline/i), { target: { value: "Quick sale needed within 30 days." } });
+  const files = Array.from({ length: 6 }, (_, index) => new File([`x${index}`], `photo-${index}.jpg`, { type: "image/jpeg" }));
+  fireEvent.change(getPhotoInput(), { target: { files } });
+};
+
 beforeEach(() => {
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({
@@ -77,7 +90,7 @@ beforeEach(() => {
   isSellerRoleMock.mockReset();
   isSellerRoleMock.mockReturnValue(true);
   functionsInvokeMock.mockReset();
-  functionsInvokeMock.mockResolvedValue({ data: { estimated_value: 300_000 }, error: null });
+  functionsInvokeMock.mockResolvedValue({ data: valuationV2({ estimatedValue: 300_000 }), error: null });
   fromMock.mockReset();
   navigateMock.mockReset();
   toastMock.success.mockReset();
@@ -346,6 +359,7 @@ describe("FiresaleQuickSaleForm", () => {
     await waitFor(() =>
       expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", {
         body: expect.objectContaining({
+          responseVersion: 2,
           city: "Athens",
           address: "Kolonaki 12, Athens",
           propertyType: "apartment",
@@ -387,5 +401,23 @@ describe("FiresaleQuickSaleForm", () => {
     expect((screen.getByPlaceholderText(/Kifisia, Dekelia/i) as HTMLInputElement).value).toBe(
       "Kolonaki 12, Athens",
     );
+  });
+
+  it("does not publish a delayed estimate after the valuation subject changes", async () => {
+    vi.stubGlobal("URL", { ...URL, createObjectURL: (_: unknown) => `blob:p-${Math.random()}`, revokeObjectURL: () => {} });
+    let resolveEstimate!: (value: unknown) => void;
+    functionsInvokeMock.mockReturnValueOnce(new Promise((resolve) => { resolveEstimate = resolve; }));
+    render(<FiresaleQuickSaleForm />);
+    fillValidQuickSale();
+
+    fireEvent.click(screen.getByRole("button", { name: /Get AI Estimate/i }));
+    await waitFor(() => expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.any(Object)));
+    fireEvent.change(screen.getByPlaceholderText(/Your target/i), { target: { value: "360000" } });
+    resolveEstimate({ data: valuationV2({ estimatedValue: 300_000 }), error: null });
+
+    await waitFor(() => expect(screen.getByText(/2\/2/)).toBeInTheDocument());
+    expect(screen.getByText("Market estimate")).toBeInTheDocument();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/300[,.]000/)).not.toBeInTheDocument();
   });
 });

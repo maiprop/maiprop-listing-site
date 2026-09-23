@@ -116,6 +116,7 @@ const optionalOpenHouseTransactionType = z.preprocess(
 );
 
 const propertyValuationRequestSchema = z.object({
+  responseVersion: z.literal(2).optional(),
   listingId: optionalBoundedText("listing id", 120),
   title: optionalBoundedText("valuation title", 180),
   city: z.string("Invalid valuation city")
@@ -258,28 +259,6 @@ const roundNumber = (value: number, digits = 0): number => {
   return Math.round(value * factor) / factor;
 };
 
-const normalizeAnnualYield = (value: unknown): number | null => {
-  const numeric = coerceFiniteNumber(value);
-  if (numeric == null) return null;
-  return roundNumber(numeric > 1 ? numeric : numeric * 100, 1);
-};
-
-const normalizeYearBuilt = (value: unknown): number => {
-  const year = coerceFiniteNumber(value);
-  if (year != null && year >= 1900 && year <= 2200) return Math.round(year);
-  return 2000;
-};
-
-const normalizeFloor = (value: unknown): number => {
-  const floor = coerceFiniteNumber(value);
-  return floor == null ? 0 : Math.round(floor);
-};
-
-const normalizeOsCategory = (value: unknown): string => {
-  const key = optionalString(value)?.toLowerCase().replace(/[^a-z0-9]+/g, "_") ?? "";
-  return OS_PROPERTY_CATEGORY[key] ?? OS_PROPERTY_CATEGORY[key.replace(/_property$/, "")] ?? "RESIDENCE";
-};
-
 const readJsonSafely = async (response: Response): Promise<JsonRecord | null> => {
   try {
     const parsed = await response.json();
@@ -367,18 +346,22 @@ const buildOsValuationBody = (input: StructuredValuationInput): JsonRecord | nul
   const latitude = coerceFiniteNumber(input.latitude);
   const longitude = coerceFiniteNumber(input.longitude);
   const sqm = coerceFiniteNumber(input.sqm);
-  if (latitude == null || longitude == null || sqm == null || sqm <= 0) return null;
+  const year = coerceFiniteNumber(input.yearBuilt);
+  const floor = coerceFiniteNumber(input.floor);
+  if (latitude == null || longitude == null || sqm == null || sqm <= 0 || year == null || year < 1900 || year > 2100 || floor == null) return null;
 
   const addressParts = [optionalString(input.address), input.city].filter(Boolean);
   const listingType = optionalString(input.listingType)?.toLowerCase() ?? "sale";
 
+  const categoryKey = optionalString(input.propertyType)?.toLowerCase().replace(/[^a-z0-9]+/g, "_") ?? "";
+  const category = OS_PROPERTY_CATEGORY[categoryKey] ?? OS_PROPERTY_CATEGORY[categoryKey.replace(/_property$/, "")];
   return {
-    constructionYear: normalizeYearBuilt(input.yearBuilt),
+    constructionYear: Math.round(year),
     propertyLongitude: longitude,
     propertyLatitude: latitude,
     propertySquareMeters: sqm,
-    propertyCategory: normalizeOsCategory(input.propertyType),
-    propertyFloor: normalizeFloor(input.floor),
+    ...(category ? { propertyCategory: category } : {}),
+    propertyFloor: Math.round(floor),
     ...(addressParts.length ? { address: addressParts.join(", ") } : {}),
     valuationModel: listingType === "auction" ? "auction" : "market",
     rangesForSimilar: [0.5, 1, 2, 5],
@@ -439,10 +422,10 @@ const fetchStructuredOsValuation = async (input: StructuredValuationInput): Prom
   const data = unwrapOsData(payload);
   const predictedPrice = coerceFiniteNumber(data?.propertyPredictedPrice);
   const predictedLeasePrice = coerceFiniteNumber(data?.propertyPredictedLeasePrice);
-  const hasPrediction = isRentalListing(input.listingType)
-    ? predictedLeasePrice != null && predictedLeasePrice > 0
-    : predictedPrice != null && predictedPrice > 0;
-  return hasPrediction ? data : null;
+  const hasUsefulData = (predictedPrice != null && predictedPrice > 0) ||
+    (predictedLeasePrice != null && predictedLeasePrice > 0) ||
+    Array.isArray(data?.valuationOverviews) || Array.isArray(data?.rentalValuationOverviews);
+  return hasUsefulData ? data : null;
 };
 
 const countOverviewComparables = (value: unknown): number => {
@@ -468,65 +451,11 @@ const firstOverviewNumber = (overviews: unknown, key: string): number | null => 
   return null;
 };
 
-const rentalMonthlyRentPerSqm = (monthlyRent: unknown, sqm: unknown): number | null => {
-  const rent = coerceFiniteNumber(monthlyRent);
-  const size = coerceFiniteNumber(sqm);
-  if (rent == null || size == null || rent <= 0 || size <= 0) return null;
-  return roundNumber(rent / size, 2);
-};
-
-const getOsPredictedMonthlyRent = (osData: JsonRecord | null): number | null =>
-  coerceFiniteNumber(osData?.propertyPredictedLeasePrice);
-
-const getOsRentalPricePerSqm = (
-  osData: JsonRecord | null,
-  monthlyRent: number | null,
-  sqm: unknown,
-): number | null =>
-  firstOverviewNumber(osData?.rentalValuationOverviews, "propertyEurPerSqm") ??
-  firstOverviewNumber(osData?.rentalValuationOverviews, "avgEurPerSqm") ??
-  rentalMonthlyRentPerSqm(monthlyRent, sqm);
-
-const isPlausibleMonthlyRent = (value: unknown, anchor: number | null): boolean => {
-  const rent = coerceFiniteNumber(value);
-  if (rent == null || rent <= 0 || rent > 100_000) return false;
-  if (anchor != null && anchor > 0) return rent >= anchor * 0.35 && rent <= anchor * 4;
-  return rent < 50_000;
-};
-
-const saleStyleRentalNarrative = /\b(sale|purchase|buyer|transfer tax|transaction cost|auction|bid value|selling price)\b/i;
-
-const rentalSummary = (monthlyRent: number, rentPerSqm: number | null, usedListingFallback: boolean): string => {
-  const rentText = Math.round(monthlyRent).toLocaleString("en-US");
-  const densityText = rentPerSqm == null ? "" : `, or about EUR ${roundNumber(rentPerSqm, 2).toLocaleString("en-US")}/sqm/month`;
-  const evidenceText = usedListingFallback
-    ? "No independent lease estimate was available, so the current asking rent is retained as a low-confidence reference rather than being presented as a market appraisal."
-    : "The estimate is anchored to rental evidence and monthly lease economics, not ownership-transfer assumptions.";
-  return `Monthly rental valuation estimates market rent at EUR ${rentText} per month${densityText}. ${evidenceText}`;
-};
-
 const toMarketComparison = (deltaPct: number): "below_market" | "at_market" | "above_market" => {
   if (deltaPct > 5) return "above_market";
   if (deltaPct < -5) return "below_market";
   return "at_market";
 };
-
-const toPricingPosition = (deltaPct: number): "overpriced" | "fair" | "underpriced" => {
-  if (deltaPct > 5) return "underpriced";
-  if (deltaPct < -5) return "overpriced";
-  return "fair";
-};
-
-const clampNumber = (value: number, min: number, max: number): number =>
-  Math.max(min, Math.min(max, value));
-
-const clampScore = (value: unknown, fallback: number): number => {
-  const numeric = coerceFiniteNumber(value);
-  return Math.round(clampNumber(numeric ?? fallback, 0, 100));
-};
-
-const isAuctionListing = (value: unknown): boolean =>
-  optionalString(value)?.toLowerCase() === "auction";
 
 const isRentalListing = (value: unknown): boolean => {
   const listingType = optionalString(value)?.toLowerCase();
@@ -546,281 +475,9 @@ const isNewOrRecentConstruction = (source: JsonRecord): boolean => {
     (yearBuilt != null && yearBuilt >= 2021);
 };
 
-const isResidentialType = (value: unknown): boolean => {
-  const propertyType = optionalString(value)?.toLowerCase() ?? "";
-  return ["apartment", "house", "villa", "studio", "maisonette", "residence"].includes(propertyType);
-};
-
-const hasConfirmedLegalPlanningDefect = (source: JsonRecord): boolean =>
-  source.withinCityPlan === false || source.withinSettlement === false || source.isBuildable === false;
-
-const computeListingQualityScore = (source: JsonRecord, osData: JsonRecord | null): number => {
-  let score = 10;
-  if (optionalString(source.title)) score += 4;
-  if (optionalString(source.city)) score += 8;
-  if (optionalString(source.address)) score += 8;
-  if (coerceFiniteNumber(source.latitude) != null && coerceFiniteNumber(source.longitude) != null) score += 10;
-  if ((coerceFiniteNumber(source.price) ?? 0) > 0) score += 10;
-  if ((coerceFiniteNumber(source.sqm) ?? 0) > 0) score += 10;
-  if (optionalString(source.propertyType)) score += 7;
-  if (optionalString(source.listingType)) score += 5;
-  if (coerceFiniteNumber(source.floor) != null) score += 3;
-  if (coerceFiniteNumber(source.yearBuilt) != null) score += 4;
-  if (coerceFiniteNumber(source.bedrooms) != null) score += 3;
-  if (coerceFiniteNumber(source.bathrooms) != null) score += 3;
-  if (optionalString(source.energyClass)) score += 3;
-  if (optionalString(source.condition)) score += 4;
-  if (optionalString(source.description) && optionalString(source.description)!.length >= 80) score += 4;
-  if ([
-    source.hasParking,
-    source.hasPool,
-    source.hasElevator,
-    source.hasGarden,
-    source.hasStorage,
-    source.hasBalcony,
-    source.hasView,
-    source.hasFurnished,
-  ].some((value) => value === true)) score += 4;
-  if ([
-    source.cadastreNumber,
-    source.withinCityPlan,
-    source.withinSettlement,
-    source.buildingAllowance,
-    source.coverageRatio,
-    source.isBuildable,
-    source.landUse,
-    source.ownershipStatus,
-    source.auctionCourt,
-  ].some((value) => value != null && value !== "")) score += 8;
-  if (osData) score += 15;
-
-  if (!osData) score = Math.min(score, 85);
-  if (coerceFiniteNumber(source.latitude) == null || coerceFiniteNumber(source.longitude) == null) score = Math.min(score, 75);
-  return Math.round(clampNumber(score, 20, 95));
-};
-
-const removeUnconfirmedLegalFlags = (
-  redFlags: unknown,
-  source: JsonRecord,
-): string[] => {
-  const flags = Array.isArray(redFlags)
-    ? redFlags.filter((flag): flag is string => typeof flag === "string" && flag.trim().length > 0).map((flag) => flag.trim())
-    : [];
-  const cityPlanKnownNegative = source.withinCityPlan === false || source.withinSettlement === false;
-  const buildabilityKnownNegative = source.isBuildable === false;
-  const cadastreKnownMissing = false;
-
-  return flags.filter((flag) => {
-    const normalized = flag.toLowerCase();
-    if (!cadastreKnownMissing && /cadastre|kaek|registration/.test(normalized)) return false;
-    if (!cityPlanKnownNegative && /(outside|out of).*(city|settlement|plan)|city.*settlement.*plan/.test(normalized)) return false;
-    if (!buildabilityKnownNegative && /buildability|buildable|building rights/.test(normalized)) return false;
-    return true;
-  });
-};
-
-const normalizeValuationResult = (
-  result: JsonRecord,
-  source: JsonRecord,
-  osData: JsonRecord | null,
-): JsonRecord => {
-  const listedPrice = coerceFiniteNumber(source.price) ?? 0;
-  const estimatedValue = coerceFiniteNumber(result.estimatedValue);
-  const cleanAuctionMarketValue = coerceFiniteNumber(result.auctionAdjustedValue);
-  const isAuction = isAuctionListing(source.listingType);
-  const isRental = isRentalListing(source.listingType);
-  const marketAnchor = isAuction && cleanAuctionMarketValue != null && cleanAuctionMarketValue > 0
-    ? cleanAuctionMarketValue
-    : estimatedValue;
-
-  if (isRental) {
-    const dedicatedMonthlyRent =
-      coerceFiniteNumber(result.estimatedMonthlyRent) ??
-      coerceFiniteNumber(result.monthlyRentEstimate) ??
-      coerceFiniteNumber(result.marketRentEstimate);
-    const osMonthlyRent = getOsPredictedMonthlyRent(osData);
-    const anchorRent = osMonthlyRent ?? (listedPrice > 0 ? listedPrice : null);
-    const providerMonthlyRent = dedicatedMonthlyRent ?? estimatedValue;
-    const providerIsPlausible = isPlausibleMonthlyRent(providerMonthlyRent, anchorRent);
-    const monthlyRent = providerIsPlausible
-      ? providerMonthlyRent!
-      : osMonthlyRent ?? listedPrice;
-    const usedListingFallback = osMonthlyRent == null && (
-      optionalString(result.generatedBy) === "fallback" || !providerIsPlausible
-    );
-    const rentPerSqm = getOsRentalPricePerSqm(osData, monthlyRent, source.sqm);
-    const rangeLow = coerceFiniteNumber(result.rangeLow);
-    const rangeHigh = coerceFiniteNumber(result.rangeHigh);
-
-    result.estimatedValue = Math.round(monthlyRent);
-    result.rangeLow = Math.round(isPlausibleMonthlyRent(rangeLow, monthlyRent) ? rangeLow! : monthlyRent * 0.9);
-    result.rangeHigh = Math.round(isPlausibleMonthlyRent(rangeHigh, monthlyRent) ? rangeHigh! : monthlyRent * 1.1);
-    result.executionValue = Math.round(monthlyRent);
-    result.pricePerSqmEstimate = rentPerSqm == null ? null : roundNumber(rentPerSqm, 2);
-    result.auctionAdjustedValue = null;
-    result.rentalYieldEstimate = 0;
-    result.methodUsed = usedListingFallback
-      ? "Low-confidence monthly-rent fallback using the current asking rent"
-      : "Monthly rental valuation using lease evidence and rental comparables";
-    if (usedListingFallback) {
-      result.confidence = Math.min(clampScore(result.confidence, 35), 40);
-      result.confidenceLabel = "Low";
-    }
-
-    const summary = optionalString(result.summary);
-    if (!summary || saleStyleRentalNarrative.test(summary) || usedListingFallback) {
-      result.summary = rentalSummary(monthlyRent, rentPerSqm, usedListingFallback);
-    }
-    const taxSummary = optionalString(result.taxSummary);
-    if (!taxSummary || saleStyleRentalNarrative.test(taxSummary)) {
-      result.taxSummary = "Assumes normal Greek lease taxation and standard landlord/tenant friction; ownership-transfer charges are excluded.";
-    }
-
-    if (listedPrice > 0 && monthlyRent > 0) {
-      const deltaPct = roundNumber(((listedPrice - monthlyRent) / monthlyRent) * 100);
-      result.marketComparisonPct = deltaPct;
-      result.marketComparison = toMarketComparison(deltaPct);
-      result.pricingPosition = deltaPct > 5 ? "overpriced" : deltaPct < -5 ? "underpriced" : "fair";
-    } else {
-      result.marketComparisonPct = 0;
-      result.marketComparison = "at_market";
-      result.pricingPosition = "fair";
-    }
-  } else if (listedPrice > 0 && marketAnchor != null && marketAnchor > 0) {
-    const deltaPct = roundNumber(((marketAnchor - listedPrice) / listedPrice) * 100);
-    result.marketComparisonPct = deltaPct;
-    result.marketComparison = toMarketComparison(deltaPct);
-    result.pricingPosition = toPricingPosition(deltaPct);
-  }
-
-  const residential = isResidentialType(source.propertyType);
-  if (residential) {
-    const legalFloor = isAuction ? 50 : 60;
-    const planningFloor = isAuction ? 60 : 65;
-    const transferFloor = isAuction ? 45 : 55;
-    const taxCeiling = isAuction ? 55 : 35;
-    const hasConfirmedDefect = hasConfirmedLegalPlanningDefect(source);
-    if (hasConfirmedDefect) {
-      const legalCap = isAuction ? 35 : 50;
-      const planningCap = isAuction ? 40 : 55;
-      const transferCap = isAuction ? 45 : 60;
-      const taxFloor = isAuction ? 60 : 50;
-      const taxConfirmedCeiling = isAuction ? 85 : 80;
-      result.legalCleanliness = Math.min(clampScore(result.legalCleanliness, legalCap), legalCap);
-      result.planningCertainty = Math.min(clampScore(result.planningCertainty, planningCap), planningCap);
-      result.transferReadiness = Math.min(clampScore(result.transferReadiness, transferCap), transferCap);
-      result.taxFriction = clampNumber(clampScore(result.taxFriction, taxFloor), taxFloor, taxConfirmedCeiling);
-    } else {
-      result.legalCleanliness = Math.max(clampScore(result.legalCleanliness, legalFloor), legalFloor);
-      result.planningCertainty = Math.max(clampScore(result.planningCertainty, planningFloor), planningFloor);
-      result.transferReadiness = Math.max(clampScore(result.transferReadiness, transferFloor), transferFloor);
-      result.taxFriction = Math.min(clampScore(result.taxFriction, taxCeiling), taxCeiling);
-    }
-    result.redFlags = removeUnconfirmedLegalFlags(result.redFlags, source);
-
-    const legalSummary = optionalString(result.legalSummary) ?? "";
-    if (!hasConfirmedDefect && /outside|no cadastre|buildability|buildable/i.test(legalSummary)) {
-      result.legalSummary = isAuction
-        ? "Listing data does not include verified cadastre, title, occupancy, or permit documents. Treat legal and planning status as unverified; auction due diligence remains required before relying on the estimate."
-        : "Listing data does not include verified cadastre, title, or permit documents. Treat legal and planning status as unverified; no confirmed legal defect is present in the supplied fields.";
-    }
-  }
-
-  result.confidence = clampScore(result.confidence, 50);
-  result.liquidityScore = clampScore(result.liquidityScore, 50);
-  result.listingQualityScore = computeListingQualityScore(source, osData);
-  return result;
-};
-
-const buildOsValuationResult = (osData: JsonRecord, input: StructuredValuationInput): JsonRecord => {
-  const listingType = optionalString(input.listingType)?.toLowerCase() ?? "sale";
-  const isAuction = listingType === "auction";
-  const isRental = isRentalListing(listingType);
-  const leaseEstimate = getOsPredictedMonthlyRent(osData);
-  const estimatedValue = Math.round(
-    isRental
-      ? leaseEstimate ?? input.price
-      : coerceFiniteNumber(osData.propertyPredictedPrice) ?? input.price,
-  );
-  const annualYield = normalizeAnnualYield(osData.annualYieldPrc);
-  const saleComparables = countOverviewComparables(osData.saleValuationOverviews);
-  const rentalComparables = countOverviewComparables(osData.rentalValuationOverviews);
-  const confidenceComparableCount = isRental
-    ? rentalComparables
-    : saleComparables + rentalComparables;
-  const pricePerSqm = isRental
-    ? getOsRentalPricePerSqm(osData, estimatedValue, input.sqm)
-    : firstOverviewNumber(osData.saleValuationOverviews, "propertyEurPerSqm") ??
-      (input.sqm > 0 ? estimatedValue / input.sqm : null);
-  const deltaPct = input.price > 0 ? roundNumber(((estimatedValue - input.price) / input.price) * 100) : 0;
-  const confidence = Math.max(55, Math.min(90, 68 + Math.min(12, confidenceComparableCount)));
-  const liquidityScore = isAuction
-    ? 45
-    : Math.max(55, Math.min(82, 62 + Math.min(14, isRental ? rentalComparables : saleComparables)));
-  const comparablesText = `${saleComparables} sale and ${rentalComparables} rental comparables`;
-  const rangeLowFactor = isRental ? 0.9 : isAuction ? 0.72 : 0.9;
-  const rangeHighFactor = isRental ? 1.1 : isAuction ? 0.92 : 1.1;
-
-  return {
-    estimatedValue,
-    rangeLow: Math.round(estimatedValue * rangeLowFactor),
-    rangeHigh: Math.round(estimatedValue * rangeHighFactor),
-    confidence,
-    confidenceLabel: confidence >= 75 ? "High" : confidence >= 50 ? "Medium" : "Low",
-    marketComparison: toMarketComparison(deltaPct),
-    marketComparisonPct: deltaPct,
-    liquidityScore,
-    pricePerSqmEstimate: pricePerSqm == null ? null : isRental ? roundNumber(pricePerSqm, 2) : Math.round(pricePerSqm),
-    pricingPosition: toPricingPosition(deltaPct),
-    rentalYieldEstimate: isRental ? 0 : annualYield,
-    executionValue: isRental ? estimatedValue : Math.round(estimatedValue * (isAuction ? 0.75 : 0.88)),
-    objectiveValueProxy: null,
-    auctionAdjustedValue: isAuction ? Math.round(estimatedValue / 0.8) : null,
-    legalCleanliness: isAuction ? 45 : 65,
-    planningCertainty: 70,
-    taxFriction: isAuction ? 55 : 30,
-    transferReadiness: isAuction ? 42 : 62,
-    legalRiskScore: isAuction ? 55 : 28,
-    taxRiskScore: isAuction ? 42 : 24,
-    listingQualityScore: confidence,
-    osEstimatedValue: estimatedValue,
-    summary: [
-      `mAI Prop OS predicts a ${isRental ? "monthly rent" : "market value"} of EUR ${estimatedValue.toLocaleString("en-US")}${isRental ? " per month" : ""}.`,
-      !isRental && leaseEstimate ? `Estimated monthly lease is EUR ${Math.round(leaseEstimate).toLocaleString("en-US")}.` : null,
-      !isRental && annualYield != null ? `Implied annual yield is ${annualYield}%.` : null,
-      `The OS model used ${isRental ? `${rentalComparables} rental comparables` : comparablesText}.`,
-    ].filter(Boolean).join(" "),
-    keyFactors: [
-      { factor: "mAI Prop OS valuation", impact: "positive", note: isRental ? "Structured OS lease-price response" : "Structured OS valuation API response" },
-      { factor: "Comparable depth", impact: confidenceComparableCount > 0 ? "positive" : "neutral", note: isRental ? `${rentalComparables} rental comparables` : comparablesText },
-      !isRental && annualYield != null ? { factor: "Rental yield", impact: "neutral", note: `${annualYield}% implied gross yield` } : null,
-      { factor: isRental ? "Rent delta" : "Asking price delta", impact: Math.abs(deltaPct) <= 5 ? "neutral" : deltaPct > 0 ? "positive" : "negative", note: `${deltaPct}% versus ${isRental ? "listed rent" : "asking price"}` },
-      { factor: "Legal/planning data", impact: isAuction ? "negative" : "neutral", note: isAuction ? "Auction risk remains" : "Document review still required" },
-    ].filter(Boolean),
-    legalSummary: isRental
-      ? "The structured OS lease estimate does not replace lease, ownership, and condition review. Confirm access, fixtures, deposit terms, and permitted rental use before relying on the estimate."
-      : isAuction
-      ? "The structured OS valuation does not replace auction title, occupancy, and burden review. Confirm legal status before relying on the estimate."
-      : "The structured OS valuation estimates market value from coordinates and property traits. Title, permit, and building identity documents still need review.",
-    taxSummary: isRental
-      ? "Assumes normal Greek lease taxation and standard landlord/tenant friction unless the lease structure is complex."
-      : "Assumes normal Greek transfer friction unless legal review identifies special burdens.",
-    renovationPotential: null,
-    highestBestUseHint: null,
-    redFlags: isAuction ? ["Auction valuations can shift materially after legal and title review."] : [],
-    methodUsed: isRental
-      ? "mAI Prop OS structured lease valuation using rental comparables"
-      : "mAI Prop OS structured valuation API (/api/v1/property/valuation)",
-    valuationMode: "MODE_2_PUBLIC_ENRICHED",
-    generatedBy: "maiprop_os",
-    osDataSources: ["mAI Prop OS structured valuation API"],
-    osComparableCounts: { sale: saleComparables, rental: rentalComparables },
-  };
-};
-
 const buildOsPromptContext = (osData: JsonRecord | null): string => {
   if (!osData) {
-    return "No structured mAI Prop OS valuation was available for this property. Use listing data and Greece 2026 benchmarks only.";
+    return "No structured mAI Prop OS valuation was available for this property. Do not infer a numeric value from the listing price or unsupported market defaults.";
   }
 
   const saleComparables = countOverviewComparables(osData.saleValuationOverviews);
@@ -840,61 +497,16 @@ const buildOsPromptContext = (osData: JsonRecord | null): string => {
   return JSON.stringify(compact, null, 2);
 };
 
-const mergeOsEvidence = (result: JsonRecord, osData: JsonRecord | null, osFallback: JsonRecord | null): JsonRecord => {
-  if (!osData || !osFallback) return result;
-
-  const fallbackYield = coerceFiniteNumber(osFallback.rentalYieldEstimate);
-  const fallbackPricePerSqm = coerceFiniteNumber(osFallback.pricePerSqmEstimate);
-  const existingFactors = Array.isArray(result.keyFactors) ? result.keyFactors : [];
-  return {
-    ...osFallback,
-    ...result,
-    estimatedValue: coerceFiniteNumber(result.estimatedValue) ?? osFallback.estimatedValue,
-    rangeLow: coerceFiniteNumber(result.rangeLow) ?? osFallback.rangeLow,
-    rangeHigh: coerceFiniteNumber(result.rangeHigh) ?? osFallback.rangeHigh,
-    executionValue: coerceFiniteNumber(result.executionValue) ?? osFallback.executionValue,
-    pricePerSqmEstimate: coerceFiniteNumber(result.pricePerSqmEstimate) ?? fallbackPricePerSqm,
-    rentalYieldEstimate: coerceFiniteNumber(result.rentalYieldEstimate) ?? fallbackYield,
-    methodUsed: optionalString(result.methodUsed) ?? "OpenAI enriched valuation with mAI Prop OS structured valuation data",
-    valuationMode: optionalString(result.valuationMode) ?? "MODE_2_PUBLIC_ENRICHED",
-    keyFactors: [
-      ...existingFactors,
-      {
-        factor: "mAI Prop OS data",
-        impact: "positive",
-        note: "Structured valuation and comparable counts used as model evidence",
-      },
-    ],
-    generatedBy: "openai_maiprop_os",
-    osEstimatedValue: osFallback.estimatedValue,
-    osDataSources: ["mAI Prop OS structured valuation API", "OpenAI"],
-    osComparableCounts: {
-      sale: countOverviewComparables(osData.saleValuationOverviews),
-      rental: countOverviewComparables(osData.rentalValuationOverviews),
-    },
-  };
-};
-
-const withOsDiagnostics = (
-  result: JsonRecord,
-  status: string,
-  detail?: string,
-): JsonRecord => ({
-  ...result,
-  osValuationStatus: status,
-  ...(detail ? { osValuationDetail: detail } : {}),
-});
-
 const buildValuationEvidenceSection = (osData: JsonRecord | null, newBuildAiOnly: boolean): string => {
   if (newBuildAiOnly) {
     return `=== NEW-BUILD AI-ONLY COMPARABLE VALUATION ===
 mAI Prop OS structured valuation is intentionally disabled for new-build and pre-sale inventory.
-Use AI reasoning only, anchored to the supplied unit/project metrics, current Greek benchmark bands, and the most similar new-build, off-plan, or recently completed properties by:
+Use AI reasoning only from the supplied unit/project metrics and provider observations. Qualitative comparison may consider new-build, off-plan, or recently completed property archetypes by:
 - nearby micro-location first, then same neighbourhood/submarket, then adjacent municipality only if nearby evidence is sparse
 - unit size, floor, layout, penthouse/top-floor status, energy class, parking/storage, pool/shared facilities, balcony/view, and delivery year
 - construction phase, permit certainty, developer/project quality, and VAT/new-build premium
-- asking €/sqm versus comparable new-build/off-plan unit archetypes
-For every supplied property spec and facility, adjust premium or discount explicitly: parking, penthouse/top-floor, pool, elevator, storage, balcony, view, garden, energy class, delivery year, and finish/condition must be reflected in keyFactors when material.
+- asking €/sqm only when an independent provider observation supplies a comparison anchor
+For every supplied property spec and facility, describe its qualitative relevance without inventing a premium or discount: parking, penthouse/top-floor, pool, elevator, storage, balcony, view, garden, energy class, delivery year, and finish/condition must be reflected in keyFactors when material.
 Do not compare a project-average input against a starting-from price unless the supplied input explicitly represents that starting unit.
 Do not invent exact comparable addresses or transactions; describe comparable archetypes and confidence limits instead.`;
   }
@@ -905,358 +517,174 @@ ${buildOsPromptContext(osData)}
 Use mAI Prop OS data as primary quantitative evidence when available, then enrich it with OpenAI qualitative reasoning. Explain where the OS data, listing price, micro-location, liquidity, legal risk, and qualitative asset traits agree or diverge.`;
 };
 
-// ── Greece 2026 market benchmarks ─────────────────────────────────────────────
-const MARKET_BENCHMARKS = `
-GREECE 2026 — PROPERTY MARKET BENCHMARKS (Bank of Greece, REDS, AADE data):
+const V2_NUMERIC_FIELDS = [
+  "estimatedValue", "auctionAdjustedValue", "rangeLow", "rangeHigh", "executionValue",
+  "pricePerSqmEstimate", "rentalYieldEstimate", "objectiveValueProxy", "confidence",
+  "liquidityScore", "legalCleanliness", "planningCertainty", "taxFriction",
+  "transferReadiness", "listingQualityScore", "marketComparisonPct",
+] as const;
+type V2NumericField = typeof V2_NUMERIC_FIELDS[number];
+type V2FieldSource = "os_prediction" | "derived_os" | "ai_estimate" | "derived_ai" | "listing_completeness" | "unavailable";
 
-RESIDENTIAL (€/sqm asking prices, Q1 2026):
-- Athens premium (Kolonaki, Psychiko, Kifissia, Ekali): €4,800–9,500/sqm
-- Athens central (Pagkrati, Mets, Koukaki, Plaka, Exarchia): €2,900–5,000/sqm
-- Athens north (Marousi, Halandri, Cholargos): €2,700–4,400/sqm
-- Athens south (Glyfada, Voula, Vouliagmeni): €3,800–7,500/sqm
-- Athens east (Zografou, Kaesariani, Vyronas): €2,000–3,200/sqm
-- Athens west (Peristeri, Ilion, Aegaleo): €1,400–2,500/sqm
-- Piraeus center: €1,900–3,200/sqm
-- Thessaloniki center: €2,400–3,800/sqm; suburbs: €1,500–2,600/sqm
-- Heraklion Crete: €1,800–3,200/sqm; Chania: €2,200–4,200/sqm
-- Patras: €900–1,900/sqm; Larissa: €900–1,800/sqm; Ioannina: €1,000–1,900/sqm
+const strictFinite = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+const positiveStrict = (value: unknown): number | null => {
+  const numeric = strictFinite(value);
+  return numeric != null && numeric > 0 ? numeric : null;
+};
+const scoreStrict = (value: unknown): number | null => {
+  const numeric = strictFinite(value);
+  return numeric != null && numeric >= 0 && numeric <= 100 ? numeric : null;
+};
+const textStrict = (value: unknown): string | null =>
+  typeof value === "string" && value.trim() ? value.trim() : null;
+const stringArray = (value: unknown): string[] => Array.isArray(value)
+  ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim())
+  : [];
+const keyFactors = (value: unknown): Array<{ factor: string; impact: "positive" | "neutral" | "negative"; note: string }> =>
+  Array.isArray(value) ? value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as JsonRecord;
+    const factor = textStrict(record.factor);
+    const note = textStrict(record.note);
+    const impact = record.impact;
+    return factor && note && (impact === "positive" || impact === "neutral" || impact === "negative")
+      ? [{ factor, impact, note }]
+      : [];
+  }) : [];
 
-ISLANDS — RESIDENTIAL (€/sqm, Q1 2026):
-- Mykonos (town/beach): €9,000–25,000+/sqm
-- Santorini (Caldera rim): €12,000–30,000+/sqm; other areas €5,000–10,000/sqm
-- Paros/Antiparos: €3,500–9,000/sqm; Rhodes: €2,500–6,000/sqm
-- Corfu (sea view): €3,000–7,000/sqm; inland: €1,500–3,000/sqm
-- Cephalonia/Zakynthos: €2,000–5,000/sqm; Lefkada: €2,000–4,500/sqm
-
-VILLAS — PREMIUM LOCATIONS (€/sqm, Q1 2026):
-- Attica (Kifissia/Ekali): €4,000–10,000/sqm; South Attica (Saronida): €3,000–7,000/sqm
-- Halkidiki (Kassandra/Sithonia): €2,000–5,500/sqm
-- Luxury island villas (Mykonos/Santorini): €8,000–35,000/sqm for turnkey
-
-COMMERCIAL (€/sqm, yield bands, Q1 2026):
-- Prime Athens retail (Ermou/Kolonaki): €4,000–9,000/sqm; yield 4.5–6.5%
-- Secondary Athens retail: €1,500–3,500/sqm; yield 7–10%
-- Athens CBD Grade-A office: €2,500–5,000/sqm; yield 5.5–7.5%
-- Thessaloniki prime retail: €2,500–5,500/sqm; yield 5.5–8%
-
-INDUSTRIAL / WAREHOUSE (€/sqm, Q1 2026):
-- Attica industrial zone (Aspropyrgos/Elefsina): €400–900/sqm; yield 7–9%
-- Secondary industrial: €200–500/sqm; yield 9–13%
-
-LAND / PLOTS (€/sqm):
-- Athens urban buildable plot: €500–3,000+/sqm depending on SD and location
-- Agricultural land: €1–15/sqm; Tourist coastal: €5–120/sqm
-
-MARKET DYNAMICS 2026 (Bank of Greece):
-- Residential price trend: Athens +5–8% YoY; islands +7–12% YoY; regional +2–5% YoY
-- PACE IS DECELERATING from 2022–2024 peaks
-- Commercial market behaves DIFFERENTLY from residential
-- Transaction costs buyer: ~8–11% total (FMA 3%, notary 1–1.5%, legal 0.5–1%, agent 2–3%)
-- Transfer tax: 3% on objective/taxable value + municipal levy (~0.3%)
-- New builds: 25–40% premium over resale same area/floor
-
-RENTAL YIELDS 2026 (gross, asking):
-- Athens center long-term: 3.5–5.5% gross
-- Athens center short-term (Airbnb zones): 6–9% gross
-- Tourist islands seasonal: 7–14% gross
-- Regional cities: 4.5–7% gross
-`;
-
-// ── Greek legal/tax overlay framework ─────────────────────────────────────────
-const LEGAL_TAX_FRAMEWORK = `
-GREEK LEGAL & TAX OVERLAY — GREECE 2026 (AADE, Cadastre, e-Πολεοδομία):
-
-SCORING MODEL (produce all four scores 0–100):
-
-1. LEGAL_CLEANLINESS_SCORE (0–100):
-   Inputs: cadastre clarity, title chain, permit status, building identity, ownership complexity, restriction risk.
-   - Unknown listing fields are UNKNOWN, not confirmed defects. Do not mark absent listing metadata as illegal/title risk.
-   - Standard urban apartment/house with no adverse signal but no documents = 60-75, not below 50.
-   - Co-ownership or partial ownership = -10 to -25
-   - Auction property with no title info = -30
-   - Signs of illegal enclosures/extensions from photos/description = -15 to -25
-   - Coastal/island/neoclassical/forest proximity = -10 to -20 (protection risk)
-   - Standard urban apartment, no red flags mentioned = 65–80
-   - Fully documented unit (permit cited, no issues) = 85–95
-
-2. PLANNING_CERTAINTY_SCORE (0–100):
-   Inputs: inside/outside plan certainty, SD/coverage/height data, land use, change-of-use feasibility.
-   - For standard apartments, do not require buildability/SD fields unless the listing is land/plot/development.
-   - Apartment/house in established urban area = 70–85 (assumed inside plan)
-   - Plot with SD stated explicitly = 75–90
-   - Plot with SD unknown = 30–50
-   - Land outside settlement, no buildability data = 20–40
-   - Hotel/commercial conversion claimed without use permit = 30–55
-   - Standard apartment, no land complexity = 70–80
-
-3. TAX_FRICTION_SCORE (0–100, higher = MORE friction):
-   Inputs: transfer tax burden, objective value divergence, transfer complexity, doc readiness.
-   - Standard transfer: ~3% FMA + notary + legal + agent = total buyer cost ~8–11%
-   - Auction: add eviction/legal uncertainty friction
-   - Foreign buyer Golden Visa property: add process complexity
-   - Inheritance/donation path: higher friction
-   - Commercial/industrial: higher complexity = higher friction
-   - Scale: 10–25 = normal residential transfer; 30–50 = commercial/complex; 50–70 = auction/foreign/inheritance; 70–90 = very complex
-
-4. TRANSFER_READINESS_SCORE (0–100):
-   Inputs: building identity completeness, E9 consistency, digital transfer readiness, doc completeness, auction burden.
-   - Digital transfer via myPROPERTY with all docs: 85–95
-   - Standard apartment with likely complete docs: 65–80
-   - Auction with unknown occupancy: 20–40
-   - Missing building identity / permit issues: 30–55
-   - Island property with multiple ownership unknowns: 25–50
-
-PROPERTY-TYPE LEGAL RULES:
-- RESIDENCE: Check horizontal property status, building identity, illegal enclosure risk, ENFIA/objective cross-check
-- COMMERCIAL: Check allowed commercial use, lease tax completeness, change-of-use feasibility
-- LAND: Check inside/outside plan, forest/coastal/archaeology protection, road access legality
-- PLOT: Check SD/coverage/height/frontage, demolition obligations, planning constraint consistency
-- VILLA/VACATION/ISLAND: Coastal restrictions, pool/extension legality, traditional settlement restrictions, tourism-use feasibility
-- HOTEL: Hospitality-use legality, room count confidence, conversion feasibility
-- MIXED-USE: Legality of use split, horizontal division, change-of-use, vacant-possession difficulty
-- INDUSTRIAL: Industrial use legality, fire/operational compliance, environmental constraints
-- AUCTION: Title burden, occupancy, eviction risk, document completeness, inspection access
-
-VALUATION MODES (infer from available data):
-- MODE 1 (LISTING ONLY): No legal data available — use conservative defaults, note as UNKNOWN
-- MODE 2 (PUBLIC-ENRICHED): Objective value proxy, planning zone clues, auction flags — use where inferable
-- MODE 3 (DOC-VERIFIED): Not applicable for listing sites — do not claim
-
-OBJECTIVE VALUE:
-- Use only as cross-check / tax reference, NOT as commercial AVM answer
-- If objective value >> AVM estimate: flag transfer/tax mismatch risk
-- If objective value << asking price: note tax/market divergence (do not reduce market value)
-
-EXECUTION VALUE:
-execution_value = market_value MINUS transaction_friction MINUS legal_uncertainty_discount
-- legal_uncertainty_discount = 0–15% of market value based on legal_cleanliness_score
-- transaction_friction = 8–11% for normal; 15–25% for auction; 20–35% for complex structures
-`;
-
-// ── Property-type specific methodology ────────────────────────────────────────
-const getTypeInstructions = (propertyType: string, listingType: string): string => {
-  const isAuction = listingType === "auction";
-
-  if (isRentalListing(listingType)) {
-    return `
-METHODOLOGY: RENTAL LISTING - comparable monthly-rent model.
-1. Estimate monthly market rent, not sale value.
-2. Use mAI Prop OS lease evidence and rental comparables as the primary quantitative source when available.
-3. Adjust for micro-location, size band, floor/elevator, parking/storage, energy class, furnishing, condition, amenities, view/noise, and construction age.
-4. Match new or recent construction with comparable new or recent rental stock first; older resale stock is lower-bound context only after an explicit age, condition, and energy adjustment.
-5. executionValue remains on the monthly-rent basis; do not deduct ownership-transfer costs or output buyer economics.
-6. When independent rental evidence is unavailable, retain the asking rent only as a low-confidence reference and state that limitation.
-Legal/lease check: verify permitted rental use, authority to lease, fixtures, deposit terms, access, and usage restrictions.`;
-  }
-
-  const base: Record<string, string> = {
-    apartment: `
-METHODOLOGY: RESIDENTIAL APARTMENT — Comparable hedonic model (primary) + rental yield sense-check.
-1. Extract micro-location → baseline €/sqm from benchmark table.
-2. Adjustments: floor (ground -8 to -15%, semi-basement -20 to -35%, 5+ with elevator +3-8%), elevator absence above floor 2 = -5 to -10%, year built pre-1980 without reno = -10 to -25%, post-2010 = +5 to +15%, new build = +25-40%, condition poor -20 to -30% / luxury +15 to +30%, parking +4-8%, storage +1-3%, balcony +2-6%, sea view +10-40%, noisy road -5 to -12%.
-3. Rental yield sanity check vs benchmark.
-4. Range: ±6-10% urban with strong comps; ±12-20% for atypical/sparse.
-Legal check: horizontal property, building identity, illegal enclosure risk, ENFIA cross-check.`,
-
-    house: `
-METHODOLOGY: DETACHED HOUSE — Comparable + cost support.
-1. Separate building from land value contribution.
-2. Building €/sqm for house subtype + garden premium (small <200sqm low; >500sqm significant).
-3. Apply condition, year, view, corner adjustments. Cost floor: €900-1,600/sqm replacement cost.
-4. Range: ±8-14% typical.
-Legal check: building identity, extension legality, horizontal property if divided.`,
-
-    villa: `
-METHODOLOGY: VILLA — Premium feature nearest-neighbor (primary) + STR support (secondary in tourism).
-DO NOT rely only on €/sqm.
-1. Feature premium score: sea view direct +20-60%, pool +8-25%, land >1k sqm +10-30%, luxury finish +15-35%, privacy +5-15%, caldera/horizon +20-50%, guesthouse +5-20%.
-2. Nearest-neighbor comps with high feature matching.
-3. STR support: Mykonos/Santorini €120-500k/year; Crete/Rhodes €40-150k/year.
-4. Range: ±12-25%. Liquidity: 0.3-0.6 non-prime; 0.6-0.8 prime island.
-Legal check: coastal restrictions, pool/extension legality, traditional settlement, tourism-use feasibility.`,
-
-    land: `
-METHODOLOGY: AGRICULTURAL/NON-URBAN LAND — Conservative comparable + optional development scenario.
-CRITICAL: DO NOT assume buildability from seller language.
-1. Classify: agricultural | speculative | coastal/tourism | non-buildable rural.
-2. Outside settlement: assume max 200sqm buildable unless SD clearly stated.
-3. Comparable land €/sqm + premiums (sea proximity, access, flat, utilities).
-4. Range: ±20-40%. Liquidity: 0.2-0.4 unless prime coastal.
-Legal check: inside/outside plan, forest/coastal/archaeology, road access legality.`,
-
-    commercial: `
-METHODOLOGY: COMMERCIAL — Income-capitalization-informed comparable.
-1. Subtype: retail | office | mixed small commercial.
-2. RETAIL: market rent/sqm/month (prime Athens €20-50; secondary €8-18; regional €4-12), annual ERV × cap rate (prime 4.5-6.5%, secondary 7-10%, regional 9-13%), frontage +10-30%, basement dependence -15 to -30%.
-3. OFFICE: Grade A €18-28/sqm/month Athens CBD; cap rate 5.5-7.5%; vacancy ~10-14% (hybrid work effect).
-4. Cross-check sales comps. Range: ±10-18%.
-NOTE: commercial ≠ residential momentum (Bank of Greece).
-Legal check: allowed use, lease tax completeness, change-of-use feasibility.`,
-
-    office: `
-METHODOLOGY: OFFICE — Yield-informed comparable (Grade-based).
-1. Grade inference from condition/description.
-2. Market rent: Athens CBD Grade A €18-28; Grade B €10-18; peripheral €7-12/sqm/month.
-3. Cap rate: Grade A 5.5-7%; Grade B 7-9.5%; Grade C 9-13%.
-4. Vacancy Athens CBD ~10-14% (2026 hybrid-work). Range: ±10-15%.
-Legal check: allowed use, building identity.`,
-  };
-
-  const auctionSuffix = isAuction ? `
-
-AUCTION OVERLAY — Apply AFTER estimating clean market value:
-- Estimate clean market value first (as if normal sale).
-- Total auction discount = sum of: liquidity 5-15%, due diligence 3-8%, inspection uncertainty 3-10%, occupancy/eviction risk 5-20%, legal uncertainty 3-12%, repair unknown 2-8%.
-- Typical total: 15-45% from clean market value.
-- Smaller discount: standard urban apartment, vacant, good photos, many comps.
-- Larger discount: occupied, no photos, special asset, island, industrial complexity.
-- Output: estimated_market_value_if_clean (= auctionAdjustedValue) AND auction-adjusted value (= estimatedValue).` : "";
-
-  const fallback = `
-METHODOLOGY: GENERAL PROPERTY — Comparable model with type-specific adjustments.
-Use benchmark table. Apply condition, location, feature adjustments. Range: ±15-25%. Liquidity: moderate 0.3-0.5.`;
-
-  return (base[propertyType] || fallback) + auctionSuffix;
+const normalizeTransaction = (source: JsonRecord): "sale" | "rent" | "auction" => {
+  const listingType = optionalString(source.listingType)?.toLowerCase();
+  if (listingType === "auction") return "auction";
+  if (listingType === "rent" || listingType === "rental" ||
+      (listingType === "open_house" && optionalString(source.openHouseTransactionType)?.toLowerCase() === "rent")) return "rent";
+  return "sale";
 };
 
-const getTransactionInstructions = (listingType: string): string => {
-  if (listingType === "auction") {
-    return `
-AUCTION-SPECIFIC RISK MODEL:
-- This is not a normal listing valuation. Estimate clean market value first, then separately estimate auction execution value.
-- Explicitly price legal risk, title-burden uncertainty, eviction/occupancy risk, and limited observability of the interior/property condition.
-- Limited observability means no full buyer inspection, incomplete photos, unknown hidden defects, unknown access, and unknown repair scope unless supplied data proves otherwise.
-- Do not treat the starting bid or listing price as market value. Use it only as a comparison point after deriving the clean market value.
-- auctionAdjustedValue must be the clean market value before auction discounts. estimatedValue must be the auction-adjusted value after legal, liquidity, observability, and execution discounts.
-- Red flags may include only auction-specific due diligence risks or confirmed property defects; do not list AI/provider fallback status as a property red flag.`;
-  }
+const buildV2Valuation = (source: JsonRecord, osData: JsonRecord | null, aiValue: unknown, osStatus: string): JsonRecord | null => {
+  const ai = aiValue && typeof aiValue === "object" && !Array.isArray(aiValue) ? aiValue as JsonRecord : null;
+  const transaction = normalizeTransaction(source);
+  const valueUnit = transaction === "rent" ? "EUR/month" : "EUR";
+  const osSale = positiveStrict(osData?.propertyPredictedPrice);
+  const osLease = positiveStrict(osData?.propertyPredictedLeasePrice);
+  const aiEstimate = positiveStrict(ai?.estimatedValue);
+  const aiClean = transaction === "auction" ? positiveStrict(ai?.auctionAdjustedValue) : null;
+  const estimatedValue = transaction === "sale" ? (osSale ?? aiEstimate) :
+    transaction === "rent" ? aiEstimate : osSale;
+  const estimatedSource: V2FieldSource = estimatedValue == null ? "unavailable" :
+    ((transaction === "sale" && osSale != null) || (transaction === "auction" && osSale != null)) ? "os_prediction" : "ai_estimate";
+  const auctionAdjustedValue = aiClean;
+  const primaryForDensity = transaction === "auction" ? (auctionAdjustedValue ?? estimatedValue) : estimatedValue;
+  const primarySource = transaction === "auction" && auctionAdjustedValue != null ? "ai_estimate" : estimatedSource;
+  const sqm = positiveStrict(source.sqm);
+  const pricePerSqmEstimate = primaryForDensity != null && sqm != null ? roundNumber(primaryForDensity / sqm, 2) : null;
+  const comparisonAnchor = transaction === "auction" ? auctionAdjustedValue : estimatedValue;
+  const asking = positiveStrict(source.price);
+  const rawComparison = comparisonAnchor != null && asking != null ? ((asking - comparisonAnchor) / comparisonAnchor) * 100 : null;
+  const marketComparisonPct = rawComparison == null ? null : Math.round(rawComparison);
+  const marketComparison = rawComparison == null ? null : toMarketComparison(rawComparison);
+  const pricingPosition = rawComparison == null ? null : rawComparison > 5 ? "overpriced" : rawComparison < -5 ? "underpriced" : "fair";
+  const confidence = scoreStrict(ai?.confidence);
+  const liquidityScore = scoreStrict(ai?.liquidityScore);
+  const confidenceLabel = confidence == null ? null : confidence >= 75 ? "High" : confidence >= 50 ? "Medium" : "Low";
+  const rangeLowCandidate = positiveStrict(ai?.rangeLow);
+  const rangeHighCandidate = positiveStrict(ai?.rangeHigh);
+  const rangeBasis = transaction === "auction" ? (auctionAdjustedValue != null ? "auctionAdjustedValue" : null) :
+    (estimatedValue != null && estimatedSource === "ai_estimate" ? "estimatedValue" : null);
+  const rangeAnchor = rangeBasis === "auctionAdjustedValue" ? auctionAdjustedValue : rangeBasis === "estimatedValue" ? estimatedValue : null;
+  const validRange = rangeLowCandidate != null && rangeHighCandidate != null && rangeAnchor != null && rangeLowCandidate <= rangeAnchor && rangeAnchor <= rangeHighCandidate;
+  const rangeLow = validRange ? rangeLowCandidate : null;
+  const rangeHigh = validRange ? rangeHighCandidate : null;
+  const summary = textStrict(ai?.summary);
+  const legalSummary = textStrict(ai?.legalSummary);
+  const taxSummary = textStrict(ai?.taxSummary);
+  const renovationPotential = textStrict(ai?.renovationPotential);
+  const highestBestUseHint = textStrict(ai?.highestBestUseHint);
+  const factors = keyFactors(ai?.keyFactors);
+  const redFlags = stringArray(ai?.redFlags);
+  const providerPrediction = transaction === "rent" && osLease != null
+    ? { value: osLease, field: "propertyPredictedLeasePrice", model: "market", unit: null }
+    : osSale != null
+      ? { value: osSale, field: "propertyPredictedPrice", model: transaction === "auction" ? "auction" : "market", unit: "EUR" }
+      : null;
+  const hasUsefulAnalysis = Boolean(
+    summary || legalSummary || taxSummary || renovationPotential || highestBestUseHint || factors.length || redFlags.length,
+  );
+  if (estimatedValue == null && auctionAdjustedValue == null && providerPrediction == null && !hasUsefulAnalysis) return null;
 
-  if (listingType === "rent") {
-    return `
-CLEAN LISTING ASSUMPTION:
-- This is a normal rental listing, not an auction. Assume the property is clean, marketable, and ready to transact unless supplied fields explicitly confirm a legal/planning defect.
-- Focus valuation on monthly rent, EUR/sqm/month, location, asset quality, tenant demand, condition, amenities, floor, energy class, rental liquidity, and neighbourhood desirability.
-- Do not produce sale value, purchase value, buyer execution value, or transfer-tax-driven value for rentals.
-- Do not apply auction discounts, eviction risk, title-burden discounts, or limited-observability penalties to normal listings.
-- Missing cadastre, buildability, or city-plan fields on standard apartments/houses are data gaps, not red flags.`;
-  }
-
-  return `
-CLEAN LISTING ASSUMPTION:
-- This is a normal sale/listing ad, not an auction. Assume the property is clean, marketable, and ready to transact unless supplied fields explicitly confirm a legal/planning defect.
-- Focus valuation on market benchmarks, micro-location, size, floor, age, condition, energy class, amenities, views/noise, renovation risk, liquidity, buyer depth, and qualitative desirability.
-- Do not apply auction discounts, eviction risk, title-burden discounts, or limited-observability penalties to normal listings.
-- Legal/tax overlay should stay light: standard transfer friction unless the listing data confirms complexity.
-- Missing cadastre, buildability, or city-plan fields on standard apartments/houses are data gaps, not red flags.`;
-};
-
-// ── Main handler ───────────────────────────────────────────────────────────────
-const fallbackBenchmarkPricePerSqm = (input: {
-  city: string;
-  region?: string;
-  address?: string;
-  propertyType?: string;
-  listingType?: string;
-}): number => {
-  const location = [input.address, input.city, input.region].filter(Boolean).join(" ").toLowerCase();
-  const propertyType = input.propertyType?.toLowerCase() ?? "apartment";
-  const listingType = input.listingType?.toLowerCase() ?? "sale";
-
-  let benchmark = 2_600;
-  if (propertyType.includes("commercial") || propertyType.includes("retail")) benchmark = 2_800;
-  else if (propertyType.includes("office")) benchmark = 2_900;
-  else if (propertyType.includes("land") || propertyType.includes("plot")) benchmark = 850;
-  else if (propertyType.includes("villa")) benchmark = 4_800;
-
-  if (/glyf|γλυφ|voula|βούλα|vouliag|βουλιαγ|south athens|νότι/.test(location)) benchmark = 5_200;
-  else if (/kolonaki|κολων|psychiko|ψυχικ|kifiss|κηφισ|ekali|εκαλ/.test(location)) benchmark = 6_200;
-  else if (/pagkrati|παγκ|mets|koukaki|κουκακ|plaka|πλακ|exarch/.test(location)) benchmark = 3_900;
-  else if (/marousi|μαρουσ|halandri|χαλανδρ|cholarg|χολαργ/.test(location)) benchmark = 3_400;
-  else if (/zograf|ζωγραφ|kaisarian|καισαριαν|vyron|βυρων/.test(location)) benchmark = 2_600;
-  else if (/perister|περιστερ|ilion|ιλιον|aigaleo|αιγαλ/.test(location)) benchmark = 1_900;
-  else if (/piraeus|πειραι/.test(location)) benchmark = 2_550;
-  else if (/thessaloniki|θεσσαλον/.test(location)) benchmark = /center|κεντρ/.test(location) ? 3_100 : 2_050;
-  else if (/chania|χανι/.test(location)) benchmark = 3_200;
-  else if (/heraklion|ηρακλ/.test(location)) benchmark = 2_450;
-  else if (/mykonos|μυκον/.test(location)) benchmark = 12_000;
-  else if (/santorini|σαντοριν/.test(location)) benchmark = 14_000;
-  else if (/paros|παροσ|antiparos|αντιπαρ/.test(location)) benchmark = 5_500;
-
-  if (listingType.includes("new_build") || listingType.includes("pre_sale")) benchmark *= 1.2;
-  if (propertyType.includes("villa")) benchmark *= 1.15;
-  if (propertyType.includes("land") || propertyType.includes("plot")) benchmark *= 0.55;
-
-  return Math.round(benchmark);
-};
-
-const fallbackValuation = (input: { // skipcq: JS-R1005 - Deterministic valuation fallback keeps comparable scoring and confidence fields aligned.
-  city: string;
-  address?: string;
-  region?: string;
-  price: number;
-  sqm: number;
-  propertyType?: string;
-  listingType?: string;
-  reason?: string;
-}) => {
-  const sqm = Number.isFinite(input.sqm) && input.sqm > 0 ? input.sqm : 1;
-  const listedPrice = Number.isFinite(input.price) && input.price > 0 ? input.price : 0;
-  const isRental = isRentalListing(input.listingType);
-  const pricePerSqm = isRental
-    ? roundNumber(listedPrice / sqm, 2)
-    : fallbackBenchmarkPricePerSqm(input);
-  const isAuction = isAuctionListing(input.listingType);
-  const cleanMarketValue = isRental ? listedPrice : Math.round(pricePerSqm * sqm);
-  const estimatedValue = isRental ? listedPrice : isAuction ? Math.round(cleanMarketValue * 0.82) : cleanMarketValue;
-  const comparisonAnchor = isAuction ? cleanMarketValue : estimatedValue;
-  const deltaPct = listedPrice > 0 ? roundNumber(((comparisonAnchor - listedPrice) / listedPrice) * 100, 1) : 0;
-  const rangeLow = Math.round(comparisonAnchor * (isRental ? 0.9 : 0.88));
-  const rangeHigh = Math.round(comparisonAnchor * (isRental ? 1.1 : 1.14));
-  const executionValue = isRental ? estimatedValue : Math.round(comparisonAnchor * (1 - (isAuction ? 0.25 : 0.12)));
-
+  const fields = Object.fromEntries(V2_NUMERIC_FIELDS.map((field) => [field, "unavailable"])) as Record<V2NumericField, V2FieldSource>;
+  fields.estimatedValue = estimatedSource;
+  fields.auctionAdjustedValue = auctionAdjustedValue == null ? "unavailable" : "ai_estimate";
+  fields.rangeLow = rangeLow == null ? "unavailable" : "ai_estimate";
+  fields.rangeHigh = rangeHigh == null ? "unavailable" : "ai_estimate";
+  fields.pricePerSqmEstimate = pricePerSqmEstimate == null ? "unavailable" : primarySource === "os_prediction" ? "derived_os" : "derived_ai";
+  fields.confidence = confidence == null ? "unavailable" : "ai_estimate";
+  fields.liquidityScore = liquidityScore == null ? "unavailable" : "ai_estimate";
+  fields.marketComparisonPct = marketComparisonPct == null ? "unavailable" : (transaction === "auction" || estimatedSource === "ai_estimate") ? "derived_ai" : "derived_os";
+  const limitations = [
+    "No legal documents, live comparable transactions, or formal appraisal were independently verified.",
+    osStatus === "missing_inputs" ? "OS valuation was skipped because required source attributes were unavailable." : null,
+    transaction === "rent" && osLease != null ? "The OS rental prediction period is unavailable, so it is retained only as an unknown-period provider observation." : null,
+    transaction === "auction" && osSale != null ? "The OS auction-model prediction is not represented as a clean-market value, bid, or execution value." : null,
+    ai ? "Model estimates and qualitative assessments are unverified." : null,
+  ].filter((item): item is string => Boolean(item));
   return {
+    responseVersion: 2,
+    status: estimatedValue != null || auctionAdjustedValue != null ? "available" : "partial",
+    transaction,
+    valueUnit,
+    estimateBasis: transaction === "rent" ? "monthly_rent" : transaction === "auction" && osSale != null ? "os_auction_model" : "market_value",
+    providerPrediction,
     estimatedValue,
+    auctionAdjustedValue,
     rangeLow,
     rangeHigh,
-    executionValue,
-    pricePerSqmEstimate: pricePerSqm,
-    confidence: 45,
-    confidenceLabel: "Low",
-    liquidityScore: input.propertyType === "apartment" ? 68 : 45,
-    marketComparison: toMarketComparison(deltaPct),
-    marketComparisonPct: deltaPct,
-    pricingPosition: toPricingPosition(deltaPct),
-    methodUsed: isRental
-      ? "Low-confidence monthly-rent fallback using the current asking rent"
-      : "Deterministic fallback using 2026 Greece location/type benchmark ranges",
-    valuationMode: "MODE_1_LISTING_ONLY",
-    summary: isRental
-      ? rentalSummary(estimatedValue, pricePerSqm, true)
-      : `Preliminary benchmark valuation for ${input.city}: this uses a ${pricePerSqm.toLocaleString()} EUR/sqm 2026 market benchmark for the location and asset type rather than copying the listed price. Treat this as a temporary estimate until a full OS/OpenAI valuation can be generated.`,
-    keyFactors: [
-      { factor: isRental ? "Asking-rent reference" : "Location benchmark", impact: "neutral", note: isRental ? `${pricePerSqm.toLocaleString()} EUR/sqm/month; independent evidence unavailable` : `${pricePerSqm.toLocaleString()} EUR/sqm fallback benchmark` },
-      { factor: "2026 market uncertainty", impact: "neutral", note: "Conservative confidence applied" },
-      { factor: isRental ? "Lease evidence" : "Transaction costs", impact: "negative", note: isRental ? "Independent rental comparables unavailable" : "Execution value includes friction" },
-      { factor: "Legal/planning data", impact: "negative", note: "Document status unknown" },
-    ],
-    legalCleanliness: 45,
-    planningCertainty: input.propertyType === "apartment" ? 65 : 45,
-    taxFriction: isRental ? 15 : isAuction ? 55 : 30,
-    transferReadiness: 50,
-    legalSummary: "Legal and planning documents were not verified by this fallback valuation. Confirm title, building identity, permits, and restrictions before relying on the estimate.",
-    taxSummary: isRental
-      ? "Assumes normal Greek lease taxation and standard landlord/tenant friction; ownership-transfer charges are excluded."
-      : "Assumes normal Greek transaction costs unless the asset is an auction or complex transfer.",
+    rangeBasis: validRange ? rangeBasis : null,
+    executionValue: null,
+    pricePerSqmEstimate,
+    rentalYieldEstimate: null,
     objectiveValueProxy: null,
-    renovationPotential: null,
-    rentalYieldEstimate: isRental ? 0 : input.propertyType === "apartment" ? 4.5 : 3.5,
-    highestBestUseHint: null,
-    redFlags: isAuction ? ["Auction legal, occupancy, and inspection status require independent verification."] : [],
-    auctionAdjustedValue: isAuction ? cleanMarketValue : null,
-    listingQualityScore: 40,
-    generatedBy: "fallback",
-    fallbackReason: input.reason ?? "the AI provider returned malformed JSON",
+    confidence,
+    confidenceLabel,
+    liquidityScore,
+    legalCleanliness: null,
+    planningCertainty: null,
+    taxFriction: null,
+    transferReadiness: null,
+    listingQualityScore: null,
+    marketComparison,
+    marketComparisonPct,
+    pricingPosition,
+    summary,
+    legalSummary,
+    taxSummary,
+    renovationPotential,
+    highestBestUseHint,
+    keyFactors: factors,
+    redFlags,
+    methodUsed: estimatedSource === "os_prediction" ? (transaction === "auction" ? "OS auction-model prediction" : "OS market-model prediction") :
+      ai ? "Unverified AI valuation analysis" : "OS provider observation",
+    evidence: {
+      independentlyVerified: false,
+      fields,
+      analysis: ai && hasUsefulAnalysis ? "ai_estimate" : osData ? "os_summary" : "unavailable",
+      limitations,
+    },
   };
+};
+
+const valuationUnavailable = (corsHeaders: Record<string, string>): Response =>
+  errorResponse("Valuation evidence unavailable", 503, corsHeaders, { code: "valuation_unavailable" });
+
+const legacyCompatibilityResponse = async (req: Request, corsHeaders: Record<string, string>): Promise<Response> => {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.toLowerCase().startsWith("bearer ")) return errorResponse("Authentication required", 401, corsHeaders);
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return errorResponse("Authentication service unavailable", 503, corsHeaders);
+  const authResponse = await fetch(`${url}/auth/v1/user`, { headers: { Authorization: authHeader, apikey: key } });
+  if (!authResponse.ok) return errorResponse("Invalid or expired token", 401, corsHeaders);
+  return valuationUnavailable(corsHeaders);
 };
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, valuation parsing, fallback, and response shaping.
@@ -1271,8 +699,10 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
   try {
     const body = await parseJsonBody(req, propertyValuationRequestSchema);
     const {
+      responseVersion,
       listingId, title, city, address, price, sqm, bedrooms, bathrooms,
       propertyType, listingType, floor, totalFloors, yearBuilt,
+      openHouseTransactionType, askingMonthlyRent,
       heatingSystem, energyClass, pricePerSqm, hasParking, hasPool, hasElevator,
       hasGarden, hasStorage, hasBalcony, hasView, hasFurnished,
       region, description, tags,
@@ -1283,6 +713,12 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       cadastreNumber, hasLandConcession, landUse,
       latitude, longitude,
     } = body;
+
+    if (responseVersion !== 2) return await legacyCompatibilityResponse(req, corsHeaders);
+
+    if (listingType === "open_house" && openHouseTransactionType === "rent" && askingMonthlyRent != null && askingMonthlyRent !== price) {
+      return errorResponse("Rental asking values must match", 400, corsHeaders, { code: "validation_error" });
+    }
 
     const numericPrice = price;
     const numericSqm = sqm;
@@ -1308,7 +744,6 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
     let osValuationData: JsonRecord | null = null;
     let osValuationStatus = "not_requested";
-    let osValuationDetail: string | undefined;
     const newBuildAiOnly = isNewBuildListing(listingType);
     const hasOsConfig = Boolean(
       (Deno.env.get("MAIPROP_OS_API_URL") ?? Deno.env.get("MAIPROP_OS_URL")) &&
@@ -1327,7 +762,6 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         osValuationStatus = osValuationData ? "ok" : osValuationStatus === "requested" ? "no_prediction" : osValuationStatus;
       } catch (osError) {
         osValuationStatus = "error";
-        osValuationDetail = osError instanceof Error ? osError.message.slice(0, 120) : String(osError).slice(0, 120);
         log.warn("property-valuation: OS structured valuation unavailable; continuing with OpenAI", {
           listingId: structuredValuationInput.listingId,
           city,
@@ -1335,24 +769,11 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         });
       }
     }
-    const osValuationFallback = osValuationData
-      ? buildOsValuationResult(osValuationData, structuredValuationInput)
-      : null;
-
     if (!hasAIProviderCredentials()) {
-      log.warn("property-valuation: AI provider key missing; using OS/fallback valuation", { city });
-      const fallback = normalizeValuationResult(withOsDiagnostics(osValuationFallback ?? fallbackValuation({
-        city: String(city),
-        address: optionalString(address),
-        region: optionalString(region),
-        price: numericPrice,
-        sqm: numericSqm,
-        propertyType: typeof propertyType === "string" ? propertyType : undefined,
-        listingType: typeof listingType === "string" ? listingType : undefined,
-        reason: "the AI provider is not configured",
-      }), osValuationStatus, osValuationDetail), body as JsonRecord, osValuationData);
+      log.warn("property-valuation: AI provider key missing; returning supported OS evidence only", { city });
+      const fallback = buildV2Valuation(body as JsonRecord, osValuationData, null, osValuationStatus);
       await recordAiCall(quotaUserId, BUCKET);
-      return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return fallback ? new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }) : valuationUnavailable(corsHeaders);
     }
 
     // ── Key property specifics (construction year, condition, heating) for valuation ──
@@ -1408,9 +829,8 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       : "";
 
     const normalizedListingType = optionalString(listingType)?.toLowerCase() ?? "sale";
-    const normalizedPropertyType = optionalString(propertyType)?.toLowerCase() ?? "apartment";
-    const transactionInstructions = getTransactionInstructions(normalizedListingType);
-    const typeInstructions = getTypeInstructions(normalizedPropertyType, normalizedListingType);
+    const transactionInstructions = `Analyse only the supplied transaction context. Do not assume fixed discounts, premiums, costs, legal status, tax treatment, or market trends. Asking price is comparison context, not valuation evidence.`;
+    const typeInstructions = `Use only supplied property features and provider observations. Missing fields remain null. Do not claim live market search, exact comparable sales, legal-document review, or current-year benchmarks.`;
     const promptPricePerSqm = coerceFiniteNumber(pricePerSqm) ?? Math.round(numericPrice / numericSqm);
     const isRentalValuation = isRentalListing(normalizedListingType);
     const newOrRecentConstruction = isNewOrRecentConstruction(body as JsonRecord);
@@ -1432,11 +852,9 @@ Use similar assets first by transaction type, property type, micro-location, siz
 - If independent lease evidence is unavailable, the asking rent is only a low-confidence reference, not a market appraisal.`
       : "";
 
-    const prompt = `You are a senior Greek real estate valuation expert (RICS-equivalent) specialising in the 2026 Greek market. Produce a RIGOROUS, EVIDENCE-BASED valuation including a legal/tax overlay layer.
+    const prompt = `You are a property valuation analyst. Produce cautious analysis from only the supplied listing attributes and provider observations.
 
-${MARKET_BENCHMARKS}
-
-${LEGAL_TAX_FRAMEWORK}
+Do not invent current-year benchmarks, named comparable transactions, financial assumptions, legal-document findings, fixed discounts or premiums, tax assumptions, or required trend factors. Missing fields remain null. Asking price is context and never valuation evidence.
 
 === PROPERTY TO VALUE ===
 KEY PROPERTY SPECIFICS (use these in your methodology): ${keySpecifics}
@@ -1464,15 +882,15 @@ ${typeInstructions}
 
 === OUTPUT REQUIREMENTS ===
 CRITICAL RULES:
-1. DO NOT echo the listed price as your estimate. Cross-reference against benchmarks only; do not invent comparable sales or addresses.
+1. DO NOT echo the listed price as your estimate. Use only supplied provider evidence; do not invent benchmarks, comparable sales, or addresses.
 2. Output a RANGE, not false precision. Range width must reflect data quality.
 3. Apply TYPE-SPECIFIC logic — one formula for all types is wrong.
 4. Missing legal data = UNKNOWN; never assume clean title or invent document status.
-5. Produce all four legal/tax scores using the scoring model above.
-6. ${isRentalValuation ? "For rentals, executionValue remains on the same monthly-rent basis as estimatedValue." : "execution_value = market_value minus transaction_friction minus legal_uncertainty_discount."}
-7. Price growth is DECELERATING in 2026 — do not extrapolate past rates.
+5. Do not produce numeric legal, planning, tax, readiness, execution, objective-value, or yield fields without explicit mapped evidence; use null.
+6. ${isRentalValuation ? "For rentals, any explicit model estimate must be monthly rent in EUR." : "Do not synthesize execution value from the estimate."}
+7. Do not assert a market trend unless it is present in supplied evidence.
 8. Commercial behavior is DISTINCT from residential.
-9. All figures must be supportable from the benchmarks and methodology above; do not hallucinate local comps or unsourced premiums.
+9. All figures must be supportable from supplied attributes and provider observations; do not hallucinate local comps or unsourced premiums.
 10. Explicitly assess liquidity, buyer depth, area-specific micro-market quality, street/noise/view factors, renovation or fit-out risk, and qualitative desirability.
 11. For rentals, every value estimate is monthly rent; never return sale or purchase value.
 12. For new or recent construction, use similar new or recent assets before older stock.
@@ -1480,49 +898,48 @@ CRITICAL RULES:
 Return ONLY valid JSON, no markdown, no explanation outside the JSON:
 
 {
-  "estimatedValue": number (${isRentalValuation ? "monthly market rent in EUR" : "market value in EUR - auction-adjusted if auction"}),
-  "rangeLow": number (${isRentalValuation ? "conservative monthly rent" : "conservative execution value"}),
-  "rangeHigh": number (${isRentalValuation ? "optimistic but supportable monthly rent" : "optimistic but supportable value"}),
-  "executionValue": number (${isRentalValuation ? "monthly rent; do not annualize" : "market value minus transaction friction and legal uncertainty discount"}),
-  "pricePerSqmEstimate": number (${isRentalValuation ? "EUR/sqm/month for this rental submarket" : "EUR/sqm for this submarket"}),
-  "confidence": number (0–100),
-  "confidenceLabel": "High" | "Medium" | "Low",
-  "liquidityScore": number (0–100),
-  "marketComparison": "below_market" | "at_market" | "above_market",
-  "marketComparisonPct": number (e.g. -12 = 12% below market; +8 = 8% above),
-  "pricingPosition": "underpriced" | "fair" | "overpriced",
+  "estimatedValue": number | null (${isRentalValuation ? "monthly market rent in EUR" : "market value in EUR; for auctions this is not a clean-market estimate"}),
+  "rangeLow": number | null (${isRentalValuation ? "supported lower monthly-rent bound" : "supported lower market-value bound"}),
+  "rangeHigh": number | null (${isRentalValuation ? "supported upper monthly-rent bound" : "supported upper market-value bound"}),
+  "executionValue": null,
+  "pricePerSqmEstimate": number | null (${isRentalValuation ? "EUR/sqm/month" : "EUR/sqm"}; null without supported numeric evidence),
+  "confidence": number | null (0–100; null without explicit model support),
+  "confidenceLabel": "High" | "Medium" | "Low" | null,
+  "liquidityScore": number | null (0–100; null without explicit model support),
+  "marketComparison": "below_market" | "at_market" | "above_market" | null,
+  "marketComparisonPct": number | null,
+  "pricingPosition": "underpriced" | "fair" | "overpriced" | null,
   "methodUsed": "string",
   "valuationMode": "MODE_1_LISTING_ONLY" | "MODE_2_PUBLIC_ENRICHED",
-  "summary": "string (3–5 sentences: cite specific €/sqm benchmark, local 2026 trend, key drivers)",
+  "summary": "string or null (cite only supplied provider observations and property-specific drivers)",
   "keyFactors": [
     { "factor": "string", "impact": "positive" | "negative" | "neutral", "note": "string (max 100 chars)" }
   ],
-  "legalCleanliness": number (0–100 — legal cleanliness score per framework above),
-  "planningCertainty": number (0–100 — planning certainty score per framework above),
-  "taxFriction": number (0–100 — tax/transfer friction score — higher = more friction),
-  "transferReadiness": number (0–100 — transfer readiness score per framework above),
-  "legalSummary": "string (2–3 sentences: key legal/planning signals observed, what is unknown, any red flags)",
-  "taxSummary": "string (1-2 sentences: ${isRentalValuation ? "lease tax/friction context; exclude transfer tax" : "estimated transfer tax burden and key friction factors"})",
-  "objectiveValueProxy": number | null (rough ENFIA/objective value proxy in EUR — use for cross-check only; null if cannot estimate),
+  "legalCleanliness": null,
+  "planningCertainty": null,
+  "taxFriction": null,
+  "transferReadiness": null,
+  "legalSummary": "string or null (key supplied legal/planning signals and unknowns; no document-verification claims)",
+  "taxSummary": "string or null (only supplied tax/friction evidence; no assumed rates)",
+  "objectiveValueProxy": null,
   "renovationPotential": "string or null",
-  "rentalYieldEstimate": number (2026 gross yield %),
+  "rentalYieldEstimate": null,
   "highestBestUseHint": "string or null",
   "redFlags": ["string"],
   "auctionAdjustedValue": number | null (clean market value before auction discounts — only if auction, else null),
-  "listingQualityScore": number (0–100)
+  "listingQualityScore": null
 }
 
 Rules:
-- listingQualityScore is normalized by the server from supplied inputs and OS evidence.
-- legalCleanliness reflects ONLY data available in the listing; do not fabricate certainty or treat unknown fields as confirmed defects.
+- listingQualityScore remains null; do not convert input completeness into valuation evidence.
+- legalCleanliness remains null unless the provider output contains independently supported numeric evidence; unknown fields are not confirmed defects.
 - redFlags include only confirmed or strongly indicated problems. Missing cadastre/buildability/city-plan fields on standard apartments are data gaps, not red flags.
 - marketComparisonPct uses the clean market value anchor. For auctions, compare listed price with auctionAdjustedValue, not executionValue or the auction-adjusted bid value.
 - pricingPosition is "underpriced" only when the listed price is meaningfully below clean market value; "overpriced" only when listed price is above it.
-- keyFactors: 4–7 items; always include a 2026 trend factor, transaction cost factor, and a legal/planning factor
-- confidenceLabel: High = 75+, Medium = 50–74, Low = <50
-- legalCleanliness: reflects ONLY data available in the listing — do not fabricate certainty
-- Range width: ±6-10% urban apartment strong data; ±15-25% villa/land; ±20-40% island/hotel/plot
-- liquidityScore: 80-100 = standard urban apartment; 60-80 = suburban/commercial; 40-60 = villa/vacation; 20-40 = island/land/industrial; 0-20 = hotel/special`;
+- keyFactors: include only factors supported by supplied attributes or provider observations
+- confidenceLabel: High = 75+, Medium = 50–74, Low = <50; null when confidence is null
+- legalCleanliness: do not fabricate certainty
+- ranges and liquidity scores must be null unless supported by supplied evidence or explicit model analysis; never use property-type defaults`;
 
     let response: Response;
     try {
@@ -1535,39 +952,28 @@ Rules:
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       log.error("AI gateway transport error", { detail });
-      const fallback = normalizeValuationResult(withOsDiagnostics(osValuationFallback ?? fallbackValuation({
-        city: String(city),
-        address: optionalString(address),
-        region: optionalString(region),
-        price: numericPrice,
-        sqm: numericSqm,
-        propertyType: typeof propertyType === "string" ? propertyType : undefined,
-        listingType: typeof listingType === "string" ? listingType : undefined,
-        reason: "the AI provider request failed",
-      }), osValuationStatus, osValuationDetail), body as JsonRecord, osValuationData);
+      const fallback = buildV2Valuation(body as JsonRecord, osValuationData, null, osValuationStatus);
       await recordAiCall(quotaUserId, BUCKET);
-      return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return fallback ? new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }) : valuationUnavailable(corsHeaders);
     }
 
     if (!response.ok) {
       const txt = await response.text();
       log.error("AI gateway error", { status: response.status, body: txt.slice(0, 500) });
-      const fallback = normalizeValuationResult(withOsDiagnostics(osValuationFallback ?? fallbackValuation({
-        city: String(city),
-        address: optionalString(address),
-        region: optionalString(region),
-        price: numericPrice,
-        sqm: numericSqm,
-        propertyType: typeof propertyType === "string" ? propertyType : undefined,
-        listingType: typeof listingType === "string" ? listingType : undefined,
-        reason: `the AI provider returned ${response.status}`,
-      }), osValuationStatus, osValuationDetail), body as JsonRecord, osValuationData);
+      const fallback = buildV2Valuation(body as JsonRecord, osValuationData, null, osValuationStatus);
       await recordAiCall(quotaUserId, BUCKET);
-      return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return fallback ? new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }) : valuationUnavailable(corsHeaders);
     }
 
-    const aiData = await response.json();
-    let raw = readOpenAITextContent(aiData);
+    let raw = "";
+    try {
+      raw = readOpenAITextContent(await response.json());
+    } catch (parseEnvelopeError) {
+      log.warn("property-valuation: AI returned malformed envelope", {
+        err: parseEnvelopeError instanceof Error ? parseEnvelopeError.message : String(parseEnvelopeError),
+        city,
+      });
+    }
 
     // Step 1: strip markdown code fences (greedy to capture full JSON)
     const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]+?)```\s*$/);
@@ -1595,38 +1001,17 @@ Rules:
         rawLength: raw.length,
         sample: raw.slice(0, 240),
       });
-      result = osValuationFallback ?? fallbackValuation({
-        city: String(city),
-        address: optionalString(address),
-        region: optionalString(region),
-        price: numericPrice,
-        sqm: numericSqm,
-        propertyType: typeof propertyType === "string" ? propertyType : undefined,
-        listingType: typeof listingType === "string" ? listingType : undefined,
-        reason: "the AI provider returned malformed JSON",
-      });
+      result = null;
     }
 
-    // Ensure backwards-compatible fields
-    if (!result.executionValue) {
-      const discount = (100 - (result.legalCleanliness || 70)) / 100 * 0.1;
-      result.executionValue = Math.round(result.estimatedValue * (1 - 0.09 - discount));
-    }
-    if (!result.legalCleanliness) result.legalCleanliness = 50;
-    if (!result.planningCertainty) result.planningCertainty = 60;
-    if (!result.taxFriction) result.taxFriction = 30;
-    if (!result.transferReadiness) result.transferReadiness = 55;
-    if (!result.valuationMode) result.valuationMode = "MODE_1_LISTING_ONLY";
-    if (!result.generatedBy) result.generatedBy = "openai";
-    result = withOsDiagnostics(mergeOsEvidence(result, osValuationData, osValuationFallback), osValuationStatus, osValuationDetail);
-    result = normalizeValuationResult(result, body as JsonRecord, osValuationData);
+    result = buildV2Valuation(body as JsonRecord, osValuationData, result, osValuationStatus);
 
     // Record usage after successful AI call
     await recordAiCall(quotaUserId, BUCKET);
 
-    return new Response(JSON.stringify(result), {
+    return result ? new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    }) : valuationUnavailable(corsHeaders);
   } catch (err) {
     if (err instanceof SchemaValidationError) {
       return errorResponse(err.message, 400, corsHeaders, {

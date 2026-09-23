@@ -1,5 +1,6 @@
 ﻿import { lazy, Suspense, useState, useEffect, type ElementType } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,7 +24,7 @@ import { toast } from "sonner";
 import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
 import { CONSTRUCTION_PHASES, formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
 import { getNewBuildCardImages } from "@/lib/newBuildCardSummary";
-import { getPrimaryValuationEstimate, type ValuationEstimateSource } from "@/lib/valuationResult";
+import { parseValuationResponseV2, selectPrimaryValuation, type ValuationFieldSource, type ValuationUnit } from "@/lib/valuationResult";
 import { FeatureSection } from "@/components/property/DetailPrimitives";
 import { PropertyGallery as Gallery } from "@/components/new-build/PropertyGallery";
 import { ConstructionTimeline } from "@/components/new-build/ConstructionTimeline";
@@ -37,7 +38,7 @@ import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { getAiErrorMessage, isAiMonthlyLimitError } from "@/lib/aiErrorUtils";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
-import { newBuildLeadSchema, parseMutationInput } from "@/lib/mutationSchemas";
+import { newBuildLeadSchema, parseMutationInput, propertyValuationBodySchema } from "@/lib/mutationSchemas";
 import { buildNewBuildValuationContext } from "@/lib/newBuildValuationContext";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
 import { useListing } from "@/hooks/useListings";
@@ -82,12 +83,9 @@ type RegisterInterestPayload = {
   contactName: string;
 };
 
-type AIInsightsResponse = ValuationEstimateSource & {
+type AIInsightsResponse = {
   error?: string;
-  marketComparisonPct?: number;
-  rentalYieldEstimate?: number;
-  marketComparison?: string;
-  confidenceLabel?: string;
+  [key: string]: unknown;
 };
 
 const AI_TIMEOUT_MS = 45_000;
@@ -162,13 +160,15 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
 
   // AI Market Insights
   const [aiInsightsData, setAiInsightsData] = useState<{
-    vsMarket: number | null; rentalYield: number; estimatedValue: number;
-    marketComparison: string | null; confidenceLabel: string;
+    vsMarket: number | null; rentalYield: number | null; estimatedValue: number | null;
+    marketComparison: string | null; confidenceLabel: string | null;
+    estimateSource: ValuationFieldSource | null; estimateUnit: ValuationUnit | null;
   } | null>(null);
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
   const [aiInsightsRequested, setAiInsightsRequested] = useState(false);
   const [aiInsightsError, setAiInsightsError] = useState<string | null>(null);
   const [aiInsightsQuotaReached, setAiInsightsQuotaReached] = useState(false);
+  const aiInsightsGeneration = useRef(0);
   const {
     quota: aiInsightsQuota,
     quotaLoading: aiInsightsQuotaLoading,
@@ -299,6 +299,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
 
   const handleLoadAiInsights = async () => {
     if (!listing || !user || !isCanonicalNewBuild || aiInsightsLoading) return;
+    const generation = aiInsightsGeneration.current;
     if (!displayCity || projectValuationMetrics.price <= 0 || projectValuationMetrics.sqm <= 0) {
       setAiInsightsRequested(true);
       setAiInsightsError(tr("newBuildDetail.ai.unavailable", "Market analysis unavailable"));
@@ -306,6 +307,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
     }
 
     const currentQuota = await refreshAiInsightsQuota();
+    if (generation !== aiInsightsGeneration.current) return;
     if (currentQuota && !currentQuota.allowed) {
       setAiInsightsRequested(true);
       setAiInsightsQuotaReached(true);
@@ -322,9 +324,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
     setAiInsightsError(null);
     setAiInsightsQuotaReached(false);
     try {
-      const { data, error } = await invokeAuthenticatedFunction<AIInsightsResponse>("property-valuation", {
-        timeout: AI_TIMEOUT_MS,
-        body: {
+      const valuationBody = parseMutationInput(propertyValuationBodySchema, {
+          responseVersion: 2,
           listingId: listing.id,
           title: displayTitle,
           city: displayCity,
@@ -353,15 +354,24 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
           description: valuationDescription || undefined,
           tags: valuationTags,
           condition: listing.construction_status,
-        },
+        }, "property valuation");
+      const { data, error } = await invokeAuthenticatedFunction<AIInsightsResponse>("property-valuation", {
+        timeout: AI_TIMEOUT_MS,
+        body: valuationBody,
       });
-      if (data && !data.error) {
+      if (generation !== aiInsightsGeneration.current) return;
+      if (!error && data && !data.error) {
+        const parsed = parseValuationResponseV2(data);
+        if (!parsed) throw new Error("Unsupported valuation response");
+        const primary = selectPrimaryValuation(parsed);
         setAiInsightsData({
-          vsMarket: data.marketComparisonPct ?? null,
-          rentalYield: data.rentalYieldEstimate ?? 0,
-          estimatedValue: getPrimaryValuationEstimate(data, projectValuationMetrics.price),
-          marketComparison: data.marketComparison ?? null,
-          confidenceLabel: data.confidenceLabel ?? "Medium",
+          vsMarket: parsed.marketComparisonPct,
+          rentalYield: parsed.rentalYieldEstimate,
+          estimatedValue: primary?.value ?? null,
+          marketComparison: parsed.marketComparison,
+          confidenceLabel: parsed.confidenceLabel,
+          estimateSource: primary?.source ?? null,
+          estimateUnit: primary?.unit ?? null,
         });
         setAiInsightsError(null);
         setAiInsightsQuotaReached(false);
@@ -373,16 +383,20 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
       setAiInsightsError(getAiErrorMessage(err, null, tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")));
       setAiInsightsQuotaReached(isAiMonthlyLimitError(err, null));
     } finally {
-      setAiInsightsLoading(false);
-      await refreshAiInsightsQuota();
+      if (generation === aiInsightsGeneration.current) {
+        setAiInsightsLoading(false);
+        await refreshAiInsightsQuota();
+      }
     }
   };
 
   useEffect(() => {
+    aiInsightsGeneration.current += 1;
     setAiInsightsData(null);
     setAiInsightsRequested(false);
     setAiInsightsError(null);
     setAiInsightsQuotaReached(false);
+    setAiInsightsLoading(false);
   }, [listing?.id, user?.id]);
 
   useEffect(() => {
@@ -560,6 +574,9 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
                 errorMessage={aiInsightsError}
                 limitReached={aiInsightsQuotaReached}
               />
+              <p className="px-1 text-xs leading-relaxed text-muted-foreground">
+                Representative-unit analysis: price and size are project or unit aggregates and may come from different available unit sets. No selected unit was appraised.
+              </p>
 
               {/* Description */}
               {listing.description && (

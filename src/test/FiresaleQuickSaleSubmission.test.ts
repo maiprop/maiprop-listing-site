@@ -38,6 +38,17 @@ const validForm = (overrides: Partial<QuickSaleFormValues> = {}): QuickSaleFormV
   ...overrides,
 });
 
+const valuationResponse = (estimatedValue: number) => ({
+  responseVersion: 2, status: "available", transaction: "sale", valueUnit: "EUR", estimateBasis: "market_value",
+  providerPrediction: null, estimatedValue, auctionAdjustedValue: null, rangeLow: null, rangeHigh: null, rangeBasis: null,
+  executionValue: null, pricePerSqmEstimate: null, rentalYieldEstimate: null, objectiveValueProxy: null, confidence: null,
+  confidenceLabel: null, liquidityScore: null, legalCleanliness: null, planningCertainty: null, taxFriction: null,
+  transferReadiness: null, listingQualityScore: null, marketComparison: null, marketComparisonPct: null, pricingPosition: null,
+  summary: null, legalSummary: null, taxSummary: null, renovationPotential: null, highestBestUseHint: null, keyFactors: [], redFlags: [],
+  methodUsed: "OS market-model prediction",
+  evidence: { independentlyVerified: false, fields: { estimatedValue: "os_prediction", auctionAdjustedValue: "unavailable", rangeLow: "unavailable", rangeHigh: "unavailable", executionValue: "unavailable", pricePerSqmEstimate: "unavailable", rentalYieldEstimate: "unavailable", objectiveValueProxy: "unavailable", confidence: "unavailable", liquidityScore: "unavailable", legalCleanliness: "unavailable", planningCertainty: "unavailable", taxFriction: "unavailable", transferReadiness: "unavailable", listingQualityScore: "unavailable", marketComparisonPct: "unavailable" }, analysis: "os_summary", limitations: [] },
+});
+
 beforeEach(() => {
   vi.restoreAllMocks();
   fromMock.mockReset();
@@ -78,24 +89,21 @@ describe("quick sale submission helpers", () => {
 
   it("applies remote estimates and reports AI quota failures without overwriting estimates", () => {
     const setAiEstimate = vi.fn();
-    applyRemoteEstimate({ estimated_value: 300_001 }, null, setAiEstimate);
-    expect(setAiEstimate).toHaveBeenCalledWith(285001);
+    applyRemoteEstimate(valuationResponse(300_001), null, setAiEstimate);
+    expect(setAiEstimate).toHaveBeenCalledWith(300001);
 
-    applyRemoteEstimate({ estimatedValue: 130_000, auctionAdjustedValue: 154_000 }, null, setAiEstimate);
-    expect(setAiEstimate).toHaveBeenLastCalledWith(146300);
+    applyRemoteEstimate({}, null, setAiEstimate);
+    expect(setAiEstimate).toHaveBeenLastCalledWith(null);
 
-    applyRemoteEstimate({}, null, setAiEstimate, 350_000);
-    expect(setAiEstimate).toHaveBeenLastCalledWith(332500);
-
-    applyRemoteEstimate({ error: "monthly_limit_reached" }, null, setAiEstimate, 350_000);
-    expect(setAiEstimate).toHaveBeenCalledTimes(3);
+    applyRemoteEstimate({ error: "monthly_limit_reached" }, null, setAiEstimate);
+    expect(setAiEstimate).toHaveBeenCalledTimes(2);
     expect(toastMock.error).toHaveBeenCalledWith("AI estimate is temporarily unavailable due to usage limits.");
 
-    applyRemoteEstimate({ error: "provider_down" }, null, setAiEstimate, 350_000);
-    expect(setAiEstimate).toHaveBeenCalledTimes(3);
-    expect(toastMock.error).toHaveBeenCalledWith("AI estimate is temporarily unavailable. Using fallback estimate.");
+    applyRemoteEstimate({ error: "provider_down" }, null, setAiEstimate);
+    expect(setAiEstimate).toHaveBeenCalledTimes(2);
+    expect(toastMock.error).toHaveBeenCalledWith("AI estimate is temporarily unavailable.");
 
-    applyRemoteEstimate(null, new Error("gateway 402 usage limit"), setAiEstimate, 350_000);
+    applyRemoteEstimate(null, new Error("gateway 402 usage limit"), setAiEstimate);
     expect(toastMock.error).toHaveBeenCalledTimes(3);
   });
 
@@ -130,14 +138,15 @@ describe("quick sale submission helpers", () => {
     expect(uploadPhotos).toHaveBeenCalledWith("req-1");
   });
 
-  it("uses the fallback estimate and skips uploading when there are no photos or stored id", async () => {
+  it("persists null when valuation is unavailable and skips uploading when there are no photos or stored id", async () => {
     invokeMock.mockResolvedValueOnce({ data: { data: {}, error: null }, error: null });
     const uploadPhotos = vi.fn();
 
     await expect(submitValidatedQuickSale(validForm({ sqm: "80" }), "user-1", null, 0, uploadPhotos)).resolves.toEqual({
-      estimate: 139840,
+      estimate: null,
       requestId: null,
     });
+    expect(invokeMock).toHaveBeenCalledWith("submit-firesale-request", expect.objectContaining({ body: expect.objectContaining({ request: expect.objectContaining({ aiEstimate: null }) }) }));
     expect(uploadPhotos).not.toHaveBeenCalled();
   });
 

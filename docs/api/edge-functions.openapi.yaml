@@ -251,9 +251,10 @@ components:
 
     PropertyValuationRequest:
       type: object
-      required: [title, city, price, sqm]
+      required: [responseVersion, city, price, sqm]
       properties:
-        title: { type: string }
+        responseVersion: { type: integer, enum: [2] }
+        title: { type: string, nullable: true }
         city: { type: string }
         address: { type: string, nullable: true }
         price: { type: number }
@@ -269,13 +270,86 @@ components:
 
     PropertyValuationResponse:
       type: object
+      required:
+        - responseVersion
+        - status
+        - transaction
+        - valueUnit
+        - estimateBasis
+        - providerPrediction
+        - estimatedValue
+        - auctionAdjustedValue
+        - rangeLow
+        - rangeHigh
+        - rangeBasis
+        - executionValue
+        - pricePerSqmEstimate
+        - rentalYieldEstimate
+        - objectiveValueProxy
+        - confidence
+        - confidenceLabel
+        - liquidityScore
+        - legalCleanliness
+        - planningCertainty
+        - taxFriction
+        - transferReadiness
+        - listingQualityScore
+        - marketComparison
+        - marketComparisonPct
+        - pricingPosition
+        - summary
+        - legalSummary
+        - taxSummary
+        - renovationPotential
+        - highestBestUseHint
+        - keyFactors
+        - redFlags
+        - methodUsed
+        - evidence
       properties:
-        estimatedValue: { type: number }
-        marketComparisonPct: { type: number }
-        marketComparison: { type: string, enum: [below_market, at_market, above_market] }
-        rentalYieldEstimate: { type: number }
-        confidenceLabel: { type: string, enum: [Low, Medium, High] }
-        notes: { type: string, nullable: true }
+        responseVersion: { type: integer, enum: [2] }
+        status: { type: string, enum: [available, partial] }
+        transaction: { type: string, enum: [sale, rent, auction] }
+        valueUnit: { type: string, enum: [EUR, EUR/month] }
+        estimateBasis: { type: string, enum: [market_value, monthly_rent, auction_value, os_auction_model] }
+        providerPrediction:
+          type: object
+          nullable: true
+          required: [value, field, model, unit]
+          properties:
+            value: { type: number }
+            field: { type: string, enum: [propertyPredictedPrice, propertyPredictedLeasePrice] }
+            model: { type: string, enum: [market, auction] }
+            unit: { type: string, enum: [EUR, EUR/month], nullable: true }
+        estimatedValue: { type: number, nullable: true }
+        auctionAdjustedValue: { type: number, nullable: true }
+        rangeLow: { type: number, nullable: true }
+        rangeHigh: { type: number, nullable: true }
+        rangeBasis: { type: string, enum: [estimatedValue, auctionAdjustedValue], nullable: true }
+        executionValue: { type: number, nullable: true }
+        pricePerSqmEstimate: { type: number, nullable: true }
+        rentalYieldEstimate: { type: number, nullable: true }
+        objectiveValueProxy: { type: number, nullable: true }
+        confidence: { type: number, minimum: 0, maximum: 100, nullable: true }
+        confidenceLabel: { type: string, enum: [Low, Medium, High], nullable: true }
+        liquidityScore: { type: number, minimum: 0, maximum: 100, nullable: true }
+        legalCleanliness: { type: number, minimum: 0, maximum: 100, nullable: true }
+        planningCertainty: { type: number, minimum: 0, maximum: 100, nullable: true }
+        taxFriction: { type: number, minimum: 0, maximum: 100, nullable: true }
+        transferReadiness: { type: number, minimum: 0, maximum: 100, nullable: true }
+        listingQualityScore: { type: number, minimum: 0, maximum: 100, nullable: true }
+        marketComparison: { type: string, enum: [below_market, at_market, above_market], nullable: true }
+        marketComparisonPct: { type: number, nullable: true }
+        pricingPosition: { type: string, enum: [underpriced, fair, overpriced], nullable: true }
+        summary: { type: string, nullable: true }
+        legalSummary: { type: string, nullable: true }
+        taxSummary: { type: string, nullable: true }
+        renovationPotential: { type: string, nullable: true }
+        highestBestUseHint: { type: string, nullable: true }
+        keyFactors: { type: array, items: { type: object, additionalProperties: true } }
+        redFlags: { type: array, items: { type: string } }
+        methodUsed: { type: string }
+        evidence: { type: object, additionalProperties: true }
 
     OSWebhookEntity:
       type: object

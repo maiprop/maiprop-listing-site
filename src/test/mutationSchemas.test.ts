@@ -87,10 +87,18 @@ describe("mutation schema parsing", () => {
       .toThrow("Invalid AI search query");
 
     expect(() => parseMutationInput(propertyValuationBodySchema, {
+      responseVersion: 2,
       city: "Athens",
       price: 100000,
       sqm: 0,
     }, "valuation")).toThrow("Invalid valuation size");
+
+    expect(() => parseMutationInput(propertyValuationBodySchema, {
+      responseVersion: 1,
+      city: "Athens",
+      price: 100000,
+      sqm: 80,
+    }, "valuation")).toThrow();
   });
 
   it("rejects invalid listing updates before owner-scoped persistence", () => {

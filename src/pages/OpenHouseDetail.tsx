@@ -657,7 +657,9 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                     bedrooms={db.bedrooms}
                     bathrooms={db.bathrooms}
                     propertyType={db.property_type}
-                    listingType={isRentalOpenHouse ? "rent" : db.listing_type}
+                    listingType={db.listing_type}
+                    openHouseTransactionType={isRentalOpenHouse ? "rent" : "sale"}
+                    askingMonthlyRent={isRentalOpenHouse ? price : undefined}
                     floor={db.floor}
                     totalFloors={db.total_floors}
                     yearBuilt={db.year_built}

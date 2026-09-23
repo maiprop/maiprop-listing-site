@@ -460,18 +460,12 @@ const QuickSaleStepOne = (props: StepOneProps) => (
 );
 
 const EstimateSummary = ({ aiEstimate }: { aiEstimate: number | null }) => {
-  if (!aiEstimate) return null;
-
   return (
     <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/20 p-4 flex items-center justify-between">
       <div>
-        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">{ui("AI Estimated Offer", "AI εκτίμηση προσφοράς")}</p>
-        <p className="font-display font-black text-2xl text-primary">&euro;{aiEstimate.toLocaleString()}</p>
-        <p className="text-[10px] text-muted-foreground mt-0.5">{ui("Indicative - Final offer after review", "Ενδεικτική - Τελική προσφορά μετά από έλεγχο")}</p>
-      </div>
-      <div className="text-right">
-        <div className="text-xs bg-primary/10 text-primary border border-primary/20 px-2 py-1 rounded-lg font-semibold">{ui("94% confidence", "94% εμπιστοσύνη")}</div>
-        <p className="text-[10px] text-muted-foreground mt-1.5">{ui("Valid 7 days", "Ισχύει για 7 ημέρες")}</p>
+        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">{ui("Market estimate", "Εκτίμηση αγοράς")}</p>
+        <p className="font-display font-black text-2xl text-primary">{aiEstimate == null ? ui("Unavailable", "Μη διαθέσιμη") : `€${aiEstimate.toLocaleString()}`}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">{ui("Unverified estimate when available; final offer follows review", "Μη επαληθευμένη εκτίμηση όταν είναι διαθέσιμη· η τελική προσφορά ακολουθεί μετά τον έλεγχο")}</p>
       </div>
     </div>
   );

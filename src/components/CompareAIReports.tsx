@@ -1,17 +1,17 @@
-import { useState, useEffect as _useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sparkles, Loader2, TrendingUp, TrendingDown, Minus, ShieldCheck, Volume2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
-import { getPrimaryValuationEstimate } from "@/lib/valuationResult";
+import { parseValuationResponseV2, selectPrimaryValuation, type PrimaryValuation, type ValuationResponseV2 } from "@/lib/valuationResult";
 import {
   neighbourhoodReportBodySchema,
   parseMutationInput,
   propertyValuationBodySchema,
 } from "@/lib/mutationSchemas";
-import { calculatePercentDelta, calculatePricePerSqm } from "@/lib/priceCalculations";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 import { useTranslation } from "react-i18next";
 
 // Compare drawer is fed both the formatted card view and the raw listing row
@@ -25,13 +25,8 @@ type Listing = Record<string, any>;
 const AI_REPORT_TIMEOUT_MS = 45_000;
 
 interface AIReport {
-  estimatedValue: number;
-  rangeLow: number;
-  rangeHigh: number;
-  confidence: number;
-  marketComparison: "below_market" | "at_market" | "above_market";
-  marketComparisonPct: number;
-  rentalYieldEstimate: number;
+  response: ValuationResponseV2;
+  primary: PrimaryValuation | null;
 }
 
 interface NeighbourhoodData {
@@ -52,19 +47,9 @@ const normaliseStoredWalkScore = (value: unknown): number | null => {
   return Number.isFinite(score) && score >= 0 && score <= 100 ? score : null;
 };
 
-const normalizeValuationReport = (data: unknown, fallbackPrice: number): AIReport => {
-  const source = data && typeof data === "object" ? data as Partial<AIReport> : {};
-  const estimatedValue = getPrimaryValuationEstimate(source, fallbackPrice);
-  const diffPct = fallbackPrice > 0 ? Math.round(((estimatedValue - fallbackPrice) / fallbackPrice) * 100) : 0;
-  return {
-    estimatedValue,
-    rangeLow: Number.isFinite(Number(source.rangeLow)) ? Number(source.rangeLow) : Math.round(estimatedValue * 0.9),
-    rangeHigh: Number.isFinite(Number(source.rangeHigh)) ? Number(source.rangeHigh) : Math.round(estimatedValue * 1.1),
-    confidence: Number.isFinite(Number(source.confidence)) ? Number(source.confidence) : 0,
-    marketComparison: source.marketComparison ?? (diffPct > 5 ? "above_market" : diffPct < -5 ? "below_market" : "at_market"),
-    marketComparisonPct: Number.isFinite(Number(source.marketComparisonPct)) ? Number(source.marketComparisonPct) : diffPct,
-    rentalYieldEstimate: Number.isFinite(Number(source.rentalYieldEstimate)) ? Number(source.rentalYieldEstimate) : 0,
-  };
+const normalizeValuationReport = (data: unknown): AIReport | null => {
+  const response = parseValuationResponseV2(data);
+  return response ? { response, primary: selectPrimaryValuation(response) } : null;
 };
 
 // ── Mini walk score badge ─────────────────────────────────────────────────────
@@ -123,32 +108,27 @@ function NoiseBadge({ level }: { level: "low" | "moderate" | "high" }) {
 }
 
 // ── Valuation mini card ───────────────────────────────────────────────────────
-function ValuationCell({ data, price }: { data: AIReport; price: number }) {
-  const diff = data.estimatedValue - price;
-  const pct = calculatePercentDelta({ value: data.estimatedValue, baseline: price }) ?? 0;
+function ValuationCell({ data }: { data: AIReport }) {
+  const { response, primary } = data;
+  const pct = response.marketComparisonPct;
   const cmpCfg = {
     below_market: { label: "Below Mkt", colour: "text-emerald-400" },
     at_market: { label: "At Market", colour: "text-yellow-400" },
     above_market: { label: "Above Mkt", colour: "text-red-400" },
-  }[data.marketComparison];
-  const Icon = diff >= 0 ? TrendingUp : diff < 0 ? TrendingDown : Minus;
-  const iconColour = diff >= 0 ? "text-emerald-400" : "text-red-400";
+  }[response.marketComparison ?? "at_market"];
+  const Icon = pct == null || pct === 0 ? Minus : pct > 0 ? TrendingUp : TrendingDown;
+  const iconColour = pct == null || pct === 0 ? "text-muted-foreground" : pct < 0 ? "text-emerald-400" : "text-red-400";
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-1.5">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${iconColour}`} />
-        <span className="font-display font-bold text-sm">€{data.estimatedValue.toLocaleString()}</span>
+        <span className="font-display font-bold text-sm">{primary ? `€${primary.value.toLocaleString()}${primary.unit === "EUR/month" ? "/mo" : ""}` : "Unavailable"}</span>
       </div>
-      <div className="text-[10px] text-muted-foreground">
-        €{data.rangeLow.toLocaleString()} – €{data.rangeHigh.toLocaleString()}
-      </div>
-      <div className={`text-[10px] font-semibold ${cmpCfg.colour}`}>
-        {cmpCfg.label} · {pct > 0 ? "+" : ""}{pct}%
-      </div>
-      <div className="text-[10px] text-muted-foreground">
-        Yield: <span className="text-primary font-semibold">{data.rentalYieldEstimate}%</span>
-      </div>
+      {primary?.rangeLow != null && primary.rangeHigh != null && <div className="text-[10px] text-muted-foreground">€{primary.rangeLow.toLocaleString()} – €{primary.rangeHigh.toLocaleString()}</div>}
+      {pct != null && response.marketComparison && <div className={`text-[10px] font-semibold ${cmpCfg.colour}`}>Asking versus estimate: {pct > 0 ? "+" : ""}{pct}% · {cmpCfg.label}</div>}
+      <div className="text-[10px] text-muted-foreground">{primary ? `${primary.source === "os_prediction" ? "OS model prediction" : "Unverified AI estimate"} · ${primary.basis.replace(/_/g, " ")}` : response.summary ?? "Partial analysis only"}</div>
+      <div className="text-[10px] text-muted-foreground">Yield: <span className="text-primary font-semibold">{response.rentalYieldEstimate == null ? "Unavailable" : `${response.rentalYieldEstimate}%`}</span></div>
     </div>
   );
 }
@@ -159,9 +139,17 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
   const { user } = useAuth();
   const [reports, setReports] = useState<Record<string, PropertyAIData>>({});
   const [triggered, setTriggered] = useState(false);
+  const requestGeneration = useRef(0);
+  const subjectsKey = listings.map((listing) => listing.id).join("|");
+
+  useEffect(() => {
+    requestGeneration.current += 1;
+    setReports({}); setTriggered(false);
+  }, [subjectsKey, user?.id]);
 
   const fetchReports = async () => {
     if (!user) return;
+    const generation = ++requestGeneration.current;
     setTriggered(true);
     const init: Record<string, PropertyAIData> = {};
     listings.forEach(l => {
@@ -186,6 +174,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           storedPricePerSqm: raw.price_per_sqm,
         });
         const valBody = {
+          responseVersion: 2,
           listingId: raw.id,
           title: listing.title,
           city: raw.city,
@@ -198,6 +187,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           bathrooms: raw.bathrooms,
           propertyType: raw.property_type,
           listingType: raw.listing_type,
+          openHouseTransactionType: raw.open_house_transaction_type,
           floor: raw.floor,
           yearBuilt: raw.year_built,
           energyClass: raw.energy_class,
@@ -231,7 +221,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
         ]);
 
         const valuation = valRes.status === "fulfilled" && !valRes.value.error && valRes.value.data
-          ? normalizeValuationReport(valRes.value.data, Number(raw.price))
+          ? normalizeValuationReport(valRes.value.data)
           : null;
 
         let reportError: string | null = null;
@@ -255,6 +245,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           neighbourhood = { safetyScore, noiseLevel };
         }
 
+        if (generation !== requestGeneration.current) return;
         setReports(prev => ({
           ...prev,
           [listing.id]: {
@@ -266,6 +257,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           },
         }));
       } catch (e: unknown) {
+        if (generation !== requestGeneration.current) return;
         setReports(prev => ({
           ...prev,
           [listing.id]: {
@@ -327,7 +319,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
                 ? <Loader2 className="w-4 h-4 animate-spin text-primary mx-auto" />
                 : r.error || !r.valuation
                 ? <span className="text-[10px] text-muted-foreground">—</span>
-                : <ValuationCell data={r.valuation} price={Number((l._raw ?? l).price)} />
+                : <ValuationCell data={r.valuation} />
               }
             </td>
           );

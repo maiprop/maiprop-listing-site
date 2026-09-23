@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { valuationV2 } from "@/test/valuationV2Fixture";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -312,14 +313,8 @@ beforeEach(() => {
   startConversationMock.mockResolvedValue("conv-1");
   fromMock.mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) });
   functionsInvokeMock.mockResolvedValue({
-    data: {
-      marketComparisonPct: 19,
-      rentalYieldEstimate: 4.4,
-      estimatedValue: 430000,
-      auctionAdjustedValue: 500000,
-      marketComparison: "above_market",
-      confidenceLabel: "High",
-    },
+    data: valuationV2({ estimatedValue: 500000, marketComparisonPct: 19, marketComparison: "above_market", pricingPosition: "overpriced", confidence: 80, confidenceLabel: "High", evidence: { ...valuationV2().evidence, fields: { ...valuationV2().evidence.fields, estimatedValue: "ai_estimate", pricePerSqmEstimate: "derived_ai", marketComparisonPct: "derived_ai" }, analysis: "ai_estimate" } }),
+    error: null,
   });
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -938,9 +933,9 @@ describe("NewBuildDetail", () => {
     expect(startConversationMock).toHaveBeenCalledWith({ other_user_id: "owner-1", listing_id: "listing-1" });
   });
 
-  it("uses conservative AI defaults when optional valuation commentary is absent", async () => {
+  it("keeps optional valuation fields unavailable instead of inventing defaults", async () => {
     useAuthMock.mockReturnValue({ user: { id: "buyer-1" }, profile: { display_name: "Buyer" } });
-    functionsInvokeMock.mockResolvedValue({ data: { estimatedValue: 430000 }, error: null });
+    functionsInvokeMock.mockResolvedValue({ data: valuationV2({ estimatedValue: 430000, confidence: null, confidenceLabel: null, rentalYieldEstimate: null, evidence: { ...valuationV2().evidence, fields: { ...valuationV2().evidence.fields, estimatedValue: "ai_estimate", confidence: "unavailable", rentalYieldEstimate: "unavailable" }, analysis: "ai_estimate" } }), error: null });
 
     renderPage();
 
@@ -948,7 +943,7 @@ describe("NewBuildDetail", () => {
 
     expect(await screen.findByText("AI Estimate")).toBeInTheDocument();
     expect(screen.getByText(/430\.000/)).toBeInTheDocument();
-    expect(screen.getByText("Confidence: Medium")).toBeInTheDocument();
+    expect(screen.getByText("Confidence: Unavailable")).toBeInTheDocument();
   });
 
   it("supports native sharing and exposes the developer phone only when supplied", async () => {

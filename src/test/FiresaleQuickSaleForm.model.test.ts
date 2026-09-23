@@ -7,8 +7,6 @@ import {
   getPhotoSelectionText,
   getQuickSaleNumericFields,
   getRequiredPropertyType,
-  getLocalEstimate,
-  getSubmitEstimate,
   propertyTypeLabel,
   syncContactFields,
   validateSubmissionForm,
@@ -58,13 +56,12 @@ describe("quick sale form model helpers", () => {
     });
   });
 
-  it("keeps validation, local estimate, and submission metadata behavior stable", () => {
+  it("keeps validation and submission metadata behavior stable without local valuation synthesis", () => {
     expect(validateStep1Form(validForm(), 5)).toEqual({});
     expect(validateStep1Form(validForm(), 4)).toHaveProperty("photos");
     expect(validateStep2Form(validForm({ contactEmail: "bad-email" }))).toHaveProperty(
       "contactEmail",
     );
-    expect(getLocalEstimate(validForm({ sqm: "100" }))).toBe(184000);
     expect(buildMetaLines(validForm(), 8)).toEqual([
       "Construction year: 2010",
       "Photo condition grade (1-10): 9",
@@ -73,7 +70,7 @@ describe("quick sale form model helpers", () => {
     ]);
   });
 
-  it("covers submission validation, estimate fallbacks, role gates, and photo labels", () => {
+  it("covers submission validation, role gates, and photo labels", () => {
     expect(validateSubmissionForm(validForm(), 5)).toEqual({});
     expect(validateSubmissionForm(validForm({ contactName: "", contactPhone: "abc" }), 2)).toMatchObject({
       contactName: expect.any(String),
@@ -87,10 +84,6 @@ describe("quick sale form model helpers", () => {
     expect(canSubmitQuickSaleRequest({ id: "user-1" }, { role: "buyer" }, false)).toBe(false);
     expect(canSubmitQuickSaleRequest({ id: "user-1" }, { role: "seller" }, true)).toBe(false);
 
-    expect(getSubmitEstimate(250000, validForm())).toBe(250000);
-    expect(getSubmitEstimate(null, validForm({ sqm: "80" }))).toBe(139840);
-    expect(getSubmitEstimate(Number.NaN, validForm({ sqm: "80" }))).toBe(139840);
-    expect(getSubmitEstimate(null, validForm({ sqm: "0" }))).toBe(0);
     expect(getRequiredPropertyType("commercial_shop")).toBe("commercial");
     expect(() => getRequiredPropertyType("garage")).toThrow("Property type is invalid");
 
@@ -101,12 +94,6 @@ describe("quick sale form model helpers", () => {
     expect(getPhotoSelectionText(1)).toBe("1 photo selected");
     expect(getPhotoSelectionText(2)).toBe("2 photos selected");
     expect(propertyTypeLabel("apartment", "Apartment")).toBe("Apartment");
-  });
-
-  it("does not produce negative or non-finite local estimates from invalid area input", () => {
-    expect(getLocalEstimate(validForm({ sqm: "0" }))).toBe(0);
-    expect(getLocalEstimate(validForm({ sqm: "-50" }))).toBe(0);
-    expect(getLocalEstimate(validForm({ sqm: "not-a-number" }))).toBe(0);
   });
 
   it("normalizes quick-sale numeric payload fields before API submission", () => {

@@ -14,7 +14,7 @@ vi.mock("react-router-dom", async () => {
 });
 
 describe("QuickSaleSubmittedView", () => {
-  it("shows the reference, estimate, investor distribution guarantees, and reset action", () => {
+  it("shows the reference, market estimate, investor distribution guarantees, and reset action", () => {
     const onReset = vi.fn();
 
     renderWithProviders(
@@ -28,7 +28,9 @@ describe("QuickSaleSubmittedView", () => {
     expect(screen.getByText(/Request Submitted/)).toBeInTheDocument();
     expect(screen.getByText("ABC12345")).toBeInTheDocument();
     expect(screen.getByText("€250,000")).toBeInTheDocument();
-    expect(screen.getByText("€263,158")).toBeInTheDocument();
+    expect(screen.getByText("Market estimate")).toBeInTheDocument();
+    expect(screen.queryByText("€263,158")).not.toBeInTheDocument();
+    expect(screen.queryByText("~5%")).not.toBeInTheDocument();
     expect(screen.getByText(/Queued for advisor review before investor publication/)).toBeInTheDocument();
     expect(screen.getByText(/not visible to investors until/i)).toBeInTheDocument();
 
@@ -44,5 +46,7 @@ describe("QuickSaleSubmittedView", () => {
     fireEvent.click(screen.getByRole("button", { name: /Track Status/i }));
     expect(navigateMock).toHaveBeenCalledWith("/dashboard");
     expect(screen.queryByText(/Ref:/)).not.toBeInTheDocument();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("€0")).not.toBeInTheDocument();
   });
 });

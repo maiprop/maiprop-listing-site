@@ -1,21 +1,22 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
 import { aiQuotaFromJson, fetchAiQuota } from "@/hooks/useAiQuota";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import type { ListingWithJoins } from "@/hooks/useListings";
-import { deriveListingMarketComparison, getPrimaryValuationEstimate } from "@/lib/valuationResult";
-import type { ValuationEstimateSource } from "@/lib/valuationResult";
+import { parseValuationResponseV2, selectPrimaryValuation, type ValuationFieldSource, type ValuationUnit } from "@/lib/valuationResult";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 export interface AIInsightsData {
   vsMarket: number | null;
-  rentalYield: number;
+  rentalYield: number | null;
   estimatedValue: number | null;
   pricePerSqmEstimate?: number;
   marketComparison: string | null;
-  confidenceLabel: string;
+  confidenceLabel: string | null;
+  estimateSource: ValuationFieldSource | null;
+  estimateUnit: ValuationUnit | null;
 }
 
 export interface AIInsightsQuota {
@@ -29,14 +30,9 @@ export interface AIInsightsQuota {
 const AI_INSIGHTS_BUCKET = "property-valuation";
 const AI_INSIGHTS_FUNCTION_TIMEOUT_MS = 45_000;
 
-type PropertyInsightsResponse = ValuationEstimateSource & {
+type PropertyInsightsResponse = {
   error?: string;
-  rentalYieldEstimate?: number;
-  pricePerSqmEstimate?: number;
-  confidenceLabel?: string;
-  estimatedMonthlyRent?: number;
-  monthlyRentEstimate?: number;
-  marketRentEstimate?: number;
+  [key: string]: unknown;
 };
 
 const toPositiveNumber = (value: unknown): number | null => {
@@ -44,49 +40,9 @@ const toPositiveNumber = (value: unknown): number | null => {
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 };
 
-const roundToOneDecimal = (value: number): number => Math.round(value * 10) / 10;
-
 const isRentalListing = (listing: ListingWithJoins): boolean =>
   listing.listing_type === "rent" ||
   (listing.listing_type === "open_house" && listing.open_house_transaction_type === "rent");
-
-const getRentalMarketRentEstimate = (
-  data: PropertyInsightsResponse,
-  listedMonthlyRent: number | null,
-): number | null => {
-  const dedicatedEstimate =
-    toPositiveNumber(data.estimatedMonthlyRent) ??
-    toPositiveNumber(data.monthlyRentEstimate) ??
-    toPositiveNumber(data.marketRentEstimate);
-  if (dedicatedEstimate) return dedicatedEstimate;
-
-  const primaryEstimate = toPositiveNumber(data.estimatedValue);
-  if (!primaryEstimate || !listedMonthlyRent) return null;
-  return primaryEstimate >= listedMonthlyRent * 0.35 && primaryEstimate <= listedMonthlyRent * 4
-    ? primaryEstimate
-    : null;
-};
-
-const getRentalYield = (
-  monthlyRent: number | null,
-  capitalEstimate: number,
-  remoteYield: unknown,
-): number => {
-  if (monthlyRent && capitalEstimate > monthlyRent * 24) {
-    return roundToOneDecimal((monthlyRent * 12 / capitalEstimate) * 100);
-  }
-  return toPositiveNumber(remoteYield) ?? 0;
-};
-
-const getRentalMarketComparison = (
-  monthlyRent: number | null,
-  marketRentEstimate: number | null,
-): { marketComparison: string | null; marketComparisonPct: number | null } => {
-  if (!monthlyRent || !marketRentEstimate) {
-    return { marketComparison: null, marketComparisonPct: null };
-  }
-  return deriveListingMarketComparison(monthlyRent, marketRentEstimate);
-};
 
 export function usePropertyAIInsights(
   dbListing: ListingWithJoins | null | undefined,
@@ -99,13 +55,16 @@ export function usePropertyAIInsights(
   const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
   const [aiInsightsQuota, setAiInsightsQuota] = useState<AIInsightsQuota | null>(null);
   const [aiInsightsQuotaLoading, setAiInsightsQuotaLoading] = useState(false);
+  const requestGeneration = useRef(0);
 
   const listingId = dbListing?.id;
 
   useEffect(() => {
+    requestGeneration.current += 1;
     setAiInsightsData(null);
     setAiInsightsLoaded(false);
     setAiInsightsQuota(null);
+    setAiInsightsLoading(false);
   }, [listingId, user?.id]);
 
   const refreshAiInsightsQuota = useCallback(async () => {
@@ -129,8 +88,10 @@ export function usePropertyAIInsights(
 
   const loadAiInsights = useCallback(async () => {
     if (!dbListing || !user || aiInsightsLoading) return;
+    const generation = requestGeneration.current;
 
     const quota = await refreshAiInsightsQuota();
+    if (generation !== requestGeneration.current) return;
     if (quota && !quota.allowed) {
       toast.error(
         quota.reason === "monthly_limit_reached"
@@ -155,6 +116,7 @@ export function usePropertyAIInsights(
       const { data, error: fnErr } = await invokeAuthenticatedFunction<PropertyInsightsResponse>("property-valuation", {
         timeout: AI_INSIGHTS_FUNCTION_TIMEOUT_MS,
         body: {
+          responseVersion: 2,
           listingId: snapshot.id,
           title: snapshot.title,
           city: snapshot.city,
@@ -212,22 +174,21 @@ export function usePropertyAIInsights(
           })(),
         },
       });
-      if (data && !data.error) {
-        const estimatedValue = getPrimaryValuationEstimate(data, Number(snapshot.price));
-        const marketRentEstimate = rentalListing ? getRentalMarketRentEstimate(data, monthlyRent) : null;
-        const comparison = rentalListing
-          ? getRentalMarketComparison(monthlyRent, marketRentEstimate)
-          : deriveListingMarketComparison(snapshot.price, estimatedValue);
-        const returnedPricePerSqm = toPositiveNumber(data.pricePerSqmEstimate);
+      if (generation !== requestGeneration.current) return;
+      if (!fnErr && data && !data.error) {
+        const parsed = parseValuationResponseV2(data);
+        if (!parsed) throw new Error("Unsupported valuation response");
+        const primary = selectPrimaryValuation(parsed);
+        const returnedPricePerSqm = toPositiveNumber(parsed.pricePerSqmEstimate);
         setAiInsightsData({
-          vsMarket: comparison.marketComparisonPct,
-          rentalYield: rentalListing
-            ? getRentalYield(monthlyRent, estimatedValue, data.rentalYieldEstimate)
-            : data.rentalYieldEstimate ?? 0,
-          estimatedValue: rentalListing ? marketRentEstimate : estimatedValue,
+          vsMarket: parsed.marketComparisonPct,
+          rentalYield: parsed.rentalYieldEstimate,
+          estimatedValue: primary?.value ?? null,
           ...(returnedPricePerSqm ? { pricePerSqmEstimate: returnedPricePerSqm } : {}),
-          marketComparison: comparison.marketComparison,
-          confidenceLabel: data.confidenceLabel ?? "Medium",
+          marketComparison: parsed.marketComparison,
+          confidenceLabel: parsed.confidenceLabel,
+          estimateSource: primary?.source ?? null,
+          estimateUnit: primary?.unit ?? null,
         });
         await refreshAiInsightsQuota();
       } else if (isAiUsageLimitError(fnErr, data)) {
@@ -245,7 +206,7 @@ export function usePropertyAIInsights(
         toast.error("Could not load AI insights. Please try again.");
       }
     } finally {
-      setAiInsightsLoading(false);
+      if (generation === requestGeneration.current) setAiInsightsLoading(false);
     }
   }, [aiInsightsLoading, dbListing, refreshAiInsightsQuota, user]);
 

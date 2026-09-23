@@ -333,7 +333,7 @@ export function AdminDealRow({
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Deal Metrics</p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-muted rounded-lg p-2"><p className="text-muted-foreground">Asking Price</p><p className="font-bold">€{(deal.asking_price || 0).toLocaleString()}</p></div>
-                <div className="bg-muted rounded-lg p-2"><p className="text-muted-foreground">AI Estimate</p><p className="font-bold text-brand-emerald">€{(deal.ai_estimate || 0).toLocaleString()}</p></div>
+                <div className="bg-muted rounded-lg p-2"><p className="text-muted-foreground">Market estimate</p><p className="font-bold text-brand-emerald">{deal.ai_estimate == null ? "Unavailable" : `€${deal.ai_estimate.toLocaleString()}`}</p></div>
                 {discountPct && <div className="bg-destructive/10 rounded-lg p-2"><p className="text-muted-foreground">Discount</p><p className="font-bold text-destructive">{discountPct}% below value</p></div>}
                 {!!deal.offer_price && <div className="bg-primary/10 rounded-lg p-2"><p className="text-muted-foreground">Our Offer</p><p className="font-bold text-primary">€{deal.offer_price.toLocaleString()}</p></div>}
               </div>
@@ -421,7 +421,7 @@ export function AdminDealRow({
             <div className="space-y-3">
               <div className="flex gap-2 text-xs">
                 <div className="flex-1 bg-muted rounded-lg p-2.5"><p className="text-muted-foreground">Asking</p><p className="font-bold text-base">€{(deal.asking_price || 0).toLocaleString()}</p></div>
-                <div className="flex-1 bg-brand-emerald/10 rounded-lg p-2.5"><p className="text-muted-foreground">AI Estimate</p><p className="font-bold text-base text-brand-emerald">€{(deal.ai_estimate || 0).toLocaleString()}</p></div>
+                <div className="flex-1 bg-brand-emerald/10 rounded-lg p-2.5"><p className="text-muted-foreground">Market estimate</p><p className="font-bold text-base text-brand-emerald">{deal.ai_estimate == null ? "Unavailable" : `€${deal.ai_estimate.toLocaleString()}`}</p></div>
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1.5">Your Offer Price *</label>

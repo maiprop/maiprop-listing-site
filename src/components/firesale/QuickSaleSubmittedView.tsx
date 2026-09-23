@@ -84,21 +84,9 @@ export function QuickSaleSubmittedView({
         ))}
       </div>
       <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/20 p-5 mb-6">
-        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">{isGreek ? "AI εκτίμηση προσφοράς" : "AI Offer Estimate"}</p>
-        <p className="font-display font-black text-4xl text-primary mb-1">€{aiEstimate?.toLocaleString()}</p>
-        <p className="text-xs text-muted-foreground">{isGreek ? "Ενδεικτική · Υπόκειται σε τελικό έλεγχο" : "Indicative · Subject to final due diligence"}</p>
-        <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3 mt-4 pt-4 border-t border-primary/10">
-          {[
-            { label: isGreek ? "Εκτ. αγοράς" : "Est. Market", value: `€${Math.round((aiEstimate || 0) / 0.95).toLocaleString()}` },
-            { label: isGreek ? "Έκπτωση" : "Discount", value: "~5%" },
-            { label: isGreek ? "Ολοκλήρωση" : "Close", value: "48–72h" },
-          ].map((s) => (
-            <div key={s.label} className="text-center">
-              <p className="font-bold text-sm">{s.value}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
-            </div>
-          ))}
-        </div>
+        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">{isGreek ? "Εκτίμηση αγοράς" : "Market estimate"}</p>
+        <p className="font-display font-black text-4xl text-primary mb-1">{aiEstimate == null ? (isGreek ? "Μη διαθέσιμη" : "Unavailable") : `€${aiEstimate.toLocaleString()}`}</p>
+        <p className="text-xs text-muted-foreground">{isGreek ? "Μη επαληθευμένη εκτίμηση όταν είναι διαθέσιμη · Η τελική προσφορά ακολουθεί μετά τον έλεγχο" : "Unverified estimate when available · Final offer follows advisor review"}</p>
       </div>
       <div className="space-y-2 text-xs text-muted-foreground text-left mb-6">
         {guarantees.map((t) => (

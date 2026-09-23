@@ -3,7 +3,7 @@
  * Manages form state, validation, photo upload, and AI estimate orchestration.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useNominatimAddressSuggestions, type NominatimAddressSuggestion } from "@/hooks/useNominatimAddressSuggestions";
 import { useFiresalePhotoUploader } from "@/hooks/useFiresalePhotoUploader";
 import { getNominatimCity } from "@/lib/locationSuggestions";
+import { parseMutationInput, propertyValuationBodySchema } from "@/lib/mutationSchemas";
 import {
   mapNominatimSuggestionToAddressPrediction,
   type AddressPrediction,
@@ -27,7 +28,6 @@ import {
   buildInitialForm,
   canSubmitQuickSaleRequest,
   getCityFromAddress,
-  getLocalEstimate,
   getQuickSaleNumericFields,
   getRequiredPropertyType,
   syncContactFields,
@@ -60,6 +60,7 @@ export const FiresaleQuickSaleForm = () => {
   const [aiEstimate, setAiEstimate] = useState<number | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
+  const estimateGeneration = useRef(0);
 
   const photoUploader = useFiresalePhotoUploader();
   const {
@@ -83,6 +84,21 @@ export const FiresaleQuickSaleForm = () => {
   useEffect(() => {
     setForm((prev) => syncContactFields(prev, profile, user?.email));
   }, [profile, user]);
+
+  useEffect(() => {
+    estimateGeneration.current += 1;
+    setAiEstimate(null);
+    setAiLoading(false);
+  }, [
+    form.address,
+    form.city,
+    form.propertyType,
+    form.sqm,
+    form.askingPrice,
+    form.constructionYear,
+    form.notes,
+    user?.id,
+  ]);
 
   const upd: QuickSaleFieldUpdater = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const handleSellerCta = () => navigateToSellerSetup(navigate, Boolean(user));
@@ -114,13 +130,13 @@ export const FiresaleQuickSaleForm = () => {
   const step2Valid = Object.keys(validateStep2Form(form)).length === 0;
 
   const generateEstimate = async () => {
-    setAiEstimate(getLocalEstimate(form));
+    const generation = ++estimateGeneration.current;
+    setAiEstimate(null);
     if (!user) { setAiLoading(false); return; }
     setAiLoading(true);
     try {
       const numericFields = getQuickSaleNumericFields(form);
-      const { data, error: fnErr } = await supabase.functions.invoke("property-valuation", {
-        body: {
+      const valuationBody = parseMutationInput(propertyValuationBodySchema, {
           title: "Quick Sale estimate",
           city: form.city.trim() || getCityFromAddress(form.address),
           address: form.address.trim(),
@@ -130,13 +146,18 @@ export const FiresaleQuickSaleForm = () => {
           listingType: "sale",
           yearBuilt: numericFields.constructionYear,
           condition: form.notes.trim() || undefined,
-        },
+          responseVersion: 2,
+        }, "property valuation");
+      const { data, error: fnErr } = await supabase.functions.invoke("property-valuation", {
+        body: valuationBody,
       });
-      applyRemoteEstimate(data, fnErr, setAiEstimate, numericFields.askingPrice);
+      if (generation === estimateGeneration.current) {
+        applyRemoteEstimate(data, fnErr, setAiEstimate);
+      }
     } catch (e: unknown) {
-      showAiEstimateError(e, null);
+      if (generation === estimateGeneration.current) showAiEstimateError(e, null);
     } finally {
-      setAiLoading(false);
+      if (generation === estimateGeneration.current) setAiLoading(false);
     }
   };
 

@@ -120,6 +120,15 @@ Deno.test("create forces user ownership from the verified caller", async () => {
   assertEquals(inserted.property_type, "commercial");
 });
 
+Deno.test("create admits and persists an explicitly unavailable estimate", async () => {
+  resetScenario({ user: { id: "verified-seller", email: "verified@test.local" } });
+  const res = await handler(authedJson(createBody({ aiEstimate: null })));
+  assertEquals(res.status, 200);
+  const insertCall = globalThis.__submitFiresaleRequestScenario.tableCalls.find((call) => call.operation === "insert");
+  const inserted = (insertCall?.payload as { payload: Record<string, unknown> }).payload;
+  assertEquals(inserted.ai_estimate, null);
+});
+
 Deno.test("rollback deletes only the verified caller's request", async () => {
   resetScenario({ user: { id: "verified-seller", email: "verified@test.local" } });
   const requestId = crypto.randomUUID();

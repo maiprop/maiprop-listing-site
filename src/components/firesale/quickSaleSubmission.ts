@@ -7,14 +7,13 @@ import {
   firesaleRequestRollbackBodySchema,
   parseMutationInput,
 } from "@/lib/mutationSchemas";
-import { getRemoteValuationEstimate } from "@/lib/valuationResult";
+import { parseValuationResponseV2, selectPrimaryValuation } from "@/lib/valuationResult";
 import {
   buildMetaLines,
   getCityFromAddress,
   getFirstError,
   getQuickSaleNumericFields,
   getRequiredPropertyType,
-  getSubmitEstimate,
   ui,
   type ErrorSetter,
   type EstimateSetter,
@@ -77,7 +76,7 @@ export const showAiEstimateError = (
     return;
   }
   if (error || data?.error) {
-    toast.error("AI estimate is temporarily unavailable. Using fallback estimate.");
+    toast.error("AI estimate is temporarily unavailable.");
   }
 };
 
@@ -85,22 +84,20 @@ export const applyRemoteEstimate = (
   data: RemoteEstimateData | null | undefined,
   fnErr: unknown,
   setAiEstimate: EstimateSetter,
-  fallbackMarketValue = 0,
 ) => {
-  const remoteEstimate = getRemoteValuationEstimate(data);
-  const fallbackEstimate = !fnErr && !data?.error ? Number(fallbackMarketValue) : 0;
-  const marketEstimate = remoteEstimate ?? (Number.isFinite(fallbackEstimate) && fallbackEstimate > 0 ? fallbackEstimate : null);
-  if (marketEstimate && marketEstimate > 0) {
-    setAiEstimate(Math.round(marketEstimate * 0.95));
+  const primary = !fnErr && !data?.error ? selectPrimaryValuation(parseValuationResponseV2(data)) : null;
+  if (primary) {
+    setAiEstimate(primary.value);
     return;
   }
+  if (!fnErr && !data?.error) setAiEstimate(null);
   showAiEstimateError(fnErr, data);
 };
 
 const insertFiresaleRequest = (
   form: QuickSaleFormValues,
   _userId: string,
-  estimate: number,
+  estimate: number | null,
   propertyType: ReturnType<typeof getRequiredPropertyType>,
   metaLines: string[],
 ) => {
@@ -159,8 +156,8 @@ export const submitValidatedQuickSale = async (
   aiEstimate: number | null,
   photoCount: number,
   uploadPhotos: (requestId: string) => Promise<string[]>,
-): Promise<{ estimate: number; requestId: string | null }> => {
-  const estimate = getSubmitEstimate(aiEstimate, form);
+): Promise<{ estimate: number | null; requestId: string | null }> => {
+  const estimate = Number.isFinite(aiEstimate) && aiEstimate != null && aiEstimate > 0 ? aiEstimate : null;
   const propertyType = getRequiredPropertyType(form.propertyType);
   const { data, error } = await insertFiresaleRequest(form, userId, estimate, propertyType, buildMetaLines(form, photoCount));
   if (error) throw error;

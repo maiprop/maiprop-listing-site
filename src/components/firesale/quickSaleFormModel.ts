@@ -64,14 +64,12 @@ export type QuickSaleErrors = Record<string, string>;
 export type QuickSaleProfile = { display_name?: string | null; first_name?: string | null; phone?: string | null; role?: string | null } | null;
 export type QuickSaleUser = { id: string; email?: string | null } | null;
 export type RemoteEstimateData = {
-  estimatedValue?: number | null;
-  estimated_value?: number | null;
-  auctionAdjustedValue?: number | null;
-  auction_adjusted_value?: number | null;
+  responseVersion?: unknown;
   error?: string;
+  [key: string]: unknown;
 };
 export type ErrorSetter = (errors: QuickSaleErrors) => void;
-export type EstimateSetter = (estimate: number) => void;
+export type EstimateSetter = (estimate: number | null) => void;
 export type QuickSaleFieldUpdater = (key: keyof QuickSaleFormValues, value: string) => void;
 export type PhotoSelectHandler = (event: ChangeEvent<HTMLInputElement>) => void;
 
@@ -206,25 +204,10 @@ export const canSubmitQuickSaleRequest = (
   authPending: boolean,
 ): boolean => Boolean(user) && !authPending && profile != null && isSellerRole(profile);
 
-const BASE_PRICE_PER_SQM: Record<string, number> = {
-  villa: 3200,
-  house: 2400,
-  apartment: 2000,
-  commercial: 2800,
-  office: 2600,
-  land: 900,
-};
-
-export const getLocalEstimate = (form: QuickSaleFormValues): number =>
-  Math.round((BASE_PRICE_PER_SQM[form.propertyType] || 2000) * (positiveFiniteNumber(form.sqm) ?? 0) * 0.92);
-
 export const validateSubmissionForm = (form: QuickSaleFormValues, photoCount: number): QuickSaleErrors => ({
   ...validateStep1Form(form, photoCount),
   ...validateStep2Form(form),
 });
-
-export const getSubmitEstimate = (aiEstimate: number | null, form: QuickSaleFormValues): number =>
-  positiveFiniteNumber(aiEstimate) ?? Math.round((positiveFiniteNumber(form.sqm) ?? 0) * 1900 * 0.92);
 
 export const getQuickSaleNumericFields = (form: QuickSaleFormValues) => ({
   sqm: positiveFiniteNumber(form.sqm) ?? 0,
