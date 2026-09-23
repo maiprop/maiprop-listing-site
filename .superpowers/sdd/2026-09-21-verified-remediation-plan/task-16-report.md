@@ -58,7 +58,11 @@ Supported tests were adapted rather than discarded:
 - A-request / switch-to-B / resolve-A and actor-change reproductions use real component/hook state. Quick Sale also changes the form subject before resolving the old estimate.
 - OS-only sale, lease partial, auction basis, OS plus AI clean-market, model-only estimate, analysis-only partial, malformed/auth-looking provider failure, authentication denial, invalid/legacy versions, rental asking conflict and nullable submit persistence use the actual Deno handlers with faked transports and denied external network.
 
-Tests intentionally retired or inverted were limited to removed behavior: legacy snake-case valuation normalization, asking-price fallback, sparse-success `at_market`/zero defaults, generated ±10% ranges, heuristic rental yield, fixed score/legal/tax defaults, deterministic service fallback estimates and Quick Sale `.95`/94%/seven-day/local benchmark assertions.
+Tests intentionally retired or inverted cover removed behavior: legacy snake-case valuation normalization, asking-price fallback, sparse-success `at_market`/zero defaults, generated ±10% ranges, heuristic rental yield, fixed score/legal/tax defaults, deterministic service fallback estimates and Quick Sale `.95`/94%/seven-day/local benchmark assertions. The initial patch also removed still-supported request-boundary, OS warm-token and new-build model/reasoning assertions; that was an overstatement in this report. Task 16 fix round 1 restores those protections against the v2 handler without restoring unsupported defaults. See `task-16-fix-1-report.md`.
+
+## Fix-round correction
+
+Independent review found that the initial implementation did not yet prove or fully implement several claims above. Fix round 1 makes the prompt transaction canonical for open-house rentals, prevents an unknown-period OS lease observation from serving as a monthly model anchor, carries the complete supported partial report through compact consumers, exposes tax-only analysis, and generation-binds quota/error/finally work. It also replaces the handler fixture's auth bypass with actual fake auth and quota transport and proves one ordered reservation per admitted attempt. The original `13` property-handler count and `98` frontend count remain historical evidence for commit `8e942877`; the current focused results and the exact corrected scope are recorded in `task-16-fix-1-report.md` and supersede those counts for the repaired files.
 
 ## Final focused verification
 

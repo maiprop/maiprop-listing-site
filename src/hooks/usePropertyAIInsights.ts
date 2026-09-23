@@ -4,7 +4,7 @@ import { aiQuotaFromJson, fetchAiQuota } from "@/hooks/useAiQuota";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import type { ListingWithJoins } from "@/hooks/useListings";
-import { parseValuationResponseV2, selectPrimaryValuation, type ValuationFieldSource, type ValuationUnit } from "@/lib/valuationResult";
+import { parseValuationResponseV2, selectPrimaryValuation, type ValuationFieldSource, type ValuationResponseV2, type ValuationUnit } from "@/lib/valuationResult";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
@@ -17,6 +17,7 @@ export interface AIInsightsData {
   confidenceLabel: string | null;
   estimateSource: ValuationFieldSource | null;
   estimateUnit: ValuationUnit | null;
+  valuation: ValuationResponseV2;
 }
 
 export interface AIInsightsQuota {
@@ -65,24 +66,25 @@ export function usePropertyAIInsights(
     setAiInsightsLoaded(false);
     setAiInsightsQuota(null);
     setAiInsightsLoading(false);
+    setAiInsightsQuotaLoading(false);
   }, [listingId, user?.id]);
 
-  const refreshAiInsightsQuota = useCallback(async () => {
+  const refreshAiInsightsQuota = useCallback(async (expectedGeneration = requestGeneration.current) => {
     if (!dbListing || !user) {
-      setAiInsightsQuota(null);
+      if (expectedGeneration === requestGeneration.current) setAiInsightsQuota(null);
       return null;
     }
 
-    setAiInsightsQuotaLoading(true);
+    if (expectedGeneration === requestGeneration.current) setAiInsightsQuotaLoading(true);
     try {
       const quota = await fetchAiQuota(AI_INSIGHTS_BUCKET);
-      setAiInsightsQuota(quota);
+      if (expectedGeneration === requestGeneration.current) setAiInsightsQuota(quota);
       return quota;
     } catch (_err: unknown) {
-      setAiInsightsQuota(null);
+      if (expectedGeneration === requestGeneration.current) setAiInsightsQuota(null);
       return null;
     } finally {
-      setAiInsightsQuotaLoading(false);
+      if (expectedGeneration === requestGeneration.current) setAiInsightsQuotaLoading(false);
     }
   }, [dbListing, user]);
 
@@ -90,7 +92,7 @@ export function usePropertyAIInsights(
     if (!dbListing || !user || aiInsightsLoading) return;
     const generation = requestGeneration.current;
 
-    const quota = await refreshAiInsightsQuota();
+    const quota = await refreshAiInsightsQuota(generation);
     if (generation !== requestGeneration.current) return;
     if (quota && !quota.allowed) {
       toast.error(
@@ -189,8 +191,9 @@ export function usePropertyAIInsights(
           confidenceLabel: parsed.confidenceLabel,
           estimateSource: primary?.source ?? null,
           estimateUnit: primary?.unit ?? null,
+          valuation: parsed,
         });
-        await refreshAiInsightsQuota();
+        await refreshAiInsightsQuota(generation);
       } else if (isAiUsageLimitError(fnErr, data)) {
         const quotaFromError = aiQuotaFromJson(data);
         if (quotaFromError) setAiInsightsQuota(quotaFromError);
@@ -199,9 +202,10 @@ export function usePropertyAIInsights(
         toast.error("Could not load AI insights. Please try again.");
       }
     } catch (e: unknown) {
+      if (generation !== requestGeneration.current) return;
       if (isAiUsageLimitError(e, null)) {
         toast.error("You've reached your AI insights limit for this month. Upgrade to continue.");
-        await refreshAiInsightsQuota();
+        await refreshAiInsightsQuota(generation);
       } else {
         toast.error("Could not load AI insights. Please try again.");
       }

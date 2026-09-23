@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
 import { CONSTRUCTION_PHASES, formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
 import { getNewBuildCardImages } from "@/lib/newBuildCardSummary";
-import { parseValuationResponseV2, selectPrimaryValuation, type ValuationFieldSource, type ValuationUnit } from "@/lib/valuationResult";
+import { parseValuationResponseV2, selectPrimaryValuation, type ValuationFieldSource, type ValuationResponseV2, type ValuationUnit } from "@/lib/valuationResult";
 import { FeatureSection } from "@/components/property/DetailPrimitives";
 import { PropertyGallery as Gallery } from "@/components/new-build/PropertyGallery";
 import { ConstructionTimeline } from "@/components/new-build/ConstructionTimeline";
@@ -163,6 +163,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
     vsMarket: number | null; rentalYield: number | null; estimatedValue: number | null;
     marketComparison: string | null; confidenceLabel: string | null;
     estimateSource: ValuationFieldSource | null; estimateUnit: ValuationUnit | null;
+    pricePerSqmEstimate?: number; valuation: ValuationResponseV2;
   } | null>(null);
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
   const [aiInsightsRequested, setAiInsightsRequested] = useState(false);
@@ -372,6 +373,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
           confidenceLabel: parsed.confidenceLabel,
           estimateSource: primary?.source ?? null,
           estimateUnit: primary?.unit ?? null,
+          ...(parsed.pricePerSqmEstimate != null ? { pricePerSqmEstimate: parsed.pricePerSqmEstimate } : {}),
+          valuation: parsed,
         });
         setAiInsightsError(null);
         setAiInsightsQuotaReached(false);
@@ -380,6 +383,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
         setAiInsightsQuotaReached(isAiMonthlyLimitError(error, data));
       }
     } catch (err: unknown) {
+      if (generation !== aiInsightsGeneration.current) return;
       setAiInsightsError(getAiErrorMessage(err, null, tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")));
       setAiInsightsQuotaReached(isAiMonthlyLimitError(err, null));
     } finally {

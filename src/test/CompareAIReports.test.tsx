@@ -64,6 +64,51 @@ describe("CompareAIReports v2", () => {
     expect(screen.getByText("Unavailable", { selector: "span.font-display" })).toBeInTheDocument();
   });
 
+  it("renders factors, renovation, and tax text from a numberless partial report", async () => {
+    const base = valuationV2();
+    const partial = valuationV2({
+      status: "partial", estimatedValue: null, rangeLow: null, rangeHigh: null, rangeBasis: null,
+      pricePerSqmEstimate: null, confidence: null, confidenceLabel: null, summary: null,
+      keyFactors: [{ factor: "Layout", impact: "positive", note: "Efficient two-bedroom plan." }],
+      renovationPotential: "Inspect services before budgeting works.", taxSummary: "Tax evidence is limited to supplied documents.",
+      evidence: { ...base.evidence, fields: { ...base.evidence.fields, estimatedValue: "unavailable", rangeLow: "unavailable", rangeHigh: "unavailable", pricePerSqmEstimate: "unavailable", confidence: "unavailable" }, analysis: "ai_estimate" },
+    });
+    invokeMock.mockImplementation((name: string) => Promise.resolve({ data: name === "property-valuation" ? partial : {}, error: null }));
+    render(wrap(<CompareAIReports listings={[listing()]} />)); run();
+    expect(await screen.findByText(/Efficient two-bedroom plan/)).toBeInTheDocument();
+    expect(screen.getByText(/Inspect services before budgeting works/)).toBeInTheDocument();
+    expect(screen.getByText(/Tax evidence is limited/)).toBeInTheDocument();
+  });
+
+  it("keeps AI clean-market auction value, range, and OS auction observation distinct", async () => {
+    const auction = valuationV2({
+      transaction: "auction", estimateBasis: "os_auction_model", estimatedValue: 250000,
+      auctionAdjustedValue: 400000, rangeLow: 380000, rangeHigh: 420000, rangeBasis: "auctionAdjustedValue",
+      providerPrediction: { value: 250000, field: "propertyPredictedPrice", model: "auction", unit: "EUR" },
+      evidence: { ...valuationV2().evidence, fields: { ...valuationV2().evidence.fields, estimatedValue: "os_prediction", auctionAdjustedValue: "ai_estimate", rangeLow: "ai_estimate", rangeHigh: "ai_estimate" } },
+    });
+    invokeMock.mockImplementation((name: string) => Promise.resolve({ data: name === "property-valuation" ? auction : {}, error: null }));
+    render(wrap(<CompareAIReports listings={[listing({ listing_type: "auction" })]} />)); run();
+    expect(await screen.findByText(/€400,000/)).toBeInTheDocument();
+    expect(screen.getByText(/€380,000.*€420,000/)).toBeInTheDocument();
+    expect(screen.getByText(/clear-title assumption/i)).toBeInTheDocument();
+    expect(screen.getByText(/Separate OS auction-model estimate.*€250,000/i)).toBeInTheDocument();
+  });
+
+  it("renders an OS lease observation without assigning a monthly unit", async () => {
+    const base = valuationV2();
+    const lease = valuationV2({
+      status: "partial", transaction: "rent", valueUnit: "EUR/month", estimateBasis: "monthly_rent",
+      providerPrediction: { value: 1800, field: "propertyPredictedLeasePrice", model: "market", unit: null },
+      estimatedValue: null, rangeLow: null, rangeHigh: null, rangeBasis: null, pricePerSqmEstimate: null,
+      evidence: { ...base.evidence, fields: { ...base.evidence.fields, estimatedValue: "unavailable", rangeLow: "unavailable", rangeHigh: "unavailable", pricePerSqmEstimate: "unavailable" } },
+    });
+    invokeMock.mockImplementation((name: string) => Promise.resolve({ data: name === "property-valuation" ? lease : {}, error: null }));
+    render(wrap(<CompareAIReports listings={[listing({ listing_type: "rent", price: 1600 })]} />)); run();
+    expect(await screen.findByText(/Rental model observation.*€1,800.*period unavailable/i)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/€1,800\/mo/);
+  });
+
   it("retains a valid partial safety estimate while noise remains unavailable", async () => {
     invokeMock.mockImplementation((name: string) => Promise.resolve({
       data: name === "property-valuation" ? valuationV2() : { responseVersion: 2, safetyScore: { score: 82 }, noiseLevel: null },

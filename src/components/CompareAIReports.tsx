@@ -118,16 +118,26 @@ function ValuationCell({ data }: { data: AIReport }) {
   }[response.marketComparison ?? "at_market"];
   const Icon = pct == null || pct === 0 ? Minus : pct > 0 ? TrendingUp : TrendingDown;
   const iconColour = pct == null || pct === 0 ? "text-muted-foreground" : pct < 0 ? "text-emerald-400" : "text-red-400";
+  const money = (value: number, unit: "EUR" | "EUR/month" | null = "EUR") => `€${value.toLocaleString()}${unit === "EUR/month" ? "/mo" : ""}`;
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-1.5">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${iconColour}`} />
-        <span className="font-display font-bold text-sm">{primary ? `€${primary.value.toLocaleString()}${primary.unit === "EUR/month" ? "/mo" : ""}` : "Unavailable"}</span>
+        <span className="font-display font-bold text-sm">{primary ? money(primary.value, primary.unit) : "Unavailable"}</span>
       </div>
-      {primary?.rangeLow != null && primary.rangeHigh != null && <div className="text-[10px] text-muted-foreground">€{primary.rangeLow.toLocaleString()} – €{primary.rangeHigh.toLocaleString()}</div>}
+      {primary?.rangeLow != null && primary.rangeHigh != null && <div className="text-[10px] text-muted-foreground">{money(primary.rangeLow, primary.unit)} – {money(primary.rangeHigh, primary.unit)}</div>}
       {pct != null && response.marketComparison && <div className={`text-[10px] font-semibold ${cmpCfg.colour}`}>Asking versus estimate: {pct > 0 ? "+" : ""}{pct}% · {cmpCfg.label}</div>}
-      <div className="text-[10px] text-muted-foreground">{primary ? `${primary.source === "os_prediction" ? "OS model prediction" : "Unverified AI estimate"} · ${primary.basis.replace(/_/g, " ")}` : response.summary ?? "Partial analysis only"}</div>
+      <div className="text-[10px] text-muted-foreground">{primary ? `${primary.source === "os_prediction" ? "OS model prediction" : "Unverified AI estimate"} · ${primary.basis.replace(/_/g, " ")}${response.transaction === "auction" && primary.basis === "market_value" ? " · clear-title assumption; documents not verified" : ""}` : response.summary ?? "Partial analysis only"}</div>
+      {response.providerPrediction?.unit === null && <div className="text-[10px] text-muted-foreground">Rental model observation: {money(response.providerPrediction.value)} · period unavailable</div>}
+      {response.transaction === "auction" && response.providerPrediction?.model === "auction" && primary?.basis === "market_value" && <div className="text-[10px] text-muted-foreground">Separate OS auction-model estimate: {money(response.providerPrediction.value)} · not clean-market, bid, or execution value</div>}
+      {response.summary && primary && <div className="text-[10px] text-muted-foreground">{response.summary}</div>}
+      {response.keyFactors.map((factor) => <div key={`${factor.factor}-${factor.note}`} className="text-[10px] text-muted-foreground"><strong>{factor.factor}:</strong> {factor.note} ({factor.impact})</div>)}
+      {response.redFlags.length > 0 && <div className="text-[10px] text-red-400"><strong>Reported concerns:</strong> {response.redFlags.join(" · ")}</div>}
+      {response.renovationPotential && <div className="text-[10px] text-muted-foreground"><strong>Renovation potential:</strong> {response.renovationPotential}</div>}
+      {response.highestBestUseHint && <div className="text-[10px] text-muted-foreground"><strong>Potential use:</strong> {response.highestBestUseHint}</div>}
+      {response.legalSummary && <div className="text-[10px] text-muted-foreground"><strong>Legal context:</strong> {response.legalSummary}</div>}
+      {response.taxSummary && <div className="text-[10px] text-muted-foreground"><strong>Tax context:</strong> {response.taxSummary}</div>}
       <div className="text-[10px] text-muted-foreground">Yield: <span className="text-primary font-semibold">{response.rentalYieldEstimate == null ? "Unavailable" : `${response.rentalYieldEstimate}%`}</span></div>
     </div>
   );

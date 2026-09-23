@@ -14,6 +14,7 @@ import { UNLIMITED_AI_LIMIT } from "@/hooks/useAiQuota";
 import type { AIInsightsQuota } from "@/hooks/usePropertyAIInsights";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
+import { selectPrimaryValuation, type ValuationResponseV2 } from "@/lib/valuationResult";
 
 interface AIInsightsData {
   vsMarket: number | null;
@@ -24,6 +25,7 @@ interface AIInsightsData {
   confidenceLabel: string | null;
   estimateSource?: string | null;
   estimateUnit?: "EUR" | "EUR/month" | null;
+  valuation?: ValuationResponseV2;
 }
 
 interface Props {
@@ -114,7 +116,10 @@ export function PropertyAIInsightsSection({
   listingType,
 }: Props) {
   const { t, i18n } = useTranslation();
-  const isRental = listingType?.toLowerCase() === "rent";
+  const report = data?.valuation;
+  const selectedPrimary = selectPrimaryValuation(report);
+  const selectedUnit = selectedPrimary?.unit ?? data?.estimateUnit ?? null;
+  const isRental = selectedUnit === "EUR/month" || (!selectedUnit && listingType?.toLowerCase() === "rent");
   const quotaReached = limitReached || (!!quota && quota.limit < UNLIMITED_AI_LIMIT && quota.used >= quota.limit);
   const loadLabel = data
     ? t("propertyAIInsights.actions.refresh", "Refresh AI insights")
@@ -132,6 +137,8 @@ export function PropertyAIInsightsSection({
     : isRental
       ? `${formatPrice(data.estimatedValue)}/${monthUnit}`
       : formatPrice(data.estimatedValue);
+  const compactMoney = (value: number, unit: "EUR" | "EUR/month" = "EUR") =>
+    `€${value.toLocaleString(numberLocale)}${unit === "EUR/month" ? `/${monthUnit}` : ""}`;
 
   return (
     <Section>
@@ -206,6 +213,7 @@ export function PropertyAIInsightsSection({
                 bg: "bg-secondary/50 border-border",
               };
           return (
+            <>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
@@ -262,6 +270,22 @@ export function PropertyAIInsightsSection({
                 <p className="text-[10px] text-muted-foreground">{data.estimateSource === "os_prediction" ? t("propertyAIInsights.source.os", "OS model prediction") : data.estimateSource === "ai_estimate" ? t("propertyAIInsights.source.ai", "Unverified AI estimate") : unavailable}</p>
               </div>
             </div>
+            {report && (
+              <div className="mt-3 space-y-2 rounded-xl border border-border bg-secondary/30 p-4 text-xs text-muted-foreground">
+                {selectedPrimary && <p><strong>Basis:</strong> {selectedPrimary.source === "os_prediction" ? "OS model prediction" : "Unverified AI estimate"} · {selectedPrimary.basis.replace(/_/g, " ")}{report.transaction === "auction" && selectedPrimary.basis === "market_value" ? " · clear-title assumption; documents not verified" : ""}</p>}
+                {selectedPrimary?.rangeLow != null && selectedPrimary.rangeHigh != null && <p><strong>Range:</strong> {compactMoney(selectedPrimary.rangeLow, selectedPrimary.unit)} – {compactMoney(selectedPrimary.rangeHigh, selectedPrimary.unit)}</p>}
+                {report.providerPrediction?.unit === null && <p><strong>Rental model observation:</strong> {compactMoney(report.providerPrediction.value)} · rental period unavailable</p>}
+                {report.transaction === "auction" && report.providerPrediction?.model === "auction" && selectedPrimary?.basis === "market_value" && <p><strong>Separate OS auction-model estimate:</strong> {compactMoney(report.providerPrediction.value)} · not clean-market, bid, or execution value</p>}
+                {report.summary && <p>{report.summary}</p>}
+                {report.keyFactors.map((factor) => <p key={`${factor.factor}-${factor.note}`}><strong>{factor.factor}:</strong> {factor.note} ({factor.impact})</p>)}
+                {report.redFlags.length > 0 && <p><strong>Reported concerns:</strong> {report.redFlags.join(" · ")}</p>}
+                {report.renovationPotential && <p><strong>Renovation potential:</strong> {report.renovationPotential}</p>}
+                {report.highestBestUseHint && <p><strong>Potential use:</strong> {report.highestBestUseHint}</p>}
+                {report.legalSummary && <p><strong>Legal context:</strong> {report.legalSummary}</p>}
+                {report.taxSummary && <p><strong>Tax context:</strong> {report.taxSummary}</p>}
+              </div>
+            )}
+            </>
           );
         })()}
 

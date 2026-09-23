@@ -457,11 +457,6 @@ const toMarketComparison = (deltaPct: number): "below_market" | "at_market" | "a
   return "at_market";
 };
 
-const isRentalListing = (value: unknown): boolean => {
-  const listingType = optionalString(value)?.toLowerCase();
-  return listingType === "rent" || listingType === "rental";
-};
-
 const isNewBuildListing = (value: unknown): boolean => {
   const listingType = optionalString(value)?.toLowerCase() ?? "";
   return listingType === "new_build" || listingType === "new-building" || listingType === "pre_sale" || listingType === "pre-sale";
@@ -484,7 +479,11 @@ const buildOsPromptContext = (osData: JsonRecord | null): string => {
   const rentalComparables = countOverviewComparables(osData.rentalValuationOverviews);
   const compact = {
     propertyPredictedPrice: osData.propertyPredictedPrice,
-    propertyPredictedLeasePrice: osData.propertyPredictedLeasePrice,
+    propertyPredictedLeasePrice: osData.propertyPredictedLeasePrice == null ? null : {
+      value: osData.propertyPredictedLeasePrice,
+      unit: null,
+      limitation: "Provider rental period is unavailable; do not use this observation as monthly rent or as a monthly valuation anchor.",
+    },
     annualYieldPrc: osData.annualYieldPrc,
     saleComparables,
     rentalComparables,
@@ -514,7 +513,7 @@ Do not invent exact comparable addresses or transactions; describe comparable ar
   return `=== MAIPROP OS STRUCTURED VALUATION DATA ===
 ${buildOsPromptContext(osData)}
 
-Use mAI Prop OS data as primary quantitative evidence when available, then enrich it with OpenAI qualitative reasoning. Explain where the OS data, listing price, micro-location, liquidity, legal risk, and qualitative asset traits agree or diverge.`;
+Use mAI Prop OS fields with established units as quantitative evidence when available, then enrich them with OpenAI qualitative reasoning. An unknown-period lease observation is context only and is not a monthly valuation anchor. Explain where the OS data, listing price, micro-location, liquidity, legal risk, and qualitative asset traits agree or diverge.`;
 };
 
 const V2_NUMERIC_FIELDS = [
@@ -828,11 +827,11 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       ? `Description excerpt: "${String(description).slice(0, 500)}"`
       : "";
 
-    const normalizedListingType = optionalString(listingType)?.toLowerCase() ?? "sale";
+    const transaction = normalizeTransaction(body as JsonRecord);
     const transactionInstructions = `Analyse only the supplied transaction context. Do not assume fixed discounts, premiums, costs, legal status, tax treatment, or market trends. Asking price is comparison context, not valuation evidence.`;
     const typeInstructions = `Use only supplied property features and provider observations. Missing fields remain null. Do not claim live market search, exact comparable sales, legal-document review, or current-year benchmarks.`;
     const promptPricePerSqm = coerceFiniteNumber(pricePerSqm) ?? Math.round(numericPrice / numericSqm);
-    const isRentalValuation = isRentalListing(normalizedListingType);
+    const isRentalValuation = transaction === "rent";
     const newOrRecentConstruction = isNewOrRecentConstruction(body as JsonRecord);
     const listedPriceLine = isRentalValuation
       ? `Listed monthly rent: EUR ${numericPrice.toLocaleString()} (EUR ${roundNumber(promptPricePerSqm, 2)}/sqm/month)`
@@ -847,7 +846,8 @@ Use similar assets first by transaction type, property type, micro-location, siz
 - Treat the listing price as monthly rent, not sale value.
 - estimatedValue, rangeLow, rangeHigh, and executionValue must be monthly rent in EUR.
 - pricePerSqmEstimate must be EUR/sqm/month.
-- Use propertyPredictedLeasePrice and rentalValuationOverviews from mAI Prop OS as primary evidence when available.
+- propertyPredictedLeasePrice is an unknown-period provider observation. Do not use it as monthly rent or as a monthly valuation anchor.
+- A monthly AI estimate is allowed only when it is explicit model analysis supported by supplied attributes or provider evidence with a known unit.
 - Do not output sale value, purchase value, transfer execution value, buyer transaction costs, or auction bid value.
 - If independent lease evidence is unavailable, the asking rent is only a low-confidence reference, not a market appraisal.`
       : "";
@@ -861,7 +861,7 @@ KEY PROPERTY SPECIFICS (use these in your methodology): ${keySpecifics}
 
 Title: ${title || "Property"}
 Location: ${address ? `${address}, ` : ""}${city}${region ? `, ${region}` : ""}, Greece
-Type: ${propertyType || "apartment"} | Transaction: ${listingType || "sale"}
+Type: ${propertyType || "apartment"} | Transaction: ${transaction}
 Size: ${sqm} sqm
 ${listedPriceLine}
 Observed features: ${observedFeatures}

@@ -122,6 +122,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             {expanded && <div className="space-y-2 rounded-lg border border-border p-3 text-xs text-muted-foreground">
               <p><strong>{tr("Method", "Μέθοδος")}:</strong> {result.methodUsed}</p>
               <p><strong>{tr("Legal assessment", "Νομική αξιολόγηση")}:</strong> {result.legalSummary ?? tr("Unavailable — documents were not reviewed.", "Μη διαθέσιμη — δεν ελέγχθηκαν έγγραφα.")}</p>
+              {result.taxSummary && <p><strong>{tr("Tax context", "Φορολογικό πλαίσιο")}:</strong> {result.taxSummary}</p>}
               {result.evidence.limitations.map((limitation) => <p key={limitation}>• {limitation}</p>)}
             </div>}
             <Button variant="outline" size="sm" onClick={runValuation} disabled={loading}>{loading ? tr("Refreshing...", "Ανανέωση...") : tr("Refresh analysis", "Ανανέωση ανάλυσης")}</Button>

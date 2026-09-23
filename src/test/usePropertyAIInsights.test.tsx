@@ -58,7 +58,7 @@ describe("usePropertyAIInsights v2", () => {
     const { result } = renderHook(() => usePropertyAIInsights(listing(), user, "a", false));
     await act(async () => result.current.loadAiInsights());
     await waitFor(() => expect(result.current.aiInsightsData).not.toBeNull());
-    expect(result.current.aiInsightsData).toEqual({ vsMarket: 0, rentalYield: null, estimatedValue: 400000, pricePerSqmEstimate: 4000, marketComparison: "at_market", confidenceLabel: "Low", estimateSource: "os_prediction", estimateUnit: "EUR" });
+    expect(result.current.aiInsightsData).toMatchObject({ vsMarket: 0, rentalYield: null, estimatedValue: 400000, pricePerSqmEstimate: 4000, marketComparison: "at_market", confidenceLabel: "Low", estimateSource: "os_prediction", estimateUnit: "EUR", valuation: expect.objectContaining({ responseVersion: 2 }) });
     expect(invokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({ body: expect.objectContaining({ responseVersion: 2 }) }));
   });
 
@@ -67,7 +67,7 @@ describe("usePropertyAIInsights v2", () => {
     installResponses(valuationV2({ status: "partial", estimatedValue: null, rangeLow: null, rangeHigh: null, rangeBasis: null, pricePerSqmEstimate: null, confidence: null, confidenceLabel: null, summary: "Useful qualitative analysis", evidence: { ...base.evidence, fields: { ...base.evidence.fields, estimatedValue: "unavailable", rangeLow: "unavailable", rangeHigh: "unavailable", pricePerSqmEstimate: "unavailable", confidence: "unavailable" }, analysis: "ai_estimate" } }));
     const { result } = renderHook(() => usePropertyAIInsights(listing(), user, "a", false));
     await act(async () => result.current.loadAiInsights());
-    expect(result.current.aiInsightsData).toMatchObject({ estimatedValue: null, rentalYield: null, confidenceLabel: null, estimateSource: null, estimateUnit: null });
+    expect(result.current.aiInsightsData).toMatchObject({ estimatedValue: null, rentalYield: null, confidenceLabel: null, estimateSource: null, estimateUnit: null, valuation: expect.objectContaining({ summary: "Useful qualitative analysis" }) });
   });
 
   it("checks invoke error before accepting a supplied data object", async () => {
@@ -138,5 +138,60 @@ describe("usePropertyAIInsights v2", () => {
     resolveOld({ data: valuationV2({ estimatedValue: 999999 }), error: null });
     await act(async () => { await pending; });
     expect(result.current.aiInsightsData).toBeNull();
+  });
+
+  it("does not let an old actor's delayed quota overwrite the new actor or continue to valuation", async () => {
+    let resolveOldQuota!: (value: unknown) => void;
+    let quotaCalls = 0;
+    invokeMock.mockImplementation((name: string) => {
+      if (name === "ai-quota-status") {
+        quotaCalls += 1;
+        if (quotaCalls === 1) return new Promise((resolve) => { resolveOldQuota = resolve; });
+        return Promise.resolve({ data: { allowed: true, reason: null, used: 1, limit: 5, remaining: 4 }, error: null });
+      }
+      return Promise.resolve({ data: valuationV2({ estimatedValue: 410000 }), error: null });
+    });
+    const { result, rerender } = renderHook(
+      ({ actor }) => usePropertyAIInsights(listing("a"), actor, "a", false),
+      { initialProps: { actor: user } },
+    );
+    let oldPending!: Promise<void>;
+    act(() => { oldPending = result.current.loadAiInsights(); });
+    await waitFor(() => expect(quotaCalls).toBe(1));
+    rerender({ actor: { id: "u-2" } as User });
+    await act(async () => result.current.loadAiInsights());
+    expect(result.current.aiInsightsData?.estimatedValue).toBe(410000);
+    expect(result.current.aiInsightsQuota?.allowed).toBe(true);
+    resolveOldQuota({ data: { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5, remaining: 0 }, error: null });
+    await act(async () => { await oldPending; });
+    expect(result.current.aiInsightsData?.estimatedValue).toBe(410000);
+    expect(result.current.aiInsightsQuota?.allowed).toBe(true);
+    expect(invokeMock.mock.calls.filter(([name]) => name === "property-valuation")).toHaveLength(1);
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores a rejected old request after the actor changes and preserves the new result", async () => {
+    let rejectOld!: (reason?: unknown) => void;
+    let valuationCalls = 0;
+    invokeMock.mockImplementation((name: string) => {
+      if (name === "ai-quota-status") return Promise.resolve({ data: { allowed: true, reason: null, used: 0, limit: 5, remaining: 5 }, error: null });
+      valuationCalls += 1;
+      if (valuationCalls === 1) return new Promise((_resolve, reject) => { rejectOld = reject; });
+      return Promise.resolve({ data: valuationV2({ estimatedValue: 420000 }), error: null });
+    });
+    const { result, rerender } = renderHook(
+      ({ actor }) => usePropertyAIInsights(listing("a"), actor, "a", false),
+      { initialProps: { actor: user } },
+    );
+    let oldPending!: Promise<void>;
+    act(() => { oldPending = result.current.loadAiInsights(); });
+    await waitFor(() => expect(valuationCalls).toBe(1));
+    rerender({ actor: { id: "u-2" } as User });
+    await act(async () => result.current.loadAiInsights());
+    rejectOld(new Error("old request failed"));
+    await act(async () => { await oldPending; });
+    expect(result.current.aiInsightsData?.estimatedValue).toBe(420000);
+    expect(result.current.aiInsightsLoading).toBe(false);
+    expect(toastErrorMock).not.toHaveBeenCalled();
   });
 });

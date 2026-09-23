@@ -271,14 +271,14 @@ const listing = {
   noise_score: 20,
 };
 
-const renderPage = () =>
-  render(
+const page = () => (
     <MemoryRouter initialEntries={["/new-build/listing-1"]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
       <Routes>
         <Route path="/new-build/:id" element={<NewBuildDetail />} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+const renderPage = () => render(page());
 
 beforeEach(() => {
   [
@@ -944,6 +944,43 @@ describe("NewBuildDetail", () => {
     expect(await screen.findByText("AI Estimate")).toBeInTheDocument();
     expect(screen.getByText(/430\.000/)).toBeInTheDocument();
     expect(screen.getByText("Confidence: Unavailable")).toBeInTheDocument();
+  });
+
+  it("renders useful numberless new-build analysis instead of empty metric cards only", async () => {
+    const base = valuationV2();
+    useAuthMock.mockReturnValue({ user: { id: "buyer-1" }, profile: { display_name: "Buyer" } });
+    functionsInvokeMock.mockResolvedValue({ data: valuationV2({
+      status: "partial", estimatedValue: null, rangeLow: null, rangeHigh: null, rangeBasis: null,
+      pricePerSqmEstimate: null, confidence: null, confidenceLabel: null, summary: null,
+      keyFactors: [{ factor: "Project phase", impact: "neutral", note: "Delivery remains subject to the supplied timeline." }],
+      renovationPotential: "Inspect delivered finishes before changes.",
+      evidence: { ...base.evidence, fields: { ...base.evidence.fields, estimatedValue: "unavailable", rangeLow: "unavailable", rangeHigh: "unavailable", pricePerSqmEstimate: "unavailable", confidence: "unavailable" }, analysis: "ai_estimate" },
+    }), error: null });
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Load AI insights" }));
+    expect(await screen.findByText(/Delivery remains subject to the supplied timeline/)).toBeInTheDocument();
+    expect(screen.getByText(/Inspect delivered finishes before changes/)).toBeInTheDocument();
+  });
+
+  it("ignores an old actor's rejected valuation after the new actor has a result", async () => {
+    let rejectOld!: (reason?: unknown) => void;
+    let valuationCalls = 0;
+    functionsInvokeMock.mockImplementation(() => {
+      valuationCalls += 1;
+      if (valuationCalls === 1) return new Promise((_resolve, reject) => { rejectOld = reject; });
+      return Promise.resolve({ data: valuationV2({ estimatedValue: 510000 }), error: null });
+    });
+    useAuthMock.mockReturnValue({ user: { id: "buyer-1" }, profile: null });
+    const view = renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Load AI insights" }));
+    await waitFor(() => expect(valuationCalls).toBe(1));
+    useAuthMock.mockReturnValue({ user: { id: "buyer-2" }, profile: null });
+    view.rerender(page());
+    fireEvent.click(screen.getByRole("button", { name: "Load AI insights" }));
+    expect(await screen.findByText(/510\.000/)).toBeInTheDocument();
+    rejectOld(new Error("old actor provider timeout"));
+    await waitFor(() => expect(screen.queryByText(/old actor provider timeout/)).not.toBeInTheDocument());
+    expect(screen.getByText(/510\.000/)).toBeInTheDocument();
   });
 
   it("supports native sharing and exposes the developer phone only when supplied", async () => {

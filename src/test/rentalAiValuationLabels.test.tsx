@@ -78,6 +78,62 @@ describe("rental AI valuation labels", () => {
     expect(screen.queryByText("€0/mo")).not.toBeInTheDocument();
   });
 
+  it("uses the selected response unit and preserves a useful text-only report", () => {
+    const base = valuationV2();
+    const partial = valuationV2({
+      status: "partial", estimatedValue: null, rangeLow: null, rangeHigh: null, rangeBasis: null,
+      pricePerSqmEstimate: null, confidence: null, confidenceLabel: null, summary: null,
+      keyFactors: [{ factor: "Layout", impact: "positive", note: "Efficient circulation." }],
+      renovationPotential: "Survey the services before works.", taxSummary: "Only supplied tax context is included.",
+      evidence: { ...base.evidence, fields: { ...base.evidence.fields, estimatedValue: "unavailable", rangeLow: "unavailable", rangeHigh: "unavailable", pricePerSqmEstimate: "unavailable", confidence: "unavailable" }, analysis: "ai_estimate" },
+    });
+    renderWithProviders(
+      <PropertyAIInsightsSection user={rentalUser} isPro loading={false} listingType="rent" data={{
+        vsMarket: null, rentalYield: null, estimatedValue: null, marketComparison: null,
+        confidenceLabel: null, estimateSource: null, estimateUnit: null, valuation: partial,
+      }} />,
+    );
+    expect(screen.getByText(/Efficient circulation/)).toBeInTheDocument();
+    expect(screen.getByText(/Survey the services before works/)).toBeInTheDocument();
+    expect(screen.getByText(/Only supplied tax context/)).toBeInTheDocument();
+  });
+
+  it("renders clean auction AI and separate OS auction quantities with the selected range", () => {
+    const auction = valuationV2({
+      transaction: "auction", valueUnit: "EUR", estimateBasis: "os_auction_model", estimatedValue: 250000,
+      auctionAdjustedValue: 400000, rangeLow: 380000, rangeHigh: 420000, rangeBasis: "auctionAdjustedValue",
+      providerPrediction: { value: 250000, field: "propertyPredictedPrice", model: "auction", unit: "EUR" },
+      evidence: { ...valuationV2().evidence, fields: { ...valuationV2().evidence.fields, estimatedValue: "os_prediction", auctionAdjustedValue: "ai_estimate", rangeLow: "ai_estimate", rangeHigh: "ai_estimate" } },
+    });
+    renderWithProviders(
+      <PropertyAIInsightsSection user={rentalUser} isPro loading={false} listingType="auction" data={{
+        vsMarket: null, rentalYield: null, estimatedValue: 400000, marketComparison: null,
+        confidenceLabel: "High", estimateSource: "ai_estimate", estimateUnit: "EUR", valuation: auction,
+      }} />,
+    );
+    expect(screen.getByText(/clear-title assumption/i)).toBeInTheDocument();
+    expect(screen.getByText(/€380.*€420/)).toBeInTheDocument();
+    expect(screen.getByText("Separate OS auction-model estimate:").closest("p")).toHaveTextContent(/€250[,.]000.*not clean-market/i);
+  });
+
+  it("renders an unknown-period OS lease observation without monthly labelling", () => {
+    const base = valuationV2();
+    const lease = valuationV2({
+      status: "partial", transaction: "rent", valueUnit: "EUR/month", estimateBasis: "monthly_rent",
+      providerPrediction: { value: 1800, field: "propertyPredictedLeasePrice", model: "market", unit: null },
+      estimatedValue: null, rangeLow: null, rangeHigh: null, rangeBasis: null, pricePerSqmEstimate: null,
+      evidence: { ...base.evidence, fields: { ...base.evidence.fields, estimatedValue: "unavailable", rangeLow: "unavailable", rangeHigh: "unavailable", pricePerSqmEstimate: "unavailable" } },
+    });
+    renderWithProviders(
+      <PropertyAIInsightsSection user={rentalUser} isPro loading={false} listingType="rent" data={{
+        vsMarket: null, rentalYield: null, estimatedValue: null, marketComparison: null,
+        confidenceLabel: null, estimateSource: null, estimateUnit: null, valuation: lease,
+      }} />,
+    );
+    expect(screen.getByText("Rental model observation:").closest("p")).toHaveTextContent(/€1[,.]800.*period unavailable/i);
+    expect(document.body.textContent).not.toMatch(/1[.,]800\/mo/);
+  });
+
   it("renders the detailed valuation result as monthly rent", async () => {
     invokeAuthenticatedFunctionMock.mockResolvedValueOnce({
       error: null,
