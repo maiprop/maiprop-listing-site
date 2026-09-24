@@ -301,7 +301,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
       setEntries(mapped);
     } catch (_err: unknown) {
       if (requestId !== requestIdRef.current) return;
-      setLoadError("Unable to load proof-of-funds submissions. Please try again.");
+      setLoadError("Failed to load proof-of-funds submissions. Please try again.");
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
