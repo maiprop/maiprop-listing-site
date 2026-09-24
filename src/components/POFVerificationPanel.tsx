@@ -4,10 +4,10 @@
  * - Fetches from `open_house_registrations` where proof_of_funds_url is not null
  * - Groups by: Unreviewed / Verified / Rejected
  * - Stats: total docs, total verified, total verified capital
- * - Falls back to 3 mock entries when no real data
+ * - Keeps successful empty responses and load failures explicit
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Wallet,
   CheckCircle2,
@@ -36,9 +36,9 @@ type PofStatus = "unreviewed" | "verified" | "rejected";
 interface PofEntry {
   id: string;
   investor_name: string;
-  proof_amount: number;
-  proof_of_funds_url: string;
-  uploaded_at: string;
+  proof_amount: number | null;
+  proof_of_funds_url: string | null;
+  uploaded_at: string | null;
   listing_id: string;
   status: PofStatus;
   rejection_reason?: string;
@@ -67,7 +67,8 @@ interface PofRowFromDb {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtEur(n: number): string {
+function fmtEur(n: number | null): string {
+  if (n == null || !Number.isFinite(n)) return "—";
   return new Intl.NumberFormat("en-EU", {
     style: "currency",
     currency: "EUR",
@@ -186,9 +187,11 @@ function PofRow({ entry, onViewDoc, onVerify, onReject }: PofRowProps) {
         <p className="font-semibold text-foreground text-sm">{entry.investor_name}</p>
         <div className="flex flex-wrap gap-2 mt-0.5 text-xs text-muted-foreground">
           <span className="flex items-center gap-0.5">
-            <Euro className="w-3 h-3" /> {fmtEur(entry.proof_amount)}
+            <Euro className="w-3 h-3" /> {entry.proof_amount == null ? "Amount unavailable" : fmtEur(entry.proof_amount)}
           </span>
-          <span>Uploaded {fmtDate(entry.uploaded_at)}</span>
+          <span>
+            Registration date {entry.uploaded_at ? fmtDate(entry.uploaded_at) : "unavailable"}
+          </span>
         </div>
         {rejectionReason && (
           <p className="text-xs text-red-500 mt-0.5 italic">Reason: &ldquo;{rejectionReason}&rdquo;</p>
@@ -196,19 +199,19 @@ function PofRow({ entry, onViewDoc, onVerify, onReject }: PofRowProps) {
       </div>
 
       {/* Document link */}
-      {entry.proof_of_funds_url && entry.proof_of_funds_url !== "#" ? (
+      {entry.proof_of_funds_url && entry.proof_of_funds_url.trim() !== "#" ? (
         <Button
           size="sm"
           variant="outline"
           className="h-7 gap-1 shrink-0"
-          onClick={() => onViewDoc(entry.proof_of_funds_url)}
+          onClick={() => onViewDoc(entry.proof_of_funds_url!)}
         >
           <ExternalLink className="w-3 h-3" /> View Doc
         </Button>
       ) : (
-        <Button size="sm" variant="outline" className="h-7 gap-1 shrink-0" disabled>
-          <AlertCircle className="w-3 h-3" /> Demo Doc
-        </Button>
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0" role="status">
+          <AlertCircle className="w-3 h-3" /> Document unavailable
+        </span>
       )}
 
       {/* Status badge */}
@@ -249,10 +252,14 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
   const [entries, setEntries] = useState<PofEntry[]>([]);
   const [tab, setTab] = useState<TabKey>("unreviewed");
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
-  async function load(): Promise<void> {
+  const load = useCallback(async (): Promise<void> => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
+    setLoadError(null);
     try {
       let query = supabase
         .from("open_house_registrations")
@@ -273,33 +280,37 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
       // pof_verified_status). PofRowFromDb mirrors the runtime shape.
       const rows = (data ?? []) as unknown as PofRowFromDb[];
 
-      if (rows.length > 0) {
-        const mapped: PofEntry[] = rows.map((r) => {
-          const status: PofStatus = r.pof_verified_status ?? "unreviewed";
+      if (requestId !== requestIdRef.current) return;
+      const mapped: PofEntry[] = rows.map((r) => {
+        const status: PofStatus = r.pof_verified_status ?? "unreviewed";
 
-          return {
-            id: r.id,
-            investor_name: `Investor ${r.requester_id.slice(0, 6)}`,
-            proof_amount: r.proof_amount ?? 0,
-            proof_of_funds_url: r.proof_of_funds_url ?? "",
-            uploaded_at: r.created_at ?? new Date().toISOString(),
-            listing_id: r.listing_id,
-            status,
-            rejection_reason: r.rejection_reason ?? undefined,
-            pof_rejection_reason: r.pof_rejection_reason ?? undefined,
-          };
-        });
-        setEntries(mapped);
-      }
+        return {
+          id: r.id,
+          investor_name: `Investor ${r.requester_id.slice(0, 6)}`,
+          proof_amount: r.proof_amount,
+          proof_of_funds_url: r.proof_of_funds_url,
+          uploaded_at: r.created_at,
+          listing_id: r.listing_id,
+          status,
+          rejection_reason: r.rejection_reason ?? undefined,
+          pof_rejection_reason: r.pof_rejection_reason ?? undefined,
+        };
+      });
+      setEntries(mapped);
     } catch (_err: unknown) {
-      // leave list empty on error
+      if (requestId !== requestIdRef.current) return;
+      setLoadError("Unable to load proof-of-funds submissions. Please try again.");
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }
+  }, [dealId]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void load(); }, [dealId]);
+  useEffect(() => {
+    void load();
+    return () => {
+      requestIdRef.current += 1;
+    };
+  }, [load]);
 
   async function handleVerify(id: string): Promise<void> {
     const entry = entries.find((e) => e.id === id);
@@ -311,11 +322,13 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
         { id, updates: { pof_verified_status: "verified", pof_rejection_reason: null } },
         "POF verification",
       );
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("open_house_registrations")
         .update(payload.updates as never)
-        .eq("id", payload.id);
-      if (error) {
+        .eq("id", payload.id)
+        .select("id")
+        .maybeSingle();
+      if (error || !updated) {
         toast.error("Failed to verify. Please try again.");
         return;
       }
@@ -344,11 +357,13 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
         },
         "POF rejection",
       );
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("open_house_registrations")
         .update(payload.updates as never)
-        .eq("id", payload.id);
-      if (error) {
+        .eq("id", payload.id)
+        .select("id")
+        .maybeSingle();
+      if (error || !updated) {
         toast.error("Failed to reject. Please try again.");
         return;
       }
@@ -380,9 +395,10 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
     rejected: entries.filter((e) => e.status === "rejected").length,
   };
 
-  const totalCapital = entries
-    .filter((e) => e.status === "verified")
-    .reduce((sum, e) => sum + e.proof_amount, 0);
+  const verifiedEntries = entries.filter((e) => e.status === "verified");
+  const totalCapital = verifiedEntries
+    .reduce((sum, e) => sum + (e.proof_amount ?? 0), 0);
+  const hasUnknownVerifiedAmount = verifiedEntries.some((e) => e.proof_amount == null);
 
   const filtered = entries.filter((e) => e.status === tab);
 
@@ -420,7 +436,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
           </div>
           <p className="text-2xl font-bold text-primary">{fmtEur(totalCapital)}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Verified investor funds
+            {hasUnknownVerifiedAmount ? "Known capital subtotal — some amounts unavailable" : "Verified investor funds"}
           </p>
         </div>
       </div>
@@ -477,7 +493,15 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
         </div>
 
         {/* Rows */}
-        {loading ? (
+        {loadError ? (
+          <div className="py-10 text-center" role="alert">
+            <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
+            <p className="text-sm text-destructive">{loadError}</p>
+            <Button size="sm" variant="outline" className="mt-3 gap-1.5" onClick={load} disabled={loading}>
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Retry
+            </Button>
+          </div>
+        ) : loading ? (
           <div>
             {[0, 1, 2].map((i) => (
               <div key={i} className="px-4 py-4 flex items-center gap-3 border-b border-border animate-pulse">

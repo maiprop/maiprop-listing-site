@@ -379,3 +379,13 @@ The later local actual-role INSERT RETURNING and own-row SELECT probe exposed a 
 - [ ] Keep a selected forward-only upgrade and exact deployed helper/body compatibility gate; no provider call, production parity claim, historical usage rewrite or migration backlog.
 
 Execute Tasks 22/23 after Task 21 and Task 24 after Task 23, all before D0/final coverage. Their focused proofs supplement D1; do not rerun old baselines or count historical source text as coverage. Final all-source and selected-upgrade evidence still bind the complete current candidate. These remain planned work, not completed repairs.
+
+### Task 25 — Open Houses viewing creation — preserve private-listing eligibility
+
+**State:** adopted, implementation pending. **Order:** after Task 24 and before selected Task 7 capability work and D0/final coverage. Binding SDD brief: `task-25-brief.md`.
+
+The executed local characterization found an eligible authenticated viewing request failing with SQLSTATE `42501` because `viewings_insert` evaluates a raw `listings` subquery after raw listing `id`/`owner_id` access was intentionally revoked. Add one forward migration with a narrow SQL `SECURITY DEFINER` helper `private.can_request_viewing_for_listing(uuid, uuid)`, empty `search_path`, authenticated execution only, exact actor/listing/expected-owner checks, and the existing active/non-off-market, actual-owner, or organization `listing:view` visibility expression. Return false for NULL, missing, or mismatched inputs.
+
+Keep the policy's existing admin/self/pending terms, command/role/permissive mode, every other viewing policy and grant, quotas, transitions, reference reads, and downstream warning behavior. Do not restore raw listing privileges, reuse an unrelated ownership helper, broaden general administration, change the frontend transport, or claim coupled viewing operations are broken without separate evidence. Guard the complete known policy state and relevant listing visibility policy with NULL-safe drift checks; reject unknown overlap or helper collisions atomically. Acceptance requires actual-role valid-create RED/GREEN, owner/visibility/denial matrix, unchanged raw-listing privacy, admin branch without general read expansion, quota/transition preservation, source/captured upgrade, drift rollback, zero residue, and local PostgREST proof before any API compatibility claim.
+
+Task25 is a forward-only local repair plan. It does not authorize deployment, provider access, customer writes, migration deletion, or a coverage claim; final whole-project coverage and release gates remain separate.

@@ -76,6 +76,12 @@ These findings extend the local remediation scope. They do not rewrite the dated
 
 Production 17.6/deployed routine and grant equivalence remains unverified. D0's separate historical managed-default bootstrap limitation remains open; none of these demonstrated findings is repaired by adding broad local grants. The Task 23 admin POF prerequisite was subsequently executed: authoritative authenticated admin and outsider panel-shaped SELECT/UPDATE each raise 42501 on listings, the entire registration remains unchanged, and the fixture rolls back with 0 residue. `task-23-admin-pof-probe.md` binds source/ACLs and preserves the first diagnostic-only failure. This expands the same private-listing workflow finding, not a separate production defect.
 
+## Additional executed source finding — 24 September 2026
+
+The current Open Houses viewing-create path was reproduced once in a disposable PostgreSQL 16.15 fixture with an eligible authenticated free buyer, an active owned listing, an unused allowance, normal action triggers, and the existing client insert/return-row shape. The insert failed with SQLSTATE `42501` (`permission denied for table listings`) because the effective `viewings_insert` policy still reads raw listing columns while the final source explicitly revokes raw listing `id`/`owner_id` access. Viewings INSERT/SELECT rights existed; no viewing, lead, or notification row was created, and rollback left zero fixture users/profiles/listings/viewings/leads/notifications. This is local source evidence, not hosted HTTP or production parity, and no read/update/cancel/complete operation was classified as broken. Evidence is preserved in `task-13-d6-viewing-create-probe.md` and its raw artifacts.
+
+The adopted action is Task 25: replace only that denied policy subquery with a narrow authenticated `private.can_request_viewing_for_listing(uuid,uuid)` predicate that preserves exact owner/listing matching and the existing active/non-off-market, owner, or organization `listing:view` visibility terms. Preserve raw-listing privacy, all other viewing policies/grants, quotas, transitions, references, and downstream behavior. Task25 remains implementation-pending and requires independent actual-role, drift, rollback, and local HTTP proof before release selection.
+
 ## Limits and decisions
 
 The metadata checks prove absence/presence and version differences; they do not prove a failed user journey for every undeployed feature. Items #5–10 are one compatibility program with separate capability groups, not six independently reproduced outages.

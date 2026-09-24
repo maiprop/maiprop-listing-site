@@ -41,7 +41,7 @@ type Row = {
  * Wires the load() query: SELECT ... .not(proof_of_funds_url is null)
  * .order(created_at desc) .limit(100) [.eq(listing_id, dealId)].
  */
-function withRows(rows: Row[]) {
+function withRows(rows: Row[] | (() => Row[])) {
   fromMock.mockImplementation(() => {
     const builder: Record<string, unknown> = {};
     builder.select = vi.fn().mockReturnValue(builder);
@@ -50,8 +50,9 @@ function withRows(rows: Row[]) {
     builder.limit = vi.fn().mockReturnValue(builder);
     builder.eq = vi.fn().mockReturnValue(builder);
     builder.update = vi.fn().mockReturnValue(builder);
+    builder.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "r-1" }, error: null });
     builder.then = (resolve: (v: { data: Row[]; error: null }) => unknown) =>
-      Promise.resolve(resolve({ data: rows, error: null }));
+      Promise.resolve(resolve({ data: typeof rows === "function" ? rows() : rows, error: null }));
     return builder;
   });
 }
@@ -101,10 +102,11 @@ describe("POFVerificationPanel", () => {
     expect(window.open).toHaveBeenCalledWith("https://signed.example/pof.pdf", "_blank", "noopener,noreferrer");
   });
 
-  it("falls back to 'Demo Doc' (disabled) when the URL is missing", async () => {
+  it("shows factual unavailable copy when the URL is missing", async () => {
     withRows([baseRow({ proof_of_funds_url: "#" })]);
     render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByText(/Demo Doc/i));
+    await waitFor(() => screen.getByText(/Document unavailable/i));
+    expect(screen.queryByText(/Demo Doc/i)).toBeNull();
   });
 
   it("verifies an unreviewed entry and toasts success", async () => {
@@ -117,7 +119,13 @@ describe("POFVerificationPanel", () => {
       b.limit = vi.fn().mockReturnValue(b);
       b.update = vi.fn().mockImplementation(() => {
         updateCalls++;
-        return { eq: vi.fn().mockResolvedValue({ error: null }) };
+        return {
+          eq: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "r-1" }, error: null }),
+            }),
+          }),
+        };
       });
       b.eq = vi.fn().mockReturnValue(b);
       b.then = (resolve: (v: { data: Row[]; error: null }) => unknown) =>
@@ -139,7 +147,11 @@ describe("POFVerificationPanel", () => {
       b.order = vi.fn().mockReturnValue(b);
       b.limit = vi.fn().mockReturnValue(b);
       b.update = vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: new Error("rls") }),
+        eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: new Error("rls") }),
+          }),
+        }),
       });
       b.eq = vi.fn().mockReturnValue(b);
       b.then = (resolve: (v: { data: Row[]; error: null }) => unknown) =>
@@ -162,7 +174,13 @@ describe("POFVerificationPanel", () => {
       b.limit = vi.fn().mockReturnValue(b);
       b.update = vi.fn().mockImplementation(() => {
         updates++;
-        return { eq: vi.fn().mockResolvedValue({ error: null }) };
+        return {
+          eq: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "r-1" }, error: null }),
+            }),
+          }),
+        };
       });
       b.eq = vi.fn().mockReturnValue(b);
       b.then = (resolve: (v: { data: Row[]; error: null }) => unknown) =>
@@ -238,7 +256,8 @@ describe("POFVerificationPanel", () => {
     expect(screen.getByText(/stale/)).toBeInTheDocument();
   });
 
-  it("swallows query errors silently and leaves the list empty", async () => {
+  it("shows a load error and supports retry", async () => {
+    let attempts = 0;
     fromMock.mockImplementation(() => {
       const b: Record<string, unknown> = {};
       b.select = vi.fn().mockReturnValue(b);
@@ -247,11 +266,95 @@ describe("POFVerificationPanel", () => {
       b.limit = vi.fn().mockReturnValue(b);
       b.eq = vi.fn().mockReturnValue(b);
       b.update = vi.fn().mockReturnValue(b);
-      b.then = (resolve: (v: { data: null; error: Error }) => unknown) =>
-        Promise.resolve(resolve({ data: null, error: new Error("rls") }));
+      b.then = (resolve: (v: { data: Row[] | null; error: Error | null }) => unknown) => {
+        attempts += 1;
+        return Promise.resolve(resolve(
+          attempts === 1
+            ? { data: null, error: new Error("rls") }
+            : { data: [baseRow()], error: null },
+        ));
+      };
       return b;
     });
     render(<POFVerificationPanel />);
+    await waitFor(() => screen.getByRole("alert"));
+    expect(screen.queryByText(/No\s+unreviewed/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Retry$/i }));
+    await waitFor(() => screen.getByText(/Investor user-a/));
+  });
+
+  it("clears stale rows on a successful empty refresh", async () => {
+    let rows: Row[] = [baseRow()];
+    withRows(() => rows);
+    render(<POFVerificationPanel />);
+    await waitFor(() => screen.getByText(/Investor user-a/));
+    rows = [];
+    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/i }));
     await waitFor(() => screen.getByText(/No\s+unreviewed/i));
+    expect(screen.queryByText(/Investor user-a/)).toBeNull();
+  });
+
+  it("keeps the newest deal result when an older request resolves late", async () => {
+    let resolveFirst: ((value: { data: Row[]; error: null }) => void) | undefined;
+    let resolveSecond: ((value: { data: Row[]; error: null }) => void) | undefined;
+    let calls = 0;
+    fromMock.mockImplementation(() => {
+      const b: Record<string, unknown> = {};
+      b.select = vi.fn().mockReturnValue(b);
+      b.not = vi.fn().mockReturnValue(b);
+      b.order = vi.fn().mockReturnValue(b);
+      b.limit = vi.fn().mockReturnValue(b);
+      b.eq = vi.fn().mockReturnValue(b);
+      b.then = (resolve: (value: { data: Row[]; error: null }) => void) => {
+        calls += 1;
+        if (calls === 1) resolveFirst = resolve;
+        else resolveSecond = resolve;
+        return new Promise<void>(() => undefined);
+      };
+      return b;
+    });
+    const view = render(<POFVerificationPanel dealId="deal-a" />);
+    view.rerender(<POFVerificationPanel dealId="deal-b" />);
+    await waitFor(() => expect(calls).toBe(2));
+    resolveSecond?.({ data: [baseRow({ id: "new", requester_id: "new-user" })], error: null });
+    await waitFor(() => screen.getByText(/Investor new-u/));
+    resolveFirst?.({ data: [baseRow({ id: "old", requester_id: "old-user" })], error: null });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText(/Investor old-u/)).toBeNull();
+  });
+
+  it("renders nullable amount, registration date, and document as unavailable", async () => {
+    withRows([baseRow({ pof_verified_status: "verified", proof_amount: null, created_at: null, proof_of_funds_url: null })]);
+    render(<POFVerificationPanel />);
+    await waitFor(() => screen.getByRole("button", { name: /Verified/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Verified/i }));
+    expect(screen.getByText(/Amount unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/Registration date unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/Document unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Uploaded/i)).toBeNull();
+    expect(screen.queryByText(/Demo Doc/i)).toBeNull();
+  });
+
+  it("does not confirm a mutation when the authorized row is gone", async () => {
+    fromMock.mockImplementation(() => {
+      const b: Record<string, unknown> = {};
+      b.select = vi.fn().mockReturnValue(b);
+      b.not = vi.fn().mockReturnValue(b);
+      b.order = vi.fn().mockReturnValue(b);
+      b.limit = vi.fn().mockReturnValue(b);
+      b.eq = vi.fn().mockReturnValue(b);
+      b.then = (resolve: (v: { data: Row[]; error: null }) => unknown) => Promise.resolve(resolve({ data: [baseRow()], error: null }));
+      b.update = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }),
+        }),
+      });
+      return b;
+    });
+    render(<POFVerificationPanel />);
+    await waitFor(() => screen.getByText(/Investor user-a/));
+    fireEvent.click(screen.getByRole("button", { name: /^Verify$/i }));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Failed to verify/i)));
+    expect(screen.getByRole("button", { name: /^Verify$/i })).toBeInTheDocument();
   });
 });
