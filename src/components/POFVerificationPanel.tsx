@@ -255,6 +255,8 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const initialLoadDealRef = useRef<string | undefined>(undefined);
+  const initialLoadStartedRef = useRef(false);
 
   const load = useCallback(async (): Promise<void> => {
     const requestId = ++requestIdRef.current;
@@ -306,11 +308,13 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
   }, [dealId]);
 
   useEffect(() => {
+    // React StrictMode replays effects during development. Keep one initial
+    // request per mounted deal; explicit Refresh/Retry still call load().
+    if (initialLoadStartedRef.current && initialLoadDealRef.current === dealId) return;
+    initialLoadStartedRef.current = true;
+    initialLoadDealRef.current = dealId;
     void load();
-    return () => {
-      requestIdRef.current += 1;
-    };
-  }, [load]);
+  }, [dealId, load]);
 
   async function handleVerify(id: string): Promise<void> {
     const entry = entries.find((e) => e.id === id);
