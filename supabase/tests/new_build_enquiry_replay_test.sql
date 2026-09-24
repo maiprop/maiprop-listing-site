@@ -1,6 +1,6 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(42);
+SELECT plan(45);
 
 SELECT is(
   (SELECT prosecdef FROM pg_proc WHERE oid = 'public.submit_new_build_enquiry(uuid,uuid,uuid,text,text,text,text)'::regprocedure),
@@ -43,15 +43,15 @@ INSERT INTO public.organization_memberships (organization_id, user_id, role, sta
 VALUES ('e1820000-0000-4000-8000-000000000002', 'e1810000-0000-4000-8000-000000000003', 'admin', 'active');
 INSERT INTO public.listings (id, owner_id, title, city, price, sqm, property_type, listing_type, status, project_id)
 VALUES ('e1830000-0000-4000-8000-000000000001', 'e1810000-0000-4000-8000-000000000001', 'Task18 private listing', 'Athens', 420000, 84, 'apartment', 'new_build', 'paused', 'e1820000-0000-4000-8000-000000000001');
-INSERT INTO public.listings (id, owner_id, title, city, price, sqm, property_type, listing_type, status, project_id, organization_id) VALUES
-  ('e1830000-0000-4000-8000-000000000002', 'e1810000-0000-4000-8000-000000000001', 'Task18 off-market listing', 'Athens', 421000, 84, 'apartment', 'new_build', 'sold', NULL, NULL),
-  ('e1830000-0000-4000-8000-000000000003', 'e1810000-0000-4000-8000-000000000001', 'Task18 type-changed listing', 'Athens', 422000, 84, 'apartment', 'sale', 'active', NULL, NULL),
-  ('e1830000-0000-4000-8000-000000000004', 'e1810000-0000-4000-8000-000000000001', 'Task18 org listing', 'Athens', 423000, 84, 'apartment', 'new_build', 'paused', NULL, 'e1820000-0000-4000-8000-000000000002');
+INSERT INTO public.listings (id, owner_id, title, city, price, sqm, property_type, listing_type, status, project_id, organization_id, is_off_market) VALUES
+  ('e1830000-0000-4000-8000-000000000002', 'e1810000-0000-4000-8000-000000000001', 'Task18 off-market listing', 'Athens', 421000, 84, 'apartment', 'new_build', 'sold', NULL, NULL, true),
+  ('e1830000-0000-4000-8000-000000000003', 'e1810000-0000-4000-8000-000000000001', 'Task18 type-changed listing', 'Athens', 422000, 84, 'apartment', 'sale', 'active', NULL, NULL, false),
+  ('e1830000-0000-4000-8000-000000000004', 'e1810000-0000-4000-8000-000000000001', 'Task18 org listing', 'Athens', 423000, 84, 'apartment', 'new_build', 'paused', NULL, 'e1820000-0000-4000-8000-000000000002', false);
 SET LOCAL session_replication_role = origin;
+SELECT is((SELECT is_off_market FROM public.listings WHERE id='e1830000-0000-4000-8000-000000000002'), true, 'off-market owner fixture sets the explicit privacy flag');
 
 SELECT set_config('request.jwt.claims','{}',true);
 SET LOCAL ROLE authenticated;
-SELECT is((SELECT count(*)::integer FROM public.new_building_leads), 0, 'authenticated role with a missing subject reads no enquiries');
 SELECT is(private.current_user_owns_listing('e1830000-0000-4000-8000-000000000001'), false, 'NULL current actor never owns a listing');
 RESET ROLE;
 
@@ -73,6 +73,12 @@ SELECT throws_ok(
   $$SELECT * FROM public.submit_new_build_enquiry('e1840000-0000-4000-8000-000000000002','e1810000-0000-4000-8000-000000000003','e1830000-0000-4000-8000-000000000001','buyer@example.com','Buyer One',NULL,'Send plans')$$,
   '42501', 'enquiry_actor_mismatch', 'expected actor cannot impersonate another buyer'
 );
+SELECT is((SELECT count(*)::integer FROM public.new_building_leads WHERE user_id='e1810000-0000-4000-8000-000000000002' AND submission_key='e1840000-0000-4000-8000-000000000001'), 1, 'authenticated buyer can read the saved enquiry before the missing-subject control');
+RESET ROLE;
+
+SELECT set_config('request.jwt.claims','{}',true);
+SET LOCAL ROLE authenticated;
+SELECT is((SELECT count(*)::integer FROM public.new_building_leads WHERE user_id='e1810000-0000-4000-8000-000000000002' AND submission_key='e1840000-0000-4000-8000-000000000001'), 0, 'authenticated role with a missing subject cannot read the saved buyer enquiry');
 RESET ROLE;
 
 SELECT is((SELECT count(*)::integer FROM public.new_building_leads WHERE submission_key='e1840000-0000-4000-8000-000000000001'), 1, 'first submit and replay persist one raw enquiry');
@@ -80,6 +86,10 @@ SELECT is((SELECT count(*)::integer FROM public.leads WHERE listing_id='e1830000
 SELECT is((SELECT count(*)::integer FROM public.project_leads WHERE project_id='e1820000-0000-4000-8000-000000000001' AND source='project_inquiry'), 1, 'replay retains one project lead');
 SELECT is((SELECT count(*)::integer FROM public.notifications WHERE user_id='e1810000-0000-4000-8000-000000000001' AND type='new_interest'), 1, 'replay emits one owner notification');
 SELECT is((SELECT email FROM public.new_building_leads WHERE submission_key='e1840000-0000-4000-8000-000000000001'), 'buyer@example.com', 'server stores canonical email');
+
+SELECT set_config('request.jwt.claims','{"sub":"e1810000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+SELECT is(current_user, 'authenticated', 'receipt and independent conflicts execute as the authenticated buyer');
 SELECT results_eq(
   $$SELECT id, new_building_id, created_at FROM public.submit_new_build_enquiry('e1840000-0000-4000-8000-000000000001','e1810000-0000-4000-8000-000000000002','e1830000-0000-4000-8000-000000000001','buyer@example.com','Buyer One','555-1','Send plans')$$,
   $$SELECT id, new_building_id, created_at FROM public.new_building_leads WHERE user_id='e1810000-0000-4000-8000-000000000002' AND submission_key='e1840000-0000-4000-8000-000000000001'$$,
@@ -101,6 +111,7 @@ SELECT throws_ok(
   $$SELECT * FROM public.submit_new_build_enquiry('e1840000-0000-4000-8000-000000000001','e1810000-0000-4000-8000-000000000002','e1830000-0000-4000-8000-000000000002','buyer@example.com','Buyer One','555-1','Send plans')$$,
   'PT409', 'enquiry_submission_payload_conflict', 'same key rejects an independently changed listing'
 );
+RESET ROLE;
 
 SELECT set_config('request.jwt.claims','{"sub":"e1810000-0000-4000-8000-000000000001","role":"authenticated"}',true);
 SET LOCAL ROLE authenticated;
@@ -108,7 +119,7 @@ SELECT is((SELECT count(*)::integer FROM public.new_building_leads WHERE submiss
 SELECT is(private.current_user_owns_listing('e1830000-0000-4000-8000-000000000001'), true, 'exact owner predicate accepts a paused listing');
 SELECT is(private.current_user_owns_listing(NULL), false, 'exact owner predicate rejects a NULL listing id');
 SELECT is(private.current_user_owns_listing('e1830000-0000-4000-8000-000000000099'), false, 'exact owner predicate rejects an absent listing id');
-SELECT is(private.current_user_owns_listing('e1830000-0000-4000-8000-000000000002'), true, 'exact owner predicate ignores off-market status');
+SELECT is(private.current_user_owns_listing('e1830000-0000-4000-8000-000000000002'), true, 'exact owner predicate ignores sold status and the explicit off-market flag');
 SELECT is(private.current_user_owns_listing('e1830000-0000-4000-8000-000000000003'), true, 'exact owner predicate ignores listing type');
 SELECT is(private.current_user_owns_listing('e1830000-0000-4000-8000-000000000004'), true, 'exact owner predicate accepts the actual owner of an organization listing');
 SELECT throws_ok(

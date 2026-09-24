@@ -46,7 +46,7 @@ SELECT ok(
     )
     ELSE false
   END,
-  'the injected unsupported policy drift remains byte-for-byte in place'
+  'the injected unsupported predicate or policy remains present'
 );
 SELECT is(
   (SELECT count(*)::integer FROM pg_trigger WHERE tgrelid='public.new_building_leads'::regclass AND tgname='new_building_leads_preserve_submission_identity'),

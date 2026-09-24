@@ -190,3 +190,14 @@ git diff --check
 TypeScript exited `0`; scoped ESLint exited `0` with no findings. `git diff --check` exited `0`. The repository-wide lint hook was not rerun because the recorded Task 9 residual benchmark artifact is unchanged and outside this task; the scoped commit uses the previously authorized hook bypass only after these focused checks.
 
 No PostgREST/schema-cache, PostgreSQL 17.6, provider, production/customer, browser-after, deployment, GitHub, build, full database suite or coverage claim is added here. All eight `maiprop_t18fix_*` disposable databases were removed after verification; a final catalog query returned zero matching databases. The ignored local raw logs remain at the paths above for scoped review.
+
+## Fix round 2 — 24 September 2026
+
+The residual I5 proof-context finding from the independent fix1 review was closed with test-only corrections. The replay fixture now sets and asserts `is_off_market=true`; its missing-subject SELECT control follows a real saved buyer enquiry and is paired with an authenticated positive read; the exact returned receipt tuple and independent email/name/phone/listing conflicts run under `SET LOCAL ROLE authenticated` with the buyer subject. The drift finalizer wording was narrowed from “byte-for-byte” to the predicate/policy presence it actually checks.
+
+The amended replay ran separately on the source and captured-policy fix-round fixtures:
+
+- source: pgTAP `1..45`, `45/45`, exit `0`, transaction rolled back;
+- captured: pgTAP `1..45`, `45/45`, exit `0`, transaction rolled back.
+
+The earlier fix1 `42/42` totals remain historical and are not relabelled. This round changed no runtime code, migration, policy, grant, frontend, or RPC behavior and did not repeat unchanged UI, browser, race, compatibility, HTTP, provider, deployment, GitHub, or coverage checks.
