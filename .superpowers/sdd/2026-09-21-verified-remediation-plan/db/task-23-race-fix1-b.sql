@@ -1,0 +1,3 @@
+\set VERBOSITY verbose
+SET application_name='task23_fix1_accept_b'; BEGIN; SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='12s'; SELECT json_build_object('barrier','B_BACKEND_READY','pid',pg_backend_pid()); RESET ROLE; SELECT set_config('request.jwt.claim.sub','d1131001-0000-4000-8000-000000000001',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}',true); SET LOCAL ROLE authenticated;
+ SELECT public.accept_open_house_offer((SELECT id FROM public.open_house_offers WHERE listing_id='d1131002-0000-4000-8000-000000000001' AND bidder_id='d1131001-0000-4000-8000-000000000003')); COMMIT;

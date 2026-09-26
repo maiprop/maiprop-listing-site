@@ -1,0 +1,16 @@
+BEGIN
+SET
+DELETE 6
+DELETE 2
+DELETE 2
+DELETE 1
+DELETE 1
+DELETE 3
+DELETE 3
+COMMIT
+                              cleanup                              
+-------------------------------------------------------------------
+ {"users": 0, "offers": 0, "notifications": 0, "registrations": 0}
+(1 row)
+
+DO

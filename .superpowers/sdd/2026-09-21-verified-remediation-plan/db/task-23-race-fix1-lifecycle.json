@@ -1,0 +1,1829 @@
+[
+  {
+    "event": "A accepted and remains uncommitted",
+    "pid": 469,
+    "at": "2026-09-26T23:34:58.876Z"
+  },
+  {
+    "event": "B backend identified before observer",
+    "pid": 472,
+    "at": "2026-09-26T23:34:58.979Z"
+  },
+  {
+    "event": "B observed blocked by A; A still uncommitted",
+    "a_pid": 469,
+    "b_pid": 472,
+    "a_state": "idle in transaction",
+    "b_state": "active",
+    "wait_event_type": "Lock",
+    "wait_event": "advisory",
+    "blocking_pids": [
+      469
+    ],
+    "a_xact_start": "2026-09-27T02:34:59.48399+03:00",
+    "b_query_start": "2026-09-27T02:34:59.597007+03:00",
+    "observed_at": "2026-09-27T02:34:59.705927+03:00",
+    "locks": [
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "virtualxid",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "ExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "virtualxid",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "ExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "advisory",
+        "transactionid": null,
+        "classid": "0",
+        "objid": "1245462399",
+        "objsubid": 1,
+        "mode": "ExclusiveLock",
+        "granted": false
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "advisory",
+        "transactionid": null,
+        "classid": "0",
+        "objid": "1245462399",
+        "objsubid": 1,
+        "mode": "ExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "transactionid",
+        "transactionid": "11268",
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "ExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 472,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "AccessShareLock",
+        "granted": true
+      },
+      {
+        "pid": 469,
+        "locktype": "relation",
+        "transactionid": null,
+        "classid": null,
+        "objid": null,
+        "objsubid": null,
+        "mode": "RowExclusiveLock",
+        "granted": true
+      }
+    ]
+  },
+  {
+    "event": "Observer passed; sending COMMIT to A",
+    "at": "2026-09-26T23:34:59.116Z"
+  },
+  {
+    "event": "Both sessions disconnected",
+    "aExit": 0,
+    "bExit": 3,
+    "at": "2026-09-26T23:34:59.131Z"
+  }
+]

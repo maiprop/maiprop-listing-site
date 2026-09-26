@@ -1,0 +1,14 @@
+{
+  "base": "a6e2f69324b89143eb2048cf27c494512a4f4810",
+  "node": "v20.20.2",
+  "sources": [
+    {
+      "path": ".superpowers/sdd/2026-09-21-verified-remediation-plan/task-23-race.mjs",
+      "sha256": "090c7de13e1f01be7fef03a9c7e0de716ad3b7377ff0b845d1f753125ff8fad4"
+    },
+    {
+      "path": "supabase/migrations/20260926224929_repair_open_house_listing_boundary.sql",
+      "sha256": "fbbe6ec765fa264c520f3c2740983addde41a4b39a0e49ae20dbac4d11dada93"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+SELECT current_database(),version(),md5(pg_get_functiondef('public.accept_open_house_offer(uuid)'::regprocedure)) AS accept_definition_md5;

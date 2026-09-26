@@ -1,0 +1,7 @@
+BEGIN; SET LOCAL session_replication_role=replica;
+ DELETE FROM public.notifications WHERE user_id::text LIKE 'd1131001-%';
+ DELETE FROM public.open_house_offers WHERE listing_id='d1131002-0000-4000-8000-000000000001'; DELETE FROM public.open_house_registrations WHERE listing_id='d1131002-0000-4000-8000-000000000001';
+ DELETE FROM public.open_house_settings WHERE listing_id='d1131002-0000-4000-8000-000000000001'; DELETE FROM public.listings WHERE id='d1131002-0000-4000-8000-000000000001';
+ DELETE FROM public.profiles WHERE user_id::text LIKE 'd1131001-%'; DELETE FROM auth.users WHERE id::text LIKE 'd1131001-%'; COMMIT;
+ SELECT jsonb_build_object('users',(SELECT count(*) FROM auth.users WHERE id::text LIKE 'd1131001-%'),'offers',(SELECT count(*) FROM public.open_house_offers WHERE listing_id='d1131002-0000-4000-8000-000000000001'),'registrations',(SELECT count(*) FROM public.open_house_registrations WHERE listing_id='d1131002-0000-4000-8000-000000000001'),'notifications',(SELECT count(*) FROM public.notifications WHERE user_id::text LIKE 'd1131001-%')) AS cleanup;
+ DO $$ BEGIN IF EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'd1131001-%') OR EXISTS(SELECT 1 FROM public.open_house_offers WHERE listing_id='d1131002-0000-4000-8000-000000000001') OR EXISTS(SELECT 1 FROM public.open_house_registrations WHERE listing_id='d1131002-0000-4000-8000-000000000001') OR EXISTS(SELECT 1 FROM public.notifications WHERE user_id::text LIKE 'd1131001-%') THEN RAISE EXCEPTION 'race_fixture_residue'; END IF; END $$;

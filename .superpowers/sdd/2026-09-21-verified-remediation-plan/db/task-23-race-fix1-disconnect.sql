@@ -1,0 +1,2 @@
+SELECT count(*) AS remaining_named_race_sessions FROM pg_stat_activity WHERE datname=current_database() AND application_name IN ('task23_fix1_accept_a','task23_fix1_accept_b');
+ DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND application_name IN ('task23_fix1_accept_a','task23_fix1_accept_b')) THEN RAISE EXCEPTION 'race_session_not_disconnected'; END IF; END $$;

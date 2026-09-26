@@ -1,0 +1,83 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+DO
+   current_database    |                                                                 version                                                                  | unix_socket 
+-----------------------+------------------------------------------------------------------------------------------------------------------------------------------+-------------
+ maiprop_t23_impl_0927 | PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit | t
+(1 row)
+
+SET
+INSERT 0 3
+INSERT 0 3
+SET
+ set_config |  set_config  |       set_config        
+------------+--------------+-------------------------
+            | service_role | {"role":"service_role"}
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+SET
+                  id                  | status  
+--------------------------------------+---------
+ 67e5e852-1500-4b32-893e-33878c432558 | pending
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ d494e9e0-5724-4619-b06c-fc3224864169 | pending
+(1 row)
+
+RESET
+              set_config              |  set_config   |                              set_config                               
+--------------------------------------+---------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | authenticated | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+UPDATE 2
+UPDATE 2
+UPDATE 1
+             requester_id             |  status  
+--------------------------------------+----------
+ d1131001-0000-4000-8000-000000000002 | attended
+ d1131001-0000-4000-8000-000000000003 | attended
+(2 rows)
+
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000002 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000002"}
+(1 row)
+
+SET
+                                                                         submit_open_house_offer                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (0199aa4d-fb1f-4a73-b081-8b05fa3c5af9,d1131002-0000-4000-8000-000000000001,d1131001-0000-4000-8000-000000000002,210000,EUR,,submitted,"2026-09-27 02:34:59.22468+03",,,)
+(1 row)
+
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000003 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000003"}
+(1 row)
+
+SET
+                                                                         submit_open_house_offer                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (649eb9a4-3b0b-45ca-8dc1-6874e8e9a4fe,d1131002-0000-4000-8000-000000000001,d1131001-0000-4000-8000-000000000003,220000,EUR,,submitted,"2026-09-27 02:34:59.22468+03",,,)
+(1 row)
+
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+SET
+UPDATE 1
+UPDATE 2
+COMMIT
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-race-fix1-setup.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 67e5e852-1500-4b32-893e-33878c432558.
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-race-fix1-setup.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration d494e9e0-5724-4619-b06c-fc3224864169.

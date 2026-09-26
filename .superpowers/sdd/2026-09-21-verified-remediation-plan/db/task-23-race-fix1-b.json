@@ -1,0 +1,6 @@
+{
+  "code": 3,
+  "processElapsedMs": 250,
+  "stdout": "SET\nBEGIN\nSET\nSET\n              json_build_object               \n----------------------------------------------\n {\"barrier\" : \"B_BACKEND_READY\", \"pid\" : 472}\n(1 row)\n\nRESET\n              set_config              |                              set_config                               \n--------------------------------------+-----------------------------------------------------------------------\n d1131001-0000-4000-8000-000000000001 | {\"role\":\"authenticated\",\"sub\":\"d1131001-0000-4000-8000-000000000001\"}\n(1 row)\n\nSET\n",
+  "stderr": "ERROR:  P0001: only_revealed_offers_can_be_accepted\nCONTEXT:  PL/pgSQL function public.accept_open_house_offer(uuid) line 41 at RAISE\nLOCATION:  exec_stmt_raise, pl_exec.c:3897\n"
+}

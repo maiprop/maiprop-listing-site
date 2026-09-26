@@ -1,0 +1,65 @@
+race-fix1-effective-definition 0    current_database    |                                                                 version                                                                  |      accept_definition_md5       
+-----------------------+------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------
+ maiprop_t23_impl_0927 | PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit | f612e7a40a1b24cc8a734ce94ca7152b
+(1 row)
+
+ 
+race-fix1-setup 0 bmitted,"2026-09-27 02:31:14.13308+03",,,)
+(1 row)
+
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000003 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000003"}
+(1 row)
+
+SET
+                                                                         submit_open_house_offer                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (144831f2-245a-4b83-8dbd-4a0a1257fade,d1131002-0000-4000-8000-000000000001,d1131001-0000-4000-8000-000000000003,220000,EUR,,submitted,"2026-09-27 02:31:14.13308+03",,,)
+(1 row)
+
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+SET
+UPDATE 1
+UPDATE 2
+COMMIT
+ psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-race-fix1-setup.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 33dc3578-38f6-4f75-a381-fc7c043bb73c.
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-race-fix1-setup.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 4adb0197-16aa-4b89-beba-53c0b5326642.
+
+race-fix1-blocking-observation 3 SET
+ psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-race-fix1-blocking-observation.sql:18: ERROR:  contender_advisory_wait_not_observed
+CONTEXT:  PL/pgSQL function inline_code_block line 14 at RAISE
+
+race-fix1-cleanup 0 BEGIN
+SET
+DELETE 6
+DELETE 2
+DELETE 2
+DELETE 1
+DELETE 1
+DELETE 3
+DELETE 3
+COMMIT
+                              cleanup                              
+-------------------------------------------------------------------
+ {"users": 0, "offers": 0, "notifications": 0, "registrations": 0}
+(1 row)
+
+DO
+ 
+file:///C:/Users/K%20R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/task-23-local.mjs:14
+ if(r.status!==0 || /not ok \d/.test(r.stdout)) throw Error(label+' failed');
+                                                      ^
+
+Error: race-fix1-blocking-observation failed
+    at sql (file:///C:/Users/K%20R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/task-23-local.mjs:14:55)
+    at file:///C:/Users/K%20R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/task-23-race.mjs:41:17
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+Node.js v20.20.2

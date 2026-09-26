@@ -1,0 +1,101 @@
+race-fix1-effective-definition 0    current_database    |                                                                 version                                                                  |      accept_definition_md5       
+-----------------------+------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------
+ maiprop_t23_impl_0927 | PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit | f612e7a40a1b24cc8a734ce94ca7152b
+(1 row)
+
+ 
+race-fix1-setup 0 bmitted,"2026-09-27 02:34:59.22468+03",,,)
+(1 row)
+
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000003 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000003"}
+(1 row)
+
+SET
+                                                                         submit_open_house_offer                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (649eb9a4-3b0b-45ca-8dc1-6874e8e9a4fe,d1131002-0000-4000-8000-000000000001,d1131001-0000-4000-8000-000000000003,220000,EUR,,submitted,"2026-09-27 02:34:59.22468+03",,,)
+(1 row)
+
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+SET
+UPDATE 1
+UPDATE 2
+COMMIT
+ psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-race-fix1-setup.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 67e5e852-1500-4b32-893e-33878c432558.
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-race-fix1-setup.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration d494e9e0-5724-4619-b06c-fc3224864169.
+
+race-fix1-blocking-observation 0 ktype" : "relation", "transactionid" : null, "classid" : null, "objid" : null, "objsubid" : null, "mode" : "AccessShareLock", "granted" : true}, {"pid" : 469, "locktype" : "relation", "transactionid" : null, "classid" : null, "objid" : null, "objsubid" : null, "mode" : "RowExclusiveLock", "granted" : true}, {"pid" : 469, "locktype" : "relation", "transactionid" : null, "classid" : null, "objid" : null, "objsubid" : null, "mode" : "RowExclusiveLock", "granted" : true}, {"pid" : 469, "locktype" : "relation", "transactionid" : null, "classid" : null, "objid" : null, "objsubid" : null, "mode" : "RowExclusiveLock", "granted" : true}, {"pid" : 472, "locktype" : "relation", "transactionid" : null, "classid" : null, "objid" : null, "objsubid" : null, "mode" : "AccessShareLock", "granted" : true}, {"pid" : 472, "locktype" : "relation", "transactionid" : null, "classid" : null, "objid" : null, "objsubid" : null, "mode" : "AccessShareLock", "granted" : true}, {"pid" : 469, "locktype" : "relation", "transactionid" : null, "classid" : null, "objid" : null, "objsubid" : null, "mode" : "AccessShareLock", "granted" : true}, {"pid" : 469, "locktype" : "relation", "transactionid" : null, "classid" : null, "objid" : null, "objsubid" : null, "mode" : "RowExclusiveLock", "granted" : true}]}
+(1 row)
+
+ 
+race-fix1-disconnect 0  remaining_named_race_sessions 
+-------------------------------
+                             0
+(1 row)
+
+DO
+ 
+race-fix1-state 0 BEGIN
+CREATE EXTENSION
+ plan 
+------
+ 1..5
+(1 row)
+
+                    is                     
+-------------------------------------------
+ ok 1 - one winner after competing accepts
+(1 row)
+
+                       is                       
+------------------------------------------------
+ ok 2 - one rejected rival, no partial mutation
+(1 row)
+
+                 is                 
+------------------------------------
+ ok 3 - listing paused consistently
+(1 row)
+
+               is               
+--------------------------------
+ ok 4 - host decisions complete
+(1 row)
+
+                       is                        
+-------------------------------------------------
+ ok 5 - one transition notification per decision
+(1 row)
+
+ finish 
+--------
+(0 rows)
+
+ROLLBACK
+ psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-race-fix1-state.sql:1: NOTICE:  extension "pgtap" already exists, skipping
+
+race-fix1-cleanup 0 BEGIN
+SET
+DELETE 6
+DELETE 2
+DELETE 2
+DELETE 1
+DELETE 1
+DELETE 3
+DELETE 3
+COMMIT
+                              cleanup                              
+-------------------------------------------------------------------
+ {"users": 0, "offers": 0, "notifications": 0, "registrations": 0}
+(1 row)
+
+DO
+ 
