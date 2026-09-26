@@ -1,0 +1,366 @@
+{
+  "policies": [
+    {
+      "cmd": "DELETE",
+      "qual": "(bidder_id = ( SELECT auth.uid() AS uid))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "open_house_offers",
+      "permissive": "PERMISSIVE",
+      "policyname": "oh_offers_delete",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "open_house_offers",
+      "permissive": "PERMISSIVE",
+      "policyname": "oh_offers_insert",
+      "schemaname": "public",
+      "with_check": "(bidder_id = ( SELECT auth.uid() AS uid))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((bidder_id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_offers.listing_id) AND (l.owner_id = ( SELECT auth.uid() AS uid))))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "open_house_offers",
+      "permissive": "PERMISSIVE",
+      "policyname": "oh_offers_select",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "((bidder_id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_offers.listing_id) AND (l.owner_id = ( SELECT auth.uid() AS uid))))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "open_house_offers",
+      "permissive": "PERMISSIVE",
+      "policyname": "oh_offers_update",
+      "schemaname": "public",
+      "with_check": "((bidder_id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_offers.listing_id) AND (l.owner_id = ( SELECT auth.uid() AS uid))))))"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "open_house_registrations",
+      "permissive": "PERMISSIVE",
+      "policyname": "oh_regs_insert",
+      "schemaname": "public",
+      "with_check": "((requester_id = ( SELECT auth.uid() AS uid)) AND (status = 'pending'::oh_registration_status))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((requester_id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_registrations.listing_id) AND (l.owner_id = ( SELECT auth.uid() AS uid))))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "open_house_registrations",
+      "permissive": "PERMISSIVE",
+      "policyname": "oh_regs_select",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "((requester_id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_registrations.listing_id) AND (l.owner_id = ( SELECT auth.uid() AS uid))))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "open_house_registrations",
+      "permissive": "PERMISSIVE",
+      "policyname": "oh_regs_update",
+      "schemaname": "public",
+      "with_check": "((requester_id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_registrations.listing_id) AND (l.owner_id = ( SELECT auth.uid() AS uid))))))"
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_settings.listing_id) AND (l.owner_id = ( SELECT auth.uid() AS uid)))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "open_house_settings",
+      "permissive": "PERMISSIVE",
+      "policyname": "open_house_settings_owner_delete",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "open_house_settings",
+      "permissive": "PERMISSIVE",
+      "policyname": "open_house_settings_owner_insert",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_settings.listing_id) AND (l.owner_id = ( SELECT auth.uid() AS uid)))))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_settings.listing_id) AND (l.owner_id = ( SELECT auth.uid() AS uid)))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "open_house_settings",
+      "permissive": "PERMISSIVE",
+      "policyname": "open_house_settings_owner_update",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_settings.listing_id) AND (l.owner_id = ( SELECT auth.uid() AS uid)))))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM listings l\n  WHERE ((l.id = open_house_settings.listing_id) AND (((l.status = 'active'::listing_status) AND (l.listing_type = 'open_house'::listing_type) AND (l.is_off_market = false)) OR (l.owner_id = ( SELECT auth.uid() AS uid))))))",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "tablename": "open_house_settings",
+      "permissive": "PERMISSIVE",
+      "policyname": "open_house_settings_select",
+      "schemaname": "public",
+      "with_check": null
+    }
+  ],
+  "routines": [
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "4fa9ff9bd99c2a2d449ae6eb1b7e9c42",
+      "settings": [
+        "search_path=public, pg_temp"
+      ],
+      "signature": "accept_open_house_offer(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.accept_open_house_offer(p_offer_id uuid)\n RETURNS open_house_offers\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_actor UUID := (SELECT auth.uid());\n  v_offer public.open_house_offers%ROWTYPE;\n  v_owner_id UUID;\n  v_gate TIMESTAMPTZ;\n  v_unrevealed_count INTEGER;\nBEGIN\n  IF v_actor IS NULL THEN\n    RAISE EXCEPTION 'not_authenticated';\n  END IF;\n\n  SELECT o.*\n  INTO v_offer\n  FROM public.open_house_offers o\n  WHERE o.id = p_offer_id;\n\n  IF v_offer.id IS NULL THEN\n    RAISE EXCEPTION 'open_house_offer_not_found';\n  END IF;\n\n  PERFORM pg_advisory_xact_lock(hashtext(v_offer.listing_id::text));\n\n  SELECT l.owner_id, COALESCE(s.offer_deadline, l.open_house_date)\n  INTO v_owner_id, v_gate\n  FROM public.listings l\n  LEFT JOIN public.open_house_settings s ON s.listing_id = l.id\n  WHERE l.id = v_offer.listing_id;\n\n  IF v_owner_id IS DISTINCT FROM v_actor THEN\n    RAISE EXCEPTION 'only_host_can_accept_offer';\n  END IF;\n\n  IF v_offer.status <> 'revealed' THEN\n    RAISE EXCEPTION 'only_revealed_offers_can_be_accepted';\n  END IF;\n\n  IF v_gate IS NOT NULL AND v_gate > now() THEN\n    RAISE EXCEPTION 'bids_cannot_be_accepted_before_deadline';\n  END IF;\n\n  SELECT count(*) INTO v_unrevealed_count\n  FROM public.open_house_offers\n  WHERE listing_id = v_offer.listing_id\n    AND status = 'submitted';\n\n  IF v_unrevealed_count > 0 THEN\n    RAISE EXCEPTION 'reveal_all_bids_before_accepting_winner';\n  END IF;\n\n  PERFORM set_config('maiprop.open_house_accept_rpc', p_offer_id::text, TRUE);\n\n  UPDATE public.open_house_offers\n  SET\n    status = 'accepted',\n    decided_by = v_actor,\n    decided_at = now(),\n    revealed_at = COALESCE(revealed_at, now())\n  WHERE id = p_offer_id\n  RETURNING * INTO v_offer;\n\n  UPDATE public.open_house_offers\n  SET\n    status = 'rejected',\n    decided_by = v_actor,\n    decided_at = now()\n  WHERE listing_id = v_offer.listing_id\n    AND id <> p_offer_id\n    AND status IN ('submitted', 'revealed');\n\n  UPDATE public.listings\n  SET status = 'paused'::public.listing_status,\n      updated_at = now()\n  WHERE id = v_offer.listing_id\n    AND status = 'active'::public.listing_status;\n\n  RETURN v_offer;\nEND;\n$function$\n",
+      "volatility": "v",
+      "definition_md5": "0a81a92be724246bc404e820fcbd698c",
+      "security_definer": false
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "89b5e830d0647cf6b6e268309eeab9af",
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "authoritative_role()",
+      "definition": "CREATE OR REPLACE FUNCTION public.authoritative_role()\n RETURNS user_role\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT public.authoritative_role(auth.uid())\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "c7b3d3f0d2c6d544fbd905f5d1c3806e",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "da90f3181090ba59f3d08858697db84d",
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "authoritative_role(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.authoritative_role(_user_id uuid)\n RETURNS user_role\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  WITH caller AS (\n    SELECT\n      auth.uid() AS uid,\n      COALESCE(auth.role(), '') AS jwt_role\n  )\n  SELECT target.role\n  FROM public.profiles AS target\n  CROSS JOIN caller\n  WHERE target.user_id = _user_id\n    AND (\n      _user_id = caller.uid\n      OR caller.jwt_role = 'service_role'\n      OR EXISTS (\n        SELECT 1\n        FROM public.profiles AS admin_profile\n        WHERE admin_profile.user_id = caller.uid\n          AND admin_profile.role = 'admin'::public.user_role\n      )\n    )\n  LIMIT 1\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "07052c9c7e3459bd1c69ddddb1556869",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "cea264a987ce96c7a617d5b9dd562549",
+      "settings": [
+        "search_path=public, pg_temp"
+      ],
+      "signature": "check_open_house_rsvp_monthly_limit()",
+      "definition": "CREATE OR REPLACE FUNCTION public.check_open_house_rsvp_monthly_limit()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_limit INTEGER;\n  v_count INTEGER;\n  v_month_start TIMESTAMPTZ := date_trunc('month', now())::timestamptz;\n  v_actor UUID := auth.uid();\n  v_rpc_context TEXT := NULLIF(current_setting('maiprop.open_house_registration_rpc', TRUE), '');\nBEGIN\n  IF v_actor IS NOT NULL THEN\n    IF NEW.requester_id IS DISTINCT FROM v_actor THEN\n      RAISE EXCEPTION 'open_house_rsvp_requester_mismatch'\n        USING HINT = 'Open-house RSVPs must be created for the authenticated user';\n    END IF;\n  ELSIF v_rpc_context IS DISTINCT FROM NEW.requester_id::TEXT THEN\n    -- Ordinary no-subject INSERTs still reach the unchanged insert guard,\n    -- which rejects them with use_create_open_house_registration_rpc.\n    RETURN NEW;\n  END IF;\n\n  v_limit := public.get_open_house_rsvp_monthly_limit(NEW.requester_id);\n  IF v_limit >= 999 THEN\n    RETURN NEW;\n  END IF;\n\n  PERFORM pg_advisory_xact_lock(\n    hashtextextended('open_house_rsvp:' || NEW.requester_id::TEXT || ':' || to_char(v_month_start, 'YYYY-MM'), 0)\n  );\n\n  SELECT COUNT(*)::INTEGER\n    INTO v_count\n  FROM public.open_house_registrations r\n  WHERE r.requester_id = NEW.requester_id\n    AND r.created_at >= v_month_start\n    AND r.status NOT IN ('cancelled', 'rejected');\n\n  IF v_count >= v_limit THEN\n    RAISE EXCEPTION 'open_house_rsvp_limit_reached'\n      USING HINT = 'Upgrade to Pro for unlimited open-house RSVPs';\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n",
+      "volatility": "v",
+      "definition_md5": "1647660de3969d30316f833ea6855bde",
+      "security_definer": true
+    },
+    {
+      "acl": null,
+      "owner": "postgres",
+      "body_md5": "51ea10f5a5d9d3defe906ca6ca9f63b2",
+      "settings": [
+        "search_path=public, pg_temp"
+      ],
+      "signature": "guard_open_house_offer_mutation()",
+      "definition": "CREATE OR REPLACE FUNCTION public.guard_open_house_offer_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_actor UUID := (SELECT auth.uid());\n  v_owner_id UUID;\n  v_open_house_date TIMESTAMPTZ;\n  v_offer_deadline TIMESTAMPTZ;\n  v_allow_sealed_bids BOOLEAN := TRUE;\n  v_require_proof_of_funds BOOLEAN := FALSE;\n  v_registration_status public.oh_registration_status;\n  v_pof_verified_status TEXT;\n  v_existing_accepted UUID;\n  v_unrevealed_count INTEGER;\n  v_accept_rpc_context TEXT := NULLIF(current_setting('maiprop.open_house_accept_rpc', TRUE), '');\n  v_reopen_rpc_context TEXT := NULLIF(current_setting('maiprop.open_house_reopen_rpc', TRUE), '');\nBEGIN\n  SELECT\n    l.owner_id,\n    l.open_house_date,\n    COALESCE(s.offer_deadline, NULL),\n    COALESCE(s.allow_sealed_bids, TRUE),\n    COALESCE(s.require_proof_of_funds, FALSE)\n  INTO v_owner_id, v_open_house_date, v_offer_deadline, v_allow_sealed_bids, v_require_proof_of_funds\n  FROM public.listings l\n  LEFT JOIN public.open_house_settings s ON s.listing_id = l.id\n  WHERE l.id = NEW.listing_id;\n\n  IF v_owner_id IS NULL THEN\n    RAISE EXCEPTION 'open_house_listing_not_found';\n  END IF;\n\n  IF TG_OP = 'INSERT' THEN\n    IF NEW.bidder_id IS DISTINCT FROM v_actor THEN\n      RAISE EXCEPTION 'bidder_must_match_authenticated_user';\n    END IF;\n\n    IF COALESCE(NEW.status, 'submitted') <> 'submitted' THEN\n      RAISE EXCEPTION 'new_offers_must_start_submitted';\n    END IF;\n  ELSE\n    IF NEW.listing_id IS DISTINCT FROM OLD.listing_id OR NEW.bidder_id IS DISTINCT FROM OLD.bidder_id THEN\n      RAISE EXCEPTION 'offer_identity_fields_are_immutable';\n    END IF;\n\n    IF v_actor = OLD.bidder_id THEN\n      IF NEW.status = 'submitted' AND OLD.status = 'submitted' THEN\n        NEW.revealed_at := NULL;\n        NEW.decided_by := NULL;\n        NEW.decided_at := NULL;\n      ELSIF NEW.status IS DISTINCT FROM 'withdrawn' OR OLD.status NOT IN ('submitted', 'revealed') THEN\n        RAISE EXCEPTION 'bidder_can_only_withdraw_active_offer';\n      END IF;\n    ELSIF v_actor = v_owner_id THEN\n      IF NEW.status = 'revealed' AND OLD.status <> 'submitted' THEN\n        IF v_reopen_rpc_context IS DISTINCT FROM NEW.listing_id::TEXT\n           OR OLD.status NOT IN ('accepted', 'rejected') THEN\n          RAISE EXCEPTION 'only_submitted_offers_can_be_revealed';\n        END IF;\n      END IF;\n      IF NEW.status = 'accepted' AND OLD.status <> 'revealed' THEN\n        RAISE EXCEPTION 'only_revealed_offers_can_be_accepted';\n      END IF;\n      IF NEW.status = 'accepted' AND v_accept_rpc_context IS DISTINCT FROM NEW.id::text THEN\n        RAISE EXCEPTION 'accepted_offers_must_use_accept_rpc';\n      END IF;\n      IF NEW.status = 'rejected' AND OLD.status NOT IN ('submitted', 'revealed') THEN\n        RAISE EXCEPTION 'only_active_offers_can_be_rejected';\n      END IF;\n      IF NEW.status = 'withdrawn' THEN\n        RAISE EXCEPTION 'owner_cannot_withdraw_bidder_offer';\n      END IF;\n    ELSE\n      RAISE EXCEPTION 'not_authorized_for_offer';\n    END IF;\n  END IF;\n\n  IF NEW.status = 'submitted' THEN\n    SELECT r.status, r.pof_verified_status\n    INTO v_registration_status, v_pof_verified_status\n    FROM public.open_house_registrations r\n    WHERE r.listing_id = NEW.listing_id\n      AND r.requester_id = NEW.bidder_id;\n\n    IF v_registration_status IS DISTINCT FROM 'attended' THEN\n      RAISE EXCEPTION 'only_attendees_can_submit_offers';\n    END IF;\n\n    IF v_require_proof_of_funds AND v_pof_verified_status IS DISTINCT FROM 'verified' THEN\n      RAISE EXCEPTION 'proof_of_funds_must_be_verified';\n    END IF;\n\n    IF NOT v_allow_sealed_bids THEN\n      RAISE EXCEPTION 'sealed_bids_disabled_for_open_house';\n    END IF;\n\n    IF v_open_house_date IS NULL OR v_open_house_date > now() THEN\n      RAISE EXCEPTION 'offers_unlock_after_open_house';\n    END IF;\n\n    IF v_offer_deadline IS NOT NULL AND v_offer_deadline < now() THEN\n      RAISE EXCEPTION 'sealed_bid_deadline_passed';\n    END IF;\n  END IF;\n\n  IF NEW.status IN ('revealed', 'accepted') THEN\n    IF COALESCE(v_offer_deadline, v_open_house_date) IS NOT NULL\n       AND COALESCE(v_offer_deadline, v_open_house_date) > now() THEN\n      RAISE EXCEPTION 'bids_cannot_be_revealed_before_deadline';\n    END IF;\n  END IF;\n\n  IF NEW.status = 'accepted' THEN\n    PERFORM pg_advisory_xact_lock(hashtext(NEW.listing_id::text));\n\n    SELECT id INTO v_existing_accepted\n    FROM public.open_house_offers\n    WHERE listing_id = NEW.listing_id\n      AND status = 'accepted'\n      AND id <> COALESCE(NEW.id, '00000000-0000-0000-0000-000000000000'::uuid)\n    LIMIT 1;\n\n    IF v_existing_accepted IS NOT NULL THEN\n      RAISE EXCEPTION 'active_offer_already_accepted';\n    END IF;\n\n    SELECT count(*) INTO v_unrevealed_count\n    FROM public.open_house_offers\n    WHERE listing_id = NEW.listing_id\n      AND id <> NEW.id\n      AND status = 'submitted';\n\n    IF v_unrevealed_count > 0 THEN\n      RAISE EXCEPTION 'reveal_all_bids_before_accepting_winner';\n    END IF;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n",
+      "volatility": "v",
+      "definition_md5": "e97cdddae6f668342da111570ca1c015",
+      "security_definer": false
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "c642b4649f7f693058e987e26f4d447e",
+      "settings": [
+        "search_path=public, pg_temp"
+      ],
+      "signature": "guard_open_house_registration_update()",
+      "definition": "CREATE OR REPLACE FUNCTION public.guard_open_house_registration_update()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_uid uuid := auth.uid();\n  v_owner_id uuid;\nBEGIN\n  IF TG_OP <> 'UPDATE' THEN\n    RETURN NEW;\n  END IF;\n\n  IF v_uid IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  SELECT l.owner_id\n    INTO v_owner_id\n  FROM public.listings l\n  WHERE l.id = NEW.listing_id;\n\n  IF v_uid = OLD.requester_id AND v_uid IS DISTINCT FROM v_owner_id THEN\n    IF NEW.listing_id IS DISTINCT FROM OLD.listing_id\n      OR NEW.requester_id IS DISTINCT FROM OLD.requester_id\n      OR NEW.timeslot_index IS DISTINCT FROM OLD.timeslot_index\n      OR NEW.id_verified_at IS DISTINCT FROM OLD.id_verified_at\n      OR NEW.approved_by IS DISTINCT FROM OLD.approved_by\n      OR NEW.approved_at IS DISTINCT FROM OLD.approved_at\n      OR NEW.attended_at IS DISTINCT FROM OLD.attended_at\n      OR NEW.rejection_reason IS DISTINCT FROM OLD.rejection_reason\n      OR NEW.pof_verified_status IS DISTINCT FROM OLD.pof_verified_status\n      OR NEW.pof_rejection_reason IS DISTINCT FROM OLD.pof_rejection_reason\n    THEN\n      RAISE EXCEPTION 'host_controlled_open_house_fields';\n    END IF;\n\n    IF NEW.status IS DISTINCT FROM OLD.status AND NEW.status <> 'cancelled' THEN\n      RAISE EXCEPTION 'requester_can_only_cancel_registration';\n    END IF;\n\n    IF NEW.proof_of_funds_url IS DISTINCT FROM OLD.proof_of_funds_url\n      OR NEW.proof_amount IS DISTINCT FROM OLD.proof_amount\n    THEN\n      NEW.pof_verified_status := 'unreviewed';\n      NEW.pof_rejection_reason := NULL;\n    END IF;\n\n    RETURN NEW;\n  END IF;\n\n  IF v_uid = v_owner_id THEN\n    IF NEW.status = 'attended' AND OLD.status <> 'approved' THEN\n      RAISE EXCEPTION 'only_approved_registrations_can_be_attended';\n    END IF;\n    RETURN NEW;\n  END IF;\n\n  RAISE EXCEPTION 'not_authorized_for_open_house_registration';\nEND;\n$function$\n",
+      "volatility": "v",
+      "definition_md5": "7918ebe4c5335985446d415144238f4e",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "b2d002ffd21dfcf28622e7456ba76452",
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "has_platform_admin(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.has_platform_admin(_user_id uuid DEFAULT auth.uid())\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT public.authoritative_role(_user_id) = 'admin'::public.user_role\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "1ccfa059205e857aaa8a25f7e4f6f03e",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "23d19924606f1f29eadaec155e87590e",
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "private.authoritative_role()",
+      "definition": "CREATE OR REPLACE FUNCTION private.authoritative_role()\n RETURNS user_role\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select private.authoritative_role((select auth.uid()))\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "634e9dc7f86f2ee5ae236d38abb98ef1",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "80dac3a071734dd27ebd388a1f46a6c7",
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "private.authoritative_role(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION private.authoritative_role(_user_id uuid)\n RETURNS user_role\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select role\n  from public.profiles\n  where user_id = _user_id\n  limit 1\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "c3ec8355de2c2f1f092cde655af4339d",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "ad6542b5e674e3b331b37126252b2d4b",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "signature": "private.can_select_open_house_document(text,text)",
+      "definition": "CREATE OR REPLACE FUNCTION private.can_select_open_house_document(p_requester_id text, p_listing_id text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  SELECT EXISTS (\n    SELECT 1\n    FROM public.open_house_registrations AS registration\n    JOIN public.listings AS listing\n      ON listing.id = registration.listing_id\n    WHERE registration.requester_id::TEXT = p_requester_id\n      AND registration.listing_id::TEXT = p_listing_id\n      AND listing.owner_id = (SELECT auth.uid())\n  );\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "192656db933195e223b4196c0ee162b2",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "24c8ab8244010ae2001b962cd1ff7b25",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "signature": "private.current_user_owns_listing(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION private.current_user_owns_listing(p_listing_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  SELECT COALESCE(\n    (SELECT auth.uid()) IS NOT NULL\n    AND EXISTS (\n      SELECT 1\n      FROM public.listings AS l\n      WHERE l.id = p_listing_id\n        AND l.owner_id = (SELECT auth.uid())\n    ),\n    false\n  )\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "775da766458d80d0c89f7167585a9e1b",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "47b9cebe7e164fa5f22b3c0252756cb5",
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "private.has_platform_admin(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION private.has_platform_admin(_user_id uuid DEFAULT auth.uid())\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select private.authoritative_role(_user_id) = 'admin'::public.user_role\n$function$\n",
+      "volatility": "s",
+      "definition_md5": "54beb92146e4fe5a145b85b8358652c9",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "c8aa016b11f2e82fbc36268f451fdc29",
+      "settings": [
+        "search_path=public, pg_temp"
+      ],
+      "signature": "private.notify_open_house_pof_status_change()",
+      "definition": "CREATE OR REPLACE FUNCTION private.notify_open_house_pof_status_change()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_actor UUID := COALESCE(NEW.approved_by, (SELECT auth.uid()));\n  v_listing_title TEXT;\nBEGIN\n  IF NEW.pof_verified_status IS NOT DISTINCT FROM OLD.pof_verified_status THEN\n    RETURN NEW;\n  END IF;\n\n  IF NEW.pof_verified_status IS NULL OR NEW.pof_verified_status NOT IN ('verified', 'rejected') THEN\n    RETURN NEW;\n  END IF;\n\n  SELECT title INTO v_listing_title\n  FROM public.listings\n  WHERE id = NEW.listing_id\n  LIMIT 1;\n\n  PERFORM private.insert_interaction_notification(\n    NEW.requester_id,\n    v_actor,\n    CASE\n      WHEN NEW.pof_verified_status = 'verified' THEN 'Proof of funds verified'\n      ELSE 'Proof of funds rejected'\n    END,\n    CASE\n      WHEN NEW.pof_verified_status = 'verified'\n        THEN concat_ws(' ', 'Your proof of funds for', COALESCE(NULLIF(v_listing_title, ''), 'an open house'), 'was verified.')\n      ELSE concat_ws(' ', 'Your proof of funds for', COALESCE(NULLIF(v_listing_title, ''), 'an open house'), 'was rejected.', NULLIF(NEW.rejection_reason, ''))\n    END,\n    'pof_review',\n    '/dashboard?tab=open-houses'\n  );\n\n  RETURN NEW;\nEND;\n$function$\n",
+      "volatility": "v",
+      "definition_md5": "df90904edff207f62f2bc6a8e0b34459",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "662bbba5331bc7661655ce19c8005867",
+      "settings": [
+        "search_path=public, pg_temp"
+      ],
+      "signature": "reopen_open_house_offer_selection(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.reopen_open_house_offer_selection(p_listing_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_actor UUID := (SELECT auth.uid());\n  v_owner_id UUID;\nBEGIN\n  IF v_actor IS NULL THEN\n    RAISE EXCEPTION 'not_authenticated';\n  END IF;\n\n  SELECT owner_id INTO v_owner_id\n  FROM public.listings\n  WHERE id = p_listing_id;\n\n  IF v_owner_id IS NULL THEN\n    RAISE EXCEPTION 'open_house_listing_not_found';\n  END IF;\n\n  IF v_owner_id IS DISTINCT FROM v_actor THEN\n    RAISE EXCEPTION 'only_host_can_reopen_offer_selection';\n  END IF;\n\n  PERFORM pg_advisory_xact_lock(hashtext(p_listing_id::text));\n\n  IF NOT EXISTS (\n    SELECT 1\n    FROM public.open_house_offers\n    WHERE listing_id = p_listing_id\n      AND status = 'accepted'\n  ) THEN\n    RAISE EXCEPTION 'open_house_no_accepted_offer_to_reopen';\n  END IF;\n\n  PERFORM set_config('maiprop.open_house_reopen_rpc', p_listing_id::TEXT, TRUE);\n\n  UPDATE public.open_house_offers\n  SET\n    status = 'revealed',\n    decided_by = NULL,\n    decided_at = NULL,\n    revealed_at = COALESCE(revealed_at, now())\n  WHERE listing_id = p_listing_id\n    AND status IN ('accepted', 'rejected');\n\n  UPDATE public.listings\n  SET status = 'active'::public.listing_status,\n      updated_at = now()\n  WHERE id = p_listing_id\n    AND status = 'paused'::public.listing_status;\nEND;\n$function$\n",
+      "volatility": "v",
+      "definition_md5": "e6b2c96ce8c4f2999e05569df868735e",
+      "security_definer": false
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "body_md5": "36290193e17e23fac474e47ba57af554",
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "submit_open_house_offer(uuid,numeric,text,text)",
+      "definition": "CREATE OR REPLACE FUNCTION public.submit_open_house_offer(p_listing_id uuid, p_amount numeric, p_message text DEFAULT NULL::text, p_currency text DEFAULT 'EUR'::text)\n RETURNS open_house_offers\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_actor UUID := (SELECT auth.uid());\n  v_offer public.open_house_offers%ROWTYPE;\nBEGIN\n  IF v_actor IS NULL THEN\n    RAISE EXCEPTION 'not_authenticated';\n  END IF;\n\n  INSERT INTO public.open_house_offers (\n    listing_id,\n    bidder_id,\n    amount,\n    currency,\n    message,\n    status,\n    submitted_at\n  )\n  VALUES (\n    p_listing_id,\n    v_actor,\n    p_amount,\n    COALESCE(NULLIF(p_currency, ''), 'EUR'),\n    NULLIF(p_message, ''),\n    'submitted',\n    now()\n  )\n  ON CONFLICT (listing_id, bidder_id) DO UPDATE\n  SET\n    amount = EXCLUDED.amount,\n    currency = EXCLUDED.currency,\n    message = EXCLUDED.message,\n    status = 'submitted',\n    submitted_at = now(),\n    revealed_at = NULL,\n    decided_by = NULL,\n    decided_at = NULL\n  WHERE public.open_house_offers.status = 'submitted'\n  RETURNING * INTO v_offer;\n\n  IF v_offer.id IS NULL THEN\n    RAISE EXCEPTION 'offer_no_longer_editable';\n  END IF;\n\n  RETURN v_offer;\nEND;\n$function$\n",
+      "volatility": "v",
+      "definition_md5": "3bb674b7115d2f64440593c036838a9c",
+      "security_definer": false
+    }
+  ],
+  "relations": [
+    {
+      "acl": "{postgres=arwdDxt/postgres}",
+      "rls": true,
+      "relation": "listings"
+    },
+    {
+      "acl": "{postgres=arwdDxt/postgres,authenticated=arwd/postgres,anon=arwd/postgres}",
+      "rls": true,
+      "relation": "open_house_offers"
+    },
+    {
+      "acl": "{postgres=arwdDxt/postgres,authenticated=arw/postgres,anon=arw/postgres}",
+      "rls": true,
+      "relation": "open_house_registrations"
+    },
+    {
+      "acl": "{postgres=arwdDxt/postgres,authenticated=arwd/postgres,anon=arwd/postgres}",
+      "rls": true,
+      "relation": "open_house_settings"
+    },
+    {
+      "acl": null,
+      "rls": true,
+      "relation": "storage.objects"
+    }
+  ],
+  "storage_acl": {
+    "authenticated_select": false,
+    "authenticated_schema_usage": true
+  },
+  "private_schema": "{postgres=UC/postgres,authenticated=U/postgres,service_role=U/postgres}"
+}

@@ -12,7 +12,8 @@ SELECT ok(NOT has_function_privilege('anon', 'public.submit_new_build_enquiry(uu
 SELECT ok(NOT has_function_privilege('service_role', 'public.submit_new_build_enquiry(uuid,uuid,uuid,text,text,text,text)', 'EXECUTE'), 'service role cannot execute browser submit RPC');
 SELECT ok(has_function_privilege('authenticated', 'private.current_user_owns_listing(uuid)', 'EXECUTE'), 'authenticated may evaluate exact-owner predicate');
 SELECT ok(has_function_privilege('anon', 'private.current_user_owns_listing(uuid)', 'EXECUTE'), 'anon may evaluate a stored PUBLIC policy predicate');
-SELECT ok(NOT has_function_privilege('service_role', 'private.current_user_owns_listing(uuid)', 'EXECUTE'), 'service role receives no Task18 helper grant');
+-- Task23 reuses the exact Task18 predicate and adds only service-role EXECUTE.
+SELECT ok(has_function_privilege('service_role', 'private.current_user_owns_listing(uuid)', 'EXECUTE'), 'Task23 shared helper service grant is present');
 SELECT ok(NOT has_table_privilege('authenticated', 'public.listings', 'SELECT'), 'raw listing SELECT remains denied');
 SELECT is((SELECT count(*)::integer FROM pg_policies WHERE schemaname='public' AND tablename='new_building_leads' AND cmd IN ('UPDATE','DELETE')), 0, 'no client UPDATE or DELETE policy is introduced');
 

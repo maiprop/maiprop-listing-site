@@ -1,360 +1,74 @@
-/**
- * Tests for POFVerificationPanel — admin Proof of Funds reviewer. Covers
- * the load query (with + without dealId scope), tab switching, verify
- * mutation (success + error toast), reject dialog flow (open / required
- * reason / confirm / cancel), totals computation and the empty-state per
- * tab.
- */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-
-const { fromMock, getOpenHouseDocSignedUrlMock, toastMock } = vi.hoisted(() => ({
-  fromMock: vi.fn(),
-  getOpenHouseDocSignedUrlMock: vi.fn(),
-  toastMock: { success: vi.fn(), error: vi.fn() },
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+const { rpcMock, getOpenHouseDocSignedUrlMock, toastMock } = vi.hoisted(() => ({
+  rpcMock: vi.fn(), getOpenHouseDocSignedUrlMock: vi.fn(), toastMock: { success: vi.fn(), error: vi.fn() },
 }));
-
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: (...a: unknown[]) => fromMock(...a) },
-}));
-vi.mock("sonner", () => ({ toast: toastMock }));
-vi.mock("@/hooks/useOpenHouseAssetControl", () => ({
-  getOpenHouseDocSignedUrl: (...a: unknown[]) => getOpenHouseDocSignedUrlMock(...a),
-}));
-
-import { POFVerificationPanel } from "@/components/POFVerificationPanel";
-
-type Row = {
-  id: string;
-  requester_id: string;
-  proof_of_funds_url: string | null;
-  proof_amount: number | null;
-  pof_verified_status: "unreviewed" | "verified" | "rejected" | null;
-  pof_rejection_reason: string | null;
-  created_at: string | null;
-  listing_id: string;
-  rejection_reason: string | null;
-  status: string | null;
-};
-
-/**
- * Wires the load() query: SELECT ... .not(proof_of_funds_url is null)
- * .order(created_at desc) .limit(100) [.eq(listing_id, dealId)].
- */
-function withRows(rows: Row[] | (() => Row[])) {
-  fromMock.mockImplementation(() => {
-    const builder: Record<string, unknown> = {};
-    builder.select = vi.fn().mockReturnValue(builder);
-    builder.not = vi.fn().mockReturnValue(builder);
-    builder.order = vi.fn().mockReturnValue(builder);
-    builder.limit = vi.fn().mockReturnValue(builder);
-    builder.eq = vi.fn().mockReturnValue(builder);
-    builder.update = vi.fn().mockReturnValue(builder);
-    builder.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "r-1" }, error: null });
-    builder.then = (resolve: (v: { data: Row[]; error: null }) => unknown) =>
-      Promise.resolve(resolve({ data: typeof rows === "function" ? rows() : rows, error: null }));
-    return builder;
-  });
+vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: (...args: unknown[]) => rpcMock(...args) } }));
+vi.mock('sonner', () => ({ toast: toastMock }));
+vi.mock('@/hooks/useOpenHouseAssetControl', () => ({ getOpenHouseDocSignedUrl: (...args: unknown[]) => getOpenHouseDocSignedUrlMock(...args) }));
+import { POFVerificationPanel } from '@/components/POFVerificationPanel';
+import type { AdminOpenHousePofRow } from '@/services/openHouseContextService';
+const baseRow = (overrides: Partial<AdminOpenHousePofRow> = {}): AdminOpenHousePofRow => ({
+  id: 'r-1', requester_id: 'user-abc-12345', proof_of_funds_url: 'docs/pof.pdf', proof_amount: 250000,
+  pof_verified_status: 'unreviewed', pof_rejection_reason: null, created_at: '2026-04-01T00:00:00Z',
+  listing_id: 'l-1', rejection_reason: null, status: 'approved', updated_at: '2026-04-01T00:00:00.123456Z', ...overrides,
+});
+function withRows(rows: AdminOpenHousePofRow[] | (() => AdminOpenHousePofRow[])) {
+  rpcMock.mockImplementation((name: string, args: Record<string, string>) => Promise.resolve({
+    data: name === 'get_admin_open_house_pof_reviews' ? (typeof rows === 'function' ? rows() : rows)
+      : [baseRow({ id: args.p_registration_id, pof_verified_status: args.p_decision as 'verified' | 'rejected', pof_rejection_reason: args.p_reason })], error: null,
+  }));
 }
-
-const baseRow = (overrides: Partial<Row> = {}): Row => ({
-  id: "r-1",
-  requester_id: "user-abc-12345",
-  proof_of_funds_url: "https://docs/pof.pdf",
-  proof_amount: 250_000,
-  pof_verified_status: "unreviewed",
-  pof_rejection_reason: null,
-  created_at: "2026-04-01T00:00:00Z",
-  listing_id: "l-1",
-  rejection_reason: null,
-  status: "approved",
-  ...overrides,
-});
-
 beforeEach(() => {
-  fromMock.mockReset();
-  getOpenHouseDocSignedUrlMock.mockReset();
-  getOpenHouseDocSignedUrlMock.mockResolvedValue("https://signed.example/pof.pdf");
-  toastMock.success.mockReset();
-  toastMock.error.mockReset();
-  vi.spyOn(window, "open").mockImplementation(() => null);
+  rpcMock.mockReset(); getOpenHouseDocSignedUrlMock.mockReset(); toastMock.success.mockReset(); toastMock.error.mockReset();
+  getOpenHouseDocSignedUrlMock.mockResolvedValue('https://signed.example/pof.pdf'); vi.spyOn(window, 'open').mockImplementation(() => null);
 });
-
-describe("POFVerificationPanel", () => {
-  it("renders the empty-state for the default 'Unreviewed' tab when no docs exist", async () => {
-    withRows([]);
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByText(/No\s+unreviewed/i));
+describe('POFVerificationPanel', () => {
+  it('renders successful empty state', async () => { withRows([]); render(<POFVerificationPanel />); await screen.findByText(/No\s+unreviewed/i); });
+  it('opens proof with the existing signed document helper', async () => {
+    withRows([baseRow()]); render(<POFVerificationPanel />); await screen.findByText(/Investor user-a/); fireEvent.click(screen.getByRole('button', { name: /View Doc/i }));
+    await waitFor(() => expect(window.open).toHaveBeenCalledWith('https://signed.example/pof.pdf', '_blank', 'noopener,noreferrer')); expect(getOpenHouseDocSignedUrlMock).toHaveBeenCalledWith('docs/pof.pdf');
   });
-
-  it("opens hydrated POF rows through signed document URLs", async () => {
-    withRows([baseRow()]);
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByText(/Investor user-a/));
-    // Euro formatter inserts NBSP/comma per locale; just confirm a 250k
-    // figure shows up somewhere. getAllByText matches both the leaf span
-    // and ancestor wrappers, so any non-zero count proves the row paints.
-    expect(
-      screen.getAllByText((_, node) => /250[\s.,\u00a0]?000/.test(node?.textContent ?? "")).length,
-    ).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: /View Doc/i }));
-    await waitFor(() => expect(getOpenHouseDocSignedUrlMock).toHaveBeenCalledWith("https://docs/pof.pdf"));
-    expect(window.open).toHaveBeenCalledWith("https://signed.example/pof.pdf", "_blank", "noopener,noreferrer");
+  it.each([null, '#', '   '])('shows unavailable document for %s', async proof_of_funds_url => {
+    withRows([baseRow({ proof_of_funds_url })]); render(<POFVerificationPanel />); await screen.findByText(/Document unavailable/); expect(screen.queryByRole('button', { name: 'View Doc' })).toBeNull();
   });
-
-  it("shows factual unavailable copy when the URL is missing", async () => {
-    withRows([baseRow({ proof_of_funds_url: "#" })]);
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByText(/Document unavailable/i));
-    expect(screen.queryByText(/Demo Doc/i)).toBeNull();
+  it('verifies a real returned row and uses exact version', async () => {
+    withRows([baseRow()]); render(<POFVerificationPanel />); fireEvent.click(await screen.findByRole('button', { name: 'Verify' }));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/verified for/)));
+    expect(rpcMock).toHaveBeenCalledWith('review_admin_open_house_pof', { p_registration_id: 'r-1', p_decision: 'verified', p_reason: null, p_expected_updated_at: baseRow().updated_at });
   });
-
-  it("verifies an unreviewed entry and toasts success", async () => {
-    let updateCalls = 0;
-    fromMock.mockImplementation(() => {
-      const b: Record<string, unknown> = {};
-      b.select = vi.fn().mockReturnValue(b);
-      b.not = vi.fn().mockReturnValue(b);
-      b.order = vi.fn().mockReturnValue(b);
-      b.limit = vi.fn().mockReturnValue(b);
-      b.update = vi.fn().mockImplementation(() => {
-        updateCalls++;
-        return {
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "r-1" }, error: null }),
-            }),
-          }),
-        };
-      });
-      b.eq = vi.fn().mockReturnValue(b);
-      b.then = (resolve: (v: { data: Row[]; error: null }) => unknown) =>
-        Promise.resolve(resolve({ data: [baseRow()], error: null }));
-      return b;
-    });
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByText(/Investor user-a/));
-    fireEvent.click(screen.getByRole("button", { name: /Verify/i }));
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/verified for/i)));
-    expect(updateCalls).toBe(1);
+  it.each([{ data: null, error: { message: 'denied' } }, { data: [], error: null }, { data: [{ id: 'r-1' }], error: null }])('does not confirm failed, absent or malformed mutation row', async response => {
+    rpcMock.mockResolvedValueOnce({ data: [baseRow()], error: null }).mockResolvedValueOnce(response); render(<POFVerificationPanel />); fireEvent.click(await screen.findByRole('button', { name: 'Verify' }));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Failed to verify/))); expect(toastMock.success).not.toHaveBeenCalled(); expect(screen.getByRole('button', { name: 'Verify' })).toBeInTheDocument();
   });
-
-  it("toasts an error when the verify update fails", async () => {
-    fromMock.mockImplementation(() => {
-      const b: Record<string, unknown> = {};
-      b.select = vi.fn().mockReturnValue(b);
-      b.not = vi.fn().mockReturnValue(b);
-      b.order = vi.fn().mockReturnValue(b);
-      b.limit = vi.fn().mockReturnValue(b);
-      b.update = vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: new Error("rls") }),
-          }),
-        }),
-      });
-      b.eq = vi.fn().mockReturnValue(b);
-      b.then = (resolve: (v: { data: Row[]; error: null }) => unknown) =>
-        Promise.resolve(resolve({ data: [baseRow()], error: null }));
-      return b;
-    });
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByText(/Investor user-a/));
-    fireEvent.click(screen.getByRole("button", { name: /Verify/i }));
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Failed to verify/i)));
+  it('requires a reject reason and submits proof reason only', async () => {
+    withRows([baseRow()]); render(<POFVerificationPanel />); fireEvent.click(await screen.findByRole('button', { name: 'Reject' })); const confirm = screen.getByRole('button', { name: 'Confirm Rejection' }); expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText(/Document expired/), { target: { value: 'Expired proof' } }); fireEvent.click(confirm);
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/rejected for/))); expect(rpcMock).toHaveBeenCalledWith('review_admin_open_house_pof', expect.objectContaining({ p_decision: 'rejected', p_reason: 'Expired proof' }));
   });
-
-  it("opens the reject dialog, requires a reason, and confirms rejection", async () => {
-    let updates = 0;
-    fromMock.mockImplementation(() => {
-      const b: Record<string, unknown> = {};
-      b.select = vi.fn().mockReturnValue(b);
-      b.not = vi.fn().mockReturnValue(b);
-      b.order = vi.fn().mockReturnValue(b);
-      b.limit = vi.fn().mockReturnValue(b);
-      b.update = vi.fn().mockImplementation(() => {
-        updates++;
-        return {
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: { id: "r-1" }, error: null }),
-            }),
-          }),
-        };
-      });
-      b.eq = vi.fn().mockReturnValue(b);
-      b.then = (resolve: (v: { data: Row[]; error: null }) => unknown) =>
-        Promise.resolve(resolve({ data: [baseRow()], error: null }));
-      return b;
-    });
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByText(/Investor user-a/));
-    // Two buttons match /Reject/i: the row's "Reject" action and the
-    // "Rejected" tab. Pick the row action by exact textContent.
-    const rejectBtn = screen
-      .getAllByRole("button", { name: /Reject/i })
-      .find((b) => b.textContent?.trim() === "Reject")!;
-    fireEvent.click(rejectBtn);
-    expect(screen.getByText(/Reject POF/i)).toBeInTheDocument();
-    const confirm = screen.getByRole("button", { name: /Confirm Rejection/i });
-    expect(confirm).toBeDisabled();
-    fireEvent.change(screen.getByPlaceholderText(/Document expired/i), {
-      target: { value: "Document is older than 90 days" },
-    });
-    expect(confirm).not.toBeDisabled();
-    fireEvent.click(confirm);
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/rejected for/i)));
-    expect(updates).toBe(1);
+  it('cancels rejection without mutation', async () => {
+    withRows([baseRow()]); render(<POFVerificationPanel />); fireEvent.click(await screen.findByRole('button', { name: 'Reject' })); fireEvent.click(screen.getByRole('button', { name: 'Cancel' })); expect(screen.queryByRole('dialog')).toBeNull(); expect(rpcMock).toHaveBeenCalledTimes(1);
   });
-
-  it("cancels the reject dialog without mutating state", async () => {
-    withRows([baseRow()]);
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByText(/Investor user-a/));
-    const rejectBtn = screen
-      .getAllByRole("button", { name: /Reject/i })
-      .find((b) => b.textContent?.trim() === "Reject")!;
-    fireEvent.click(rejectBtn);
-    fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
-    expect(screen.queryByText(/Reject POF/i)).toBeNull();
+  it('scopes the dedicated read with the optional listing', async () => {
+    withRows([]); render(<POFVerificationPanel dealId='listing-a' />); await screen.findByText(/No\s+unreviewed/i); expect(rpcMock).toHaveBeenCalledWith('get_admin_open_house_pof_reviews', { p_listing_id: 'listing-a' });
   });
-
-  it("scopes the load query by listing_id when dealId is provided", async () => {
-    let eqCalledWith: [string, string] | null = null;
-    fromMock.mockImplementation(() => {
-      const b: Record<string, unknown> = {};
-      b.select = vi.fn().mockReturnValue(b);
-      b.not = vi.fn().mockReturnValue(b);
-      b.order = vi.fn().mockReturnValue(b);
-      b.limit = vi.fn().mockReturnValue(b);
-      b.eq = vi.fn().mockImplementation((col: string, val: string) => {
-        eqCalledWith = [col, val];
-        return b;
-      });
-      b.update = vi.fn().mockReturnValue(b);
-      b.then = (resolve: (v: { data: Row[]; error: null }) => unknown) =>
-        Promise.resolve(resolve({ data: [], error: null }));
-      return b;
-    });
-    render(<POFVerificationPanel dealId="deal-x" />);
-    await waitFor(() => expect(eqCalledWith).toEqual(["listing_id", "deal-x"]));
+  it('switches verified and rejected tabs and preserves proof reason', async () => {
+    withRows([baseRow({ pof_verified_status: 'verified' }), baseRow({ id: 'r-2', pof_verified_status: 'rejected', pof_rejection_reason: 'Expired', rejection_reason: 'Admission reason' })]); render(<POFVerificationPanel />); await screen.findByText(/No\s+unreviewed/i);
+    fireEvent.click(screen.getByRole('button', { name: /Verified/ })); expect(screen.getByText(/Investor user-a/)).toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: /Rejected/ })); expect(screen.getByText(/Expired/)).toBeInTheDocument(); expect(screen.queryByText(/Admission reason/)).toBeNull();
   });
-
-  it("switches between tabs and shows verified/rejected only on their tabs", async () => {
-    withRows([
-      baseRow({ id: "v1", pof_verified_status: "verified", proof_amount: 100_000 }),
-      baseRow({ id: "r1", pof_verified_status: "rejected", proof_amount: 50_000, pof_rejection_reason: "stale" }),
-    ]);
-    render(<POFVerificationPanel />);
-    // Default tab = unreviewed → empty
-    await waitFor(() => screen.getByText(/No\s+unreviewed/i));
-    // Switch to verified
-    fireEvent.click(screen.getByRole("button", { name: /Verified/i }));
-    expect(screen.getByText(/Investor user-a/)).toBeInTheDocument();
-    // Switch to rejected
-    fireEvent.click(screen.getByRole("button", { name: /Rejected/i }));
-    expect(screen.getByText(/stale/)).toBeInTheDocument();
+  it('shows load errors distinctly and supports retry', async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: new Error('denied') }).mockResolvedValueOnce({ data: [baseRow()], error: null }); render(<POFVerificationPanel />); await screen.findByRole('alert'); expect(screen.queryByText(/No\s+unreviewed/i)).toBeNull(); fireEvent.click(screen.getByRole('button', { name: 'Retry' })); await screen.findByText(/Investor user-a/);
   });
-
-  it("shows a load error and supports retry", async () => {
-    let attempts = 0;
-    fromMock.mockImplementation(() => {
-      const b: Record<string, unknown> = {};
-      b.select = vi.fn().mockReturnValue(b);
-      b.not = vi.fn().mockReturnValue(b);
-      b.order = vi.fn().mockReturnValue(b);
-      b.limit = vi.fn().mockReturnValue(b);
-      b.eq = vi.fn().mockReturnValue(b);
-      b.update = vi.fn().mockReturnValue(b);
-      b.then = (resolve: (v: { data: Row[] | null; error: Error | null }) => unknown) => {
-        attempts += 1;
-        return Promise.resolve(resolve(
-          attempts === 1
-            ? { data: null, error: new Error("rls") }
-            : { data: [baseRow()], error: null },
-        ));
-      };
-      return b;
-    });
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByRole("alert"));
-    expect(screen.queryByText(/No\s+unreviewed/i)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^Retry$/i }));
-    await waitFor(() => screen.getByText(/Investor user-a/));
+  it('clears rows on successful empty refresh', async () => {
+    let rows = [baseRow()]; withRows(() => rows); render(<POFVerificationPanel />); await screen.findByText(/Investor user-a/); rows = []; fireEvent.click(screen.getByRole('button', { name: 'Refresh' })); await screen.findByText(/No\s+unreviewed/i); expect(screen.queryByText(/Investor user-a/)).toBeNull();
   });
-
-  it("clears stale rows on a successful empty refresh", async () => {
-    let rows: Row[] = [baseRow()];
-    withRows(() => rows);
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByText(/Investor user-a/));
-    rows = [];
-    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/i }));
-    await waitFor(() => screen.getByText(/No\s+unreviewed/i));
-    expect(screen.queryByText(/Investor user-a/)).toBeNull();
+  it('ignores late results from an earlier deal', async () => {
+    let first: (value: unknown) => void = () => {}; let second: (value: unknown) => void = () => {};
+    rpcMock.mockImplementationOnce(() => new Promise(resolve => { first = resolve; })).mockImplementationOnce(() => new Promise(resolve => { second = resolve; }));
+    const view = render(<POFVerificationPanel dealId='a' />); view.rerender(<POFVerificationPanel dealId='b' />); second({ data: [baseRow({ requester_id: 'new-user' })], error: null }); await screen.findByText(/Investor new-u/);
+    first({ data: [baseRow({ requester_id: 'old-user' })], error: null }); await waitFor(() => expect(screen.queryByText(/Investor old-u/)).toBeNull());
   });
-
-  it("keeps the newest deal result when an older request resolves late", async () => {
-    let resolveFirst: ((value: { data: Row[]; error: null }) => void) | undefined;
-    let resolveSecond: ((value: { data: Row[]; error: null }) => void) | undefined;
-    let calls = 0;
-    fromMock.mockImplementation(() => {
-      const b: Record<string, unknown> = {};
-      b.select = vi.fn().mockReturnValue(b);
-      b.not = vi.fn().mockReturnValue(b);
-      b.order = vi.fn().mockReturnValue(b);
-      b.limit = vi.fn().mockReturnValue(b);
-      b.eq = vi.fn().mockReturnValue(b);
-      b.then = (resolve: (value: { data: Row[]; error: null }) => void) => {
-        calls += 1;
-        if (calls === 1) resolveFirst = resolve;
-        else resolveSecond = resolve;
-        return new Promise<void>(() => undefined);
-      };
-      return b;
-    });
-    const view = render(<POFVerificationPanel dealId="deal-a" />);
-    view.rerender(<POFVerificationPanel dealId="deal-b" />);
-    await waitFor(() => expect(calls).toBe(2));
-    resolveSecond?.({ data: [baseRow({ id: "new", requester_id: "new-user" })], error: null });
-    await waitFor(() => screen.getByText(/Investor new-u/));
-    resolveFirst?.({ data: [baseRow({ id: "old", requester_id: "old-user" })], error: null });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(screen.queryByText(/Investor old-u/)).toBeNull();
-  });
-
-  it("renders nullable amount, registration date, and document as unavailable", async () => {
-    withRows([baseRow({ pof_verified_status: "verified", proof_amount: null, created_at: null, proof_of_funds_url: null })]);
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByRole("button", { name: /Verified/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Verified/i }));
-    expect(screen.getByText(/Amount unavailable/i)).toBeInTheDocument();
-    expect(screen.getByText(/Registration date unavailable/i)).toBeInTheDocument();
-    expect(screen.getByText(/Document unavailable/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Uploaded/i)).toBeNull();
-    expect(screen.queryByText(/Demo Doc/i)).toBeNull();
-  });
-
-  it("does not confirm a mutation when the authorized row is gone", async () => {
-    fromMock.mockImplementation(() => {
-      const b: Record<string, unknown> = {};
-      b.select = vi.fn().mockReturnValue(b);
-      b.not = vi.fn().mockReturnValue(b);
-      b.order = vi.fn().mockReturnValue(b);
-      b.limit = vi.fn().mockReturnValue(b);
-      b.eq = vi.fn().mockReturnValue(b);
-      b.then = (resolve: (v: { data: Row[]; error: null }) => unknown) => Promise.resolve(resolve({ data: [baseRow()], error: null }));
-      b.update = vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }),
-        }),
-      });
-      return b;
-    });
-    render(<POFVerificationPanel />);
-    await waitFor(() => screen.getByText(/Investor user-a/));
-    fireEvent.click(screen.getByRole("button", { name: /^Verify$/i }));
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Failed to verify/i)));
-    expect(screen.getByRole("button", { name: /^Verify$/i })).toBeInTheDocument();
+  it('renders unknown amount/date without synthetic facts', async () => {
+    withRows([baseRow({ pof_verified_status: 'verified', proof_amount: null, created_at: null, proof_of_funds_url: null })]); render(<POFVerificationPanel />); await screen.findByText(/No\s+unreviewed/i); fireEvent.click(screen.getByRole('button', { name: /Verified/ })); expect(screen.getByText('Amount unavailable')).toBeInTheDocument(); expect(screen.getByText('Registration date unavailable')).toBeInTheDocument();
   });
 });

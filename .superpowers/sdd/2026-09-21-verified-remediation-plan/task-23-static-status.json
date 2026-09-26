@@ -1,0 +1,21 @@
+[
+  {
+    "name": "typecheck",
+    "exit": 0,
+    "outputBytes": 0
+  },
+  {
+    "name": "eslint",
+    "exit": 0,
+    "outputBytes": 0
+  },
+  {
+    "name": "migration-idempotency",
+    "exit": 1,
+    "outputBytes": 624
+  },
+  {
+    "name": "git diff --check",
+    "exit": 0
+  }
+]

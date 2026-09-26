@@ -1,0 +1,5 @@
+warning: in the working copy of 'src/components/POFVerificationPanel.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/hooks/useOpenHouseAssetControl.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/POFVerificationPanel.test.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/useOpenHouseAssetControl.branchCoverage.test.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/test/useOpenHouseAssetControl.test.tsx', LF will be replaced by CRLF the next time Git touches it

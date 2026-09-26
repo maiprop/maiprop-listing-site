@@ -1,0 +1,8 @@
+[migration-idempotency] FAIL — 3 violation(s) in 179 new migration(s):
+
+  20260923193844_durable_new_build_enquiry_replay.sql:175  CREATE TRIGGER new_building_leads_preserve_submission_identity without preceding DROP TRIGGER IF EXISTS
+    ↳ Add `DROP TRIGGER IF EXISTS new_building_leads_preserve_submission_identity ON <table>;` before the CREATE.
+  20260923193844_durable_new_build_enquiry_replay.sql:93  CREATE FUNCTION without OR REPLACE
+    ↳ Use `CREATE OR REPLACE FUNCTION ...`.
+  20260924130000_restore_viewing_create_visibility.sql:90  CREATE FUNCTION without OR REPLACE
+    ↳ Use `CREATE OR REPLACE FUNCTION ...`.

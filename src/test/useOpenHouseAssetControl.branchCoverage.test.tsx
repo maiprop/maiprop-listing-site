@@ -69,7 +69,11 @@ function orderedQuery(result: { data: unknown; error: unknown }) {
   };
 }
 
-function maybeSingleQuery(result: { data: unknown; error: unknown }) {
+function maybeSingleQuery(result: { data: any; error: unknown }) {
+  if (result.data?.listings) {
+    mocks.rpc.mockResolvedValueOnce({ data: [{ id: "listing-1", ...result.data.listings }], error: null });
+    result = { ...result, data: { ...result.data, listings: undefined, listing_id: "listing-1" } };
+  }
   return {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),

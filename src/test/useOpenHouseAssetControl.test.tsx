@@ -251,11 +251,11 @@ describe("useMyOpenHouseRegistrations", () => {
     fromMock.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({ data: [{ id: "r-2" }], error: null }),
+      order: vi.fn().mockResolvedValue({ data: [{ id: "r-2", listing_id: "l-1" }], error: null }),
     });
     const { result } = renderHookWithQuery(() => useMyOpenHouseRegistrations());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual([{ id: "r-2" }]);
+    expect(result.current.data).toEqual([{ id: "r-2", listing_id: "l-1", listings: null }]);
   });
 });
 
@@ -450,7 +450,8 @@ describe("useUpdateOpenHouseRegistration", () => {
       open_house_settings?: Array<Record<string, unknown>> | Record<string, unknown> | null;
     };
   } | null) {
-    const lookupMaybe = vi.fn().mockResolvedValue({ data: lookup, error: null });
+    const lookupMaybe = vi.fn().mockResolvedValue({ data: lookup ? { ...lookup, listings: undefined, listing_id: "l-1" } : null, error: null });
+    rpcMock.mockResolvedValue({ data: lookup?.listings ? [{ id: "l-1", ...lookup.listings }] : [], error: null });
     const single = vi.fn().mockResolvedValue({ data: { id: "r-1" }, error: null });
     const eq = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
     const updateMock = vi.fn().mockReturnValue({ eq });
@@ -799,7 +800,8 @@ describe("useUpdateOpenHouseOffer", () => {
       listings: { owner_id: "u-1", open_house_date: "2026-01-01T10:00:00.000Z", open_house_settings: null },
     },
   ) {
-    const lookupMaybe = vi.fn().mockResolvedValue({ data: lookup, error: null });
+    const lookupMaybe = vi.fn().mockResolvedValue({ data: lookup ? { ...lookup, listings: undefined, listing_id: "l-1" } : null, error: null });
+    rpcMock.mockResolvedValue({ data: lookup?.listings ? [{ id: "l-1", ...lookup.listings }] : [], error: null });
     const single = vi.fn().mockResolvedValue({ data: { id: "o-1" }, error: null });
     const eq = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
     const updateMock = vi.fn().mockReturnValue({ eq });

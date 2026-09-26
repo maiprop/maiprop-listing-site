@@ -1,0 +1,296 @@
+BEGIN
+CREATE EXTENSION
+ plan  
+-------
+ 1..45
+(1 row)
+
+                       is                       
+------------------------------------------------
+ ok 1 - submission RPC remains security invoker
+(1 row)
+
+                     ok                      
+---------------------------------------------
+ ok 2 - authenticated can execute submit RPC
+(1 row)
+
+                  ok                   
+---------------------------------------
+ ok 3 - anon cannot execute submit RPC
+(1 row)
+
+                          ok                           
+-------------------------------------------------------
+ ok 4 - service role cannot execute browser submit RPC
+(1 row)
+
+                           ok                            
+---------------------------------------------------------
+ ok 5 - authenticated may evaluate exact-owner predicate
+(1 row)
+
+                            ok                             
+-----------------------------------------------------------
+ ok 6 - anon may evaluate a stored PUBLIC policy predicate
+(1 row)
+
+                                                  ok                                                   
+-------------------------------------------------------------------------------------------------------
+ ok 7 - Task23 deliberately adds only service helper execute; all Task18 browser/anon behavior remains
+(1 row)
+
+                    ok                    
+------------------------------------------
+ ok 8 - raw listing SELECT remains denied
+(1 row)
+
+                           is                           
+--------------------------------------------------------
+ ok 9 - no client UPDATE or DELETE policy is introduced
+(1 row)
+
+ set_config 
+------------
+ {}
+(1 row)
+
+SET
+                        throws_ok                        
+---------------------------------------------------------
+ ok 10 - anonymous role is actually denied RPC execution
+(1 row)
+
+RESET
+SET
+INSERT 0 4
+INSERT 0 4
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 3
+SET
+                               is                                
+-----------------------------------------------------------------
+ ok 11 - off-market owner fixture sets the explicit privacy flag
+(1 row)
+
+ set_config 
+------------
+ {}
+(1 row)
+
+SET
+                       is                        
+-------------------------------------------------
+ ok 12 - NULL current actor never owns a listing
+(1 row)
+
+RESET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"e1810000-0000-4000-8000-000000000002","role":"authenticated"}
+(1 row)
+
+SET
+                     lives_ok                     
+--------------------------------------------------
+ ok 13 - buyer can submit through the invoker RPC
+(1 row)
+
+                             lives_ok                              
+-------------------------------------------------------------------
+ ok 14 - canonical-equivalent replay returns the stored submission
+(1 row)
+
+                     throws_ok                     
+---------------------------------------------------
+ ok 15 - same key with changed payload is rejected
+(1 row)
+
+                        throws_ok                        
+---------------------------------------------------------
+ ok 16 - expected actor cannot impersonate another buyer
+(1 row)
+
+                                            is                                             
+-------------------------------------------------------------------------------------------
+ ok 17 - authenticated buyer can read the saved enquiry before the missing-subject control
+(1 row)
+
+RESET
+ set_config 
+------------
+ {}
+(1 row)
+
+SET
+                                          is                                           
+---------------------------------------------------------------------------------------
+ ok 18 - authenticated role with a missing subject cannot read the saved buyer enquiry
+(1 row)
+
+RESET
+                           is                            
+---------------------------------------------------------
+ ok 19 - first submit and replay persist one raw enquiry
+(1 row)
+
+                      is                       
+-----------------------------------------------
+ ok 20 - replay retains one canonical CRM lead
+(1 row)
+
+                   is                    
+-----------------------------------------
+ ok 21 - replay retains one project lead
+(1 row)
+
+                     is                      
+---------------------------------------------
+ ok 22 - replay emits one owner notification
+(1 row)
+
+                  is                   
+---------------------------------------
+ ok 23 - server stores canonical email
+(1 row)
+
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"e1810000-0000-4000-8000-000000000002","role":"authenticated"}
+(1 row)
+
+SET
+                                      is                                      
+------------------------------------------------------------------------------
+ ok 24 - receipt and independent conflicts execute as the authenticated buyer
+(1 row)
+
+                        results_eq                        
+----------------------------------------------------------
+ ok 25 - replay returns the exact stored receipt identity
+(1 row)
+
+                        throws_ok                        
+---------------------------------------------------------
+ ok 26 - same key rejects an independently changed email
+(1 row)
+
+                       throws_ok                        
+--------------------------------------------------------
+ ok 27 - same key rejects an independently changed name
+(1 row)
+
+                        throws_ok                        
+---------------------------------------------------------
+ ok 28 - same key rejects an independently changed phone
+(1 row)
+
+                         throws_ok                         
+-----------------------------------------------------------
+ ok 29 - same key rejects an independently changed listing
+(1 row)
+
+RESET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"e1810000-0000-4000-8000-000000000001","role":"authenticated"}
+(1 row)
+
+SET
+                                    is                                    
+--------------------------------------------------------------------------
+ ok 30 - actual listing owner reads the buyer enquiry on a paused listing
+(1 row)
+
+                           is                           
+--------------------------------------------------------
+ ok 31 - exact owner predicate accepts a paused listing
+(1 row)
+
+                           is                            
+---------------------------------------------------------
+ ok 32 - exact owner predicate rejects a NULL listing id
+(1 row)
+
+                             is                             
+------------------------------------------------------------
+ ok 33 - exact owner predicate rejects an absent listing id
+(1 row)
+
+                                         is                                         
+------------------------------------------------------------------------------------
+ ok 34 - exact owner predicate ignores sold status and the explicit off-market flag
+(1 row)
+
+                         is                         
+----------------------------------------------------
+ ok 35 - exact owner predicate ignores listing type
+(1 row)
+
+                                        is                                         
+-----------------------------------------------------------------------------------
+ ok 36 - exact owner predicate accepts the actual owner of an organization listing
+(1 row)
+
+                    throws_ok                     
+--------------------------------------------------
+ ok 37 - listing owner cannot replay as the buyer
+(1 row)
+
+                            lives_ok                            
+----------------------------------------------------------------
+ ok 38 - listing owner may submit an enquiry as their own actor
+(1 row)
+
+RESET
+                           is                            
+---------------------------------------------------------
+ ok 39 - owner-as-self receives one durable raw identity
+(1 row)
+
+                                         is                                         
+------------------------------------------------------------------------------------
+ ok 40 - existing self-notification suppression emits no owner-to-self notification
+(1 row)
+
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"e1810000-0000-4000-8000-000000000003","role":"authenticated"}
+(1 row)
+
+SET
+                        is                         
+---------------------------------------------------
+ ok 41 - outsider cannot read the buyer submission
+(1 row)
+
+                                           is                                           
+----------------------------------------------------------------------------------------
+ ok 42 - organization authority without owner equality does not satisfy exact ownership
+(1 row)
+
+                           lives_ok                            
+---------------------------------------------------------------
+ ok 43 - another actor may independently use the same UUID key
+(1 row)
+
+RESET
+                        is                        
+--------------------------------------------------
+ ok 44 - actor plus key, not key alone, is unique
+(1 row)
+
+                            throws_ok                             
+------------------------------------------------------------------
+ ok 45 - privileged update cannot change a keyed accepted payload
+(1 row)
+
+ finish 
+--------
+(0 rows)
+
+ROLLBACK
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-selected-task18-regression.sql:2: NOTICE:  extension "pgtap" already exists, skipping

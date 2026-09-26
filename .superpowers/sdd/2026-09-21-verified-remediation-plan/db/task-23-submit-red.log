@@ -1,0 +1,81 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+DO
+   current_database    |                                                                 version                                                                  | unix_socket 
+-----------------------+------------------------------------------------------------------------------------------------------------------------------------------+-------------
+ maiprop_t23_impl_0927 | PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit | t
+(1 row)
+
+SET
+INSERT 0 3
+INSERT 0 3
+SET
+ set_config |  set_config  |       set_config        
+------------+--------------+-------------------------
+            | service_role | {"role":"service_role"}
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+SET
+                  id                  | status  
+--------------------------------------+---------
+ d2e38753-720d-4607-8f2d-b65d8765a0fa | pending
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ 12705fb0-f339-4c22-a640-1539f3f870dc | pending
+(1 row)
+
+RESET
+              set_config              |  set_config   |                              set_config                               
+--------------------------------------+---------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | authenticated | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+UPDATE 2
+UPDATE 2
+UPDATE 1
+             requester_id             |  status  
+--------------------------------------+----------
+ d1131001-0000-4000-8000-000000000002 | attended
+ d1131001-0000-4000-8000-000000000003 | attended
+(2 rows)
+
+                                                                                                                                                                                   before_state                                                                                                                                                                                   
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"phase" : "before_offer", "listing" : {"id":"d1131002-0000-4000-8000-000000000001","status":"active"}, "offers" : [], "notifications" : [{"user_id":"d1131001-0000-4000-8000-000000000002","type":"open_house","title":"Open house registration approved"}, {"user_id":"d1131001-0000-4000-8000-000000000003","type":"open_house","title":"Open house registration approved"}]}
+(1 row)
+
+              set_config              |                              set_config                               | set_config | set_config 
+--------------------------------------+-----------------------------------------------------------------------+------------+------------
+ d1131001-0000-4000-8000-000000000002 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000002"} |            | 
+(1 row)
+
+SET
+ current_user  |                 uid                  |     role      | triggers | listing_select | listing_id_select | listing_owner_select | listing_update 
+---------------+--------------------------------------+---------------+----------+----------------+-------------------+----------------------+----------------
+ authenticated | d1131001-0000-4000-8000-000000000002 | authenticated | origin   | f              | f                 | f                    | f
+(1 row)
+
+DO
+RESET
+                                                                                                                                                                                   after_state                                                                                                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"phase" : "after_block", "listing" : {"id":"d1131002-0000-4000-8000-000000000001","status":"active"}, "offers" : [], "notifications" : [{"user_id":"d1131001-0000-4000-8000-000000000002","type":"open_house","title":"Open house registration approved"}, {"user_id":"d1131001-0000-4000-8000-000000000003","type":"open_house","title":"Open house registration approved"}]}
+(1 row)
+
+DO
+ROLLBACK
+                                                    after_rollback                                                     
+-----------------------------------------------------------------------------------------------------------------------
+ {"users" : 0, "profiles" : 0, "listings" : 0, "settings" : 0, "registrations" : 0, "offers" : 0, "notifications" : 0}
+(1 row)
+
+DO
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-submit-red.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration d2e38753-720d-4607-8f2d-b65d8765a0fa.
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-submit-red.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 12705fb0-f339-4c22-a640-1539f3f870dc.
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-submit-red.sql:48: NOTICE:  WORKFLOW_BLOCKED stage=submit_open_house_offer SQLSTATE=42501 message=permission denied for table listings

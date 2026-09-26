@@ -1,0 +1,16 @@
+
+ RUN  v4.1.9 C:/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site
+
+stderr | src/test/useOpenHouseAssetControl.test.tsx > useUpsertOpenHouseSettings > toasts an error when upsert fails
+Warning: The current testing environment is not configured to support act(...)
+
+stderr | src/test/useOpenHouseAssetControl.test.tsx > useUpsertOpenHouseSettings > toasts an error when upsert fails
+Warning: The current testing environment is not configured to support act(...)
+
+···················································································
+
+ Test Files  4 passed (4)
+      Tests  83 passed (83)
+   Start at  02:11:40
+   Duration  4.67s (transform 943ms, setup 2.79s, import 2.16s, tests 3.86s, environment 7.17s)
+

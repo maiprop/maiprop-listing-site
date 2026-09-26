@@ -1,0 +1,10 @@
+[
+  { label: 'settings', status: 200, code: undefined },
+  { label: 'registrations', status: 200, code: undefined },
+  { label: 'offers', status: 200, code: undefined },
+  { label: 'old-my-registration', status: 403, code: '42501' },
+  { label: 'old-my-offer', status: 403, code: '42501' },
+  { label: 'old-registration-lookup', status: 403, code: '42501' },
+  { label: 'old-offer-lookup', status: 403, code: '42501' }
+]
+HTTP named-argument/shape/workflow/admin assertions passed: 28

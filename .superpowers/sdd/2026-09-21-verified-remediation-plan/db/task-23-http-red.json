@@ -1,0 +1,72 @@
+[
+  {
+    "label": "settings",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  },
+  {
+    "label": "registrations",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  },
+  {
+    "label": "offers",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  },
+  {
+    "label": "old-my-registration",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  },
+  {
+    "label": "old-my-offer",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  },
+  {
+    "label": "old-registration-lookup",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  },
+  {
+    "label": "old-offer-lookup",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  }
+]

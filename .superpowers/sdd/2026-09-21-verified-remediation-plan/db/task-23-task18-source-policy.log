@@ -1,0 +1,57 @@
+BEGIN
+CREATE EXTENSION
+CREATE EXTENSION
+ plan 
+------
+ 1..6
+(1 row)
+
+                            is                             
+-----------------------------------------------------------
+ ok 1 - prior race proof disconnected every dblink session
+(1 row)
+
+                         is                         
+----------------------------------------------------
+ ok 2 - prior race proof left zero enquiry fixtures
+(1 row)
+
+                      is                       
+-----------------------------------------------
+ ok 3 - source SELECT policy name is preserved
+(1 row)
+
+                           is                           
+--------------------------------------------------------
+ ok 4 - source SELECT policy remains authenticated-only
+(1 row)
+
+                                     ok                                     
+----------------------------------------------------------------------------
+ ok 5 - source SELECT retains private admin and corrected exact-owner terms
+(1 row)
+
+SET
+INSERT 0 3
+INSERT 0 3
+INSERT 0 1
+INSERT 0 1
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"e1890000-0000-4000-8000-000000000001","role":"authenticated"}
+(1 row)
+
+SET
+                                 is                                  
+---------------------------------------------------------------------
+ ok 6 - source authoritative platform admin keeps enquiry visibility
+(1 row)
+
+RESET
+ finish 
+--------
+(0 rows)
+
+ROLLBACK
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-task18-source-policy.sql:2: NOTICE:  extension "pgtap" already exists, skipping

@@ -1,0 +1,223 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+DO
+   current_database    |                                                                 version                                                                  | unix_socket 
+-----------------------+------------------------------------------------------------------------------------------------------------------------------------------+-------------
+ maiprop_t23_impl_0927 | PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit | t
+(1 row)
+
+SET
+INSERT 0 3
+INSERT 0 3
+SET
+ set_config |  set_config  |       set_config        
+------------+--------------+-------------------------
+            | service_role | {"role":"service_role"}
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+SET
+                  id                  | status  
+--------------------------------------+---------
+ 1c521043-eab9-4549-9258-28dee3f070e8 | pending
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ f553395d-8a97-484c-9fda-085cf1b28530 | pending
+(1 row)
+
+RESET
+              set_config              |  set_config   |                              set_config                               
+--------------------------------------+---------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | authenticated | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+UPDATE 2
+UPDATE 2
+UPDATE 1
+             requester_id             |  status  
+--------------------------------------+----------
+ d1131001-0000-4000-8000-000000000002 | attended
+ d1131001-0000-4000-8000-000000000003 | attended
+(2 rows)
+
+CREATE EXTENSION
+ no_plan 
+---------
+(0 rows)
+
+SET
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+UPDATE 1
+SET
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000005 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000005"}
+(1 row)
+
+SET
+                                 is                                  
+---------------------------------------------------------------------
+ ok 1 - organization administrator gains no unrelated public context
+(1 row)
+
+                          is                           
+-------------------------------------------------------
+ ok 2 - organization administrator gains no child rows
+(1 row)
+
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+SET
+                           ok                           
+--------------------------------------------------------
+ ok 3 - actual organization listing owner remains owner
+(1 row)
+
+RESET
+UPDATE 1
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000002 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000002"}
+(1 row)
+
+SET
+                                 is                                 
+--------------------------------------------------------------------
+ ok 4 - historical type-changed active participant summary retained
+(1 row)
+
+                              is                              
+--------------------------------------------------------------
+ ok 5 - type-changed participant does not get hidden settings
+(1 row)
+
+RESET
+UPDATE 1
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000002 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000002"}
+(1 row)
+
+SET
+                      is                      
+----------------------------------------------
+ ok 6 - off-market participant context absent
+(1 row)
+
+                           is                            
+---------------------------------------------------------
+ ok 7 - off-market participant own registration retained
+(1 row)
+
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+SET
+                         is                         
+----------------------------------------------------
+ ok 8 - type-changed off-market owner keeps context
+(1 row)
+
+                                  ok                                  
+----------------------------------------------------------------------
+ ok 9 - shared helper retains type-changed off-market owner semantics
+(1 row)
+
+                ok                 
+-----------------------------------
+ ok 10 - NULL listing is not owned
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok 11 - absent listing is not owned
+(1 row)
+
+RESET
+ set_config | set_config 
+------------+------------
+            | {}
+(1 row)
+
+SET
+                                       is                                       
+--------------------------------------------------------------------------------
+ ok 12 - anon settings hide off-market row through stored private helper policy
+(1 row)
+
+RESET
+UPDATE 1
+       set_config        
+-------------------------
+ {"role":"service_role"}
+(1 row)
+
+SET
+            throws_ok            
+---------------------------------
+ ok 13 - required name preserved
+(1 row)
+
+            throws_ok             
+----------------------------------
+ ok 14 - required email preserved
+(1 row)
+
+            throws_ok             
+----------------------------------
+ ok 15 - required phone preserved
+(1 row)
+
+               throws_ok               
+---------------------------------------
+ ok 16 - required permission preserved
+(1 row)
+
+                     throws_ok                      
+----------------------------------------------------
+ ok 17 - required id_verification_consent preserved
+(1 row)
+
+                     throws_ok                      
+----------------------------------------------------
+ ok 18 - required privacy_acknowledgement preserved
+(1 row)
+
+           throws_ok            
+--------------------------------
+ ok 19 - past event closes RSVP
+(1 row)
+
+RESET
+                                  is                                  
+----------------------------------------------------------------------
+ ok 20 - all rejected statements preserve original registration count
+(1 row)
+
+ finish 
+--------
+ 1..20
+(1 row)
+
+ROLLBACK
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-context-matrix.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 1c521043-eab9-4549-9258-28dee3f070e8.
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-context-matrix.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration f553395d-8a97-484c-9fda-085cf1b28530.
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-context-matrix.sql:31: NOTICE:  extension "pgtap" already exists, skipping

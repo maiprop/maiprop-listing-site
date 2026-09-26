@@ -1,0 +1,83 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+DO
+   current_database    |                                                                 version                                                                  | unix_socket 
+-----------------------+------------------------------------------------------------------------------------------------------------------------------------------+-------------
+ maiprop_t23_impl_0927 | PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit | t
+(1 row)
+
+SET
+INSERT 0 3
+INSERT 0 3
+SET
+ set_config |  set_config  |       set_config        
+------------+--------------+-------------------------
+            | service_role | {"role":"service_role"}
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+SET
+                  id                  | status  
+--------------------------------------+---------
+ 4417354b-697f-4696-8929-74e8aff0544c | pending
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ 72d8c493-05bd-44a0-ab9a-44bb7a32a119 | pending
+(1 row)
+
+RESET
+              set_config              |  set_config   |                              set_config                               
+--------------------------------------+---------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | authenticated | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+UPDATE 2
+UPDATE 2
+UPDATE 1
+             requester_id             |  status  
+--------------------------------------+----------
+ d1131001-0000-4000-8000-000000000002 | attended
+ d1131001-0000-4000-8000-000000000003 | attended
+(2 rows)
+
+RESET
+              set_config              |                              set_config                               
+--------------------------------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+SET
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+RESET
+UPDATE 2
+                                        body                                         
+-------------------------------------------------------------------------------------
+ Your proof of funds for Synthetic offer reopen probe was rejected. ADMISSION_REASON
+ Your proof of funds for Synthetic offer reopen probe was rejected. ADMISSION_REASON
+(2 rows)
+
+ROLLBACK
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 4417354b-697f-4696-8929-74e8aff0544c.
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:27: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 72d8c493-05bd-44a0-ab9a-44bb7a32a119.
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:32: NOTICE:  RED 1: permission denied for table listings
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:33: NOTICE:  RED 2: permission denied for table listings
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:34: NOTICE:  RED 3: permission denied for table listings
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:35: NOTICE:  RED 4: permission denied for table listings
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:36: NOTICE:  RED 5: permission denied for table listings
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:37: NOTICE:  RED 6: permission denied for table listings
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:38: NOTICE:  RED 7: permission denied for table listings
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:39: NOTICE:  RED 8: permission denied for table listings
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:40: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 4417354b-697f-4696-8929-74e8aff0544c.
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-coupled-red.sql:40: WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 72d8c493-05bd-44a0-ab9a-44bb7a32a119.

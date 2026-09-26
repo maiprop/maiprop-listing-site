@@ -1,3 +1,4 @@
+import { hydrateOpenHouseRows, requireOpenHouseListingContext } from "@/services/openHouseContextService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -179,7 +180,7 @@ export function useMyOpenHouseRegistrations() {
         .eq("requester_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as MyOpenHouseRegistration[];
+      return await hydrateOpenHouseRows(data ?? [], true) as unknown as MyOpenHouseRegistration[];
     },
     enabled: !!user?.id,
   });
@@ -293,7 +294,7 @@ export function useUpdateOpenHouseRegistration() {
         .eq("id", id)
         .maybeSingle();
       if (lookupErr) throw lookupErr;
-      const lookup = reg as unknown as OpenHouseRegistrationLookup | null;
+      const lookup = reg ? { ...reg, listings: await requireOpenHouseListingContext(reg.listing_id) } as unknown as OpenHouseRegistrationLookup : null;
       const requesterId = lookup?.requester_id;
       const ownerId = lookup?.listings?.owner_id;
       if (uid !== requesterId && uid !== ownerId) {
@@ -374,7 +375,7 @@ export function useMyOpenHouseOffers() {
         .eq("bidder_id", user.id)
         .order("submitted_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as MyOpenHouseOffer[];
+      return await hydrateOpenHouseRows(data ?? [], false) as unknown as MyOpenHouseOffer[];
     },
     enabled: !!user?.id,
   });
@@ -439,7 +440,7 @@ export function useUpdateOpenHouseOffer() {
         .eq("id", id)
         .maybeSingle();
       if (lookupErr) throw lookupErr;
-      const lookup = offer as unknown as OpenHouseOfferLookup | null;
+      const lookup = offer ? { ...offer, listings: await requireOpenHouseListingContext(offer.listing_id) } as unknown as OpenHouseOfferLookup : null;
       const bidderId = lookup?.bidder_id;
       const ownerId = lookup?.listings?.owner_id;
       if (uid !== bidderId && uid !== ownerId) {

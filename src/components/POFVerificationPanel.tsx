@@ -1,7 +1,7 @@
 /**
  * POFVerificationPanel — Admin panel for reviewing investor Proof of Funds documents.
  *
- * - Fetches from `open_house_registrations` where proof_of_funds_url is not null
+ * - Fetches proof-bearing rows through the scoped admin review RPC
  * - Groups by: Unreviewed / Verified / Rejected
  * - Stats: total docs, total verified, total verified capital
  * - Keeps successful empty responses and load failures explicit
@@ -23,11 +23,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
+import { getAdminOpenHousePofReviews, reviewAdminOpenHousePof, type AdminOpenHousePofRow } from "@/services/openHouseContextService";
 import { toast } from "sonner";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { getOpenHouseDocSignedUrl } from "@/hooks/useOpenHouseAssetControl";
-import { parseMutationInput, rowUpdateMutationSchema } from "@/lib/mutationSchemas";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,25 +42,19 @@ interface PofEntry {
   status: PofStatus;
   rejection_reason?: string;
   pof_rejection_reason?: string;
+  updated_at: string | null;
 }
 
-/**
- * Shape of a row returned from `open_house_registrations` for the POF
- * panel. Some of these columns may not be in the generated Supabase
- * types yet (rejection_reason, pof_verified_status), so we declare the
- * shape locally and cast the query result via `unknown`.
- */
-interface PofRowFromDb {
-  id: string;
-  requester_id: string;
-  proof_of_funds_url: string | null;
-  proof_amount: number | null;
-  pof_verified_status: PofStatus | null;
-  pof_rejection_reason: string | null;
-  created_at: string | null;
-  listing_id: string;
-  rejection_reason: string | null;
-  status: string | null;
+function mapPofEntry(r: AdminOpenHousePofRow): PofEntry {
+  return {
+    id: r.id, investor_name: `Investor ${r.requester_id.slice(0, 6)}`,
+    proof_amount: r.proof_amount, proof_of_funds_url: r.proof_of_funds_url,
+    uploaded_at: r.created_at, listing_id: r.listing_id,
+    status: r.pof_verified_status ?? "unreviewed",
+    rejection_reason: r.rejection_reason ?? undefined,
+    pof_rejection_reason: r.pof_rejection_reason ?? undefined,
+    updated_at: r.updated_at,
+  };
 }
 
 
@@ -199,7 +192,7 @@ function PofRow({ entry, onViewDoc, onVerify, onReject }: PofRowProps) {
       </div>
 
       {/* Document link */}
-      {entry.proof_of_funds_url && entry.proof_of_funds_url.trim() !== "#" ? (
+      {entry.proof_of_funds_url?.trim() && entry.proof_of_funds_url.trim() !== "#" ? (
         <Button
           size="sm"
           variant="outline"
@@ -255,6 +248,10 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const scopeRef = useRef(dealId);
+  scopeRef.current = dealId;
+  const [entriesScope, setEntriesScope] = useState(dealId);
+  const visibleEntries = entriesScope === dealId ? entries : [];
   const initialLoadDealRef = useRef<string | undefined>(undefined);
   const initialLoadStartedRef = useRef(false);
 
@@ -263,42 +260,10 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
     setLoading(true);
     setLoadError(null);
     try {
-      let query = supabase
-        .from("open_house_registrations")
-        .select("id, requester_id, proof_of_funds_url, proof_amount, pof_verified_status, pof_rejection_reason, created_at, listing_id, rejection_reason, status")
-        .not("proof_of_funds_url", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(100);
-
-      if (dealId) {
-        query = query.eq("listing_id", dealId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      // Cast through `unknown` because the generated Supabase types may
-      // not yet include all fields we select (rejection_reason,
-      // pof_verified_status). PofRowFromDb mirrors the runtime shape.
-      const rows = (data ?? []) as unknown as PofRowFromDb[];
-
-      if (requestId !== requestIdRef.current) return;
-      const mapped: PofEntry[] = rows.map((r) => {
-        const status: PofStatus = r.pof_verified_status ?? "unreviewed";
-
-        return {
-          id: r.id,
-          investor_name: `Investor ${r.requester_id.slice(0, 6)}`,
-          proof_amount: r.proof_amount,
-          proof_of_funds_url: r.proof_of_funds_url,
-          uploaded_at: r.created_at,
-          listing_id: r.listing_id,
-          status,
-          rejection_reason: r.rejection_reason ?? undefined,
-          pof_rejection_reason: r.pof_rejection_reason ?? undefined,
-        };
-      });
-      setEntries(mapped);
+      const rows = await getAdminOpenHousePofReviews(dealId);
+      if (requestId !== requestIdRef.current || scopeRef.current !== dealId) return;
+      setEntriesScope(dealId);
+      setEntries(rows.map(mapPofEntry));
     } catch (_err: unknown) {
       if (requestId !== requestIdRef.current) return;
       setLoadError("Failed to load proof-of-funds submissions. Please try again.");
@@ -311,75 +276,42 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
     // React StrictMode replays effects during development. Keep one initial
     // request per mounted deal; explicit Refresh/Retry still call load().
     if (initialLoadStartedRef.current && initialLoadDealRef.current === dealId) return;
+    if (initialLoadStartedRef.current && initialLoadDealRef.current !== dealId) {
+      setEntries([]);
+      setEntriesScope(dealId);
+      setRejectTarget(null);
+    }
     initialLoadStartedRef.current = true;
     initialLoadDealRef.current = dealId;
     void load();
   }, [dealId, load]);
 
-  async function handleVerify(id: string): Promise<void> {
-    const entry = entries.find((e) => e.id === id);
-    if (!entry) return;
-
-    {
-      const payload = parseMutationInput(
-        rowUpdateMutationSchema,
-        { id, updates: { pof_verified_status: "verified", pof_rejection_reason: null } },
-        "POF verification",
-      );
-      const { data: updated, error } = await supabase
-        .from("open_house_registrations")
-        .update(payload.updates as never)
-        .eq("id", payload.id)
-        .select("id")
-        .maybeSingle();
-      if (error || !updated) {
-        toast.error("Failed to verify. Please try again.");
-        return;
-      }
+  async function review(id: string, decision: "verified" | "rejected", reason: string | null): Promise<boolean> {
+    const entry = visibleEntries.find(e => e.id === id);
+    if (!entry || loading || loadError) return false;
+    const scope = dealId;
+    try {
+      const updated = await reviewAdminOpenHousePof(id, decision, reason, entry.updated_at);
+      if (scopeRef.current !== scope) return false;
+      setEntries(prev => prev.map(e => e.id === id ? mapPofEntry(updated) : e));
+      toast.success(decision === "verified"
+        ? "POF verified for " + entry.investor_name + " — " + fmtEur(entry.proof_amount)
+        : "POF rejected for " + entry.investor_name + ".");
+      return true;
+    } catch (error) {
+      if (scopeRef.current !== scope) return false;
+      toast.error(decision === "verified" ? "Failed to verify. Please try again." : "Failed to reject. Please try again.");
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "40001") await load();
+      return false;
     }
+  }
 
-    setEntries((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, status: "verified" } : e))
-    );
-    toast.success(`POF verified for ${entry.investor_name} — ${fmtEur(entry.proof_amount)}`);
+  async function handleVerify(id: string): Promise<void> {
+    await review(id, "verified", null);
   }
 
   async function handleRejectConfirm(reason: string): Promise<void> {
-    if (!rejectTarget) return;
-    const entry = entries.find((e) => e.id === rejectTarget);
-    if (!entry) return;
-
-    {
-      const payload = parseMutationInput(
-        rowUpdateMutationSchema,
-        {
-          id: rejectTarget,
-          updates: {
-            pof_verified_status: "rejected",
-            pof_rejection_reason: reason,
-          },
-        },
-        "POF rejection",
-      );
-      const { data: updated, error } = await supabase
-        .from("open_house_registrations")
-        .update(payload.updates as never)
-        .eq("id", payload.id)
-        .select("id")
-        .maybeSingle();
-      if (error || !updated) {
-        toast.error("Failed to reject. Please try again.");
-        return;
-      }
-    }
-
-    setEntries((prev) =>
-      prev.map((e) =>
-        e.id === rejectTarget ? { ...e, status: "rejected", pof_rejection_reason: reason } : e
-      )
-    );
-    toast.success(`POF rejected for ${entry.investor_name}.`);
-    setRejectTarget(null);
+    if (rejectTarget && await review(rejectTarget, "rejected", reason)) setRejectTarget(null);
   }
 
   async function handleViewDoc(path: string): Promise<void> {
@@ -394,19 +326,19 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
   // ── Derived stats ─────────────────────────────────────────────────────────
 
   const counts: Record<TabKey, number> = {
-    unreviewed: entries.filter((e) => e.status === "unreviewed").length,
-    verified: entries.filter((e) => e.status === "verified").length,
-    rejected: entries.filter((e) => e.status === "rejected").length,
+    unreviewed: visibleEntries.filter((e) => e.status === "unreviewed").length,
+    verified: visibleEntries.filter((e) => e.status === "verified").length,
+    rejected: visibleEntries.filter((e) => e.status === "rejected").length,
   };
 
-  const verifiedEntries = entries.filter((e) => e.status === "verified");
+  const verifiedEntries = visibleEntries.filter((e) => e.status === "verified");
   const totalCapital = verifiedEntries
     .reduce((sum, e) => sum + (e.proof_amount ?? 0), 0);
   const hasUnknownVerifiedAmount = verifiedEntries.some((e) => e.proof_amount == null);
 
-  const filtered = entries.filter((e) => e.status === tab);
+  const filtered = visibleEntries.filter((e) => e.status === tab);
 
-  const rejectEntry = rejectTarget ? entries.find((e) => e.id === rejectTarget) : null;
+  const rejectEntry = rejectTarget ? visibleEntries.find((e) => e.id === rejectTarget) : null;
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: "unreviewed", label: "Unreviewed" },
@@ -422,7 +354,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2">
             <Wallet className="w-3.5 h-3.5" /> Total POF Docs
           </div>
-          <p className="text-2xl font-bold text-foreground">{entries.length}</p>
+          <p className="text-2xl font-bold text-foreground">{visibleEntries.length}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {counts.unreviewed} awaiting review
           </p>

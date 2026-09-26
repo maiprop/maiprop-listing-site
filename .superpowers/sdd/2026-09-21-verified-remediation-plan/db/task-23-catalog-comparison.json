@@ -1,0 +1,7 @@
+{
+  "matched": true,
+  "tableAndSchemaAclUnchanged": true,
+  "submitQuotaDocumentsAdminAuthorityUnchanged": true,
+  "sharedOwnerDefinitionUnchanged": true,
+  "onlySharedOwnerGrantAdded": "service_role EXECUTE"
+}

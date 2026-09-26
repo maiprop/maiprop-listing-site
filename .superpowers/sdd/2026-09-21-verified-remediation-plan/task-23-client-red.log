@@ -1,0 +1,1941 @@
+
+ RUN  v4.1.9 C:/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site
+
+xxxxxx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/test/openHouseBoundary.test.tsx > Open Houses scoped boundary client > hydrates own rows in one batch and preserves missing context/order
+ FAIL  src/test/openHouseBoundary.test.tsx > Open Houses scoped boundary client > hydrates own rows in one batch and preserves missing context/order
+AssertionError: expected undefined to be null
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ src/test/openHouseBoundary.test.tsx:22:45
+     20|   const {result}=renderHook(hook,{wrapper:wrap});await waitFor(()=>exp…
+     21|   expect(result.current.data?.map(r=>r.id)).toEqual(['r-b','r-a','r-a2…
+     22|   expect(result.current.data?.[0].listings).toBeNull();expect(result.c…
+       |                                             ^
+     23|   expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('get_open_house_li…
+     24|   expect(builder.select.mock.calls[0][0]).not.toContain('listings');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/test/openHouseBoundary.test.tsx > Open Houses scoped boundary client > passes exact backend version 2026-09-23T11:22:33.123456+00:00 through real panel review
+ FAIL  src/test/openHouseBoundary.test.tsx > Open Houses scoped boundary client > passes exact backend version null through real panel review
+TestingLibraryElementError: Unable to find role="button" and name "Verify"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-5"
+    >
+      <div
+        class="grid grid-cols-1 sm:grid-cols-3 gap-3"
+      >
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-wallet w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+              />
+              <path
+                d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+              />
+            </svg>
+             Total POF Docs
+          </div>
+          <p
+            class="text-2xl font-bold text-foreground"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            0
+             awaiting review
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-circle-check w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+              />
+              <path
+                d="m9 12 2 2 4-4"
+              />
+            </svg>
+             Total Verified
+          </div>
+          <p
+            class="text-2xl font-bold text-brand-emerald"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Approved submissions
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-trending-up w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <polyline
+                points="22 7 13.5 15.5 8.5 10.5 2 17"
+              />
+              <polyline
+                points="16 7 22 7 22 13"
+              />
+            </svg>
+             Total Capital Available
+          </div>
+          <p
+            class="text-2xl font-bold text-primary"
+          >
+            €0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Verified investor funds
+          </p>
+        </div>
+      </div>
+      <div
+        class="glass-card rounded-xl border border-border overflow-hidden bg-card"
+      >
+        <div
+          class="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/20 flex-wrap gap-2"
+        >
+          <div
+            class="flex gap-1 flex-wrap"
+          >
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 bg-primary/10 text-primary font-semibold"
+            >
+              Unreviewed
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-primary/20 text-primary"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Verified
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Rejected
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+          </div>
+          <div
+            class="flex items-center gap-2"
+          >
+            <button
+              class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground min-h-[44px] rounded-md px-3 lg:h-9 lg:min-h-0 gap-1.5 h-8"
+            >
+              <svg
+                class="lucide lucide-refresh-cw w-3.5 h-3.5"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+                />
+                <path
+                  d="M21 3v5h-5"
+                />
+                <path
+                  d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+                />
+                <path
+                  d="M8 16H3v5"
+                />
+              </svg>
+              <span
+                class="text-xs"
+              >
+                Refresh
+              </span>
+            </button>
+          </div>
+        </div>
+        <div
+          class="hidden sm:grid grid-cols-[36px_1fr_auto_auto_auto_auto] gap-3 px-4 py-2.5 bg-muted/10 border-b border-border items-center"
+        >
+          <div />
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Investor
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide text-right"
+          >
+            POF Amount
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Document
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Status
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Actions
+          </p>
+        </div>
+        <div
+          class="py-10 text-center"
+          role="alert"
+        >
+          <svg
+            class="lucide lucide-circle-alert w-8 h-8 text-destructive mx-auto mb-2"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <line
+              x1="12"
+              x2="12"
+              y1="8"
+              y2="12"
+            />
+            <line
+              x1="12"
+              x2="12.01"
+              y1="16"
+              y2="16"
+            />
+          </svg>
+          <p
+            class="text-sm text-destructive"
+          >
+            Failed to load proof-of-funds submissions. Please try again.
+          </p>
+          <button
+            class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground min-h-[44px] h-10 rounded-md px-3 lg:h-9 lg:min-h-0 mt-3 gap-1.5"
+          >
+            <svg
+              class="lucide lucide-refresh-cw w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+              />
+              <path
+                d="M21 3v5h-5"
+              />
+              <path
+                d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+              />
+              <path
+                d="M8 16H3v5"
+              />
+            </svg>
+             Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-5"
+    >
+      <div
+        class="grid grid-cols-1 sm:grid-cols-3 gap-3"
+      >
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-wallet w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+              />
+              <path
+                d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+              />
+            </svg>
+             Total POF Docs
+          </div>
+          <p
+            class="text-2xl font-bold text-foreground"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            0
+             awaiting review
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-circle-check w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+              />
+              <path
+                d="m9 12 2 2 4-4"
+              />
+            </svg>
+             Total Verified
+          </div>
+          <p
+            class="text-2xl font-bold text-brand-emerald"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Approved submissions
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-trending-up w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <polyline
+                points="22 7 13.5 15.5 8.5 10.5 2 17"
+              />
+              <polyline
+                points="16 7 22 7 22 13"
+              />
+            </svg>
+             Total Capital Available
+          </div>
+          <p
+            class="text-2xl font-bold text-primary"
+          >
+            €0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Verified investor funds
+          </p>
+        </div>
+      </div>
+      <div
+        class="glass-card rounded-xl border border-border overflow-hidden bg-card"
+      >
+        <div
+          class="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/20 flex-wrap gap-2"
+        >
+          <div
+            class="flex gap-1 flex-wrap"
+          >
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 bg-primary/10 text-primary font-semibold"
+            >
+              Unreviewed
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-primary/20 text-primary"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Verified
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Rejected
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+          </div>
+          <div
+            class="flex items-center gap-2"
+          >
+            <button
+              class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground min-h-[44px] rounded-md px-3 lg:h-9 lg:min-h-0 gap-1.5 h-8"
+            >
+              <svg
+                class="lucide lucide-refresh-cw w-3.5 h-3.5"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+                />
+                <path
+                  d="M21 3v5h-5"
+                />
+                <path
+                  d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+                />
+                <path
+                  d="M8 16H3v5"
+                />
+              </svg>
+              <span
+                class="text-xs"
+              >
+                Refresh
+              </span>
+            </button>
+          </div>
+        </div>
+        <div
+          class="hidden sm:grid grid-cols-[36px_1fr_auto_auto_auto_auto] gap-3 px-4 py-2.5 bg-muted/10 border-b border-border items-center"
+        >
+          <div />
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Investor
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide text-right"
+          >
+            POF Amount
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Document
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Status
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Actions
+          </p>
+        </div>
+        <div
+          class="py-10 text-center"
+          role="alert"
+        >
+          <svg
+            class="lucide lucide-circle-alert w-8 h-8 text-destructive mx-auto mb-2"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <line
+              x1="12"
+              x2="12"
+              y1="8"
+              y2="12"
+            />
+            <line
+              x1="12"
+              x2="12.01"
+              y1="16"
+              y2="16"
+            />
+          </svg>
+          <p
+            class="text-sm text-destructive"
+          >
+            Failed to load proof-of-funds submissions. Please try again.
+          </p>
+          <button
+            class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground min-h-[44px] h-10 rounded-md px-3 lg:h-9 lg:min-h-0 mt-3 gap-1.5"
+          >
+            <svg
+              class="lucide lucide-refresh-cw w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+              />
+              <path
+                d="M21 3v5h-5"
+              />
+              <path
+                d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+              />
+              <path
+                d="M8 16H3v5"
+              />
+            </svg>
+             Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ waitForWrapper ../../../../AppData/Local/Temp/maiprop-audit-locked-20260908/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../../AppData/Local/Temp/maiprop-audit-locked-20260908/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/test/openHouseBoundary.test.tsx:28:48
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/test/openHouseBoundary.test.tsx > Open Houses scoped boundary client > clears prior scope dialog and rows while new scope fails
+TestingLibraryElementError: Unable to find role="button" and name "Reject"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-5"
+    >
+      <div
+        class="grid grid-cols-1 sm:grid-cols-3 gap-3"
+      >
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-wallet w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+              />
+              <path
+                d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+              />
+            </svg>
+             Total POF Docs
+          </div>
+          <p
+            class="text-2xl font-bold text-foreground"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            0
+             awaiting review
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-circle-check w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+              />
+              <path
+                d="m9 12 2 2 4-4"
+              />
+            </svg>
+             Total Verified
+          </div>
+          <p
+            class="text-2xl font-bold text-brand-emerald"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Approved submissions
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-trending-up w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <polyline
+                points="22 7 13.5 15.5 8.5 10.5 2 17"
+              />
+              <polyline
+                points="16 7 22 7 22 13"
+              />
+            </svg>
+             Total Capital Available
+          </div>
+          <p
+            class="text-2xl font-bold text-primary"
+          >
+            €0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Verified investor funds
+          </p>
+        </div>
+      </div>
+      <div
+        class="glass-card rounded-xl border border-border overflow-hidden bg-card"
+      >
+        <div
+          class="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/20 flex-wrap gap-2"
+        >
+          <div
+            class="flex gap-1 flex-wrap"
+          >
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 bg-primary/10 text-primary font-semibold"
+            >
+              Unreviewed
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-primary/20 text-primary"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Verified
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Rejected
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+          </div>
+          <div
+            class="flex items-center gap-2"
+          >
+            <span
+              class="text-xs text-muted-foreground bg-muted/40 px-2 py-0.5 rounded font-mono"
+            >
+              Deal: 
+              a
+              …
+            </span>
+            <button
+              class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground min-h-[44px] rounded-md px-3 lg:h-9 lg:min-h-0 gap-1.5 h-8"
+            >
+              <svg
+                class="lucide lucide-refresh-cw w-3.5 h-3.5"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+                />
+                <path
+                  d="M21 3v5h-5"
+                />
+                <path
+                  d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+                />
+                <path
+                  d="M8 16H3v5"
+                />
+              </svg>
+              <span
+                class="text-xs"
+              >
+                Refresh
+              </span>
+            </button>
+          </div>
+        </div>
+        <div
+          class="hidden sm:grid grid-cols-[36px_1fr_auto_auto_auto_auto] gap-3 px-4 py-2.5 bg-muted/10 border-b border-border items-center"
+        >
+          <div />
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Investor
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide text-right"
+          >
+            POF Amount
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Document
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Status
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Actions
+          </p>
+        </div>
+        <div
+          class="py-10 text-center"
+          role="alert"
+        >
+          <svg
+            class="lucide lucide-circle-alert w-8 h-8 text-destructive mx-auto mb-2"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <line
+              x1="12"
+              x2="12"
+              y1="8"
+              y2="12"
+            />
+            <line
+              x1="12"
+              x2="12.01"
+              y1="16"
+              y2="16"
+            />
+          </svg>
+          <p
+            class="text-sm text-destructive"
+          >
+            Failed to load proof-of-funds submissions. Please try again.
+          </p>
+          <button
+            class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground min-h-[44px] h-10 rounded-md px-3 lg:h-9 lg:min-h-0 mt-3 gap-1.5"
+          >
+            <svg
+              class="lucide lucide-refresh-cw w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+              />
+              <path
+                d="M21 3v5h-5"
+              />
+              <path
+                d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+              />
+              <path
+                d="M8 16H3v5"
+              />
+            </svg>
+             Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-5"
+    >
+      <div
+        class="grid grid-cols-1 sm:grid-cols-3 gap-3"
+      >
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-wallet w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+              />
+              <path
+                d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+              />
+            </svg>
+             Total POF Docs
+          </div>
+          <p
+            class="text-2xl font-bold text-foreground"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            0
+             awaiting review
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-circle-check w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+              />
+              <path
+                d="m9 12 2 2 4-4"
+              />
+            </svg>
+             Total Verified
+          </div>
+          <p
+            class="text-2xl font-bold text-brand-emerald"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Approved submissions
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-trending-up w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <polyline
+                points="22 7 13.5 15.5 8.5 10.5 2 17"
+              />
+              <polyline
+                points="16 7 22 7 22 13"
+              />
+            </svg>
+             Total Capital Available
+          </div>
+          <p
+            class="text-2xl font-bold text-primary"
+          >
+            €0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Verified investor funds
+          </p>
+        </div>
+      </div>
+      <div
+        class="glass-card rounded-xl border border-border overflow-hidden bg-card"
+      >
+        <div
+          class="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/20 flex-wrap gap-2"
+        >
+          <div
+            class="flex gap-1 flex-wrap"
+          >
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 bg-primary/10 text-primary font-semibold"
+            >
+              Unreviewed
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-primary/20 text-primary"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Verified
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Rejected
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+          </div>
+          <div
+            class="flex items-center gap-2"
+          >
+            <span
+              class="text-xs text-muted-foreground bg-muted/40 px-2 py-0.5 rounded font-mono"
+            >
+              Deal: 
+              a
+              …
+            </span>
+            <button
+              class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground min-h-[44px] rounded-md px-3 lg:h-9 lg:min-h-0 gap-1.5 h-8"
+            >
+              <svg
+                class="lucide lucide-refresh-cw w-3.5 h-3.5"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+                />
+                <path
+                  d="M21 3v5h-5"
+                />
+                <path
+                  d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+                />
+                <path
+                  d="M8 16H3v5"
+                />
+              </svg>
+              <span
+                class="text-xs"
+              >
+                Refresh
+              </span>
+            </button>
+          </div>
+        </div>
+        <div
+          class="hidden sm:grid grid-cols-[36px_1fr_auto_auto_auto_auto] gap-3 px-4 py-2.5 bg-muted/10 border-b border-border items-center"
+        >
+          <div />
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Investor
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide text-right"
+          >
+            POF Amount
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Document
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Status
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Actions
+          </p>
+        </div>
+        <div
+          class="py-10 text-center"
+          role="alert"
+        >
+          <svg
+            class="lucide lucide-circle-alert w-8 h-8 text-destructive mx-auto mb-2"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <line
+              x1="12"
+              x2="12"
+              y1="8"
+              y2="12"
+            />
+            <line
+              x1="12"
+              x2="12.01"
+              y1="16"
+              y2="16"
+            />
+          </svg>
+          <p
+            class="text-sm text-destructive"
+          >
+            Failed to load proof-of-funds submissions. Please try again.
+          </p>
+          <button
+            class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground min-h-[44px] h-10 rounded-md px-3 lg:h-9 lg:min-h-0 mt-3 gap-1.5"
+          >
+            <svg
+              class="lucide lucide-refresh-cw w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+              />
+              <path
+                d="M21 3v5h-5"
+              />
+              <path
+                d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+              />
+              <path
+                d="M8 16H3v5"
+              />
+            </svg>
+             Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ waitForWrapper ../../../../AppData/Local/Temp/maiprop-audit-locked-20260908/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../../AppData/Local/Temp/maiprop-audit-locked-20260908/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/test/openHouseBoundary.test.tsx:35:70
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/test/openHouseBoundary.test.tsx > Open Houses scoped boundary client > treats whitespace-only document paths as unavailable
+TestingLibraryElementError: Unable to find an element with the text: Document unavailable. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-5"
+    >
+      <div
+        class="grid grid-cols-1 sm:grid-cols-3 gap-3"
+      >
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-wallet w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+              />
+              <path
+                d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+              />
+            </svg>
+             Total POF Docs
+          </div>
+          <p
+            class="text-2xl font-bold text-foreground"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            0
+             awaiting review
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-circle-check w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+              />
+              <path
+                d="m9 12 2 2 4-4"
+              />
+            </svg>
+             Total Verified
+          </div>
+          <p
+            class="text-2xl font-bold text-brand-emerald"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Approved submissions
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-trending-up w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <polyline
+                points="22 7 13.5 15.5 8.5 10.5 2 17"
+              />
+              <polyline
+                points="16 7 22 7 22 13"
+              />
+            </svg>
+             Total Capital Available
+          </div>
+          <p
+            class="text-2xl font-bold text-primary"
+          >
+            €0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Verified investor funds
+          </p>
+        </div>
+      </div>
+      <div
+        class="glass-card rounded-xl border border-border overflow-hidden bg-card"
+      >
+        <div
+          class="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/20 flex-wrap gap-2"
+        >
+          <div
+            class="flex gap-1 flex-wrap"
+          >
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 bg-primary/10 text-primary font-semibold"
+            >
+              Unreviewed
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-primary/20 text-primary"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Verified
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Rejected
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+          </div>
+          <div
+            class="flex items-center gap-2"
+          >
+            <button
+              class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground min-h-[44px] rounded-md px-3 lg:h-9 lg:min-h-0 gap-1.5 h-8"
+            >
+              <svg
+                class="lucide lucide-refresh-cw w-3.5 h-3.5"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+                />
+                <path
+                  d="M21 3v5h-5"
+                />
+                <path
+                  d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+                />
+                <path
+                  d="M8 16H3v5"
+                />
+              </svg>
+              <span
+                class="text-xs"
+              >
+                Refresh
+              </span>
+            </button>
+          </div>
+        </div>
+        <div
+          class="hidden sm:grid grid-cols-[36px_1fr_auto_auto_auto_auto] gap-3 px-4 py-2.5 bg-muted/10 border-b border-border items-center"
+        >
+          <div />
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Investor
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide text-right"
+          >
+            POF Amount
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Document
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Status
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Actions
+          </p>
+        </div>
+        <div
+          class="py-10 text-center"
+          role="alert"
+        >
+          <svg
+            class="lucide lucide-circle-alert w-8 h-8 text-destructive mx-auto mb-2"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <line
+              x1="12"
+              x2="12"
+              y1="8"
+              y2="12"
+            />
+            <line
+              x1="12"
+              x2="12.01"
+              y1="16"
+              y2="16"
+            />
+          </svg>
+          <p
+            class="text-sm text-destructive"
+          >
+            Failed to load proof-of-funds submissions. Please try again.
+          </p>
+          <button
+            class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground min-h-[44px] h-10 rounded-md px-3 lg:h-9 lg:min-h-0 mt-3 gap-1.5"
+          >
+            <svg
+              class="lucide lucide-refresh-cw w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+              />
+              <path
+                d="M21 3v5h-5"
+              />
+              <path
+                d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+              />
+              <path
+                d="M8 16H3v5"
+              />
+            </svg>
+             Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="space-y-5"
+    >
+      <div
+        class="grid grid-cols-1 sm:grid-cols-3 gap-3"
+      >
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-wallet w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+              />
+              <path
+                d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+              />
+            </svg>
+             Total POF Docs
+          </div>
+          <p
+            class="text-2xl font-bold text-foreground"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            0
+             awaiting review
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-circle-check w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+              />
+              <path
+                d="m9 12 2 2 4-4"
+              />
+            </svg>
+             Total Verified
+          </div>
+          <p
+            class="text-2xl font-bold text-brand-emerald"
+          >
+            0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Approved submissions
+          </p>
+        </div>
+        <div
+          class="glass-card rounded-xl border border-border p-4"
+        >
+          <div
+            class="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-2"
+          >
+            <svg
+              class="lucide lucide-trending-up w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <polyline
+                points="22 7 13.5 15.5 8.5 10.5 2 17"
+              />
+              <polyline
+                points="16 7 22 7 22 13"
+              />
+            </svg>
+             Total Capital Available
+          </div>
+          <p
+            class="text-2xl font-bold text-primary"
+          >
+            €0
+          </p>
+          <p
+            class="text-xs text-muted-foreground mt-0.5"
+          >
+            Verified investor funds
+          </p>
+        </div>
+      </div>
+      <div
+        class="glass-card rounded-xl border border-border overflow-hidden bg-card"
+      >
+        <div
+          class="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/20 flex-wrap gap-2"
+        >
+          <div
+            class="flex gap-1 flex-wrap"
+          >
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 bg-primary/10 text-primary font-semibold"
+            >
+              Unreviewed
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-primary/20 text-primary"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Verified
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+            <button
+              class="text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              Rejected
+              <span
+                class="text-xs px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground"
+              >
+                0
+              </span>
+            </button>
+          </div>
+          <div
+            class="flex items-center gap-2"
+          >
+            <button
+              class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground min-h-[44px] rounded-md px-3 lg:h-9 lg:min-h-0 gap-1.5 h-8"
+            >
+              <svg
+                class="lucide lucide-refresh-cw w-3.5 h-3.5"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+                />
+                <path
+                  d="M21 3v5h-5"
+                />
+                <path
+                  d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+                />
+                <path
+                  d="M8 16H3v5"
+                />
+              </svg>
+              <span
+                class="text-xs"
+              >
+                Refresh
+              </span>
+            </button>
+          </div>
+        </div>
+        <div
+          class="hidden sm:grid grid-cols-[36px_1fr_auto_auto_auto_auto] gap-3 px-4 py-2.5 bg-muted/10 border-b border-border items-center"
+        >
+          <div />
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Investor
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide text-right"
+          >
+            POF Amount
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Document
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Status
+          </p>
+          <p
+            class="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+          >
+            Actions
+          </p>
+        </div>
+        <div
+          class="py-10 text-center"
+          role="alert"
+        >
+          <svg
+            class="lucide lucide-circle-alert w-8 h-8 text-destructive mx-auto mb-2"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <line
+              x1="12"
+              x2="12"
+              y1="8"
+              y2="12"
+            />
+            <line
+              x1="12"
+              x2="12.01"
+              y1="16"
+              y2="16"
+            />
+          </svg>
+          <p
+            class="text-sm text-destructive"
+          >
+            Failed to load proof-of-funds submissions. Please try again.
+          </p>
+          <button
+            class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground min-h-[44px] h-10 rounded-md px-3 lg:h-9 lg:min-h-0 mt-3 gap-1.5"
+          >
+            <svg
+              class="lucide lucide-refresh-cw w-3.5 h-3.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+              />
+              <path
+                d="M21 3v5h-5"
+              />
+              <path
+                d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+              />
+              <path
+                d="M8 16H3v5"
+              />
+            </svg>
+             Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ waitForWrapper ../../../../AppData/Local/Temp/maiprop-audit-locked-20260908/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../../AppData/Local/Temp/maiprop-audit-locked-20260908/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/test/openHouseBoundary.test.tsx:40:131
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed (6)
+   Start at  01:57:53
+   Duration  7.33s (transform 245ms, setup 408ms, import 471ms, tests 4.30s, environment 1.29s)
+

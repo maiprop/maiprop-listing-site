@@ -1,0 +1,38 @@
+BEGIN
+CREATE EXTENSION
+ plan 
+------
+ 1..5
+(1 row)
+
+                    is                     
+-------------------------------------------
+ ok 1 - one winner after competing accepts
+(1 row)
+
+                       is                       
+------------------------------------------------
+ ok 2 - one rejected rival, no partial mutation
+(1 row)
+
+                 is                 
+------------------------------------
+ ok 3 - listing paused consistently
+(1 row)
+
+               is               
+--------------------------------
+ ok 4 - host decisions complete
+(1 row)
+
+                       is                        
+-------------------------------------------------
+ ok 5 - one transition notification per decision
+(1 row)
+
+ finish 
+--------
+(0 rows)
+
+ROLLBACK
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-23-race-state.sql:1: NOTICE:  extension "pgtap" already exists, skipping

@@ -1,0 +1,46 @@
+[
+  {
+    "path": "src/components/POFVerificationPanel.tsx",
+    "sha256": "2f3907546a28aa7baad41aa17d1ca24a4a11da518cbb8b0530c544d0e9cb00fc"
+  },
+  {
+    "path": "src/hooks/openHouseAssetControl/constants.ts",
+    "sha256": "e2045abc0a064e9acbd2a431b1828a3437b716a590aa8db0c394f47f9ca73552"
+  },
+  {
+    "path": "src/hooks/useOpenHouseAssetControl.ts",
+    "sha256": "f92e3ae7a4c71c6b97ec26ef017b33bbce7bbd9e1ed0ca2b77f61ed62e86fee0"
+  },
+  {
+    "path": "src/services/openHouseContextService.ts",
+    "sha256": "173ad9275e5c333f2695cc5c1bbc48c0c02ab674edfc9e8982f8866a3b9f3eac"
+  },
+  {
+    "path": "src/test/POFVerificationPanel.test.tsx",
+    "sha256": "c2774afe44bf3d367233e373426a688cb0556300e1550b7e2f6b661c65ec7e25"
+  },
+  {
+    "path": "src/test/openHouseBoundary.test.tsx",
+    "sha256": "5ad36d027fb48a64d93bf47a96bd476db6669a279255b1f852451ab9084888cb"
+  },
+  {
+    "path": "src/test/useOpenHouseAssetControl.test.tsx",
+    "sha256": "6e0db0a316171b22c5e7d558ff6a4d3731b33e275d205bdbbdf173d403094bb5"
+  },
+  {
+    "path": "src/test/useOpenHouseAssetControl.branchCoverage.test.tsx",
+    "sha256": "452da58fc1ce36b47937606e4262fbb50018b304598fd0fb536acf8f620a6a8b"
+  },
+  {
+    "path": "supabase/migrations/20260926224929_repair_open_house_listing_boundary.sql",
+    "sha256": "fbbe6ec765fa264c520f3c2740983addde41a4b39a0e49ae20dbac4d11dada93"
+  },
+  {
+    "path": "supabase/tests/open_house_listing_boundary_test.sql",
+    "sha256": "643c153c36ed347001e9b524d06e711bd138be65844408f12a73abb0fabc3468"
+  },
+  {
+    "path": "supabase/tests/new_build_enquiry_replay_test.sql",
+    "sha256": "fa71e13f5b72c85d4b099f6cd7244127c5e6879ebdfae0c15fb31bfd9675e27f"
+  }
+]

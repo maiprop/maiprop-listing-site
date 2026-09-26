@@ -1,0 +1,30 @@
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pgtap;
+CREATE EXTENSION IF NOT EXISTS dblink;
+SELECT plan(6);
+SELECT is(dblink_get_connections(), NULL::text[], 'prior race proof disconnected every dblink session');
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM public.new_building_leads
+    WHERE user_id::text LIKE 'e1850000-%'
+       OR new_building_id::text LIKE 'e1870000-%'
+  ),
+  0,
+  'prior race proof left zero enquiry fixtures'
+);
+SELECT is((SELECT policyname FROM pg_policies WHERE schemaname='public' AND tablename='new_building_leads' AND cmd='SELECT'), 'new_building_leads_select', 'source SELECT policy name is preserved');
+SELECT is((SELECT roles::text FROM pg_policies WHERE schemaname='public' AND tablename='new_building_leads' AND cmd='SELECT'), '{authenticated}', 'source SELECT policy remains authenticated-only');
+SELECT ok((SELECT qual ILIKE '%private.has_platform_admin%' AND qual ILIKE '%current_user_owns_listing%' FROM pg_policies WHERE schemaname='public' AND tablename='new_building_leads' AND cmd='SELECT'), 'source SELECT retains private admin and corrected exact-owner terms');
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id) VALUES ('e1890000-0000-4000-8000-000000000001'),('e1890000-0000-4000-8000-000000000002'),('e1890000-0000-4000-8000-000000000003');
+INSERT INTO public.profiles(user_id,role) VALUES ('e1890000-0000-4000-8000-000000000001','admin'),('e1890000-0000-4000-8000-000000000002','developer'),('e1890000-0000-4000-8000-000000000003','buyer');
+INSERT INTO public.listings(id,owner_id,title,city,price,sqm,property_type,listing_type,status) VALUES ('e1891000-0000-4000-8000-000000000001','e1890000-0000-4000-8000-000000000002','Admin policy fixture','Athens',1,1,'apartment','new_build','paused');
+INSERT INTO public.new_building_leads(id,new_building_id,user_id,email,full_name,notes) VALUES ('e1892000-0000-4000-8000-000000000001','e1891000-0000-4000-8000-000000000001','e1890000-0000-4000-8000-000000000003','buyer@example.com','Buyer','Fixture');
+SET LOCAL session_replication_role=origin;
+SELECT set_config('request.jwt.claims','{"sub":"e1890000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+SELECT is((SELECT count(*)::integer FROM public.new_building_leads WHERE id='e1892000-0000-4000-8000-000000000001'),1,'source authoritative platform admin keeps enquiry visibility');
+RESET ROLE;
+SELECT * FROM finish();
+ROLLBACK;

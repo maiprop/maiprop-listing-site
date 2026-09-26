@@ -1,0 +1,560 @@
+[
+  {
+    "label": "settings",
+    "status": 200,
+    "body": [
+      {
+        "id": "9c8e29fe-d1af-4105-8564-d8ecadc23773",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "timeslots": [],
+        "max_visitors_per_slot": 10,
+        "max_total_visitors": null,
+        "broker_required": false,
+        "require_proof_of_funds": false,
+        "min_proof_amount": null,
+        "require_investor_declaration": false,
+        "offer_deadline": "2026-09-27T02:53:09.516212+03:00",
+        "allow_sealed_bids": true,
+        "created_at": "2026-09-27T01:53:09.516212+03:00",
+        "updated_at": "2026-09-27T01:53:09.516212+03:00"
+      }
+    ]
+  },
+  {
+    "label": "registrations",
+    "status": 200,
+    "body": [
+      {
+        "id": "30d764f1-ce6d-4c92-9860-65292f1924ce",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "requester_id": "d1131001-0000-4000-8000-000000000002",
+        "timeslot_index": null,
+        "id_doc_type": null,
+        "id_doc_url": null,
+        "id_verified_at": null,
+        "waiver_signed_at": null,
+        "waiver_url": null,
+        "proof_of_funds_url": "d1131001-0000-4000-8000-000000000002/d1131002-0000-4000-8000-000000000001/proof.pdf",
+        "proof_amount": null,
+        "investor_declaration_signed_at": null,
+        "status": "attended",
+        "approved_by": "d1131001-0000-4000-8000-000000000001",
+        "approved_at": "2026-09-27T01:53:09.516212+03:00",
+        "rejection_reason": "ADMISSION_HTTP_REASON",
+        "attended_at": "2026-09-27T01:53:09.516212+03:00",
+        "note": null,
+        "created_at": "2026-09-27T01:53:09.516212+03:00",
+        "updated_at": "2026-09-27T02:10:05.654665+03:00",
+        "pof_verified_status": "unreviewed",
+        "contact_name": "Synthetic A",
+        "contact_email": "a@example.test",
+        "contact_phone": "+300000001",
+        "visit_purpose": null,
+        "contact_permission_at": "2026-09-27T01:53:09.516212+03:00",
+        "id_verification_consent_at": "2026-09-27T01:53:09.516212+03:00",
+        "privacy_acknowledged_at": "2026-09-27T01:53:09.516212+03:00",
+        "mortgage_status": null,
+        "budget_range": null,
+        "working_with_agent": null,
+        "screening_doc_url": null,
+        "screening_score": 0,
+        "pof_rejection_reason": null
+      },
+      {
+        "id": "82c5d5b6-bf24-489e-943a-912d35b9e697",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "requester_id": "d1131001-0000-4000-8000-000000000003",
+        "timeslot_index": null,
+        "id_doc_type": null,
+        "id_doc_url": null,
+        "id_verified_at": null,
+        "waiver_signed_at": null,
+        "waiver_url": null,
+        "proof_of_funds_url": "d1131001-0000-4000-8000-000000000003/d1131002-0000-4000-8000-000000000001/proof.pdf",
+        "proof_amount": null,
+        "investor_declaration_signed_at": null,
+        "status": "attended",
+        "approved_by": "d1131001-0000-4000-8000-000000000001",
+        "approved_at": "2026-09-27T01:53:09.516212+03:00",
+        "rejection_reason": "ADMISSION_HTTP_REASON",
+        "attended_at": "2026-09-27T01:53:09.516212+03:00",
+        "note": null,
+        "created_at": "2026-09-27T01:53:09.516212+03:00",
+        "updated_at": "2026-09-27T02:10:05.654665+03:00",
+        "pof_verified_status": "unreviewed",
+        "contact_name": "Synthetic B",
+        "contact_email": "b@example.test",
+        "contact_phone": "+300000002",
+        "visit_purpose": null,
+        "contact_permission_at": "2026-09-27T01:53:09.516212+03:00",
+        "id_verification_consent_at": "2026-09-27T01:53:09.516212+03:00",
+        "privacy_acknowledged_at": "2026-09-27T01:53:09.516212+03:00",
+        "mortgage_status": null,
+        "budget_range": null,
+        "working_with_agent": null,
+        "screening_doc_url": null,
+        "screening_score": 0,
+        "pof_rejection_reason": null
+      }
+    ]
+  },
+  {
+    "label": "offers",
+    "status": 200,
+    "body": []
+  },
+  {
+    "label": "old-my-registration",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  },
+  {
+    "label": "old-my-offer",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  },
+  {
+    "label": "old-registration-lookup",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  },
+  {
+    "label": "old-offer-lookup",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  },
+  {
+    "label": "participant fixed context",
+    "status": 200,
+    "body": [
+      {
+        "id": "d1131002-0000-4000-8000-000000000001",
+        "owner_id": "d1131001-0000-4000-8000-000000000001",
+        "title": "Synthetic offer reopen probe",
+        "city": "Athens",
+        "address": null,
+        "cover_image_url": null,
+        "open_house_date": "2026-09-26T23:53:09.516212+03:00",
+        "price": 200000,
+        "open_house_transaction_type": "sale",
+        "open_house_settings": [
+          {
+            "id": "9c8e29fe-d1af-4105-8564-d8ecadc23773",
+            "timeslots": [],
+            "created_at": "2026-09-27T01:53:09.516212+03:00",
+            "listing_id": "d1131002-0000-4000-8000-000000000001",
+            "updated_at": "2026-09-27T01:53:09.516212+03:00",
+            "offer_deadline": "2026-09-27T02:53:09.516212+03:00",
+            "broker_required": false,
+            "min_proof_amount": null,
+            "allow_sealed_bids": true,
+            "max_total_visitors": null,
+            "max_visitors_per_slot": 10,
+            "require_proof_of_funds": false,
+            "require_investor_declaration": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "label": "unrelated active id context absent",
+    "status": 200,
+    "body": []
+  },
+  {
+    "label": "anon context denied",
+    "status": 401,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for function get_open_house_listing_context"
+    }
+  },
+  {
+    "label": "upgraded registration and retained profile embed",
+    "status": 200,
+    "body": [
+      {
+        "id": "30d764f1-ce6d-4c92-9860-65292f1924ce",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "requester_id": "d1131001-0000-4000-8000-000000000002",
+        "timeslot_index": null,
+        "id_doc_type": null,
+        "id_doc_url": null,
+        "id_verified_at": null,
+        "waiver_signed_at": null,
+        "waiver_url": null,
+        "proof_of_funds_url": "d1131001-0000-4000-8000-000000000002/d1131002-0000-4000-8000-000000000001/proof.pdf",
+        "proof_amount": null,
+        "investor_declaration_signed_at": null,
+        "status": "attended",
+        "approved_by": "d1131001-0000-4000-8000-000000000001",
+        "approved_at": "2026-09-27T01:53:09.516212+03:00",
+        "rejection_reason": "ADMISSION_HTTP_REASON",
+        "attended_at": "2026-09-27T01:53:09.516212+03:00",
+        "note": null,
+        "created_at": "2026-09-27T01:53:09.516212+03:00",
+        "updated_at": "2026-09-27T02:10:05.654665+03:00",
+        "pof_verified_status": "unreviewed",
+        "contact_name": "Synthetic A",
+        "contact_email": "a@example.test",
+        "contact_phone": "+300000001",
+        "visit_purpose": null,
+        "contact_permission_at": "2026-09-27T01:53:09.516212+03:00",
+        "id_verification_consent_at": "2026-09-27T01:53:09.516212+03:00",
+        "privacy_acknowledged_at": "2026-09-27T01:53:09.516212+03:00",
+        "mortgage_status": null,
+        "budget_range": null,
+        "working_with_agent": null,
+        "screening_doc_url": null,
+        "screening_score": 0,
+        "pof_rejection_reason": null,
+        "profiles": null
+      },
+      {
+        "id": "82c5d5b6-bf24-489e-943a-912d35b9e697",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "requester_id": "d1131001-0000-4000-8000-000000000003",
+        "timeslot_index": null,
+        "id_doc_type": null,
+        "id_doc_url": null,
+        "id_verified_at": null,
+        "waiver_signed_at": null,
+        "waiver_url": null,
+        "proof_of_funds_url": "d1131001-0000-4000-8000-000000000003/d1131002-0000-4000-8000-000000000001/proof.pdf",
+        "proof_amount": null,
+        "investor_declaration_signed_at": null,
+        "status": "attended",
+        "approved_by": "d1131001-0000-4000-8000-000000000001",
+        "approved_at": "2026-09-27T01:53:09.516212+03:00",
+        "rejection_reason": "ADMISSION_HTTP_REASON",
+        "attended_at": "2026-09-27T01:53:09.516212+03:00",
+        "note": null,
+        "created_at": "2026-09-27T01:53:09.516212+03:00",
+        "updated_at": "2026-09-27T02:10:05.654665+03:00",
+        "pof_verified_status": "unreviewed",
+        "contact_name": "Synthetic B",
+        "contact_email": "b@example.test",
+        "contact_phone": "+300000002",
+        "visit_purpose": null,
+        "contact_permission_at": "2026-09-27T01:53:09.516212+03:00",
+        "id_verification_consent_at": "2026-09-27T01:53:09.516212+03:00",
+        "privacy_acknowledged_at": "2026-09-27T01:53:09.516212+03:00",
+        "mortgage_status": null,
+        "budget_range": null,
+        "working_with_agent": null,
+        "screening_doc_url": null,
+        "screening_score": 0,
+        "pof_rejection_reason": null,
+        "profiles": null
+      }
+    ]
+  },
+  {
+    "label": "old signature submit A",
+    "status": 200,
+    "body": {
+      "id": "8956b31a-c49e-4ad3-a468-7645d5f3a708",
+      "listing_id": "d1131002-0000-4000-8000-000000000001",
+      "bidder_id": "d1131001-0000-4000-8000-000000000002",
+      "amount": 210000,
+      "currency": "EUR",
+      "message": "A",
+      "status": "submitted",
+      "submitted_at": "2026-09-27T02:10:17.469311+03:00",
+      "revealed_at": null,
+      "decided_by": null,
+      "decided_at": null
+    }
+  },
+  {
+    "label": "old signature submit B",
+    "status": 200,
+    "body": {
+      "id": "12ca46e2-3909-4f25-9675-9e1ccb0c4448",
+      "listing_id": "d1131002-0000-4000-8000-000000000001",
+      "bidder_id": "d1131001-0000-4000-8000-000000000003",
+      "amount": 220000,
+      "currency": "EUR",
+      "message": "B",
+      "status": "submitted",
+      "submitted_at": "2026-09-27T02:10:17.481441+03:00",
+      "revealed_at": null,
+      "decided_by": null,
+      "decided_at": null
+    }
+  },
+  {
+    "label": "deadline denial",
+    "status": 400,
+    "body": {
+      "code": "P0001",
+      "details": null,
+      "hint": null,
+      "message": "bids_cannot_be_revealed_before_deadline"
+    }
+  },
+  {
+    "label": "host settings deadline update",
+    "status": 200,
+    "body": [
+      {
+        "id": "9c8e29fe-d1af-4105-8564-d8ecadc23773",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "timeslots": [],
+        "max_visitors_per_slot": 10,
+        "max_total_visitors": null,
+        "broker_required": false,
+        "require_proof_of_funds": false,
+        "min_proof_amount": null,
+        "require_investor_declaration": false,
+        "offer_deadline": "2020-01-01T02:00:00+02:00",
+        "allow_sealed_bids": true,
+        "created_at": "2026-09-27T01:53:09.516212+03:00",
+        "updated_at": "2026-09-27T02:10:17.497826+03:00"
+      }
+    ]
+  },
+  {
+    "label": "host reveal direct child API",
+    "status": 200,
+    "body": [
+      {
+        "id": "8956b31a-c49e-4ad3-a468-7645d5f3a708",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "bidder_id": "d1131001-0000-4000-8000-000000000002",
+        "amount": 210000,
+        "currency": "EUR",
+        "message": "A",
+        "status": "revealed",
+        "submitted_at": "2026-09-27T02:10:17.469311+03:00",
+        "revealed_at": "2026-09-27T02:10:17.069+03:00",
+        "decided_by": null,
+        "decided_at": null
+      },
+      {
+        "id": "12ca46e2-3909-4f25-9675-9e1ccb0c4448",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "bidder_id": "d1131001-0000-4000-8000-000000000003",
+        "amount": 220000,
+        "currency": "EUR",
+        "message": "B",
+        "status": "revealed",
+        "submitted_at": "2026-09-27T02:10:17.481441+03:00",
+        "revealed_at": "2026-09-27T02:10:17.069+03:00",
+        "decided_by": null,
+        "decided_at": null
+      }
+    ]
+  },
+  {
+    "label": "foreign bidder acceptance denied",
+    "status": 400,
+    "body": {
+      "code": "P0001",
+      "details": null,
+      "hint": null,
+      "message": "only_host_can_accept_offer"
+    }
+  },
+  {
+    "label": "old accept signature host A",
+    "status": 200,
+    "body": {
+      "id": "8956b31a-c49e-4ad3-a468-7645d5f3a708",
+      "listing_id": "d1131002-0000-4000-8000-000000000001",
+      "bidder_id": "d1131001-0000-4000-8000-000000000002",
+      "amount": 210000,
+      "currency": "EUR",
+      "message": "A",
+      "status": "accepted",
+      "submitted_at": "2026-09-27T02:10:17.469311+03:00",
+      "revealed_at": "2026-09-27T02:10:17.069+03:00",
+      "decided_by": "d1131001-0000-4000-8000-000000000001",
+      "decided_at": "2026-09-27T02:10:17.52541+03:00"
+    }
+  },
+  {
+    "label": "paused bidder context absent",
+    "status": 200,
+    "body": []
+  },
+  {
+    "label": "paused owner context",
+    "status": 200,
+    "body": [
+      {
+        "id": "d1131002-0000-4000-8000-000000000001",
+        "owner_id": "d1131001-0000-4000-8000-000000000001",
+        "title": "Synthetic offer reopen probe",
+        "city": "Athens",
+        "address": null,
+        "cover_image_url": null,
+        "open_house_date": "2026-09-26T23:53:09.516212+03:00",
+        "price": 200000,
+        "open_house_transaction_type": "sale",
+        "open_house_settings": [
+          {
+            "id": "9c8e29fe-d1af-4105-8564-d8ecadc23773",
+            "timeslots": [],
+            "created_at": "2026-09-27T01:53:09.516212+03:00",
+            "listing_id": "d1131002-0000-4000-8000-000000000001",
+            "updated_at": "2026-09-27T02:10:17.497826+03:00",
+            "offer_deadline": "2020-01-01T02:00:00+02:00",
+            "broker_required": false,
+            "min_proof_amount": null,
+            "allow_sealed_bids": true,
+            "max_total_visitors": null,
+            "max_visitors_per_slot": 10,
+            "require_proof_of_funds": false,
+            "require_investor_declaration": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "label": "old reopen signature paused host",
+    "status": 204,
+    "body": null
+  },
+  {
+    "label": "old accept signature select B",
+    "status": 200,
+    "body": {
+      "id": "12ca46e2-3909-4f25-9675-9e1ccb0c4448",
+      "listing_id": "d1131002-0000-4000-8000-000000000001",
+      "bidder_id": "d1131001-0000-4000-8000-000000000003",
+      "amount": 220000,
+      "currency": "EUR",
+      "message": "B",
+      "status": "accepted",
+      "submitted_at": "2026-09-27T02:10:17.481441+03:00",
+      "revealed_at": "2026-09-27T02:10:17.069+03:00",
+      "decided_by": "d1131001-0000-4000-8000-000000000001",
+      "decided_at": "2026-09-27T02:10:17.559527+03:00"
+    }
+  },
+  {
+    "label": "dedicated admin panel",
+    "status": 200,
+    "body": [
+      {
+        "id": "82c5d5b6-bf24-489e-943a-912d35b9e697",
+        "requester_id": "d1131001-0000-4000-8000-000000000003",
+        "proof_of_funds_url": "d1131001-0000-4000-8000-000000000003/d1131002-0000-4000-8000-000000000001/proof.pdf",
+        "proof_amount": null,
+        "pof_verified_status": "unreviewed",
+        "pof_rejection_reason": null,
+        "created_at": "2026-09-27T01:53:09.516212+03:00",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "rejection_reason": "ADMISSION_HTTP_REASON",
+        "status": "attended",
+        "updated_at": "2026-09-27T02:10:05.654665+03:00"
+      },
+      {
+        "id": "30d764f1-ce6d-4c92-9860-65292f1924ce",
+        "requester_id": "d1131001-0000-4000-8000-000000000002",
+        "proof_of_funds_url": "d1131001-0000-4000-8000-000000000002/d1131002-0000-4000-8000-000000000001/proof.pdf",
+        "proof_amount": null,
+        "pof_verified_status": "unreviewed",
+        "pof_rejection_reason": null,
+        "created_at": "2026-09-27T01:53:09.516212+03:00",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "rejection_reason": "ADMISSION_HTTP_REASON",
+        "status": "attended",
+        "updated_at": "2026-09-27T02:10:05.654665+03:00"
+      }
+    ]
+  },
+  {
+    "label": "exact-version admin verify",
+    "status": 200,
+    "body": [
+      {
+        "id": "82c5d5b6-bf24-489e-943a-912d35b9e697",
+        "requester_id": "d1131001-0000-4000-8000-000000000003",
+        "proof_of_funds_url": "d1131001-0000-4000-8000-000000000003/d1131002-0000-4000-8000-000000000001/proof.pdf",
+        "proof_amount": null,
+        "pof_verified_status": "verified",
+        "pof_rejection_reason": null,
+        "created_at": "2026-09-27T01:53:09.516212+03:00",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "rejection_reason": "ADMISSION_HTTP_REASON",
+        "status": "attended",
+        "updated_at": "2026-09-27T02:10:17.574058+03:00"
+      }
+    ]
+  },
+  {
+    "label": "stale review conflict",
+    "status": 500,
+    "body": {
+      "code": "40001",
+      "details": null,
+      "hint": null,
+      "message": "open_house_pof_review_conflict"
+    }
+  },
+  {
+    "label": "proof reason reject",
+    "status": 200,
+    "body": [
+      {
+        "id": "82c5d5b6-bf24-489e-943a-912d35b9e697",
+        "requester_id": "d1131001-0000-4000-8000-000000000003",
+        "proof_of_funds_url": "d1131001-0000-4000-8000-000000000003/d1131002-0000-4000-8000-000000000001/proof.pdf",
+        "proof_amount": null,
+        "pof_verified_status": "rejected",
+        "pof_rejection_reason": "POF_HTTP_REASON",
+        "created_at": "2026-09-27T01:53:09.516212+03:00",
+        "listing_id": "d1131002-0000-4000-8000-000000000001",
+        "rejection_reason": "ADMISSION_HTTP_REASON",
+        "status": "attended",
+        "updated_at": "2026-09-27T02:10:17.587622+03:00"
+      }
+    ]
+  },
+  {
+    "label": "legacy admin flag review denied",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "platform_admin_required"
+    }
+  },
+  {
+    "label": "raw listing stays denied",
+    "status": 403,
+    "body": {
+      "code": "42501",
+      "details": null,
+      "hint": null,
+      "message": "permission denied for table listings"
+    }
+  }
+]

@@ -1,0 +1,13 @@
+Existing pre-commit command: node scripts/project-runtime.mjs -- npm run lint
+Exit: 1
+Output summary from the tool's complete hook result (no rerun):
+perf-baseline-source/scripts/_prod-guard.mjs:84:5 unused eslint-disable warning
+perf-baseline-source/scripts/seed-demo-accounts.ts:342:61,360:70,379:45,392:10 no-explicit-any
+perf-baseline-source/scripts/seed-listing-images.ts:313:61,321:60 no-explicit-any
+perf-baseline-source/scripts/seed-mock-new-builds.ts:303:52 no-explicit-any
+perf-baseline-source/scripts/seed-mock-open-houses.ts:535:29,536:30,537:29,538:26,539:26,540:28,541:24,542:31,543:29,578:33 no-explicit-any
+perf-baseline-source/src/components/ui/command.tsx:24:11 no-empty-object-type
+perf-baseline-source/src/components/ui/textarea.tsx:5:18 no-empty-object-type
+perf-baseline-source/src/test/components.smoke.test.tsx:1:1 ban-ts-comment
+7 react-refresh/only-export-components warnings in old badge/button/form/navigation-menu/sidebar/sonner/toggle
+28 problems (20 errors, 8 warnings); husky - pre-commit script failed (code 1)

@@ -1,0 +1,50 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+DO
+   current_database    |                                                                 version                                                                  | unix_socket 
+-----------------------+------------------------------------------------------------------------------------------------------------------------------------------+-------------
+ maiprop_t23_http_0927 | PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit | t
+(1 row)
+
+SET
+INSERT 0 3
+INSERT 0 3
+SET
+ set_config |  set_config  |       set_config        
+------------+--------------+-------------------------
+            | service_role | {"role":"service_role"}
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+SET
+                  id                  | status  
+--------------------------------------+---------
+ 30d764f1-ce6d-4c92-9860-65292f1924ce | pending
+(1 row)
+
+                  id                  | status  
+--------------------------------------+---------
+ 82c5d5b6-bf24-489e-943a-912d35b9e697 | pending
+(1 row)
+
+RESET
+              set_config              |  set_config   |                              set_config                               
+--------------------------------------+---------------+-----------------------------------------------------------------------
+ d1131001-0000-4000-8000-000000000001 | authenticated | {"role":"authenticated","sub":"d1131001-0000-4000-8000-000000000001"}
+(1 row)
+
+UPDATE 2
+UPDATE 2
+UPDATE 1
+             requester_id             |  status  
+--------------------------------------+----------
+ d1131001-0000-4000-8000-000000000002 | attended
+ d1131001-0000-4000-8000-000000000003 | attended
+(2 rows)
+
+COMMIT
+WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 30d764f1-ce6d-4c92-9860-65292f1924ce.
+WARNING:  WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration 82c5d5b6-bf24-489e-943a-912d35b9e697.
