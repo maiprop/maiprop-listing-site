@@ -1,0 +1,3 @@
+missing expected exit3; rejected before writes
+wrong expected exit3; rejected before writes
+Composition exit0, race14 + ordinary33 = 47 assertions, no failures

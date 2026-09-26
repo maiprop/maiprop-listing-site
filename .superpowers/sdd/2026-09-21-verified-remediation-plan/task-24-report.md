@@ -64,3 +64,31 @@ Fixture attempts1–3 respectively hit guarded direct role change, missing expli
 Tooling deviation: an initial evidence-script invocation via `npm exec -- node` emitted an install warning for `node@22.23.3` and may have fetched npm cache content, contrary to the no-install constraint. That invocation completed, but the npm-exec-node workflow was not repeated; its stdout/stderr/exit are preserved as `task-24-source-check-attempt1.*`. No package.json/lockfile tracked diff changed and no cache cleanup was attempted. All accepted source checks were rerun using the project wrapper's direct `-- node` path, asserted Node20 and recorded v20.20.2. No dependency manifest was modified.
 
 D0 managed-default ACL bootstrap remains unresolved. This proves local PG16.15 selected forward upgrade and concurrency, not hosted PG17.6 parity, production rollout, actual payment/provider completion, or global clean replay. No coverage run or exclusions were added; separate Edge>=80%, executable PL/pgSQL>=80% and frontend floors remain later gates. Remote dblink work is not main-backend coverage. Future deployment must preflight current reservation/helper definitions, owner/ACL and dependencies. Reverting the function would restore premature denial; rollback must never delete usage or refund consumed credits.
+
+## Fix1 — explicit disposable target and race-to-contract composition
+
+Addresses the P2 in `task-24-independent-review-20260927.md`, against base `a2905aa2581abe52b9764453db010fdb97bc1114`. Only the race harness guard changes; the runtime migration and ordinary33 suite are unchanged, so their original source/ACL/runtime evidence is reused. The old hardcoded-target behavior described above is superseded by this paragraph; all original outputs remain intact.
+
+The controlling runner must first issue `SET maiprop.test_disposable_database='<its exact authorized disposable database>';` in the same backend. The guard uses `current_setting(...,true)` and requires nonempty exact equality with `current_database()`; there is no default, prefix-based acceptance or self-derived expected name. Missing/mismatch abort before extension creation, BEGIN, fixture insertion or commit. The existing local Unix socket, normal-origin triggers and collision safeguards remain. Known shared/bootstrap targets (`postgres`, `template0`, `template1`, `maiprop_replay_current_20260921`) are rejected even if explicitly named. This setting is an explicit runner assertion that its named target is disposable, not permission to run on arbitrary shared databases; D0 must supply its own authorized exact target. Bounded two-session mechanics and exact cleanup are unchanged.
+
+Created only `maiprop_task24_fix1_20260927` from the immutable source template, applied only the already reviewed Task24 migration, then ran these focused checks on local PG16.15:
+
+- Missing setting: psql exit3 at the guard; no BEGIN/INSERT/CREATE/COMMIT in stdout.
+- Wrong setting (`maiprop_task24_fix1_wrong_20260927` while connected to the authorized fix1 clone): same exit3 before writes. A separate observer audit after these failures records zero across all seven fixture relations and zero remote sessions.
+- Explicit correct setting: `task-24-fix1-composition.sql` runs the race14 then ordinary33 in one psql process/backend **pid455**, with the same pid printed before, between and after. **47/47 assertions pass, exit0**, plans1..14 then1..33, no TAP failure. A pid458 holds the admitted last credit, B pid459 demonstrably waits `Lock/advisory` with blocker `{458}`, then A commits and B denies. Assertions between suites confirm no temporary/TAP relations or dblink connections; final assertions confirm0 temp/TAP relations,0 temp helpers and0 dblink connections. The final audit records0 across seven fixture relations and0 remote sessions.
+- Dropped only the fix1 clone (exit0); catalog check returns0 (exit0). No template, other clone, application grants, source runtime bodies, dependencies or hosted services changed. No npm/install invocation or broad suite was run during fix1.
+
+Exact command forms (working directory is this worktree; `<mounted-root>` is `/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site`):
+
+```text
+wsl -d Ubuntu -u postgres -- createdb -h /var/run/postgresql -T maiprop_replay_current_20260921 maiprop_task24_fix1_20260927
+wsl -d Ubuntu -u postgres -- psql -X -v ON_ERROR_STOP=1 -h /var/run/postgresql -d maiprop_task24_fix1_20260927 -f <mounted-root>/supabase/migrations/20260926233914_restore_ai_reservation_spendable_credits.sql
+wsl -d Ubuntu -u postgres -- psql -X -v ON_ERROR_STOP=1 -h /var/run/postgresql -d maiprop_task24_fix1_20260927 -f <mounted-root>/supabase/tests/ai_reservation_last_credit_race_test.sql
+wsl -d Ubuntu -u postgres -- psql -X -v ON_ERROR_STOP=1 -h /var/run/postgresql -d maiprop_task24_fix1_20260927 -f <mounted-root>/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-24-fix1-wrong.sql
+wsl -d Ubuntu -u postgres -- psql -X -v ON_ERROR_STOP=1 -h /var/run/postgresql -d maiprop_task24_fix1_20260927 -f <mounted-root>/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-24-cleanup.sql
+wsl -d Ubuntu -u postgres -- psql -X -v ON_ERROR_STOP=1 -h /var/run/postgresql -d maiprop_task24_fix1_20260927 -f <mounted-root>/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-24-fix1-composition.sql
+wsl -d Ubuntu -u postgres -- dropdb -h /var/run/postgresql maiprop_task24_fix1_20260927
+wsl -d Ubuntu -u postgres -- psql -X -At -h /var/run/postgresql -d postgres -c "SELECT count(*) FROM pg_database WHERE datname='maiprop_task24_fix1_20260927';"
+```
+
+Every command has retained `db/task-24-fix1-<create|apply|missing|wrong|rejected-residue|composition|dropdb|dropdb-verify>.stdout/.stderr/.exit`. A separate output validator checked expected exit3/no write commands for both guards, exit0/no TAP failures and47 assertions for composition (`task-24-fix1-checks.stdout`). Raw psql whitespace is retained; scoped source diff checking excludes raw stdout. Independent rereview remains next; D0 and final coverage/release limitations above are unchanged.

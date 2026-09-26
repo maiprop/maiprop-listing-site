@@ -1,8 +1,13 @@
 \set ON_ERROR_STOP on
 \pset pager off
--- Commits synthetic fixtures: run ONLY on this disposable local task clone.
-DO $$ BEGIN
- IF current_database()<>'maiprop_task24_ai_20260927' OR inet_server_addr() IS NOT NULL THEN RAISE EXCEPTION 'Task24 disposable socket database required'; END IF;
+-- Commits synthetic fixtures: the controlling runner must explicitly select its
+-- authorized disposable database with SET maiprop.test_disposable_database='...'.
+-- Never derive that setting from current_database() or set it for a shared baseline.
+DO $$ DECLARE expected_database text := current_setting('maiprop.test_disposable_database',true); BEGIN
+ IF expected_database IS NULL OR expected_database='' OR current_database()<>expected_database
+    OR inet_server_addr() IS NOT NULL
+    OR current_database() IN ('postgres','template0','template1','maiprop_replay_current_20260921')
+ THEN RAISE EXCEPTION 'Explicit matching disposable socket database required'; END IF;
  IF current_setting('session_replication_role')<>'origin' THEN RAISE EXCEPTION 'Normal triggers required'; END IF;
  IF EXISTS(SELECT 1 FROM auth.users WHERE id='d1241001-0000-4000-8000-000000000001') THEN RAISE EXCEPTION 'Fixture collision'; END IF;
 END $$;

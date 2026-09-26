@@ -1,0 +1,27 @@
+       current_database       |                                                                 version                                                                  | socket 
+------------------------------+------------------------------------------------------------------------------------------------------------------------------------------+--------
+ maiprop_task24_fix1_20260927 | PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit | t
+(1 row)
+
+                 oid                  | provolatile | prosecdef |      proconfig       |                    proacl                     | pg_get_userbyid 
+--------------------------------------+-------------+-----------+----------------------+-----------------------------------------------+-----------------
+ reserve_ai_quota_for_user(uuid,text) | v           | t         | {search_path=public} | {postgres=X/postgres,service_role=X/postgres} | postgres
+ get_ai_call_monthly_limit(uuid,text) | s           | t         | {search_path=public} | {postgres=X/postgres,service_role=X/postgres} | postgres
+(2 rows)
+
+        ?column?        | count 
+------------------------+-------
+ users                  |     0
+ profiles               |     0
+ profiles_public        |     0
+ addon_purchases        |     0
+ usage_ai_calls         |     0
+ notifications          |     0
+ investor_subscriptions |     0
+(7 rows)
+
+ remote_task24_connections 
+---------------------------
+                         0
+(1 row)
+
