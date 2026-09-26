@@ -142,19 +142,16 @@ Deno.test("registration is created for the verified caller only", async () => {
   );
 });
 
-Deno.test("business RPC errors preserve message and code in an RPC-style envelope", async () => {
-  resetScenario({
-    rpcError: {
-      message: "open_house_timeslot_capacity_reached",
-      code: "23514",
-    },
+for (const rpcError of [
+  { message: "open_house_timeslot_capacity_reached", code: "23514" },
+  { message: "open_house_rsvp_limit_reached", code: "P0001" },
+]) {
+  Deno.test(`${rpcError.message} preserves the RPC error envelope`, async () => {
+    resetScenario({ rpcError });
+    const res = await handler(authedJson(registrationBody()));
+    assertEquals(res.status, 200);
+    const body = await res.json();
+    assertEquals(body.data, null);
+    assertEquals(body.error, rpcError);
   });
-  const res = await handler(authedJson(registrationBody()));
-  assertEquals(res.status, 200);
-  const body = await res.json();
-  assertEquals(body.data, null);
-  assertEquals(body.error, {
-    message: "open_house_timeslot_capacity_reached",
-    code: "23514",
-  });
-});
+}

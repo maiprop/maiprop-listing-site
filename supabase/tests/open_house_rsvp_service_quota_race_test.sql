@@ -31,23 +31,31 @@ FROM generate_series(9, 10) n;
 COMMIT;
 
 BEGIN;
-SELECT plan(6);
+SELECT plan(7);
 SELECT dblink_connect('rsvp_a', 'dbname=' || current_database());
 SELECT dblink_connect('rsvp_b', 'dbname=' || current_database());
 
-SELECT dblink_exec('rsvp_a', $$BEGIN; SET ROLE service_role; SET LOCAL request.jwt.claim.sub = ''; SET LOCAL request.jwt.claims = '{"role":"service_role"}'$$);
+SELECT dblink_exec('rsvp_a', $$BEGIN; SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'; SET LOCAL idle_in_transaction_session_timeout='30s'; SET LOCAL application_name='task22_rsvp_a'; SET ROLE service_role; SET LOCAL request.jwt.claim.sub = ''; SET LOCAL request.jwt.claims = '{"role":"service_role"}'$$);
 SELECT is((SELECT count(*)::integer FROM dblink(
   'rsvp_a',
   $$SELECT (public.create_open_house_registration_for_user('d1221001-0000-4000-8000-000000000002','d1221002-0000-4000-8000-000000000011',NULL,'Race Buyer','race@example.test','+30000000006',NULL,NULL,true,true,true)).id$$
 ) AS result(id uuid)), 1, 'first service RSVP race query completes while uncommitted');
 
-SELECT dblink_exec('rsvp_b', $$BEGIN; SET ROLE service_role; SET LOCAL request.jwt.claim.sub = ''; SET LOCAL request.jwt.claims = '{"role":"service_role"}'$$);
+SELECT dblink_exec('rsvp_b', $$BEGIN; SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'; SET LOCAL idle_in_transaction_session_timeout='30s'; SET LOCAL application_name='task22_rsvp_b'; SET ROLE service_role; SET LOCAL request.jwt.claim.sub = ''; SET LOCAL request.jwt.claims = '{"role":"service_role"}'$$);
 SELECT is(dblink_send_query(
   'rsvp_b',
   $$SELECT (public.create_open_house_registration_for_user('d1221001-0000-4000-8000-000000000002','d1221002-0000-4000-8000-000000000012',NULL,'Race Buyer','race@example.test','+30000000006',NULL,NULL,true,true,true)).id$$
 ), 1, 'second service RSVP race query starts');
 SELECT pg_sleep(0.2);
 SELECT is(dblink_is_busy('rsvp_b'), 1, 'second RSVP blocks on the requester-month lock');
+SELECT ok(EXISTS (
+  SELECT 1 FROM pg_stat_activity contender
+  JOIN pg_stat_activity winner ON winner.pid = ANY(pg_blocking_pids(contender.pid))
+  WHERE contender.datname=current_database() AND winner.datname=current_database()
+    AND contender.application_name='task22_rsvp_b'
+    AND winner.application_name='task22_rsvp_a'
+    AND contender.wait_event_type='Lock' AND contender.wait_event='advisory'
+), 'database confirms contender waits on the winner advisory lock');
 SELECT dblink_exec('rsvp_a', 'COMMIT');
 SELECT throws_ok(
   $$SELECT * FROM dblink_get_result('rsvp_b') AS result(id uuid)$$,

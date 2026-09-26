@@ -308,11 +308,14 @@ describe("useCreateOpenHouseRegistration", () => {
     expect(toastMock.success).toHaveBeenCalled();
   });
 
-  it("maps server-side capacity errors to visitor-friendly copy", async () => {
+  it.each([
+    ["open_house_timeslot_capacity_reached", "23514", "That timeslot is fully booked. Please choose another slot."],
+    ["open_house_rsvp_limit_reached", "P0001", "You've reached your monthly RSVP limit. Upgrade to Pro for unlimited open-house RSVPs."],
+  ])("maps %s without reporting registration success", async (message, code, copy) => {
     invokeMock.mockResolvedValue({
       data: {
         data: null,
-        error: { message: "open_house_timeslot_capacity_reached" },
+        error: { message, code },
       },
       error: null,
     });
@@ -328,7 +331,10 @@ describe("useCreateOpenHouseRegistration", () => {
         })
         .catch(() => {});
     });
-    expect(toastMock.error).toHaveBeenCalledWith("That timeslot is fully booked. Please choose another slot.");
+    expect(toastMock.error).toHaveBeenCalledWith(copy);
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(result.current.data).toBeUndefined();
   });
 
   it("maps invalid timeslot errors to visitor-friendly copy", async () => {
