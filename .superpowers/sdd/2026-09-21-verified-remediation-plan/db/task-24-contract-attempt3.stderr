@@ -1,0 +1,3 @@
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/supabase/tests/ai_reservation_spendable_credits_test.sql:3: NOTICE:  extension "pgtap" already exists, skipping
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/supabase/tests/ai_reservation_spendable_credits_test.sql:12: ERROR:  developer_display_name_required
+CONTEXT:  PL/pgSQL function complete_onboarding_role_for_user(uuid,user_role,text,text,text,text) line 96 at RAISE

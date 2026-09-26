@@ -1,0 +1,195 @@
+Pager usage is off.
+DO
+CREATE EXTENSION
+CREATE EXTENSION
+BEGIN
+SET
+SET
+ set_config |  set_config  |       set_config        
+------------+--------------+-------------------------
+            | service_role | {"role":"service_role"}
+(1 row)
+
+INSERT 0 1
+SET
+ complete_onboarding_role_for_user 
+-----------------------------------
+ 
+(1 row)
+
+RESET
+ set_config 
+------------
+ false
+(1 row)
+
+INSERT 0 1
+SET
+DO
+RESET
+COMMIT
+BEGIN
+SET
+ plan  
+-------
+ 1..14
+(1 row)
+
+CREATE TABLE
+                            is                            
+----------------------------------------------------------
+ ok 1 - committed normal fixture has one remaining credit
+(1 row)
+
+ dblink_connect 
+----------------
+ OK
+(1 row)
+
+ dblink_connect 
+----------------
+ OK
+(1 row)
+
+ dblink_exec 
+-------------
+ SET
+(1 row)
+
+ dblink_exec 
+-------------
+ SET
+(1 row)
+
+                               ok                               
+----------------------------------------------------------------
+ ok 2 - session A is actual service/no-sub with normal triggers
+(1 row)
+
+                               ok                               
+----------------------------------------------------------------
+ ok 3 - session B is actual service/no-sub with normal triggers
+(1 row)
+
+INSERT 0 1
+                         ok                          
+-----------------------------------------------------
+ ok 4 - A reserves last credit and holds transaction
+(1 row)
+
+                  is                   
+---------------------------------------
+ ok 5 - B starts competing reservation
+(1 row)
+
+DO
+                             is                             
+------------------------------------------------------------
+ ok 6 - B remains busy while A owns reservation transaction
+(1 row)
+
+                         ok                          
+-----------------------------------------------------
+ ok 7 - observer proves B advisory wait blocked by A
+(1 row)
+
+ winner_pid | contender_pid | wait_event_type | wait_event | blocking_pids 
+------------+---------------+-----------------+------------+---------------
+        465 |           466 | Lock            | advisory   | {465}
+(1 row)
+
+ dblink_exec 
+-------------
+ COMMIT
+(1 row)
+
+INSERT 0 1
+ count 
+-------
+     0
+(1 row)
+
+ dblink_exec 
+-------------
+ ROLLBACK
+(1 row)
+
+                     is                      
+---------------------------------------------
+ ok 8 - B denies after A commits last credit
+(1 row)
+
+                        is                         
+---------------------------------------------------
+ ok 9 - exactly one additional committed usage row
+(1 row)
+
+                        is                        
+--------------------------------------------------
+ ok 10 - exactly one committed credit consumption
+(1 row)
+
+                               ok                                
+-----------------------------------------------------------------
+ ok 11 - winning returned reservation id matches committed usage
+(1 row)
+
+ dblink_exec 
+-------------
+ SET
+(1 row)
+
+                         is                         
+----------------------------------------------------
+ ok 12 - batch status confirms committed exhaustion
+(1 row)
+
+ dblink_exec 
+-------------
+ ROLLBACK
+(1 row)
+
+ session |                                                                      result                                                                       
+---------+---------------------------------------------------------------------------------------------------------------------------------------------------
+ a       | {"used": 6, "limit": 6, "reason": null, "allowed": true, "reservation_id": "7b50c862-1c06-4751-a43a-c64fcc62b372", "addon_credit_consumed": true}
+ b       | {"used": 6, "limit": 6, "reason": "monthly_limit_reached", "allowed": false}
+(2 rows)
+
+ dblink_disconnect 
+-------------------
+ OK
+(1 row)
+
+ dblink_disconnect 
+-------------------
+ OK
+(1 row)
+
+                    ok                     
+-------------------------------------------
+ ok 13 - both dblink sessions disconnected
+(1 row)
+
+DO
+                    is                    
+------------------------------------------
+ ok 14 - no remote task24 sessions remain
+(1 row)
+
+ finish 
+--------
+(0 rows)
+
+ROLLBACK
+BEGIN
+DELETE 6
+DELETE 1
+DELETE 0
+DELETE 1
+DELETE 1
+COMMIT
+      ?column?       | ?column? 
+---------------------+----------
+ task24 race residue |        0
+(1 row)
+

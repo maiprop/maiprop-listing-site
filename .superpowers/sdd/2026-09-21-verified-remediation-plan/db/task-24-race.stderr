@@ -1,0 +1,2 @@
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/supabase/tests/ai_reservation_last_credit_race_test.sql:9: NOTICE:  extension "pgtap" already exists, skipping
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/supabase/tests/ai_reservation_last_credit_race_test.sql:10: NOTICE:  extension "dblink" already exists, skipping

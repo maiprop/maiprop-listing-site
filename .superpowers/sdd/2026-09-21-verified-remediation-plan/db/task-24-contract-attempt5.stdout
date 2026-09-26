@@ -1,0 +1,213 @@
+BEGIN
+CREATE EXTENSION
+ no_plan 
+---------
+(0 rows)
+
+SET
+SET
+                  is                   
+---------------------------------------
+ ok 1 - normal action triggers enabled
+(1 row)
+
+ set_config |  set_config  |       set_config        
+------------+--------------+-------------------------
+            | service_role | {"role":"service_role"}
+(1 row)
+
+INSERT 0 6
+SET
+ complete_onboarding_role_for_user 
+-----------------------------------
+ 
+ 
+ 
+ 
+ 
+ 
+(6 rows)
+
+RESET
+ set_config 
+------------
+ false
+(1 row)
+
+INSERT 0 1
+DELETE 1
+INSERT 0 1
+INSERT 0 6
+INSERT 0 2
+                                    is                                    
+--------------------------------------------------------------------------
+ ok 2 - purchase trigger derives quantities including both mapped buckets
+(1 row)
+
+                   ok                   
+----------------------------------------
+ ok 3 - durable subscription grants Pro
+(1 row)
+
+             is             
+----------------------------
+ ok 4 - real Pro base is 50
+(1 row)
+
+               is                
+---------------------------------
+ ok 5 - admin sentinel unchanged
+(1 row)
+
+                    is                    
+------------------------------------------
+ ok 6 - unpaid developer has no free base
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok 7 - onboarded buyer remains free
+(1 row)
+
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+SET
+                                                  lives_ok                                                   
+-------------------------------------------------------------------------------------------------------------
+ ok 8 - two normal valuation credits admit calls 6 and 7; call 8 denies, with status agreement at every step
+(1 row)
+
+                              lives_ok                               
+---------------------------------------------------------------------
+ ok 9 - second mapped bucket spends both normal credits and exhausts
+(1 row)
+
+                              lives_ok                              
+--------------------------------------------------------------------
+ ok 10 - durable Pro stays below its base without consuming add-ons
+(1 row)
+
+                        lives_ok                         
+---------------------------------------------------------
+ ok 11 - admin sentinel does not grow or consume add-ons
+(1 row)
+
+                                          lives_ok                                           
+---------------------------------------------------------------------------------------------
+ ok 12 - unpaid Pro-only audience can spend purchased credits but receives no free allowance
+(1 row)
+
+                  is                  
+--------------------------------------
+ ok 13 - null actor envelope retained
+(1 row)
+
+              is              
+------------------------------
+ ok 14 - null bucket rejected
+(1 row)
+
+              is               
+-------------------------------
+ ok 15 - blank bucket rejected
+(1 row)
+
+                is                 
+-----------------------------------
+ ok 16 - oversized bucket rejected
+(1 row)
+
+                               lives_ok                               
+----------------------------------------------------------------------
+ ok 17 - unknown valid bucket denied consistently by existing helpers
+(1 row)
+
+RESET
+                                         is                                         
+------------------------------------------------------------------------------------
+ ok 18 - two explicit paid-attempt calls produce distinct usage rows in each bucket
+(1 row)
+
+                     is                      
+---------------------------------------------
+ ok 19 - opposite runtime purchase untouched
+(1 row)
+
+                  is                   
+---------------------------------------
+ ok 20 - other actor credits untouched
+(1 row)
+
+SET
+                                    lives_ok                                     
+---------------------------------------------------------------------------------
+ ok 21 - historical fixture consumes first credit through normal overage trigger
+(1 row)
+
+RESET
+UPDATE 6
+UPDATE 1
+SET
+                               lives_ok                                
+-----------------------------------------------------------------------
+ ok 22 - prior month usage excluded and consumed credit stays deducted
+(1 row)
+
+RESET
+SAVEPOINT
+SET
+ task24_steps 
+--------------
+ 
+(1 row)
+
+RESET
+ROLLBACK
+                            is                             
+-----------------------------------------------------------
+ ok 23 - savepoint restores usage after successful overage
+(1 row)
+
+                      is                       
+-----------------------------------------------
+ ok 24 - savepoint restores credit consumption
+(1 row)
+
+SET
+                                            lives_ok                                             
+-------------------------------------------------------------------------------------------------
+ ok 25 - remaining historical credit succeeds once then denies, never restored by month boundary
+(1 row)
+
+RESET
+SET
+                            throws_ok                            
+-----------------------------------------------------------------
+ ok 26 - authenticated cannot execute explicit actor reservation
+(1 row)
+
+RESET
+SET
+                       throws_ok                        
+--------------------------------------------------------
+ ok 27 - anon cannot execute explicit actor reservation
+(1 row)
+
+RESET
+                                        ok                                        
+----------------------------------------------------------------------------------
+ ok 28 - every successful return names its exact persisted actor/bucket usage row
+(1 row)
+
+ finish 
+--------
+ 1..28
+(1 row)
+
+ROLLBACK
+    ?column?    | ?column? 
+----------------+----------
+ task24 residue |        0
+(1 row)
+

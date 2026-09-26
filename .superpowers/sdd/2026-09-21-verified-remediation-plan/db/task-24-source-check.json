@@ -1,0 +1,561 @@
+{
+  "node": "v20.20.2",
+  "base": "76a15d8a01d6cc3b297db5e7cfa9e350f5193075",
+  "database": "maiprop_task24_ai_20260927",
+  "version": "PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit",
+  "socket": true,
+  "changed_routines": [
+    "reserve_ai_quota_for_user(uuid,text)"
+  ],
+  "routines": [
+    {
+      "signature": "auth.role()",
+      "owner": "postgres",
+      "acl": null,
+      "source_sha256": "7f41dd3aa327487b8346b3eb7952465718f393eff27594b3b80e689237d16727",
+      "matching_migrations": []
+    },
+    {
+      "signature": "auth.uid()",
+      "owner": "postgres",
+      "acl": null,
+      "source_sha256": "ef0f6116f33bda441a4e5f9f881857b0806b3eeb7bbf22e120c7f179755d293d",
+      "matching_migrations": []
+    },
+    {
+      "signature": "private.authoritative_role()",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres",
+        "authenticated=X/postgres"
+      ],
+      "source_sha256": "84ae1e15d1b62a45f4f7f499479462839a1112af56c02e343c37197cd238ee3a",
+      "matching_migrations": [
+        {
+          "file": "20260507154337_critical_security_advisor_fixes.sql",
+          "sha256": "5cfc92ab1c72a4bf3b9303c39d54412a4d400750172ff8ba092735e6cb96b5a0"
+        }
+      ]
+    },
+    {
+      "signature": "private.authoritative_role(uuid)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "65a5eeabdacf51bbc4847cf308777596008ce2d5da5c89d024af9c81c4e9391b",
+      "matching_migrations": [
+        {
+          "file": "20260507154337_critical_security_advisor_fixes.sql",
+          "sha256": "5cfc92ab1c72a4bf3b9303c39d54412a4d400750172ff8ba092735e6cb96b5a0"
+        }
+      ]
+    },
+    {
+      "signature": "private.current_billing_subscription_for_user(uuid,text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "6f5a40e268247727772754663209cc2040921fdcda2809ff23a361853c6bc1a3",
+      "matching_migrations": [
+        {
+          "file": "20260718124557_enforce_durable_developer_pro_entitlements.sql",
+          "sha256": "8d4987386accd0cf49b4189a5421753cf1170b253a69f1640dd9f5951b66e0ee"
+        }
+      ]
+    },
+    {
+      "signature": "private.has_current_billing_subscription_for_user(uuid)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "09d2606fa3c1f188d0a047235549eb1c05ac86f53c9a7f84ccc3186836c7f3ae",
+      "matching_migrations": [
+        {
+          "file": "20260716172217_unify_durable_entitlement_contract.sql",
+          "sha256": "3e144212854325c12c27d7047b81794852636e3cbad820424a5d4c106ae42b05"
+        }
+      ]
+    },
+    {
+      "signature": "private.has_free_ai_access_for_user(uuid)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "43e4a24c781efe1be0e96ca457f1430fc5c21d785faba905f857f8c13d58f9f7",
+      "matching_migrations": [
+        {
+          "file": "20260716233924_enforce_pro_only_ai_and_pricing_contract.sql",
+          "sha256": "c81cb11ab1f4d6075f02f8d50872015704b16fcf73b75d81b0415fc180a526b6"
+        }
+      ]
+    },
+    {
+      "signature": "private.has_investor_subscription_for_user(uuid)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "e6ef99802d2c30b78457b371a7ad8b4955668695c240af55a4bc74207b782c30",
+      "matching_migrations": [
+        {
+          "file": "20260718124557_enforce_durable_developer_pro_entitlements.sql",
+          "sha256": "8d4987386accd0cf49b4189a5421753cf1170b253a69f1640dd9f5951b66e0ee"
+        }
+      ]
+    },
+    {
+      "signature": "private.has_platform_admin(uuid)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "098e63fdefe089a2af468a16e650cd00de5abced547aae0fd3316857eb585d24",
+      "matching_migrations": [
+        {
+          "file": "20260507154337_critical_security_advisor_fixes.sql",
+          "sha256": "5cfc92ab1c72a4bf3b9303c39d54412a4d400750172ff8ba092735e6cb96b5a0"
+        }
+      ]
+    },
+    {
+      "signature": "addon_credit_bucket(text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "d2e7d97aa4ddd6bf79fdaf788d457cb458041701bec8bef1cec7d87380e35ba9",
+      "matching_migrations": [
+        {
+          "file": "20260628193711_addon_purchase_credit_delivery.sql",
+          "sha256": "672ae603edfb5b19d29cd2cbc4d6e0e1f2f5219a5936515613d35f214dedb024"
+        }
+      ]
+    },
+    {
+      "signature": "addon_credit_units(text,integer)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "f43b8ef43c1d3302d30c911cd3bff29314b92415756cb9a21be7117768b92302",
+      "matching_migrations": [
+        {
+          "file": "20260714112834_listing_promotion_entitlements.sql",
+          "sha256": "db821b0218a62ea2a8a3a0e69f93b36f74cd2a7ffc3effc4ea2a621e556c8eda"
+        }
+      ]
+    },
+    {
+      "signature": "authoritative_role(uuid)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "f2a2adc70c621efdf6ac58f0c82dcd1e1fa0c2946cff29c4e38c0e02962ab334",
+      "matching_migrations": [
+        {
+          "file": "20260714170523_reassert_scoped_authoritative_role.sql",
+          "sha256": "c1d3e168fad8e68baec835c213ce431e22dca81bbe618c4aea8d88e82f88152c"
+        }
+      ]
+    },
+    {
+      "signature": "authoritative_role()",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "b6ec07ae121031aa73ed7182142fc3cdff057dff7547d37c1b0996065d04f1cf",
+      "matching_migrations": [
+        {
+          "file": "20260602005747_scope_authoritative_role_lookup.sql",
+          "sha256": "e41c93b9f6a085379d9eddbdefd3f85b4ec68916d367d113d0bdb9a0000c84d2"
+        },
+        {
+          "file": "20260623130000_authoritative_role.sql",
+          "sha256": "52edb90ca4f19a7a8836c5262b1a2322cd2176876b353ae94485f5dd77c309fb"
+        },
+        {
+          "file": "20260714170523_reassert_scoped_authoritative_role.sql",
+          "sha256": "c1d3e168fad8e68baec835c213ce431e22dca81bbe618c4aea8d88e82f88152c"
+        }
+      ]
+    },
+    {
+      "signature": "auto_grant_owner_privileges()",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "abec468dc0214b1bd7a508e62b1327243e1a502238c54ff3d3c81e6f7174bede",
+      "matching_migrations": [
+        {
+          "file": "20260707171000_allow_owner_auth_trigger_signup.sql",
+          "sha256": "a453722dfdb4a20c764484a87b72ddc8968cee9b9797f7de29bcf18f088b727c"
+        }
+      ]
+    },
+    {
+      "signature": "check_ai_call_monthly_limit_trigger()",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "8290b6cff3664fb7fc9bb40ae9fa289bb296d0690426b56677c7078a6858b536",
+      "matching_migrations": [
+        {
+          "file": "20260630121353_fix_ai_bundle_credit_trigger_limit.sql",
+          "sha256": "5186d933e8285aed8eb9dd4a30b9a5e167ffa3a9359775a11887e9f896697441"
+        }
+      ]
+    },
+    {
+      "signature": "check_ai_quotas_for_user(uuid,text[])",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "964552f60829caea7bb1ac1395aee965f1b4e6d4f150d63e9fe200d69e9b47d4",
+      "matching_migrations": [
+        {
+          "file": "20260716233924_enforce_pro_only_ai_and_pricing_contract.sql",
+          "sha256": "c81cb11ab1f4d6075f02f8d50872015704b16fcf73b75d81b0415fc180a526b6"
+        }
+      ]
+    },
+    {
+      "signature": "complete_onboarding_role_for_user(uuid,user_role,text,text,text,text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "de495a4129670f3f1a3655db24938c93d69557dec1b6c34b4ecfe9ecb9e5e41f",
+      "matching_migrations": [
+        {
+          "file": "20260812102335_enforce_role_switch_audit_integrity.sql",
+          "sha256": "9997993e129400b878ed18d8f74f772c56a22aeee8bf4c1beb520e7807ca3bd6"
+        }
+      ]
+    },
+    {
+      "signature": "consume_addon_credit_for_user(uuid,text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "6b514abcf2335c8fc8903c45f805630ba3bbf40be1f934ea0724e89435b8cfe0",
+      "matching_migrations": [
+        {
+          "file": "20260703073514_scope_addon_credit_runtime.sql",
+          "sha256": "b2599bd4a24d8d620a150db79bb90959f2fdb4e74cb80b129171b5f238e4d3a2"
+        }
+      ]
+    },
+    {
+      "signature": "current_billing_runtime_mode()",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "849eb2b1ad715d2523dfca7a8bd013ba83214e699af9fa34295a4c6bfe4d0924",
+      "matching_migrations": [
+        {
+          "file": "20260714143110_harden_durable_billing_entitlements.sql",
+          "sha256": "214a46de169303a0d2f7b58f9bb56c5e177c6a41749f5943574a01e33f66145b"
+        }
+      ]
+    },
+    {
+      "signature": "get_addon_credit_balance(uuid,text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "48852165feaa89762f724fdcad2e5da8c5b53460b24979467c04b96d13130b9e",
+      "matching_migrations": [
+        {
+          "file": "20260703073514_scope_addon_credit_runtime.sql",
+          "sha256": "b2599bd4a24d8d620a150db79bb90959f2fdb4e74cb80b129171b5f238e4d3a2"
+        }
+      ]
+    },
+    {
+      "signature": "get_ai_call_monthly_base_limit(uuid,text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "73056463bde1fc532adef960b6f6ff781263c69ce73bce19241e3f13cc4b7c51",
+      "matching_migrations": [
+        {
+          "file": "20260716233924_enforce_pro_only_ai_and_pricing_contract.sql",
+          "sha256": "c81cb11ab1f4d6075f02f8d50872015704b16fcf73b75d81b0415fc180a526b6"
+        }
+      ]
+    },
+    {
+      "signature": "get_ai_call_monthly_limit(uuid,text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "ead8ba4519ab88582cce712e973ced3d7fa530dfc05de68787b91b88182a3c04",
+      "matching_migrations": [
+        {
+          "file": "20260628193711_addon_purchase_credit_delivery.sql",
+          "sha256": "672ae603edfb5b19d29cd2cbc4d6e0e1f2f5219a5936515613d35f214dedb024"
+        },
+        {
+          "file": "20260707159000_fix_staging_advisor_drift.sql",
+          "sha256": "3a0dcfc0aec91b9045ae52f813da2c8c55b7dba26e2fcfbb08484cf814a80b08"
+        }
+      ]
+    },
+    {
+      "signature": "get_available_addon_credits(uuid,text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "aead4112ba28b27dc1b0b4a4fb0ac2381a9bef47f01fc5ac3d94d6082afc6b84",
+      "matching_migrations": [
+        {
+          "file": "20260703073249_complete_stripe_billing_refunds_runtime_current.sql",
+          "sha256": "69ebbd87dce2aa921163bc9fd369b5d05aa3cc8d8b56ef833ed30e5378f18917"
+        },
+        {
+          "file": "20260703073514_scope_addon_credit_runtime.sql",
+          "sha256": "b2599bd4a24d8d620a150db79bb90959f2fdb4e74cb80b129171b5f238e4d3a2"
+        }
+      ]
+    },
+    {
+      "signature": "guard_sensitive_profile_columns()",
+      "owner": "postgres",
+      "acl": null,
+      "source_sha256": "a45d2e306f6e4c72762e34f535f6ad4bd78826b6681fd0f5811e8406a66c7581",
+      "matching_migrations": [
+        {
+          "file": "20260627200000_critical_security_fixes.sql",
+          "sha256": "208fb06ff4749a92f0949560383866244e5efa54558b1030a9f453caec0c7196"
+        }
+      ]
+    },
+    {
+      "signature": "handle_new_user()",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "563d3aac738e4b6f6419e635c369fb70506343c721a1319efbd4bf75109a8e31",
+      "matching_migrations": [
+        {
+          "file": "20260511183000_handle_new_user_trigger.sql",
+          "sha256": "62f3e3bd5bc135771e22be82582ff2841ea8709f5c3029def7a2ebe1dc28845f"
+        }
+      ]
+    },
+    {
+      "signature": "has_platform_admin(uuid)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "538d52c2183558f117dcabe767d88e70f13039cc58566129f81841b15c642383",
+      "matching_migrations": [
+        {
+          "file": "20260623130000_authoritative_role.sql",
+          "sha256": "52edb90ca4f19a7a8836c5262b1a2322cd2176876b353ae94485f5dd77c309fb"
+        }
+      ]
+    },
+    {
+      "signature": "is_pro(uuid)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "94ce869e8244ea2d833ab4ad4862e991e8e2088bb99d5f3bc14cf9e913a2830a",
+      "matching_migrations": [
+        {
+          "file": "20260718124557_enforce_durable_developer_pro_entitlements.sql",
+          "sha256": "8d4987386accd0cf49b4189a5421753cf1170b253a69f1640dd9f5951b66e0ee"
+        }
+      ]
+    },
+    {
+      "signature": "profile_pricing_audience(user_role,text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "b54dfaa260cd30b21ede8d7af28cc3504cc340f819a8d7f6353419dbd41fc13d",
+      "matching_migrations": [
+        {
+          "file": "20260707080000_harden_participant_type_entitlement_audience.sql",
+          "sha256": "644883126578a8123c34d45a94edcafdfe0367a7a6c9a7f4c79537d5e7e3e176"
+        }
+      ]
+    },
+    {
+      "signature": "profiles_guard_admin_and_role()",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "02c622572868d3a3dd16324e5f573f75079389e5629ea89042cabdcc9be169ef",
+      "matching_migrations": [
+        {
+          "file": "20260707171000_allow_owner_auth_trigger_signup.sql",
+          "sha256": "a453722dfdb4a20c764484a87b72ddc8968cee9b9797f7de29bcf18f088b727c"
+        }
+      ]
+    },
+    {
+      "signature": "reserve_ai_quota_for_user(uuid,text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "be53a602ce7d2a3051e5b80a6b2825ee4b2300db4e1105fb10eeb1be0e0c8aa2",
+      "matching_migrations": [
+        {
+          "file": "20260926233914_restore_ai_reservation_spendable_credits.sql",
+          "sha256": "bd62ba87e1ae275d94bcbdacc77d6d5b53fb42a9bcd0ec7d78435dd16f60adb0"
+        }
+      ]
+    },
+    {
+      "signature": "set_addon_purchase_credits()",
+      "owner": "postgres",
+      "acl": null,
+      "source_sha256": "085bd2c77a5ec4a46500ac57cbebfef974d59b02dae84a41e1b62c50a1844003",
+      "matching_migrations": [
+        {
+          "file": "20260628193711_addon_purchase_credit_delivery.sql",
+          "sha256": "672ae603edfb5b19d29cd2cbc4d6e0e1f2f5219a5936515613d35f214dedb024"
+        }
+      ]
+    },
+    {
+      "signature": "sync_profiles_public()",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "e2f3df4ed99163ea5fd4c593b78742340ef07a298348d0d7afc378f881731338",
+      "matching_migrations": [
+        {
+          "file": "20260714130731_harden_messaging_realtime_and_profile_summaries.sql",
+          "sha256": "cc78b2e88e254e5d722f6ed61ab46f907a4fa2eed3366808e21423fd300a4607"
+        }
+      ]
+    },
+    {
+      "signature": "touch_addon_purchases_updated_at()",
+      "owner": "postgres",
+      "acl": null,
+      "source_sha256": "689e6680e07e7c2e2be686ffa9c0bef614593352cc620ca20070cc4f9578f482",
+      "matching_migrations": [
+        {
+          "file": "20260628120000_stripe_billing_state.sql",
+          "sha256": "474b293dca270f8d74818b93b8688f6714727d9fb8b2c9bf9c20ffd034ee488e"
+        },
+        {
+          "file": "20260703120000_agent_data_inputs.sql",
+          "sha256": "7705b970336b0de50e46a91125d2b15abf949bf61545201838e4a07d70fa1b3d"
+        },
+        {
+          "file": "20260707157000_addon_purchase_and_investor_payment_ledger.sql",
+          "sha256": "dc52ce48267c543fe832e66aaaeffd6c51e1e0bddfc9b101110cfa5e4f6ded21"
+        },
+        {
+          "file": "20260714112834_listing_promotion_entitlements.sql",
+          "sha256": "db821b0218a62ea2a8a3a0e69f93b36f74cd2a7ffc3effc4ea2a621e556c8eda"
+        }
+      ]
+    },
+    {
+      "signature": "unarchive_role_data(uuid,text)",
+      "owner": "postgres",
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "source_sha256": "7ef48c690f8b585711c0449e21a81c10b945d715b902ab6434a128d02ad36cea",
+      "matching_migrations": [
+        {
+          "file": "20260510120000_typology_switch_cleanup.sql",
+          "sha256": "6dc9e20278affed01efe1466366805000f1f92a9c2972bd38dc10845be84b979"
+        }
+      ]
+    },
+    {
+      "signature": "update_updated_at_column()",
+      "owner": "postgres",
+      "acl": null,
+      "source_sha256": "37a6687cead2e980d97b09ae3f5d5a35379f4db24d10b83768421803a8c29a8f",
+      "matching_migrations": [
+        {
+          "file": "20260315093949_1df27cbb-0a65-443e-b2a4-f3daf20f08c6.sql",
+          "sha256": "e3760985a5a5db70e84857d75e86309cc2437546964b2358a0149965fd002495"
+        }
+      ]
+    }
+  ],
+  "migration_lint": [],
+  "migration_chronology": [],
+  "checks": [
+    {
+      "name": "contract",
+      "count": 33,
+      "exit": 0
+    },
+    {
+      "name": "race",
+      "count": 14,
+      "exit": 0
+    },
+    {
+      "name": "shared-backend",
+      "count": 66,
+      "exit": 0
+    }
+  ]
+}

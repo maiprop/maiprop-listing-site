@@ -1,0 +1,26 @@
+{
+  "node": "v20.20.2",
+  "bound_routines": 35,
+  "changed": [
+    "reserve_ai_quota_for_user(uuid,text)"
+  ],
+  "checks": [
+    {
+      "name": "contract",
+      "count": 33,
+      "exit": 0
+    },
+    {
+      "name": "race",
+      "count": 14,
+      "exit": 0
+    },
+    {
+      "name": "shared-backend",
+      "count": 66,
+      "exit": 0
+    }
+  ],
+  "scoped_migration_lint": "pass",
+  "chronology": "pass"
+}

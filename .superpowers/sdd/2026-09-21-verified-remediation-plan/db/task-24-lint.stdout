@@ -1,0 +1,4 @@
+
+> maiprop-listing-site@1.12.15 lint:migrations
+> node scripts/check-migration-idempotency.mjs
+

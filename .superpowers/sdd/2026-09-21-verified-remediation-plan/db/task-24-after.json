@@ -1,0 +1,614 @@
+{
+    "limit": {
+        "bucket": "property-valuation",
+        "updated_at": "2026-09-21T20:21:57.348223+03:00",
+        "description": "AI market insights and valuation analysis",
+        "is_pro_only": false,
+        "pro_monthly": 50,
+        "free_monthly": 5
+    },
+    "socket": true,
+    "version": "PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit",
+    "database": "maiprop_task24_ai_20260927",
+    "routines": [
+        {
+            "acl": null,
+            "name": "role",
+            "owner": "postgres",
+            "schema": "auth",
+            "source": "\n SELECT COALESCE(NULLIF(current_setting('request.jwt.claim.role',true),''),auth.jwt()->>'role','anon')\n",
+            "signature": "auth.role()",
+            "definition": "CREATE OR REPLACE FUNCTION auth.role()\n RETURNS text\n LANGUAGE sql\n STABLE\nAS $function$\n SELECT COALESCE(NULLIF(current_setting('request.jwt.claim.role',true),''),auth.jwt()->>'role','anon')\n$function$\n",
+            "source_md5": "11fcbd59f1d4c380cb4a9a141f047854"
+        },
+        {
+            "acl": null,
+            "name": "uid",
+            "owner": "postgres",
+            "schema": "auth",
+            "source": "\n SELECT COALESCE(NULLIF(current_setting('request.jwt.claim.sub',true),''),NULLIF(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid\n",
+            "signature": "auth.uid()",
+            "definition": "CREATE OR REPLACE FUNCTION auth.uid()\n RETURNS uuid\n LANGUAGE sql\n STABLE\nAS $function$\n SELECT COALESCE(NULLIF(current_setting('request.jwt.claim.sub',true),''),NULLIF(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid\n$function$\n",
+            "source_md5": "d4f85124a5072d4004068ce5ae04cfbb"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres",
+                "authenticated=X/postgres"
+            ],
+            "name": "authoritative_role",
+            "owner": "postgres",
+            "schema": "private",
+            "source": "\n  select private.authoritative_role((select auth.uid()))\n",
+            "signature": "private.authoritative_role()",
+            "definition": "CREATE OR REPLACE FUNCTION private.authoritative_role()\n RETURNS user_role\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select private.authoritative_role((select auth.uid()))\n$function$\n",
+            "source_md5": "23d19924606f1f29eadaec155e87590e"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "authoritative_role",
+            "owner": "postgres",
+            "schema": "private",
+            "source": "\n  select role\n  from public.profiles\n  where user_id = _user_id\n  limit 1\n",
+            "signature": "private.authoritative_role(uuid)",
+            "definition": "CREATE OR REPLACE FUNCTION private.authoritative_role(_user_id uuid)\n RETURNS user_role\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select role\n  from public.profiles\n  where user_id = _user_id\n  limit 1\n$function$\n",
+            "source_md5": "80dac3a071734dd27ebd388a1f46a6c7"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "current_billing_subscription_for_user",
+            "owner": "postgres",
+            "schema": "private",
+            "source": "\n  SELECT subscription.*\n  FROM public.billing_subscriptions AS subscription\n  JOIN public.profiles AS profile\n    ON profile.user_id = subscription.user_id\n  JOIN public.pricing_configs AS pricing\n    ON pricing.is_active = true\n   AND pricing.audience = public.profile_pricing_audience(\n     profile.role,\n     profile.participant_type::text\n   )\n   AND pricing.key = subscription.plan_key\n   AND pricing.module IN (\n     'user_subscription',\n     'agent_subscription',\n     'developer_subscription',\n     'professional_subscription'\n   )\n   AND pricing.metadata->>'stripe_product_id' = subscription.stripe_product_id\n  WHERE subscription.user_id = p_user_id\n    AND profile.role_switch_in_progress_at IS NULL\n    AND subscription.runtime_mode = public.current_billing_runtime_mode()\n    AND subscription.livemode = (public.current_billing_runtime_mode() = 'live')\n    AND subscription.audience = public.profile_pricing_audience(\n      profile.role,\n      profile.participant_type::text\n    )\n    AND subscription.status IN ('active', 'trialing', 'past_due')\n    AND (\n      p_required_stripe_subscription_id IS NULL\n      OR subscription.stripe_subscription_id = p_required_stripe_subscription_id\n    )\n    AND CASE\n      WHEN subscription.status = 'trialing' THEN\n        COALESCE(subscription.trial_end, subscription.current_period_end) IS NOT NULL\n        AND COALESCE(subscription.trial_end, subscription.current_period_end) > now()\n      ELSE\n        subscription.current_period_end IS NOT NULL\n        AND subscription.current_period_end > now()\n    END\n  ORDER BY subscription.updated_at DESC, subscription.id DESC\n  LIMIT 1\n",
+            "signature": "private.current_billing_subscription_for_user(uuid,text)",
+            "definition": "CREATE OR REPLACE FUNCTION private.current_billing_subscription_for_user(p_user_id uuid, p_required_stripe_subscription_id text DEFAULT NULL::text)\n RETURNS SETOF billing_subscriptions\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  SELECT subscription.*\n  FROM public.billing_subscriptions AS subscription\n  JOIN public.profiles AS profile\n    ON profile.user_id = subscription.user_id\n  JOIN public.pricing_configs AS pricing\n    ON pricing.is_active = true\n   AND pricing.audience = public.profile_pricing_audience(\n     profile.role,\n     profile.participant_type::text\n   )\n   AND pricing.key = subscription.plan_key\n   AND pricing.module IN (\n     'user_subscription',\n     'agent_subscription',\n     'developer_subscription',\n     'professional_subscription'\n   )\n   AND pricing.metadata->>'stripe_product_id' = subscription.stripe_product_id\n  WHERE subscription.user_id = p_user_id\n    AND profile.role_switch_in_progress_at IS NULL\n    AND subscription.runtime_mode = public.current_billing_runtime_mode()\n    AND subscription.livemode = (public.current_billing_runtime_mode() = 'live')\n    AND subscription.audience = public.profile_pricing_audience(\n      profile.role,\n      profile.participant_type::text\n    )\n    AND subscription.status IN ('active', 'trialing', 'past_due')\n    AND (\n      p_required_stripe_subscription_id IS NULL\n      OR subscription.stripe_subscription_id = p_required_stripe_subscription_id\n    )\n    AND CASE\n      WHEN subscription.status = 'trialing' THEN\n        COALESCE(subscription.trial_end, subscription.current_period_end) IS NOT NULL\n        AND COALESCE(subscription.trial_end, subscription.current_period_end) > now()\n      ELSE\n        subscription.current_period_end IS NOT NULL\n        AND subscription.current_period_end > now()\n    END\n  ORDER BY subscription.updated_at DESC, subscription.id DESC\n  LIMIT 1\n$function$\n",
+            "source_md5": "fb0587b8c9e1ec69b4f97feab07046ce"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "has_current_billing_subscription_for_user",
+            "owner": "postgres",
+            "schema": "private",
+            "source": "\n  SELECT EXISTS (\n    SELECT 1\n    FROM private.current_billing_subscription_for_user(p_user_id, NULL)\n  )\n",
+            "signature": "private.has_current_billing_subscription_for_user(uuid)",
+            "definition": "CREATE OR REPLACE FUNCTION private.has_current_billing_subscription_for_user(p_user_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'private'\nAS $function$\n  SELECT EXISTS (\n    SELECT 1\n    FROM private.current_billing_subscription_for_user(p_user_id, NULL)\n  )\n$function$\n",
+            "source_md5": "35edda55d2fc47554043cfd802ffbd2a"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "has_free_ai_access_for_user",
+            "owner": "postgres",
+            "schema": "private",
+            "source": "\n  SELECT COALESCE((\n    SELECT public.profile_pricing_audience(\n      profile.role,\n      profile.participant_type\n    ) NOT IN ('developer', 'investor', 'institutional')\n    FROM public.profiles AS profile\n    WHERE profile.user_id = p_user_id\n    LIMIT 1\n  ), false)\n",
+            "signature": "private.has_free_ai_access_for_user(uuid)",
+            "definition": "CREATE OR REPLACE FUNCTION private.has_free_ai_access_for_user(p_user_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  SELECT COALESCE((\n    SELECT public.profile_pricing_audience(\n      profile.role,\n      profile.participant_type\n    ) NOT IN ('developer', 'investor', 'institutional')\n    FROM public.profiles AS profile\n    WHERE profile.user_id = p_user_id\n    LIMIT 1\n  ), false)\n$function$\n",
+            "source_md5": "8f845c011604245ca2175b7978202ac3"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "has_investor_subscription_for_user",
+            "owner": "postgres",
+            "schema": "private",
+            "source": "\n  SELECT EXISTS (\n    SELECT 1\n    FROM public.investor_subscriptions AS subscription\n    JOIN public.profiles AS profile\n      ON profile.user_id = subscription.user_id\n    WHERE subscription.user_id = p_user_id\n      AND profile.role_switch_in_progress_at IS NULL\n      AND public.profile_pricing_audience(\n        profile.role,\n        profile.participant_type::text\n      ) IN ('investor', 'institutional')\n      AND subscription.runtime_mode = public.current_billing_runtime_mode()\n      AND subscription.livemode = (\n        public.current_billing_runtime_mode() = 'live'\n      )\n      AND subscription.status IN ('active', 'trial')\n      AND (\n        subscription.expires_at IS NULL\n        OR subscription.expires_at > now()\n      )\n  )\n",
+            "signature": "private.has_investor_subscription_for_user(uuid)",
+            "definition": "CREATE OR REPLACE FUNCTION private.has_investor_subscription_for_user(p_user_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  SELECT EXISTS (\n    SELECT 1\n    FROM public.investor_subscriptions AS subscription\n    JOIN public.profiles AS profile\n      ON profile.user_id = subscription.user_id\n    WHERE subscription.user_id = p_user_id\n      AND profile.role_switch_in_progress_at IS NULL\n      AND public.profile_pricing_audience(\n        profile.role,\n        profile.participant_type::text\n      ) IN ('investor', 'institutional')\n      AND subscription.runtime_mode = public.current_billing_runtime_mode()\n      AND subscription.livemode = (\n        public.current_billing_runtime_mode() = 'live'\n      )\n      AND subscription.status IN ('active', 'trial')\n      AND (\n        subscription.expires_at IS NULL\n        OR subscription.expires_at > now()\n      )\n  )\n$function$\n",
+            "source_md5": "5fbd2dbfebb076e0f5692271b924978f"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "authenticated=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "has_platform_admin",
+            "owner": "postgres",
+            "schema": "private",
+            "source": "\n  select private.authoritative_role(_user_id) = 'admin'::public.user_role\n",
+            "signature": "private.has_platform_admin(uuid)",
+            "definition": "CREATE OR REPLACE FUNCTION private.has_platform_admin(_user_id uuid DEFAULT auth.uid())\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select private.authoritative_role(_user_id) = 'admin'::public.user_role\n$function$\n",
+            "source_md5": "47b9cebe7e164fa5f22b3c0252756cb5"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "authenticated=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "addon_credit_bucket",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\n  SELECT CASE p_addon_key\n    WHEN 'valuation_single' THEN 'property-valuation'\n    WHEN 'valuation_bundle' THEN 'property-valuation'\n    WHEN 'neighbourhood_report_single' THEN 'neighbourhood-report'\n    WHEN 'neighbourhood_report_bundle' THEN 'neighbourhood-report'\n    WHEN 'property_report_single' THEN 'property-report'\n    ELSE NULL\n  END\n",
+            "signature": "addon_credit_bucket(text)",
+            "definition": "CREATE OR REPLACE FUNCTION public.addon_credit_bucket(p_addon_key text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'public'\nAS $function$\n  SELECT CASE p_addon_key\n    WHEN 'valuation_single' THEN 'property-valuation'\n    WHEN 'valuation_bundle' THEN 'property-valuation'\n    WHEN 'neighbourhood_report_single' THEN 'neighbourhood-report'\n    WHEN 'neighbourhood_report_bundle' THEN 'neighbourhood-report'\n    WHEN 'property_report_single' THEN 'property-report'\n    ELSE NULL\n  END\n$function$\n",
+            "source_md5": "eacc56dc6e858934a5192e3598d66059"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "authenticated=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "addon_credit_units",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\n  SELECT GREATEST(COALESCE(p_quantity, 1), 1) * CASE p_addon_key\n    WHEN 'valuation_single' THEN 1\n    WHEN 'valuation_bundle' THEN 5\n    WHEN 'neighbourhood_report_single' THEN 1\n    WHEN 'neighbourhood_report_bundle' THEN 3\n    WHEN 'property_report_single' THEN 1\n    WHEN 'featured_listing' THEN 1\n    WHEN 'priority_placement' THEN 1\n    WHEN 'featured_priority_bundle' THEN 1\n    ELSE 0\n  END\n",
+            "signature": "addon_credit_units(text,integer)",
+            "definition": "CREATE OR REPLACE FUNCTION public.addon_credit_units(p_addon_key text, p_quantity integer DEFAULT 1)\n RETURNS integer\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'public'\nAS $function$\n  SELECT GREATEST(COALESCE(p_quantity, 1), 1) * CASE p_addon_key\n    WHEN 'valuation_single' THEN 1\n    WHEN 'valuation_bundle' THEN 5\n    WHEN 'neighbourhood_report_single' THEN 1\n    WHEN 'neighbourhood_report_bundle' THEN 3\n    WHEN 'property_report_single' THEN 1\n    WHEN 'featured_listing' THEN 1\n    WHEN 'priority_placement' THEN 1\n    WHEN 'featured_priority_bundle' THEN 1\n    ELSE 0\n  END\n$function$\n",
+            "source_md5": "3ba3d9ac17d0c8a88bfd4bc55ef860f7"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "authoritative_role",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\n  WITH caller AS (\n    SELECT\n      auth.uid() AS uid,\n      COALESCE(auth.role(), '') AS jwt_role\n  )\n  SELECT target.role\n  FROM public.profiles AS target\n  CROSS JOIN caller\n  WHERE target.user_id = _user_id\n    AND (\n      _user_id = caller.uid\n      OR caller.jwt_role = 'service_role'\n      OR EXISTS (\n        SELECT 1\n        FROM public.profiles AS admin_profile\n        WHERE admin_profile.user_id = caller.uid\n          AND admin_profile.role = 'admin'::public.user_role\n      )\n    )\n  LIMIT 1\n",
+            "signature": "authoritative_role(uuid)",
+            "definition": "CREATE OR REPLACE FUNCTION public.authoritative_role(_user_id uuid)\n RETURNS user_role\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  WITH caller AS (\n    SELECT\n      auth.uid() AS uid,\n      COALESCE(auth.role(), '') AS jwt_role\n  )\n  SELECT target.role\n  FROM public.profiles AS target\n  CROSS JOIN caller\n  WHERE target.user_id = _user_id\n    AND (\n      _user_id = caller.uid\n      OR caller.jwt_role = 'service_role'\n      OR EXISTS (\n        SELECT 1\n        FROM public.profiles AS admin_profile\n        WHERE admin_profile.user_id = caller.uid\n          AND admin_profile.role = 'admin'::public.user_role\n      )\n    )\n  LIMIT 1\n$function$\n",
+            "source_md5": "da90f3181090ba59f3d08858697db84d"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "authoritative_role",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\n  SELECT public.authoritative_role(auth.uid())\n",
+            "signature": "authoritative_role()",
+            "definition": "CREATE OR REPLACE FUNCTION public.authoritative_role()\n RETURNS user_role\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT public.authoritative_role(auth.uid())\n$function$\n",
+            "source_md5": "89b5e830d0647cf6b6e268309eeab9af"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "auto_grant_owner_privileges",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  v_email text := LOWER(COALESCE(NEW.email, ''));\nBEGIN\n  IF v_email IN ('kr@maiprop.co', 'kostisrenios@gmail.com') THEN\n    PERFORM set_config('maiprop.owner_auth_trigger_active', 'true', true);\n  END IF;\n\n  IF LOWER(COALESCE(NEW.email, '')) = 'kr@maiprop.co' THEN\n    UPDATE public.profiles\n    SET role = 'admin'::public.user_role,\n        participant_type = NULL,\n        updated_at = now()\n    WHERE user_id = NEW.id;\n  ELSIF LOWER(COALESCE(NEW.email, '')) = 'kostisrenios@gmail.com' THEN\n    UPDATE public.profiles\n    SET role = 'agent'::public.user_role,\n        participant_type = 'agent',\n        updated_at = now()\n    WHERE user_id = NEW.id;\n  END IF;\n\n  RETURN NEW;\nEND;\n",
+            "signature": "auto_grant_owner_privileges()",
+            "definition": "CREATE OR REPLACE FUNCTION public.auto_grant_owner_privileges()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_email text := LOWER(COALESCE(NEW.email, ''));\nBEGIN\n  IF v_email IN ('kr@maiprop.co', 'kostisrenios@gmail.com') THEN\n    PERFORM set_config('maiprop.owner_auth_trigger_active', 'true', true);\n  END IF;\n\n  IF LOWER(COALESCE(NEW.email, '')) = 'kr@maiprop.co' THEN\n    UPDATE public.profiles\n    SET role = 'admin'::public.user_role,\n        participant_type = NULL,\n        updated_at = now()\n    WHERE user_id = NEW.id;\n  ELSIF LOWER(COALESCE(NEW.email, '')) = 'kostisrenios@gmail.com' THEN\n    UPDATE public.profiles\n    SET role = 'agent'::public.user_role,\n        participant_type = 'agent',\n        updated_at = now()\n    WHERE user_id = NEW.id;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n",
+            "source_md5": "dcac12d0f7dc238a509a22e251294775"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "check_ai_call_monthly_limit_trigger",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  v_base_limit integer;\n  v_available_credits integer;\n  v_effective_limit integer;\n  v_count integer;\n  v_month_start timestamptz;\n  v_consumed_credit boolean := false;\nBEGIN\n  v_base_limit := public.get_ai_call_monthly_base_limit(NEW.user_id, NEW.bucket);\n  IF v_base_limit >= 999999 THEN\n    RETURN NEW;\n  END IF;\n\n  v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';\n\n  PERFORM pg_advisory_xact_lock(\n    hashtextextended(NEW.user_id::text || ':' || NEW.bucket || ':' || v_month_start::date::text, 0)\n  );\n\n  v_available_credits := public.get_available_addon_credits(NEW.user_id, NEW.bucket);\n\n  SELECT COUNT(*)::integer\n  INTO v_count\n  FROM public.usage_ai_calls\n  WHERE user_id = NEW.user_id\n    AND bucket = NEW.bucket\n    AND created_at >= v_month_start;\n\n  v_effective_limit := v_base_limit + v_available_credits + GREATEST(v_count - v_base_limit, 0);\n\n  IF v_count >= v_effective_limit THEN\n    RAISE EXCEPTION 'ai_call_monthly_limit_reached'\n      USING HINT = 'Bucket=' || NEW.bucket || ' user=' || NEW.user_id;\n  END IF;\n\n  IF v_count >= v_base_limit THEN\n    v_consumed_credit := public.consume_addon_credit_for_user(NEW.user_id, NEW.bucket);\n    IF NOT v_consumed_credit THEN\n      RAISE EXCEPTION 'ai_call_monthly_limit_reached'\n        USING HINT = 'Bucket=' || NEW.bucket || ' user=' || NEW.user_id;\n    END IF;\n  END IF;\n\n  RETURN NEW;\nEND;\n",
+            "signature": "check_ai_call_monthly_limit_trigger()",
+            "definition": "CREATE OR REPLACE FUNCTION public.check_ai_call_monthly_limit_trigger()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_base_limit integer;\n  v_available_credits integer;\n  v_effective_limit integer;\n  v_count integer;\n  v_month_start timestamptz;\n  v_consumed_credit boolean := false;\nBEGIN\n  v_base_limit := public.get_ai_call_monthly_base_limit(NEW.user_id, NEW.bucket);\n  IF v_base_limit >= 999999 THEN\n    RETURN NEW;\n  END IF;\n\n  v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';\n\n  PERFORM pg_advisory_xact_lock(\n    hashtextextended(NEW.user_id::text || ':' || NEW.bucket || ':' || v_month_start::date::text, 0)\n  );\n\n  v_available_credits := public.get_available_addon_credits(NEW.user_id, NEW.bucket);\n\n  SELECT COUNT(*)::integer\n  INTO v_count\n  FROM public.usage_ai_calls\n  WHERE user_id = NEW.user_id\n    AND bucket = NEW.bucket\n    AND created_at >= v_month_start;\n\n  v_effective_limit := v_base_limit + v_available_credits + GREATEST(v_count - v_base_limit, 0);\n\n  IF v_count >= v_effective_limit THEN\n    RAISE EXCEPTION 'ai_call_monthly_limit_reached'\n      USING HINT = 'Bucket=' || NEW.bucket || ' user=' || NEW.user_id;\n  END IF;\n\n  IF v_count >= v_base_limit THEN\n    v_consumed_credit := public.consume_addon_credit_for_user(NEW.user_id, NEW.bucket);\n    IF NOT v_consumed_credit THEN\n      RAISE EXCEPTION 'ai_call_monthly_limit_reached'\n        USING HINT = 'Bucket=' || NEW.bucket || ' user=' || NEW.user_id;\n    END IF;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n",
+            "source_md5": "37ccff5e712790ad4b22a8e0dc482e93"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "check_ai_quotas_for_user",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  v_buckets text[];\n  v_runtime_mode text;\n  v_is_admin boolean := false;\n  v_is_pro boolean := false;\n  v_has_free_ai_access boolean := false;\n  v_month_start timestamptz;\n  v_result jsonb;\nBEGIN\n  IF _user_id IS NULL THEN\n    RAISE EXCEPTION 'user id is required' USING ERRCODE = '22023';\n  END IF;\n\n  IF p_buckets IS NULL\n     OR cardinality(p_buckets) = 0\n     OR cardinality(p_buckets) > 12\n     OR EXISTS (\n       SELECT 1\n       FROM unnest(p_buckets) AS requested(bucket)\n       WHERE bucket IS NULL OR bucket !~ '^[a-z0-9-]{2,64}$'\n     ) THEN\n    RAISE EXCEPTION 'invalid AI quota buckets' USING ERRCODE = '22023';\n  END IF;\n\n  SELECT array_agg(deduplicated.bucket ORDER BY deduplicated.first_position)\n  INTO v_buckets\n  FROM (\n    SELECT requested.bucket, min(requested.position) AS first_position\n    FROM unnest(p_buckets) WITH ORDINALITY AS requested(bucket, position)\n    GROUP BY requested.bucket\n  ) AS deduplicated;\n\n  v_runtime_mode := public.current_billing_runtime_mode();\n  v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';\n  v_is_admin := public.has_platform_admin(_user_id);\n  v_is_pro := public.is_pro(_user_id);\n  v_has_free_ai_access := private.has_free_ai_access_for_user(_user_id);\n\n  WITH requested AS (\n    SELECT bucket, position\n    FROM unnest(v_buckets) WITH ORDINALITY AS value(bucket, position)\n  ),\n  limits_by_bucket AS (\n    SELECT\n      requested.bucket,\n      requested.position,\n      CASE\n        WHEN v_is_admin THEN 999999\n        WHEN v_is_pro THEN COALESCE(limits.pro_monthly, 0)\n        WHEN v_has_free_ai_access THEN COALESCE(limits.free_monthly, 0)\n        ELSE 0\n      END::integer AS base_limit\n    FROM requested\n    LEFT JOIN public.ai_usage_limits AS limits\n      ON limits.bucket = requested.bucket\n  ),\n  usage_by_bucket AS (\n    SELECT calls.bucket, count(*)::integer AS used\n    FROM public.usage_ai_calls AS calls\n    WHERE calls.user_id = _user_id\n      AND calls.bucket = ANY (v_buckets)\n      AND calls.created_at >= v_month_start\n    GROUP BY calls.bucket\n  ),\n  credits_by_bucket AS (\n    SELECT\n      public.addon_credit_bucket(purchases.addon_key) AS bucket,\n      GREATEST(\n        COALESCE(sum(\n          purchases.credits_granted\n          - purchases.credits_consumed\n          - purchases.credits_refunded\n        ), 0),\n        0\n      )::integer AS available\n    FROM public.addon_purchases AS purchases\n    WHERE purchases.user_id = _user_id\n      AND purchases.runtime_mode = v_runtime_mode\n      AND purchases.livemode = (v_runtime_mode = 'live')\n      AND purchases.status IN ('paid', 'active', 'refunded')\n      AND public.addon_credit_bucket(purchases.addon_key) = ANY (v_buckets)\n    GROUP BY public.addon_credit_bucket(purchases.addon_key)\n  ),\n  quota_rows AS (\n    SELECT\n      limits.bucket,\n      limits.position,\n      COALESCE(usage.used, 0)::integer AS used,\n      CASE\n        WHEN limits.base_limit >= 999999 THEN limits.base_limit\n        ELSE limits.base_limit\n          + COALESCE(credits.available, 0)\n          + GREATEST(COALESCE(usage.used, 0) - limits.base_limit, 0)\n      END::integer AS effective_limit\n    FROM limits_by_bucket AS limits\n    LEFT JOIN usage_by_bucket AS usage ON usage.bucket = limits.bucket\n    LEFT JOIN credits_by_bucket AS credits ON credits.bucket = limits.bucket\n  )\n  SELECT jsonb_object_agg(\n    quota.bucket,\n    jsonb_build_object(\n      'allowed', quota.used < quota.effective_limit,\n      'reason', CASE\n        WHEN quota.used >= quota.effective_limit\n             AND quota.effective_limit = 0\n          THEN 'plan_does_not_include_feature'\n        WHEN quota.used >= quota.effective_limit\n          THEN 'monthly_limit_reached'\n        ELSE NULL\n      END,\n      'used', quota.used,\n      'limit', quota.effective_limit\n    )\n    ORDER BY quota.position\n  )\n  INTO v_result\n  FROM quota_rows AS quota;\n\n  RETURN COALESCE(v_result, '{}'::jsonb);\nEND;\n",
+            "signature": "check_ai_quotas_for_user(uuid,text[])",
+            "definition": "CREATE OR REPLACE FUNCTION public.check_ai_quotas_for_user(_user_id uuid, p_buckets text[])\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'private'\nAS $function$\nDECLARE\n  v_buckets text[];\n  v_runtime_mode text;\n  v_is_admin boolean := false;\n  v_is_pro boolean := false;\n  v_has_free_ai_access boolean := false;\n  v_month_start timestamptz;\n  v_result jsonb;\nBEGIN\n  IF _user_id IS NULL THEN\n    RAISE EXCEPTION 'user id is required' USING ERRCODE = '22023';\n  END IF;\n\n  IF p_buckets IS NULL\n     OR cardinality(p_buckets) = 0\n     OR cardinality(p_buckets) > 12\n     OR EXISTS (\n       SELECT 1\n       FROM unnest(p_buckets) AS requested(bucket)\n       WHERE bucket IS NULL OR bucket !~ '^[a-z0-9-]{2,64}$'\n     ) THEN\n    RAISE EXCEPTION 'invalid AI quota buckets' USING ERRCODE = '22023';\n  END IF;\n\n  SELECT array_agg(deduplicated.bucket ORDER BY deduplicated.first_position)\n  INTO v_buckets\n  FROM (\n    SELECT requested.bucket, min(requested.position) AS first_position\n    FROM unnest(p_buckets) WITH ORDINALITY AS requested(bucket, position)\n    GROUP BY requested.bucket\n  ) AS deduplicated;\n\n  v_runtime_mode := public.current_billing_runtime_mode();\n  v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';\n  v_is_admin := public.has_platform_admin(_user_id);\n  v_is_pro := public.is_pro(_user_id);\n  v_has_free_ai_access := private.has_free_ai_access_for_user(_user_id);\n\n  WITH requested AS (\n    SELECT bucket, position\n    FROM unnest(v_buckets) WITH ORDINALITY AS value(bucket, position)\n  ),\n  limits_by_bucket AS (\n    SELECT\n      requested.bucket,\n      requested.position,\n      CASE\n        WHEN v_is_admin THEN 999999\n        WHEN v_is_pro THEN COALESCE(limits.pro_monthly, 0)\n        WHEN v_has_free_ai_access THEN COALESCE(limits.free_monthly, 0)\n        ELSE 0\n      END::integer AS base_limit\n    FROM requested\n    LEFT JOIN public.ai_usage_limits AS limits\n      ON limits.bucket = requested.bucket\n  ),\n  usage_by_bucket AS (\n    SELECT calls.bucket, count(*)::integer AS used\n    FROM public.usage_ai_calls AS calls\n    WHERE calls.user_id = _user_id\n      AND calls.bucket = ANY (v_buckets)\n      AND calls.created_at >= v_month_start\n    GROUP BY calls.bucket\n  ),\n  credits_by_bucket AS (\n    SELECT\n      public.addon_credit_bucket(purchases.addon_key) AS bucket,\n      GREATEST(\n        COALESCE(sum(\n          purchases.credits_granted\n          - purchases.credits_consumed\n          - purchases.credits_refunded\n        ), 0),\n        0\n      )::integer AS available\n    FROM public.addon_purchases AS purchases\n    WHERE purchases.user_id = _user_id\n      AND purchases.runtime_mode = v_runtime_mode\n      AND purchases.livemode = (v_runtime_mode = 'live')\n      AND purchases.status IN ('paid', 'active', 'refunded')\n      AND public.addon_credit_bucket(purchases.addon_key) = ANY (v_buckets)\n    GROUP BY public.addon_credit_bucket(purchases.addon_key)\n  ),\n  quota_rows AS (\n    SELECT\n      limits.bucket,\n      limits.position,\n      COALESCE(usage.used, 0)::integer AS used,\n      CASE\n        WHEN limits.base_limit >= 999999 THEN limits.base_limit\n        ELSE limits.base_limit\n          + COALESCE(credits.available, 0)\n          + GREATEST(COALESCE(usage.used, 0) - limits.base_limit, 0)\n      END::integer AS effective_limit\n    FROM limits_by_bucket AS limits\n    LEFT JOIN usage_by_bucket AS usage ON usage.bucket = limits.bucket\n    LEFT JOIN credits_by_bucket AS credits ON credits.bucket = limits.bucket\n  )\n  SELECT jsonb_object_agg(\n    quota.bucket,\n    jsonb_build_object(\n      'allowed', quota.used < quota.effective_limit,\n      'reason', CASE\n        WHEN quota.used >= quota.effective_limit\n             AND quota.effective_limit = 0\n          THEN 'plan_does_not_include_feature'\n        WHEN quota.used >= quota.effective_limit\n          THEN 'monthly_limit_reached'\n        ELSE NULL\n      END,\n      'used', quota.used,\n      'limit', quota.effective_limit\n    )\n    ORDER BY quota.position\n  )\n  INTO v_result\n  FROM quota_rows AS quota;\n\n  RETURN COALESCE(v_result, '{}'::jsonb);\nEND;\n$function$\n",
+            "source_md5": "48d54162530f5495c6df99694b323605"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "complete_onboarding_role_for_user",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  v_old_role public.user_role;\n  v_old_participant_type text;\n  v_was_switching boolean;\n  v_role_switch_audit_id uuid;\nBEGIN\n  IF p_user_id IS NULL THEN\n    RAISE EXCEPTION 'not_authenticated';\n  END IF;\n\n  SELECT\n    role,\n    participant_type,\n    role_switch_in_progress_at IS NOT NULL,\n    role_switch_audit_id\n  INTO\n    v_old_role,\n    v_old_participant_type,\n    v_was_switching,\n    v_role_switch_audit_id\n  FROM public.profiles\n  WHERE user_id = p_user_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN\n    RAISE EXCEPTION 'profile_not_found';\n  END IF;\n  IF v_old_role = 'admin'::public.user_role THEN\n    RAISE EXCEPTION 'admin_role_locked';\n  END IF;\n  IF p_participant_type NOT IN ('buyer','seller','agent','developer','professional') THEN\n    RAISE EXCEPTION 'invalid_participant_type';\n  END IF;\n  IF p_role::text <> p_participant_type THEN\n    RAISE EXCEPTION 'role_participant_mismatch';\n  END IF;\n  IF p_role NOT IN (\n    'buyer'::public.user_role,\n    'seller'::public.user_role,\n    'agent'::public.user_role,\n    'developer'::public.user_role,\n    'professional'::public.user_role\n  ) THEN\n    RAISE EXCEPTION 'role_not_allowed';\n  END IF;\n\n  -- A non-null participant_type proves that onboarding has already completed.\n  -- Such a profile may only change role inside the sentinel + exact finalized\n  -- audit flow. The only unaudited established-profile call allowed here is an\n  -- idempotent completion of the same role/participant pair.\n  IF NOT v_was_switching\n     AND v_old_participant_type IS NOT NULL\n     AND (\n       v_old_role IS DISTINCT FROM p_role\n       OR v_old_participant_type IS DISTINCT FROM p_participant_type\n     ) THEN\n    RAISE EXCEPTION 'role_switch_audit_required';\n  END IF;\n\n  IF v_was_switching THEN\n    IF v_role_switch_audit_id IS NULL THEN\n      RAISE EXCEPTION 'role_switch_audit_required';\n    END IF;\n    IF NOT EXISTS (\n      SELECT 1\n      FROM public.role_switch_history history\n      WHERE history.id = v_role_switch_audit_id\n        AND history.user_id = p_user_id\n        AND history.from_type = v_old_role::text\n        AND history.to_type = p_participant_type\n        AND history.billing_reconciliation_required = false\n        AND history.billing_outcome IN ('not_required', 'succeeded', 'already_pending')\n      FOR UPDATE\n    ) THEN\n      RAISE EXCEPTION 'role_switch_audit_destination_mismatch';\n    END IF;\n  END IF;\n\n  PERFORM public.unarchive_role_data(p_user_id, p_role::text);\n\n  IF p_role = 'professional'::public.user_role THEN\n    IF nullif(trim(coalesce(p_phone, '')), '') IS NULL THEN\n      RAISE EXCEPTION 'professional_phone_required';\n    END IF;\n    IF NOT EXISTS (\n      SELECT 1 FROM public.professionals pr\n      WHERE pr.user_id = p_user_id AND pr.archived_at IS NULL\n    ) THEN\n      RAISE EXCEPTION 'professional_profile_required';\n    END IF;\n  END IF;\n\n  IF p_role = 'developer'::public.user_role THEN\n    IF nullif(trim(coalesce(p_display_name, '')), '') IS NULL THEN\n      RAISE EXCEPTION 'developer_display_name_required';\n    END IF;\n    IF nullif(trim(coalesce(p_city, '')), '') IS NULL THEN\n      RAISE EXCEPTION 'developer_city_required';\n    END IF;\n  END IF;\n\n  IF v_was_switching AND v_old_role::text IS DISTINCT FROM p_role::text THEN\n    PERFORM public.archive_role_data(p_user_id, v_old_role::text);\n  END IF;\n\n  PERFORM set_config('maiprop.onboarding_rpc_active', 'true', true);\n\n  UPDATE public.profiles\n  SET\n    role = p_role,\n    participant_type = p_participant_type,\n    display_name = COALESCE(NULLIF(trim(p_display_name), ''), display_name),\n    city = COALESCE(NULLIF(trim(p_city), ''), city),\n    phone = COALESCE(NULLIF(trim(p_phone), ''), phone),\n    role_switch_in_progress_at = NULL,\n    role_switch_audit_id = NULL,\n    updated_at = now()\n  WHERE user_id = p_user_id;\n\n  IF NOT FOUND THEN\n    RAISE EXCEPTION 'profile_update_failed';\n  END IF;\nEND;\n",
+            "signature": "complete_onboarding_role_for_user(uuid,user_role,text,text,text,text)",
+            "definition": "CREATE OR REPLACE FUNCTION public.complete_onboarding_role_for_user(p_user_id uuid, p_role user_role, p_participant_type text, p_display_name text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_phone text DEFAULT NULL::text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_old_role public.user_role;\n  v_old_participant_type text;\n  v_was_switching boolean;\n  v_role_switch_audit_id uuid;\nBEGIN\n  IF p_user_id IS NULL THEN\n    RAISE EXCEPTION 'not_authenticated';\n  END IF;\n\n  SELECT\n    role,\n    participant_type,\n    role_switch_in_progress_at IS NOT NULL,\n    role_switch_audit_id\n  INTO\n    v_old_role,\n    v_old_participant_type,\n    v_was_switching,\n    v_role_switch_audit_id\n  FROM public.profiles\n  WHERE user_id = p_user_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN\n    RAISE EXCEPTION 'profile_not_found';\n  END IF;\n  IF v_old_role = 'admin'::public.user_role THEN\n    RAISE EXCEPTION 'admin_role_locked';\n  END IF;\n  IF p_participant_type NOT IN ('buyer','seller','agent','developer','professional') THEN\n    RAISE EXCEPTION 'invalid_participant_type';\n  END IF;\n  IF p_role::text <> p_participant_type THEN\n    RAISE EXCEPTION 'role_participant_mismatch';\n  END IF;\n  IF p_role NOT IN (\n    'buyer'::public.user_role,\n    'seller'::public.user_role,\n    'agent'::public.user_role,\n    'developer'::public.user_role,\n    'professional'::public.user_role\n  ) THEN\n    RAISE EXCEPTION 'role_not_allowed';\n  END IF;\n\n  -- A non-null participant_type proves that onboarding has already completed.\n  -- Such a profile may only change role inside the sentinel + exact finalized\n  -- audit flow. The only unaudited established-profile call allowed here is an\n  -- idempotent completion of the same role/participant pair.\n  IF NOT v_was_switching\n     AND v_old_participant_type IS NOT NULL\n     AND (\n       v_old_role IS DISTINCT FROM p_role\n       OR v_old_participant_type IS DISTINCT FROM p_participant_type\n     ) THEN\n    RAISE EXCEPTION 'role_switch_audit_required';\n  END IF;\n\n  IF v_was_switching THEN\n    IF v_role_switch_audit_id IS NULL THEN\n      RAISE EXCEPTION 'role_switch_audit_required';\n    END IF;\n    IF NOT EXISTS (\n      SELECT 1\n      FROM public.role_switch_history history\n      WHERE history.id = v_role_switch_audit_id\n        AND history.user_id = p_user_id\n        AND history.from_type = v_old_role::text\n        AND history.to_type = p_participant_type\n        AND history.billing_reconciliation_required = false\n        AND history.billing_outcome IN ('not_required', 'succeeded', 'already_pending')\n      FOR UPDATE\n    ) THEN\n      RAISE EXCEPTION 'role_switch_audit_destination_mismatch';\n    END IF;\n  END IF;\n\n  PERFORM public.unarchive_role_data(p_user_id, p_role::text);\n\n  IF p_role = 'professional'::public.user_role THEN\n    IF nullif(trim(coalesce(p_phone, '')), '') IS NULL THEN\n      RAISE EXCEPTION 'professional_phone_required';\n    END IF;\n    IF NOT EXISTS (\n      SELECT 1 FROM public.professionals pr\n      WHERE pr.user_id = p_user_id AND pr.archived_at IS NULL\n    ) THEN\n      RAISE EXCEPTION 'professional_profile_required';\n    END IF;\n  END IF;\n\n  IF p_role = 'developer'::public.user_role THEN\n    IF nullif(trim(coalesce(p_display_name, '')), '') IS NULL THEN\n      RAISE EXCEPTION 'developer_display_name_required';\n    END IF;\n    IF nullif(trim(coalesce(p_city, '')), '') IS NULL THEN\n      RAISE EXCEPTION 'developer_city_required';\n    END IF;\n  END IF;\n\n  IF v_was_switching AND v_old_role::text IS DISTINCT FROM p_role::text THEN\n    PERFORM public.archive_role_data(p_user_id, v_old_role::text);\n  END IF;\n\n  PERFORM set_config('maiprop.onboarding_rpc_active', 'true', true);\n\n  UPDATE public.profiles\n  SET\n    role = p_role,\n    participant_type = p_participant_type,\n    display_name = COALESCE(NULLIF(trim(p_display_name), ''), display_name),\n    city = COALESCE(NULLIF(trim(p_city), ''), city),\n    phone = COALESCE(NULLIF(trim(p_phone), ''), phone),\n    role_switch_in_progress_at = NULL,\n    role_switch_audit_id = NULL,\n    updated_at = now()\n  WHERE user_id = p_user_id;\n\n  IF NOT FOUND THEN\n    RAISE EXCEPTION 'profile_update_failed';\n  END IF;\nEND;\n$function$\n",
+            "source_md5": "3a49014e7218ad4241b0d884610d0742"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "consume_addon_credit_for_user",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  v_purchase_id uuid;\n  v_balance integer;\nBEGIN\n  v_balance := public.get_addon_credit_balance(p_user_id, p_bucket);\n  IF v_balance <= 0 THEN\n    RETURN false;\n  END IF;\n\n  SELECT id\n  INTO v_purchase_id\n  FROM public.addon_purchases\n  WHERE user_id = p_user_id\n    AND status IN ('paid', 'active')\n    AND runtime_mode = public.current_billing_runtime_mode()\n    AND credits_granted - credits_consumed - credits_refunded > 0\n    AND public.addon_credit_bucket(addon_key) = p_bucket\n  ORDER BY created_at ASC, id ASC\n  FOR UPDATE SKIP LOCKED\n  LIMIT 1;\n\n  IF v_purchase_id IS NULL THEN\n    RETURN false;\n  END IF;\n\n  UPDATE public.addon_purchases\n  SET credits_consumed = credits_consumed + 1\n  WHERE id = v_purchase_id\n    AND credits_granted - credits_consumed - credits_refunded > 0;\n\n  RETURN FOUND;\nEND;\n",
+            "signature": "consume_addon_credit_for_user(uuid,text)",
+            "definition": "CREATE OR REPLACE FUNCTION public.consume_addon_credit_for_user(p_user_id uuid, p_bucket text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_purchase_id uuid;\n  v_balance integer;\nBEGIN\n  v_balance := public.get_addon_credit_balance(p_user_id, p_bucket);\n  IF v_balance <= 0 THEN\n    RETURN false;\n  END IF;\n\n  SELECT id\n  INTO v_purchase_id\n  FROM public.addon_purchases\n  WHERE user_id = p_user_id\n    AND status IN ('paid', 'active')\n    AND runtime_mode = public.current_billing_runtime_mode()\n    AND credits_granted - credits_consumed - credits_refunded > 0\n    AND public.addon_credit_bucket(addon_key) = p_bucket\n  ORDER BY created_at ASC, id ASC\n  FOR UPDATE SKIP LOCKED\n  LIMIT 1;\n\n  IF v_purchase_id IS NULL THEN\n    RETURN false;\n  END IF;\n\n  UPDATE public.addon_purchases\n  SET credits_consumed = credits_consumed + 1\n  WHERE id = v_purchase_id\n    AND credits_granted - credits_consumed - credits_refunded > 0;\n\n  RETURN FOUND;\nEND;\n$function$\n",
+            "source_md5": "6fc3342bae958af831136e9c11986088"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "current_billing_runtime_mode",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  v_runtime_mode text;\nBEGIN\n  SELECT runtime_mode\n  INTO v_runtime_mode\n  FROM private.billing_runtime_config\n  WHERE singleton;\n\n  IF v_runtime_mode IS NULL THEN\n    RAISE EXCEPTION 'billing_runtime_mode_not_configured'\n      USING ERRCODE = '55000';\n  END IF;\n  RETURN v_runtime_mode;\nEND;\n",
+            "signature": "current_billing_runtime_mode()",
+            "definition": "CREATE OR REPLACE FUNCTION public.current_billing_runtime_mode()\n RETURNS text\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'private'\nAS $function$\nDECLARE\n  v_runtime_mode text;\nBEGIN\n  SELECT runtime_mode\n  INTO v_runtime_mode\n  FROM private.billing_runtime_config\n  WHERE singleton;\n\n  IF v_runtime_mode IS NULL THEN\n    RAISE EXCEPTION 'billing_runtime_mode_not_configured'\n      USING ERRCODE = '55000';\n  END IF;\n  RETURN v_runtime_mode;\nEND;\n$function$\n",
+            "source_md5": "86ecafe714b16fb88470d78a7a763c49"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "get_addon_credit_balance",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\n  SELECT COALESCE(SUM(credits_granted - credits_consumed - credits_refunded), 0)::integer\n  FROM public.addon_purchases\n  WHERE user_id = p_user_id\n    AND status IN ('paid', 'active', 'refunded')\n    AND runtime_mode = public.current_billing_runtime_mode()\n    AND public.addon_credit_bucket(addon_key) = p_bucket\n",
+            "signature": "get_addon_credit_balance(uuid,text)",
+            "definition": "CREATE OR REPLACE FUNCTION public.get_addon_credit_balance(p_user_id uuid, p_bucket text)\n RETURNS integer\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT COALESCE(SUM(credits_granted - credits_consumed - credits_refunded), 0)::integer\n  FROM public.addon_purchases\n  WHERE user_id = p_user_id\n    AND status IN ('paid', 'active', 'refunded')\n    AND runtime_mode = public.current_billing_runtime_mode()\n    AND public.addon_credit_bucket(addon_key) = p_bucket\n$function$\n",
+            "source_md5": "3c58c083f86292a696a57126f7f7b158"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "get_ai_call_monthly_base_limit",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  v_free integer;\n  v_pro integer;\nBEGIN\n  IF public.has_platform_admin(p_user_id) THEN\n    RETURN 999999;\n  END IF;\n\n  SELECT limits.free_monthly, limits.pro_monthly\n  INTO v_free, v_pro\n  FROM public.ai_usage_limits AS limits\n  WHERE limits.bucket = p_bucket\n  LIMIT 1;\n\n  IF v_free IS NULL THEN\n    RETURN 0;\n  END IF;\n\n  IF public.is_pro(p_user_id) THEN\n    RETURN COALESCE(v_pro, 0);\n  END IF;\n\n  IF private.has_free_ai_access_for_user(p_user_id) THEN\n    RETURN v_free;\n  END IF;\n\n  RETURN 0;\nEND;\n",
+            "signature": "get_ai_call_monthly_base_limit(uuid,text)",
+            "definition": "CREATE OR REPLACE FUNCTION public.get_ai_call_monthly_base_limit(p_user_id uuid, p_bucket text)\n RETURNS integer\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_free integer;\n  v_pro integer;\nBEGIN\n  IF public.has_platform_admin(p_user_id) THEN\n    RETURN 999999;\n  END IF;\n\n  SELECT limits.free_monthly, limits.pro_monthly\n  INTO v_free, v_pro\n  FROM public.ai_usage_limits AS limits\n  WHERE limits.bucket = p_bucket\n  LIMIT 1;\n\n  IF v_free IS NULL THEN\n    RETURN 0;\n  END IF;\n\n  IF public.is_pro(p_user_id) THEN\n    RETURN COALESCE(v_pro, 0);\n  END IF;\n\n  IF private.has_free_ai_access_for_user(p_user_id) THEN\n    RETURN v_free;\n  END IF;\n\n  RETURN 0;\nEND;\n$function$\n",
+            "source_md5": "0a322b8984508f38a2da4c2c6061aff2"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "get_ai_call_monthly_limit",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  v_base integer;\n  v_available integer;\n  v_count integer;\n  v_month_start timestamptz;\nBEGIN\n  v_base := public.get_ai_call_monthly_base_limit(p_user_id, p_bucket);\n  IF v_base >= 999999 THEN\n    RETURN v_base;\n  END IF;\n\n  v_available := public.get_available_addon_credits(p_user_id, p_bucket);\n  v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';\n\n  SELECT COUNT(*)::integer\n  INTO v_count\n  FROM public.usage_ai_calls\n  WHERE user_id = p_user_id\n    AND bucket = p_bucket\n    AND created_at >= v_month_start;\n\n  RETURN v_base + v_available + GREATEST(v_count - v_base, 0);\nEND;\n",
+            "signature": "get_ai_call_monthly_limit(uuid,text)",
+            "definition": "CREATE OR REPLACE FUNCTION public.get_ai_call_monthly_limit(p_user_id uuid, p_bucket text)\n RETURNS integer\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_base integer;\n  v_available integer;\n  v_count integer;\n  v_month_start timestamptz;\nBEGIN\n  v_base := public.get_ai_call_monthly_base_limit(p_user_id, p_bucket);\n  IF v_base >= 999999 THEN\n    RETURN v_base;\n  END IF;\n\n  v_available := public.get_available_addon_credits(p_user_id, p_bucket);\n  v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';\n\n  SELECT COUNT(*)::integer\n  INTO v_count\n  FROM public.usage_ai_calls\n  WHERE user_id = p_user_id\n    AND bucket = p_bucket\n    AND created_at >= v_month_start;\n\n  RETURN v_base + v_available + GREATEST(v_count - v_base, 0);\nEND;\n$function$\n",
+            "source_md5": "b583b8a5e99be030713a755cde784427"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "get_available_addon_credits",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\n  SELECT GREATEST(public.get_addon_credit_balance(p_user_id, p_bucket), 0)\n",
+            "signature": "get_available_addon_credits(uuid,text)",
+            "definition": "CREATE OR REPLACE FUNCTION public.get_available_addon_credits(p_user_id uuid, p_bucket text)\n RETURNS integer\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT GREATEST(public.get_addon_credit_balance(p_user_id, p_bucket), 0)\n$function$\n",
+            "source_md5": "989384d1162e85138ba260ba18eb90c5"
+        },
+        {
+            "acl": null,
+            "name": "guard_sensitive_profile_columns",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nBEGIN\n  -- Only admins (via service role / RPC) can change these columns.\n  -- Regular authenticated users must not self-assign subscription or privilege fields.\n  -- When auth.uid() IS NULL (service-role edge functions like stripe-webhook),\n  -- the guard is skipped so those writes go through.\n\n  -- Guard subscription_product_id\n  IF NEW.subscription_product_id IS DISTINCT FROM OLD.subscription_product_id THEN\n    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN\n      NEW.subscription_product_id := OLD.subscription_product_id;\n    END IF;\n  END IF;\n\n  -- Guard force_pro_access\n  IF NEW.force_pro_access IS DISTINCT FROM OLD.force_pro_access THEN\n    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN\n      NEW.force_pro_access := OLD.force_pro_access;\n    END IF;\n  END IF;\n\n  -- Guard verified (trust badge — admin-only)\n  IF NEW.verified IS DISTINCT FROM OLD.verified THEN\n    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN\n      NEW.verified := OLD.verified;\n    END IF;\n  END IF;\n\n  -- Guard participant_type: non-admins can only set allowed values.\n  -- 'investor' and 'institutional' require admin approval.\n  IF NEW.participant_type IS DISTINCT FROM OLD.participant_type THEN\n    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN\n      IF NEW.participant_type NOT IN ('buyer', 'seller', 'agent', 'developer', 'professional') THEN\n        NEW.participant_type := OLD.participant_type;\n      END IF;\n    END IF;\n  END IF;\n\n  RETURN NEW;\nEND;\n",
+            "signature": "guard_sensitive_profile_columns()",
+            "definition": "CREATE OR REPLACE FUNCTION public.guard_sensitive_profile_columns()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nBEGIN\n  -- Only admins (via service role / RPC) can change these columns.\n  -- Regular authenticated users must not self-assign subscription or privilege fields.\n  -- When auth.uid() IS NULL (service-role edge functions like stripe-webhook),\n  -- the guard is skipped so those writes go through.\n\n  -- Guard subscription_product_id\n  IF NEW.subscription_product_id IS DISTINCT FROM OLD.subscription_product_id THEN\n    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN\n      NEW.subscription_product_id := OLD.subscription_product_id;\n    END IF;\n  END IF;\n\n  -- Guard force_pro_access\n  IF NEW.force_pro_access IS DISTINCT FROM OLD.force_pro_access THEN\n    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN\n      NEW.force_pro_access := OLD.force_pro_access;\n    END IF;\n  END IF;\n\n  -- Guard verified (trust badge — admin-only)\n  IF NEW.verified IS DISTINCT FROM OLD.verified THEN\n    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN\n      NEW.verified := OLD.verified;\n    END IF;\n  END IF;\n\n  -- Guard participant_type: non-admins can only set allowed values.\n  -- 'investor' and 'institutional' require admin approval.\n  IF NEW.participant_type IS DISTINCT FROM OLD.participant_type THEN\n    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN\n      IF NEW.participant_type NOT IN ('buyer', 'seller', 'agent', 'developer', 'professional') THEN\n        NEW.participant_type := OLD.participant_type;\n      END IF;\n    END IF;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n",
+            "source_md5": "c89c0d19f4fbac08871a51b7cab9cf4f"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "handle_new_user",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nBEGIN\n  INSERT INTO public.profiles (user_id, created_at, updated_at)\n  VALUES (NEW.id, now(), now())\n  ON CONFLICT (user_id) DO NOTHING;   -- idempotent: skip if row already exists\n  RETURN NEW;\nEND;\n",
+            "signature": "handle_new_user()",
+            "definition": "CREATE OR REPLACE FUNCTION public.handle_new_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  INSERT INTO public.profiles (user_id, created_at, updated_at)\n  VALUES (NEW.id, now(), now())\n  ON CONFLICT (user_id) DO NOTHING;   -- idempotent: skip if row already exists\n  RETURN NEW;\nEND;\n$function$\n",
+            "source_md5": "8a20be17533657b50c807a6194c4dd1c"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "has_platform_admin",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\n  SELECT public.authoritative_role(_user_id) = 'admin'::public.user_role\n",
+            "signature": "has_platform_admin(uuid)",
+            "definition": "CREATE OR REPLACE FUNCTION public.has_platform_admin(_user_id uuid DEFAULT auth.uid())\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT public.authoritative_role(_user_id) = 'admin'::public.user_role\n$function$\n",
+            "source_md5": "b2d002ffd21dfcf28622e7456ba76452"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "is_pro",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\n  SELECT\n    public.has_platform_admin(p_user_id)\n    OR COALESCE(\n      (\n        SELECT\n          profile.role_switch_in_progress_at IS NULL\n          AND profile.force_pro_access\n        FROM public.profiles AS profile\n        WHERE profile.user_id = p_user_id\n        LIMIT 1\n      ),\n      FALSE\n    )\n    OR private.has_current_billing_subscription_for_user(p_user_id)\n    OR private.has_investor_subscription_for_user(p_user_id)\n",
+            "signature": "is_pro(uuid)",
+            "definition": "CREATE OR REPLACE FUNCTION public.is_pro(p_user_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'private'\nAS $function$\n  SELECT\n    public.has_platform_admin(p_user_id)\n    OR COALESCE(\n      (\n        SELECT\n          profile.role_switch_in_progress_at IS NULL\n          AND profile.force_pro_access\n        FROM public.profiles AS profile\n        WHERE profile.user_id = p_user_id\n        LIMIT 1\n      ),\n      FALSE\n    )\n    OR private.has_current_billing_subscription_for_user(p_user_id)\n    OR private.has_investor_subscription_for_user(p_user_id)\n$function$\n",
+            "source_md5": "4e2c04615d08eaee323a86d5b041ba8a"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "authenticated=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "profile_pricing_audience",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\n  SELECT CASE\n    WHEN p_role IN ('buyer'::public.user_role, 'seller'::public.user_role) THEN 'participant'\n    WHEN p_role IN (\n      'agent'::public.user_role,\n      'developer'::public.user_role,\n      'professional'::public.user_role,\n      'investor'::public.user_role,\n      'institutional'::public.user_role\n    ) THEN p_role::text\n    WHEN p_role = 'admin'::public.user_role THEN 'agent'\n    WHEN p_role IS NULL AND p_participant_type IN ('buyer', 'seller', 'participant', 'pro', 'user') THEN 'participant'\n    ELSE NULL\n  END\n",
+            "signature": "profile_pricing_audience(user_role,text)",
+            "definition": "CREATE OR REPLACE FUNCTION public.profile_pricing_audience(p_role user_role, p_participant_type text DEFAULT NULL::text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'public'\nAS $function$\n  SELECT CASE\n    WHEN p_role IN ('buyer'::public.user_role, 'seller'::public.user_role) THEN 'participant'\n    WHEN p_role IN (\n      'agent'::public.user_role,\n      'developer'::public.user_role,\n      'professional'::public.user_role,\n      'investor'::public.user_role,\n      'institutional'::public.user_role\n    ) THEN p_role::text\n    WHEN p_role = 'admin'::public.user_role THEN 'agent'\n    WHEN p_role IS NULL AND p_participant_type IN ('buyer', 'seller', 'participant', 'pro', 'user') THEN 'participant'\n    ELSE NULL\n  END\n$function$\n",
+            "source_md5": "a76486f188fa43eaeaf77adf4e76dd7f"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "profiles_guard_admin_and_role",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  v_via_rpc boolean := COALESCE(\n    current_setting('maiprop.onboarding_rpc_active', true),\n    'false'\n  ) = 'true';\n  v_via_owner_auth_trigger boolean := COALESCE(\n    current_setting('maiprop.owner_auth_trigger_active', true),\n    'false'\n  ) = 'true';\n  v_is_admin boolean := public.has_platform_admin((SELECT auth.uid()));\nBEGIN\n  -- is_platform_admin column flips remain admin-only.\n  IF NEW.is_platform_admin IS DISTINCT FROM OLD.is_platform_admin THEN\n    IF NOT v_is_admin THEN\n      NEW.is_platform_admin := OLD.is_platform_admin;\n    END IF;\n  END IF;\n\n  -- The owner auth trigger runs as SECURITY DEFINER immediately after a new\n  -- auth.users row is inserted. It sets a local transaction marker before it\n  -- writes the initial trusted owner role.\n  IF v_via_owner_auth_trigger THEN\n    RETURN NEW;\n  END IF;\n\n  IF NEW.role IS DISTINCT FROM OLD.role THEN\n    IF v_is_admin THEN\n      NULL;\n    ELSE\n      IF NOT v_via_rpc THEN\n        RAISE EXCEPTION\n          'role_change_via_direct_update_not_permitted: '\n          'use rpc(\"complete_onboarding_role\", {...}) instead';\n      END IF;\n\n      IF NEW.role IN (\n        'admin'::public.user_role,\n        'investor'::public.user_role,\n        'institutional'::public.user_role\n      ) THEN\n        RAISE EXCEPTION\n          'role_not_self_assignable: %', NEW.role;\n      END IF;\n\n      IF NEW.participant_type IS NULL OR NEW.role::text IS DISTINCT FROM NEW.participant_type THEN\n        RAISE EXCEPTION\n          'role_participant_mismatch: role % does not match participant_type %',\n          NEW.role,\n          NEW.participant_type;\n      END IF;\n    END IF;\n  END IF;\n\n  IF NEW.participant_type IS DISTINCT FROM OLD.participant_type THEN\n    IF v_is_admin THEN\n      NULL;\n    ELSIF NEW.participant_type IS NULL\n      AND NEW.role IS NOT DISTINCT FROM OLD.role\n      AND NEW.role_switch_in_progress_at IS NOT NULL THEN\n      -- begin_role_switch() intentionally clears participant_type before the\n      -- completion RPC writes a new aligned role/participant_type pair.\n      NULL;\n    ELSE\n      IF NOT v_via_rpc THEN\n        RAISE EXCEPTION\n          'participant_type_change_via_direct_update_not_permitted: '\n          'use rpc(\"complete_onboarding_role\", {...}) instead';\n      END IF;\n\n      IF NEW.participant_type IS NULL OR NEW.role::text IS DISTINCT FROM NEW.participant_type THEN\n        RAISE EXCEPTION\n          'role_participant_mismatch: role % does not match participant_type %',\n          NEW.role,\n          NEW.participant_type;\n      END IF;\n    END IF;\n  END IF;\n\n  RETURN NEW;\nEND;\n",
+            "signature": "profiles_guard_admin_and_role()",
+            "definition": "CREATE OR REPLACE FUNCTION public.profiles_guard_admin_and_role()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_via_rpc boolean := COALESCE(\n    current_setting('maiprop.onboarding_rpc_active', true),\n    'false'\n  ) = 'true';\n  v_via_owner_auth_trigger boolean := COALESCE(\n    current_setting('maiprop.owner_auth_trigger_active', true),\n    'false'\n  ) = 'true';\n  v_is_admin boolean := public.has_platform_admin((SELECT auth.uid()));\nBEGIN\n  -- is_platform_admin column flips remain admin-only.\n  IF NEW.is_platform_admin IS DISTINCT FROM OLD.is_platform_admin THEN\n    IF NOT v_is_admin THEN\n      NEW.is_platform_admin := OLD.is_platform_admin;\n    END IF;\n  END IF;\n\n  -- The owner auth trigger runs as SECURITY DEFINER immediately after a new\n  -- auth.users row is inserted. It sets a local transaction marker before it\n  -- writes the initial trusted owner role.\n  IF v_via_owner_auth_trigger THEN\n    RETURN NEW;\n  END IF;\n\n  IF NEW.role IS DISTINCT FROM OLD.role THEN\n    IF v_is_admin THEN\n      NULL;\n    ELSE\n      IF NOT v_via_rpc THEN\n        RAISE EXCEPTION\n          'role_change_via_direct_update_not_permitted: '\n          'use rpc(\"complete_onboarding_role\", {...}) instead';\n      END IF;\n\n      IF NEW.role IN (\n        'admin'::public.user_role,\n        'investor'::public.user_role,\n        'institutional'::public.user_role\n      ) THEN\n        RAISE EXCEPTION\n          'role_not_self_assignable: %', NEW.role;\n      END IF;\n\n      IF NEW.participant_type IS NULL OR NEW.role::text IS DISTINCT FROM NEW.participant_type THEN\n        RAISE EXCEPTION\n          'role_participant_mismatch: role % does not match participant_type %',\n          NEW.role,\n          NEW.participant_type;\n      END IF;\n    END IF;\n  END IF;\n\n  IF NEW.participant_type IS DISTINCT FROM OLD.participant_type THEN\n    IF v_is_admin THEN\n      NULL;\n    ELSIF NEW.participant_type IS NULL\n      AND NEW.role IS NOT DISTINCT FROM OLD.role\n      AND NEW.role_switch_in_progress_at IS NOT NULL THEN\n      -- begin_role_switch() intentionally clears participant_type before the\n      -- completion RPC writes a new aligned role/participant_type pair.\n      NULL;\n    ELSE\n      IF NOT v_via_rpc THEN\n        RAISE EXCEPTION\n          'participant_type_change_via_direct_update_not_permitted: '\n          'use rpc(\"complete_onboarding_role\", {...}) instead';\n      END IF;\n\n      IF NEW.participant_type IS NULL OR NEW.role::text IS DISTINCT FROM NEW.participant_type THEN\n        RAISE EXCEPTION\n          'role_participant_mismatch: role % does not match participant_type %',\n          NEW.role,\n          NEW.participant_type;\n      END IF;\n    END IF;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n",
+            "source_md5": "4a43418a99c6c58d167cc4043c2df8aa"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "reserve_ai_quota_for_user",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  v_uid UUID := _user_id;\n  v_base_limit INTEGER;\n  v_effective_limit INTEGER;\n  v_count INTEGER;\n  v_month_start TIMESTAMPTZ;\n  v_reservation_id UUID;\n  v_consumed_credit BOOLEAN := FALSE;\nBEGIN\n  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object(\n      'allowed', FALSE,\n      'reason', 'not_authenticated',\n      'used', 0,\n      'limit', 0\n    );\n  END IF;\n\n  IF p_bucket IS NULL OR length(trim(p_bucket)) = 0 OR length(p_bucket) > 120 THEN\n    RETURN jsonb_build_object(\n      'allowed', FALSE,\n      'reason', 'invalid_bucket',\n      'used', 0,\n      'limit', 0\n    );\n  END IF;\n\n  v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';\n\n  PERFORM pg_advisory_xact_lock(\n    hashtextextended(v_uid::TEXT || ':' || p_bucket || ':' || v_month_start::DATE::TEXT, 0)\n  );\n\n  v_base_limit := public.get_ai_call_monthly_base_limit(v_uid, p_bucket);\n  v_effective_limit := public.get_ai_call_monthly_limit(v_uid, p_bucket);\n\n  SELECT COUNT(*)::INTEGER\n  INTO v_count\n  FROM public.usage_ai_calls\n  WHERE user_id = v_uid\n    AND bucket = p_bucket\n    AND created_at >= v_month_start;\n\n  IF v_effective_limit <= 0 THEN\n    RETURN jsonb_build_object(\n      'allowed', FALSE,\n      'reason', 'plan_does_not_include_feature',\n      'used', v_count,\n      'limit', v_effective_limit\n    );\n  END IF;\n\n  IF v_count >= v_effective_limit THEN\n    RETURN jsonb_build_object(\n      'allowed', FALSE,\n      'reason', 'monthly_limit_reached',\n      'used', v_count,\n      'limit', v_effective_limit\n    );\n  END IF;\n\n  v_consumed_credit := v_base_limit < 999999 AND v_count >= v_base_limit;\n\n  INSERT INTO public.usage_ai_calls (user_id, bucket)\n  VALUES (v_uid, p_bucket)\n  RETURNING id INTO v_reservation_id;\n\n  RETURN jsonb_build_object(\n    'allowed', TRUE,\n    'reason', NULL,\n    'used', v_count + 1,\n    'limit', v_effective_limit,\n    'reservation_id', v_reservation_id,\n    'addon_credit_consumed', v_consumed_credit\n  );\nEND;\n",
+            "signature": "reserve_ai_quota_for_user(uuid,text)",
+            "definition": "CREATE OR REPLACE FUNCTION public.reserve_ai_quota_for_user(_user_id uuid, p_bucket text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_uid UUID := _user_id;\n  v_base_limit INTEGER;\n  v_effective_limit INTEGER;\n  v_count INTEGER;\n  v_month_start TIMESTAMPTZ;\n  v_reservation_id UUID;\n  v_consumed_credit BOOLEAN := FALSE;\nBEGIN\n  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object(\n      'allowed', FALSE,\n      'reason', 'not_authenticated',\n      'used', 0,\n      'limit', 0\n    );\n  END IF;\n\n  IF p_bucket IS NULL OR length(trim(p_bucket)) = 0 OR length(p_bucket) > 120 THEN\n    RETURN jsonb_build_object(\n      'allowed', FALSE,\n      'reason', 'invalid_bucket',\n      'used', 0,\n      'limit', 0\n    );\n  END IF;\n\n  v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';\n\n  PERFORM pg_advisory_xact_lock(\n    hashtextextended(v_uid::TEXT || ':' || p_bucket || ':' || v_month_start::DATE::TEXT, 0)\n  );\n\n  v_base_limit := public.get_ai_call_monthly_base_limit(v_uid, p_bucket);\n  v_effective_limit := public.get_ai_call_monthly_limit(v_uid, p_bucket);\n\n  SELECT COUNT(*)::INTEGER\n  INTO v_count\n  FROM public.usage_ai_calls\n  WHERE user_id = v_uid\n    AND bucket = p_bucket\n    AND created_at >= v_month_start;\n\n  IF v_effective_limit <= 0 THEN\n    RETURN jsonb_build_object(\n      'allowed', FALSE,\n      'reason', 'plan_does_not_include_feature',\n      'used', v_count,\n      'limit', v_effective_limit\n    );\n  END IF;\n\n  IF v_count >= v_effective_limit THEN\n    RETURN jsonb_build_object(\n      'allowed', FALSE,\n      'reason', 'monthly_limit_reached',\n      'used', v_count,\n      'limit', v_effective_limit\n    );\n  END IF;\n\n  v_consumed_credit := v_base_limit < 999999 AND v_count >= v_base_limit;\n\n  INSERT INTO public.usage_ai_calls (user_id, bucket)\n  VALUES (v_uid, p_bucket)\n  RETURNING id INTO v_reservation_id;\n\n  RETURN jsonb_build_object(\n    'allowed', TRUE,\n    'reason', NULL,\n    'used', v_count + 1,\n    'limit', v_effective_limit,\n    'reservation_id', v_reservation_id,\n    'addon_credit_consumed', v_consumed_credit\n  );\nEND;\n$function$\n",
+            "source_md5": "b34e1c44ecdadd795d44af419f5b3ddb"
+        },
+        {
+            "acl": null,
+            "name": "set_addon_purchase_credits",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nBEGIN\n  IF TG_OP = 'INSERT'\n     OR NEW.addon_key IS DISTINCT FROM OLD.addon_key\n     OR NEW.quantity IS DISTINCT FROM OLD.quantity THEN\n    NEW.credits_granted := public.addon_credit_units(NEW.addon_key, NEW.quantity);\n    IF NEW.credits_consumed > NEW.credits_granted THEN\n      NEW.credits_consumed := NEW.credits_granted;\n    END IF;\n  END IF;\n\n  RETURN NEW;\nEND;\n",
+            "signature": "set_addon_purchase_credits()",
+            "definition": "CREATE OR REPLACE FUNCTION public.set_addon_purchase_credits()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF TG_OP = 'INSERT'\n     OR NEW.addon_key IS DISTINCT FROM OLD.addon_key\n     OR NEW.quantity IS DISTINCT FROM OLD.quantity THEN\n    NEW.credits_granted := public.addon_credit_units(NEW.addon_key, NEW.quantity);\n    IF NEW.credits_consumed > NEW.credits_granted THEN\n      NEW.credits_consumed := NEW.credits_granted;\n    END IF;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n",
+            "source_md5": "93f37b6cffaa19028e7ae5f4520cd2e7"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "sync_profiles_public",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nDECLARE\n  projected_owner_type text;\nBEGIN\n  IF TG_OP = 'DELETE' THEN\n    DELETE FROM public.profiles_public WHERE user_id = OLD.user_id;\n    RETURN OLD;\n  END IF;\n\n  projected_owner_type := CASE\n    WHEN NEW.is_platform_admin\n      OR NEW.role::text IN ('agent', 'developer', 'admin')\n      THEN 'agent'\n    WHEN NEW.role::text = 'seller' THEN 'seller'\n    ELSE NULL\n  END;\n\n  INSERT INTO public.profiles_public (\n    user_id,\n    display_name,\n    avatar_url,\n    first_name,\n    last_name,\n    role,\n    owner_participant_type\n  )\n  VALUES (\n    NEW.user_id,\n    NEW.display_name,\n    NEW.avatar_url,\n    NEW.first_name,\n    NEW.last_name,\n    NEW.role,\n    projected_owner_type\n  )\n  ON CONFLICT (user_id) DO UPDATE SET\n    display_name = EXCLUDED.display_name,\n    avatar_url = EXCLUDED.avatar_url,\n    first_name = EXCLUDED.first_name,\n    last_name = EXCLUDED.last_name,\n    role = EXCLUDED.role,\n    owner_participant_type = EXCLUDED.owner_participant_type;\n\n  RETURN NEW;\nEND;\n",
+            "signature": "sync_profiles_public()",
+            "definition": "CREATE OR REPLACE FUNCTION public.sync_profiles_public()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  projected_owner_type text;\nBEGIN\n  IF TG_OP = 'DELETE' THEN\n    DELETE FROM public.profiles_public WHERE user_id = OLD.user_id;\n    RETURN OLD;\n  END IF;\n\n  projected_owner_type := CASE\n    WHEN NEW.is_platform_admin\n      OR NEW.role::text IN ('agent', 'developer', 'admin')\n      THEN 'agent'\n    WHEN NEW.role::text = 'seller' THEN 'seller'\n    ELSE NULL\n  END;\n\n  INSERT INTO public.profiles_public (\n    user_id,\n    display_name,\n    avatar_url,\n    first_name,\n    last_name,\n    role,\n    owner_participant_type\n  )\n  VALUES (\n    NEW.user_id,\n    NEW.display_name,\n    NEW.avatar_url,\n    NEW.first_name,\n    NEW.last_name,\n    NEW.role,\n    projected_owner_type\n  )\n  ON CONFLICT (user_id) DO UPDATE SET\n    display_name = EXCLUDED.display_name,\n    avatar_url = EXCLUDED.avatar_url,\n    first_name = EXCLUDED.first_name,\n    last_name = EXCLUDED.last_name,\n    role = EXCLUDED.role,\n    owner_participant_type = EXCLUDED.owner_participant_type;\n\n  RETURN NEW;\nEND;\n$function$\n",
+            "source_md5": "1ce16841784064dbf23c591b0e9fa3fe"
+        },
+        {
+            "acl": null,
+            "name": "touch_addon_purchases_updated_at",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nBEGIN\n  NEW.updated_at := now();\n  RETURN NEW;\nEND;\n",
+            "signature": "touch_addon_purchases_updated_at()",
+            "definition": "CREATE OR REPLACE FUNCTION public.touch_addon_purchases_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nBEGIN\n  NEW.updated_at := now();\n  RETURN NEW;\nEND;\n$function$\n",
+            "source_md5": "5bdc21b8fa8fb1231bdb021e09a5bc8e"
+        },
+        {
+            "acl": [
+                "postgres=X/postgres",
+                "service_role=X/postgres"
+            ],
+            "name": "unarchive_role_data",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nBEGIN\n  IF p_user_id IS NULL THEN\n    RAISE EXCEPTION 'unarchive_role_data_user_id_required';\n  END IF;\n\n  IF p_role = 'professional' THEN\n    UPDATE public.professionals\n    SET archived_at = NULL, updated_at = now()\n    WHERE user_id = p_user_id AND archived_at IS NOT NULL;\n  ELSIF p_role = 'developer' THEN\n    UPDATE public.projects\n    SET archived_at = NULL, updated_at = now()\n    WHERE owner_id = p_user_id AND archived_at IS NOT NULL;\n  END IF;\nEND;\n",
+            "signature": "unarchive_role_data(uuid,text)",
+            "definition": "CREATE OR REPLACE FUNCTION public.unarchive_role_data(p_user_id uuid, p_role text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF p_user_id IS NULL THEN\n    RAISE EXCEPTION 'unarchive_role_data_user_id_required';\n  END IF;\n\n  IF p_role = 'professional' THEN\n    UPDATE public.professionals\n    SET archived_at = NULL, updated_at = now()\n    WHERE user_id = p_user_id AND archived_at IS NOT NULL;\n  ELSIF p_role = 'developer' THEN\n    UPDATE public.projects\n    SET archived_at = NULL, updated_at = now()\n    WHERE owner_id = p_user_id AND archived_at IS NOT NULL;\n  END IF;\nEND;\n$function$\n",
+            "source_md5": "959432a02cc8e5a67b75183e27fcaed1"
+        },
+        {
+            "acl": null,
+            "name": "update_updated_at_column",
+            "owner": "postgres",
+            "schema": "public",
+            "source": "\nBEGIN NEW.updated_at = now(); RETURN NEW; END;\n",
+            "signature": "update_updated_at_column()",
+            "definition": "CREATE OR REPLACE FUNCTION public.update_updated_at_column()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nBEGIN NEW.updated_at = now(); RETURN NEW; END;\n$function$\n",
+            "source_md5": "5b733ab523bad442e4b10f836de9e4ba"
+        }
+    ],
+    "relations": [
+        {
+            "acl": null,
+            "rls": false,
+            "name": "auth.users",
+            "triggers": [
+                {
+                    "name": "on_auth_user_created",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_user()"
+                },
+                {
+                    "name": "on_auth_user_created_owner",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER on_auth_user_created_owner AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION auto_grant_owner_privileges()"
+                },
+                {
+                    "name": "trg_complete_account_deletion_from_auth_delete",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER trg_complete_account_deletion_from_auth_delete AFTER DELETE ON auth.users FOR EACH ROW EXECUTE FUNCTION complete_account_deletion_from_auth_delete()"
+                }
+            ],
+            "constraints": [
+                "UNIQUE (email)",
+                "PRIMARY KEY (id)"
+            ]
+        },
+        {
+            "acl": [
+                "postgres=arwdDxt/postgres",
+                "authenticated=ar/postgres"
+            ],
+            "rls": true,
+            "name": "profiles",
+            "triggers": [
+                {
+                    "name": "update_profiles_updated_at",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+                },
+                {
+                    "name": "profiles_guard_account_moderation",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER profiles_guard_account_moderation BEFORE UPDATE OF account_status, account_moderation_reason, account_moderated_at, account_moderated_by ON public.profiles FOR EACH ROW EXECUTE FUNCTION profiles_guard_account_moderation()"
+                },
+                {
+                    "name": "trg_guard_sensitive_profile_columns",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER trg_guard_sensitive_profile_columns BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION guard_sensitive_profile_columns()"
+                },
+                {
+                    "name": "profiles_guard_admin_and_role_trg",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER profiles_guard_admin_and_role_trg BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION profiles_guard_admin_and_role()"
+                },
+                {
+                    "name": "trg_sync_profiles_public",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER trg_sync_profiles_public AFTER INSERT OR DELETE OR UPDATE OF display_name, avatar_url, first_name, last_name, role, is_platform_admin ON public.profiles FOR EACH ROW EXECUTE FUNCTION sync_profiles_public()"
+                },
+                {
+                    "name": "trg_00_preserve_deleted_promotion_owner_audit",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER trg_00_preserve_deleted_promotion_owner_audit BEFORE DELETE ON public.profiles FOR EACH ROW EXECUTE FUNCTION private.preserve_deleted_promotion_owner_audit()"
+                }
+            ],
+            "constraints": [
+                "FOREIGN KEY (account_moderated_by) REFERENCES auth.users(id) ON DELETE SET NULL",
+                "CHECK ((account_status = ANY (ARRAY['active'::text, 'suspended'::text, 'banned'::text])))",
+                "CHECK ((participant_type = ANY (ARRAY['buyer'::text, 'seller'::text, 'agent'::text, 'developer'::text, 'professional'::text, 'investor'::text, 'institutional'::text])))",
+                "PRIMARY KEY (id)",
+                "FOREIGN KEY (role_switch_audit_id) REFERENCES role_switch_history(id) ON DELETE SET NULL",
+                "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+                "UNIQUE (user_id)"
+            ]
+        },
+        {
+            "acl": [
+                "postgres=arwdDxt/postgres",
+                "authenticated=arwd/postgres"
+            ],
+            "rls": true,
+            "name": "ai_usage_limits",
+            "triggers": null,
+            "constraints": [
+                "PRIMARY KEY (bucket)"
+            ]
+        },
+        {
+            "acl": [
+                "postgres=arwdDxt/postgres",
+                "authenticated=r/postgres"
+            ],
+            "rls": true,
+            "name": "usage_ai_calls",
+            "triggers": [
+                {
+                    "name": "trg_check_ai_call_monthly_limit",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER trg_check_ai_call_monthly_limit BEFORE INSERT ON public.usage_ai_calls FOR EACH ROW EXECUTE FUNCTION check_ai_call_monthly_limit_trigger()"
+                }
+            ],
+            "constraints": [
+                "PRIMARY KEY (id)",
+                "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+            ]
+        },
+        {
+            "acl": [
+                "postgres=arwdDxt/postgres",
+                "authenticated=r/postgres",
+                "service_role=arwd/postgres"
+            ],
+            "rls": true,
+            "name": "addon_purchases",
+            "triggers": [
+                {
+                    "name": "trg_set_addon_purchase_credits",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER trg_set_addon_purchase_credits BEFORE INSERT OR UPDATE OF addon_key, quantity ON public.addon_purchases FOR EACH ROW EXECUTE FUNCTION set_addon_purchase_credits()"
+                },
+                {
+                    "name": "trg_touch_addon_purchases_updated_at",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER trg_touch_addon_purchases_updated_at BEFORE UPDATE ON public.addon_purchases FOR EACH ROW EXECUTE FUNCTION touch_addon_purchases_updated_at()"
+                },
+                {
+                    "name": "trg_revoke_refunded_listing_promotions",
+                    "enabled": "O",
+                    "definition": "CREATE TRIGGER trg_revoke_refunded_listing_promotions AFTER UPDATE OF status, refund_status, credits_refunded ON public.addon_purchases FOR EACH ROW EXECUTE FUNCTION private.revoke_refunded_listing_promotions()"
+                }
+            ],
+            "constraints": [
+                "CHECK ((checkout_mode = ANY (ARRAY['payment'::text, 'subscription'::text])))",
+                "CHECK ((credits_consumed <= credits_granted))",
+                "CHECK ((credits_consumed >= 0))",
+                "CHECK ((credits_granted >= 0))",
+                "CHECK ((credits_refunded >= 0))",
+                "PRIMARY KEY (id)",
+                "CHECK ((quantity > 0))",
+                "CHECK ((refund_status = ANY (ARRAY['none'::text, 'partial_refund'::text, 'refunded'::text, 'failed'::text])))",
+                "CHECK (((runtime_mode = 'live'::text) = livemode))",
+                "CHECK ((runtime_mode = ANY (ARRAY['test'::text, 'live'::text])))",
+                "CHECK ((status = ANY (ARRAY['paid'::text, 'active'::text, 'cancelled'::text, 'refunded'::text])))",
+                "CHECK (((stripe_amount_total IS NULL) OR (stripe_amount_total > 0)))",
+                "CHECK (((stripe_currency IS NULL) OR (stripe_currency ~ '^[a-z]{3}$'::text)))",
+                "UNIQUE (stripe_session_id)",
+                "CHECK (((stripe_session_id IS NULL) OR ((stripe_session_id ~~ 'cs_live_%'::text) AND (runtime_mode = 'live'::text) AND (livemode IS TRUE)) OR ((stripe_session_id ~~ 'cs_test_%'::text) AND (runtime_mode = 'test'::text) AND (livemode IS FALSE)) OR ((stripe_session_id !~~ 'cs_live_%'::text) AND (stripe_session_id !~~ 'cs_test_%'::text))))",
+                "FOREIGN KEY (user_id) REFERENCES profiles(user_id) ON DELETE CASCADE"
+            ]
+        }
+    ],
+    "captured_at": "2026-09-27T02:47:50.004915+03:00",
+    "service_acl": {
+        "batch": true,
+        "reserve": true
+    }
+}

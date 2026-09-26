@@ -1,0 +1,209 @@
+BEGIN
+CREATE EXTENSION
+ no_plan 
+---------
+(0 rows)
+
+SET
+SET
+                  is                   
+---------------------------------------
+ ok 1 - normal action triggers enabled
+(1 row)
+
+ set_config |  set_config  |       set_config        
+------------+--------------+-------------------------
+            | service_role | {"role":"service_role"}
+(1 row)
+
+INSERT 0 6
+SET
+ complete_onboarding_role_for_user 
+-----------------------------------
+ 
+ 
+ 
+ 
+ 
+ 
+(6 rows)
+
+RESET
+ set_config 
+------------
+ false
+(1 row)
+
+INSERT 0 1
+UPDATE 1
+INSERT 0 6
+INSERT 0 2
+                                    is                                    
+--------------------------------------------------------------------------
+ ok 2 - purchase trigger derives quantities including both mapped buckets
+(1 row)
+
+                   ok                   
+----------------------------------------
+ ok 3 - durable subscription grants Pro
+(1 row)
+
+             is             
+----------------------------
+ ok 4 - real Pro base is 50
+(1 row)
+
+                     is                      
+---------------------------------------------
+ not ok 5 - admin sentinel unchanged        +
+ # Failed test 5: "admin sentinel unchanged"+
+ #         have: 5                          +
+ #         want: 999999
+(1 row)
+
+                    is                    
+------------------------------------------
+ ok 6 - unpaid developer has no free base
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok 7 - onboarded buyer remains free
+(1 row)
+
+CREATE FUNCTION
+SET
+                                                                                         lives_ok                                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ not ok 8 - two normal valuation credits admit calls 6 and 7; call 8 denies, with status agreement at every step                                                                          +
+ # Failed test 8: "two normal valuation credits admit calls 6 and 7; call 8 denies, with status agreement at every step"                                                                  +
+ #     died: 42501: permission denied for table usage_ai_calls                                                                                                                            +
+ #         CONTEXT:                                                                                                                                                                       +
+ #             SQL expression "NOT EXISTS(SELECT 1 FROM public.usage_ai_calls WHERE id=(result->>'reservation_id')::uuid AND user_id=actor AND usage_ai_calls.bucket=task24_steps.bucket)"+
+ #             PL/pgSQL function pg_temp_3.task24_steps(uuid,text,integer,integer) line 16 at IF                                                                                          +
+ #             SQL statement "SELECT pg_temp.task24_steps('d1240001-0000-4000-8000-000000000001','property-valuation',7,8)"                                                               +
+ #             PL/pgSQL function lives_ok(text,text) line 14 at EXECUTE
+(1 row)
+
+                                                                                         lives_ok                                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ not ok 9 - second mapped bucket spends both normal credits and exhausts                                                                                                                  +
+ # Failed test 9: "second mapped bucket spends both normal credits and exhausts"                                                                                                          +
+ #     died: 42501: permission denied for table usage_ai_calls                                                                                                                            +
+ #         CONTEXT:                                                                                                                                                                       +
+ #             SQL expression "NOT EXISTS(SELECT 1 FROM public.usage_ai_calls WHERE id=(result->>'reservation_id')::uuid AND user_id=actor AND usage_ai_calls.bucket=task24_steps.bucket)"+
+ #             PL/pgSQL function pg_temp_3.task24_steps(uuid,text,integer,integer) line 16 at IF                                                                                          +
+ #             SQL statement "SELECT pg_temp.task24_steps('d1240001-0000-4000-8000-000000000001','neighbourhood-report',7,8)"                                                             +
+ #             PL/pgSQL function lives_ok(text,text) line 14 at EXECUTE
+(1 row)
+
+                                                                                         lives_ok                                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ not ok 10 - durable Pro stays below its base without consuming add-ons                                                                                                                   +
+ # Failed test 10: "durable Pro stays below its base without consuming add-ons"                                                                                                           +
+ #     died: 42501: permission denied for table usage_ai_calls                                                                                                                            +
+ #         CONTEXT:                                                                                                                                                                       +
+ #             SQL expression "NOT EXISTS(SELECT 1 FROM public.usage_ai_calls WHERE id=(result->>'reservation_id')::uuid AND user_id=actor AND usage_ai_calls.bucket=task24_steps.bucket)"+
+ #             PL/pgSQL function pg_temp_3.task24_steps(uuid,text,integer,integer) line 16 at IF                                                                                          +
+ #             SQL statement "SELECT pg_temp.task24_steps('d1240001-0000-4000-8000-000000000003','property-valuation',52,2)"                                                              +
+ #             PL/pgSQL function lives_ok(text,text) line 14 at EXECUTE
+(1 row)
+
+                                                            lives_ok                                                             
+---------------------------------------------------------------------------------------------------------------------------------
+ not ok 11 - admin sentinel does not grow or consume add-ons                                                                    +
+ # Failed test 11: "admin sentinel does not grow or consume add-ons"                                                            +
+ #     died: P0001: status/reservation ceiling disagreement                                                                     +
+ #         CONTEXT:                                                                                                             +
+ #             PL/pgSQL function pg_temp_3.task24_steps(uuid,text,integer,integer) line 12 at RAISE                             +
+ #             SQL statement "SELECT pg_temp.task24_steps('d1240001-0000-4000-8000-000000000004','property-valuation',999999,2)"+
+ #             PL/pgSQL function lives_ok(text,text) line 14 at EXECUTE
+(1 row)
+
+                                                                                         lives_ok                                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ not ok 12 - unpaid Pro-only audience can spend purchased credits but receives no free allowance                                                                                          +
+ # Failed test 12: "unpaid Pro-only audience can spend purchased credits but receives no free allowance"                                                                                  +
+ #     died: 42501: permission denied for table usage_ai_calls                                                                                                                            +
+ #         CONTEXT:                                                                                                                                                                       +
+ #             SQL expression "NOT EXISTS(SELECT 1 FROM public.usage_ai_calls WHERE id=(result->>'reservation_id')::uuid AND user_id=actor AND usage_ai_calls.bucket=task24_steps.bucket)"+
+ #             PL/pgSQL function pg_temp_3.task24_steps(uuid,text,integer,integer) line 16 at IF                                                                                          +
+ #             SQL statement "SELECT pg_temp.task24_steps('d1240001-0000-4000-8000-000000000005','property-valuation',2,3)"                                                               +
+ #             PL/pgSQL function lives_ok(text,text) line 14 at EXECUTE
+(1 row)
+
+                  is                  
+--------------------------------------
+ ok 13 - null actor envelope retained
+(1 row)
+
+              is              
+------------------------------
+ ok 14 - null bucket rejected
+(1 row)
+
+              is               
+-------------------------------
+ ok 15 - blank bucket rejected
+(1 row)
+
+                is                 
+-----------------------------------
+ ok 16 - oversized bucket rejected
+(1 row)
+
+                               lives_ok                               
+----------------------------------------------------------------------
+ ok 17 - unknown valid bucket denied consistently by existing helpers
+(1 row)
+
+RESET
+                                               is                                               
+------------------------------------------------------------------------------------------------
+ not ok 18 - two explicit paid-attempt calls produce distinct usage rows in each bucket        +
+ # Failed test 18: "two explicit paid-attempt calls produce distinct usage rows in each bucket"+
+ #         have: 0                                                                             +
+ #         want: 14
+(1 row)
+
+                     is                      
+---------------------------------------------
+ ok 19 - opposite runtime purchase untouched
+(1 row)
+
+                  is                   
+---------------------------------------
+ ok 20 - other actor credits untouched
+(1 row)
+
+SET
+                                                                                         lives_ok                                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ not ok 21 - historical fixture consumes first credit through normal overage trigger                                                                                                      +
+ # Failed test 21: "historical fixture consumes first credit through normal overage trigger"                                                                                              +
+ #     died: 42501: permission denied for table usage_ai_calls                                                                                                                            +
+ #         CONTEXT:                                                                                                                                                                       +
+ #             SQL expression "NOT EXISTS(SELECT 1 FROM public.usage_ai_calls WHERE id=(result->>'reservation_id')::uuid AND user_id=actor AND usage_ai_calls.bucket=task24_steps.bucket)"+
+ #             PL/pgSQL function pg_temp_3.task24_steps(uuid,text,integer,integer) line 16 at IF                                                                                          +
+ #             SQL statement "SELECT pg_temp.task24_steps('d1240001-0000-4000-8000-000000000006','property-valuation',7,6)"                                                               +
+ #             PL/pgSQL function lives_ok(text,text) line 14 at EXECUTE
+(1 row)
+
+RESET
+UPDATE 0
+UPDATE 1
+SET
+                                                          lives_ok                                                          
+----------------------------------------------------------------------------------------------------------------------------
+ not ok 22 - prior month usage excluded and consumed credit stays deducted                                                 +
+ # Failed test 22: "prior month usage excluded and consumed credit stays deducted"                                         +
+ #     died: P0001: status/reservation ceiling disagreement                                                                +
+ #         CONTEXT:                                                                                                        +
+ #             PL/pgSQL function pg_temp_3.task24_steps(uuid,text,integer,integer) line 12 at RAISE                        +
+ #             SQL statement "SELECT pg_temp.task24_steps('d1240001-0000-4000-8000-000000000006','property-valuation',6,5)"+
+ #             PL/pgSQL function lives_ok(text,text) line 14 at EXECUTE
+(1 row)
+
+RESET
+SAVEPOINT
+SET
