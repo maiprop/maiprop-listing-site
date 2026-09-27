@@ -7,6 +7,9 @@ CREATE TABLE remediation_ddl_trace.events (
   object_type text, schema_name text, object_identity text,
   classid oid, objid oid, objsubid integer
 );
+-- VACUUM on this empty local table is the suite-boundary transaction probe:
+-- PostgreSQL rejects VACUUM inside an open BEGIN block (SQLSTATE 25001).
+CREATE TABLE remediation_ddl_trace.boundary_probe (id integer PRIMARY KEY);
 CREATE FUNCTION remediation_ddl_trace.record_ddl() RETURNS event_trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $trace$
 BEGIN

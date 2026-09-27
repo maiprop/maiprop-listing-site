@@ -6,6 +6,27 @@ export const sha256 = (value) => createHash('sha256').update(value).digest('hex'
 export const hashFile = (path) => sha256(readFileSync(path));
 export const expectedSegments = (name) => name === 'open_house_listing_boundary_test.sql' ? 2 : 1;
 
+export function assertInventoryStable(before, after) {
+  if (JSON.stringify(before.migrations) !== JSON.stringify(after.migrations)
+    || JSON.stringify(before.suites) !== JSON.stringify(after.suites)
+    || JSON.stringify(before.hashes) !== JSON.stringify(after.hashes)) {
+    throw new Error('migration, suite, supporting SQL, or measurement input drift');
+  }
+}
+
+export function assessRun({ percent, initialStatus, finalStatus, requestedThreshold = 80 }) {
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) throw new Error('invalid coverage percentage');
+  const diagnosticThreshold = requestedThreshold !== 80;
+  const dirty = Boolean(initialStatus || finalStatus);
+  const accepted = percent >= 80 && !dirty && !diagnosticThreshold;
+  return {
+    status: accepted ? 'valid-target-met' : dirty ? 'valid-diagnostic-dirty'
+      : diagnosticThreshold ? 'valid-diagnostic-threshold' : 'valid-below-target',
+    accepted, exitCode: accepted ? 0 : 2, requiredThreshold: 80,
+    requestedThreshold, diagnosticThreshold, dirty,
+  };
+}
+
 export function assertDisposableName(name) {
   if (!/^maiprop_d0_[a-z0-9_]{6,48}$/.test(name ?? '')) {
     throw new Error('explicit disposable database name must match maiprop_d0_[a-z0-9_]{6,48}');
@@ -103,7 +124,59 @@ export function parseCsv(raw) {
   });
 }
 
-export function aggregateStatements(routines, statements, { threshold = 80 } = {}) {
+export function validateEffectiveSchema(objects, events, migrationNames) {
+  if (!objects.length || !events.length) throw new Error('empty effective schema evidence');
+  const objectKeys = new Set();
+  for (const object of objects) {
+    const key = `${object.catalog_class}:${object.catalog_oid}`;
+    if (objectKeys.has(key) || !/^[1-9]\d*$/.test(object.catalog_oid)
+      || !object.object_identity || !object.object_kind || !object.canonical_definition
+      || sha256(object.canonical_definition) !== object.definition_sha256) {
+      throw new Error(`invalid or duplicate final object ${key}`);
+    }
+    objectKeys.add(key);
+  }
+  const allowedMigrations = new Set(migrationNames);
+  let last = 0;
+  for (const event of events) {
+    const sequence = Number(event.sequence);
+    if (!Number.isSafeInteger(sequence) || sequence <= last || !allowedMigrations.has(event.migration)) throw new Error('invalid lineage sequence or migration');
+    last = sequence;
+    if (!['current_object','dropped_object','nonaddressable_ddl_event','superseded_or_unmapped'].includes(event.lineage_status)) throw new Error('invalid lineage status');
+    const key = `${event.class_name}:${event.objid}`;
+    if (event.lineage_status === 'current_object') {
+      if (!objectKeys.has(key) || !event.final_identity || !/^[a-f0-9]{64}$/.test(event.final_definition_sha256)) throw new Error(`unbound current object ${key}`);
+    } else if (event.final_definition_sha256) throw new Error(`non-current event has final definition ${key}`);
+  }
+  return {
+    objects: objects.length, events: events.length,
+    policies: objects.filter((o) => o.object_kind === 'policy').length,
+    defaultAcls: objects.filter((o) => o.object_kind === 'default_acl').length,
+    unresolved: events.filter((e) => e.lineage_status === 'nonaddressable_ddl_event' || e.lineage_status === 'superseded_or_unmapped').length,
+  };
+}
+
+export function assertStatementIdentitySet(before, after) {
+  const identity = (s) => [s.signature,s.schema_name,s.definition_sha256,s.stmtid,s.lineno,s.stmtname].join('\0');
+  const collect = (rows) => {
+    const found = new Set();
+    for (const row of rows) {
+      const key = identity(row);
+      if (found.has(key)) throw new Error(`duplicate profiler identity ${row.signature} stmt ${row.stmtid}`);
+      found.add(key);
+    }
+    return found;
+  };
+  const a = collect(before), b = collect(after);
+  if (a.size !== b.size || [...a].some((key) => !b.has(key))) throw new Error('pre/post suite official statement identity drift');
+  const afterByIdentity = new Map(after.map((row) => [identity(row), row]));
+  return before.map((row) => ({ ...row,
+    exec_stmts: afterByIdentity.get(identity(row)).exec_stmts,
+    exec_stmts_err: afterByIdentity.get(identity(row)).exec_stmts_err,
+  }));
+}
+
+export function aggregateStatements(routines, statements) {
   const bySignature = new Map();
   for (const r of routines) {
     if (!['public', 'private'].includes(r.schema_name) || !/^[a-f0-9]{64}$/.test(r.definition_sha256) || !r.signature) throw new Error('invalid routine inventory');
@@ -111,19 +184,22 @@ export function aggregateStatements(routines, statements, { threshold = 80 } = {
     bySignature.set(r.signature, r);
   }
   if (!bySignature.size) throw new Error('empty routine inventory');
-  const identities = new Map(); const routineCounts = new Map([...bySignature].map(([k]) => [k, { hit: 0, total: 0 }]));
+  const identities = new Map(); const statementIds = new Set(); const routineCounts = new Map([...bySignature].map(([k]) => [k, { hit: 0, total: 0 }]));
   for (const s of statements) {
     const r = bySignature.get(s.signature);
     if (!r || s.definition_sha256 !== r.definition_sha256 || s.schema_name !== r.schema_name) throw new Error(`stale or unknown statement routine ${s.signature}`);
     if (!/^(0|[1-9]\d*)$/.test(s.stmtid) || !/^(0|[1-9]\d*)$/.test(s.lineno) || !s.stmtname || !/^(0|[1-9]\d*)$/.test(s.exec_stmts) || !/^(0|[1-9]\d*)$/.test(s.exec_stmts_err)) throw new Error(`malformed profiler row ${s.signature}`);
     const key = [s.signature, s.definition_sha256, s.stmtid, s.lineno, s.stmtname].join('\0');
+    const statementId = [s.signature, s.stmtid].join('\0');
     if (identities.has(key)) throw new Error(`duplicate profiler identity ${s.signature} stmt ${s.stmtid}`);
+    if (statementIds.has(statementId)) throw new Error(`conflicting profiler statement id ${s.signature} stmt ${s.stmtid}`);
     identities.set(key, s);
+    statementIds.add(statementId);
     const count = routineCounts.get(s.signature); count.total++; if (BigInt(s.exec_stmts) > 0n) count.hit++;
   }
   for (const [signature, count] of routineCounts) if (!count.total) throw new Error(`missing profiler statements for ${signature}`);
   const total = identities.size;
   const hit = [...routineCounts.values()].reduce((n, x) => n + x.hit, 0);
   const percent = 100 * hit / total;
-  return { routines: bySignature.size, zeroHitRoutines: [...routineCounts.values()].filter((x) => x.hit === 0).length, hit, total, percent, threshold, meetsThreshold: percent >= threshold, routineCounts: Object.fromEntries(routineCounts) };
+  return { routines: bySignature.size, zeroHitRoutines: [...routineCounts.values()].filter((x) => x.hit === 0).length, hit, total, percent, requiredThreshold: 80, meetsTarget: percent >= 80, routineCounts: Object.fromEntries(routineCounts) };
 }
