@@ -2,7 +2,7 @@
 
 ## Scope and source identity
 
-Task 18's accepted runtime work (`7d290881`) and test/report repair (`2ec0220cb`) preceded this task. O5 began from clean parent `da048db9f2465858ec21048fd941e326a13eafd4`. The exact committed implementation measured below is `4ed2fb87e2bbe1f70461807e0ebf757db3618aec`; the worktree was clean before the after probe. The earlier 2026-09-21 baseline is immutable and predates intervening remediation commits.
+Task 18's accepted runtime work (`7d290881`) and test/report repair (`ec0220cb9f775037ac3c9390140f75ccc96ee7b3`) preceded this task. O5 began from clean parent `da048db9f2465858ec21048fd941e326a13eafd4`. The exact committed implementation measured below is `4ed2fb87e2bbe1f70461807e0ebf757db3618aec`; the worktree was clean before the after probe. The earlier 2026-09-21 baseline is immutable and predates intervening remediation commits.
 
 The saved original probe was copied byte-identically to ignored `overfetch-probe-original-o5.mjs` before adaptation: 7,379 bytes, SHA-256 `6aad7dbe7ac5c4bd36d8dcbf40c91c7d1f6974ee8ec0559f5c407f44011b4c46`. Its saved `overfetch-probe-results.json` remains unchanged at SHA-256 `7a72da0d8c92253d20639209ca5418f8318f30e08c4346d24e7064e52dbc9d97`. The saved baseline actual hook source hash is `fe7c12d618bd4e2330b16d2da48e7dabe3ddda6b51fdf8fb07273eb26b8bf780`. The after hook hash is `3d7ccb700975bea5a9943653e0af19749243d8886d84f04e04ed70451d04d6b8`; the after profile component hash is `cd6ea18572b05d3807a91c358665330481583afb4aaa45d0cbc0ab8eae5c0295`.
 
@@ -34,5 +34,14 @@ The baseline broad request began independently of the detail request. The new re
 - `npm run typecheck` passed; direct ESLint on the six changed source/test files passed; `git diff --check` passed. The repository-wide lint script scanned ignored saved audit sources and failed on 20 errors there; its output included no O5-file errors. No full suite or build was run.
 - An exploratory five-file test run passed four files but found one out-of-scope failure in `src/test/components.test.tsx:494`: `PropertyAIInsightsSection > does not show a fake 0% vs-market value when the benchmark is unavailable` uses `getByText(/Unavailable/i)` where the rendered view has multiple matches. The same single case failed when rerun without any O5 change to that file; its exact output is retained in ignored `task-8-o5-unrelated-components-attempt-1.log`. This is an unchanged-source ambiguity, not evidence of an O5 regression or proof that it failed on the base commit. The unrelated test was not edited.
 - Self-review checked that the existing broad `useProfessionals` export and other profile actions remain, the new key is public and scoped, no management fields enter the related response, the three-peer public rule remains, and pending/error cannot be mistaken for no peers.
+
+The successful focused commands were run from the repository root with the frozen Node 20 binary:
+
+```powershell
+& 'C:/Users/K R/scoop/apps/nodejs20/current/node.exe' scripts/project-runtime.mjs -- npm test -- --run src/test/useProfessionals.test.tsx src/test/ProfessionalProfile.branchCoverage.test.tsx src/test/pages.smoke.test.tsx src/test/pricing-dashboard-auction-specific.test.tsx
+& 'C:/Users/K R/scoop/apps/nodejs20/current/node.exe' scripts/project-runtime.mjs -- npm run typecheck
+& 'C:/Users/K R/scoop/apps/nodejs20/current/node.exe' scripts/project-runtime.mjs -- node node_modules/eslint/bin/eslint.js src/hooks/useProfessionals.ts src/pages/ProfessionalProfile.tsx src/test/useProfessionals.test.tsx src/test/ProfessionalProfile.branchCoverage.test.tsx src/test/pages.smoke.test.tsx src/test/pricing-dashboard-auction-specific.test.tsx
+& 'C:/Users/K R/scoop/apps/nodejs20/current/node.exe' scripts/project-runtime.mjs -- node .superpowers/sdd/2026-09-21-verified-remediation-plan/overfetch-probe.mjs --o5-after task-8-o5-after-4ed2fb87-attempt-1.json 4ed2fb87e2bbe1f70461807e0ebf757db3618aec
+```
 
 Implementation commit: `4ed2fb87e2bbe1f70461807e0ebf757db3618aec`. This report is a follow-up evidence commit. Raw probe files and logs remain ignored and inspectable locally; the baseline results and O6 rows were not overwritten.
