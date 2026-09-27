@@ -58,12 +58,12 @@ SELECT throws_ok($$SELECT (public.create_open_house_registration_for_user('d1220
 RESET ROLE;
 SELECT is((SELECT count(*)::integer FROM public.open_house_registrations WHERE requester_id='d1220001-0000-4000-8000-000000000002'), 3, 'service path preserves exactly three free rows');
 SELECT is((SELECT count(*)::integer FROM public.open_house_registrations WHERE requester_id='d1220001-0000-4000-8000-000000000002' AND listing_id='d1220002-0000-4000-8000-000000000001'), 1, 'first listing has one registration before replay');
-SELECT ok(NOT has_table_privilege('service_role','public.open_house_registrations','INSERT'), 'actual service role lacks raw registration INSERT in this fixture');
+SELECT ok(has_table_privilege('service_role','public.open_house_registrations','INSERT'), 'historical replay grants service role raw registration INSERT');
 SELECT set_config('request.jwt.claim.sub','',true), set_config('request.jwt.claim.role','service_role',true), set_config('request.jwt.claims','{"role":"service_role"}',true), set_config('maiprop.open_house_registration_rpc','',true);
 SET LOCAL ROLE service_role;
-SELECT throws_ok($$INSERT INTO public.open_house_registrations(listing_id,requester_id,contact_name,contact_email,contact_phone,contact_permission_at,id_verification_consent_at,privacy_acknowledged_at,status) VALUES ('d1220002-0000-4000-8000-000000000008','d1220001-0000-4000-8000-000000000004','Direct Insert','direct@example.test','+30000000004',now(),now(),now(),'pending')$$, '42501', 'permission denied for table open_house_registrations', 'actual service-role raw insert is denied by table ACL before triggers');
+SELECT throws_ok($$INSERT INTO public.open_house_registrations(listing_id,requester_id,contact_name,contact_email,contact_phone,contact_permission_at,id_verification_consent_at,privacy_acknowledged_at,status) VALUES ('d1220002-0000-4000-8000-000000000008','d1220001-0000-4000-8000-000000000004','Direct Insert','direct@example.test','+30000000004',now(),now(),now(),'pending')$$, '42501', 'use_create_open_house_registration_rpc', 'actual service-role raw insert is denied by the RPC guard trigger');
 RESET ROLE;
-SELECT is((SELECT count(*)::integer FROM public.open_house_registrations WHERE listing_id='d1220002-0000-4000-8000-000000000008'), 0, 'service raw insert denial leaves listing eight empty');
+SELECT is((SELECT count(*)::integer FROM public.open_house_registrations WHERE listing_id='d1220002-0000-4000-8000-000000000008'), 0, 'service raw insert trigger denial leaves listing eight empty');
 SET LOCAL ROLE service_role;
 SELECT lives_ok($$DO $body$ BEGIN
   FOR n IN 1..4 LOOP
@@ -148,7 +148,7 @@ SELECT set_config('request.jwt.claim.sub','d1220001-0000-4000-8000-000000000002'
 SELECT throws_ok($$SELECT (public.create_open_house_registration_for_user('d1220001-0000-4000-8000-000000000003','d1220002-0000-4000-8000-000000000005',NULL,'Pro Buyer','pro@example.test','+30000000002',NULL,NULL,true,true,true)).id$$, 'P0001', 'open_house_rsvp_requester_mismatch', 'service RPC rejects a mismatched authenticated subject');
 
 -- The privileged observer reaches the RPC guard directly. The real service
--- role also has an earlier table-ACL boundary on this local source fixture.
+-- role also reaches this trigger under the historical table grant.
 SELECT set_config('request.jwt.claim.sub','',true),
        set_config('request.jwt.claim.role','service_role',true),
        set_config('request.jwt.claims','{"role":"service_role"}',true),
