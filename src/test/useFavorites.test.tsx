@@ -193,6 +193,45 @@ describe("useToggleFavorite", () => {
     expect(qc.getQueryData(["favorites", "user-a"])).toEqual([]);
   });
 
+  it("does not publish an intermediate save when two pending saves both fail", async () => {
+    const first = "d1000000-0000-4000-8000-000000000031";
+    const second = "d1000000-0000-4000-8000-000000000032";
+    const finishes = new Map<string, (value: { error: Error | null }) => void>();
+    mockFrom.mockReturnValue({
+      insert: (row: { listing_id: string }) => new Promise<{ error: Error | null }>(resolve => finishes.set(row.listing_id, resolve)),
+    });
+    const hydrations: Array<{ ids: string[]; finish: (value: { data: Array<{ id: string; title: string }>; error: null }) => void }> = [];
+    mockRpc.mockReturnValue({ select: () => ({ in: (_column: string, ids: string[]) => new Promise(resolve => {
+      hydrations.push({ ids, finish: resolve });
+    }) }) });
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({ user: { id: "user-a" } });
+    qc.setQueryData(["favoriteMembership", "user-a"], []);
+
+    const toggle = renderHook(() => useToggleFavorite(), { wrapper });
+    let a!: Promise<void>, b!: Promise<void>;
+    act(() => {
+      a = toggle.result.current.mutateAsync({ listing_id: first, isFavorited: false });
+      b = toggle.result.current.mutateAsync({ listing_id: second, isFavorited: false });
+    });
+    await waitFor(() => expect(finishes.size).toBe(2));
+    const full = renderHook(() => useFavorites(), { wrapper });
+    await waitFor(() => expect(hydrations.length).toBe(1));
+
+    act(() => {
+      finishes.get(first)!({ error: new Error("first denied") });
+      finishes.get(second)!({ error: new Error("second denied") });
+    });
+    await Promise.all([expect(a).rejects.toThrow("first denied"), expect(b).rejects.toThrow("second denied")]);
+    for (let i = 0; i < hydrations.length; i++) {
+      const request = hydrations[i];
+      act(() => request.finish({ data: request.ids.map(id => ({ id, title: id })), error: null }));
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    await waitFor(() => expect(full.result.current.data).toEqual([]));
+    expect(qc.getQueryData(["favoriteMembership", "user-a"])).toEqual([]);
+    expect(qc.getQueryData(["favorites", "user-a"])).toEqual([]);
+  });
+
   it("retains another pending save in a full view when the first save fails", async () => {
     const first = "d1000000-0000-4000-8000-000000000021";
     const second = "d1000000-0000-4000-8000-000000000022";

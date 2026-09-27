@@ -94,7 +94,7 @@ type FavoriteMutationContext = {
   full: { previous: FullFavorite | undefined; index: number; existed: boolean };
 };
 
-const pendingByClient = new WeakMap<object, Map<string, { count: number; succeeded: boolean }>>();
+const pendingByClient = new WeakMap<object, Map<string, { count: number; succeeded: boolean; needsFullRecovery: boolean }>>();
 
 function updateListing<T extends { listing_id: string }>(rows: T[] | undefined, listingId: string, replacement?: T): T[] {
   const remaining = (rows ?? []).filter(row => row.listing_id !== listingId);
@@ -166,7 +166,7 @@ export function useToggleFavorite() {
       if (full.existed) queryClient.setQueryData<FullFavorite[]>(fullKey(operationUserId), old => updateListing(old, listing_id, isFavorited ? undefined : { ...optimisticRow, listings: null }));
       let pending = pendingByClient.get(queryClient);
       if (!pending) { pending = new Map(); pendingByClient.set(queryClient, pending); }
-      const state = pending.get(operationUserId) ?? { count: 0, succeeded: false };
+      const state = pending.get(operationUserId) ?? { count: 0, succeeded: false, needsFullRecovery: false };
       state.count += 1;
       pending.set(operationUserId, state);
       return { operationUserId, listingId: listing_id, membership, full };
@@ -185,9 +185,10 @@ export function useToggleFavorite() {
         if (queryClient.getQueryData(joinedKey) !== undefined) {
           queryClient.setQueryData<FullFavorite[]>(joinedKey, old => restoreListing(old, listingId, { ...full, existed: true }));
         }
-        // An active full view must rederive after a cancelled or late hydration.
-        // It reads the corrected row cache, including other pending listings.
-        void queryClient.invalidateQueries({ queryKey: joinedKey, exact: true });
+        // Wait for this actor's overlapping writes before rederiving. A recovery
+        // started here could capture another optimistic row that fails next.
+        const state = pendingByClient.get(queryClient)?.get(operationUserId);
+        if (state) state.needsFullRecovery = true;
       }
       toast.error(t("toasts.favorites.errorToggle"));
     },
@@ -214,6 +215,8 @@ export function useToggleFavorite() {
         pending?.delete(context.operationUserId);
         if (state.succeeded) {
           queryClient.invalidateQueries({ queryKey: membershipKey(context.operationUserId), exact: true });
+        }
+        if (state.succeeded || state.needsFullRecovery) {
           queryClient.invalidateQueries({ queryKey: fullKey(context.operationUserId), exact: true });
         }
       }
