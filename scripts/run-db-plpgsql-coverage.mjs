@@ -88,11 +88,13 @@ function substituteMigration(name, source) {
 }
 
 function databasePreflight() {
-  const facts = psql('postgres', ['-A', '-t', '-F', '|', '-c', "SELECT current_setting('server_version_num'), current_setting('port'), current_setting('unix_socket_directories'), current_user, (SELECT rolbypassrls FROM pg_roles WHERE rolname='service_role'), (SELECT count(*) FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role'))"], 'local-preflight').trim();
+  const preflightSql = writeSql('local-preflight.sql', "SELECT current_setting('server_version_num'), current_setting('port'), current_setting('unix_socket_directories'), current_user, (SELECT rolbypassrls FROM pg_roles WHERE rolname='service_role'), (SELECT count(*) FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role'));");
+  const facts = psql('postgres', ['-A', '-t', '-f', wslPath(preflightSql)], 'local-preflight').trim();
   const [version, port, sockets, user, bypass, roles] = facts.split('|');
   if (!version?.startsWith('16') || port !== '5432' || !sockets?.split(',').map((s) => s.trim()).includes('/var/run/postgresql') || user !== 'postgres' || bypass !== 't' || roles !== '3') throw new Error(`unexpected local PostgreSQL prerequisite: ${facts}`);
   manifest.postgresqlPreflight = { version, port, sockets, user, serviceBypassRls: bypass, apiRoleCount: Number(roles) };
-  const exists = psql('postgres', ['-A', '-t', '-c', `SELECT count(*) FROM pg_database WHERE datname=${quote(database)}`], 'database-exists').trim();
+  const existsSql = writeSql('database-exists.sql', `SELECT count(*) FROM pg_database WHERE datname=${quote(database)};`);
+  const exists = psql('postgres', ['-A', '-t', '-f', wslPath(existsSql)], 'database-exists').trim();
   if (exists !== '0') throw new Error(`disposable database already exists: ${database}`);
   wsl(['createdb', '-h', '/var/run/postgresql', '-p', '5432', '-U', 'postgres', '-T', 'template0', database], 'create-database');
 }
