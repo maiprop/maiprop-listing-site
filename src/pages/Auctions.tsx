@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { useAuth } from "@/contexts/AuthContext";
-import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
+import { useFavoriteMembership, useToggleFavorite } from "@/hooks/useFavorites";
 import { useListingReport } from "@/hooks/useListingReport";
 import { toast } from "sonner";
 import {
@@ -134,7 +134,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
   }, [searchParams]);
 
   const toggleFav = useToggleFavorite();
-  const favorites = useFavorites();
+  const favorites = useFavoriteMembership();
   const favoritedIds = useMemo(
     () => new Set((favorites.data ?? []).map((favorite) => favorite.listing_id)),
     [favorites.data],

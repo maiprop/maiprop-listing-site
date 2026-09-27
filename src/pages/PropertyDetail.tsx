@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense, useMemo } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { useModal } from "@/hooks/useModal";
@@ -18,7 +18,7 @@ import ViewingDialog from "@/components/ViewingDialog";
 import { useListing, useOwnerProStatus, useTrackListingView } from "@/hooks/useListings";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import { dedupeSimilarListings, useSimilarListings } from "@/hooks/useSimilarListings";
-import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
+import { useIsFavorited, useToggleFavorite } from "@/hooks/useFavorites";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -143,7 +143,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     isPro,
   );
 
-  const { data: favorites = [] } = useFavorites();
+  const { data: isFavorited = false } = useIsFavorited(id ?? "");
   const toggleFav = useToggleFavorite();
   const startConversation = useStartConversation();
   const report = useListingReport({
@@ -155,7 +155,6 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     onSignInRequired: () => navigate("/login"),
   });
 
-  const isFavorited = useMemo(() => favorites.some((f: { listing_id: string }) => f.listing_id === id), [favorites, id]);
 
   const handleFavorite = () => {
     if (!user) {toast.error(t("property.signInToSave"));return;}

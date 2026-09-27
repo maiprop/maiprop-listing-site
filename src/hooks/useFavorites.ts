@@ -6,20 +6,38 @@ import { toast } from "sonner";
 import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { favoriteToggleSchema, parseMutationInput } from "@/lib/mutationSchemas";
 import type { DbListingCardRow } from "@/lib/domainContracts";
+import type { Database } from "@/integrations/supabase/types";
+
+type FavoriteRow = Database["public"]["Tables"]["favorites"]["Row"];
+type FullFavorite = FavoriteRow & { listings: DbListingCardRow | null };
+const membershipKey = (id: string) => ["favoriteMembership", id] as const;
+const fullKey = (id: string) => ["favorites", id] as const;
+
+const membershipOptions = (id: string) => ({
+  queryKey: membershipKey(id),
+  queryFn: async (): Promise<FavoriteRow[]> => {
+    const { data, error } = await supabase.from("favorites").select("*").eq("user_id", id).order("created_at", { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+  staleTime: USER_SCOPED_QUERY_STALE_TIME,
+});
+
+/** One actor-scoped row read shared by all membership-only consumers. */
+export function useFavoriteMembership() {
+  const { user } = useAuth();
+  return useQuery({ ...membershipOptions(user?.id ?? ""), enabled: !!user });
+}
 
 /** Returns the current user's saved/favorited listings with full listing data joined. */
 export function useFavorites() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   return useQuery({
-    queryKey: ["favorites", user?.id],
-    queryFn: async () => {
+    queryKey: fullKey(user?.id ?? ""),
+    queryFn: async (): Promise<FullFavorite[]> => {
       if (!user) return [];
-      const { data: favoriteRows, error } = await supabase
-        .from("favorites")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
+      const favoriteRows = await queryClient.fetchQuery(membershipOptions(user.id));
       const listingIds = [...new Set((favoriteRows ?? []).map((row) => row.listing_id))];
       if (listingIds.length === 0) return [];
 
@@ -45,7 +63,7 @@ export function useFavorites() {
           }),
       );
 
-      return (favoriteRows ?? []).map((favorite) => ({
+      return favoriteRows.map((favorite) => ({
         ...favorite,
         listings: listingById.get(favorite.listing_id) ?? null,
       }));
@@ -54,8 +72,6 @@ export function useFavorites() {
     staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
-
-type FavoriteRow = { listing_id: string; user_id: string; price_alert: boolean; price_when_saved: number | null; created_at?: string };
 
 type FavoriteToggleVariables = {
   listing_id: string;
@@ -69,10 +85,28 @@ type FavoriteToggleOperation = FavoriteToggleVariables & {
 };
 
 type FavoriteMutationContext = {
-  queryKey: readonly ["favorites", string];
-  previous: FavoriteRow[] | undefined;
-  hadPrevious: boolean;
+  operationUserId: string;
+  listingId: string;
+  membership: { previous: FavoriteRow | undefined; index: number; existed: boolean };
+  full: { previous: FullFavorite | undefined; index: number; existed: boolean };
 };
+
+const pendingByClient = new WeakMap<object, Map<string, { count: number; succeeded: boolean }>>();
+
+function updateListing<T extends { listing_id: string }>(rows: T[] | undefined, listingId: string, replacement?: T): T[] {
+  const remaining = (rows ?? []).filter(row => row.listing_id !== listingId);
+  return replacement ? [replacement, ...remaining] : remaining;
+}
+
+function previousListing<T extends { listing_id: string }>(rows: T[] | undefined, listingId: string) {
+  return { previous: rows?.find(row => row.listing_id === listingId), index: rows?.findIndex(row => row.listing_id === listingId) ?? -1, existed: rows !== undefined };
+}
+
+function restoreListing<T extends { listing_id: string }>(rows: T[] | undefined, listingId: string, snapshot: { previous?: T; index: number; existed: boolean }): T[] | undefined {
+  const remaining = (rows ?? []).filter(row => row.listing_id !== listingId);
+  if (snapshot.previous) remaining.splice(Math.min(snapshot.index, remaining.length), 0, snapshot.previous);
+  return !snapshot.existed && remaining.length === 0 ? undefined : remaining;
+}
 
 export function useToggleFavorite() {
   const queryClient = useQueryClient();
@@ -112,33 +146,44 @@ export function useToggleFavorite() {
     },
     onMutate: async ({ listing_id, isFavorited, priceAlert, price, operationUserId }) => {
       if (!operationUserId) return undefined;
-      const qk = ["favorites", operationUserId] as const;
-      // Cancel in-flight refetches to avoid overwriting the optimistic update
-      await queryClient.cancelQueries({ queryKey: qk });
-      const previous = queryClient.getQueryData<FavoriteRow[]>(qk);
-      queryClient.setQueryData<FavoriteRow[]>(qk, (old = []) => {
-        if (isFavorited) {
-          return old.filter(f => f.listing_id !== listing_id);
-        }
-        return [
-          { listing_id, user_id: operationUserId, price_alert: priceAlert ?? false, price_when_saved: price ?? null },
-          ...old,
-        ];
-      });
-      return { queryKey: qk, previous, hadPrevious: previous !== undefined };
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: membershipKey(operationUserId), exact: true }),
+        queryClient.cancelQueries({ queryKey: fullKey(operationUserId), exact: true }),
+      ]);
+      const memberRows = queryClient.getQueryData<FavoriteRow[]>(membershipKey(operationUserId));
+      const fullRows = queryClient.getQueryData<FullFavorite[]>(fullKey(operationUserId));
+      const membership = previousListing(memberRows, listing_id);
+      const full = previousListing(fullRows, listing_id);
+      const optimisticRow: FavoriteRow = {
+        id: `optimistic-${listing_id}`, listing_id, user_id: operationUserId,
+        price_alert: priceAlert ?? false, price_when_saved: price ?? null,
+        created_at: new Date().toISOString(),
+      };
+      queryClient.setQueryData<FavoriteRow[]>(membershipKey(operationUserId), old => updateListing(old, listing_id, isFavorited ? undefined : optimisticRow));
+      if (full.existed) queryClient.setQueryData<FullFavorite[]>(fullKey(operationUserId), old => updateListing(old, listing_id, isFavorited ? undefined : { ...optimisticRow, listings: null }));
+      let pending = pendingByClient.get(queryClient);
+      if (!pending) { pending = new Map(); pendingByClient.set(queryClient, pending); }
+      const state = pending.get(operationUserId) ?? { count: 0, succeeded: false };
+      state.count += 1;
+      pending.set(operationUserId, state);
+      return { operationUserId, listingId: listing_id, membership, full };
     },
     onError: (_err, _vars, context) => {
-      // Roll back optimistic update
-      if (context?.hadPrevious) {
-        queryClient.setQueryData(context.queryKey, context.previous);
-      } else if (context) {
-        queryClient.removeQueries({ queryKey: context.queryKey, exact: true });
+      if (context) {
+        const { operationUserId, listingId, membership, full } = context;
+        const memberKey = membershipKey(operationUserId);
+        const restoredMembers = restoreListing(queryClient.getQueryData<FavoriteRow[]>(memberKey), listingId, membership);
+        if (restoredMembers) queryClient.setQueryData(memberKey, restoredMembers);
+        else queryClient.removeQueries({ queryKey: memberKey, exact: true });
+        if (full.existed) queryClient.setQueryData<FullFavorite[]>(fullKey(operationUserId), old => restoreListing(old, listingId, full));
       }
       toast.error(t("toasts.favorites.errorToggle"));
     },
     onSuccess: (_, { isFavorited, priceAlert }, context) => {
-      // Scope invalidation to this user only
-      if (context) queryClient.invalidateQueries({ queryKey: context.queryKey, exact: true });
+      if (context) {
+        const state = pendingByClient.get(queryClient)?.get(context.operationUserId);
+        if (state) state.succeeded = true;
+      }
       toast.success(
         isFavorited
           ? t("toasts.favorites.removed")
@@ -146,6 +191,20 @@ export function useToggleFavorite() {
             ? t("toasts.favorites.savedWithAlert")
             : t("toasts.favorites.saved")
       );
+    },
+    onSettled: (_data, _error, _variables, context) => {
+      if (!context) return;
+      const pending = pendingByClient.get(queryClient);
+      const state = pending?.get(context.operationUserId);
+      if (!state) return;
+      state.count -= 1;
+      if (state.count === 0) {
+        pending?.delete(context.operationUserId);
+        if (state.succeeded) {
+          queryClient.invalidateQueries({ queryKey: membershipKey(context.operationUserId), exact: true });
+          queryClient.invalidateQueries({ queryKey: fullKey(context.operationUserId), exact: true });
+        }
+      }
     },
   });
 
@@ -162,9 +221,9 @@ export function useToggleFavorite() {
 }
 
 
-/** Derives favorited state from the useFavorites() cache — no extra DB query per card. */
+/** Derives heart state from the shared row query. */
 export function useIsFavorited(listing_id: string) {
-  const favorites = useFavorites();
+  const favorites = useFavoriteMembership();
   const isFavorited = (favorites.data ?? []).some(
     (f: { listing_id: string }) => f.listing_id === listing_id
   );

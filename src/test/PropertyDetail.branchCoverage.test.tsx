@@ -46,7 +46,7 @@ vi.mock("@/hooks/useSimilarListings", () => ({
   useSimilarListings: () => mocks.similar(),
 }));
 vi.mock("@/hooks/useFavorites", () => ({
-  useFavorites: () => mocks.favorites(),
+  useIsFavorited: (id: string) => ({ data: (mocks.favorites().data ?? []).some((favorite: { listing_id: string }) => favorite.listing_id === id) }),
   useToggleFavorite: () => ({ mutate: mocks.toggleFavorite }),
 }));
 vi.mock("@/hooks/useMessages", () => ({

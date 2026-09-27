@@ -18,7 +18,7 @@ import OpenHouseOfferDialog from "@/components/OpenHouseOfferDialog";
 import { PropertyReportCard } from "@/components/property/PropertyReportCard";
 import { useListing, useTrackListingView, useUpdateListing, useDeleteListing, type ListingWithJoins } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
-import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
+import { useIsFavorited, useToggleFavorite } from "@/hooks/useFavorites";
 import { useOpenHouseSettings, useOpenHouseRegistrations, useOpenHouseOffers } from "@/hooks/useOpenHouseAssetControl";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -102,9 +102,8 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   const myReg = registrations.find(r => r.requester_id === user?.id);
   const myOffer = offers.find(o => o.bidder_id === user?.id);
   const isOwner = !!(user?.id && db?.owner_id === user.id);
-  const { data: favorites = [] } = useFavorites();
+  const { data: isFavorited = false } = useIsFavorited(listingIdParam ?? "");
   const toggleFav = useToggleFavorite();
-  const isFavorited = !!listingIdParam && favorites.some(f => f.listing_id === listingIdParam);
   const handleFavorite = () => {
     if (!user) { toast.error(isGreek ? "Συνδεθείτε για να αποθηκεύσετε ακίνητα" : "Sign in to save properties"); return; }
     if (listingIdParam) toggleFav.mutate({ listing_id: listingIdParam, isFavorited });

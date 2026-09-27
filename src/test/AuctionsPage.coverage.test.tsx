@@ -32,7 +32,7 @@ vi.mock("@/contexts/AuthContext", () => ({
 }));
 
 vi.mock("@/hooks/useFavorites", () => ({
-  useFavorites: () => ({ data: mocks.favoriteRows, isLoading: false }),
+  useFavoriteMembership: () => ({ data: mocks.favoriteRows, isLoading: false }),
   useToggleFavorite: () => ({ mutate: mocks.mutate, isPending: false }),
 }));
 
