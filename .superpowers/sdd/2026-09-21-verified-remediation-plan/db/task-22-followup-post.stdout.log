@@ -1,0 +1,29 @@
+Pager usage is off.
+           database            |           postgres_version            
+-------------------------------+---------------------------------------
+ maiprop_t22_evidence_20260927 | 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
+(1 row)
+
+                                                  signature                                                  |  owner   |                      acl                      | security_definer |        function_settings        |          definition_md5          | service_execute | authenticated_execute | anon_execute 
+-------------------------------------------------------------------------------------------------------------+----------+-----------------------------------------------+------------------+---------------------------------+----------------------------------+-----------------+-----------------------+--------------
+ check_open_house_rsvp_monthly_limit()                                                                       | postgres | {postgres=X/postgres}                         | t                | {"search_path=public, pg_temp"} | 1647660de3969d30316f833ea6855bde | f               | f                     | f
+ create_open_house_registration(uuid,integer,text,text,text,text,text,boolean,boolean,boolean)               | postgres | {postgres=X/postgres,service_role=X/postgres} | t                | {search_path=public}            | b47628b2f5e9abcca862470dae67a251 | t               | f                     | f
+ create_open_house_registration_for_user(uuid,uuid,integer,text,text,text,text,text,boolean,boolean,boolean) | postgres | {postgres=X/postgres,service_role=X/postgres} | t                | {"search_path=public, pg_temp"} | 35975a7060786de3e4506b9ae16d6cdc | t               | f                     | f
+(3 rows)
+
+                           tgname                            | tgenabled |                                                                                                                                binding                                                                                                                                |                    function_signature                     
+-------------------------------------------------------------+-----------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------
+ open_house_registrations_updated_at                         | O         | CREATE TRIGGER open_house_registrations_updated_at BEFORE UPDATE ON public.open_house_registrations FOR EACH ROW EXECUTE FUNCTION set_open_house_updated_at()                                                                                                         | set_open_house_updated_at()
+ trg_check_open_house_rsvp_monthly_limit                     | O         | CREATE TRIGGER trg_check_open_house_rsvp_monthly_limit BEFORE INSERT ON public.open_house_registrations FOR EACH ROW EXECUTE FUNCTION check_open_house_rsvp_monthly_limit()                                                                                           | check_open_house_rsvp_monthly_limit()
+ trg_enforce_open_house_registration_submission_requirements | O         | CREATE TRIGGER trg_enforce_open_house_registration_submission_requirements BEFORE INSERT OR UPDATE ON public.open_house_registrations FOR EACH ROW EXECUTE FUNCTION enforce_open_house_registration_submission_requirements()                                         | enforce_open_house_registration_submission_requirements()
+ trg_guard_open_house_registration_insert                    | O         | CREATE TRIGGER trg_guard_open_house_registration_insert BEFORE INSERT ON public.open_house_registrations FOR EACH ROW EXECUTE FUNCTION guard_open_house_registration_insert()                                                                                         | guard_open_house_registration_insert()
+ trg_guard_open_house_registration_update                    | O         | CREATE TRIGGER trg_guard_open_house_registration_update BEFORE UPDATE ON public.open_house_registrations FOR EACH ROW EXECUTE FUNCTION guard_open_house_registration_update()                                                                                         | guard_open_house_registration_update()
+ trg_open_house_pof_notify                                   | O         | CREATE TRIGGER trg_open_house_pof_notify AFTER UPDATE OF pof_verified_status ON public.open_house_registrations FOR EACH ROW WHEN ((old.pof_verified_status IS DISTINCT FROM new.pof_verified_status)) EXECUTE FUNCTION private.notify_open_house_pof_status_change() | private.notify_open_house_pof_status_change()
+ trg_open_house_registration_in_app_notify                   | O         | CREATE TRIGGER trg_open_house_registration_in_app_notify AFTER UPDATE OF status ON public.open_house_registrations FOR EACH ROW WHEN ((old.status IS DISTINCT FROM new.status)) EXECUTE FUNCTION private.notify_open_house_registration_status_change()               | private.notify_open_house_registration_status_change()
+(7 rows)
+
+ service_insert | service_select 
+----------------+----------------
+ f              | f
+(1 row)
+

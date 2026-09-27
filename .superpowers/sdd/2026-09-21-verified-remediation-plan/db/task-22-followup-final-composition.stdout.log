@@ -1,0 +1,426 @@
+ backend_before_suite 
+----------------------
+                  755
+(1 row)
+
+Pager usage is off.
+BEGIN
+SET
+SET
+CREATE EXTENSION
+ plan  
+-------
+ 1..45
+(1 row)
+
+SET
+INSERT 0 6
+INSERT 0 6
+INSERT 0 8
+INSERT 0 2
+SET
+ set_config |  set_config  |       set_config        
+------------+--------------+-------------------------
+            | service_role | {"role":"service_role"}
+(1 row)
+
+                     is                     
+--------------------------------------------
+ ok 1 - free buyer keeps the existing limit
+(1 row)
+
+                 is                 
+------------------------------------
+ ok 2 - Pro buyer remains unlimited
+(1 row)
+
+                 is                 
+------------------------------------
+ ok 3 - non-buyer remains unlimited
+(1 row)
+
+                  ok                  
+--------------------------------------
+ ok 4 - quota trigger remains enabled
+(1 row)
+
+                        ok                         
+---------------------------------------------------
+ ok 5 - active RPC remains service-role executable
+(1 row)
+
+                  ok                   
+---------------------------------------
+ ok 6 - active RPC denies anon EXECUTE
+(1 row)
+
+                       ok                       
+------------------------------------------------
+ ok 7 - active RPC denies authenticated EXECUTE
+(1 row)
+
+                        ok                         
+---------------------------------------------------
+ ok 8 - legacy RPC remains service-role executable
+(1 row)
+
+       set_config        
+-------------------------
+ {"role":"service_role"}
+(1 row)
+
+SET
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                  lives_ok                  
+--------------------------------------------
+ ok 9 - service path admits first free RSVP
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                   lives_ok                   
+----------------------------------------------
+ ok 10 - service path admits second free RSVP
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                  lives_ok                   
+---------------------------------------------
+ ok 11 - service path admits third free RSVP
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                     throws_ok                     
+---------------------------------------------------
+ ok 12 - service path rejects the fourth free RSVP
+(1 row)
+
+RESET
+                           is                           
+--------------------------------------------------------
+ ok 13 - service path preserves exactly three free rows
+(1 row)
+
+                            is                            
+----------------------------------------------------------
+ ok 14 - first listing has one registration before replay
+(1 row)
+
+                                    ok                                     
+---------------------------------------------------------------------------
+ ok 15 - actual service role lacks raw registration INSERT in this fixture
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+SET
+                                   throws_ok                                   
+-------------------------------------------------------------------------------
+ ok 16 - actual service-role raw insert is denied by table ACL before triggers
+(1 row)
+
+RESET
+                              is                              
+--------------------------------------------------------------
+ ok 17 - service raw insert denial leaves listing eight empty
+(1 row)
+
+SET
+                   lives_ok                   
+----------------------------------------------
+ ok 18 - Pro buyer admits four distinct RSVPs
+(1 row)
+
+                   lives_ok                   
+----------------------------------------------
+ ok 19 - non-buyer admits four distinct RSVPs
+(1 row)
+
+RESET
+                   is                   
+----------------------------------------
+ ok 20 - Pro fourth admission is stored
+(1 row)
+
+                      is                      
+----------------------------------------------
+ ok 21 - non-buyer fourth admission is stored
+(1 row)
+
+SELECT 1
+GRANT
+SET
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                        is                        
+--------------------------------------------------
+ ok 22 - active service proof has no user subject
+(1 row)
+
+                                           is                                            
+-----------------------------------------------------------------------------------------
+ ok 23 - retry at quota returns the exact stored receipt without adopting changed fields
+(1 row)
+
+RESET
+                      is                      
+----------------------------------------------
+ ok 24 - retry at quota creates no fourth row
+(1 row)
+
+              set_config              |  set_config  |                              set_config                              | set_config 
+--------------------------------------+--------------+----------------------------------------------------------------------+------------
+ d1220001-0000-4000-8000-000000000002 | service_role | {"role":"service_role","sub":"d1220001-0000-4000-8000-000000000002"} | 
+(1 row)
+
+SET
+                       throws_ok                        
+--------------------------------------------------------
+ ok 25 - legacy subject path also rejects a fourth RSVP
+(1 row)
+
+              set_config              |  set_config  |                              set_config                              | set_config 
+--------------------------------------+--------------+----------------------------------------------------------------------+------------
+ d1220001-0000-4000-8000-000000000002 | service_role | {"role":"service_role","sub":"d1220001-0000-4000-8000-000000000002"} | 
+(1 row)
+
+                              is                               
+---------------------------------------------------------------
+ ok 26 - legacy retry returns the same stored receipt at quota
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+RESET
+SET
+INSERT 0 3
+SET
+SET
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                              lives_ok                              
+--------------------------------------------------------------------
+ ok 27 - excluded statuses and prior-month row do not consume quota
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                          lives_ok                           
+-------------------------------------------------------------
+ ok 28 - buyer with excluded rows reaches second active RSVP
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                          lives_ok                          
+------------------------------------------------------------
+ ok 29 - buyer with excluded rows reaches third active RSVP
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                       throws_ok                        
+--------------------------------------------------------
+ ok 30 - excluded rows do not change the existing limit
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                                  is                                  
+----------------------------------------------------------------------
+ ok 31 - retry does not reactivate an existing cancelled registration
+(1 row)
+
+RESET
+                             is                              
+-------------------------------------------------------------
+ ok 32 - cancelled retry leaves all six existing rows intact
+(1 row)
+
+SET
+              set_config              |  set_config  |                              set_config                              |              set_config              
+--------------------------------------+--------------+----------------------------------------------------------------------+--------------------------------------
+ d1220001-0000-4000-8000-000000000002 | service_role | {"role":"service_role","sub":"d1220001-0000-4000-8000-000000000002"} | d1220001-0000-4000-8000-000000000003
+(1 row)
+
+                           throws_ok                            
+----------------------------------------------------------------
+ ok 33 - service RPC rejects a mismatched authenticated subject
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+RESET
+                        throws_ok                         
+----------------------------------------------------------
+ ok 34 - raw insert without the RPC marker remains denied
+(1 row)
+
+ set_config |  set_config  |       set_config        |              set_config              
+------------+--------------+-------------------------+--------------------------------------
+            | service_role | {"role":"service_role"} | d1220001-0000-4000-8000-000000000003
+(1 row)
+
+                              throws_ok                              
+---------------------------------------------------------------------
+ ok 35 - raw insert with a different requester marker remains denied
+(1 row)
+
+              set_config              |  set_config  |                              set_config                              | set_config 
+--------------------------------------+--------------+----------------------------------------------------------------------+------------
+ d1220001-0000-4000-8000-000000000006 | service_role | {"role":"service_role","sub":"d1220001-0000-4000-8000-000000000006"} | 
+(1 row)
+
+SET
+                           lives_ok                           
+--------------------------------------------------------------
+ ok 36 - legacy path admits three distinct free registrations
+(1 row)
+
+              set_config              |  set_config  |                              set_config                              | set_config 
+--------------------------------------+--------------+----------------------------------------------------------------------+------------
+ d1220001-0000-4000-8000-000000000006 | service_role | {"role":"service_role","sub":"d1220001-0000-4000-8000-000000000006"} | 
+(1 row)
+
+                  throws_ok                  
+---------------------------------------------
+ ok 37 - legacy fourth admission is rejected
+(1 row)
+
+RESET
+                            is                             
+-----------------------------------------------------------
+ ok 38 - legacy denial preserves exactly three stored rows
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+SET
+                                      throws_ok                                      
+-------------------------------------------------------------------------------------
+ ok 39 - existing registration still consumes venue capacity regardless of its month
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+              lives_ok              
+------------------------------------
+ ok 40 - one visitor fills the slot
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                       throws_ok                       
+-------------------------------------------------------
+ ok 41 - non-buyer quota does not bypass slot capacity
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                   throws_ok                   
+-----------------------------------------------
+ ok 42 - required slot validation is preserved
+(1 row)
+
+ set_config |  set_config  |       set_config        | set_config 
+------------+--------------+-------------------------+------------
+            | service_role | {"role":"service_role"} | 
+(1 row)
+
+                  throws_ok                   
+----------------------------------------------
+ ok 43 - invalid slot validation is preserved
+(1 row)
+
+RESET
+                                 is                                 
+--------------------------------------------------------------------
+ ok 44 - failed slot admissions leave only the winning registration
+(1 row)
+
+                                   is                                   
+------------------------------------------------------------------------
+ ok 45 - failed venue admission leaves the original registration intact
+(1 row)
+
+ finish 
+--------
+(0 rows)
+
+ROLLBACK
+Pager usage is off.
+           database            | backend_pid | receipt_temp_gone | fixture_users | fixture_profiles | fixture_listings | fixture_registrations 
+-------------------------------+-------------+-------------------+---------------+------------------+------------------+-----------------------
+ maiprop_t22_evidence_20260927 |         755 | t                 |             0 |                0 |                0 |                     0
+(1 row)
+
+BEGIN
+ plan 
+------
+ 1..1
+(1 row)
+
+                                          ok                                           
+---------------------------------------------------------------------------------------
+ ok 1 - ordinary suite leaves no temp receipt or synthetic fixture in the same backend
+(1 row)
+
+ finish 
+--------
+(0 rows)
+
+ROLLBACK

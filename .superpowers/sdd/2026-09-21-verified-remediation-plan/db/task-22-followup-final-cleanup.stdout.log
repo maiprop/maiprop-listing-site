@@ -1,0 +1,2 @@
+sessions_before_drop=0
+database_after_drop=0
