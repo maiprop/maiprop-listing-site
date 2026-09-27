@@ -4020,7 +4020,16 @@
         "freshAllHistoryReplayProven": false,
         "providerExecution": "stubs only; no hosted calls",
         "existingSourceSqlChecks": 27,
-        "oneBackendComposedChecks": 146
+        "oneBackendComposedChecks": 146,
+        "fixRound1ProfessionalStringContract": {
+          "capturedActualServiceRpcChecks": 51,
+          "sourceActualServiceRpcChecksWithRollbackOnlyCapturedServiceAclSimulation": 51,
+          "redFailuresPerBaseline": 38,
+          "ecmaScriptTrimCodepoints": 25,
+          "utf16LengthValidated": true,
+          "privateHelper": "private.normalize_professional_profile_string(text,integer)",
+          "apiHelperExecuteGranted": false
+        }
       }
     }
   },

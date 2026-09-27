@@ -950,13 +950,29 @@ BEGIN
   role_switch_audit_id=_audit_id,updated_at=now() WHERE user_id=_user_id;
 END; $$;
 
+-- Match the retained HTTP String.trim() and UTF-16 String.length contract.
+-- Explicit ECMAScript WhiteSpace + LineTerminator set; notably excludes U+0085,
+-- U+180E and U+200B. PostgreSQL text length alone counts supplementary code points once.
+CREATE OR REPLACE FUNCTION private.normalize_professional_profile_string(p_value text,p_max_units integer)
+RETURNS text LANGUAGE plpgsql IMMUTABLE STRICT SECURITY INVOKER SET search_path=pg_catalog AS $$
+DECLARE normalized text; utf16_units bigint;
+BEGIN
+ normalized:=btrim(p_value,U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF');
+ SELECT coalesce(sum(CASE WHEN ascii(character)>65535 THEN 2 ELSE 1 END),0)
+ INTO utf16_units FROM regexp_split_to_table(normalized,'') AS characters(character);
+ IF utf16_units>p_max_units THEN
+  RAISE EXCEPTION 'invalid_professional_profile' USING ERRCODE='22023'; END IF;
+ RETURN NULLIF(normalized,'');
+END; $$;
+REVOKE ALL ON FUNCTION private.normalize_professional_profile_string(text,integer) FROM PUBLIC,anon,authenticated,service_role;
+
 -- Both public completion contracts use this one atomic transaction body.
 CREATE OR REPLACE FUNCTION private.complete_onboarding_role_transaction(
  p_user_id uuid,p_role public.user_role,p_participant_type text,
  p_display_name text,p_city text,p_phone text,p_professional_profile jsonb
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
 DECLARE p public.profiles%ROWTYPE; legacy_lane boolean; professional_id uuid; item record;
- profile_title text; profile_category public.professional_category;
+ profile_title text; profile_display_name text; profile_city text; profile_license_number text; profile_category public.professional_category;
 BEGIN
  IF p_user_id IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
  IF p_role IS NULL OR p_participant_type IS NULL THEN RAISE EXCEPTION 'role_not_allowed'; END IF;
@@ -983,20 +999,19 @@ BEGIN
    IF item.key IN ('displayName','city','licenseNumber') AND jsonb_typeof(item.value) NOT IN ('null','string') THEN
     RAISE EXCEPTION 'invalid_professional_profile' USING ERRCODE='22023'; END IF;
   END LOOP;
-  profile_title:=btrim(p_professional_profile->>'title');
-  IF profile_title IS NULL OR length(profile_title)=0 OR length(profile_title)>160
-   OR NOT (p_professional_profile ? 'category') OR p_professional_profile->>'category' IS NULL
-   OR length(btrim(p_professional_profile->>'displayName'))>160
-   OR length(btrim(p_professional_profile->>'city'))>120
-   OR length(btrim(p_professional_profile->>'licenseNumber'))>120 THEN
+  profile_title:=private.normalize_professional_profile_string(p_professional_profile->>'title',160);
+  profile_display_name:=private.normalize_professional_profile_string(p_professional_profile->>'displayName',160);
+  profile_city:=private.normalize_professional_profile_string(p_professional_profile->>'city',120);
+  profile_license_number:=private.normalize_professional_profile_string(p_professional_profile->>'licenseNumber',120);
+  IF profile_title IS NULL
+   OR NOT (p_professional_profile ? 'category') OR p_professional_profile->>'category' IS NULL THEN
    RAISE EXCEPTION 'invalid_professional_profile' USING ERRCODE='22023'; END IF;
   IF p_professional_profile->>'category' NOT IN ('architect','civil_engineer','lawyer','notary','electrician','plumber','contractor','property_manager','valuer','interior_designer','financial_advisor','real_estate_agent','insurance_broker','utility_certification_provider','esg_sustainability_consultant','relocation_immigration_consultant','facility_manager','short_term_rental_operator','hotel_hospitality_operator','marketing_agency','crm_listing_data_provider','concrete_contractor','steel_structure_contractor','carpenter','tile_installer','painter','building_permit_consultant','urban_planning_consultant','legalization_specialist','energy_certificate_inspector','building_regulation_consultant','fire_protection_consultant','drywall_installer','waterproofing_specialist','insulation_contractor','roofing_contractor','window_aluminum_installer','elevator_installer','smart_home_installer') THEN
    RAISE EXCEPTION 'invalid_professional_profile_category' USING ERRCODE='22023'; END IF;
   BEGIN profile_category:=(p_professional_profile->>'category')::public.professional_category;
   EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'invalid_professional_profile_category' USING ERRCODE='22023'; END;
   INSERT INTO public.professionals(user_id,title,category,display_name,city,license_number)
-  VALUES(p_user_id,profile_title,profile_category,NULLIF(btrim(p_professional_profile->>'displayName'),''),
-   NULLIF(btrim(p_professional_profile->>'city'),''),NULLIF(btrim(p_professional_profile->>'licenseNumber'),''))
+  VALUES(p_user_id,profile_title,profile_category,profile_display_name,profile_city,profile_license_number)
   ON CONFLICT(user_id) DO UPDATE SET title=excluded.title,category=excluded.category,
    display_name=excluded.display_name,city=excluded.city,license_number=excluded.license_number
   RETURNING id INTO professional_id;
