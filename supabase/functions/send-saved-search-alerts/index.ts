@@ -96,7 +96,8 @@ Deno.serve(async (req) => {
     });
   }
 
-  if (!Deno.env.get("BREVO_API_KEY")) {
+  const BREVO_KEY = Deno.env.get("BREVO_API_KEY");
+  if (!BREVO_KEY) {
     return new Response(
       JSON.stringify({
         ok: false,
@@ -118,7 +119,6 @@ Deno.serve(async (req) => {
     },
   );
 
-  const BREVO_KEY = Deno.env.get("BREVO_API_KEY");
   const APP_URL = Deno.env.get("MAIPROP_APP_URL") ||
     "https://portal.maiprop.co/";
   const FROM_EMAIL = Deno.env.get("BREVO_FROM_EMAIL") || "alerts@maiprop.co";
