@@ -71,7 +71,7 @@ test('final discovery catches added migration, suite, supporting SQL, and hash d
   assert.throws(() => assertInventoryStable(base,{...base,hashes:{...base.hashes,'supabase/tests/a_test.sql':'b'}}));
 });
 test('effective inventory requires stable canonical object hashes and bound event status', () => {
-  const definition = '{"acl":[],"command":"r"}';
+  const definition = '{"command":"r","roles":["PUBLIC"]}';
   const policy = { catalog_class:'pg_policy',catalog_oid:'42',object_identity:'public.t.p',object_kind:'policy',canonical_definition:definition,definition_sha256:sha256(definition) };
   const event = {sequence:'1',migration:'001_a.sql',class_name:'pg_policy',objid:'42',lineage_status:'current_object',final_identity:policy.object_identity,final_definition_sha256:policy.definition_sha256};
   assert.equal(validateEffectiveSchema([policy],[event],['001_a.sql']).policies,1);
@@ -79,6 +79,12 @@ test('effective inventory requires stable canonical object hashes and bound even
   assert.throws(() => validateEffectiveSchema([policy,policy],[event],['001_a.sql']));
   assert.throws(() => validateEffectiveSchema([policy],[{...event,objid:'43'}],['001_a.sql']));
   assert.throws(() => validateEffectiveSchema([policy],[{...event,lineage_status:'superseded_or_unmapped'}],['001_a.sql']));
+  assert.throws(() => validateEffectiveSchema([policy],[{...event,final_identity:'public.t.other'}],['001_a.sql']));
+  assert.throws(() => validateEffectiveSchema([policy],[{...event,final_definition_sha256:'0'.repeat(64)}],['001_a.sql']));
+  const namedDefinition = '{"command":"r","roles":["postgres"]}';
+  assert.notEqual(sha256(definition),sha256(namedDefinition));
+  const namedPolicy = {...policy,canonical_definition:namedDefinition,definition_sha256:sha256(namedDefinition)};
+  assert.equal(validateEffectiveSchema([namedPolicy],[{...event,final_definition_sha256:namedPolicy.definition_sha256}],['001_a.sql']).policies,1);
 });
 test('statement input rejects duplicates, source drift, omissions, malformed counters and namespace', () => {
   const routines = [routine('public.a()')]; const row = stmt('public.a()',1,1);

@@ -126,7 +126,7 @@ export function parseCsv(raw) {
 
 export function validateEffectiveSchema(objects, events, migrationNames) {
   if (!objects.length || !events.length) throw new Error('empty effective schema evidence');
-  const objectKeys = new Set();
+  const objectKeys = new Map();
   for (const object of objects) {
     const key = `${object.catalog_class}:${object.catalog_oid}`;
     if (objectKeys.has(key) || !/^[1-9]\d*$/.test(object.catalog_oid)
@@ -134,7 +134,7 @@ export function validateEffectiveSchema(objects, events, migrationNames) {
       || sha256(object.canonical_definition) !== object.definition_sha256) {
       throw new Error(`invalid or duplicate final object ${key}`);
     }
-    objectKeys.add(key);
+    objectKeys.set(key,object);
   }
   const allowedMigrations = new Set(migrationNames);
   let last = 0;
@@ -145,7 +145,11 @@ export function validateEffectiveSchema(objects, events, migrationNames) {
     if (!['current_object','dropped_object','nonaddressable_ddl_event','superseded_or_unmapped'].includes(event.lineage_status)) throw new Error('invalid lineage status');
     const key = `${event.class_name}:${event.objid}`;
     if (event.lineage_status === 'current_object') {
-      if (!objectKeys.has(key) || !event.final_identity || !/^[a-f0-9]{64}$/.test(event.final_definition_sha256)) throw new Error(`unbound current object ${key}`);
+      const object = objectKeys.get(key);
+      if (!object || event.final_identity !== object.object_identity
+        || event.final_definition_sha256 !== object.definition_sha256) {
+        throw new Error(`unbound or stale current object ${key}`);
+      }
     } else if (event.final_definition_sha256) throw new Error(`non-current event has final definition ${key}`);
   }
   return {

@@ -58,7 +58,9 @@ WITH raw AS (
   UNION ALL
   SELECT 'pg_policy',p.oid,format('%I.%I.%I',n.nspname,c.relname,p.polname),'policy',
     jsonb_build_object('command',p.polcmd,'permissive',p.polpermissive,
-      'roles',COALESCE((SELECT jsonb_agg(r.rolname ORDER BY r.rolname) FROM pg_roles r WHERE r.oid=ANY(p.polroles)),'[]'::jsonb),
+      'roles',COALESCE((SELECT jsonb_agg(assigned.role_name ORDER BY assigned.role_name)
+        FROM (SELECT CASE WHEN assigned_role.role_oid=0 THEN 'PUBLIC' ELSE r.rolname END AS role_name
+          FROM unnest(p.polroles) AS assigned_role(role_oid) LEFT JOIN pg_roles r ON r.oid=assigned_role.role_oid) assigned),'[]'::jsonb),
       'using',pg_get_expr(p.polqual,p.polrelid),'with_check',pg_get_expr(p.polwithcheck,p.polrelid))
   FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid JOIN pg_namespace n ON n.oid=c.relnamespace
   WHERE n.nspname IN ('public','private','auth','storage','realtime','vault','net','cron','pgmq')
