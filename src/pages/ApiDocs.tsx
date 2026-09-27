@@ -38,7 +38,7 @@ export default function APIDocs() {
                   </span>
                 </div>
                 <p className="text-muted-foreground max-w-2xl">
-                  Built on Supabase Edge Functions (Deno runtime). All endpoints return JSON.
+                  Source contracts for Supabase services and the website catalogue API. Most responses are JSON; property chat streams SSE. Deployment parity must be checked for your selected environment.
                   Protected endpoints require a valid JWT token in the{" "}
                   <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
                     Authorization
@@ -50,9 +50,9 @@ export default function APIDocs() {
                     {`https://${PROJECT_ID}.supabase.co/functions/v1/`}
                   </code>
                   <span className="text-xs text-muted-foreground">
-                    Replace{" "}
+                    Edge base: replace{" "}
                     <code className="font-mono text-primary">[project-id]</code> with your
-                    Supabase project ID
+                    Supabase project ID. Website listings instead uses https://[website-host]/api/public/listings
                   </span>
                 </div>
               </div>
@@ -160,8 +160,7 @@ export default function APIDocs() {
                   <div className="flex-1">
                     <h2 className="font-display text-lg font-bold mb-1">Try It Out</h2>
                     <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                      The easiest way to explore the API is via the Supabase dashboard. Invoke Edge
-                      Functions directly, inspect logs, and manage authentication tokens.
+                      Use synthetic inputs in an explicitly selected local or isolated environment. AI calls consume quota and checkout can create provider sessions. Never put service keys in a browser.
                     </p>
                     <div className="flex flex-wrap gap-3">
                       <Button asChild size="sm" className="gap-2">
@@ -223,7 +222,7 @@ export default function APIDocs() {
                         {
                           code: "403",
                           label: "Forbidden",
-                          cause: "Valid token but insufficient permissions (e.g. non-Pro user)",
+                          cause: "Authenticated actor lacks permission for this operation",
                         },
                         {
                           code: "422",

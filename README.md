@@ -6,7 +6,7 @@ A full-stack property listing and investment platform for the Greek market. Buil
 
 ```bash
 nvm use                         # Node 20.19.5 / npm 10.x
-cp .env.example .env          # fill in required vars (see below)
+cp .env.example .env          # select explicit local/isolated backend; never default to production
 npm ci
 npm run dev                   # http://localhost:8080
 ```
@@ -52,8 +52,6 @@ npm run preview      # preview prod build on :4173
 npm run lint         # ESLint
 npm run test         # Vitest test suite (once)
 npm run test:watch   # Vitest in watch mode
-npm run db:push      # push Supabase migrations (requires supabase CLI)
-npm run seed:users   # seed mock users (requires tsx)
 ```
 
 ## Architecture
@@ -79,7 +77,7 @@ src/
   test/                — Vitest unit tests
 supabase/
   functions/           — Deno edge functions
-  migrations/          — SQL migrations (apply with npm run db:push)
+  migrations/          — SQL migrations (controlled release; preserve history)
 ```
 
 ### Auth & Role Model
@@ -90,27 +88,24 @@ Auth state lives exclusively in `AuthContext`. Route guards are wrapper componen
 |---|---|
 | `ProtectedRoute` | Any authenticated user |
 | `AdminRoute` | `profiles.role = 'admin'` |
-| `InvestorRoute` | Active investor subscription |
-| `SellerRoute` | Sell-side role (seller / agent / developer) |
+| `InvestorRoute` | Server-derived Quick Sale eligibility (admin or approved eligible investor) |
+| `SellerRoute` | Sell-side authority (seller / agent / developer / institutional; admin handled separately) |
 
-Roles are stored in `profiles.role` and map to the `ParticipantId` type:
+Authority is stored in protected `profiles.role` (including admin). The separate presentation `ParticipantId` values are:
 `buyer | seller | agent | developer | professional | investor | institutional`
 
 Use `getParticipantTypeFromProfile()` from `src/lib/participantConfig.ts` to resolve a profile to its canonical participant type — it handles the legacy `bio __type:` prefix automatically.
 
-**Never check roles by email** — `role = 'admin'` in the DB is the authoritative check.
+**Never check roles by email.** Participant display fallback does not grant authority. Billing entitlement, ownership and organization permissions are separate; see [Platform Architecture](docs/PLATFORM_ARCHITECTURE.md).
 
 ### Data Layer
 
-All server state goes through **React Query** hooks in `src/hooks/`:
+The main frontend query layer uses **React Query** hooks in `src/hooks/`. For new or revised queries:
 - Use explicit `.select("col1, col2, …")` — never `select("*")`
-- Apply `enabled: !!user` guards to skip unauthenticated fetches
+- Scope private queries by actor and skip them until authenticated; public projections remain available without sign-in
 - Invalidate related query keys on mutation success
 
-Regenerate Supabase types after schema changes:
-```bash
-supabase gen types typescript --linked > src/integrations/supabase/types.ts
-```
+Regenerate types from the explicitly selected verified schema after schema changes; do not overwrite them from an implicitly linked project. Production mutations follow [the controlled release path](docs/PRODUCTION_RELEASE_RUNBOOK.md).
 
 ### Performance
 
@@ -125,21 +120,20 @@ The project has **two distinct backend function layers**. Use the table below to
 
 | Layer | Directory | Runtime | Purpose | When to add here |
 |---|---|---|---|---|
-| **Cloudflare Pages Functions** | `functions/` | Node (edge) | Routing middleware, dynamic sitemap, static-route proxying | URL rewriting, response headers, sitemap generation — anything that must run at the CDN level before the SPA loads |
+| **Cloudflare Pages Functions** | `functions/` | Workers runtime | Website API, middleware, sitemap and SEO routes | Public catalogue projections, response headers and website request handling |
 | **Supabase Edge Functions** | `supabase/functions/` | Deno | Business logic, AI calls, Stripe payments, emails, data sync | Any function that reads/writes the database, calls external APIs, or requires auth context |
 
-**Rule of thumb:** If the function needs Supabase secrets (`SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `OPENAI_API_KEY`) it belongs in `supabase/functions/`. If it only needs to intercept/rewrite an HTTP request at the edge, it belongs in `functions/`.
+Both layers can read upstream services. Use their existing runtime boundaries; keep privileged credentials server-side. Source routes do not prove deployment parity.
 
 ### Supabase Edge Functions
 
-**Protected** (JWT required): `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `create-checkout`, `check-subscription`, `customer-portal`, `create-stripe-price`, `process-email-queue`
-
-**Public**: AI search, property valuation, neighbourhood reports, POIs, auction syncing, saved-search alerts
+AI search, valuation, neighbourhood, POI, chat and listing assistance require signed-in actor quota checks in their handlers. Checkout/subscription use authenticated billing contracts. Webhooks and cron/service handlers have distinct signature/secret/service boundaries: verify_jwt=false does not mean anonymous business access. Inspect each handler and [the API reference](docs/api/README.md). Most responses are JSON; property-chat success is SSE.
 
 ### Cloudflare Pages Functions (`functions/`)
 
 | File | Purpose |
 |---|---|
+| `api/public/listings.ts` | Public website catalogue GET (website origin, not Edge functions/v1) |
 | `_middleware.ts` | Global request middleware (headers, redirects) |
 | `sitemap-dynamic.xml.ts` | Server-rendered sitemap combining static + live listings |
 | `property/[id].ts` | Property detail URL pass-through |
@@ -165,9 +159,8 @@ The project has **two distinct backend function layers**. Use the table below to
 
 ### Platform reference
 
-- [`docs/PLATFORM_REFERENCE.md`](./docs/PLATFORM_REFERENCE.md) — canonical roles, participant IDs, pricing keys, routes, modules
-- [`docs/QA_CHECKLIST.md`](./docs/QA_CHECKLIST.md) — release smoke + role/plan matrix checklist
-- [`docs/UNDEVELOPED_FEATURES.md`](./docs/UNDEVELOPED_FEATURES.md) — gap list: plan limits not yet enforced
+- [`docs/PLATFORM_ARCHITECTURE.md`](./docs/PLATFORM_ARCHITECTURE.md) — authority, participant identity, entitlements and source limits
+- [`docs/superpowers/plans/2026-09-27-remediation-checkpoint.md`](./docs/superpowers/plans/2026-09-27-remediation-checkpoint.md) — scoped local acceptance and remaining gates
 - [`docs/archive/`](./docs/archive/) — historical audits and completed setup instructions (do not treat as current)
 
 ### Conventions

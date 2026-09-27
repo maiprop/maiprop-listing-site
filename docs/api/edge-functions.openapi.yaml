@@ -3,8 +3,10 @@ info:
   title: mAI prop Supabase Edge Functions
   description: |
     HTTP endpoints exposed by Supabase Edge Functions for the mAI prop platform.
-    All functions run on Deno runtime and are hosted at
+    Supabase functions run on Deno; the separately identified website catalogue route overrides the server base. Supabase paths use
     `https://<project>.supabase.co/functions/v1/<name>`.
+
+    This is a source contract, not proof of current hosted parity.
 
     Auth model:
     - `verify_jwt = true`: requires Supabase session JWT in `Authorization: Bearer <token>`.
@@ -100,19 +102,58 @@ components:
 
     SubscriptionCheckState:
       type: object
-      required: [subscribed, product_id, subscription_end, sync_status]
+      required:
+        - subscribed
+        - product_id
+        - subscription_end
+        - sync_status
       properties:
-        subscribed: { type: boolean }
-        product_id: { type: string, nullable: true }
-        plan_key: { type: string, nullable: true }
-        audience: { type: string, nullable: true }
-        billing_cycle: { type: string, nullable: true }
-        status: { type: string, nullable: true }
-        subscription_end: { type: string, format: date-time, nullable: true }
-        source: { type: string, enum: [billing_state, investor, database, stripe, reconciliation, deadline] }
-        sync_status: { type: string, enum: [synced, pending, timeout] }
+        subscribed:
+          type: boolean
+        product_id:
+          type:
+            - string
+            - 'null'
+        plan_key:
+          type:
+            - string
+            - 'null'
+        audience:
+          type:
+            - string
+            - 'null'
+        billing_cycle:
+          type:
+            - string
+            - 'null'
+        status:
+          type:
+            - string
+            - 'null'
+        subscription_end:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        source:
+          type: string
+          enum:
+            - billing_state
+            - investor
+            - database
+            - stripe
+            - reconciliation
+            - deadline
+        sync_status:
+          type: string
+          enum:
+            - synced
+            - pending
+            - timeout
         verified_checkout:
-          description: Present only after this exact Checkout session is verified against its durable subscription or add-on record.
+          description: >-
+            Present only after this exact Checkout session is verified against its durable subscription or add-on
+            record.
           $ref: '#/components/schemas/SubscriptionCheckoutReceipt'
 
     FullSyncFromOsRequest:
@@ -275,40 +316,138 @@ components:
 
     AISearchRequest:
       type: object
-      required: [query]
+      required:
+        - query
       properties:
-        query: { type: string, description: Natural-language search input }
+        query:
+          type: string
+          minLength: 1
+          maxLength: 500
+      additionalProperties: false
 
     AISearchResponse:
       type: object
       properties:
-        city: { type: string, nullable: true }
-        listing_type: { type: string, enum: [sale, rent, auction, firesale], nullable: true }
-        property_type: { type: string, nullable: true }
-        price_min: { type: number, nullable: true }
-        price_max: { type: number, nullable: true }
-        beds_min: { type: integer, nullable: true }
-        sqm_min: { type: integer, nullable: true }
-        summary: { type: string, nullable: true }
+        city:
+          type:
+            - string
+            - 'null'
+        listing_type:
+          type:
+            - string
+            - 'null'
+          enum:
+            - sale
+            - rent
+            - auction
+            - null
+        property_type:
+          type:
+            - string
+            - 'null'
+        price_min:
+          type:
+            - number
+            - 'null'
+        price_max:
+          type:
+            - number
+            - 'null'
+        beds_min:
+          type:
+            - integer
+            - 'null'
+        sqm_min:
+          type:
+            - integer
+            - 'null'
+        summary:
+          type: string
+        beds_max:
+          type:
+            - integer
+            - 'null'
+        sqm_max:
+          type:
+            - integer
+            - 'null'
+        features:
+          type: array
+          items:
+            type: string
+        energy:
+          type: array
+          items:
+            type: string
+        heating:
+          type:
+            - string
+            - 'null'
+          enum:
+            - autonomous
+            - central
+            - floor
+            - none
+            - null
 
     PropertyValuationRequest:
       type: object
-      required: [responseVersion, city, price, sqm]
+      required:
+        - responseVersion
+        - city
+        - price
+        - sqm
       properties:
-        responseVersion: { type: integer, enum: [2] }
-        title: { type: string, nullable: true }
-        city: { type: string }
-        address: { type: string, nullable: true }
-        price: { type: number }
-        sqm: { type: number }
-        bedrooms: { type: integer, nullable: true }
-        bathrooms: { type: integer, nullable: true }
-        propertyType: { type: string, nullable: true }
-        listingType: { type: string, nullable: true }
-        yearBuilt: { type: integer, nullable: true }
-        energyClass: { type: string, nullable: true }
-        floor: { type: integer, nullable: true }
-        pricePerSqm: { type: number, nullable: true }
+        responseVersion:
+          type: integer
+          enum:
+            - 2
+        title:
+          type:
+            - string
+            - 'null'
+        city:
+          type: string
+        address:
+          type:
+            - string
+            - 'null'
+        price:
+          type: number
+        sqm:
+          type: number
+        bedrooms:
+          type:
+            - integer
+            - 'null'
+        bathrooms:
+          type:
+            - integer
+            - 'null'
+        propertyType:
+          type:
+            - string
+            - 'null'
+        listingType:
+          type:
+            - string
+            - 'null'
+        yearBuilt:
+          type:
+            - integer
+            - 'null'
+        energyClass:
+          type:
+            - string
+            - 'null'
+        floor:
+          type:
+            - integer
+            - 'null'
+        pricePerSqm:
+          type:
+            - number
+            - 'null'
 
     PropertyValuationResponse:
       type: object
@@ -349,49 +488,210 @@ components:
         - methodUsed
         - evidence
       properties:
-        responseVersion: { type: integer, enum: [2] }
-        status: { type: string, enum: [available, partial] }
-        transaction: { type: string, enum: [sale, rent, auction] }
-        valueUnit: { type: string, enum: [EUR, EUR/month] }
-        estimateBasis: { type: string, enum: [market_value, monthly_rent, auction_value, os_auction_model] }
+        responseVersion:
+          type: integer
+          enum:
+            - 2
+        status:
+          type: string
+          enum:
+            - available
+            - partial
+        transaction:
+          type: string
+          enum:
+            - sale
+            - rent
+            - auction
+        valueUnit:
+          type: string
+          enum:
+            - EUR
+            - EUR/month
+        estimateBasis:
+          type: string
+          enum:
+            - market_value
+            - monthly_rent
+            - auction_value
+            - os_auction_model
         providerPrediction:
-          type: object
-          nullable: true
-          required: [value, field, model, unit]
+          type:
+            - object
+            - 'null'
+          required:
+            - value
+            - field
+            - model
+            - unit
           properties:
-            value: { type: number }
-            field: { type: string, enum: [propertyPredictedPrice, propertyPredictedLeasePrice] }
-            model: { type: string, enum: [market, auction] }
-            unit: { type: string, enum: [EUR, EUR/month], nullable: true }
-        estimatedValue: { type: number, nullable: true }
-        auctionAdjustedValue: { type: number, nullable: true }
-        rangeLow: { type: number, nullable: true }
-        rangeHigh: { type: number, nullable: true }
-        rangeBasis: { type: string, enum: [estimatedValue, auctionAdjustedValue], nullable: true }
-        executionValue: { type: number, nullable: true }
-        pricePerSqmEstimate: { type: number, nullable: true }
-        rentalYieldEstimate: { type: number, nullable: true }
-        objectiveValueProxy: { type: number, nullable: true }
-        confidence: { type: number, minimum: 0, maximum: 100, nullable: true }
-        confidenceLabel: { type: string, enum: [Low, Medium, High], nullable: true }
-        liquidityScore: { type: number, minimum: 0, maximum: 100, nullable: true }
-        legalCleanliness: { type: number, minimum: 0, maximum: 100, nullable: true }
-        planningCertainty: { type: number, minimum: 0, maximum: 100, nullable: true }
-        taxFriction: { type: number, minimum: 0, maximum: 100, nullable: true }
-        transferReadiness: { type: number, minimum: 0, maximum: 100, nullable: true }
-        listingQualityScore: { type: number, minimum: 0, maximum: 100, nullable: true }
-        marketComparison: { type: string, enum: [below_market, at_market, above_market], nullable: true }
-        marketComparisonPct: { type: number, nullable: true }
-        pricingPosition: { type: string, enum: [underpriced, fair, overpriced], nullable: true }
-        summary: { type: string, nullable: true }
-        legalSummary: { type: string, nullable: true }
-        taxSummary: { type: string, nullable: true }
-        renovationPotential: { type: string, nullable: true }
-        highestBestUseHint: { type: string, nullable: true }
-        keyFactors: { type: array, items: { type: object, additionalProperties: true } }
-        redFlags: { type: array, items: { type: string } }
-        methodUsed: { type: string }
-        evidence: { type: object, additionalProperties: true }
+            value:
+              type: number
+            field:
+              type: string
+              enum:
+                - propertyPredictedPrice
+                - propertyPredictedLeasePrice
+            model:
+              type: string
+              enum:
+                - market
+                - auction
+            unit:
+              type:
+                - string
+                - 'null'
+              enum:
+                - EUR
+                - EUR/month
+                - null
+        estimatedValue:
+          type:
+            - number
+            - 'null'
+        auctionAdjustedValue:
+          type:
+            - number
+            - 'null'
+        rangeLow:
+          type:
+            - number
+            - 'null'
+        rangeHigh:
+          type:
+            - number
+            - 'null'
+        rangeBasis:
+          type:
+            - string
+            - 'null'
+          enum:
+            - estimatedValue
+            - auctionAdjustedValue
+            - null
+        executionValue:
+          type:
+            - number
+            - 'null'
+        pricePerSqmEstimate:
+          type:
+            - number
+            - 'null'
+        rentalYieldEstimate:
+          type:
+            - number
+            - 'null'
+        objectiveValueProxy:
+          type:
+            - number
+            - 'null'
+        confidence:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 100
+        confidenceLabel:
+          type:
+            - string
+            - 'null'
+          enum:
+            - Low
+            - Medium
+            - High
+            - null
+        liquidityScore:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 100
+        legalCleanliness:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 100
+        planningCertainty:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 100
+        taxFriction:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 100
+        transferReadiness:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 100
+        listingQualityScore:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 100
+        marketComparison:
+          type:
+            - string
+            - 'null'
+          enum:
+            - below_market
+            - at_market
+            - above_market
+            - null
+        marketComparisonPct:
+          type:
+            - number
+            - 'null'
+        pricingPosition:
+          type:
+            - string
+            - 'null'
+          enum:
+            - underpriced
+            - fair
+            - overpriced
+            - null
+        summary:
+          type:
+            - string
+            - 'null'
+        legalSummary:
+          type:
+            - string
+            - 'null'
+        taxSummary:
+          type:
+            - string
+            - 'null'
+        renovationPotential:
+          type:
+            - string
+            - 'null'
+        highestBestUseHint:
+          type:
+            - string
+            - 'null'
+        keyFactors:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        redFlags:
+          type: array
+          items:
+            type: string
+        methodUsed:
+          type: string
+        evidence:
+          type: object
+          additionalProperties: true
 
     OSWebhookEntity:
       type: object
@@ -412,69 +712,329 @@ components:
         data: { type: object }
 
 paths:
+  /api/public/listings:
+    servers:
+      - url: https://{websiteHost}
+        variables:
+          websiteHost:
+            default: portal.maiprop.co
+    get:
+      operationId: publicWebsiteListings
+      summary: Public website catalogue (not a Supabase Edge route)
+      security: []
+      description: >-
+        Website API: use your website origin, not the Supabase base. Public active catalogue; optional
+        listing_type/property_type, price_min/price_max and cursor. Reuse nextCursor with the same filters;
+        expired/invalid cursors return 400. Empty synthetic page shown.
+      parameters:
+        - in: query
+          name: city
+          schema:
+            type: string
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 40
+        - in: query
+          name: cursor
+          schema:
+            type: string
+        - in: query
+          name: listing_type
+          schema:
+            type: string
+        - in: query
+          name: property_type
+          schema:
+            type: string
+        - in: query
+          name: price_min
+          schema:
+            type: number
+        - in: query
+          name: price_max
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Public page; no total-count field
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  hasMore:
+                    type: boolean
+                  nextCursor:
+                    type:
+                      - string
+                      - 'null'
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  offset:
+                    type: integer
+                  publicationId:
+                    type: integer
+              example:
+                data: []
+                hasMore: false
+                nextCursor: null
+                page: 1
+                pageSize: 24
+                offset: 0
+                publicationId: 1
+        '400':
+          description: Invalid or expired cursor/bounds
+        '503':
+          description: Upstream catalogue unavailable
+
   /ai-search:
     post:
       operationId: aiSearch
       summary: Natural-language listing search — converts query into filter object
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/AISearchRequest' }
-      responses:
-        '200':
-          description: Parsed filters
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/AISearchResponse' }
-        '400':
-          description: Bad request
-          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
-
-  /property-valuation:
-    post:
-      operationId: propertyValuation
-      summary: AI-powered property valuation and market comparison
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/PropertyValuationRequest' }
-      responses:
-        '200':
-          description: Valuation result
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/PropertyValuationResponse' }
-
-  /neighbourhood-report:
-    post:
-      operationId: neighbourhoodReport
-      summary: Generates an AI-written neighbourhood report for a city/address
-      security: []
+      security:
+        - SupabaseJWT: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [city]
+              additionalProperties: false
+              required:
+                - query
               properties:
-                city: { type: string }
-                address: { type: string, nullable: true }
+                query:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+            example:
+              query: Apartment in Athens under 250000 euros
       responses:
         '200':
-          description: Report
+          description: Parsed filters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISearchResponse'
+              example:
+                city: Athens
+                listing_type: sale
+                property_type: apartment
+                price_min: null
+                price_max: 250000
+                beds_min: null
+                beds_max: null
+                sqm_min: null
+                sqm_max: null
+                features: []
+                energy: []
+                heating: null
+                summary: Apartment for sale in Athens under €250k
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: >-
+        Converts natural language into filters; does not retrieve listing records. Model interpretation should
+        be checked by the caller. Source limiter: 20 requests / minute per IP (actor fallback); monthly actor
+        quota. Examples are synthetic and do not establish deployment or provider availability.
+
+  /property-valuation:
+    post:
+      operationId: propertyValuation
+      summary: AI-powered property valuation and market comparison
+      security:
+        - SupabaseJWT: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PropertyValuationRequest'
+            example:
+              responseVersion: 2
+              city: Athens
+              price: 250000
+              sqm: 80
+              propertyType: apartment
+              listingType: sale
+      responses:
+        '200':
+          description: Valuation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PropertyValuationResponse'
+              example:
+                responseVersion: 2
+                status: partial
+                transaction: sale
+                valueUnit: EUR
+                estimateBasis: market_value
+                providerPrediction: null
+                estimatedValue: null
+                auctionAdjustedValue: null
+                rangeLow: null
+                rangeHigh: null
+                rangeBasis: null
+                executionValue: null
+                pricePerSqmEstimate: null
+                rentalYieldEstimate: null
+                objectiveValueProxy: null
+                confidence: null
+                confidenceLabel: null
+                liquidityScore: null
+                legalCleanliness: null
+                planningCertainty: null
+                taxFriction: null
+                transferReadiness: null
+                listingQualityScore: null
+                marketComparison: null
+                marketComparisonPct: null
+                pricingPosition: null
+                legalSummary: null
+                taxSummary: null
+                renovationPotential: null
+                highestBestUseHint: null
+                summary: Insufficient comparable evidence for a numeric estimate.
+                keyFactors: []
+                redFlags: []
+                methodUsed: Unverified AI valuation analysis
+                evidence:
+                  independentlyVerified: false
+                  fields:
+                    estimatedValue: unavailable
+                    auctionAdjustedValue: unavailable
+                    rangeLow: unavailable
+                    rangeHigh: unavailable
+                    executionValue: unavailable
+                    pricePerSqmEstimate: unavailable
+                    rentalYieldEstimate: unavailable
+                    objectiveValueProxy: unavailable
+                    confidence: unavailable
+                    liquidityScore: unavailable
+                    legalCleanliness: unavailable
+                    planningCertainty: unavailable
+                    taxFriction: unavailable
+                    transferReadiness: unavailable
+                    listingQualityScore: unavailable
+                    marketComparisonPct: unavailable
+                  analysis: ai_estimate
+                  limitations:
+                    - >-
+                      No legal documents, live comparable transactions, or formal appraisal were independently
+                      verified.
+                    - Model estimates and qualitative assessments are unverified.
+      description: >-
+        Signed-in, quota-metered v2 valuation. Synthetic partial example: unavailable fields stay null;
+        model/provider observations are not independently verified appraisals. A complete lack of evidence
+        returns 503. Source limiter: 15 requests / minute per IP; monthly actor quota. Examples are synthetic
+        and do not establish deployment or provider availability.
+
+  /neighbourhood-report:
+    post:
+      operationId: neighbourhoodReport
+      summary: Generates an AI-written neighbourhood report for a city/address
+      security:
+        - SupabaseJWT: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - responseVersion
+                - city
+              properties:
+                responseVersion:
+                  type: integer
+                  enum:
+                    - 2
+                city:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                address:
+                  type: string
+                region:
+                  type: string
+                municipality:
+                  type: string
+                propertyType:
+                  type: string
+                listingId:
+                  type: string
+                  format: uuid
+                lat:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+                lng:
+                  type: number
+                  minimum: -180
+                  maximum: 180
+            example:
+              responseVersion: 2
+              city: Athens
+              address: Synthetic example street
+      responses:
+        '200':
+          description: Successful result; shape depends on the documented operation
           content:
             application/json:
               schema:
                 type: object
-                properties:
-                  summary: { type: string }
-                  highlights: { type: array, items: { type: string } }
-                  walkScore: { type: integer, nullable: true }
+                additionalProperties: true
+              example:
+                responseVersion: 2
+                areaName: Synthetic example street
+                walkabilityScore: null
+                pricePerSqmTrend:
+                  current: null
+                  oneYearAgo: null
+                  threeYearsAgo: null
+                  fiveYearsAgo: null
+                  changeYoY: null
+                  change5Y: null
+                noiseLevel: null
+                safetyScore: null
+                developmentProjects: []
+                demographics: null
+                investmentOutlook: null
+                areaHighlights: []
+                generatedBy: fallback
+                osMunicipalityStatus: missing_config
+                osMunicipalityDetail: ''
+                provenance:
+                  pricePerSqmTrend:
+                    current: null
+                    oneYearAgo: null
+                    threeYearsAgo: null
+                    fiveYearsAgo: null
+                    changeYoY: null
+                    change5Y: null
+                  analysis: null
+                  developmentProjects: null
+      description: >-
+        Signed-in v2 area report. Source-qualified nullable market history and qualitative model analysis; not
+        verified safety or walkability. Synthetic fallback response shows unavailable evidence as null. Source
+        limiter: 15 requests / minute per IP; monthly actor quota. Examples are synthetic and do not establish
+        deployment or provider availability.
 
   /property-pois:
     post:
@@ -553,27 +1113,82 @@ paths:
     post:
       operationId: propertyChat
       summary: Chat with the AI about a specific listing (authenticated)
-      security: [{ SupabaseJWT: [] }]
+      security:
+        - SupabaseJWT: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [listing_id, message]
+              additionalProperties: false
+              required:
+                - messages
               properties:
-                listing_id: { type: string }
-                message: { type: string }
-                history: { type: array, items: { type: object } }
+                messages:
+                  type: array
+                  minItems: 1
+                  maxItems: 30
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required:
+                      - role
+                      - content
+                    properties:
+                      role:
+                        type: string
+                        enum:
+                          - user
+                          - assistant
+                      content:
+                        type: string
+                        minLength: 1
+                        maxLength: 8000
+                propertyContext:
+                  type: object
+                  description: >-
+                    Optional supplied property facts. Supported keys are defined by propertyContextSchema in the
+                    source handler; coordinates must be paired.
+                  properties:
+                    city:
+                      type: string
+                    title:
+                      type: string
+                    sqm:
+                      type: number
+                    price:
+                      type: number
+                    latitude:
+                      type: number
+                    longitude:
+                      type: number
+            example:
+              messages:
+                - role: user
+                  content: Which property details should I confirm?
+              propertyContext:
+                city: Athens
+                sqm: 80
       responses:
         '200':
-          description: Assistant reply
+          description: Assistant text stream (errors use JSON)
           content:
-            application/json:
+            text/event-stream:
               schema:
-                type: object
-                properties:
-                  reply: { type: string }
+                type: string
+              example: >+
+                data: {"choices":[{"delta":{"content":"Confirm the property details with the responsible
+                professional."}}]}
+
+
+                data: [DONE]
+
+      description: >-
+        Ask about supplied property context. This endpoint does not upload documents. Success streams
+        text/event-stream; errors are JSON. Answers are model-generated and require verification. Source
+        limiter: 20 requests / minute per IP (actor fallback); monthly actor quota. Examples are synthetic and
+        do not establish deployment or provider availability.
 
   /pro-ai-tools:
     post:
@@ -599,32 +1214,43 @@ paths:
     post:
       operationId: aiServiceMatch
       summary: Match a user query to a suitable professional
-      security: [{ SupabaseJWT: [] }]
+      security:
+        - SupabaseJWT: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [query]
+              additionalProperties: false
+              required:
+                - need
               properties:
-                query: { type: string }
+                need:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+            example:
+              need: I need help reviewing a property purchase contract.
       responses:
         '200':
-          description: Ranked professional matches
+          description: Successful result; shape depends on the documented operation
           content:
             application/json:
               schema:
                 type: object
-                properties:
-                  matches:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        professional_id: { type: string }
-                        score: { type: number }
-                        reason: { type: string }
+                additionalProperties: true
+              example:
+                category: lawyer
+                services:
+                  - Contract review
+                explanation: A lawyer can review the proposed contract.
+                urgency: medium
+                follow_up_question: null
+      description: >-
+        Suggests a professional category and services from your need. Does not return verified professionals,
+        fees, ratings or availability. Source limiter: 20 requests / minute per IP (actor fallback); monthly
+        actor quota. Examples are synthetic and do not establish deployment or provider availability.
 
   /ai-translate:
     post:
@@ -654,46 +1280,173 @@ paths:
   /listing-ai-assist:
     post:
       operationId: listingAiAssist
-      summary: "Assist form: title, description, features, price suggestion"
-      security: [{ SupabaseJWT: [] }]
+      summary: 'Assist form: title, description, features, price suggestion'
+      security:
+        - SupabaseJWT: []
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required:
+                    - type
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - ping
+                - type: object
+                  additionalProperties: false
+                  required:
+                    - type
+                    - property
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - description
+                        - price
+                    property:
+                      type: object
+                      required:
+                        - property_type
+                        - listing_type
+                        - city
+                        - sqm
+                      properties:
+                        property_type:
+                          type: string
+                        listing_type:
+                          type: string
+                          enum:
+                            - sale
+                            - rent
+                            - auction
+                            - open_house
+                        city:
+                          type: string
+                        sqm:
+                          type: number
+                        address:
+                          type: string
+                        region:
+                          type: string
+                        bedrooms:
+                          type: number
+                        bathrooms:
+                          type: number
+                        floor:
+                          type: number
+                        year_built:
+                          type: number
+                        energy_class:
+                          type: string
+                        features:
+                          type: array
+                          items:
+                            type: string
+                        condition:
+                          type: string
+                      additionalProperties: false
+            example:
+              type: description
+              property:
+                property_type: apartment
+                listing_type: sale
+                city: Athens
+                sqm: 80
       responses:
-        '200': { description: Suggestions, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        '200':
+          description: Successful result; shape depends on the documented operation
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+              example:
+                content: An 80 m² apartment in Athens. Further details require confirmation.
+      description: >-
+        Generate unverified description or price-assistance text from supplied property facts (type description
+        or price). The separate type:ping availability operation does not test authenticated generation. Source
+        limiter: 20 requests / minute per IP (actor fallback); monthly actor quota. Examples are synthetic and
+        do not establish deployment or provider availability.
 
   /create-checkout:
     post:
       operationId: createCheckout
       summary: Create a Stripe Checkout session for subscription upgrade
-      security: [{ SupabaseJWT: [] }]
+      security:
+        - SupabaseJWT: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [price_id]
+              description: >-
+                Subscription uses plan; add-on branch uses addon_key. Product/price authority is resolved
+                server-side, not supplied price_id.
+              anyOf:
+                - required:
+                    - plan
+                - required:
+                    - addon_key
               properties:
-                price_id: { type: string }
-                success_url: { type: string }
-                cancel_url: { type: string }
+                plan:
+                  type: string
+                billing_cycle:
+                  type: string
+                  enum:
+                    - monthly
+                    - annual
+                success_url:
+                  type: string
+                cancel_url:
+                  type: string
+                trial:
+                  type: boolean
+                addon_key:
+                  type: string
+                target_type:
+                  type: string
+                target_id:
+                  type: string
+                quantity:
+                  type: integer
+            example:
+              plan: pro
+              billing_cycle: monthly
+              success_url: /dashboard
+              cancel_url: /pricing
       responses:
         '200':
-          description: Checkout URL
+          description: Successful result; shape depends on the documented operation
           content:
             application/json:
               schema:
                 type: object
-                properties:
-                  url: { type: string, format: uri }
+                additionalProperties: true
+              example:
+                url: https://checkout.stripe.com/c/pay/cs_test_synthetic
+                session_id: cs_test_synthetic
+                checkout_type: subscription
+                mode: test
+      description: >-
+        Create an eligible subscription Checkout session using a server-resolved plan. Add-ons, trials and
+        existing subscriptions have separate response branches. Redirect only to the returned URL; this is not
+        payment confirmation. Source limiter: 10 requests / minute per verified user. Examples are synthetic and
+        do not establish deployment or provider availability.
 
   /check-subscription:
     get:
       operationId: checkSubscription
       summary: Returns the authenticated user's current subscription state
       description: An ordinary empty refresh. A synced entitlement is not proof of a new Checkout session.
-      security: [{ SupabaseJWT: [] }]
+      security:
+        - SupabaseJWT: []
       responses:
         '200':
           description: Subscription state
@@ -704,12 +1457,13 @@ paths:
     post:
       operationId: reconcileCheckoutSubscription
       summary: Refresh subscription state and optionally reconcile one exact Checkout session
-      description: |
-        An empty JSON object performs the supported ordinary refresh. Providing checkout_session_id
-        requests exact-session reconciliation. A 200 response confirms that Checkout only when
-        verified_checkout is present and matches the request; receipt absence does not invalidate
-        otherwise usable entitlement state. Pending provider or durable-state observation returns 202.
-      security: [{ SupabaseJWT: [] }]
+      description: >-
+        Refresh durable subscription state with no body or {}. Optional checkout_session_id requests
+        exact-session reconciliation; only a matching verified_checkout receipt confirms that session. A pending
+        reconciliation may return 202. Source limiter: 30 requests / minute per IP; limiter outage is logged and
+        allowed. Examples are synthetic and do not establish deployment or provider availability.
+      security:
+        - SupabaseJWT: []
       requestBody:
         required: false
         content:
@@ -720,7 +1474,8 @@ paths:
               properties:
                 checkout_session_id:
                   type: string
-                  pattern: '^cs_(test|live)_[A-Za-z0-9_]+$'
+                  pattern: ^cs_(test|live)_[A-Za-z0-9_]+$
+            example: {}
       responses:
         '200':
           description: Current state; exact Checkout is confirmed only when verified_checkout is present
@@ -728,6 +1483,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SubscriptionCheckState'
+              example:
+                subscribed: true
+                product_id: prod_synthetic
+                subscription_end: '2026-10-27T00:00:00Z'
+                source: billing_state
+                plan_key: pro
+                audience: participant
+                billing_cycle: monthly
+                status: active
+                sync_status: synced
         '202':
           description: Checkout reconciliation remains pending or cannot yet be durably verified
           content:
@@ -738,12 +1503,14 @@ paths:
           description: Invalid request body
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           description: Missing or invalid authenticated session
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /customer-portal:
     post:

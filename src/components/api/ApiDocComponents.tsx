@@ -104,7 +104,7 @@ export function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
               No request body. Use query parameters for filtering.
             </p>
           )}
-          <CodeBlock code={endpoint.responseExample} label="Response Example (200 OK)" />
+          <CodeBlock code={endpoint.responseExample} label={endpoint.responseLabel ?? "Synthetic response example (200, JSON)"} />
         </div>
       )}
     </div>

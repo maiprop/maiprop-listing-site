@@ -1,13 +1,11 @@
 # Edge Function Auth Rationale
 
-Last verified: 2026-06-19
+Original inventory review: 2026-06-19. Selected AI accounting references updated from candidate source on 2026-09-27.
 
 Sources: `supabase/config.toml`, `scripts/public-function-inventory.cjs`, local
 Edge Function tests, and `npm run check:public-functions`.
 
-`npm run check:public-functions` currently reports 26 functions configured with
-`verify_jwt = false`, with no unclassified functions, missing source files,
-missing required protection snippets, or missing required tests.
+The original June check reported 26 functions configured with verify_jwt=false. That is historical evidence, not a current count or hosted inventory. Use docs/public-edge-function-inventory.json and its normal source check for the selected candidate; source classification does not prove current deployment.
 
 ## Release Rule
 
@@ -34,12 +32,12 @@ provider without one of those controls, treat it as a release blocker.
 
 | Function | Why public invocation is acceptable | Required in-handler controls |
 | --- | --- | --- |
-| `ai-search` | Browser calls need CORS-compatible invocation, but AI work is user scoped. | `enforceAiQuota(req)`, `recordAiCall`, and fail-closed quota checks before provider work. |
+| `ai-search` | Browser calls need CORS-compatible invocation, but AI work is user scoped. | `enforceAiQuota(req)` with atomic pre-provider reservation, and fail-closed quota checks before provider work. |
 | `ai-translate` | Browser translation requests are public at the platform layer for compatibility. | `requireAuthenticatedUser(req)`, request rate limiting, and `MAX_TRANSLATION_KEYS` payload bounds. |
-| `smart-filters` | Same browser/AI pattern as search; platform JWT is replaced by handler quota enforcement. | `enforceAiQuota(req)`, `recordAiCall`, and fail-closed quota checks before provider work. |
-| `neighbourhood-report` | Signed-in users request generated area reports through the browser. | `enforceAiQuota(req)`, `recordAiCall`, fail-closed rate/quota handling, and bounded request payloads. |
-| `property-pois` | Browser calls request POI enrichment without relying on Supabase platform JWT. | `enforceAiQuota(req)`, `recordAiCall`, fail-closed rate/quota handling, and bounded request payloads. |
-| `property-valuation` | Signed-in users request generated valuations through a browser-compatible endpoint. | `enforceAiQuota(req)`, `recordAiCall`, fail-closed rate/quota handling, and bounded request payloads. |
+| `smart-filters` | Same browser/AI pattern as search; platform JWT is replaced by handler quota enforcement. | `enforceAiQuota(req)` with atomic pre-provider reservation, and fail-closed quota checks before provider work. |
+| `neighbourhood-report` | Signed-in users request generated area reports through the browser. | `enforceAiQuota(req)` with atomic pre-provider reservation, fail-closed rate/quota handling, and bounded request payloads. |
+| `property-pois` | Browser calls request POI enrichment without relying on Supabase platform JWT. | `enforceAiQuota(req)` with atomic pre-provider reservation, fail-closed rate/quota handling, and bounded request payloads. |
+| `property-valuation` | Signed-in users request generated valuations through a browser-compatible endpoint. | `enforceAiQuota(req)` with atomic pre-provider reservation, fail-closed rate/quota handling, and bounded request payloads. |
 
 ### Webhooks and External Callers
 

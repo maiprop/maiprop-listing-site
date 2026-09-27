@@ -1,225 +1,34 @@
-# Platform Architecture: maiprop
+# Platform architecture and access
 
-## 1. Module Access Model (Free vs Pro)
+This describes inspected candidate source, updated 27 September 2026. It is not a deployment or whole-module acceptance statement. See [the remediation checkpoint](superpowers/plans/2026-09-27-remediation-checkpoint.md) for remaining gates.
 
-### Philosophy
-Every module is **fully browsable for free**. The paywall sits at the point of action — the moment a user wants to act on information rather than just consume it. This maximizes SEO (all content is crawlable) and minimizes friction to discovery.
+## Independent access dimensions
 
----
+| Dimension | Source and enforcement |
+| --- | --- |
+| Authority | Protected profiles.role; frontend helpers in src/lib/authUtils.ts, database authoritative_role/has_platform_admin and resource-specific policies/RPCs. Admin is a role, never an email match. |
+| Participant identity | src/lib/participantConfig.ts selects dashboard/pricing audience. Explicit onboarding uses participant_type; legacy display fallback can read role/bio. Presentation identity does not grant authority. |
+| Billing entitlement | src/hooks/useSubscription.ts consumes durable validated grant state; Edge _shared/entitlements.ts checks active pricing configuration against audience/product/price. Database entitlement helpers enforce server access. Admin/managed overrides and investor grants are not proof of a Stripe payment. |
+| Resource permission | Ownership, organization membership/permission, workflow state and RLS/RPC checks apply independently of plan or route visibility. |
 
-### Module Breakdown
+Route guards improve navigation; they do not replace backend checks. Sell-side roles include seller, agent, developer and institutional, with explicit admin handling. Investor access includes eligibility/subscription checks. Inspect the actual guard and server operation for the action under test.
 
-#### Buy / Rent
-| Feature | Free | Pro |
-|---|---|---|
-| Browse & search listings | ✅ | ✅ |
-| View listing detail | ✅ | ✅ |
-| Basic filters (price, beds, type) | ✅ | ✅ |
-| Contact agent (1/month) | ✅ | ✅ |
-| Advanced filters (floor, energy class, building age) | ❌ | ✅ |
-| Saved searches + email alerts | ❌ | ✅ |
-| Price history & index chart | ❌ | ✅ |
-| AI property valuation | ❌ | ✅ |
-| Side-by-side compare tool | ❌ | ✅ |
-| Unlimited agent contacts | ❌ | ✅ |
+## Limits and accounting
 
-#### Auctions
-| Feature | Free | Pro |
-|---|---|---|
-| Browse court auctions | ✅ | ✅ |
-| View opening bid & property type | ✅ | ✅ |
-| Court name & date | ✅ | ✅ |
-| Full auction dossier (cadastre, encumbrances) | ❌ | ✅ |
-| Auction alerts by city / property type / price | ❌ | ✅ |
-| Historical bid data | ❌ | ✅ |
-| AI discount estimator | ❌ | ✅ |
+The audience-specific display contract is [usePlanLimits.ts](../src/hooks/usePlanLimits.ts). For example, buyer Free has one saved search, one search alert, one monthly contact, three monthly Open House RSVPs, one monthly viewing, five monthly valuations and a 60-row auction window. Buyer Pro has five search/auction alerts, ten monthly viewings, fifty monthly valuations, three monthly reports and a 600-row auction window; saved searches/contacts/RSVPs are unlimited. Other audiences differ. Zero means unavailable and null means unlimited in this display contract. These examples do not prove every path's enforcement or describe current hosted configuration.
 
-#### Quick Sale (Fire Sale)
-| Feature | Free | Pro |
-|---|---|---|
-| Browse quick-sale listings | ✅ | ✅ |
-| View price & location | ✅ | ✅ |
-| Submit property for quick sale | ❌ | ✅ (Seller) |
-| Instant AI valuation pre-submission | ❌ | ✅ |
-| Priority placement in results | ❌ | ✅ |
-| Investor pipeline (receive deal flow) | ❌ | ✅ (Investor) |
+Server limits live in effective database helpers, triggers and service RPCs, not in a universal Free/Pro table. AI handlers call enforceAiQuota before provider work: it verifies the actor and reserves through service-only reserve_ai_quota_for_user. The normal database trigger consumes usage; purchased credits contribute through get_ai_call_monthly_limit. There is no post-success recordAiCall writer. Usage readers and credit balances remain. See [selected schema lineage](effective-schema-remediation-map.md); full final replay/equivalence is still pending.
 
-#### Open Houses
-| Feature | Free | Pro |
-|---|---|---|
-| Browse upcoming open houses | ✅ | ✅ |
-| RSVP attendance | ✅ | ✅ |
-| View address & host | ✅ | ✅ |
-| Private / video viewing request | ❌ | ✅ |
-| Branded video room (seller/agent) | ❌ | ✅ |
-| Attendance analytics (host) | ❌ | ✅ |
-| Lead capture from open house (agent) | ❌ | ✅ |
+## Data and performance
 
-#### Market Professionals
-| Feature | Free | Pro |
-|---|---|---|
-| Browse professional directory | ✅ | ✅ |
-| View public profile & specialties | ✅ | ✅ |
-| Send 1 enquiry/month | ✅ | ✅ |
-| Book consultation | ❌ | ✅ |
-| AI service matching | ❌ | ✅ |
-| Direct messaging (unlimited) | ❌ | ✅ |
-| Professional creates own profile | ❌ | ✅ (Pro account) |
-| CRM tools for professionals | ❌ | ✅ (Pro account) |
+React Query caches are actor-scoped where data is private. Favourite hearts share projected membership rows; saved-property views separately hydrate listings and retain inaccessible joins as null. Failed optimistic writes roll back without overwriting another actor's cache. Related professionals use a four-field public projection, category/exclusion filters and a stable three-row bound. Full directory and management interfaces remain.
 
----
+Public website catalogue routes live in functions/api/public; Supabase services live in supabase/functions. Public projections deliberately differ from owner/admin raw management. Never expose protected data in HTML and merely blur it as an access control. Public SEO output must use the authorized public projection.
 
-## 2. User Roles
+Performance findings require comparable measurements, not assertions that every app path is optimized. Source-bound transfer improvements and local tests are separate from hosted latency, provider availability and final browser acceptance.
 
-```
-participant         — default for all registered users
-  ├── buyer         — browses, saves searches, contacts agents
-  ├── seller        — lists property, quick sale, open house hosting
-  └── investor      — quick sale pipeline, auction alerts, portfolio tracking
+## Current and proposed architecture
 
-professional        — market professionals (agents, lawyers, notaries)
-  └── sub-types: real_estate_agent | lawyer | architect | notary | contractor
+The app remains one root npm project with multiple runtime surfaces. The package extraction layout in [Repository Architecture](REPOSITORY_ARCHITECTURE.md) is a future direction, not implemented restructuring. Modules and migration history remain; removal requires consumer and compatibility evidence.
 
-admin               — platform management
-```
-
-**Onboarding** determines role. All roles can upgrade to Pro.
-
----
-
-## 3. Gating Strategy (Development)
-
-### Single source of truth: `usePlanLimits`
-
-```ts
-// src/hooks/usePlanLimits.ts
-const LIMITS = {
-  free:  { contacts: 1, savedSearches: 0, valuations: 0, alerts: 0 },
-  pro:   { contacts: Infinity, savedSearches: 5, valuations: 10, alerts: 10 },
-}
-```
-
-### Gate component pattern
-
-```tsx
-// src/components/ProGate.tsx
-// Wraps any Pro-only feature. Shows upgrade prompt inline rather than redirecting.
-<ProGate feature="auction-alerts">
-  <AuctionAlertModal />
-</ProGate>
-```
-
-**Rules:**
-- Never hide Pro content from the DOM for SEO-critical text — blur/overlay instead
-- For **actions** (buttons, forms): disable + show upgrade tooltip
-- For **data** (charts, full dossiers): render skeleton + overlay
-- Never redirect to a paywall page mid-flow — always upgrade inline
-
----
-
-## 4. Performance Architecture
-
-### Current biggest bottlenecks (by impact)
-
-| Problem | Files | Fix |
-|---|---|---|
-| No memoization on AuthContext value | `AuthContext.tsx` | Wrap value in `useMemo`; wrap callbacks in `useCallback` |
-| 2000+ line page files | `Index.tsx`, `Dashboard.tsx` | Extract inline components to separate files |
-| Dashboard fetches all data at once | `Dashboard.tsx` | Lazy-load tab content; fetch on tab activation |
-| PropertyCard not memoized | `PropertyCard.tsx` | `React.memo(PropertyCard)` |
-| Filter arrays recreated every render | `Listings.tsx` | Move to module-level constants |
-| No list virtualization | `Listings.tsx`, `Index.tsx` | Use `@tanstack/virtual` for property grids |
-| All Dashboard tabs mounted on load | `Dashboard.tsx` | Render tab content only when tab is active |
-| Heavy pages not code-split | `CreateListing`, `AdminDashboard` | Already lazy in App.tsx — verify chunk sizes |
-
-### Code splitting rules
-
-```
-All routes are already lazy-loaded in App.tsx — keep it that way.
-Heavy components inside pages should also be lazy:
-  - MapView (Mapbox GL — large bundle)
-  - AIAssistantWidget (only needed on non-dashboard pages)
-  - CompareDrawer (only when user triggers compare)
-  - NeighbourhoodReport (only when user scrolls to section)
-```
-
-### SEO requirements
-
-- All listing data must be server-renderable or included in the initial HTML response
-- Use `react-helmet-async` for per-page `<title>` and `<meta description>` — already in place
-- `PropertyDetail` and `Listings` pages must render above-the-fold content without waiting for auth
-- Pro-gated content must not be in the DOM at all for anonymous users (to avoid leaking paid data), but listing titles/prices/locations must always be present in HTML
-
-### Rendering budget (target)
-
-| Page | Max components rendered on first load | Notes |
-|---|---|---|
-| Index (homepage) | < 12 | Defer below-fold sections with IntersectionObserver |
-| Listings | < 30 property cards | Paginate or virtualize; infinite scroll with threshold |
-| PropertyDetail | ~8 sections | Defer Valuation, Neighbourhood, AI tabs until scroll |
-| Dashboard | 1 tab panel | Mount other tabs only on activation |
-| Open Houses | < 20 cards | Same as Listings |
-
----
-
-## 5. File Structure Targets
-
-### Current state → target
-
-```
-src/pages/Index.tsx        2,073 lines  →  ~600 lines  (extract Hero, SearchBar, FeaturedSection, etc.)
-src/pages/Dashboard.tsx    2,143 lines  →  ~300 lines  (extract each tab to src/pages/dashboard/*)
-src/pages/Listings.tsx     1,422 lines  →  ~500 lines  (extract FilterBar, ListingGrid, SortBar)
-src/pages/PropertyDetail.tsx 1,436 lines → ~600 lines  (extract sections to src/components/property/*)
-src/pages/CreateListing.tsx 1,549 lines → ~400 lines  (extract each form step to separate component)
-```
-
-### Recommended folder structure additions
-
-```
-src/
-  pages/
-    dashboard/
-      DashboardShell.tsx       ← routing + tab state only
-      tabs/
-        ListingsTab.tsx
-        ViewingsTab.tsx
-        ContactsTab.tsx
-        LeadsTab.tsx
-    property/
-      sections/
-        ValuationSection.tsx
-        NeighbourhoodSection.tsx
-        SimilarListingsSection.tsx
-  components/
-    gates/
-      ProGate.tsx              ← single gate component
-      UpgradePrompt.tsx        ← inline upgrade CTA
-    listings/
-      PropertyCard.tsx         ← memoized
-      ListingGrid.tsx          ← virtualized grid
-      FilterBar.tsx
-```
-
----
-
-## 6. Business Model Clarity
-
-### Why this structure works
-
-- **Free tier drives SEO**: All listings, all modules are crawlable. Google indexes everything.
-- **Free tier drives signups**: Users hit the action limit (1 contact, 0 saved searches) naturally, not through a hard block on page load.
-- **Pro tier is sticky**: Saved searches, alerts, and CRM tools create daily return visits. These are the highest-retention features.
-- **Professional accounts are a separate revenue line**: Agents pay for their profile + CRM. This is independent of buyer/seller subscriptions.
-
-### Pricing tiers to consider
-
-| Tier | Target | Key unlocks |
-|---|---|---|
-| Free | Casual browsers | Browse all modules, 1 contact/month |
-| Pro Buyer | Active buyers/renters | Alerts, valuation, advanced filters, unlimited contacts |
-| Pro Seller | Homeowners selling | List property, quick sale, open house tools |
-| Pro Investor | Investors | Auction alerts, investor pipeline, portfolio |
-| Pro Professional | Agents, lawyers | Directory profile, CRM, branded video room |
-
-Keep tiers cleanly separated in `usePlanLimits` so switching or adding tiers requires changing one file.
+Email uses multiple direct producers plus an existing queue consumer. See [ADR-004](adr/004-pgmq-email-queue.md). Release follows the [Production Release Runbook](PRODUCTION_RELEASE_RUNBOOK.md); a local implementation does not enable cleanup, reconciliation, billing or schedulers.

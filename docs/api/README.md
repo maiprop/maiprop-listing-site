@@ -22,12 +22,12 @@ directly — it is gitignored and regenerated.
 
 ### Viewing the spec locally
 
-**Option 1 — Swagger UI (local)**
+**Optional Redoc tooling (not installed by this repository; review installation separately)**
 ```powershell
 npx @redocly/cli preview-docs docs/api/edge-functions.openapi.yaml
 ```
 
-**Option 2 — Static HTML (generate once)**
+**Optional static HTML generation with that tooling**
 ```powershell
 npx @redocly/cli build-docs docs/api/edge-functions.openapi.yaml -o docs/api/index.html
 ```
@@ -36,12 +36,11 @@ npx @redocly/cli build-docs docs/api/edge-functions.openapi.yaml -o docs/api/ind
 
 ### Auth model
 
-| Security scheme | Functions using it |
-|-----------------|--------------------|
-| `SupabaseJWT`   | All `verify_jwt = true` functions (see `supabase/config.toml`) |
-| `HMACSignature` | Webhooks from MaiProp-OS (verified via `_shared/webhookHmac.ts`) |
-| `StripeSignature` | `stripe-webhook` only |
-| _none_ | Public endpoints (AI search, valuations, sitemap, street-view proxy) |
+Gateway verify_jwt controls gateway JWT validation only. Individual handlers can require a verified actor and quota, cron/service credentials or signed webhooks even when that setting is false. The displayed AI generation endpoints require signed-in actors; listing-ai-assist has a separate availability ping branch. property-chat success is SSE, not JSON. Follow the operation contract rather than treating the public-function inventory as an anonymous-access list.
+
+The website catalogue uses GET /api/public/listings on the selected website origin. It is not an Edge /listings function and its OpenAPI operation overrides the server base. Its page envelope contains data/hasMore/nextCursor/page/pageSize/offset/publicationId, not a total field.
+
+Examples are synthetic source contracts. Select an isolated environment and public client credentials; never place service keys in browser code. AI requests consume quota and Checkout can create provider sessions. Source presence does not prove current deployed availability.
 
 ### Environments
 
