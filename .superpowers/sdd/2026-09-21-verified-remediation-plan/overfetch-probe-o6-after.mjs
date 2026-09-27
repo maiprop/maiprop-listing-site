@@ -46,7 +46,7 @@ function mockDatabase(rows, calls) {
         return (async () => {
           const startedMs = performance.now();
           await pause();
-          let data = (rows[table] ?? []).filter(row => predicates.every(predicate(row)));
+          let data = (rows[table] ?? []).filter(row => predicates.every(predicate => predicate(row)));
           for (const [key, options] of [...orders].reverse()) data.sort((a, b) => (a[key] === b[key] ? 0 : a[key] > b[key] ? 1 : -1) * (options.ascending ? 1 : -1));
           if (projection !== '*') data = data.map(row => Object.fromEntries(projection.split(',').map(key => key.trim()).map(key => [key, row[key]])));
           calls.push({ kind, table, projection, filters, orders, rows: data.length, bytes: bytes(data), startedMs, settledMs: performance.now() });

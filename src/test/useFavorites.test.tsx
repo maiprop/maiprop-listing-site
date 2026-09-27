@@ -34,15 +34,17 @@ beforeEach(() => {
 describe("useFavorites", () => {
   it("shares one row read across twenty cold heart consumers without hydrating listings", async () => {
     const rows = [{ id: "f1", listing_id: "l1", user_id: "u1", price_alert: true, price_when_saved: 42, created_at: "2026-01-01" }];
+    const select = vi.fn(() => ({ eq: () => ({ order: async () => ({ data: rows, error: null }) }) }));
     mockFrom.mockImplementation((table: string) => {
       if (table !== "favorites") throw new Error(`unexpected table: ${table}`);
-      return { select: () => ({ eq: () => ({ order: async () => ({ data: rows, error: null }) }) }) };
+      return { select };
     });
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({ user: { id: "u1" } });
     const { result } = renderHook(() => Array.from({ length: 20 }, (_, i) => useIsFavorited(i ? `other-${i}` : "l1")), { wrapper });
     await waitFor(() => expect(result.current[0].data).toBe(true));
     expect(result.current.slice(1).every(heart => heart.data === false)).toBe(true);
     expect(mockFrom).toHaveBeenCalledTimes(1);
+    expect(select).toHaveBeenCalledWith("id, user_id, listing_id, price_alert, price_when_saved, created_at");
     expect(mockRpc).not.toHaveBeenCalled();
     expect(qc.getQueryData(["favoriteMembership", "u1"])).toEqual(rows);
   });

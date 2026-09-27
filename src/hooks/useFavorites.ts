@@ -16,7 +16,10 @@ const fullKey = (id: string) => ["favorites", id] as const;
 const membershipOptions = (id: string) => ({
   queryKey: membershipKey(id),
   queryFn: async (): Promise<FavoriteRow[]> => {
-    const { data, error } = await supabase.from("favorites").select("*").eq("user_id", id).order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("favorites")
+      .select("id, user_id, listing_id, price_alert, price_when_saved, created_at")
+      .eq("user_id", id)
+      .order("created_at", { ascending: false });
     if (error) throw error;
     return data ?? [];
   },
