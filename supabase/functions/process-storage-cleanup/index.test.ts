@@ -14,6 +14,7 @@ type Scenario = {
   jobs: CleanupJob[];
   prepareResults?: Record<string, "delete" | "preserve" | "lost">;
   removeFailurePaths?: string[];
+  providerRemove?: (bucket: string, paths: string[]) => Promise<{ message: string } | null>;
   lostLeaseJobIds?: string[];
   calls: Array<{ name: string; args?: unknown }>;
 };
@@ -178,4 +179,48 @@ Deno.test("Storage cleanup processor retries transient removals and eventually m
     .filter((call) => call.name === "update")
     .map((call) => (call.args as { payload: { status: string } }).payload.status);
   assertEquals(updates, ["pending", "dead"]);
+});
+
+Deno.test("controlled provider timeout after deletion retries an already-absent object", async () => {
+  const submitted = job();
+  const remoteObjects = new Set([submitted.object_path]);
+  let calls = 0;
+  const providerRemove = async (_bucket: string, paths: string[]) => {
+    calls++;
+    for (const path of paths) remoteObjects.delete(path);
+    return calls === 1 ? { message: "response timeout after successful delete" } : null;
+  };
+  reset({ jobs: [submitted], providerRemove });
+  const first = await handler(req("POST", {}, { "x-cron-secret": "test-cron-secret" }));
+  assertEquals((await first.json()).retried, 1);
+  assertEquals(remoteObjects.size, 0);
+  reset({ jobs: [{ ...submitted, attempts: 2, lease_token: "lease-2" }], providerRemove });
+  const second = await handler(req("POST", {}, { "x-cron-secret": "test-cron-secret" }));
+  assertEquals((await second.json()).completed, 1);
+  assertEquals(calls, 2);
+});
+
+Deno.test("delayed old provider delete reproduces activation gap despite token-scoped settlement", async () => {
+  const submitted = job();
+  let entered!: () => void;
+  let release!: () => void;
+  const started = new Promise<void>((resolve) => entered = resolve);
+  const barrier = new Promise<void>((resolve) => release = resolve);
+  const remoteObjects = new Map([[submitted.object_path, "old object"]]);
+  reset({ jobs: [submitted], providerRemove: async (_bucket, paths) => {
+    entered();
+    await barrier;
+    for (const path of paths) remoteObjects.delete(path);
+    return null;
+  } });
+  const request = handler(req("POST", {}, { "x-cron-secret": "test-cron-secret" }));
+  await started;
+  // Controlled provider model: old authorized call survives expiry/reclaim and a later writer.
+  // PostgreSQL token checks protect settlement, but cannot recall this in-flight provider call.
+  globalThis.__storageCleanupScenario.lostLeaseJobIds = [submitted.id];
+  remoteObjects.set(submitted.object_path, "replacement referenced after later writer");
+  release();
+  const response = await request;
+  assertEquals(await response.json(), { claimed: 1, completed: 0, retried: 0, dead: 0 });
+  assertEquals(remoteObjects.has(submitted.object_path), false);
 });

@@ -22,7 +22,8 @@ import { useCreateBuildingListing } from "@/hooks/useCreateBuildingListing";
 import { useManageableOrganizations } from "@/hooks/useManageableOrganizations";
 import { LocationAutocompleteInput, type LocationAutocompleteSelection } from "@/components/location/LocationAutocompleteInput";
 import {
-  IMAGE_AND_VIDEO_MIME_TYPES,
+  PROJECT_MEDIA_MIME_TYPES,
+  PROJECT_MEDIA_MAX_BYTES,
   PDF_MIME_TYPES,
   assertAllowedUpload,
 } from "@/lib/uploadValidation";
@@ -675,10 +676,10 @@ export default function CreateNewBuildingListing() {
                             if (!f) return;
                             // Fail fast at selection rather than waiting until upload.
                             try {
-                              const allowed = value === "brochure_pdf" ? PDF_MIME_TYPES : IMAGE_AND_VIDEO_MIME_TYPES;
+                              const allowed = value === "brochure_pdf" ? PDF_MIME_TYPES : PROJECT_MEDIA_MIME_TYPES;
                               assertAllowedUpload(f, allowed, {
                                 label: value === "brochure_pdf" ? tr("newBuildingListing.media.pdfBrochure", "PDF brochure") : tr("newBuildingListing.media.mediaFile", "media file"),
-                                maxBytes: 50 * 1024 * 1024,
+                                maxBytes: PROJECT_MEDIA_MAX_BYTES,
                               });
                             } catch (err: unknown) {
                               toast.error(err instanceof Error ? err.message : tr("newBuildingListing.validation.unsupportedFile", "Unsupported file"));

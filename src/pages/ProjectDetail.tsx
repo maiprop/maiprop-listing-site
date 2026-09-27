@@ -30,7 +30,8 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { LocationAutocompleteInput, type LocationAutocompleteSelection } from "@/components/location/LocationAutocompleteInput";
 import {
-  IMAGE_AND_VIDEO_MIME_TYPES,
+  PROJECT_MEDIA_MIME_TYPES,
+  PROJECT_MEDIA_MAX_BYTES,
   PDF_MIME_TYPES,
   assertAllowedUpload,
 } from "@/lib/uploadValidation";
@@ -44,7 +45,6 @@ import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
-const PROJECT_MEDIA_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
 const MEDIA_TYPES: { value: ProjectMediaType; label: string; mandatory?: boolean }[] = [
   { value: "rendering", label: "Building renderings", mandatory: true },
@@ -167,12 +167,12 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
 
   const uploadProjectMedia = useCallback(async (file: File, mediaType: ProjectMediaType): Promise<string> => { // skipcq: JS-R1005 - Upload path validates media type, storage path, and public URL together.
     if (!user || !id) throw new Error(tr("projects.detail.errors.notAuthenticated", "Not authenticated"));
-    const allowed = mediaType === "brochure_pdf" ? PDF_MIME_TYPES : IMAGE_AND_VIDEO_MIME_TYPES;
+    const allowed = mediaType === "brochure_pdf" ? PDF_MIME_TYPES : PROJECT_MEDIA_MIME_TYPES;
     assertAllowedUpload(file, allowed, {
       label: mediaType === "brochure_pdf"
         ? tr("projects.detail.media.pdfBrochure", "PDF brochure")
         : tr("projects.detail.media.mediaFile", "media file"),
-      maxBytes: PROJECT_MEDIA_UPLOAD_MAX_BYTES,
+      maxBytes: PROJECT_MEDIA_MAX_BYTES,
     });
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${user.id}/${id}/media/${mediaType}-${crypto.randomUUID()}.${ext}`;

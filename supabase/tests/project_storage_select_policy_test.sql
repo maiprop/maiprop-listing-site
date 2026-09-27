@@ -1,0 +1,50 @@
+\set ON_ERROR_STOP on
+BEGIN;
+DO $$ BEGIN IF current_setting('maiprop.test_disposable_database',true) IS DISTINCT FROM current_database() OR inet_server_addr() IS NOT NULL OR current_database() IN ('postgres','template0','template1','maiprop_replay_current_20260921') THEN RAISE EXCEPTION 'Explicit matching disposable socket database required'; END IF; END $$;
+SET LOCAL statement_timeout='30s';
+CREATE EXTENSION IF NOT EXISTS pgtap;
+SET LOCAL search_path=public,extensions;
+SELECT no_plan();
+-- Source bootstrap lacks the managed Storage ACL. This explicit rollback-only simulation
+-- copies only the captured authenticated SELECT permission; no production migration grant.
+GRANT SELECT ON storage.objects TO authenticated;
+-- Synthetic seed only; all policy reads below use the actual authenticated role.
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email) SELECT ('7b070000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'task7b-policy-'||n||'@example.test' FROM generate_series(1,5)n;
+INSERT INTO public.profiles(user_id,role) SELECT id,CASE WHEN id::text LIKE '%0005' THEN 'admin'::public.user_role ELSE 'buyer'::public.user_role END FROM auth.users WHERE id::text LIKE '7b070000%';
+INSERT INTO public.listings(id,owner_id,title,city,price,sqm,property_type,listing_type,status) VALUES('7b080000-0000-4000-8000-000000000001','7b070000-0000-4000-8000-000000000001','Synthetic hosted policy boundary','Athens',200000,80,'apartment','open_house','active'),('7b080000-0000-4000-8000-000000000002','7b070000-0000-4000-8000-000000000004','Other synthetic listing','Athens',200000,80,'apartment','open_house','active');
+INSERT INTO public.open_house_registrations(listing_id,requester_id) VALUES('7b080000-0000-4000-8000-000000000001','7b070000-0000-4000-8000-000000000002'),('7b080000-0000-4000-8000-000000000002','7b070000-0000-4000-8000-000000000003');
+INSERT INTO public.conversations(id,participant_a,participant_b) VALUES('7b090000-0000-4000-8000-000000000001','7b070000-0000-4000-8000-000000000002','7b070000-0000-4000-8000-000000000003');
+INSERT INTO storage.buckets(id,name) SELECT b,b FROM unnest(ARRAY['listing-images','project-media','open-house-docs','message-attachments','firesale-proof-docs','task7b-unrelated'])b ON CONFLICT(id) DO NOTHING;
+INSERT INTO storage.objects(bucket_id,name) SELECT b,u||'/task7b-policy/file.jpg' FROM unnest(ARRAY['listing-images','project-media'])b CROSS JOIN unnest(ARRAY['7b070000-0000-4000-8000-000000000001','7b070000-0000-4000-8000-000000000002'])u;
+INSERT INTO storage.objects(bucket_id,name) VALUES('open-house-docs','7b070000-0000-4000-8000-000000000002/7b080000-0000-4000-8000-000000000001/task7b-policy.pdf'),('open-house-docs','7b070000-0000-4000-8000-000000000002/7b080000-0000-4000-8000-000000000002/task7b-policy.pdf'),('message-attachments','7b070000-0000-4000-8000-000000000002/7b090000-0000-4000-8000-000000000001/task7b-policy.pdf'),('firesale-proof-docs','7b070000-0000-4000-8000-000000000002/task7b-policy.pdf'),('task7b-unrelated','7b070000-0000-4000-8000-000000000001/task7b-policy.pdf');
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"7b070000-0000-4000-8000-000000000001"}',true);
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='listing-images' AND name LIKE '%task7b-policy%'),1::bigint,'owner sees own listing images only');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='project-media' AND name LIKE '%task7b-policy%'),1::bigint,'owner sees own project media only');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='message-attachments' AND name LIKE '%task7b-policy%'),0::bigint,'message nonparticipant remains denied');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='open-house-docs' AND name LIKE '%task7b-policy%'),1::bigint,'exact listing host sees corresponding registration document');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='firesale-proof-docs' AND name LIKE '%task7b-policy%'),0::bigint,'unrelated firesale nonowner remains denied');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='task7b-unrelated'),0::bigint,'new owner branch does not apply to unrelated bucket');
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"7b070000-0000-4000-8000-000000000002"}',true);
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='listing-images' AND name LIKE '%task7b-policy%'),1::bigint,'second actor sees only own listing image');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='project-media' AND name LIKE '%task7b-policy%'),1::bigint,'second actor sees only own project media');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='message-attachments' AND name LIKE '%task7b-policy%'),1::bigint,'message participant A retains access');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='open-house-docs' AND name LIKE '%task7b-policy%'),2::bigint,'OH requester retains own-folder semantics');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='firesale-proof-docs' AND name LIKE '%task7b-policy%'),1::bigint,'firesale owner retains access');
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"7b070000-0000-4000-8000-000000000003"}',true);
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='message-attachments' AND name LIKE '%task7b-policy%'),1::bigint,'message participant B retains access');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='open-house-docs' AND name LIKE '%task7b-policy%'),0::bigint,'different requester cannot read other requester documents');
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"7b070000-0000-4000-8000-000000000004"}',true);
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id IN('listing-images','project-media') AND name LIKE '%task7b-policy%'),0::bigint,'foreign actor cannot see either managed bucket');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='message-attachments' AND name LIKE '%task7b-policy%'),0::bigint,'outsider message access stays denied');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='open-house-docs' AND name LIKE '%task7b-policy%'),0::bigint,'host of different registration cannot read mismatched requester/listing pair');
+SELECT set_config('request.jwt.claims','{"role":"authenticated","sub":"7b070000-0000-4000-8000-000000000005"}',true);
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='open-house-docs' AND name LIKE '%task7b-policy%'),2::bigint,'OH platform admin retains access');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='firesale-proof-docs' AND name LIKE '%task7b-policy%'),1::bigint,'firesale platform admin retains access');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id IN('listing-images','project-media') AND name LIKE '%task7b-policy%'),0::bigint,'no new admin override in managed bucket owner lane');
+SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='message-attachments' AND name LIKE '%task7b-policy%'),0::bigint,'no new admin override in message participant lane');
+RESET ROLE;
+SELECT * FROM finish();
+ROLLBACK;

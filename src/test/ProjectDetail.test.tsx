@@ -332,6 +332,31 @@ describe("ProjectDetail", () => {
     );
   });
 
+  it.each(["video/mp4", "application/pdf", "image/gif"])("uploads bucket-supported %s at exactly 20 MiB", async (type) => {
+    renderPage();
+    const file = new File(["x"], "accepted.file", { type });
+    Object.defineProperty(file, "size", { value: 20 * 1024 * 1024 });
+    fireEvent.change(document.querySelectorAll('input[type="file"]')[type === "application/pdf" ? 3 : 0], { target: { files: [file] } });
+    await waitFor(() => expect(uploadMock).toHaveBeenCalled());
+    expect(rpcMock).toHaveBeenCalledWith("register_new_building_storage_upload", expect.any(Object));
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["video/mp4", 20 * 1024 * 1024 + 1, /20 MB/],
+    ["image/heic", 10, /Unsupported/],
+    ["video/quicktime", 10, /Unsupported/],
+  ])("rejects project media %s (%i bytes) before registration", async (type, size, message) => {
+    renderPage();
+    const file = new File(["x"], "media.file", { type });
+    Object.defineProperty(file, "size", { value: size });
+    fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(message)));
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(uploadMock).not.toHaveBeenCalled();
+    expect(addMediaMock).not.toHaveBeenCalled();
+  });
+
   it("uploads and deletes project media", async () => {
     renderPage();
 

@@ -388,6 +388,17 @@ describe("CreateNewBuildingListing", () => {
     });
   });
 
+  it.each(["video/mp4", "application/pdf", "image/gif"])("selects bucket-supported %s at exactly 20 MiB", async (type) => {
+    renderPage(); fillRequiredProject();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i })); await screen.findByText(/Step 2 of 5/i);
+    fillRequiredUnit(); fireEvent.click(screen.getByRole("button", { name: /Next/i })); await screen.findByText(/Step 3 of 5/i);
+    const file = new File(["x"], "accepted.file", { type });
+    Object.defineProperty(file, "size", { value: 20 * 1024 * 1024 });
+    fireEvent.change(document.querySelectorAll('input[type="file"]')[type === "application/pdf" ? 3 : 0], { target: { files: [file] } });
+    expect(screen.getByText("accepted.file")).toBeInTheDocument();
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
   it.each([
     "not-json",
     JSON.stringify({ version: 2, step: "unit" }),
@@ -547,6 +558,27 @@ describe("CreateNewBuildingListing", () => {
         longitude: "",
       }),
     })));
+  });
+
+  it.each([
+    ["video/mp4", 20 * 1024 * 1024 + 1, /20 MB/],
+    ["image/heic", 10, /Unsupported/],
+    ["video/quicktime", 10, /Unsupported/],
+  ])("rejects wizard media %s (%i bytes) before selecting it", async (type, size, message) => {
+    renderPage();
+    fillRequiredProject();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 of 5/i);
+    fillRequiredUnit();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 of 5/i);
+    const file = new File(["x"], "rejected.file", { type });
+    Object.defineProperty(file, "size", { value: size });
+    fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(message));
+    expect(screen.queryByText("rejected.file")).not.toBeInTheDocument();
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(uploadListingImageMock).not.toHaveBeenCalled();
   });
 
   it("surfaces media selection and submit failures without leaving the wizard", async () => {

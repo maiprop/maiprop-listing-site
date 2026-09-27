@@ -149,11 +149,12 @@ describe("building listing upload helpers", () => {
     );
   });
 
-  it("accepts project media above 20 MB up to the wizard's 50 MB limit", async () => {
-    const file = new File([new Uint8Array(21 * 1024 * 1024)], "tour.mp4", {
+  it("accepts project media exactly at the 20 MiB bucket limit", async () => {
+    const file = new File([new Uint8Array(0)], "tour.mp4", {
       type: "video/mp4",
     });
 
+    Object.defineProperty(file, "size", { value: 20 * 1024 * 1024 });
     const url = await uploadProjectMedia(file, "user-1", "project-1", "video");
 
     expect(storageMocks.fromMock).toHaveBeenCalledWith("project-media");
@@ -186,13 +187,15 @@ describe("building listing upload helpers", () => {
       ),
     ).rejects.toThrow(/Unsupported media file type/);
 
-    const oversizedVideo = new File([new Uint8Array(50 * 1024 * 1024 + 1)], "tour.mp4", {
+    const oversizedVideo = new File([new Uint8Array(0)], "tour.mp4", {
       type: "video/mp4",
     });
+    Object.defineProperty(oversizedVideo, "size", { value: 20 * 1024 * 1024 + 1 });
     await expect(
       uploadProjectMedia(oversizedVideo, "user-1", "project-1", "video"),
-    ).rejects.toThrow(/exceeds the 50 MB limit/);
+    ).rejects.toThrow(/exceeds the 20 MB limit/);
     expect(storageMocks.uploadMock).not.toHaveBeenCalled();
+    expect(storageMocks.supabase!.rpc).not.toHaveBeenCalled();
   });
 
   it("propagates storage failures so callers can surface a hard upload failure", async () => {

@@ -12,6 +12,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
   PDF_MIME_TYPES,
+  PROJECT_MEDIA_MAX_BYTES,
+  PROJECT_MEDIA_MIME_TYPES,
   assertAllowedUpload,
 } from "@/lib/uploadValidation";
 import type { ProjectMediaType } from "@/hooks/useProjectMedia";
@@ -22,16 +24,7 @@ const LISTING_IMAGE_MIME_TYPES = new Set<string>([
   "image/webp",
 ]);
 
-const PROJECT_MEDIA_MIME_TYPES = new Set<string>([
-  ...LISTING_IMAGE_MIME_TYPES,
-  "image/gif",
-  "application/pdf",
-  "video/mp4",
-  "video/webm",
-]);
-
 const LISTING_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-const PROJECT_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 
 type NewBuildingStorageBucket = "listing-images" | "project-media";
 

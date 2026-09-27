@@ -18,6 +18,9 @@ export function createClient(..._args: unknown[]) {
       from: (bucket) => ({
         remove: async (paths) => {
           scenario.calls.push({ name: "remove", args: { bucket, paths } });
+          if (scenario.providerRemove) {
+            return { data: null, error: await scenario.providerRemove(bucket, paths) };
+          }
           const failed = paths.some((path) =>
             scenario.removeFailurePaths?.includes(path)
           );

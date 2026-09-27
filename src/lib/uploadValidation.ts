@@ -39,6 +39,13 @@ export const IMAGE_AND_VIDEO_MIME_TYPES = new Set<string>([
   ...VIDEO_MIME_TYPES,
 ]);
 
+/** Captured project-media bucket contract; unrelated upload allowlists stay independent. */
+export const PROJECT_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
+export const PROJECT_MEDIA_MIME_TYPES = new Set<string>([
+  "image/jpeg", "image/png", "image/webp", "image/gif",
+  "application/pdf", "video/mp4", "video/webm",
+]);
+
 /** Document attachments (PDFs, Word). */
 export const DOCUMENT_MIME_TYPES = new Set<string>([
   "application/pdf",
