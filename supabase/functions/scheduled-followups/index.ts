@@ -84,8 +84,8 @@ Deno.serve(async (req) => {
 
     for (const lead of leads) {
       const createdAt = new Date(lead.created_at);
-      const daysSinceCreation =
-        (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+      const daysSinceCreation = (now.getTime() - createdAt.getTime()) /
+        (1000 * 60 * 60 * 24);
       const currentStep = lead.followup_step || 0;
 
       // Find the next step that should be sent based on timing
@@ -113,34 +113,41 @@ Deno.serve(async (req) => {
         );
 
         const followupData = await followupRes.json();
+        const complete = followupRes.ok && followupData?.success === true &&
+          followupData.preview !== true &&
+          (followupData.provider_accepted === undefined || followupData.provider_accepted === true) &&
+          (followupData.persistence_complete === undefined || followupData.persistence_complete === true) &&
+          (followupData.outcome === undefined || followupData.outcome === "succeeded");
         results.push({
           step: nextSchedule.step,
-          success: followupRes.ok,
-          error: followupRes.ok ? undefined : followupData.error,
+          success: complete,
+          error: complete ? undefined : "followup_incomplete",
         });
 
         console.log(
-          `Followup step ${nextSchedule.step} for ${lead.full_name}: ${followupRes.ok ? "OK" : "FAILED"}`,
+          `Followup step ${nextSchedule.step}: ${complete ? "OK" : "FAILED"}`,
         );
-      } catch (e) {
-        console.error(`Failed to send followup to ${lead.full_name}:`, e);
+      } catch {
+        console.error("Followup child result unavailable");
         results.push({
           step: nextSchedule.step,
           success: false,
-          error: String(e),
+          error: "followup_result_unknown",
         });
       }
     }
 
+    const failed = results.filter((r) => !r.success).length;
     return new Response(
       JSON.stringify({
-        success: true,
+        success: failed === 0,
+        outcome: failed === 0 ? "succeeded" : "partial",
         processed: results.length,
         succeeded: results.filter((r) => r.success).length,
-        failed: results.filter((r) => !r.success).length,
+        failed,
       }),
       {
-        status: 200,
+        status: failed === 0 ? 200 : 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );

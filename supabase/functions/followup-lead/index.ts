@@ -583,7 +583,10 @@ Deno.serve(async (req) => {
     const supabaseKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { lead, source } = await findLead(supabase as unknown as LeadLookupClient, lead_id);
+    const { lead, source } = await findLead(
+      supabase as unknown as LeadLookupClient,
+      lead_id,
+    );
     if (!lead || !source) {
       return new Response(JSON.stringify({ error: "Lead not found" }), {
         status: 404,
@@ -602,7 +605,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ?? Deno.env.get("brevo");
+    const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ??
+      Deno.env.get("brevo");
     if (!BREVO_API_KEY && !preview_only) {
       return new Response(
         JSON.stringify({ error: "Email service not configured" }),
@@ -665,51 +669,111 @@ Deno.serve(async (req) => {
     }
 
     // Send via Brevo
-    const emailRes = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "api-key": BREVO_API_KEY,
-        "Content-Type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify({
-        sender: { name: "mAI Prop", email: "kr@maiprop.co" },
-        to: [{ email: lead.email, name: leadFullName(lead) }],
-        subject: result.subject,
-        htmlContent: result.body,
-      }),
-    });
-
-    const emailData = await emailRes.json();
-
-    if (!emailRes.ok) {
-      console.error("Brevo error:", JSON.stringify(emailData));
-      return new Response(JSON.stringify({ error: "Failed to send email" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    let emailRes: Response;
+    try {
+      emailRes = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": BREVO_API_KEY,
+          "Content-Type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          sender: { name: "mAI Prop", email: "kr@maiprop.co" },
+          to: [{ email: lead.email, name: leadFullName(lead) }],
+          subject: result.subject,
+          htmlContent: result.body,
+        }),
       });
+    } catch {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "email_acceptance_unknown",
+          provider_accepted: null,
+          persistence_complete: false,
+          send_outcome: "unknown",
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    if (source === "marketing_leads") {
-      await supabase
-        .from("marketing_leads")
-        .update({
-          followup_step: step,
+    if (!emailRes.ok) {
+      console.error("Brevo rejected email:", emailRes.status);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Failed to send email",
+          provider_accepted: false,
+          persistence_complete: false,
+          send_outcome: "rejected",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // HTTP acceptance survives an absent or malformed optional provider body.
+    let emailId: string | null = null;
+    try {
+      const data = await emailRes.json();
+      const value = data?.messageId ?? data?.message_id;
+      if (typeof value === "string") emailId = value;
+    } catch { /* Accepted without a provider identifier. */ }
+
+    let persistenceComplete = false;
+    try {
+      let checkpoint;
+      if (source === "marketing_leads") {
+        checkpoint = supabase.from("marketing_leads").update({
+          followup_step: Math.max(lead.followup_step ?? 0, step),
           ...(lead.status === "new" ? { status: "contacted" } : {}),
         })
-        .eq("id", lead_id);
-    } else {
-      await supabase
-        .from("leads")
-        .update({
+          .eq("id", lead_id);
+        checkpoint = lead.followup_step == null
+          ? checkpoint.is("followup_step", null)
+          : checkpoint.eq("followup_step", lead.followup_step);
+      } else {
+        checkpoint = supabase.from("leads").update({
           follow_up_at: new Date().toISOString(),
           ...(lead.status === "new" ? { status: "contacted" } : {}),
         })
-        .eq("id", lead_id);
+          .eq("id", lead_id);
+      }
+      if (lead.status === "new") checkpoint = checkpoint.eq("status", "new");
+      const { data, error } = await checkpoint.select("id");
+      persistenceComplete = !error && data?.length === 1;
+    } catch { /* Preserve acceptance even when persistence rejects. */ }
+    if (!persistenceComplete) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          step,
+          email_id: emailId,
+          error: "email_checkpoint_failed",
+          provider_accepted: true,
+          persistence_complete: false,
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     return new Response(
-      JSON.stringify({ success: true, step, email_id: emailData.id }),
+      JSON.stringify({
+        success: true,
+        step,
+        email_id: emailId,
+        provider_accepted: true,
+        persistence_complete: true,
+      }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -717,14 +781,17 @@ Deno.serve(async (req) => {
     );
   } catch (error: unknown) {
     if (error instanceof SchemaValidationError) {
-      return new Response(JSON.stringify({
-        error: error.message,
-        code: error.code,
-        issues: error.issues,
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: error.message,
+          code: error.code,
+          issues: error.issues,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
     console.error("Followup error:", error);
     return new Response(JSON.stringify({ error: "Internal error" }), {

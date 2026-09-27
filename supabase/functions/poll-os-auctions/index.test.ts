@@ -363,3 +363,143 @@ Deno.test("cron authorization does not call Supabase Auth when bearer secret mat
 
 restore();
 restoreProductionBoundary();
+
+let pollClock = Date.now();
+async function pollOutcomeScenario(
+  mode: "import" | "empty" | "full" | "config" | "primary" | "partial",
+  logFailure?: "resolved" | "rejected",
+) {
+  const oldFetch = globalThis.fetch;
+  const oldNow = Date.now;
+  pollClock += 60_001;
+  Date.now = () => pollClock;
+  let logCalls = 0, providerCalls = 0, inserted = 0;
+  const json = (value: unknown, status = 200) =>
+    new Response(JSON.stringify(value), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  globalThis.fetch =
+    (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const method = init?.method ??
+        (input instanceof Request ? input.method : "GET");
+      if (url.pathname === "/rest/v1/sync_log") {
+        logCalls++;
+        if (logFailure === "rejected") throw new Error("log-private");
+        return logFailure === "resolved"
+          ? json({ message: "log-private" }, 500)
+          : new Response(null, { status: 201 });
+      }
+      if (url.pathname === "/rest/v1/listings") {
+        if (method === "HEAD") {
+          return new Response(null, {
+            headers: {
+              "content-range": `*/${mode === "full" ? 600 : inserted}`,
+            },
+          });
+        }
+        if (method === "GET") return json([]);
+        if (method === "POST") {
+          if (mode === "partial") {
+            return json(
+              { code: "23514", message: "fixture insert rejection" },
+              400,
+            );
+          }
+          inserted++;
+          return json([{ id: "44444444-4444-4444-8444-444444444444" }], 201);
+        }
+        if (method === "PATCH") return json([]);
+      }
+      if (url.pathname === "/auth/login") {
+        providerCalls++;
+        return mode === "primary"
+          ? json({ message: "fixture authentication failure" }, 401)
+          : json({ token: "fixture-token" });
+      }
+      if (url.pathname === "/api/v1/auctions/filter/details") {
+        providerCalls++;
+        return json({
+          data: mode === "empty" ? [] : [{
+            auctionListingId: "fixture-auction",
+            firstPriceOffer: 100000,
+            propertyMunicipalityName: "Athens",
+          }],
+          responseMetadata: {
+            pagination: { totalElements: mode === "empty" ? 0 : 1 },
+          },
+        });
+      }
+      throw new Error(`Unexpected fake transport ${method} ${url.pathname}`);
+    }) as typeof fetch;
+  if (mode === "config") Deno.env.delete("MAIPROP_OS_PASSWORD");
+  try {
+    const response = await handler(
+      req("POST", { page: 0, pageSize: 1, sampleAcrossGreece: false }, {
+        authorization: `Bearer ${Deno.env.get("CRON_SECRET")}`,
+      }),
+    );
+    return {
+      response,
+      body: await response.json(),
+      logCalls,
+      providerCalls,
+      inserted,
+    };
+  } finally {
+    globalThis.fetch = oldFetch;
+    Date.now = oldNow;
+    if (mode === "config") Deno.env.set("MAIPROP_OS_PASSWORD", "testpass");
+  }
+}
+for (const failure of ["resolved", "rejected"] as const) {
+  Deno.test(`poll preserves imported work when log ${failure}`, async () => {
+    const result = await pollOutcomeScenario("import", failure);
+    assertEquals(result.response.status, 503);
+    assertEquals(result.body.ok, false);
+    assertEquals(result.body.imported, 1);
+    assertEquals(result.body.persistence_complete, false);
+    assertEquals(result.body.import_complete, true);
+    assertEquals(result.logCalls, 1);
+  });
+}
+for (const failure of ["resolved", "rejected"] as const) {
+  Deno.test(`poll preserves primary error when log ${failure}`, async () => {
+    const result = await pollOutcomeScenario("primary", failure);
+    assertEquals(result.response.status, 500);
+    assertEquals(result.body.error.includes("OS auth failed"), true);
+    assertEquals(result.body.error.includes("log-private"), false);
+    assertEquals(result.body.persistence_complete, false);
+    assertEquals(result.logCalls, 1);
+  });
+}
+for (const mode of ["full", "empty", "config"] as const) {
+  Deno.test(`poll records ${mode} outcome and reports persistence failure`, async () => {
+    for (const failure of [undefined, "resolved"] as const) {
+      const result = await pollOutcomeScenario(mode, failure);
+      assertEquals(result.response.status, failure ? 503 : 200);
+      assertEquals(result.logCalls, 1);
+      assertEquals(result.body.persistence_complete, !failure);
+      if (mode !== "empty") assertEquals(result.providerCalls, 0);
+    }
+  });
+}
+Deno.test("poll does not label rejected catalogue items complete", async () => {
+  const result = await pollOutcomeScenario("partial");
+  assertEquals(result.response.status, 503);
+  assertEquals(result.body.ok, false);
+  assertEquals(result.body.errors, 1);
+  assertEquals(result.body.imported, 0);
+  assertEquals(result.logCalls, 1);
+});
+
+Deno.test('poll ordinary import reports both catalogue and outcome persistence', async () => {
+  const result = await pollOutcomeScenario('import');
+  assertEquals(result.response.status, 200);
+  assertEquals(result.body.ok, true);
+  assertEquals(result.body.import_complete, true);
+  assertEquals(result.body.persistence_complete, true);
+  assertEquals([result.body.imported, result.body.updated, result.body.errors], [1, 0, 0]);
+  assertEquals(result.logCalls, 1);
+});

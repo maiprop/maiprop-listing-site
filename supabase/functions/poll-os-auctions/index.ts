@@ -282,9 +282,9 @@ async function logSync(
   error_message?: string | null,
   payload?: unknown,
   records_affected = 0,
-): Promise<void> {
+): Promise<boolean> {
   try {
-    await table(sb, "sync_log").insert({
+    const { error } = await table(sb, "sync_log").insert({
       direction: "os_to_hub",
       entity_type: "auction",
       entity_id: "poll-batch",
@@ -293,10 +293,14 @@ async function logSync(
       payload: payload ?? null,
       records_affected,
     });
-  } catch (e) {
-    log.warn("logSync failed", {
-      err: e instanceof Error ? e.message : String(e),
-    });
+    if (error) {
+      log.warn("Sync outcome persistence failed");
+      return false;
+    }
+    return true;
+  } catch {
+    log.warn("Sync outcome persistence failed");
+    return false;
   }
 }
 
@@ -788,55 +792,74 @@ Deno.serve(async (req) => {
     return tooManyRequestsResponse(corsHeaders);
   }
 
-  // ── Daily pool guard ─────────────────────────────────────────────────────
-  // Use the actual pool tag instead of sync_log so retries and interrupted
-  // pg_net calls cannot grow the visible daily catalogue beyond 600.
-  const poolDate = getUtcPoolDate();
-  const existingDailyPoolCount = await getActiveDailyPoolCount(sb, poolDate);
+  let imported = 0, updated = 0, errors = 0;
+  try {
+    // ── Daily pool guard ─────────────────────────────────────────────────────
+    // Use the actual pool tag instead of sync_log so retries and interrupted
+    // pg_net calls cannot grow the visible daily catalogue beyond 600.
+    const poolDate = getUtcPoolDate();
+    const existingDailyPoolCount = await getActiveDailyPoolCount(sb, poolDate);
 
-  if (existingDailyPoolCount >= DAILY_AUCTION_LIMIT) {
-    const prunedPoolRows = existingDailyPoolCount > DAILY_AUCTION_LIMIT
-      ? await trimDailyPoolToLatest(sb, poolDate, DAILY_AUCTION_LIMIT)
-      : 0;
-    const finalDailyPoolCount = existingDailyPoolCount - prunedPoolRows;
-    log.info("Daily auction pool already populated — skipping", {
-      existingDailyPoolCount,
-      finalDailyPoolCount,
-      prunedPoolRows,
-      limit: DAILY_AUCTION_LIMIT,
-    });
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        status: "skipped",
-        reason:
-          `Daily pool of ${DAILY_AUCTION_LIMIT} auctions already populated`,
+    if (existingDailyPoolCount >= DAILY_AUCTION_LIMIT) {
+      const prunedPoolRows = existingDailyPoolCount > DAILY_AUCTION_LIMIT
+        ? await trimDailyPoolToLatest(sb, poolDate, DAILY_AUCTION_LIMIT)
+        : 0;
+      const finalDailyPoolCount = existingDailyPoolCount - prunedPoolRows;
+      log.info("Daily auction pool already populated — skipping", {
+        existingDailyPoolCount,
+        finalDailyPoolCount,
+        prunedPoolRows,
+        limit: DAILY_AUCTION_LIMIT,
+      });
+      const persisted = await logSync(sb, "skipped", null, {
         poolDate,
         pool_count_before: existingDailyPoolCount,
         pool_count_after: finalDailyPoolCount,
         prunedPoolRows,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  }
+      });
+      return new Response(
+        JSON.stringify({
+          ok: persisted,
+          persistence_complete: persisted,
+          status: "skipped",
+          reason:
+            `Daily pool of ${DAILY_AUCTION_LIMIT} auctions already populated`,
+          poolDate,
+          pool_count_before: existingDailyPoolCount,
+          pool_count_after: finalDailyPoolCount,
+          prunedPoolRows,
+        }),
+        {
+          status: persisted ? 200 : 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
 
-  const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
-  const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
-  const OS_PASS = Deno.env.get("MAIPROP_OS_PASSWORD");
+    const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
+    const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
+    const OS_PASS = Deno.env.get("MAIPROP_OS_PASSWORD");
 
-  if (!OS_URL || !OS_EMAIL || !OS_PASS) {
-    await logSync(sb, "skipped", "OS credentials not configured");
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        status: "skipped",
-        reason: "OS credentials not configured",
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  }
+    if (!OS_URL || !OS_EMAIL || !OS_PASS) {
+      const persisted = await logSync(
+        sb,
+        "skipped",
+        "OS credentials not configured",
+      );
+      return new Response(
+        JSON.stringify({
+          ok: persisted,
+          persistence_complete: persisted,
+          status: "skipped",
+          reason: "OS credentials not configured",
+        }),
+        {
+          status: persisted ? 200 : 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
 
-  try {
     // Build the provider filter only from the validated allowlist.
     const filterRequest: Record<string, unknown> = {};
 
@@ -928,10 +951,16 @@ Deno.serve(async (req) => {
     });
 
     if (auctions.length === 0) {
-      await logSync(sb, "success", null, { endpoint, total: 0, page }, 0);
+      const persisted = await logSync(sb, "success", null, {
+        endpoint,
+        total: 0,
+        page,
+      }, 0);
       return new Response(
         JSON.stringify({
-          ok: true,
+          ok: persisted,
+          import_complete: true,
+          persistence_complete: persisted,
           total: 0,
           imported: 0,
           updated: 0,
@@ -939,7 +968,10 @@ Deno.serve(async (req) => {
           daily_limit: DAILY_AUCTION_LIMIT,
           pool_count_before: existingDailyPoolCount,
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: persisted ? 200 : 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -1003,9 +1035,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    let imported = 0,
-      updated = 0,
-      errors = 0;
     const CHUNK = 50;
 
     // Bulk insert new auctions
@@ -1061,9 +1090,9 @@ Deno.serve(async (req) => {
       prunedPoolRows,
     };
 
-    await logSync(
+    const persisted = await logSync(
       sb,
-      errors > 0 && imported + updated === 0 ? "error" : "success",
+      errors > 0 ? "error" : "success",
       errors > 0 ? `${errors} item(s) failed` : null,
       summary,
       imported + updated,
@@ -1071,16 +1100,41 @@ Deno.serve(async (req) => {
 
     log.info("poll done", { summary });
 
-    return new Response(JSON.stringify({ ok: true, ...summary }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        ok: errors === 0 && persisted,
+        ...summary,
+        import_complete: errors === 0,
+        persistence_complete: persisted,
+        outcome: errors === 0 && persisted ? "succeeded" : "partial",
+      }),
+      {
+        status: errors === 0 && persisted ? 200 : 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     log.error("poll error", { err: message });
-    await logSync(sb, "error", message);
-    return new Response(JSON.stringify({ ok: false, error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const persisted = await logSync(sb, "error", message, {
+      imported,
+      updated,
+      errors,
+    }, imported + updated);
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: message,
+        imported,
+        updated,
+        errors,
+        import_complete: false,
+        persistence_complete: persisted,
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

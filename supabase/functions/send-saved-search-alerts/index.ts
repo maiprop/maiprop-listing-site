@@ -4,7 +4,7 @@
  * Fetches saved searches with email_alerts=true, runs each against listings,
  * and sends an email when new matches appear. Designed to run via pg_cron (e.g. every 6h).
  *
- * Env: BREVO_API_KEY (optional - if not set, logs only), MAIPROP_APP_URL (for links)
+ * Env: BREVO_API_KEY (required), MAIPROP_APP_URL (for links)
  * Invoke: POST with empty body or cron.
  */
 
@@ -96,15 +96,58 @@ Deno.serve(async (req) => {
     });
   }
 
-
-  const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", {
-    auth: { persistSession: false },
-  });
+  if (!Deno.env.get("BREVO_API_KEY")) {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: "email_service_not_configured",
+        processed: 0,
+        emailsSent: 0,
+      }),
+      {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    {
+      auth: { persistSession: false },
+    },
+  );
 
   const BREVO_KEY = Deno.env.get("BREVO_API_KEY");
-  const APP_URL = Deno.env.get("MAIPROP_APP_URL") || "https://portal.maiprop.co/";
+  const APP_URL = Deno.env.get("MAIPROP_APP_URL") ||
+    "https://portal.maiprop.co/";
   const FROM_EMAIL = Deno.env.get("BREVO_FROM_EMAIL") || "alerts@maiprop.co";
 
+  let sent = 0,
+    checkpointed = 0,
+    failed = 0,
+    rejected = 0,
+    unknown = 0,
+    processed = 0;
+  const respond = () =>
+    new Response(
+      JSON.stringify({
+        ok: failed === 0,
+        processed,
+        emailsSent: sent,
+        checkpointsPersisted: checkpointed,
+        failed,
+        sendsRejected: rejected,
+        sendsUnknown: unknown,
+        outcome: failed === 0 ? "succeeded" : sent > 0 ? "partial" : "failed",
+        provider_accepted: sent > 0,
+        persistence_complete: checkpointed === sent,
+      }),
+      {
+        status: failed === 0 ? 200 : 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   try {
     const { data: searches, error: searchError } = await supabase
       .from("saved_searches")
@@ -120,95 +163,137 @@ Deno.serve(async (req) => {
       });
     }
 
-    let sent = 0;
+    processed = searches.length;
 
     for (const s of searches) {
-      const filters = (s.filters as Record<string, unknown>) || {};
-      const { data: listings, error: listError } = await buildListingsQuery(supabase, filters);
+      try {
+        const filters = (s.filters as Record<string, unknown>) || {};
+        const { data: listings, error: listError } = await buildListingsQuery(
+          supabase,
+          filters,
+        );
 
-      if (listError) {
-        log("Listings query error for search " + s.id, listError);
-        continue;
-      }
+        if (listError) {
+          failed++;
+          log("Listings query failed");
+          continue;
+        }
 
-      const listingIds = (listings || []).map((l: { id: string }) => l.id);
-      const prevIds = (s.last_alert_listing_ids as string[]) || [];
-      const newIds = listingIds.filter((id: string) => !prevIds.includes(id));
+        const listingIds = (listings || []).map((l: { id: string }) => l.id);
+        const prevIds = (s.last_alert_listing_ids as string[]) || [];
+        const newIds = listingIds.filter((id: string) => !prevIds.includes(id));
 
-      if (newIds.length === 0 && prevIds.length > 0) {
-        continue; // No new listings, skip
-      }
+        if (newIds.length === 0 && prevIds.length > 0) {
+          continue; // No new listings, skip
+        }
 
-      const { data: authUser } = await supabase.auth.admin.getUserById(s.user_id);
-      const email = authUser?.user?.email;
-      if (!email) {
-        log("No email for user " + s.user_id);
-        continue;
-      }
+        const { data: authUser, error: authError } = await supabase.auth.admin
+          .getUserById(s.user_id);
+        const email = authUser?.user?.email;
+        if (authError || !email) {
+          failed++;
+          log("Recipient lookup failed");
+          continue;
+        }
 
-      const listingsToSend = (listings || []).filter(
-        (l: { id: string }) => newIds.includes(l.id) || prevIds.length === 0,
-      );
-      if (listingsToSend.length === 0) continue;
+        const listingsToSend = (listings || []).filter(
+          (l: { id: string }) => newIds.includes(l.id) || prevIds.length === 0,
+        );
+        if (listingsToSend.length === 0) continue;
 
-      const listHtml = listingsToSend
-        .map(
-          (l: { id: string; title: string; city: string; price: number }) =>
-            `<li><a href="${escapeHtml(propertyUrl(APP_URL, l.id))}">${escapeHtml(l.title)}</a> &middot; ${escapeHtml(l.city || "")} &middot; EUR ${Number(l.price || 0).toLocaleString()}</li>`,
-        )
-        .join("");
+        const listHtml = listingsToSend
+          .map(
+            (l: { id: string; title: string; city: string; price: number }) =>
+              `<li><a href="${escapeHtml(propertyUrl(APP_URL, l.id))}">${
+                escapeHtml(l.title)
+              }</a> &middot; ${escapeHtml(l.city || "")} &middot; EUR ${
+                Number(l.price || 0).toLocaleString()
+              }</li>`,
+          )
+          .join("");
 
-      const subject = `maiProp: ${listingsToSend.length} new match${listingsToSend.length > 1 ? "es" : ""} for "${s.name}"`;
-      const searchName = escapeHtml(s.name);
-      const listingsUrl = escapeHtml(`${APP_URL.replace(/\/$/, "")}/listings`);
-      const html = `
+        const subject = `maiProp: ${listingsToSend.length} new match${
+          listingsToSend.length > 1 ? "es" : ""
+        } for "${s.name}"`;
+        const searchName = escapeHtml(s.name);
+        const listingsUrl = escapeHtml(
+          `${APP_URL.replace(/\/$/, "")}/listings`,
+        );
+        const html = `
         <h2>Your saved search "${searchName}" has new matches</h2>
         <ul>${listHtml}</ul>
         <p><a href="${listingsUrl}">View all listings</a></p>
       `;
 
-      if (BREVO_KEY) {
-        const res = await fetchWithTimeout("https://api.brevo.com/v3/smtp/email", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "api-key": BREVO_KEY,
-          },
-          body: JSON.stringify({
-            sender: { email: FROM_EMAIL, name: "maiProp Alerts" },
-            to: [{ email }],
-            subject,
-            htmlContent: html,
-          }),
-        });
-        if (!res.ok) {
-          const err = await res.text();
-          log("Brevo error", { status: res.status, err });
-          continue;
+        {
+          let res: Response;
+          try {
+            res = await fetchWithTimeout(
+              "https://api.brevo.com/v3/smtp/email",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "api-key": BREVO_KEY,
+                },
+                body: JSON.stringify({
+                  sender: { email: FROM_EMAIL, name: "maiProp Alerts" },
+                  to: [{ email }],
+                  subject,
+                  htmlContent: html,
+                }),
+              },
+            );
+          } catch {
+            unknown++;
+            failed++;
+            log("Email acceptance unknown");
+            continue;
+          }
+          if (!res.ok) {
+            rejected++;
+            failed++;
+            log("Email rejected", { status: res.status });
+            continue;
+          }
+          sent++;
         }
-        sent++;
-      } else {
-        log("BREVO_API_KEY not set, skipping email", { to: email, subject, count: listingsToSend.length });
-      }
 
-      await supabase
-        .from("saved_searches")
-        .update({
-          last_alert_sent_at: new Date().toISOString(),
-          last_alert_listing_ids: listingIds,
-        })
-        .eq("id", s.id);
+        let checkpoint = supabase
+          .from("saved_searches")
+          .update({
+            last_alert_sent_at: new Date().toISOString(),
+            last_alert_listing_ids: listingIds,
+          })
+          .eq("id", s.id)
+          .eq("user_id", s.user_id)
+          .eq("email_alerts", true)
+          .eq("filters", JSON.stringify(s.filters));
+        checkpoint = s.last_alert_listing_ids === null
+          ? checkpoint.is("last_alert_listing_ids", null)
+          : checkpoint.eq(
+            "last_alert_listing_ids",
+            `{${(s.last_alert_listing_ids as string[]).join(",")}}`,
+          );
+        const { data: updated, error: updateError } = await checkpoint.select(
+          "id",
+        );
+        if (updateError || updated?.length !== 1) {
+          failed++;
+          log("Accepted email checkpoint failed");
+        } else {
+          checkpointed++;
+        }
+      } catch {
+        failed++;
+        log("Saved alert processing failed");
+      }
     }
 
-    return new Response(JSON.stringify({ ok: true, processed: searches.length, emailsSent: sent }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
-  } catch (err) {
-    log("ERROR", (err as Error).message);
-    return new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
+    return respond();
+  } catch {
+    failed++;
+    log("Saved alert query failed");
+    return respond();
   }
 });
