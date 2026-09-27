@@ -368,12 +368,15 @@ let pollClock = Date.now();
 async function pollOutcomeScenario(
   mode: "import" | "empty" | "full" | "config" | "primary" | "partial",
   logFailure?: "resolved" | "rejected",
+  sampling?: { failedPages: number[] },
 ) {
   const oldFetch = globalThis.fetch;
   const oldNow = Date.now;
   pollClock += 60_001;
   Date.now = () => pollClock;
   let logCalls = 0, providerCalls = 0, inserted = 0;
+  const requestedPages: number[] = [];
+  const outcomes: { status: string; payload: { page_fetch_failures: number } }[] = [];
   const json = (value: unknown, status = 200) =>
     new Response(JSON.stringify(value), {
       status,
@@ -386,6 +389,7 @@ async function pollOutcomeScenario(
         (input instanceof Request ? input.method : "GET");
       if (url.pathname === "/rest/v1/sync_log") {
         logCalls++;
+        outcomes.push(JSON.parse(String(init?.body)));
         if (logFailure === "rejected") throw new Error("log-private");
         return logFailure === "resolved"
           ? json({ message: "log-private" }, 500)
@@ -420,14 +424,17 @@ async function pollOutcomeScenario(
       }
       if (url.pathname === "/api/v1/auctions/filter/details") {
         providerCalls++;
+        const page = Number(url.searchParams.get("page"));
+        requestedPages.push(page);
+        if (sampling?.failedPages.includes(page)) return json({ message: "synthetic page failure" }, 500);
         return json({
           data: mode === "empty" ? [] : [{
-            auctionListingId: "fixture-auction",
+            auctionListingId: sampling ? `fixture-auction-${page}` : "fixture-auction",
             firstPriceOffer: 100000,
             propertyMunicipalityName: "Athens",
           }],
           responseMetadata: {
-            pagination: { totalElements: mode === "empty" ? 0 : 1 },
+            pagination: { totalElements: sampling ? 10 : mode === "empty" ? 0 : 1 },
           },
         });
       }
@@ -436,7 +443,7 @@ async function pollOutcomeScenario(
   if (mode === "config") Deno.env.delete("MAIPROP_OS_PASSWORD");
   try {
     const response = await handler(
-      req("POST", { page: 0, pageSize: 1, sampleAcrossGreece: false }, {
+      req("POST", sampling ? { pageSize: 1, sampleAcrossGreece: true } : { page: 0, pageSize: 1, sampleAcrossGreece: false }, {
         authorization: `Bearer ${Deno.env.get("CRON_SECRET")}`,
       }),
     );
@@ -446,6 +453,8 @@ async function pollOutcomeScenario(
       logCalls,
       providerCalls,
       inserted,
+      requestedPages,
+      outcomes,
     };
   } finally {
     globalThis.fetch = oldFetch;
@@ -502,4 +511,27 @@ Deno.test('poll ordinary import reports both catalogue and outcome persistence',
   assertEquals(result.body.persistence_complete, true);
   assertEquals([result.body.imported, result.body.updated, result.body.errors], [1, 0, 0]);
   assertEquals(result.logCalls, 1);
+});
+
+for (const scenario of [
+  { name: 'mixed page results', mode: 'import' as const, failedPages: [5, 7], expectedImported: 1, expectedTotal: 2 },
+  { name: 'empty results with unavailable pages', mode: 'empty' as const, failedPages: [3, 5, 7], expectedImported: 0, expectedTotal: 0 },
+  { name: 'all selected pages available', mode: 'import' as const, failedPages: [], expectedImported: 1, expectedTotal: 4 },
+]) Deno.test(`sampled poll truthfully records ${scenario.name}`, async () => {
+  const result = await pollOutcomeScenario(scenario.mode, undefined, { failedPages: scenario.failedPages });
+  const complete = scenario.failedPages.length === 0;
+  assertEquals(result.response.status, complete ? 200 : 503);
+  assertEquals(result.body.ok, complete);
+  assertEquals(result.body.import_complete, complete);
+  assertEquals(result.body.persistence_complete, true);
+  assertEquals(result.body.outcome, complete ? 'succeeded' : 'partial');
+  assertEquals(result.body.page_fetch_failures, scenario.failedPages.length);
+  assertEquals(result.body.imported, scenario.expectedImported);
+  assertEquals(result.body.updated, 0);
+  assertEquals(result.body.errors ?? 0, 0);
+  assertEquals(result.body.total, scenario.expectedTotal);
+  assertEquals(result.requestedPages.sort((a, b) => a - b), [0, 3, 5, 7]);
+  assertEquals(result.logCalls, 1);
+  assertEquals(result.outcomes[0].status, complete ? 'success' : 'error');
+  assertEquals(result.outcomes[0].payload.page_fetch_failures, scenario.failedPages.length);
 });

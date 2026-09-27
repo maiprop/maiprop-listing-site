@@ -793,6 +793,7 @@ Deno.serve(async (req) => {
   }
 
   let imported = 0, updated = 0, errors = 0;
+  let pageFetchFailures = 0;
   try {
     // ── Daily pool guard ─────────────────────────────────────────────────────
     // Use the actual pool tag instead of sync_log so retries and interrupted
@@ -935,6 +936,7 @@ Deno.serve(async (req) => {
     const extraAuctions = extraPageResults.flatMap((result) =>
       result.status === "fulfilled" ? result.value.auctions : []
     );
+    pageFetchFailures = extraPageResults.filter((result) => result.status === "rejected").length;
     const auctions = [firstPage.auctions, ...extraAuctions].flat();
 
     // The v1 API wraps data in AnalyticaResponse → data is the list
@@ -946,21 +948,27 @@ Deno.serve(async (req) => {
       total_available: totalAvailable,
       page,
       source_pages: samplePages,
+      page_fetch_failures: pageFetchFailures,
       daily_limit: DAILY_AUCTION_LIMIT,
       pool_count_before: existingDailyPoolCount,
     });
 
     if (auctions.length === 0) {
-      const persisted = await logSync(sb, "success", null, {
+      const complete = pageFetchFailures === 0;
+      const persisted = await logSync(sb, complete ? "success" : "error", complete ? null : `${pageFetchFailures} selected page(s) failed`, {
         endpoint,
         total: 0,
         page,
+        sourcePages: samplePages,
+        page_fetch_failures: pageFetchFailures,
       }, 0);
       return new Response(
         JSON.stringify({
-          ok: persisted,
-          import_complete: true,
+          ok: complete && persisted,
+          import_complete: complete,
           persistence_complete: persisted,
+          outcome: complete && persisted ? "succeeded" : "partial",
+          page_fetch_failures: pageFetchFailures,
           total: 0,
           imported: 0,
           updated: 0,
@@ -969,7 +977,7 @@ Deno.serve(async (req) => {
           pool_count_before: existingDailyPoolCount,
         }),
         {
-          status: persisted ? 200 : 503,
+          status: complete && persisted ? 200 : 503,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
@@ -1078,6 +1086,7 @@ Deno.serve(async (req) => {
       imported,
       updated,
       errors,
+      page_fetch_failures: pageFetchFailures,
       page,
       sourcePages: samplePages,
       size,
@@ -1090,10 +1099,11 @@ Deno.serve(async (req) => {
       prunedPoolRows,
     };
 
+    const complete = errors === 0 && pageFetchFailures === 0;
     const persisted = await logSync(
       sb,
-      errors > 0 ? "error" : "success",
-      errors > 0 ? `${errors} item(s) failed` : null,
+      complete ? "success" : "error",
+      complete ? null : `${errors} item(s) and ${pageFetchFailures} selected page(s) failed`,
       summary,
       imported + updated,
     );
@@ -1102,14 +1112,14 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        ok: errors === 0 && persisted,
+        ok: complete && persisted,
         ...summary,
-        import_complete: errors === 0,
+        import_complete: complete,
         persistence_complete: persisted,
-        outcome: errors === 0 && persisted ? "succeeded" : "partial",
+        outcome: complete && persisted ? "succeeded" : "partial",
       }),
       {
-        status: errors === 0 && persisted ? 200 : 503,
+        status: complete && persisted ? 200 : 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
@@ -1120,6 +1130,7 @@ Deno.serve(async (req) => {
       imported,
       updated,
       errors,
+      page_fetch_failures: pageFetchFailures,
     }, imported + updated);
     return new Response(
       JSON.stringify({
@@ -1128,6 +1139,7 @@ Deno.serve(async (req) => {
         imported,
         updated,
         errors,
+        page_fetch_failures: pageFetchFailures,
         import_complete: false,
         persistence_complete: persisted,
       }),
