@@ -4001,7 +4001,27 @@
       ],
       "doesNotNeed": [
         "dropping old overloads first"
-      ]
+      ],
+      "plannedMigration": "supabase/migrations/20260927013928_restore_role_switch_compatibility_bridge.sql",
+      "localEvidence": {
+        "report": ".superpowers/sdd/2026-09-21-verified-remediation-plan/task-7c-report.md",
+        "design": "B: additive bridge and fenced strict cutover",
+        "capturedSqlChecks": 119,
+        "sourceSqlChecksWithRollbackOnlyCapturedServiceAclSimulation": 119,
+        "sourcePreexistingBindingChecks": 4,
+        "capturedNamedPostgrestRequests": 19,
+        "observedBlockingRaces": 6,
+        "simultaneousSkipLockedClaimers": 2,
+        "focusedDenoTests": 46,
+        "newCompletionRpc": "public.complete_onboarding_role_with_profile_for_user(uuid,user_role,text,text,text,text,jsonb) RETURNS jsonb",
+        "strictEnrollmentEnabled": false,
+        "reconciliationEnabled": false,
+        "oldInvocationDrainProven": false,
+        "freshAllHistoryReplayProven": false,
+        "providerExecution": "stubs only; no hosted calls",
+        "existingSourceSqlChecks": 27,
+        "oneBackendComposedChecks": 146
+      }
     }
   },
   "compatibility": {

@@ -15,7 +15,10 @@ declare global {
   var __completeOnboardingScenario: MockScenario;
 }
 
-const { handler, restore } = await captureHandler(import.meta.url, "./index.ts");
+const { handler, restore } = await captureHandler(
+  import.meta.url,
+  "./index.ts",
+);
 
 const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__completeOnboardingScenario = { calls: [], ...overrides };
@@ -32,12 +35,16 @@ Deno.test("OPTIONS preflight returns 200", async () => {
 
 Deno.test("self-service onboarding forwards agent role to trusted RPC", async () => {
   resetScenario();
-  const res = await handler(authedJson({ role: "agent", participantType: "agent" }));
+  const res = await handler(
+    authedJson({ role: "agent", participantType: "agent" }),
+  );
 
   assertEquals(res.status, 200);
-  const rpcCall = globalThis.__completeOnboardingScenario.calls.find((call) => call.name === "rpc");
+  const rpcCall = globalThis.__completeOnboardingScenario.calls.find((call) =>
+    call.name === "rpc"
+  );
   assertEquals(rpcCall?.args, {
-    name: "complete_onboarding_role_for_user",
+    name: "complete_onboarding_role_with_profile_for_user",
     args: {
       p_user_id: "11111111-1111-4111-8111-111111111111",
       p_role: "agent",
@@ -45,6 +52,7 @@ Deno.test("self-service onboarding forwards agent role to trusted RPC", async ()
       p_display_name: null,
       p_city: null,
       p_phone: null,
+      p_professional_profile: null,
     },
   });
 });
@@ -59,9 +67,11 @@ Deno.test("self-service onboarding forwards developer role to trusted RPC", asyn
   }));
 
   assertEquals(res.status, 200);
-  const rpcCall = globalThis.__completeOnboardingScenario.calls.find((call) => call.name === "rpc");
+  const rpcCall = globalThis.__completeOnboardingScenario.calls.find((call) =>
+    call.name === "rpc"
+  );
   assertEquals(rpcCall?.args, {
-    name: "complete_onboarding_role_for_user",
+    name: "complete_onboarding_role_with_profile_for_user",
     args: {
       p_user_id: "11111111-1111-4111-8111-111111111111",
       p_role: "developer",
@@ -69,38 +79,55 @@ Deno.test("self-service onboarding forwards developer role to trusted RPC", asyn
       p_display_name: "Dev Co",
       p_city: "Athens",
       p_phone: null,
+      p_professional_profile: null,
     },
   });
 });
 
 Deno.test("self-service onboarding rejects invite-only investor role before RPC", async () => {
   resetScenario();
-  const res = await handler(authedJson({ role: "investor", participantType: "investor" }));
+  const res = await handler(
+    authedJson({ role: "investor", participantType: "investor" }),
+  );
   const body = await res.json();
 
   assertEquals(res.status, 400);
   assertEquals(body.error, "role_not_allowed");
-  assert(!globalThis.__completeOnboardingScenario.calls.some((call) => call.name === "rpc"));
+  assert(
+    !globalThis.__completeOnboardingScenario.calls.some((call) =>
+      call.name === "rpc"
+    ),
+  );
 });
 
 Deno.test("self-service onboarding rejects admin role before RPC", async () => {
   resetScenario();
-  const res = await handler(authedJson({ role: "admin", participantType: "admin" }));
+  const res = await handler(
+    authedJson({ role: "admin", participantType: "admin" }),
+  );
   const body = await res.json();
 
   assertEquals(res.status, 400);
   assertEquals(body.error, "role_not_allowed");
-  assert(!globalThis.__completeOnboardingScenario.calls.some((call) => call.name === "rpc"));
+  assert(
+    !globalThis.__completeOnboardingScenario.calls.some((call) =>
+      call.name === "rpc"
+    ),
+  );
 });
 
 Deno.test("self-service onboarding forwards seller role to trusted RPC", async () => {
   resetScenario();
-  const res = await handler(authedJson({ role: "seller", participantType: "seller" }));
+  const res = await handler(
+    authedJson({ role: "seller", participantType: "seller" }),
+  );
 
   assertEquals(res.status, 200);
-  const rpcCall = globalThis.__completeOnboardingScenario.calls.find((call) => call.name === "rpc");
+  const rpcCall = globalThis.__completeOnboardingScenario.calls.find((call) =>
+    call.name === "rpc"
+  );
   assertEquals(rpcCall?.args, {
-    name: "complete_onboarding_role_for_user",
+    name: "complete_onboarding_role_with_profile_for_user",
     args: {
       p_user_id: "11111111-1111-4111-8111-111111111111",
       p_role: "seller",
@@ -108,9 +135,12 @@ Deno.test("self-service onboarding forwards seller role to trusted RPC", async (
       p_display_name: null,
       p_city: null,
       p_phone: null,
+      p_professional_profile: null,
     },
   });
-  const auditCall = globalThis.__completeOnboardingScenario.calls.find((call) => call.name === "audit");
+  const auditCall = globalThis.__completeOnboardingScenario.calls.find((call) =>
+    call.name === "audit"
+  );
   assertEquals(auditCall?.args, {
     actor_id: "11111111-1111-4111-8111-111111111111",
     target_id: "11111111-1111-4111-8111-111111111111",
@@ -125,7 +155,7 @@ Deno.test("self-service onboarding forwards seller role to trusted RPC", async (
   });
 });
 
-Deno.test("professional onboarding creates profile row with verified caller before RPC", async () => {
+Deno.test("professional onboarding sends one atomic RPC with verified actor and returns its professional id", async () => {
   resetScenario();
   const res = await handler(authedJson({
     role: "professional",
@@ -144,23 +174,32 @@ Deno.test("professional onboarding creates profile row with verified caller befo
   assertEquals(res.status, 200);
   assertEquals(body.professionalId, "22222222-2222-4222-8222-222222222222");
 
-  const upsertIndex = globalThis.__completeOnboardingScenario.calls.findIndex((call) => call.name === "upsert");
-  const rpcIndex = globalThis.__completeOnboardingScenario.calls.findIndex((call) => call.name === "rpc");
-  assert(upsertIndex >= 0);
-  assert(rpcIndex > upsertIndex);
-
-  const upsertCall = globalThis.__completeOnboardingScenario.calls[upsertIndex];
-  assertEquals(upsertCall.args, {
-    table: "professionals",
-    row: {
-      user_id: "11111111-1111-4111-8111-111111111111",
-      title: "Pro Studio",
-      category: "architect",
-      display_name: "A Pro",
-      city: "Athens",
-      license_number: "123456789",
+  assert(
+    !globalThis.__completeOnboardingScenario.calls.some((call) =>
+      call.name === "upsert"
+    ),
+  );
+  const rpc = globalThis.__completeOnboardingScenario.calls.filter((call) =>
+    call.name === "rpc"
+  );
+  assertEquals(rpc.length, 1);
+  assertEquals(rpc[0].args, {
+    name: "complete_onboarding_role_with_profile_for_user",
+    args: {
+      p_user_id: "11111111-1111-4111-8111-111111111111",
+      p_role: "professional",
+      p_participant_type: "professional",
+      p_display_name: "A Pro",
+      p_city: "Athens",
+      p_phone: "+306900000000",
+      p_professional_profile: {
+        title: "Pro Studio",
+        category: "architect",
+        displayName: "A Pro",
+        city: "Athens",
+        licenseNumber: "123456789",
+      },
     },
-    options: { onConflict: "user_id" },
   });
 });
 
@@ -180,8 +219,33 @@ Deno.test("professional onboarding rejects browser-supplied profile user id befo
 
   assertEquals(res.status, 400);
   assertEquals(body.error, "validation_error");
-  assert(!globalThis.__completeOnboardingScenario.calls.some((call) => call.name === "upsert"));
-  assert(!globalThis.__completeOnboardingScenario.calls.some((call) => call.name === "rpc"));
+  assert(
+    !globalThis.__completeOnboardingScenario.calls.some((call) =>
+      call.name === "upsert"
+    ),
+  );
+  assert(
+    !globalThis.__completeOnboardingScenario.calls.some((call) =>
+      call.name === "rpc"
+    ),
+  );
+});
+
+Deno.test("completion failure produces no separate professional write or success audit", async () => {
+  resetScenario({ rpcError: "role_switch_audit_required" });
+  const res = await handler(
+    authedJson({
+      role: "seller",
+      participantType: "seller",
+      professionalProfile: { title: "Studio", category: "architect" },
+    }),
+  );
+  assertEquals(res.status, 500);
+  assert(
+    !globalThis.__completeOnboardingScenario.calls.some((call) =>
+      ["upsert", "audit"].includes(call.name)
+    ),
+  );
 });
 
 restore();

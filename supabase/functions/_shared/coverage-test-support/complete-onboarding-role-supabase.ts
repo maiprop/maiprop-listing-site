@@ -42,7 +42,14 @@ export function createClient(..._args: unknown[]) {
       scenario.calls.push({ name: "rpc", args: { name, args } });
       return scenario.rpcError
         ? { data: null, error: { message: scenario.rpcError } }
-        : { data: null, error: null };
+        : {
+          data: {
+            professionalId: args.p_professional_profile
+              ? "22222222-2222-4222-8222-222222222222"
+              : null,
+          },
+          error: null,
+        };
     },
   };
 }

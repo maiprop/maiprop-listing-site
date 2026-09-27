@@ -1,4 +1,14 @@
 BEGIN;
+-- This source-scheduler fixture deliberately admits synthetic reconciliation
+-- only in this transaction. The compatibility migration defaults remain closed.
+DO $$ BEGIN
+ IF current_setting('maiprop.test_disposable_database',true) IS DISTINCT FROM current_database()
+  OR inet_server_addr() IS NOT NULL
+  OR current_database() IN ('postgres','template0','template1','maiprop_replay_current_20260921') THEN
+  RAISE EXCEPTION 'Explicit disposable local socket database required';
+ END IF;
+END $$;
+UPDATE private.role_switch_rollout_control SET reconciliation_enabled=true WHERE singleton;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SELECT plan(27);
 
