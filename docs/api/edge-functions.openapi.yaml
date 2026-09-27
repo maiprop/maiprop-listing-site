@@ -1092,22 +1092,143 @@ paths:
           description: Nearby-place evidence is unavailable or the requested response version is unsupported
 
   /smart-filters:
-    get:
+    post:
       operationId: smartFilters
-      summary: Returns suggested smart filters for a type/subtype combo
-      security: []
-      parameters:
-        - in: query
-          name: type
-          required: true
-          schema: { type: string }
-        - in: query
-          name: subtype
-          schema: { type: string }
+      summary: Suggest search filter sections and feature labels
+      description: >-
+        Send POST JSON, not GET query parameters. Requires a signed-in actor and atomic AI quota
+        reservation before provider work. Source limiter is 20 requests/minute per IP (actor fallback).
+        Optional subtype must belong to the selected type; canonical source mapping is
+        PROPERTY_SUBTYPES_BY_TYPE in smart-filters/index.ts. Model suggestions are allowlisted and do not
+        retrieve properties or prove property features.
+      security:
+        - SupabaseJWT: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - type
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - apartment
+                    - house
+                    - villa
+                    - land
+                    - commercial
+                    - office
+                    - studio
+                    - maisonette
+                    - warehouse
+                    - hotel
+                    - mixed_use
+                    - parking
+                    - storage
+                subtype:
+                  type:
+                    - string
+                    - 'null'
+                  description: >-
+                    Must be a member of the selected type’s source subtype mapping; omit or use null
+                    otherwise.
+                listing_type:
+                  type:
+                    - string
+                    - 'null'
+                  enum:
+                    - sale
+                    - rent
+                    - auction
+                    - firesale
+                    - open_house
+                    - new_build
+                    - null
+            example:
+              type: apartment
+              subtype: studio
+              listing_type: sale
       responses:
         '200':
-          description: Filter suggestions
-          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+          description: Synthetic successful source-contract example
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - sections
+                  - features
+                  - sizeLabel
+                  - priceLabel
+                  - bedsLabel
+                  - featuresLabel
+                properties:
+                  sections:
+                    type: array
+                    minItems: 1
+                    maxItems: 24
+                    items:
+                      type: string
+                      enum:
+                        - size
+                        - bedrooms
+                        - bathrooms
+                        - floor
+                        - year_built
+                        - heating
+                        - energy_class
+                        - construction_status
+                        - land_details
+                        - rental_extras
+                        - commercial_details
+                  features:
+                    type: array
+                    maxItems: 24
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required:
+                        - key
+                        - label
+                      properties:
+                        key:
+                          type: string
+                        label:
+                          type: string
+                  sizeLabel:
+                    type: string
+                  priceLabel:
+                    type: string
+                  bedsLabel:
+                    type:
+                      - string
+                      - 'null'
+                  featuresLabel:
+                    type: string
+              example:
+                sections:
+                  - size
+                  - bedrooms
+                features:
+                  - key: has_balcony
+                    label: Balcony
+                sizeLabel: Size (m²)
+                priceLabel: Asking Price
+                bedsLabel: Bedrooms
+                featuresLabel: Features
+        '400':
+          description: Invalid request
+        '401':
+          description: Authentication required for the authenticated operation
+        '429':
+          description: Rate or monthly quota limit reached
+        '503':
+          description: Required service unavailable
 
   /property-chat:
     post:
@@ -1255,27 +1376,149 @@ paths:
   /ai-translate:
     post:
       operationId: aiTranslate
-      summary: Translate arbitrary text between supported locales
-      security: []
+      summary: Translate a flat keyed string dictionary
+      description: >-
+        POST only. AI target locales require a verified signed-in actor, 10 requests/minute per user and an
+        atomic ai-translate quota reservation before provider work. Exception: static locales en and el
+        return the supplied locale/strings unchanged before authentication, rate limiting or quota; this is
+        pass-through, not translation. The security scheme describes AI translation. Strict JSON accepts
+        only locale and strings. Keys cannot have leading/trailing whitespace; the pretty-printed strings
+        object is limited to 200000 characters, request body to 192 KiB, each string to the source
+        provider-output budget, and the payload to 64 provider chunks. Source validates complete translated
+        key identity; success is not a guarantee of linguistic accuracy. No anonymous AI-generation
+        contract is offered.
+      security:
+        - SupabaseJWT: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [text, target]
+              additionalProperties: false
+              required:
+                - locale
+                - strings
               properties:
-                text: { type: string }
-                target: { type: string, enum: [en, el, de, fr, it] }
+                locale:
+                  type: string
+                  enum:
+                    - en
+                    - el
+                    - fr
+                    - de
+                    - ar
+                    - zh
+                    - ru
+                    - tr
+                    - it
+                    - es
+                    - pt
+                    - nl
+                    - pl
+                    - ro
+                    - bg
+                    - cs
+                    - hu
+                    - sk
+                    - hr
+                    - sr
+                    - uk
+                    - he
+                    - ja
+                    - ko
+                strings:
+                  type: object
+                  minProperties: 1
+                  maxProperties: 2500
+                  propertyNames:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                  additionalProperties:
+                    type: string
+                    maxLength: 10000
+            examples:
+              ai:
+                summary: Authenticated AI translation
+                value:
+                  locale: fr
+                  strings:
+                    nav.listings: Listings
+              static:
+                summary: Unauthenticated static pass-through; unchanged output
+                value:
+                  locale: en
+                  strings:
+                    nav.listings: Listings
       responses:
         '200':
-          description: Translated text
+          description: Synthetic successful source-contract example
           content:
             application/json:
               schema:
                 type: object
+                additionalProperties: false
+                required:
+                  - locale
+                  - strings
                 properties:
-                  translated: { type: string }
+                  locale:
+                    type: string
+                    enum:
+                      - en
+                      - el
+                      - fr
+                      - de
+                      - ar
+                      - zh
+                      - ru
+                      - tr
+                      - it
+                      - es
+                      - pt
+                      - nl
+                      - pl
+                      - ro
+                      - bg
+                      - cs
+                      - hu
+                      - sk
+                      - hr
+                      - sr
+                      - uk
+                      - he
+                      - ja
+                      - ko
+                  strings:
+                    type: object
+                    additionalProperties:
+                      type: string
+              examples:
+                ai:
+                  value:
+                    locale: fr
+                    strings:
+                      nav.listings: Annonces
+                static:
+                  value:
+                    locale: en
+                    strings:
+                      nav.listings: Listings
+        '400':
+          description: Invalid request
+        '401':
+          description: Authentication required for the authenticated operation
+        '405':
+          description: Only POST is supported (apart from CORS preflight)
+        '429':
+          description: Rate or monthly quota limit reached
+        '502':
+          description: Provider translation/key validation failed
+        '503':
+          description: Required service unavailable
+        '504':
+          description: Translation deadline exceeded
 
   /listing-ai-assist:
     post:

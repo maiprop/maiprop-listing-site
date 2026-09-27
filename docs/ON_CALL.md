@@ -23,6 +23,8 @@ Use existing organizational escalation contacts. Severity follows user impact: c
 
 Saved-search/followup handlers now check conditional persistence and scheduler business outcomes in candidate source. This is not durable exactly-once dispatch. A pg_net request ID/response is transport evidence; SQL cron invocation completion is not business completion. Provider HTTP acceptance is not delivery; inspect delivery/bounce events separately. Queue usage/current schedules remain unverified; there is no documented five-second retry guarantee. See [ADR-004](adr/004-pgmq-email-queue.md).
 
+For the retained queue path, inspect `process-email-queue` logs and its `email_send_log` records for sent, failed, rate-limited and dead-letter outcomes. Check `suppressed_emails` for recorded unsubscribe, bounce or complaint reasons, and use the Brevo delivery view/provider events to establish delivery or bounce separately. These tables and the queue consumer exist in source; verify current environment access and deployed behavior before drawing conclusions. A queue log entry is not a universal ledger for direct-send producers, and a recorded sent state is not inbox-delivery proof.
+
 ## Changes and release
 
 Use the [Production Release Runbook](PRODUCTION_RELEASE_RUNBOOK.md) for selected exact-artifact staging, approval, lease and production mutation. Do not use dashboard redeploys, ad hoc Management API migration writes, manual migration-history repair or broad function deployment as incident shortcuts. Existing user authorization and incident scope still govern actions; documentation itself grants none.
