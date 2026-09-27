@@ -101,3 +101,31 @@ This is usable disabled capability preparation, not global reclamation or releas
 Actual canonical origin values, Storage object existence/read/remove permissions, managed pg_net response lifecycle and PG17 are separate authorized hosted proofs. Bucket size/MIME settings are not changed. The narrow Storage SELECT repair is included; actual provider remove behavior and all direct deletion writers remain explicit managed/activation gates. Full historical D0 bootstrap replay, real local PostgREST named-call integration, all quota saturation and every historical URL encoding remain outside the bounded checks; routine named arguments are captured and current service mocks pass, not a hosted gateway success claim.
 
 Self-review: historical migrations/old overloads preserved; selected source definitions and explicit ACLs; no shared quota replacement; exact source/captured metadata distinction; no blanket grants/remote calls/dependencies; no schedule; gate false with null invoker; tests use actual roles and normal graph triggers; known races remain honest activation blockers. Independent review follows. Scoped commit uses controller-authorized `git -c core.hooksPath=NUL commit` after focused checks, avoiding the previously recorded unrelated broad precommit artifact-lint failure.
+
+## Fix round 1 — eligible disabled-claim regression
+
+Review base: `9f6e26efe758b9746eef5da63bae672a34807953`. Addresses the important P2 in `task-7b-independent-review-20260927.md`; no runtime/migration change. The P3 rollout-default compatibility check remains explicitly deferred to the controller's final minor-repair ledger.
+
+The lifecycle suite now creates three eligible synthetic queue rows: due pending, expired processing (with existing token), and stale held. It verifies all three are eligible before each call, snapshots complete rows, invokes claim under the actual service_role/JWT context with both a false flag and a missing control row, then compares every row as full JSONB. Resetting only these synthetic rows from the snapshot between cases ensures missing-row proof is independent even when the false-gate call is deliberately broken. Rows are removed before later enabled-lease diagnostics; the entire suite remains BEGIN/ROLLBACK and uses the same explicit disposable-database marker/one-backend D0 composition.
+
+Controlled mutation proof used the exact migration claim definition with only its closed-gate early return removed, inserted inside the suite transaction after the disposable-target guard. No gate was enabled, no provider was invoked, and ROLLBACK restored the original definition. Before/after snapshots compare the exact pg_get_functiondef text, ACL, owner, gate value and total queue count.
+
+Exact commands (repository root):
+
+`node scripts/project-runtime.mjs -- node .superpowers/sdd/2026-09-21-verified-remediation-plan/task-7b-fix1-proof.mjs maiprop_t7b_captured_20260927`
+
+`node scripts/project-runtime.mjs -- node .superpowers/sdd/2026-09-21-verified-remediation-plan/task-7b-fix1-proof.mjs maiprop_t7b_source_20260927`
+
+Each command uses `wsl.exe -d Ubuntu -u postgres -- psql -X -At -h /var/run/postgresql -p 5432 -v ON_ERROR_STOP=1 -d <own-baseline-db> -f <generated-local-file>`. The ignored harness requires one of the two exact owned Task7b database names and writes distinct fix-round evidence without overwriting earlier logs.
+
+Both baselines produced exactly eight intended RED failures: closed/missing claim returned three instead of zero, and all three complete-row comparisons failed for each case (assertions10–13,24,27–29). PostgreSQL execution exited0 because pgTAP reports assertion failures as rows; the harness explicitly classified these as expected failing assertions, checked their exact count/labels, and required the plan `1..90`. It did not treat psql exit0 as a test pass.
+
+GREEN against the unmodified current migration: **90/90 lifecycle checks on each baseline**, ending `1..90` and `ROLLBACK`, with no `not ok` results and psql exit0. Exact snapshots matched after RED and GREEN. Both databases remain retained with gate false and no fixture rows committed. This supersedes the initial82-check lifecycle result only; the separate20-check policy suite and prior client/Edge/race results were not rerun or relabeled.
+
+Evidence under SDD:
+
+- `task-7b-fix1-proof.mjs`: exact mutation/restoration/check harness.
+- `task-7b-fix1-maiprop_t7b_{captured,source}_20260927-summary.json`: eight failure labels, GREEN90 count, exact-restoration verdict.
+- `db/task-7b-fix1-maiprop_t7b_{captured,source}_20260927-{before,red,after-red,green,after-green}.{sql,stdout,stderr,exit}`: complete generated SQL and process results, including original/restored function text and permissions.
+
+Self-review checked eligibility independent of the registered-upload delay, full-row rather than selected-column equality, both missing/false branches, actual service role, independent fixture reset, rollback-only mutation proof and unchanged runtime scope. Scoped diff whitespace check passed; commit remains test/report only.

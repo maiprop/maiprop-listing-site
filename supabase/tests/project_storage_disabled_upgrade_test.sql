@@ -30,10 +30,27 @@ SELECT throws_ok($q$SELECT public.invoke_storage_cleanup_cron()$q$,'42501',NULL,
 SELECT lives_ok($q$SELECT public.register_new_building_storage_upload('7b020000-0000-4000-8000-000000000001','listing-images',pg_temp.object_path('7b020000-0000-4000-8000-000000000001','cover.jpg'),pg_temp.object_url('7b020000-0000-4000-8000-000000000001','cover.jpg'))$q$,'registration remains usable while closed');
 RESET ROLE;
 SELECT is((SELECT status FROM public.storage_cleanup_jobs WHERE project_id='7b020000-0000-4000-8000-000000000001'),'pending','registration creates pending job');
-CREATE TEMP TABLE gate_before AS SELECT * FROM public.storage_cleanup_jobs;
+-- Eligible synthetic queue rows, separate from the not-yet-due registered upload.
+-- Distinct complete-row snapshots catch attempts/status/token/expiry/timestamp mutation.
+INSERT INTO public.storage_cleanup_jobs(id,bucket,object_path,object_url,owner_id,project_id,reason,status,attempts,next_attempt_at,last_error,created_at,updated_at,lease_token,lease_expires_at)
+SELECT ('7b0a0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  'project-media', pg_temp.object_path('7b020000-0000-4000-8000-000000000090','gate-'||n||'.jpg'),
+  'https://task7b.example.test/storage/v1/object/public/project-media/'||pg_temp.object_path('7b020000-0000-4000-8000-000000000090','gate-'||n||'.jpg'),
+  '7b010000-0000-4000-8000-000000000001','7b020000-0000-4000-8000-000000000090','task7b_disabled_claim',
+  state,n,now()-interval '2 hours','synthetic prior error',now()-interval '3 hours',now()-interval '1 hour',
+  CASE WHEN state='processing' THEN '7b0b0000-0000-4000-8000-000000000001'::uuid END,
+  CASE WHEN state='processing' THEN now()-interval '30 minutes' END
+FROM (VALUES (1,'pending'),(2,'processing'),(3,'held')) AS eligible(n,state);
+CREATE TEMP TABLE gate_before AS SELECT * FROM public.storage_cleanup_jobs WHERE reason='task7b_disabled_claim';
+SELECT is((SELECT count(*) FROM public.storage_cleanup_jobs WHERE reason='task7b_disabled_claim' AND ((status='pending' AND next_attempt_at<=now()) OR (status='processing' AND lease_expires_at<=now()) OR (status='held' AND updated_at<=now()-interval '15 minutes'))),3::bigint,'disabled-claim fixtures are all eligible before invoking claim');
 SET LOCAL ROLE service_role;
 SELECT set_config('request.jwt.claims','{"role":"service_role"}',true),set_config('request.jwt.claim.role','service_role',true);
 SELECT is((SELECT count(*) FROM public.claim_storage_cleanup_jobs()),0::bigint,'closed claim returns zero');
+RESET ROLE;
+SELECT is((SELECT to_jsonb(job) FROM public.storage_cleanup_jobs job WHERE id='7b0a0000-0000-4000-8000-000000000001'),(SELECT to_jsonb(job) FROM gate_before job WHERE id='7b0a0000-0000-4000-8000-000000000001'),'false gate preserves complete due pending row');
+SELECT is((SELECT to_jsonb(job) FROM public.storage_cleanup_jobs job WHERE id='7b0a0000-0000-4000-8000-000000000002'),(SELECT to_jsonb(job) FROM gate_before job WHERE id='7b0a0000-0000-4000-8000-000000000002'),'false gate preserves complete expired processing row');
+SELECT is((SELECT to_jsonb(job) FROM public.storage_cleanup_jobs job WHERE id='7b0a0000-0000-4000-8000-000000000003'),(SELECT to_jsonb(job) FROM gate_before job WHERE id='7b0a0000-0000-4000-8000-000000000003'),'false gate preserves complete stale held row');
+SET LOCAL ROLE service_role;
 SELECT is(public.prepare_storage_cleanup_delete('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002'),'lost','closed prepare never authorizes delete');
 SELECT is(public.invoke_storage_cleanup_cron(),NULL::bigint,'closed invoker returns null before managed calls');
 SELECT lives_ok($q$SELECT pg_temp.create_graph('7b020000-0000-4000-8000-000000000001')$q$,'strict graph creation with normal triggers');
@@ -49,12 +66,20 @@ SELECT is((SELECT count(*) FROM public.listings WHERE project_id='7b020000-0000-
 
 -- Disabled calls preserve every queue field, not just row count.
 SELECT is((SELECT attempts FROM public.storage_cleanup_jobs WHERE project_id='7b020000-0000-4000-8000-000000000001'),0,'disabled calls do not increment attempts');
+-- Reset these synthetic rows so missing-row proof remains independent even under a broken claim.
+DELETE FROM public.storage_cleanup_jobs WHERE reason='task7b_disabled_claim';
+INSERT INTO public.storage_cleanup_jobs SELECT * FROM gate_before;
+SELECT is((SELECT count(*) FROM public.storage_cleanup_jobs WHERE reason='task7b_disabled_claim' AND ((status='pending' AND next_attempt_at<=now()) OR (status='processing' AND lease_expires_at<=now()) OR (status='held' AND updated_at<=now()-interval '15 minutes'))),3::bigint,'disabled-claim fixtures are all eligible before invoking claim');
 DELETE FROM private.storage_cleanup_rollout_control;
 SET LOCAL ROLE service_role;
 SELECT is((SELECT count(*) FROM public.claim_storage_cleanup_jobs()),0::bigint,'missing control row disables claim');
 SELECT is(public.prepare_storage_cleanup_delete(gen_random_uuid(),gen_random_uuid()),'lost','missing control row disables prepare');
 SELECT is(public.invoke_storage_cleanup_cron(),NULL::bigint,'missing control row disables invocation');
 RESET ROLE;
+SELECT is((SELECT to_jsonb(job) FROM public.storage_cleanup_jobs job WHERE id='7b0a0000-0000-4000-8000-000000000001'),(SELECT to_jsonb(job) FROM gate_before job WHERE id='7b0a0000-0000-4000-8000-000000000001'),'missing gate row preserves complete due pending row');
+SELECT is((SELECT to_jsonb(job) FROM public.storage_cleanup_jobs job WHERE id='7b0a0000-0000-4000-8000-000000000002'),(SELECT to_jsonb(job) FROM gate_before job WHERE id='7b0a0000-0000-4000-8000-000000000002'),'missing gate row preserves complete expired processing row');
+SELECT is((SELECT to_jsonb(job) FROM public.storage_cleanup_jobs job WHERE id='7b0a0000-0000-4000-8000-000000000003'),(SELECT to_jsonb(job) FROM gate_before job WHERE id='7b0a0000-0000-4000-8000-000000000003'),'missing gate row preserves complete stale held row');
+DELETE FROM public.storage_cleanup_jobs WHERE reason='task7b_disabled_claim';
 INSERT INTO private.storage_cleanup_rollout_control VALUES(true,false);
 CREATE FUNCTION pg_temp.manifest(p uuid, filename text DEFAULT 'cover.jpg') RETURNS jsonb LANGUAGE sql AS $$ SELECT jsonb_build_array(jsonb_build_object('bucket','listing-images','object_path',pg_temp.object_path(p,filename),'object_url',pg_temp.object_url(p,filename))) $$;
 -- Failure injection is AFTER each real graph stage, retaining all normal trigger effects.
