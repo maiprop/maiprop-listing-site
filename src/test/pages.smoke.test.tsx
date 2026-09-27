@@ -184,6 +184,7 @@ vi.mock("@/hooks/useContacts", () => ({
 
 vi.mock("@/hooks/useProfessionals", () => ({
   useProfessionals: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useRelatedProfessionals: vi.fn().mockReturnValue({ data: [], isPending: false, isError: false }),
   useProfessional: vi.fn().mockReturnValue({ data: null, isLoading: false }),
   useProfessionalByUserId: vi.fn().mockReturnValue({ data: null, isLoading: false }),
 }));

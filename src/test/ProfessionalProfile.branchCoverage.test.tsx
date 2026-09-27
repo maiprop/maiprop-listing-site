@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   useAuth: vi.fn(),
   useProfessional: vi.fn(),
-  useProfessionals: vi.fn(),
+  useRelatedProfessionals: vi.fn(),
   useServices: vi.fn(),
   useAvailability: vi.fn(),
   useListings: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("@tanstack/react-query", async () => {
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => mocks.useAuth() }));
 vi.mock("@/hooks/useProfessionals", () => ({
   useProfessional: (...args: unknown[]) => mocks.useProfessional(...args),
-  useProfessionals: () => mocks.useProfessionals(),
+  useRelatedProfessionals: (...args: unknown[]) => mocks.useRelatedProfessionals(...args),
 }));
 vi.mock("@/hooks/useProfessionalServices", () => ({
   useProfessionalServices: (...args: unknown[]) => mocks.useServices(...args),
@@ -131,7 +131,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.useAuth.mockReturnValue({ user: null });
   mocks.useProfessional.mockReturnValue({ data: professional(), isLoading: false });
-  mocks.useProfessionals.mockReturnValue({ data: [] });
+  mocks.useRelatedProfessionals.mockReturnValue({ data: [] });
   mocks.useServices.mockReturnValue({ data: [] });
   mocks.useAvailability.mockReturnValue({ data: [] });
   mocks.useListings.mockReturnValue({ data: [] });
@@ -147,6 +147,29 @@ describe("ProfessionalProfile business branches", () => {
 
     expect(container.querySelector(".animate-spin")).toBeInTheDocument();
     expect(screen.queryByText("Nora Notary")).not.toBeInTheDocument();
+    expect(mocks.useRelatedProfessionals).toHaveBeenCalledWith(undefined, undefined);
+  });
+
+  it("shows a self-supplied license number without implying verified licensing", () => {
+    mocks.useProfessional.mockReturnValue({ data: professional({ verified: false, license_number: "NOTARY-1" }), isLoading: false });
+    renderProfile();
+    expect(screen.getAllByText("Pending Verification").length).toBeGreaterThan(0);
+    expect(screen.getByText("License number provided")).toBeInTheDocument();
+    expect(screen.getByText("NOTARY-1")).toBeInTheDocument();
+    expect(screen.queryByText("Licensed Professional")).not.toBeInTheDocument();
+  });
+
+  it("distinguishes loading and failed related requests from no peers", () => {
+    mocks.useRelatedProfessionals.mockReturnValue({ data: undefined, isPending: true, isError: false });
+    const loading = renderProfile();
+    expect(screen.getByText("Loading similar professionals…")).toBeInTheDocument();
+    expect(screen.queryByText("No others in this category yet.")).not.toBeInTheDocument();
+    loading.unmount();
+
+    mocks.useRelatedProfessionals.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    renderProfile();
+    expect(screen.getByText("Could not load similar professionals.")).toBeInTheDocument();
+    expect(screen.queryByText("No others in this category yet.")).not.toBeInTheDocument();
   });
 
   it("keeps sparse free-agent contact actions gated and derives fallback portfolio data", () => {
@@ -195,7 +218,7 @@ describe("ProfessionalProfile business branches", () => {
       }),
       isLoading: false,
     });
-    mocks.useProfessionals.mockReturnValue({
+    mocks.useRelatedProfessionals.mockReturnValue({
       data: [
         professional(),
         professional({ id: "peer-1", category: "specialist_not_in_catalog", display_name: "", city: "", avatar_url: null }),
@@ -246,7 +269,7 @@ describe("ProfessionalProfile business branches", () => {
 
     vi.clearAllMocks();
     mocks.useProfessional.mockReturnValue({ data: professional({ subscription_tier: "free" }), isLoading: false });
-    mocks.useProfessionals.mockReturnValue({ data: [] });
+    mocks.useRelatedProfessionals.mockReturnValue({ data: [] });
     mocks.useServices.mockReturnValue({ data: [] });
     mocks.useAvailability.mockReturnValue({ data: [] });
     mocks.useListings.mockReturnValue({ data: [] });
@@ -331,7 +354,7 @@ describe("ProfessionalProfile business branches", () => {
   });
 
   it("handles a malformed professionals response as an empty peer directory", () => {
-    mocks.useProfessionals.mockReturnValue({ data: { unexpected: true } });
+    mocks.useRelatedProfessionals.mockReturnValue({ data: { unexpected: true } });
     renderProfile();
     expect(screen.getByText("No others in this category yet.")).toBeInTheDocument();
   });

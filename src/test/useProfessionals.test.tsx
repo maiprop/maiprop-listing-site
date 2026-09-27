@@ -16,7 +16,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-import { useProfessionals, useProfessional, useProfessionalByUserId } from "@/hooks/useProfessionals";
+import { useProfessionals, useProfessional, useProfessionalByUserId, useRelatedProfessionals } from "@/hooks/useProfessionals";
 
 const publicProfessional = {
   id: "p1",
@@ -142,6 +142,73 @@ describe("useProfessional(id)", () => {
       display_name: "Bob",
     });
     expect(single).toHaveBeenCalled();
+  });
+});
+
+describe("useRelatedProfessionals", () => {
+  it("waits for a loaded profile id and category", () => {
+    const { result } = renderHookWithQuery(() => useRelatedProfessionals("", undefined));
+    expect(result.current.isPending).toBe(true);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("waits for category even when the current id is known", () => {
+    const { result } = renderHookWithQuery(() => useRelatedProfessionals("p1", undefined));
+    expect(result.current.isPending).toBe(true);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("requests only three same-category peers in stable priority order", async () => {
+    const peers = [{ id: "p2", display_name: "Bob", avatar_url: null, city: "Athens" }];
+    const query = {
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), neq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(), limit: vi.fn().mockResolvedValue({ data: peers, error: null }),
+    };
+    fromMock.mockReturnValue(query);
+    const { result } = renderHookWithQuery(() => useRelatedProfessionals("p1", "architect"));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fromMock).toHaveBeenCalledWith("public_professionals");
+    expect(query.select).toHaveBeenCalledWith("id, display_name, avatar_url, city");
+    expect(query.eq).toHaveBeenCalledWith("category", "architect");
+    expect(query.neq).toHaveBeenCalledWith("id", "p1");
+    expect(query.order.mock.calls).toEqual([
+      ["subscription_tier", { ascending: false, nullsFirst: false }],
+      ["rating", { ascending: false, nullsFirst: false }],
+      ["id", { ascending: true }],
+    ]);
+    expect(query.limit).toHaveBeenCalledWith(3);
+    expect(result.current.data).toEqual(peers);
+  });
+
+  it("keeps an empty result distinct from a failed request", async () => {
+    const query = {
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), neq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(), limit: vi.fn().mockResolvedValueOnce({ data: [], error: null }).mockResolvedValueOnce({ data: null, error: new Error("db down") }),
+    };
+    fromMock.mockReturnValue(query);
+    const empty = renderHookWithQuery(() => useRelatedProfessionals("p1", "architect"));
+    await waitFor(() => expect(empty.result.current.isSuccess).toBe(true));
+    expect(empty.result.current.data).toEqual([]);
+    empty.unmount();
+    const failed = renderHookWithQuery(() => useRelatedProfessionals("p1", "architect"));
+    await waitFor(() => expect(failed.result.current.isError).toBe(true));
+  });
+
+  it("refetches for a different profile category instead of reusing prior peers", async () => {
+    const query = {
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), neq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(), limit: vi.fn()
+        .mockResolvedValueOnce({ data: [{ id: "architect-peer", display_name: "A", avatar_url: null, city: null }], error: null })
+        .mockResolvedValueOnce({ data: [{ id: "lawyer-peer", display_name: "L", avatar_url: null, city: null }], error: null }),
+    };
+    fromMock.mockReturnValue(query);
+    let category: "architect" | "lawyer" = "architect";
+    const view = renderHookWithQuery(() => useRelatedProfessionals("p1", category));
+    await waitFor(() => expect(view.result.current.data?.[0]?.id).toBe("architect-peer"));
+    category = "lawyer";
+    view.rerender();
+    await waitFor(() => expect(view.result.current.data?.[0]?.id).toBe("lawyer-peer"));
+    expect(query.eq.mock.calls).toEqual([["category", "architect"], ["category", "lawyer"]]);
   });
 });
 

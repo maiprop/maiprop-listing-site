@@ -70,6 +70,31 @@ export function useProfessional(id: string) {
   });
 }
 
+export function useRelatedProfessionals(
+  currentId: string | undefined,
+  category: Enums<"professional_category"> | null | undefined,
+) {
+  return useQuery({
+    queryKey: ["related-professionals", category, currentId],
+    queryFn: async () => {
+      if (!currentId || !category) throw new Error("Current professional is required");
+      const { data, error } = await supabase
+        .from("public_professionals")
+        .select("id, display_name, avatar_url, city")
+        .eq("category", category)
+        .neq("id", currentId)
+        .order("subscription_tier", { ascending: false, nullsFirst: false })
+        .order("rating", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: true })
+        .limit(3);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentId && !!category,
+    staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
+  });
+}
+
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useProfessionalByUserId(userId: string | undefined) {
   return useQuery({

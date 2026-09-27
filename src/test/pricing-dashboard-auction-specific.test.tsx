@@ -135,6 +135,7 @@ vi.mock("@/pages/dashboard/DataInputTab", () => ({ default: () => <div data-test
 vi.mock("@/hooks/useProfessionals", () => ({
   useProfessional: (...args: unknown[]) => mocks.useProfessionalMock(...args),
   useProfessionals: () => mocks.useProfessionalsMock(),
+  useRelatedProfessionals: () => mocks.useProfessionalsMock(),
 }));
 vi.mock("@/hooks/useProfessionalReviews", () => ({
   useProfessionalReviews: () => ({ data: [{ id: "review-1" }] }),

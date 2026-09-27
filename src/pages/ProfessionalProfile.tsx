@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { useProfessionals, useProfessional } from "@/hooks/useProfessionals";
+import { useRelatedProfessionals, useProfessional } from "@/hooks/useProfessionals";
 import { useProfessionalServices, useProfessionalAvailability } from "@/hooks/useProfessionalServices";
 import { useListings } from "@/hooks/useListings";
 import { useQueryClient } from "@tanstack/react-query";
@@ -79,7 +79,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
   const professionalIdParam = hasValidProfessionalId ? id ?? "" : "";
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: pro, isLoading } = useProfessional(professionalIdParam);
-  const { data: allProfessionals = [] } = useProfessionals();
+  const { data: relatedProfessionals, isPending: relatedPending, isError: relatedError } = useRelatedProfessionals(pro?.id, pro?.category);
   const professionalIsPro = (pro?.subscription_tier || "").toLowerCase() === "pro";
   const { data: dbServices = [] } = useProfessionalServices(professionalIsPro ? professionalIdParam : "");
   const { data: dbAvailability = [] } = useProfessionalAvailability(professionalIsPro ? professionalIdParam : "");
@@ -536,8 +536,8 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
                     {pro.verified ? "Identity Verified" : "Pending Verification"}
                   </div>
                   {pro.license_number && (
-                    <div className="flex items-center gap-2 text-sm text-brand-emerald">
-                      <Shield className="w-4 h-4 shrink-0" /> Licensed Professional
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Shield className="w-4 h-4 shrink-0" /> <span>License number provided</span> <span>{pro.license_number}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -555,9 +555,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
               <div className="glass-card rounded-xl p-5">
                 <h3 className="font-display font-semibold mb-3 text-sm">Similar Professionals</h3>
                 <div className="space-y-3">
-                  {(Array.isArray(allProfessionals) ? allProfessionals : [])
-                    .filter((p) => p.category === pro.category && p.id !== pro.id)
-                    .slice(0, 3)
+                  {(Array.isArray(relatedProfessionals) ? relatedProfessionals : [])
                     .map((peer) => {
                       const peerName = peer.display_name || "Professional";
                       return (
@@ -573,7 +571,9 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
                         </Link>
                       );
                     })}
-                  {(Array.isArray(allProfessionals) ? allProfessionals : []).filter((p) => p.category === pro.category && p.id !== pro.id).length === 0 && (
+                  {relatedPending && <p className="text-xs text-muted-foreground">Loading similar professionals…</p>}
+                  {relatedError && <p className="text-xs text-muted-foreground">Could not load similar professionals.</p>}
+                  {!relatedPending && !relatedError && (!Array.isArray(relatedProfessionals) || relatedProfessionals.length === 0) && (
                     <p className="text-xs text-muted-foreground">No others in this category yet.</p>
                   )}
                 </div>
