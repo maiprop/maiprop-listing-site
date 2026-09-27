@@ -220,9 +220,8 @@ describe("ProfessionalProfile business branches", () => {
     });
     mocks.useRelatedProfessionals.mockReturnValue({
       data: [
-        professional(),
-        professional({ id: "peer-1", category: "specialist_not_in_catalog", display_name: "", city: "", avatar_url: null }),
-        professional({ id: "peer-2", category: "specialist_not_in_catalog", display_name: "Peer Two", avatar_url: "https://cdn.example/peer.jpg" }),
+        { id: "peer-1", display_name: "", city: "", avatar_url: null },
+        { id: "peer-2", display_name: "Peer Two", city: "Athens", avatar_url: "https://cdn.example/peer.jpg" },
       ],
     });
     mocks.modal.isOpen.mockImplementation((key: string) => key === "aiMatch");

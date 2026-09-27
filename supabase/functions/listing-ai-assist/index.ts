@@ -1,7 +1,7 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
-import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { enforceAiQuota } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
@@ -173,7 +173,6 @@ ${property.listing_type === "rent" ? "Provide monthly rent estimate in EUR." : "
     const result = await response.json();
     const content = readOpenAITextContent(result);
 
-    await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify({ content }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

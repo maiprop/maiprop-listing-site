@@ -118,8 +118,8 @@ function PriceHistory({ points, currentYear }: { points: Array<{ year: string; v
   const path = xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
   const fill = [
     ...xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`),
-    `L${(padX + innerW).toFixed(1)},${(padTop + innerH)}`,
-    `L${padX},${(padTop + innerH)}`,
+    `L${xs[xs.length - 1].toFixed(1)},${(padTop + innerH)}`,
+    `L${xs[0].toFixed(1)},${(padTop + innerH)}`,
     "Z",
   ].join(" ");
 

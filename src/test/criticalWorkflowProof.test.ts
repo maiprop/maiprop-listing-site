@@ -77,7 +77,7 @@ const requirements: readonly ProofRequirement[] = [
     area: "ai_quota",
     kind: "happy_path",
     file: "src/test/PropertyValuation.test.tsx",
-    snippets: ["runs for non-Pro users because the server enforces the free quota", "property-valuation"],
+    snippets: ["requests v2 and renders OS values, true zero confidence, density, and unavailable unsupported fields", "property-valuation"],
   },
   {
     area: "ai_quota",
@@ -94,8 +94,8 @@ const requirements: readonly ProofRequirement[] = [
   {
     area: "ai_quota",
     kind: "race_or_idempotency",
-    file: "supabase/functions/_shared/aiUsage.ts",
-    snippets: ["recordAiCall", "reserve_ai_quota"],
+    file: "supabase/functions/_shared/aiQuotaHandlers.test.ts",
+    snippets: ["quota reserves once before provider work", "reserve_ai_quota_for_user"],
   },
   {
     area: "open_house",
@@ -107,7 +107,7 @@ const requirements: readonly ProofRequirement[] = [
     area: "open_house",
     kind: "denial_path",
     file: "src/test/useOpenHouseAssetControl.test.tsx",
-    snippets: ["maps server-side capacity errors to visitor-friendly copy", "open_house_timeslot_capacity_reached"],
+    snippets: ["maps %s without reporting registration success", "open_house_timeslot_capacity_reached"],
   },
   {
     area: "open_house",

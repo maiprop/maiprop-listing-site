@@ -7,7 +7,7 @@ import {
   openAIChatCompletion,
   readOpenAITextContent,
 } from "../_shared/openai.ts";
-import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { enforceAiQuota } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
@@ -264,9 +264,7 @@ ${VETTED_ANSWER_RULES}
       throw new Error(`AI gateway error: ${response.status}`);
     }
 
-    // Record usage now — we've committed to the call. The stream may
-    // still fail mid-flight, but the OpenAI cost is already incurred.
-    await recordAiCall(quota.userId, BUCKET);
+    // Quota was reserved before provider work, including streams that fail later.
     return await normalizeProviderResponseToSse(response, corsHeaders);
   } catch (e: unknown) {
     if (e instanceof SchemaValidationError) {

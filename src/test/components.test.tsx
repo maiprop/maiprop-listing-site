@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, within } from "@testing-library/react";
 import React, { Suspense } from "react";
 import { renderWithProviders } from "@/test/utils";
 
@@ -491,7 +491,8 @@ describe("PropertyAIInsightsSection", () => {
     );
 
     expect(screen.queryByText(/^0%$/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Unavailable/i)).toBeInTheDocument();
+    const marketCard = screen.getByText(/^vs Market$/i).parentElement!;
+    expect(within(marketCard).getByText(/^Unavailable$/i)).toBeInTheDocument();
     expect(screen.getByText(/Market benchmark not returned/i)).toBeInTheDocument();
   });
 

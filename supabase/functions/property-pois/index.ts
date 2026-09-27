@@ -1,7 +1,7 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
-import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { enforceAiQuota } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 import { errorResponse } from "../_shared/response.ts";
@@ -202,7 +202,6 @@ Rules:
       return unavailableResponse(corsHeaders, "AI provider returned an invalid nearby-place shape");
     }
 
-    await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify({
       responseVersion: 2,
       pois: providerResult.data.pois,

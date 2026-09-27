@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   useSubscription: vi.fn(),
   usePropertyReportAddonCredits: vi.fn(),
   useReportUsage: vi.fn(),
-  mutateAsync: vi.fn(),
   invoke: vi.fn(),
 }));
 
@@ -19,7 +18,6 @@ vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => mocks.useSubs
 vi.mock("@/hooks/useUsageAddons", () => ({
   REPORT_EXTRA_COST: 49,
   REPORT_INCLUDED: 3,
-  useRecordReport: () => ({ mutateAsync: mocks.mutateAsync }),
   usePropertyReportAddonCredits: (...args: unknown[]) => mocks.usePropertyReportAddonCredits(...args),
   useReportUsage: (...args: unknown[]) => mocks.useReportUsage(...args),
 }));
@@ -58,7 +56,6 @@ describe("PropertyReportCard", () => {
     mocks.useSubscription.mockReturnValue({ isPro: true });
     mocks.useReportUsage.mockReturnValue({ data: 0 });
     mocks.usePropertyReportAddonCredits.mockReturnValue({ data: 0 });
-    mocks.mutateAsync.mockResolvedValue(undefined);
   });
 
   it("disables the report action when required listing data is missing", () => {
@@ -95,7 +92,7 @@ describe("PropertyReportCard", () => {
     })));
     await waitFor(() => expect(screen.getByText(/No valuation report/i)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /report unavailable/i })).toBeDisabled();
-    expect(mocks.mutateAsync).not.toHaveBeenCalled();
+
   });
 
   it("keeps report generation retryable while another request owns the generation lease", async () => {

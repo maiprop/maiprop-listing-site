@@ -12,6 +12,8 @@ export default tseslint.config(
       "test-results/**",
       "playwright-report/**",
       ".tmp/**",
+      ".superpowers/**",
+      "supabase/functions/coverage/**",
       ".codex-remote-attachments/**",
       ".claude/**",
       "mai-pro-os/**",

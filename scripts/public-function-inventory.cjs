@@ -26,7 +26,7 @@ const policies = {
     caller: "signed-in browser",
     classification: "costly_ai",
     mechanisms: ["signed_in_quota", "fail_closed_quota"],
-    requiredSnippets: ["enforceAiQuota(req", "recordAiCall", "failClosed: true"],
+    requiredSnippets: ["enforceAiQuota(req", "if (quota.errorResponse) return quota.errorResponse", "failClosed: true"],
     notes: "verify_jwt is false for CORS/browser invocation, but handler requires a valid user token before provider work.",
   },
   "smart-filters": {
@@ -34,7 +34,7 @@ const policies = {
     caller: "signed-in browser",
     classification: "costly_ai",
     mechanisms: ["signed_in_quota", "fail_closed_quota"],
-    requiredSnippets: ["enforceAiQuota(req", "recordAiCall", "failClosed: true"],
+    requiredSnippets: ["enforceAiQuota(req", "if (quota.errorResponse) return quota.errorResponse", "failClosed: true"],
     notes: "Same quota contract as ai-search.",
   },
   "neighbourhood-report": {
@@ -42,7 +42,7 @@ const policies = {
     caller: "signed-in browser",
     classification: "costly_ai",
     mechanisms: ["signed_in_quota", "fail_closed_rate_limit", "bounded_payload"],
-    requiredSnippets: ["enforceAiQuota(req", "recordAiCall", "failClosed: true"],
+    requiredSnippets: ["enforceAiQuota(req", "if (quota.errorResponse) return quota.errorResponse", "failClosed: true"],
     notes: "AI neighbourhood report endpoint; handler requires an authenticated quota context before provider work.",
   },
   "property-pois": {
@@ -50,7 +50,7 @@ const policies = {
     caller: "signed-in browser",
     classification: "costly_ai",
     mechanisms: ["signed_in_quota", "fail_closed_rate_limit", "bounded_payload"],
-    requiredSnippets: ["enforceAiQuota(req", "recordAiCall", "failClosed: true"],
+    requiredSnippets: ["enforceAiQuota(req", "if (quota.errorResponse) return quota.errorResponse", "failClosed: true"],
     notes: "AI POI endpoint; CORS-compatible platform config is paired with handler-level quota and rate-limit gates.",
   },
   "property-valuation": {
@@ -58,7 +58,7 @@ const policies = {
     caller: "signed-in browser",
     classification: "costly_ai",
     mechanisms: ["signed_in_quota", "fail_closed_rate_limit", "bounded_payload"],
-    requiredSnippets: ["enforceAiQuota(req", "recordAiCall", "failClosed: true"],
+    requiredSnippets: ["enforceAiQuota(req", "if (quota.errorResponse) return quota.errorResponse", "failClosed: true"],
     notes: "AI valuation endpoint; signed-in quota enforcement runs before valuation generation.",
   },
   "sync-to-os": {

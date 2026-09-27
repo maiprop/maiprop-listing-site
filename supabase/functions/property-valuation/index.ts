@@ -2,7 +2,7 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
-import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { enforceAiQuota } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { errorResponse } from "../_shared/response.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
@@ -724,7 +724,6 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
     const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
     if (quota.errorResponse) return quota.errorResponse;
-    const quotaUserId = quota.userId;
 
     const structuredValuationInput: StructuredValuationInput = {
       listingId: typeof listingId === "string" ? listingId : null,
@@ -771,7 +770,6 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
     if (!hasAIProviderCredentials()) {
       log.warn("property-valuation: AI provider key missing; returning supported OS evidence only", { city });
       const fallback = buildV2Valuation(body as JsonRecord, osValuationData, null, osValuationStatus);
-      await recordAiCall(quotaUserId, BUCKET);
       return fallback ? new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }) : valuationUnavailable(corsHeaders);
     }
 
@@ -953,7 +951,6 @@ Rules:
       const detail = error instanceof Error ? error.message : String(error);
       log.error("AI gateway transport error", { detail });
       const fallback = buildV2Valuation(body as JsonRecord, osValuationData, null, osValuationStatus);
-      await recordAiCall(quotaUserId, BUCKET);
       return fallback ? new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }) : valuationUnavailable(corsHeaders);
     }
 
@@ -961,7 +958,6 @@ Rules:
       const txt = await response.text();
       log.error("AI gateway error", { status: response.status, body: txt.slice(0, 500) });
       const fallback = buildV2Valuation(body as JsonRecord, osValuationData, null, osValuationStatus);
-      await recordAiCall(quotaUserId, BUCKET);
       return fallback ? new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }) : valuationUnavailable(corsHeaders);
     }
 
@@ -1006,8 +1002,6 @@ Rules:
 
     result = buildV2Valuation(body as JsonRecord, osValuationData, result, osValuationStatus);
 
-    // Record usage after successful AI call
-    await recordAiCall(quotaUserId, BUCKET);
 
     return result ? new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

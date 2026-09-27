@@ -144,6 +144,40 @@ describe("useFavorites", () => {
 });
 
 describe("useToggleFavorite", () => {
+  it.each([[0, 1, false], [1, 0, false], [0, 1, true], [1, 0, true]] as const)("preserves equal-timestamp saved order when removals fail in order %s,%s with concurrent save=%s", async (first, second, withSave) => {
+    const ids = [1, 2, 3, 4].map(n => `d1000000-0000-4000-8000-${String(n).padStart(12, "0")}`);
+    const original = ids.slice(0, 3).map((listing_id, i) => ({ id: `favorite-${i}`, listing_id, user_id: "user-a", created_at: "2026-09-01T00:00:00Z", price_alert: false, price_when_saved: null, listings: null }));
+    const finishes = new Map<string, (value: { error: Error | null }) => void>();
+    mockFrom.mockReturnValue({
+      delete: () => ({ eq: () => ({ eq: (_: string, id: string) => new Promise(resolve => finishes.set(id, resolve)) }) }),
+      insert: (row: { listing_id: string }) => new Promise(resolve => finishes.set(row.listing_id, resolve)),
+    });
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({ user: { id: "user-a" } });
+    for (const key of ["favoriteMembership", "favorites"]) qc.setQueryData([key, "user-a"], original);
+    const { result } = renderHook(() => useToggleFavorite(), { wrapper });
+    const writes: Promise<void>[] = [];
+    for (const id of ids.slice(0, 2)) {
+      act(() => { writes.push(result.current.mutateAsync({ listing_id: id, isFavorited: true })); });
+      await waitFor(() => expect(finishes.has(id)).toBe(true));
+    }
+    let save!: Promise<void>;
+    if (withSave) {
+      act(() => { save = result.current.mutateAsync({ listing_id: ids[3], isFavorited: false }); });
+      await waitFor(() => expect(finishes.has(ids[3])).toBe(true));
+    }
+    act(() => finishes.get(ids[first])!({ error: new Error("denied") }));
+    await expect(writes[first]).rejects.toThrow("denied");
+    // A separate successful write must survive either failure completion order.
+    if (withSave) {
+      act(() => finishes.get(ids[3])!({ error: null }));
+      await save;
+    }
+    act(() => finishes.get(ids[second])!({ error: new Error("denied") }));
+    await expect(writes[second]).rejects.toThrow("denied");
+    for (const key of ["favoriteMembership", "favorites"]) {
+      expect(qc.getQueryData<Array<{ listing_id: string }>>([key, "user-a"])?.map(row => row.listing_id)).toEqual([...(withSave ? [ids[3]] : []), ...ids.slice(0, 3)]);
+    }
+  });
   it("removes a rejected save from a full view opened while the write was pending", async () => {
     const listingId = "d1000000-0000-4000-8000-000000000011";
     let finishWrite!: (value: { error: Error | null }) => void;

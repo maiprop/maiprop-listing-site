@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-12T00:51:57.730Z",
+  "generated_at": "2026-09-27T03:45:58.332Z",
   "public_function_count": 27,
   "entries": [
     {
@@ -15,7 +15,7 @@
       ],
       "requiredSnippets": [
         "enforceAiQuota(req",
-        "recordAiCall",
+        "if (quota.errorResponse) return quota.errorResponse",
         "failClosed: true"
       ],
       "notes": "verify_jwt is false for CORS/browser invocation, but handler requires a valid user token before provider work.",
@@ -173,7 +173,7 @@
       ],
       "requiredSnippets": [
         "enforceAiQuota(req",
-        "recordAiCall",
+        "if (quota.errorResponse) return quota.errorResponse",
         "failClosed: true"
       ],
       "notes": "AI neighbourhood report endpoint; handler requires an authenticated quota context before provider work.",
@@ -293,7 +293,7 @@
       ],
       "requiredSnippets": [
         "enforceAiQuota(req",
-        "recordAiCall",
+        "if (quota.errorResponse) return quota.errorResponse",
         "failClosed: true"
       ],
       "notes": "AI POI endpoint; CORS-compatible platform config is paired with handler-level quota and rate-limit gates.",
@@ -313,7 +313,7 @@
       ],
       "requiredSnippets": [
         "enforceAiQuota(req",
-        "recordAiCall",
+        "if (quota.errorResponse) return quota.errorResponse",
         "failClosed: true"
       ],
       "notes": "AI valuation endpoint; signed-in quota enforcement runs before valuation generation.",
@@ -445,7 +445,7 @@
       ],
       "requiredSnippets": [
         "enforceAiQuota(req",
-        "recordAiCall",
+        "if (quota.errorResponse) return quota.errorResponse",
         "failClosed: true"
       ],
       "notes": "Same quota contract as ai-search.",

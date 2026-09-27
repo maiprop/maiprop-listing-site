@@ -90,24 +90,31 @@ type FavoriteToggleOperation = FavoriteToggleVariables & {
 type FavoriteMutationContext = {
   operationUserId: string;
   listingId: string;
-  membership: { previous: FavoriteRow | undefined; index: number; existed: boolean };
-  full: { previous: FullFavorite | undefined; index: number; existed: boolean };
+  membership: { previous: FavoriteRow | undefined; order: string[]; existed: boolean };
+  full: { previous: FullFavorite | undefined; order: string[]; existed: boolean };
 };
 
-const pendingByClient = new WeakMap<object, Map<string, { count: number; succeeded: boolean; needsFullRecovery: boolean }>>();
+const pendingByClient = new WeakMap<object, Map<string, { count: number; succeeded: boolean; needsFullRecovery: boolean; membershipOrder: string[]; fullOrder: string[] }>>();
 
 function updateListing<T extends { listing_id: string }>(rows: T[] | undefined, listingId: string, replacement?: T): T[] {
   const remaining = (rows ?? []).filter(row => row.listing_id !== listingId);
   return replacement ? [replacement, ...remaining] : remaining;
 }
 
-function previousListing<T extends { listing_id: string }>(rows: T[] | undefined, listingId: string) {
-  return { previous: rows?.find(row => row.listing_id === listingId), index: rows?.findIndex(row => row.listing_id === listingId) ?? -1, existed: rows !== undefined };
+function previousListing<T extends { listing_id: string }>(rows: T[] | undefined, listingId: string, order: string[]) {
+  return { previous: rows?.find(row => row.listing_id === listingId), order, existed: rows !== undefined };
 }
 
-function restoreListing<T extends { listing_id: string }>(rows: T[] | undefined, listingId: string, snapshot: { previous?: T; index: number; existed: boolean }): T[] | undefined {
+function restoreListing<T extends { listing_id: string }>(rows: T[] | undefined, listingId: string, snapshot: { previous?: T; order: string[]; existed: boolean }): T[] | undefined {
   const remaining = (rows ?? []).filter(row => row.listing_id !== listingId);
-  if (snapshot.previous) remaining.splice(Math.min(snapshot.index, remaining.length), 0, snapshot.previous);
+  if (snapshot.previous) {
+    // All overlapping writes share the pre-mutation order, including timestamp
+    // ties. New saves stay ahead of restored rows and unrelated writes survive.
+    const ranks = new Map(snapshot.order.map((id, index) => [id, index]));
+    const originalIndex = ranks.get(listingId) ?? -1;
+    const nextIndex = remaining.findIndex(row => (ranks.get(row.listing_id) ?? -1) > originalIndex);
+    remaining.splice(nextIndex < 0 ? remaining.length : nextIndex, 0, snapshot.previous);
+  }
   return !snapshot.existed && remaining.length === 0 ? undefined : remaining;
 }
 
@@ -155,8 +162,15 @@ export function useToggleFavorite() {
       ]);
       const memberRows = queryClient.getQueryData<FavoriteRow[]>(membershipKey(operationUserId));
       const fullRows = queryClient.getQueryData<FullFavorite[]>(fullKey(operationUserId));
-      const membership = previousListing(memberRows, listing_id);
-      const full = previousListing(fullRows, listing_id);
+      let pending = pendingByClient.get(queryClient);
+      if (!pending) { pending = new Map(); pendingByClient.set(queryClient, pending); }
+      const state = pending.get(operationUserId) ?? {
+        count: 0, succeeded: false, needsFullRecovery: false,
+        membershipOrder: (memberRows ?? []).map(row => row.listing_id),
+        fullOrder: (fullRows ?? memberRows ?? []).map(row => row.listing_id),
+      };
+      const membership = previousListing(memberRows, listing_id, state.membershipOrder);
+      const full = previousListing(fullRows, listing_id, state.fullOrder);
       const optimisticRow: FavoriteRow = {
         id: `optimistic-${listing_id}`, listing_id, user_id: operationUserId,
         price_alert: priceAlert ?? false, price_when_saved: price ?? null,
@@ -164,9 +178,6 @@ export function useToggleFavorite() {
       };
       queryClient.setQueryData<FavoriteRow[]>(membershipKey(operationUserId), old => updateListing(old, listing_id, isFavorited ? undefined : optimisticRow));
       if (full.existed) queryClient.setQueryData<FullFavorite[]>(fullKey(operationUserId), old => updateListing(old, listing_id, isFavorited ? undefined : { ...optimisticRow, listings: null }));
-      let pending = pendingByClient.get(queryClient);
-      if (!pending) { pending = new Map(); pendingByClient.set(queryClient, pending); }
-      const state = pending.get(operationUserId) ?? { count: 0, succeeded: false, needsFullRecovery: false };
       state.count += 1;
       pending.set(operationUserId, state);
       return { operationUserId, listingId: listing_id, membership, full };

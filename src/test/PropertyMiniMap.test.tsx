@@ -113,6 +113,23 @@ const baseProps = {
 };
 
 describe("PropertyMiniMap", () => {
+  it("retains the unverified qualifier through a pending refresh and its failure", async () => {
+    render(<PropertyMiniMap {...baseProps} />);
+    expect(await screen.findByText("Possible nearby cafe")).toBeInTheDocument();
+    expect(screen.getByText(/not independently verified/i)).toBeInTheDocument();
+    let finish!: (value: InvokeResult) => void;
+    invokeMock.mockImplementation((name: string) => name === "ai-quota-status"
+      ? Promise.resolve(quotaInvokeResult)
+      : new Promise<InvokeResult>(resolve => { finish = resolve; }));
+    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
+    await waitFor(() => expect(finish).toBeDefined());
+    expect(screen.getByText("Possible nearby cafe")).toBeInTheDocument();
+    expect(screen.getByText(/not independently verified/i)).toBeInTheDocument();
+    await act(async () => finish({ error: new Error("refresh unavailable") }));
+    expect(await screen.findByText("refresh unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Possible nearby cafe")).toBeInTheDocument();
+    expect(screen.getByText(/not independently verified/i)).toBeInTheDocument();
+  });
   it("renders the Mapbox map + property marker when lat/lng + token + user are present", async () => {
     render(<PropertyMiniMap {...baseProps} />);
     expect(await screen.findByTestId("mapbox-map")).toBeInTheDocument();

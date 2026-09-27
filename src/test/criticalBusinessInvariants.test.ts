@@ -83,7 +83,8 @@ describe("critical business invariants", () => {
 
     expect(checkout).toContain("withMockBillingParams");
     expect(checkout).toContain('mode: "mock"');
-    expect(pricing).toContain('searchParams.get("billing_mode") === "mock"');
+    expect(pricing).toContain('const billingMode = searchParams.get("billing_mode")');
+    expect(pricing).toContain('billingMode === "mock"');
     expect(pricing).toContain("Mock checkout completed. No live payment or subscription entitlement was created.");
     expect(billing).toContain('searchParams.get("billing_mode") === "mock"');
     expect(billing).toContain("Mock add-on checkout completed. No live payment or add-on entitlement was created.");
@@ -112,7 +113,7 @@ describe("critical business invariants", () => {
     ]) {
       const source = read(path);
       expect(source).toContain("enforceAiQuota(req");
-      expect(source).toContain("recordAiCall");
+      expect(source).toContain("if (quota.errorResponse) return quota.errorResponse");
       expect(source).toContain("failClosed: true");
     }
 

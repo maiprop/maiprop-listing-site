@@ -397,3 +397,14 @@ it("displays a lone sourced historical observation without inventing a chart", a
   expect(await screen.findByText(`${new Date().getFullYear() - 1}: €1,600 (historical observation)`)).toBeInTheDocument();
   expect(screen.queryByLabelText("Price history")).toBeNull();
 });
+
+it.each([
+  { name: "recent-only", values: { oneYearAgo: 1600, current: 2000 }, start: "616.0", end: "760.0" },
+  { name: "historical-only", values: { fiveYearsAgo: 1200, threeYearsAgo: 1600 }, start: "40.0", end: "328.0" },
+])("shades only the observed interval for $name history", async ({ values, start, end }) => {
+  mockQuotaAndReport({ ...unavailableData, pricePerSqmTrend: { ...unavailableData.pricePerSqmTrend, ...values }, provenance: { pricePerSqmTrend: { current: { privateSalesAverage: values.current } } } });
+  render(<NeighbourhoodReport {...baseProps} />);
+  await loadReport();
+  const chart = await screen.findByLabelText("Price history");
+  expect(chart.querySelector('path[fill="url(#chartFillGrad)"]')).toHaveAttribute("d", expect.stringContaining(`L${end},128 L${start},128 Z`));
+});

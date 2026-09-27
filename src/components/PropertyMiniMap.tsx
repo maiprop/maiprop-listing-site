@@ -391,7 +391,6 @@ export default function PropertyMiniMap({
     const requestId = ++activePoiRequest.current;
     setLoadingPOIs(true);
     setPoiError(null);
-    setPoiWarning(null);
     try {
       if (poiQuota && !poiQuota.allowed) {
         if (requestId === activePoiRequest.current) setPois(null);

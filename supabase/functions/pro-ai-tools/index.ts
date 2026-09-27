@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion } from "../_shared/openai.ts";
-import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { enforceAiQuota } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
@@ -147,7 +147,6 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       });
     }
 
-    await recordAiCall(quota.userId ?? userId, BUCKET);
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });

@@ -5,16 +5,11 @@
  *   1. Call `enforceAiQuota(req, bucket, corsHeaders)` early in the request
  *      handler. It verifies the Bearer token and reserves one quota unit in
  *      Postgres before provider work starts.
- *   2. Existing callers may still call `recordAiCall(userId, bucket)` after a
- *      successful provider call; it is now a compatibility no-op because the
- *      quota unit was already reserved up front.
  *
  * Buckets are seeded in migration 20260623160000_ai_usage_tracking.sql.
  * The DB enforces strict caps via an atomic reservation RPC and a BEFORE
  * INSERT trigger. Provider work must not run unless reservation succeeds.
  *
- * Anonymous endpoints (e.g. ai-translate with verify_jwt=false) should NOT use
- * this helper; their abuse vector is rate limiting, not per-user quota.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
@@ -179,17 +174,4 @@ export async function enforceAiQuota(
   }
 
   return { userId, errorResponse: null, reserved: true };
-}
-
-/**
- * Compatibility shim for existing edge functions. Quota is now reserved by
- * `enforceAiQuota()` before provider work begins, so this function intentionally
- * does not insert a second usage row.
- */
-export async function recordAiCall(
-  userId: string | null,
-  bucket: string,
-): Promise<void> {
-  if (!userId) return;
-  console.debug(`[aiUsage] quota already reserved for bucket=${bucket} userId=${userId}`);
 }

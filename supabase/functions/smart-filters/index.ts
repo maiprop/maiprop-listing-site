@@ -1,7 +1,7 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
-import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { enforceAiQuota } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 import type { Database } from "../../../src/integrations/supabase/types.ts";
@@ -232,7 +232,6 @@ Rules:
     const features = featureKeys
       .map((k) => featureMap[k]);
 
-    await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify({
       sections: sections.length ? sections : ["size"],
       features,

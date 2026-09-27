@@ -11,7 +11,7 @@ import {
   openAIChatCompletion,
   readOpenAITextContent,
 } from "../_shared/openai.ts";
-import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { enforceAiQuota } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 import { errorResponse } from "../_shared/response.ts";
@@ -874,7 +874,6 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         region,
         osMunicipalityContext,
       );
-      await recordAiCall(quota.userId, BUCKET);
       return reportResponse(fallback, corsHeaders);
     }
 
@@ -967,7 +966,6 @@ Rules:
         region,
         osMunicipalityContext,
       );
-      await recordAiCall(quota.userId, BUCKET);
       return reportResponse(fallback, corsHeaders);
     }
 
@@ -1035,7 +1033,6 @@ Rules:
 
     // No provider in this endpoint supplies measured listing-level scores.
     // Model estimates and unavailable defaults must not enter listing filters.
-    await recordAiCall(quota.userId, BUCKET);
     return reportResponse(parsed as JsonRecord, corsHeaders);
   } catch (e) {
     if (e instanceof SchemaValidationError) {

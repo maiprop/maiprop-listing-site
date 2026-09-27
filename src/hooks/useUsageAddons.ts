@@ -1,15 +1,12 @@
 /**
  * Usage-based add-ons: AI valuations, Property Reports, Priority Ads.
  * Reads current-month usage from the canonical usage_ai_calls table
- * (populated server-side by edge functions via recordAiCall).
+ * (populated by server-side quota reservations).
  */
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSubscription } from "@/hooks/useSubscription";
-import { toast } from "sonner";
-import { parseMutationInput, rowIdSchema } from "@/lib/mutationSchemas";
 import { getClientStripeRuntimeMode } from "@/lib/billingRuntime";
 
 const VALUATION_INCLUDED = 5;
@@ -43,23 +40,6 @@ export function useValuationUsage() {
       if (error) throw error;
       return (data ?? []).length;
     },
-  });
-}
-
-export function useRecordValuation() {
-  const qc = useQueryClient();
-  const { user } = useAuth();
-
-  return useMutation({
-    mutationFn: async (listingId?: string) => {
-      if (!user) throw new Error("Not authenticated");
-      if (listingId) parseMutationInput(rowIdSchema("listing id"), listingId, "listing id");
-      throw new Error("AI valuation usage is recorded server-side by the valuation function");
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["usage_ai_valuations"] });
-    },
-    onError: () => toast.error("Failed to record AI valuation usage. Please try again."),
   });
 }
 
@@ -112,23 +92,6 @@ export function usePropertyReportAddonCredits(options: { enabled?: boolean } = {
   });
 }
 
-export function useRecordReport() {
-  const qc = useQueryClient();
-  const { user } = useAuth();
-
-  return useMutation({
-    mutationFn: async (listingId?: string) => {
-      if (!user) throw new Error("Not authenticated");
-      if (listingId) parseMutationInput(rowIdSchema("listing id"), listingId, "listing id");
-      throw new Error("Property report usage is recorded server-side by the report function");
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["usage_property_reports"] });
-    },
-    onError: () => toast.error("Failed to record report usage. Please try again."),
-  });
-}
-
 export function usePriorityAdsUsage() {
   const { user } = useAuth();
   const monthStart = startOfMonth();
@@ -148,25 +111,6 @@ export function usePriorityAdsUsage() {
       if (error) throw error;
       return (data ?? []).length;
     },
-  });
-}
-
-export function useRecordPriorityAd() {
-  const qc = useQueryClient();
-  const { user } = useAuth();
-  const { isPro } = useSubscription();
-
-  return useMutation({
-    mutationFn: async (listingId: string) => {
-      if (!user) throw new Error("Not authenticated");
-      if (!isPro) throw new Error("Priority Ads require Pro plan");
-      parseMutationInput(rowIdSchema("listing id"), listingId, "listing id");
-      throw new Error("Priority ad usage is recorded server-side by the checkout or boost workflow");
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["listing_promotion_allocations", "priority-plan-usage"] });
-    },
-    onError: () => toast.error("Failed to record priority ad usage. Please try again."),
   });
 }
 

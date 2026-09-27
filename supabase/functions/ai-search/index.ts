@@ -1,7 +1,7 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
-import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { enforceAiQuota } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
@@ -122,7 +122,6 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       summary: optionalString(src.summary) ?? "",
     };
 
-    await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify(filters), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
