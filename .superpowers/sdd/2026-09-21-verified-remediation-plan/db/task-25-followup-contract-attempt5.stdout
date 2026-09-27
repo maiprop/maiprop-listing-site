@@ -1,0 +1,299 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+CREATE EXTENSION
+SET
+INSERT 0 5
+INSERT 0 5
+INSERT 0 1
+INSERT 0 1
+INSERT 0 5
+SET
+CREATE FUNCTION
+SELECT 1
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 1 - wrong owner
+RESET
+|{}
+ok 2 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 3 - missing listing
+RESET
+|{}
+ok 4 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 5 - NULL listing
+RESET
+|{}
+ok 6 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+not ok 7 - NULL owner
+# Failed test 7: "NULL owner"
+#         have: {"hint": "Listing owner has reached viewing limit. Upgrade to Pro for more.", "role": "authenticated", "state": "P0001", "message": "viewing_limit_reached"}
+#         want: {"hint": "", "role": "authenticated", "state": "42501", "message": "new row violates row-level security policy for table \"viewings\""}
+RESET
+|{}
+ok 8 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 9 - spoofed requester
+RESET
+|{}
+ok 10 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+|{"role":"authenticated"}
+SET
+authenticated||origin
+ok 11 - no subject
+RESET
+|{}
+ok 12 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+|{"role":"anon"}
+SET
+anon||origin
+ok 13 - anon
+RESET
+|{}
+ok 14 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 15 - paused outsider
+RESET
+|{}
+ok 16 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 17 - off-market outsider
+RESET
+|{}
+ok 18 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 19 - private org outsider
+RESET
+|{}
+ok 20 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 21 - effective authenticated helper prerequisites
+ok 22 - direct raw listing denied
+ok 23 - actual-role NULL predicate false
+RESET
+|{}
+|{"role":"authenticated"}
+SET
+authenticated||origin
+ok 24 - actual-role missing subject false
+RESET
+|{}
+SAVEPOINT
+RESET
+|{}
+d6250001-0000-4000-8000-000000000001|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000001"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000001|origin
+ok 25 - actual owner paused
+RESET
+|{}
+ROLLBACK
+RELEASE
+RESET
+|{}
+SAVEPOINT
+RESET
+|{}
+d6250001-0000-4000-8000-000000000004|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000004"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000004|origin
+ok 26 - org listing:view member
+RESET
+|{}
+ROLLBACK
+RELEASE
+UPDATE 1
+RESET
+|{}
+d6250001-0000-4000-8000-000000000004|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000004"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000004|origin
+ok 27 - suspended org member
+RESET
+|{}
+ok 28 - denied action leaves viewing lead notification counts unchanged
+UPDATE 1
+INSERT 0 1
+RESET
+|{}
+d6250001-0000-4000-8000-000000000003|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000003"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000003|origin
+ok 29 - cross-tenant member
+RESET
+|{}
+ok 30 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000005|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000005"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000005|origin
+ok 31 - admin gets no helper private visibility
+ok 32 - admin outer insert without participant returning
+ok 33 - admin has no ordinary participant SELECT
+RESET
+|{}
+DELETE 1
+DELETE 1
+DELETE 1
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 34 - under-limit exact insert returning
+ok 35 - exact returned-row fields and requester read
+ok 36 - scoped reference current requester
+RESET
+|{}
+{"id":"86703bf4-4528-4416-be1b-fdcb23f18071","owner_id":"d6250001-0000-4000-8000-000000000001","source":"viewing","listing_id":"d6250002-0000-4000-8000-000000000001","professional_id":null,"project_id":null,"name":"Task25 Requester","email":"task25-requester@example.test","phone":null,"message":"Viewing request for Task25 active public (in-person)","status":"new","notes":null,"follow_up_at":"2026-12-15T14:30:00+02:00","created_at":"2026-09-27T03:06:25.772952+03:00","updated_at":"2026-09-27T03:06:25.772952+03:00","origin_context_key":"listing:d6250002-0000-4000-8000-000000000001"}
+{"id":"d7cd6a31-c4ee-4c53-ae20-db1cf2e65166","user_id":"d6250001-0000-4000-8000-000000000001","title":"New viewing request","body":"A buyer requested a in-person viewing for Task25 active public","type":"viewing","read":false,"created_at":"2026-09-27T03:06:25.772952+03:00","link":"/dashboard?tab=viewings"}
+TRUNCATE TABLE
+INSERT 0 1
+ok 37 - canonical owner notification content
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 38 - requester exhaustion exact error/hint
+RESET
+|{}
+ok 39 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 40 - requester identity immutable
+ok 41 - requester cannot confirm
+ok 42 - requester cannot edit host details
+RESET
+|{}
+ok 43 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000001|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000001"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000001|origin
+ok 44 - owner reads created row
+ok 45 - owner cannot skip confirmation
+ok 46 - same-status update
+RESET
+|{}
+ok 47 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000001|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000001"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000001|origin
+ok 48 - owner confirms
+ok 49 - owner completes
+ok 50 - owner cannot reopen completed
+RESET
+|{}
+ok 51 - two status notifications to requester
+UPDATE 1
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 52 - existing participant retains private paused reference
+ok 53 - reference relationship does not allow new request
+RESET
+|{}
+d6250001-0000-4000-8000-000000000003|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000003"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000003|origin
+ok 54 - unrelated private paused creation denied
+RESET
+|{}
+SAVEPOINT
+RESET
+|{}
+d6250001-0000-4000-8000-000000000004|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000004"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000004|origin
+ok 55 - fresh member public request
+ok 56 - requester cancels pending
+RESET
+|{}
+ROLLBACK
+RELEASE
+SAVEPOINT
+SET
+UPDATE 1
+UPDATE 1
+SET
+ok 57 - authoritative free owner allowance
+SET
+ok 58 - separate unlimited requester allowance
+RESET
+|{}
+d6250001-0000-4000-8000-000000000004|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000004"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000004|origin
+ok 59 - owner allowance second hosted
+ok 60 - owner allowance third hosted
+RESET
+|{}
+TRUNCATE TABLE
+INSERT 0 1
+RESET
+|{}
+d6250001-0000-4000-8000-000000000004|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000004"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000004|origin
+ok 61 - owner exhaustion exact error/hint
+RESET
+|{}
+ok 62 - denied action leaves viewing lead notification counts unchanged
+ROLLBACK
+RELEASE
+1..54
+# Looks like you failed 1 test of 54
+ROLLBACK

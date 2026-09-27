@@ -1,0 +1,2 @@
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-25-followup-drift-listing-reject.sql:88: ERROR:  unsupported_listings_authenticated_select_policy
+CONTEXT:  PL/pgSQL function inline_code_block line 79 at RAISE

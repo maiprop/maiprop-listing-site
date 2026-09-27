@@ -1,0 +1,1 @@
+CREATE FUNCTION private.can_request_viewing_for_listing(uuid,uuid) RETURNS boolean LANGUAGE sql AS 'SELECT false';

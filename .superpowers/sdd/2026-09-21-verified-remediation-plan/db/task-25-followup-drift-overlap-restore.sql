@@ -1,0 +1,1 @@
+DROP POLICY task25_overlap ON public.viewings;

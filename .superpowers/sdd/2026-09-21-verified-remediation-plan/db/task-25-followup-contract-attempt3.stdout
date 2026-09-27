@@ -1,0 +1,159 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+CREATE EXTENSION
+SET
+INSERT 0 5
+INSERT 0 5
+INSERT 0 1
+INSERT 0 1
+INSERT 0 5
+SET
+CREATE FUNCTION
+SELECT 1
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 1 - wrong owner
+RESET
+|{}
+ok 2 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 3 - missing listing
+RESET
+|{}
+ok 4 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 5 - NULL listing
+RESET
+|{}
+ok 6 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+not ok 7 - NULL owner
+# Failed test 7: "NULL owner"
+#         have: {"hint": "Listing owner has reached viewing limit. Upgrade to Pro for more.", "role": "authenticated", "state": "P0001", "message": "viewing_limit_reached"}
+#         want: {"hint": "", "role": "authenticated", "state": "42501", "message": "new row violates row-level security policy for table \"viewings\""}
+RESET
+|{}
+ok 8 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 9 - spoofed requester
+RESET
+|{}
+ok 10 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+|{"role":"authenticated"}
+SET
+authenticated||origin
+ok 11 - no subject
+RESET
+|{}
+ok 12 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+|{"role":"anon"}
+SET
+anon||origin
+ok 13 - anon
+RESET
+|{}
+ok 14 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 15 - paused outsider
+RESET
+|{}
+ok 16 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 17 - off-market outsider
+RESET
+|{}
+ok 18 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 19 - private org outsider
+RESET
+|{}
+ok 20 - denied action leaves viewing lead notification counts unchanged
+RESET
+|{}
+d6250001-0000-4000-8000-000000000002|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000002"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000002|origin
+ok 21 - effective authenticated helper prerequisites
+ok 22 - direct raw listing denied
+ok 23 - actual-role NULL predicate false
+RESET
+|{}
+|{"role":"authenticated"}
+SET
+authenticated||origin
+ok 24 - actual-role missing subject false
+RESET
+|{}
+SAVEPOINT
+RESET
+|{}
+d6250001-0000-4000-8000-000000000001|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000001"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000001|origin
+ok 25 - actual owner paused
+RESET
+|{}
+ROLLBACK
+RELEASE
+RESET
+|{}
+SAVEPOINT
+RESET
+|{}
+d6250001-0000-4000-8000-000000000004|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000004"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000004|origin
+ok 26 - org listing:view member
+RESET
+|{}
+ROLLBACK
+RELEASE
+UPDATE 1
+RESET
+|{}
+d6250001-0000-4000-8000-000000000004|{"role":"authenticated","sub":"d6250001-0000-4000-8000-000000000004"}
+SET
+authenticated|d6250001-0000-4000-8000-000000000004|origin
+ok 27 - suspended org member
+RESET
+|{}
+ok 28 - denied action leaves viewing lead notification counts unchanged
+UPDATE 1
+INSERT 0 1

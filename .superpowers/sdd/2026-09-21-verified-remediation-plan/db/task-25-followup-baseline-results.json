@@ -1,0 +1,11 @@
+{
+  "source_preserved": true,
+  "atomic_rejections": 6,
+  "captured_inputs": [
+    "live-a6-mutation-tables.json",
+    "live-a6-tables.json"
+  ],
+  "captured_acl_preserved": true,
+  "omitted_pg17_privilege": "MAINTAIN",
+  "scope": "bounded captured policy/table ACL fixture; not managed schema or live parity"
+}

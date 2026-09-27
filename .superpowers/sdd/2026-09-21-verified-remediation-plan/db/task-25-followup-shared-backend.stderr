@@ -1,0 +1,2 @@
+psql:supabase/tests/viewing_create_followup_test.sql:6: NOTICE:  extension "pgtap" already exists, skipping
+psql:supabase/tests/viewing_create_policy_test.sql:6: NOTICE:  extension "pgtap" already exists, skipping

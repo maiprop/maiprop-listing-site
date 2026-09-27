@@ -1,0 +1,3 @@
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-25-followup-contract-attempt4.sql:6: NOTICE:  extension "pgtap" already exists, skipping
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-25-followup-contract-attempt4.sql:158: ERROR:  role_change_via_direct_update_not_permitted: use rpc("complete_onboarding_role", {...}) instead
+CONTEXT:  PL/pgSQL function profiles_guard_admin_and_role() line 32 at RAISE

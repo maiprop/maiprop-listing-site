@@ -1,0 +1,15 @@
+DO
+{"id":"0a9d0d96-f020-470c-9989-bac3bfe748e7","listing_id":"d6250002-0000-4000-8000-000000000001","requester_id":"d6250001-0000-4000-8000-000000000002","owner_id":"d6250001-0000-4000-8000-000000000001","viewing_type":"in_person","status":"pending","scheduled_at":"2026-12-15T14:30:00+02:00","note":"Task25 HTTP exact note","video_link":null,"created_at":"2026-09-27T03:10:43.057372+03:00","updated_at":"2026-09-27T03:10:43.057372+03:00"}
+{"id":"09756e0c-5139-40a8-a316-b188b9aad07a","owner_id":"d6250001-0000-4000-8000-000000000001","source":"viewing","listing_id":"d6250002-0000-4000-8000-000000000001","professional_id":null,"project_id":null,"name":"Task25 Requester","email":"task25-requester@example.test","phone":null,"message":"Viewing request for Task25 active public (in-person)","status":"new","notes":null,"follow_up_at":"2026-12-15T14:30:00+02:00","created_at":"2026-09-27T03:10:43.057372+03:00","updated_at":"2026-09-27T03:10:43.057372+03:00","origin_context_key":"listing:d6250002-0000-4000-8000-000000000001"}
+{"id":"99e7cb7a-ecbb-4a38-a246-770fec7c92d1","user_id":"d6250001-0000-4000-8000-000000000001","title":"New viewing request","body":"A buyer requested a in-person viewing for Task25 active public","type":"viewing","read":false,"created_at":"2026-09-27T03:10:43.057372+03:00","link":"/dashboard?tab=viewings"}
+BEGIN
+SET
+DELETE 1
+DELETE 1
+DELETE 1
+DELETE 1
+DELETE 1
+DELETE 5
+DELETE 5
+DELETE 5
+COMMIT

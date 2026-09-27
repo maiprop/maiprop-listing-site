@@ -1,0 +1,9 @@
+
+ RUN  v4.1.9 C:/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site
+
+
+ Test Files  4 passed (4)
+      Tests  31 passed (31)
+   Start at  03:12:54
+   Duration  4.35s (transform 667ms, setup 2.30s, import 1.23s, tests 1.52s, environment 6.01s)
+

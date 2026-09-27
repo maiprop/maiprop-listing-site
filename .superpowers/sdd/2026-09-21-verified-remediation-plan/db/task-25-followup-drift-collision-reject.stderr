@@ -1,0 +1,2 @@
+psql:/mnt/c/Users/K R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/db/task-25-followup-drift-collision-reject.sql:88: ERROR:  unexpected_existing_can_request_viewing_for_listing
+CONTEXT:  PL/pgSQL function inline_code_block line 8 at RAISE

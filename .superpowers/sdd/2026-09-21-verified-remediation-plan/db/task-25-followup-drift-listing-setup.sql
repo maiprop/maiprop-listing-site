@@ -1,0 +1,1 @@
+ALTER POLICY listings_select_authenticated ON public.listings USING(true);

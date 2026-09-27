@@ -1,0 +1,1 @@
+ALTER POLICY listings_select_authenticated ON public.listings USING ((((status = 'active'::listing_status) AND (COALESCE(is_off_market, false) = false)) OR (owner_id = ( SELECT auth.uid() AS uid)) OR ((organization_id IS NOT NULL) AND private.has_org_permission(organization_id, 'listing:view'::text, ( SELECT auth.uid() AS uid)))));

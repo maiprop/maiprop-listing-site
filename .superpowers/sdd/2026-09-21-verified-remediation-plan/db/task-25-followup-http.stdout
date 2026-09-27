@@ -1,0 +1,18 @@
+http-pause 0 DO
+UPDATE 1
+ 
+Six local HTTP representation/read/reference/privacy checks passed
+http-cleanup 0 2026-09-27T03:11:00.548963+03:00","origin_context_key":"listing:d6250002-0000-4000-8000-000000000001"}
+{"id":"9373ea04-5665-40a9-a27e-73c9b062ad86","user_id":"d6250001-0000-4000-8000-000000000001","title":"New viewing request","body":"A buyer requested a in-person viewing for Task25 active public","type":"viewing","read":false,"created_at":"2026-09-27T03:11:00.548963+03:00","link":"/dashboard?tab=viewings"}
+BEGIN
+SET
+DELETE 1
+DELETE 1
+DELETE 1
+DELETE 1
+DELETE 1
+DELETE 5
+DELETE 5
+DELETE 5
+COMMIT
+ 

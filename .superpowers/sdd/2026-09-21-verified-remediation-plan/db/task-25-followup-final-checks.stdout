@@ -1,0 +1,22 @@
+shared-backend 0 -0000-4000-8000-000000000002","role":"authenticated"}
+SET
+ok 20 - requester can read the created viewing
+ok 21 - second free request preserves the existing viewing limit error
+ok 22 - requester spoof remains denied
+RESET
+d6250001-0000-4000-8000-000000000005|{"sub":"d6250001-0000-4000-8000-000000000005","role":"authenticated"}
+SET
+ok 23 - platform-admin outer policy branch remains available
+RESET
+ok 24 - platform-admin viewing row is persisted
+ROLLBACK
+DO
+zero synthetic and temporary residue
+445
+ psql:supabase/tests/viewing_create_followup_test.sql:6: NOTICE:  extension "pgtap" already exists, skipping
+psql:supabase/tests/viewing_create_policy_test.sql:6: NOTICE:  extension "pgtap" already exists, skipping
+
+cleanup-final 0 DO
+zero synthetic and temporary residue
+ 
+Focused candidate lint/chronology, source binding, metadata preservation, same-backend composition and zero residue passed

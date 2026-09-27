@@ -1,0 +1,1 @@
+DO $$ BEGIN IF current_database()<>'maiprop_t25_followup_20260927' OR inet_server_addr() IS NOT NULL THEN RAISE EXCEPTION 'Named local disposable target required'; END IF; END $$;UPDATE public.listings SET status='paused',is_off_market=true WHERE id='d6250002-0000-4000-8000-000000000001';

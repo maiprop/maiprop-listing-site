@@ -1,0 +1,14 @@
+source-full-before 0 n"}], "schemas" : [{"name" : "private", "owner" : "postgres", "acl" : ["postgres=UC/postgres","authenticated=U/postgres","service_role=U/postgres"]}, {"name" : "public", "owner" : "pg_database_owner", "acl" : ["pg_database_owner=UC/pg_database_owner","=U/pg_database_owner","anon=U/pg_database_owner","authenticated=U/pg_database_owner","service_role=U/pg_database_owner"]}], "access" : {"viewing_insert" : true, "viewing_select" : true, "listing_id_select" : false, "listing_owner_select" : false}}
+ 
+source-full-apply 0 BEGIN
+DO
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+GRANT
+ALTER POLICY
+COMMIT
+ 
+source-full-after 0 n"}], "schemas" : [{"name" : "private", "owner" : "postgres", "acl" : ["postgres=UC/postgres","authenticated=U/postgres","service_role=U/postgres"]}, {"name" : "public", "owner" : "pg_database_owner", "acl" : ["pg_database_owner=UC/pg_database_owner","=U/pg_database_owner","anon=U/pg_database_owner","authenticated=U/pg_database_owner","service_role=U/pg_database_owner"]}], "access" : {"viewing_insert" : true, "viewing_select" : true, "listing_id_select" : false, "listing_owner_select" : false}}
+ 
+Complete source schema/table ACL identity passed

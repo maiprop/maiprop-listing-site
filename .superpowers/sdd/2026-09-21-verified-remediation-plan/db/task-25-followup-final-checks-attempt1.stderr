@@ -1,0 +1,18 @@
+node:internal/modules/esm/resolve:283
+    throw new ERR_MODULE_NOT_FOUND(
+          ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\Users\K R\.codex\worktrees\auction-recovery\\scripts\check-migration-idempotency.mjs' imported from C:\Users\K R\.codex\worktrees\auction-recovery\maiprop-listing-site\.superpowers\sdd\2026-09-21-verified-remediation-plan\task-25-followup-final.mjs
+    at finalizeResolution (node:internal/modules/esm/resolve:283:11)
+    at moduleResolve (node:internal/modules/esm/resolve:952:10)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:708:12)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:657:25)
+    at ModuleLoader.resolve (node:internal/modules/esm/loader:640:38)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:264:38)
+    at ModuleJob._link (node:internal/modules/esm/module_job:168:49) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///C:/Users/K%20R/.codex/worktrees/auction-recovery//scripts/check-migration-idempotency.mjs'
+}
+
+Node.js v20.20.2

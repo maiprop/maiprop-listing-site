@@ -1,0 +1,1 @@
+DROP FUNCTION private.can_request_viewing_for_listing(uuid,uuid);

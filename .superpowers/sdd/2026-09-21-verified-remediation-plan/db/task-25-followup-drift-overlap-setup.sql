@@ -1,0 +1,1 @@
+CREATE POLICY task25_overlap ON public.viewings FOR ALL TO authenticated USING(true) WITH CHECK(true);

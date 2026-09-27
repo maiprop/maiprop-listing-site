@@ -1,0 +1,11 @@
+file:///C:/Users/K%20R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/task-25-followup-local.mjs:16
+if(process.argv[1].endsWith('task-25-followup-local.mjs') && process.argv[2]==='prepare'){
+                   ^
+
+TypeError: Cannot read properties of undefined (reading 'endsWith')
+    at file:///C:/Users/K%20R/.codex/worktrees/auction-recovery/maiprop-listing-site/.superpowers/sdd/2026-09-21-verified-remediation-plan/task-25-followup-local.mjs:16:20
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.eval (node:internal/modules/esm/loader:245:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.20.2

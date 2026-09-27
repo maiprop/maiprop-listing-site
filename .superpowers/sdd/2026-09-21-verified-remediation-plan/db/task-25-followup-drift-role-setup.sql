@@ -1,0 +1,1 @@
+ALTER POLICY viewings_insert ON public.viewings TO anon;

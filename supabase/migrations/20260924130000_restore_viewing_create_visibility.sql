@@ -87,7 +87,7 @@ BEGIN
 END
 $preflight$;
 
-CREATE FUNCTION private.can_request_viewing_for_listing(
+CREATE OR REPLACE FUNCTION private.can_request_viewing_for_listing(
   p_listing_id UUID,
   p_expected_owner_id UUID
 )

@@ -1,0 +1,19 @@
+{
+  "scanned": 180,
+  "violations": [
+    {
+      "file": "20260923193844_durable_new_build_enquiry_replay.sql",
+      "line": 175,
+      "rule": "CREATE TRIGGER new_building_leads_preserve_submission_identity without preceding DROP TRIGGER IF EXISTS",
+      "snippet": "Add `DROP TRIGGER IF EXISTS new_building_leads_preserve_submission_identity ON <table>;` before the CREATE."
+    },
+    {
+      "file": "20260923193844_durable_new_build_enquiry_replay.sql",
+      "line": 93,
+      "rule": "CREATE FUNCTION without OR REPLACE",
+      "snippet": "Use `CREATE OR REPLACE FUNCTION ...`."
+    }
+  ],
+  "chronologyViolations": [],
+  "appliedFutureSourceViolations": []
+}

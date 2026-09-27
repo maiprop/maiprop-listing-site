@@ -1,0 +1,270 @@
+[
+  {
+    "signature": "auth.role()",
+    "effective_sha256": "9ee930e2be38e85a455bc973dcda8d4be9175fb11d9e1bc0dfec7f256d69b41a",
+    "sources": []
+  },
+  {
+    "signature": "auth.uid()",
+    "effective_sha256": "165110a193108a843de59f6c104dca630d34112795386ceb4ad6c53979b5c3e8",
+    "sources": []
+  },
+  {
+    "signature": "private.authoritative_role()",
+    "effective_sha256": "e4dc1a482e11d5feb41c37703fe52506bef199b980e144af4631120fe7144e3e",
+    "sources": [
+      {
+        "file": "20260507154337_critical_security_advisor_fixes.sql",
+        "raw_sha256": "2619727bf742c40a5ed96e2174e088cf98109975f6b29ad469e854c6b826908f"
+      }
+    ]
+  },
+  {
+    "signature": "private.authoritative_role(uuid)",
+    "effective_sha256": "066dcbbdcd9a4199b70790a9959659ecd1117794fb764b7ccb7f812c32e94e20",
+    "sources": [
+      {
+        "file": "20260507154337_critical_security_advisor_fixes.sql",
+        "raw_sha256": "2619727bf742c40a5ed96e2174e088cf98109975f6b29ad469e854c6b826908f"
+      }
+    ]
+  },
+  {
+    "signature": "private.can_request_viewing_for_listing(uuid,uuid)",
+    "effective_sha256": "a6a23dd79a17093d354655c0755bff48f00b757bbb50c159181619b4344e98c5",
+    "sources": [
+      {
+        "file": "20260924130000_restore_viewing_create_visibility.sql",
+        "raw_sha256": "6729972ed7c83ab169db121cbc5175857981d7dbca660e78658c56d8fa6a2166"
+      }
+    ]
+  },
+  {
+    "signature": "private.capture_viewing_owner_lead()",
+    "effective_sha256": "f8dc5cb62d2bf0d275f720f1d9f9645c4c170715083d88d2c88d711fa164c998",
+    "sources": [
+      {
+        "file": "20260525082323_canonical_lead_upsert_and_contact_inbox.sql",
+        "raw_sha256": "bcb20a0708bbe3ba3ea76eab6dc769f2d4f9da3d6a4c788053701f021570375a"
+      }
+    ]
+  },
+  {
+    "signature": "private.current_billing_subscription_for_user(uuid,text)",
+    "effective_sha256": "90fdc7a5697e4c74fdc84b7b0f06f14b572d37bb3c4ca31a856933426d4f382b",
+    "sources": [
+      {
+        "file": "20260718124557_enforce_durable_developer_pro_entitlements.sql",
+        "raw_sha256": "7a9c79a96dba351a70e4f7b6e78eb210198d44c37b61a02adf870f77f10506fd"
+      }
+    ]
+  },
+  {
+    "signature": "private.has_current_billing_subscription_for_user(uuid)",
+    "effective_sha256": "4bb976c07ba1e429c7b3458883b1915e97d95f5dd5766fdcde60f1ca2ec55d8e",
+    "sources": [
+      {
+        "file": "20260716172217_unify_durable_entitlement_contract.sql",
+        "raw_sha256": "f7145676501d1f65fee02b3863f008eb169406a4c4c83e8ebfb9b9f3497ff178"
+      }
+    ]
+  },
+  {
+    "signature": "private.has_investor_subscription_for_user(uuid)",
+    "effective_sha256": "823bcb7cbda126b55fada7285302a3bc7c72ce5eccc4d76c0bb90ff11e74eba7",
+    "sources": [
+      {
+        "file": "20260718124557_enforce_durable_developer_pro_entitlements.sql",
+        "raw_sha256": "7a9c79a96dba351a70e4f7b6e78eb210198d44c37b61a02adf870f77f10506fd"
+      }
+    ]
+  },
+  {
+    "signature": "private.has_org_permission(uuid,text,uuid)",
+    "effective_sha256": "7e8a40cc867a0eac77fb51da2d4743a62d043927cf1e09facbe356c61754011d",
+    "sources": [
+      {
+        "file": "20260702180854_enterprise_tenant_resource_ownership.sql",
+        "raw_sha256": "d6d7d798d83c5b104d900b353379a793aeadb1aa1850b3f8b66286180313bffc"
+      }
+    ]
+  },
+  {
+    "signature": "private.has_platform_admin(uuid)",
+    "effective_sha256": "3cc3d373cdbeebfc02c99f585eb72a2588b6f1c0059870ec600e293c101fe6b4",
+    "sources": [
+      {
+        "file": "20260507154337_critical_security_advisor_fixes.sql",
+        "raw_sha256": "2619727bf742c40a5ed96e2174e088cf98109975f6b29ad469e854c6b826908f"
+      }
+    ]
+  },
+  {
+    "signature": "private.insert_interaction_notification(uuid,uuid,text,text,text,text)",
+    "effective_sha256": "e0fa1d7ef21fd14f208433efbab4b4996612855d567948c6fad4922cf0e8b2e3",
+    "sources": [
+      {
+        "file": "20260524150533_interaction_notifications.sql",
+        "raw_sha256": "f5c2ccc3b937506d85830cfa7277fd1712dd3ceba69b66248205d94ca17adf22"
+      }
+    ]
+  },
+  {
+    "signature": "private.notify_viewing_created()",
+    "effective_sha256": "87a743946c3eaead65f90c33d77887f46363a1babcb0358a18758fbe5c965f14",
+    "sources": [
+      {
+        "file": "20260524150533_interaction_notifications.sql",
+        "raw_sha256": "f5c2ccc3b937506d85830cfa7277fd1712dd3ceba69b66248205d94ca17adf22"
+      }
+    ]
+  },
+  {
+    "signature": "private.notify_viewing_status_changed()",
+    "effective_sha256": "c268c2839a2d2b03dad4b2b47db11d79ad45bc7eae1070f22f79876eeda8d2d8",
+    "sources": [
+      {
+        "file": "20260524150533_interaction_notifications.sql",
+        "raw_sha256": "f5c2ccc3b937506d85830cfa7277fd1712dd3ceba69b66248205d94ca17adf22"
+      }
+    ]
+  },
+  {
+    "signature": "private.set_lead_origin_context_key()",
+    "effective_sha256": "d3f0418c064c62e98b98e4fefa4c029c062254c158a1586a2e5634d612b410d1",
+    "sources": [
+      {
+        "file": "20260717003310_preserve_lead_origin_context_on_resource_deletion.sql",
+        "raw_sha256": "fb589955ae5e39eaeaa30930b206bad3a4971f2736cc0e8bed13174b0e6a1c3b"
+      }
+    ]
+  },
+  {
+    "signature": "private.upsert_owner_lead(uuid,text,uuid,uuid,uuid,text,text,text,text,text,text,timestamp with time zone)",
+    "effective_sha256": "680a68f86d303dbfda027bce29c2dc1bf6641350fae55dc6727411b2fcdd716b",
+    "sources": [
+      {
+        "file": "20260717003310_preserve_lead_origin_context_on_resource_deletion.sql",
+        "raw_sha256": "fb589955ae5e39eaeaa30930b206bad3a4971f2736cc0e8bed13174b0e6a1c3b"
+      }
+    ]
+  },
+  {
+    "signature": "authoritative_role()",
+    "effective_sha256": "e3f85c7e6d5845defed9875169516ca3a1a027dc53c7207402b20ce76db6b619",
+    "sources": [
+      {
+        "file": "20260602005747_scope_authoritative_role_lookup.sql",
+        "raw_sha256": "1b33a61ff60980ea59d2a7c4562f6001870e577a2d420a637cd55eb6a880dfd9"
+      },
+      {
+        "file": "20260623130000_authoritative_role.sql",
+        "raw_sha256": "9e2ccb384f579dbbd65f3aa4593594ef9b27242235f334e211d7e2a65fd94373"
+      },
+      {
+        "file": "20260714170523_reassert_scoped_authoritative_role.sql",
+        "raw_sha256": "3ac7e013a36aedb433180bb2fe268c6a0e828bf4e37c32aa41873c4d3cf92c65"
+      }
+    ]
+  },
+  {
+    "signature": "authoritative_role(uuid)",
+    "effective_sha256": "67a0a25708892991918ff62fa508a2200e37a5f3f6a91dd09f1faa355524524f",
+    "sources": [
+      {
+        "file": "20260714170523_reassert_scoped_authoritative_role.sql",
+        "raw_sha256": "3ac7e013a36aedb433180bb2fe268c6a0e828bf4e37c32aa41873c4d3cf92c65"
+      }
+    ]
+  },
+  {
+    "signature": "check_viewing_limit()",
+    "effective_sha256": "22eefb8126dd8cb165632eb2f8063e1dff75213d58eff59fe439865e9b7d85e1",
+    "sources": [
+      {
+        "file": "20260526000000_seed_bypass_viewing_trigger.sql",
+        "raw_sha256": "559c3cbb3bb394fa490ca5a52e99dbe4b7e9613f1afe3fa320257f4ab59c0646"
+      }
+    ]
+  },
+  {
+    "signature": "current_billing_runtime_mode()",
+    "effective_sha256": "b43f44d197d93f0a70b4848b2c0c7dae5de88cc535330ddf12405ad54464f0cb",
+    "sources": [
+      {
+        "file": "20260714143110_harden_durable_billing_entitlements.sql",
+        "raw_sha256": "096c4c10874a5c8638745f4c794f0e53fefc5cc3abcbbefef5afa15cee04695d"
+      }
+    ]
+  },
+  {
+    "signature": "get_listing_reference_catalogue()",
+    "effective_sha256": "5def99b203759290d0be12b4d34a7bfec92809a4199ecf1b6710d3c018b28f09",
+    "sources": [
+      {
+        "file": "20260722060307_replace_definer_listing_views_with_scoped_rpcs.sql",
+        "raw_sha256": "e247253898e52973df8f8fd5f305906c2e2e403cc628f812726fd2241ce6a7c9"
+      }
+    ]
+  },
+  {
+    "signature": "get_viewing_limit(uuid,boolean)",
+    "effective_sha256": "c61dc8947e021015ecdea2c501da60c3b697879af9201f9e90687117abb25742",
+    "sources": [
+      {
+        "file": "20260716221706_enforce_report_and_viewing_entitlements.sql",
+        "raw_sha256": "8fd386f2eb1673433834c7c4c5ab29157658320f4562f74fad1740392640d548"
+      }
+    ]
+  },
+  {
+    "signature": "guard_viewing_status_transitions()",
+    "effective_sha256": "8ef5be662d17d2ff458a61a6c602cbb0c5f661139f30f9c1a1341e11404e5018",
+    "sources": [
+      {
+        "file": "20260711180343_ecas_no_upgrade_hardening.sql",
+        "raw_sha256": "4ee6fca26994620ad48220571a6485ebf71dc633e1c788979ad35814d147e54e"
+      }
+    ]
+  },
+  {
+    "signature": "has_platform_admin(uuid)",
+    "effective_sha256": "c3991d37d0ed52fc1fc13c6420ea57b9d8176e43183d05af630ced051077bae9",
+    "sources": [
+      {
+        "file": "20260623130000_authoritative_role.sql",
+        "raw_sha256": "9e2ccb384f579dbbd65f3aa4593594ef9b27242235f334e211d7e2a65fd94373"
+      }
+    ]
+  },
+  {
+    "signature": "is_pro(uuid)",
+    "effective_sha256": "de39117b161fbf2f2bc4995632b8d1febf71e5ad83849bb82b70e0d81218bc21",
+    "sources": [
+      {
+        "file": "20260718124557_enforce_durable_developer_pro_entitlements.sql",
+        "raw_sha256": "7a9c79a96dba351a70e4f7b6e78eb210198d44c37b61a02adf870f77f10506fd"
+      }
+    ]
+  },
+  {
+    "signature": "profile_pricing_audience(user_role,text)",
+    "effective_sha256": "42ad07517ed94d9bd728eb442131d0910af4f80174c5cdf5e825d54bda82778a",
+    "sources": [
+      {
+        "file": "20260707080000_harden_participant_type_entitlement_audience.sql",
+        "raw_sha256": "afb98ceb5741205be9e391387c6a7081fa90e212e30b45fa2acb4fa49ca91990"
+      }
+    ]
+  },
+  {
+    "signature": "update_updated_at_column()",
+    "effective_sha256": "c65132a2c298725f67acf5857b5f6ee3a5df5eb94047848b690650542f6de5fb",
+    "sources": [
+      {
+        "file": "20260315093949_1df27cbb-0a65-443e-b2a4-f3daf20f08c6.sql",
+        "raw_sha256": "c0919ba130a6f469d70f742cc150433e9b8015a8dc22d40457aeb8d102efec47"
+      }
+    ]
+  }
+]

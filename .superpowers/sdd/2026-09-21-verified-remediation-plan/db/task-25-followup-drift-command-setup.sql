@@ -1,0 +1,1 @@
+DROP POLICY viewings_insert ON public.viewings; CREATE POLICY viewings_insert ON public.viewings FOR UPDATE TO authenticated USING(true);

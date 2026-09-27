@@ -1,0 +1,3 @@
+DROP POLICY viewings_insert ON public.viewings; DROP FUNCTION IF EXISTS private.can_request_viewing_for_listing(uuid,uuid); CREATE POLICY "viewings_insert" ON public."viewings" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((private.has_platform_admin(( SELECT auth.uid() AS uid)) OR ((requester_id = ( SELECT auth.uid() AS uid)) AND (status = 'pending'::viewing_status) AND (EXISTS ( SELECT 1
+   FROM listings listing
+  WHERE ((listing.id = viewings.listing_id) AND (listing.owner_id = viewings.owner_id)))))));
