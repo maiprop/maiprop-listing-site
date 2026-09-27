@@ -144,6 +144,87 @@ describe("useFavorites", () => {
 });
 
 describe("useToggleFavorite", () => {
+  it("removes a rejected save from a full view opened while the write was pending", async () => {
+    const listingId = "d1000000-0000-4000-8000-000000000011";
+    let finishWrite!: (value: { error: Error | null }) => void;
+    const insert = vi.fn().mockReturnValue(new Promise<{ error: Error | null }>(resolve => { finishWrite = resolve; }));
+    mockFrom.mockReturnValue({ insert });
+    mockRpc.mockReturnValue({ select: () => ({ in: async () => ({ data: [{ id: listingId, title: "Transient" }], error: null }) }) });
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({ user: { id: "user-a" } });
+    qc.setQueryData(["favoriteMembership", "user-a"], []);
+
+    const toggle = renderHook(() => useToggleFavorite(), { wrapper });
+    let write!: Promise<void>;
+    act(() => { write = toggle.result.current.mutateAsync({ listing_id: listingId, isFavorited: false }); });
+    await waitFor(() => expect(insert).toHaveBeenCalledTimes(1));
+    const full = renderHook(() => useFavorites(), { wrapper });
+    await waitFor(() => expect(full.result.current.data?.[0]?.listing_id).toBe(listingId));
+
+    act(() => finishWrite({ error: new Error("denied") }));
+    await expect(write).rejects.toThrow("denied");
+    await waitFor(() => expect(full.result.current.data).toEqual([]));
+    expect(qc.getQueryData(["favoriteMembership", "user-a"])).toEqual([]);
+    expect(qc.getQueryData(["favorites", "user-a"])).toEqual([]);
+  });
+
+  it("prevents late full hydration from publishing a rejected optimistic save", async () => {
+    const listingId = "d1000000-0000-4000-8000-000000000012";
+    let finishWrite!: (value: { error: Error | null }) => void;
+    let finishHydration!: (value: { data: Array<{ id: string; title: string }>; error: null }) => void;
+    const insert = vi.fn().mockReturnValue(new Promise<{ error: Error | null }>(resolve => { finishWrite = resolve; }));
+    mockFrom.mockReturnValue({ insert });
+    const inListings = vi.fn().mockReturnValue(new Promise(resolve => { finishHydration = resolve; }));
+    mockRpc.mockReturnValue({ select: () => ({ in: inListings }) });
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({ user: { id: "user-a" } });
+    qc.setQueryData(["favoriteMembership", "user-a"], []);
+
+    const toggle = renderHook(() => useToggleFavorite(), { wrapper });
+    let write!: Promise<void>;
+    act(() => { write = toggle.result.current.mutateAsync({ listing_id: listingId, isFavorited: false }); });
+    await waitFor(() => expect(insert).toHaveBeenCalledTimes(1));
+    const full = renderHook(() => useFavorites(), { wrapper });
+    await waitFor(() => expect(inListings).toHaveBeenCalledTimes(1));
+
+    act(() => finishWrite({ error: new Error("denied") }));
+    await expect(write).rejects.toThrow("denied");
+    act(() => finishHydration({ data: [{ id: listingId, title: "Transient" }], error: null }));
+    await waitFor(() => expect(full.result.current.data).toEqual([]));
+    expect(qc.getQueryData(["favoriteMembership", "user-a"])).toEqual([]);
+    expect(qc.getQueryData(["favorites", "user-a"])).toEqual([]);
+  });
+
+  it("retains another pending save in a full view when the first save fails", async () => {
+    const first = "d1000000-0000-4000-8000-000000000021";
+    const second = "d1000000-0000-4000-8000-000000000022";
+    const finishes = new Map<string, (value: { error: Error | null }) => void>();
+    let confirmed: Array<{ id: string; listing_id: string; user_id: string; price_alert: boolean; price_when_saved: null; created_at: string }> = [];
+    mockFrom.mockReturnValue({
+      insert: (row: { listing_id: string }) => new Promise<{ error: Error | null }>(resolve => finishes.set(row.listing_id, resolve)),
+      select: () => ({ eq: () => ({ order: async () => ({ data: confirmed, error: null }) }) }),
+    });
+    mockRpc.mockReturnValue({ select: () => ({ in: async (_column: string, ids: string[]) => ({ data: ids.map(id => ({ id, title: id })), error: null }) }) });
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({ user: { id: "user-a" } });
+    qc.setQueryData(["favoriteMembership", "user-a"], []);
+    const toggle = renderHook(() => useToggleFavorite(), { wrapper });
+    let a!: Promise<void>, b!: Promise<void>;
+    act(() => {
+      a = toggle.result.current.mutateAsync({ listing_id: first, isFavorited: false });
+      b = toggle.result.current.mutateAsync({ listing_id: second, isFavorited: false });
+    });
+    await waitFor(() => expect(finishes.size).toBe(2));
+    const full = renderHook(() => useFavorites(), { wrapper });
+    await waitFor(() => expect(full.result.current.data?.map(row => row.listing_id)).toEqual([second, first]));
+
+    act(() => finishes.get(first)!({ error: new Error("denied") }));
+    await expect(a).rejects.toThrow("denied");
+    await waitFor(() => expect(full.result.current.data?.map(row => row.listing_id)).toEqual([second]));
+    expect(qc.getQueryData<Array<{ listing_id: string }>>(["favoriteMembership", "user-a"])?.map(row => row.listing_id)).toEqual([second]);
+
+    confirmed = [{ id: "confirmed-second", listing_id: second, user_id: "user-a", price_alert: false, price_when_saved: null, created_at: "2026-01-01" }];
+    act(() => finishes.get(second)!({ error: null }));
+    await b;
+    await waitFor(() => expect(full.result.current.data?.map(row => row.listing_id)).toEqual([second]));
+  });
   it("keeps a confirmed save when another listing fails later, across both caches", async () => {
     const first = "d1000000-0000-4000-8000-000000000001";
     const second = "d1000000-0000-4000-8000-000000000002";
@@ -201,6 +282,7 @@ describe("useToggleFavorite", () => {
     }));
 
     await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(qc.getQueryData(["favoriteMembership", "user-a"])).toBeUndefined();
     expect(qc.getQueryData(["favorites", "user-a"])).toBeUndefined();
   });
 

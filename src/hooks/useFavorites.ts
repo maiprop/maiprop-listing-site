@@ -171,14 +171,23 @@ export function useToggleFavorite() {
       pending.set(operationUserId, state);
       return { operationUserId, listingId: listing_id, membership, full };
     },
-    onError: (_err, _vars, context) => {
+    onError: async (_err, _vars, context) => {
       if (context) {
         const { operationUserId, listingId, membership, full } = context;
         const memberKey = membershipKey(operationUserId);
+        const joinedKey = fullKey(operationUserId);
+        // A full view may have mounted after onMutate and captured the optimistic row.
+        // Cancel that hydration before it can publish a rejected save.
+        await queryClient.cancelQueries({ queryKey: joinedKey, exact: true });
         const restoredMembers = restoreListing(queryClient.getQueryData<FavoriteRow[]>(memberKey), listingId, membership);
         if (restoredMembers) queryClient.setQueryData(memberKey, restoredMembers);
         else queryClient.removeQueries({ queryKey: memberKey, exact: true });
-        if (full.existed) queryClient.setQueryData<FullFavorite[]>(fullKey(operationUserId), old => restoreListing(old, listingId, full));
+        if (queryClient.getQueryData(joinedKey) !== undefined) {
+          queryClient.setQueryData<FullFavorite[]>(joinedKey, old => restoreListing(old, listingId, { ...full, existed: true }));
+        }
+        // An active full view must rederive after a cancelled or late hydration.
+        // It reads the corrected row cache, including other pending listings.
+        void queryClient.invalidateQueries({ queryKey: joinedKey, exact: true });
       }
       toast.error(t("toasts.favorites.errorToggle"));
     },
