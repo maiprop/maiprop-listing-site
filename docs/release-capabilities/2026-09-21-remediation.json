@@ -3965,7 +3965,19 @@
       ],
       "doesNotNeed": [
         "Edge deployment"
-      ]
+      ],
+      "plannedMigration": "supabase/migrations/20260927003528_restore_managed_listing_readers.sql",
+      "localEvidence": {
+        "report": ".superpowers/sdd/2026-09-21-verified-remediation-plan/task-7a-report.md",
+        "sql": "supabase/tests/managed_listing_readers_upgrade_test.sql",
+        "capturedFixture": "supabase/tests/fixtures/managed_listing_captured_read_surface.sql",
+        "hooks": "src/test/useListings.managedSession.test.tsx",
+        "capturedChecks": 52,
+        "sourceDerivedChecks": 52,
+        "localHttpRequests": 29,
+        "focusedFrontendTests": 19,
+        "limits": "Bounded synthetic captured read surface on PostgreSQL16.15/PostgREST16.3; source-derived clone is separate evidence. HostedPG17, managed default ACL/fresh all-history replay, protected staging/browser, full acceptance and final coverage gates remain unproved. No production capability status changed."
+      }
     },
     "A6b": {
       "ready": false,
