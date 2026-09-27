@@ -62,3 +62,24 @@ Public official references checked27September: [changelog](https://supabase.com/
 Reviewed all eight scoped files and the whitespace-insensitive runtime diff. Source matching and scheduling rules are unchanged; no current listing/card functionality removed. Stateful fakes apply emitted filters to independently mutated rows; missing filters are unrestricted, so the fixture cannot itself silently protect a missing concurrency guard. Exact affected rows are required for email checkpoints; full-pool skip logs do not substitute for pool state.
 
 These fixes make completion reporting truthful; **they do not solve the provider/database atomicity gap**. Accepted email followed by a failed checkpoint can be sent again on a later invocation. Concurrent invocations can still both send before their competing checkpoint; timeout acceptance stays unknown.503 is not evidence that a retry is safe. There is no automatic retry added here, durable email admission, frozen operation ledger, pg_net dispatch correlation, provider deduplication/inbox-delivery proof, or hosted video/TURN proof. Those remain T12b/release work. No claim of >=80% coverage or full-project completion is made.
+
+## Fix round1 — sampled-page completion (independent Important finding)
+
+Fix base `5fbb46f6d0039bd4730f26629cf09937d4312a5d`; implementation `40842cf52fa6cd178b15139df913840cf76a55e7`.
+Read full task-12a-independent-review-20260927.md. Confirmed the allSettled sampling path discarded selected-page failures while the terminal result inspected only item-write errors. Added separate page_fetch_failures count for rejected selected extra-page fetches. Successful imports remain preserved; item errors/imported/updated semantics and the selection/cap/prune algorithm remain unchanged. Any page failure makes the completed processing partial: HTTP503, ok:false/import_complete:false/outcome:partial, checked log status error with safe counts. Both the empty available-results branch and ordinary import branch apply the same rule. Any later primary failure retains observed page failures alongside existing counts. No retries or scheduling changes.
+
+Tracked actual-handler regressions reuse the existing stateful SDK/fetch fixture and isolated clock. Selected pages are exactly0/3/5/7, requested once each:
+- Mixed page results: pages0/3 succeed,5/7 fail; imports1 under unchanged size1 selection, total2, item errors0, page failures2, partial response and one error log.
+- Empty available results: first page empty but totalElements10,3/5/7 fail; imports0/total0, page failures3, partial response and one error log rather than an inferred successful empty catalogue.
+- All four pages succeed: total4, imports1 under unchanged selection, item errors0, page failures0, HTTP200/full completion and one success log.
+
+RED before runtime repair:3 failed (two expected503 versus actual200; control missing new zero count), retained task-12a-fix1-red.txt. GREEN after repair: full affected poll suite26 passed/0 failed, retained task-12a-fix1-green.txt. Exact commands from repository root:
+
+```powershell
+& 'C:/Users/K R/.deno/bin/deno.exe' test --node-modules-dir=none --cached-only --frozen --allow-env --allow-read --deny-net --config=supabase/functions/deno.json --import-map=supabase/functions/coverage-import-map.json --filter 'sampled poll truthfully' supabase/functions/poll-os-auctions/index.test.ts
+& 'C:/Users/K R/.deno/bin/deno.exe' test --node-modules-dir=none --cached-only --frozen --allow-env --allow-read --deny-net --config=supabase/functions/deno.json --import-map=supabase/functions/coverage-import-map.json supabase/functions/poll-os-auctions/index.test.ts
+node scripts/project-runtime.mjs -- node node_modules/eslint/bin/eslint.js --no-ignore supabase/functions/poll-os-auctions/index.ts supabase/functions/poll-os-auctions/index.test.ts
+git diff --check
+```
+
+Deno type checks and scoped lint passed; patch check exit0 with repository newline notices only. Request parser did not change, so its prior7 passing tests were not repeated; unchanged email/scheduler suites were not repeated. Self-reviewed exact two-file diff. Independent probe/artifacts preserved. No schema, provider/hosted/GitHub, install, retry, scheduler, or T12b work performed. Original T12b/release/coverage limitations remain.
