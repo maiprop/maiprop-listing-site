@@ -8,7 +8,10 @@ BEGIN
       RAISE EXCEPTION 'managed_listing_index_definition_mismatch: idx_listings_personal_management_cursor';
     END IF;
   ELSE
-    CREATE INDEX idx_listings_personal_management_cursor ON public.listings (owner_id, created_at DESC, id DESC) WHERE organization_id IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_listings_personal_management_cursor ON public.listings (owner_id, created_at DESC, id DESC) WHERE organization_id IS NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_index i WHERE i.indexrelid = to_regclass('public.idx_listings_personal_management_cursor') AND i.indisvalid AND i.indisready AND i.indislive AND pg_catalog.pg_get_indexdef(i.indexrelid) = 'CREATE INDEX idx_listings_personal_management_cursor ON public.listings USING btree (owner_id, created_at DESC, id DESC) WHERE (organization_id IS NULL)') THEN
+    RAISE EXCEPTION 'managed_listing_index_definition_mismatch: idx_listings_personal_management_cursor';
   END IF;
 END;
 $index$;
@@ -20,7 +23,10 @@ BEGIN
       RAISE EXCEPTION 'managed_listing_index_definition_mismatch: idx_listings_org_management_cursor';
     END IF;
   ELSE
-    CREATE INDEX idx_listings_org_management_cursor ON public.listings (organization_id, created_at DESC, id DESC) WHERE organization_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_listings_org_management_cursor ON public.listings (organization_id, created_at DESC, id DESC) WHERE organization_id IS NOT NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_index i WHERE i.indexrelid = to_regclass('public.idx_listings_org_management_cursor') AND i.indisvalid AND i.indisready AND i.indislive AND pg_catalog.pg_get_indexdef(i.indexrelid) = 'CREATE INDEX idx_listings_org_management_cursor ON public.listings USING btree (organization_id, created_at DESC, id DESC) WHERE (organization_id IS NOT NULL)') THEN
+    RAISE EXCEPTION 'managed_listing_index_definition_mismatch: idx_listings_org_management_cursor';
   END IF;
 END;
 $index$;

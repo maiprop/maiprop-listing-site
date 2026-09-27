@@ -13,6 +13,18 @@ BEGIN
     RAISE EXCEPTION 'unexpected_existing_current_user_owns_listing';
   END IF;
 
+  IF to_regprocedure('private.preserve_new_build_enquiry_submission()') IS NOT NULL THEN
+    RAISE EXCEPTION 'unexpected_existing_preserve_new_build_enquiry_submission';
+  END IF;
+
+  IF to_regprocedure('public.submit_new_build_enquiry(uuid,uuid,uuid,text,text,text,text)') IS NOT NULL THEN
+    RAISE EXCEPTION 'unexpected_existing_submit_new_build_enquiry';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='public.new_building_leads'::regclass AND tgname='new_building_leads_preserve_submission_identity') THEN
+    RAISE EXCEPTION 'unexpected_existing_new_building_leads_preserve_submission_identity';
+  END IF;
+
   SELECT count(*)::integer INTO v_total_policy_count
   FROM pg_policies
   WHERE schemaname = 'public'
@@ -90,7 +102,7 @@ BEGIN
 END
 $preflight$;
 
-CREATE FUNCTION private.current_user_owns_listing(p_listing_id uuid)
+CREATE OR REPLACE FUNCTION private.current_user_owns_listing(p_listing_id uuid)
 RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -146,7 +158,7 @@ ALTER TABLE public.new_building_leads
   ADD CONSTRAINT new_building_leads_user_submission_key_key
   UNIQUE (user_id, submission_key);
 
-CREATE FUNCTION private.preserve_new_build_enquiry_submission()
+CREATE OR REPLACE FUNCTION private.preserve_new_build_enquiry_submission()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY INVOKER
@@ -172,12 +184,12 @@ $function$;
 ALTER FUNCTION private.preserve_new_build_enquiry_submission() OWNER TO postgres;
 REVOKE ALL ON FUNCTION private.preserve_new_build_enquiry_submission() FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE TRIGGER new_building_leads_preserve_submission_identity
+CREATE OR REPLACE TRIGGER new_building_leads_preserve_submission_identity
 BEFORE UPDATE ON public.new_building_leads
 FOR EACH ROW
 EXECUTE FUNCTION private.preserve_new_build_enquiry_submission();
 
-CREATE FUNCTION public.submit_new_build_enquiry(
+CREATE OR REPLACE FUNCTION public.submit_new_build_enquiry(
   p_submission_key uuid,
   p_user_id uuid,
   p_new_building_id uuid,

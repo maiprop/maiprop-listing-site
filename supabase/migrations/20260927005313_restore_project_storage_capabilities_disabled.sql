@@ -32,8 +32,8 @@ END $preflight$;
 CREATE TABLE IF NOT EXISTS private.storage_cleanup_rollout_control (singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton), cleanup_enabled boolean NOT NULL DEFAULT false);
 DO $gate_layout$ BEGIN
   IF (SELECT count(*) FROM pg_attribute WHERE attrelid='private.storage_cleanup_rollout_control'::regclass AND attnum>0 AND NOT attisdropped)<>2
-    OR NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid='private.storage_cleanup_rollout_control'::regclass AND attname='singleton' AND atttypid='boolean'::regtype AND attnotnull)
-    OR NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid='private.storage_cleanup_rollout_control'::regclass AND attname='cleanup_enabled' AND atttypid='boolean'::regtype AND attnotnull)
+    OR NOT EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum WHERE a.attrelid='private.storage_cleanup_rollout_control'::regclass AND a.attname='singleton' AND a.atttypid='boolean'::regtype AND a.attnotnull AND pg_get_expr(d.adbin,d.adrelid)='true')
+    OR NOT EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum WHERE a.attrelid='private.storage_cleanup_rollout_control'::regclass AND a.attname='cleanup_enabled' AND a.atttypid='boolean'::regtype AND a.attnotnull AND pg_get_expr(d.adbin,d.adrelid)='false')
     OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='private.storage_cleanup_rollout_control'::regclass AND contype='p' AND pg_get_constraintdef(oid)='PRIMARY KEY (singleton)')
     OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='private.storage_cleanup_rollout_control'::regclass AND contype='c' AND convalidated AND pg_get_constraintdef(oid)='CHECK (singleton)')
   THEN RAISE EXCEPTION 'storage_capability_rollout_control_conflict'; END IF;
