@@ -11,6 +11,7 @@ import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  assertBehavioralSourceIdentities,
   captureCoverageInputs,
   finalizeCoverageResult,
   mergeRuntimeCoverage,
@@ -168,6 +169,15 @@ for (const [raw, output] of [[behaviorRaw, behaviorLcovPath], [inventoryRaw, inv
 
 const behaviorLcov = readFileSync(behaviorLcovPath, "utf8");
 const inventoryLcov = readFileSync(inventoryLcovPath, "utf8");
+const relocatedServices = Object.keys(JSON.parse(readFileSync(importMap, "utf8")).scopes)
+  .map((scope) => scope.replace(/^\.\//, "").replace(/\/$/, ""));
+const relocatedSourceIdentities = relocatedServices.map((service) => `supabase/functions/${service}/index.ts`);
+assertBehavioralSourceIdentities({
+  root: repoRoot,
+  runtimePaths: included.map(({ path }) => path),
+  behaviorLcov,
+  expectedPaths: relocatedSourceIdentities,
+});
 const merged = mergeRuntimeCoverage({
   root: repoRoot,
   runtimePaths: included.map(({ path }) => path),
@@ -178,14 +188,6 @@ const mergedPath = resolve(outputDir, "runtime-merged.lcov");
 const zeroHitRuntimePaths = merged.records
   .filter(({ lines }) => lines.every(([, count]) => count === 0))
   .map(({ path }) => path);
-
-const relocatedServices = Object.keys(JSON.parse(readFileSync(importMap, "utf8")).scopes)
-  .map((scope) => scope.replace(/^\.\//, "").replace(/\/$/, ""));
-const relocatedSourceIdentities = relocatedServices.map((service) => `supabase/functions/${service}/index.ts`);
-const mergedPathSet = new Set(merged.records.map(({ path }) => path));
-for (const path of relocatedSourceIdentities) {
-  if (!mergedPathSet.has(path)) throw new Error(`missing relocated production source identity: ${path}`);
-}
 
 const denoVersion = run(deno, ["--version"], { quiet: true }).trim().split(/\r?\n/);
 const result = {

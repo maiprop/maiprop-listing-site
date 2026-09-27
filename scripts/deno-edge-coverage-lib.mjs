@@ -263,10 +263,12 @@ globalThis.fetch = ((input: RequestInfo | URL) => {
 globalThis.setTimeout = (() => 0) as typeof setTimeout;
 globalThis.setInterval = (() => 0) as typeof setInterval;
 
+let inventoryImportFailed = false;
 let inventoryImportFailure: unknown;
 try {
 ${inventoryImports}
 } catch (error) {
+  inventoryImportFailed = true;
   inventoryImportFailure = error;
 } finally {
   globalThis.fetch = originalFetch;
@@ -281,7 +283,7 @@ ${inventoryImports}
 if (inventoryTransportAttempts.length > 0) {
   throw new Error(\`inventory transport attempted: \${inventoryTransportAttempts.join(", ")}\`);
 }
-if (inventoryImportFailure !== undefined) throw inventoryImportFailure;
+if (inventoryImportFailed) throw inventoryImportFailure;
 
 Deno.test("imports every runtime source without transport", () => {});
 `;
@@ -367,6 +369,18 @@ function collectRecords({ root, text, label, runtimeSet }) {
     }
   }
   return sources;
+}
+
+export function assertBehavioralSourceIdentities({ root, runtimePaths, behaviorLcov, expectedPaths }) {
+  const normalizedRuntimePaths = runtimePaths.map(toPosix);
+  const runtimeSet = new Set(normalizedRuntimePaths);
+  if (runtimeSet.size !== normalizedRuntimePaths.length) {
+    throw new Error("runtime manifest contains duplicate paths");
+  }
+  const behavior = collectRecords({ root, text: behaviorLcov, label: "behavior LCOV", runtimeSet });
+  for (const path of expectedPaths.map(toPosix)) {
+    if (!behavior.has(path)) throw new Error(`missing relocated production source identity in behavioral LCOV: ${path}`);
+  }
 }
 
 export function mergeRuntimeCoverage({ root, runtimePaths, behaviorLcov, inventoryLcov }) {

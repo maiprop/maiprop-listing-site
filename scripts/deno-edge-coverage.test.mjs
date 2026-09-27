@@ -14,6 +14,7 @@ import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 
 import {
+  assertBehavioralSourceIdentities,
   assertCoverageThreshold,
   captureCoverageInputs,
   discoverRuntimeManifest,
@@ -141,6 +142,7 @@ test("runtime manifest permits dependency replacement only through a scoped test
       "test",
       "--no-config",
       "--cached-only",
+      "--frozen",
       "--deny-net",
       `--import-map=${importMap}`,
       "example/index.test.ts",
@@ -218,6 +220,7 @@ test("inventory harness rejects a fetch attempt even when the imported module ca
       "test",
       "--no-config",
       "--cached-only",
+      "--frozen",
       "--allow-env",
       "--allow-read",
       "--deny-net",
@@ -242,6 +245,7 @@ test("inventory harness rejects a fetch attempt even when the imported module ca
         "test",
         "--no-config",
         "--cached-only",
+        "--frozen",
         "--allow-env",
         "--allow-read",
         "--deny-net",
@@ -249,6 +253,68 @@ test("inventory harness rejects a fetch attempt even when the imported module ca
       ], { cwd: root, encoding: "utf8", stdio: "pipe" }),
       (error) => /inventory transport attempted.*fetch/i.test(`${error.stdout ?? ""}${error.stderr ?? ""}`),
     );
+  });
+});
+
+test("inventory harness rejects undefined import failures and restores intercepted APIs", () => {
+  withTempRoot("maiprop-deno-inventory-undefined-", (root) => {
+    const fixtures = [
+      ["safe", "export const loaded = true;\n", false],
+      ["throw-undefined", "throw undefined;\nexport {};\n", true],
+      ["reject-undefined", "await Promise.reject(undefined);\nexport {};\n", true],
+    ];
+    for (const [name, source, shouldFail] of fixtures) {
+      const modulePath = write(root, `${name}.ts`, source);
+      const harnessPath = write(root, `${name}-inventory.ts`, renderInventoryHarness({
+        moduleUrls: [pathToFileURL(modulePath).href],
+      }));
+      const args = ["test", "--no-config", "--cached-only", "--frozen", "--allow-env", "--allow-read", "--deny-net", harnessPath];
+      if (shouldFail) {
+        assert.throws(() => execFileSync(deno, args, { cwd: root, encoding: "utf8", stdio: "pipe" }),
+          (error) => /error: Test failed/.test(`${error.stdout ?? ""}${error.stderr ?? ""}`)
+            && !/SyntaxError|TS\d{4}/.test(`${error.stdout ?? ""}${error.stderr ?? ""}`));
+      } else {
+        assert.doesNotThrow(() => execFileSync(deno, args, { cwd: root, encoding: "utf8", stdio: "pipe" }));
+      }
+    }
+
+    for (const name of ["throw-undefined", "reject-undefined"]) {
+      const rejectedPath = join(root, `${name}-inventory.ts`);
+      const wrapperPath = write(root, `${name}-restoration.test.ts`, [
+        "const originalFetch = globalThis.fetch;",
+        "const originalSetTimeout = globalThis.setTimeout;",
+        "const originalSetInterval = globalThis.setInterval;",
+        "const originalServe = Deno.serve;",
+        "let caught = false;",
+        `try { await import(${JSON.stringify(pathToFileURL(rejectedPath).href)}); } catch (error) { caught = true; if (error !== undefined) throw error; }`,
+        "Deno.test('undefined rejection restores intercepted APIs', () => {",
+        "  if (!caught) throw new Error('inventory failure was accepted');",
+        "  if (globalThis.fetch !== originalFetch || globalThis.setTimeout !== originalSetTimeout || globalThis.setInterval !== originalSetInterval || Deno.serve !== originalServe) throw new Error('intercepted API was not restored');",
+        "  const key = 'MAIPROP_INVENTORY_RESTORATION_SENTINEL';",
+        "  const previous = Deno.env.get(key);",
+        "  try { Deno.env.set(key, 'restored'); if (Deno.env.get(key) !== 'restored') throw new Error('env set/get not restored'); Deno.env.delete(key); if (Deno.env.get(key) !== undefined) throw new Error('env delete not restored'); }",
+        "  finally { if (previous === undefined) Deno.env.delete(key); else Deno.env.set(key, previous); }",
+        "});",
+        "",
+      ].join("\n"));
+      assert.doesNotThrow(() => execFileSync(deno, [
+        "test", "--no-config", "--cached-only", "--frozen", "--allow-env", "--allow-read", "--deny-net", wrapperPath,
+      ], { cwd: root, encoding: "utf8", stdio: "pipe" }));
+    }
+
+    const transportThenUndefined = write(root, "caught-fetch-then-undefined.ts", [
+      "try { await fetch('https://inventory-transport.invalid'); } catch { /* caught by runtime */ }",
+      "throw undefined;",
+      "export {};",
+      "",
+    ].join("\n"));
+    const precedenceHarness = write(root, "transport-precedence-inventory.ts", renderInventoryHarness({
+      moduleUrls: [pathToFileURL(transportThenUndefined).href],
+    }));
+    assert.throws(() => execFileSync(deno, [
+      "test", "--no-config", "--cached-only", "--frozen", "--allow-env", "--allow-read", "--deny-net", precedenceHarness,
+    ], { cwd: root, encoding: "utf8", stdio: "pipe" }),
+    (error) => /inventory transport attempted.*fetch/.test(`${error.stdout ?? ""}${error.stderr ?? ""}`));
   });
 });
 
@@ -287,6 +353,55 @@ test("merger unions duplicate source identities by line and forces inventory-onl
     assert.deepEqual(merged.records[1].lines, [[1, 0], [2, 0]]);
     assert.deepEqual(merged.summary, { hit: 2, found: 4, percent: 50 });
     assert.equal(merged.inventoryPositiveCountsDiscarded, 4);
+  });
+});
+
+test("relocated original source identity must come from actual behavioral LCOV", () => {
+  withTempRoot("maiprop-deno-relocated-", (root) => {
+    const original = write(root, "supabase/functions/example/index.ts", "export function value() { return 7; }\n");
+    const copied = write(root, "supabase/functions/copied/index.ts", readFileSync(original, "utf8"));
+    const unhit = write(root, "supabase/functions/unhit/index.ts", "export function untouched() { return 9; }\n");
+    const runtimePaths = [original, copied, unhit].map((path) => relative(root, path).replaceAll("\\", "/"));
+    write(root, "inventory.test.ts", [
+      "import './supabase/functions/example/index.ts';",
+      "import './supabase/functions/copied/index.ts';",
+      "import './supabase/functions/unhit/index.ts';",
+      "Deno.test('inventory', () => {});",
+      "",
+    ].join("\n"));
+    write(root, "wrong.test.ts", "import { value } from './supabase/functions/copied/index.ts';\nDeno.test('wrong copy', () => { if (value() !== 7) throw Error('bad'); });\n");
+    write(root, "correct.test.ts", "import { value } from './supabase/functions/example/index.ts';\nDeno.test('original', () => { if (value() !== 7) throw Error('bad'); });\n");
+    const collect = (name) => {
+      const raw = join(root, `${name}-raw`);
+      const output = join(root, `${name}.lcov`);
+      execFileSync(deno, ["test", "--no-config", "--cached-only", "--frozen", "--deny-net", `--coverage=${raw}`, "--coverage-raw-data-only", `${name}.test.ts`], { cwd: root, stdio: "pipe" });
+      execFileSync(deno, ["coverage", "--lcov", "--include=.*supabase[/\\\\]functions[/\\\\].*index\\.ts$", `--output=${output}`, raw], { cwd: root, stdio: "pipe" });
+      return readFileSync(output, "utf8");
+    };
+    const inventoryLcov = collect("inventory");
+    const wrongLcov = collect("wrong");
+    const correctLcov = collect("correct");
+    assert.match(inventoryLcov, /SF:.*example.*index\.ts/);
+    assert.doesNotMatch(wrongLcov, /SF:.*example.*index\.ts/);
+    assert.match(wrongLcov, /SF:.*copied.*index\.ts/);
+    const wrongMerged = mergeRuntimeCoverage({ root, runtimePaths, behaviorLcov: wrongLcov, inventoryLcov });
+    assert.ok(wrongMerged.records.some(({ path }) => path === runtimePaths[0]));
+    assert.throws(() => assertBehavioralSourceIdentities({ root, runtimePaths, behaviorLcov: wrongLcov, expectedPaths: [runtimePaths[0]] }), /missing relocated production source identity.*example\/index\.ts/i);
+    assert.doesNotThrow(() => assertBehavioralSourceIdentities({ root, runtimePaths, behaviorLcov: correctLcov, expectedPaths: [runtimePaths[0]] }));
+    const merged = mergeRuntimeCoverage({ root, runtimePaths, behaviorLcov: correctLcov, inventoryLcov });
+    assert.equal(merged.records.length, 3);
+    assert.ok(merged.records.find(({ path }) => path === runtimePaths[0]).lines.some(([, count]) => count > 0));
+    for (const path of runtimePaths.slice(1)) {
+      assert.ok(merged.records.find((record) => record.path === path).lines.every(([, count]) => count === 0));
+    }
+    assert.equal(merged.summary.found, merged.records.reduce((total, record) => total + record.lines.length, 0));
+    assert.ok(merged.summary.found > merged.records.find(({ path }) => path === runtimePaths[0]).lines.length);
+    assert.doesNotThrow(() => assertBehavioralSourceIdentities({
+      root,
+      runtimePaths,
+      behaviorLcov: lcov([{ source: pathToFileURL(original).href, lines: [[1, 0]] }]),
+      expectedPaths: [runtimePaths[0]],
+    }));
   });
 });
 
@@ -370,6 +485,7 @@ test("official Deno identities produce truthful zero, partial, and full branch-f
         "test",
         "--no-config",
         "--cached-only",
+        "--frozen",
         "--deny-net",
         `--coverage=${raw}`,
         "--coverage-raw-data-only",

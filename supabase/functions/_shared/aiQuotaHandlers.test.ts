@@ -26,6 +26,7 @@ for (const [index, entry] of cases.entries()) {
     Deno.test(`${entry.name}: ${outcome} quota reserves once before provider work`, async () => {
       const events: string[] = [];
       const unexpected: string[] = [];
+      const reservationPayloads: unknown[] = [];
       const actor = `quota-actor-${index}-${outcome}`;
       const previous = activeFetch;
       const originalError = console.error;
@@ -43,7 +44,7 @@ for (const [index, entry] of cases.entries()) {
         }
         if (url.hostname === "test.supabase.co" && url.pathname === "/rest/v1/rpc/reserve_ai_quota_for_user") {
           events.push("reserve");
-          assertEquals(JSON.parse(String((init as { body?: unknown })?.body)), { _user_id: actor, p_bucket: entry.name });
+          reservationPayloads.push(JSON.parse(String((init as { body?: unknown })?.body)));
           return Promise.resolve(outcome === "unavailable"
             ? json({ message: "quota unavailable" }, 503)
             : json({ allowed: outcome === "allowed", reason: outcome === "denied" ? "monthly_limit_reached" : null, used: 1, limit: 5 }));
@@ -65,6 +66,7 @@ for (const [index, entry] of cases.entries()) {
         const body = await response.text();
         assertEquals(response.status, outcome === "allowed" ? 200 : outcome === "denied" ? 429 : 503, body);
         assertEquals(events.filter(event => event === "reserve"), ["reserve"]);
+        assertEquals(reservationPayloads, [{ _user_id: actor, p_bucket: entry.name }]);
         assertEquals(events.filter(event => event === "provider").length, outcome === "allowed" ? 1 : 0);
         assertEquals(events[0], "auth");
         assertEquals(unexpected, []);
