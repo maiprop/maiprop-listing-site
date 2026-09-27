@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { aggregateStatements, assessRun, assertDisposableName, assertInventoryStable, assertRepoPath,
-  assertStatementIdentitySet, parseCsv, parseTap, sha256, validateEffectiveSchema } from './db-plpgsql-coverage-lib.mjs';
+  assertStatementIdentitySet, parseCsv, parseTap, sha256, suiteKind, validateEffectiveSchema } from './db-plpgsql-coverage-lib.mjs';
 
 const one = [{ name: 'basic_test.sql', hash: 'a'.repeat(64) }];
 const tap = (body, name = 'basic_test.sql') => `D0_START_TEST ${name}\n${body}\nD0_END_TEST ${name}`;
@@ -28,6 +28,40 @@ test('strict TAP rejects failed, missing, extra, restarted, and undiscovered seg
     'ok 1 - first\nSELECT * FROM finish();\n1..1\nok 1 - extra\nSELECT * FROM finish();\n1..1',
   ]) assert.throws(() => parseTap(tap(body),one), body);
   assert.throws(() => parseTap(tap(good,'unknown_test.sql'),one));
+});
+const nativeName = 'public_professionals_runtime_test.sql';
+const native = [{name:nativeName,hash:'209a4a884854f36e78e643f143d22a40c3a5d74b4944dd68912fda5a59a329a9'}];
+const successfulPsql = {exitCode:0,onErrorStop:true};
+const nativeBody = [
+  'BEGIN;', 'BEGIN', 'SET LOCAL plpgsql.check_asserts = on;', 'SET',
+  ...Array.from({length:6}, (_, n) => [
+    'DO $test$',
+    ...Array.from({length:n === 0 ? 6 : 4}, () => 'ASSERT true;'),
+    '$test$;', 'DO',
+  ]).flat(),
+  'ROLLBACK;', 'ROLLBACK',
+  'VACUUM remediation_ddl_trace.boundary_probe;', 'VACUUM',
+].join('\n');
+test('only the pinned native ASSERT suite accepts six executed blocks and zero TAP segments', () => {
+  assert.equal(suiteKind(nativeName,native[0].hash),'native_assert');
+  const result = parseTap(tap(nativeBody,nativeName),native,successfulPsql);
+  assert.deepEqual(result.detail[nativeName],{segments:0,assertions:0});
+  assert.throws(() => parseTap(tap('', 'basic_test.sql'),one,successfulPsql),/TAP segment count mismatch/);
+});
+test('native ASSERT execution rejects disabled or removed asserts, hash drift, SQL failure and absent execution', () => {
+  const raw = tap(nativeBody,nativeName);
+  assert.throws(() => parseTap(raw,[{...native[0],hash:'0'.repeat(64)}],successfulPsql),/hash drift/);
+  assert.throws(() => parseTap(raw,native,{exitCode:3,onErrorStop:true}),/successful ON_ERROR_STOP/);
+  assert.throws(() => parseTap(raw,native,{exitCode:0,onErrorStop:false}),/successful ON_ERROR_STOP/);
+  assert.throws(() => parseTap(raw,native),/successful ON_ERROR_STOP/);
+  for (const broken of [
+    nativeBody.replace('SET LOCAL plpgsql.check_asserts = on;', 'SET LOCAL plpgsql.check_asserts = off;'),
+    nativeBody.replaceAll('ASSERT true;', 'PERFORM true;'),
+    nativeBody.replace('\nDO\nROLLBACK;', '\nROLLBACK;'),
+    nativeBody.replace('ROLLBACK;\nROLLBACK', 'ROLLBACK;'),
+    nativeBody.replace('BEGIN;\nBEGIN', 'BEGIN;'),
+  ]) assert.throws(() => parseTap(tap(broken,nativeName),native,successfulPsql),/incomplete native ASSERT/);
+  assert.throws(() => parseTap(`D0_START_TEST ${nativeName}\n${nativeBody}`,native,successfulPsql),/inventory mismatch/);
 });
 const routine = (signature, hash = 'a'.repeat(64)) => ({ signature, schema_name:'public', definition_sha256:hash });
 const stmt = (signature, stmtid, exec_stmts, hash = 'a'.repeat(64)) => ({ signature, schema_name:'public', definition_sha256:hash, stmtid:String(stmtid), lineno:String(stmtid), stmtname:'stmt', exec_stmts:String(exec_stmts), exec_stmts_err:'0' });

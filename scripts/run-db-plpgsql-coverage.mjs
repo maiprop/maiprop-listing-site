@@ -6,7 +6,7 @@ import yaml from 'js-yaml';
 import {
   aggregateStatements, assessRun, assertDisposableName, assertInventoryStable,
   assertRepoPath, assertStatementIdentitySet, hashFile, parseCsv, parseTap,
-  sha256, expectedSegments, validateEffectiveSchema,
+  sha256, expectedSegments, suiteKind, validateEffectiveSchema,
 } from './db-plpgsql-coverage-lib.mjs';
 
 const root = resolve(import.meta.dirname, '..');
@@ -65,7 +65,8 @@ function sourceInventory() {
   const hashes = Object.fromEntries(files.map((name) => [name, hashFile(join(root, name))]));
   for (const name of migrations) assertRepoPath(root, join(root, 'supabase/migrations', name), 'supabase/migrations', /^\d+_[A-Za-z0-9_.-]+\.sql$/);
   for (const name of suites) assertRepoPath(root, join(testDir, name), 'supabase/tests', /^[a-z0-9_]+_test\.sql$/);
-  return { migrations, suites: suites.map((name) => ({ name, hash: hashes[`supabase/tests/${name}`], segments: expectedSegments(name) })), hashes };
+  return { migrations, suites: suites.map((name) => ({ name, hash: hashes[`supabase/tests/${name}`],
+    kind: suiteKind(name, hashes[`supabase/tests/${name}`]), segments: expectedSegments(name) })), hashes };
 }
 
 function ciBootstrap() {
@@ -270,7 +271,12 @@ SELECT current_setting('server_version'), extname, extversion FROM pg_extension 
   suiteSql.push(copyTo(routineQuery,after),copyTo(statementQuery,statementsAfter));
   const collection = writeSql('collect.sql',suiteSql.join('\n'));
   const rawTap = psql(database,['-f',wslPath(collection)],'collection');
-  manifest.tap = parseTap(rawTap,source.suites);
+  const collectionCommand = manifest.commands.at(-1);
+  manifest.tap = parseTap(rawTap,source.suites,{
+    exitCode: collectionCommand.exitCode,
+    onErrorStop: collectionCommand.command === 'wsl.exe'
+      && collectionCommand.args.includes('ON_ERROR_STOP=1'),
+  });
   const beforeRows = parseCsv(readFileSync(before,'utf8'));
   const afterRows = parseCsv(readFileSync(after,'utf8'));
   if (JSON.stringify(beforeRows) !== JSON.stringify(afterRows)) throw new Error('routine definitions or inventory changed during suites');

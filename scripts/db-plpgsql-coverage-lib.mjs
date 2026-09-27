@@ -4,7 +4,45 @@ import { relative, resolve, sep } from 'node:path';
 
 export const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 export const hashFile = (path) => sha256(readFileSync(path));
-export const expectedSegments = (name) => name === 'open_house_listing_boundary_test.sql' ? 2 : 1;
+const nativeAssertSuite = {
+  name: 'public_professionals_runtime_test.sql',
+  hash: '209a4a884854f36e78e643f143d22a40c3a5d74b4944dd68912fda5a59a329a9',
+  doCommands: 6,
+  assertions: 26,
+};
+export const expectedSegments = (name) => name === nativeAssertSuite.name ? 0
+  : name === 'open_house_listing_boundary_test.sql' ? 2 : 1;
+
+export function suiteKind(name, hash) {
+  if (name !== nativeAssertSuite.name) return 'tap';
+  if (hash !== nativeAssertSuite.hash) throw new Error(`reviewed native ASSERT suite hash drift: ${name}`);
+  return 'native_assert';
+}
+
+function assertNativeExecution(lines, name) {
+  const boundary = lines.findIndex((line) => line === 'VACUUM remediation_ddl_trace.boundary_probe;');
+  if (boundary < 0) throw new Error(`native ASSERT boundary missing: ${name}`);
+  const body = lines.slice(0, boundary);
+  const indexes = (value) => body.flatMap((line, index) => line === value ? [index] : []);
+  const beginEcho = indexes('BEGIN;');
+  const setEcho = indexes('SET LOCAL plpgsql.check_asserts = on;');
+  const rollbackEcho = indexes('ROLLBACK;'), rollbackTag = indexes('ROLLBACK');
+  const doEcho = body.flatMap((line, index) => /^DO \$test\$$/.test(line) ? [index] : []);
+  const doTag = indexes('DO');
+  const assertCount = body.filter((line) => /^ASSERT\b/.test(line)).length;
+  if (beginEcho.length !== 1 || setEcho.length !== 1
+    || rollbackEcho.length !== 1 || rollbackTag.length !== 1
+    || doEcho.length !== nativeAssertSuite.doCommands || doTag.length !== nativeAssertSuite.doCommands
+    || assertCount !== nativeAssertSuite.assertions
+    || !(body[beginEcho[0] + 1] === 'BEGIN' && beginEcho[0] < setEcho[0]
+      && body[setEcho[0] + 1] === 'SET' && setEcho[0] < doEcho[0]
+      && doTag.at(-1) < rollbackEcho[0]
+      && rollbackEcho[0] < rollbackTag[0])
+    || doEcho.some((index, n) => !(index < doTag[n] && (n === 0 || doTag[n - 1] < index)
+      && (n === doEcho.length - 1 || doTag[n] < doEcho[n + 1])))) {
+    throw new Error(`incomplete native ASSERT execution: ${name}`);
+  }
+}
 
 export function assertInventoryStable(before, after) {
   if (JSON.stringify(before.migrations) !== JSON.stringify(after.migrations)
@@ -42,14 +80,15 @@ export function assertRepoPath(root, path, prefix, pattern) {
   return rel;
 }
 
-// psql uses tuples-only, unaligned output. Every TAP segment has its own
-// plan/finish, and only the one reviewed split file may contain two segments.
-export function parseTap(raw, tests) {
-  const expected = new Map(tests.map(({ name, hash }) => [name, { hash, segments: expectedSegments(name) }]));
+// psql uses tuples-only, unaligned output. TAP segments require plan/finish;
+// only the reviewed split file has two segments and the pinned native suite has none.
+export function parseTap(raw, tests, execution) {
+  const expected = new Map(tests.map(({ name, hash }) => [name, { hash, kind: suiteKind(name, hash), segments: expectedSegments(name) }]));
   const seen = new Map();
   let current = null;
   let segment = null;
   let assertions = 0;
+  let nativeLines = [];
   const closeSegment = () => {
     if (!segment || segment.plan === null || segment.count !== segment.plan || !segment.finished) {
       throw new Error(`incomplete TAP segment in ${current}`);
@@ -66,10 +105,17 @@ export function parseTap(raw, tests) {
       if (current || !expected.has(start[1]) || seen.has(start[1])) throw new Error(`unexpected TAP suite ${start[1]}`);
       current = start[1];
       seen.set(current, { segments: 0, assertions: 0 });
+      nativeLines = [];
       continue;
     }
     if (end) {
       if (current !== end[1]) throw new Error(`unpaired TAP suite ${end[1]}`);
+      if (expected.get(current).kind === 'native_assert') {
+        if (execution?.exitCode !== 0 || execution?.onErrorStop !== true) {
+          throw new Error(`native ASSERT requires successful ON_ERROR_STOP process: ${current}`);
+        }
+        assertNativeExecution(nativeLines, current);
+      }
       if (segment) closeSegment();
       if (seen.get(current).segments !== expected.get(current).segments) throw new Error(`TAP segment count mismatch: ${current}`);
       seen.get(current).assertions = assertions;
@@ -78,6 +124,13 @@ export function parseTap(raw, tests) {
     }
     if (!current) continue;
     if (/^(?:Bail out!|not ok\b|# Looks like you failed)/i.test(line)) throw new Error(`TAP failure in ${current}: ${line}`);
+    if (expected.get(current).kind === 'native_assert') {
+      nativeLines.push(line);
+      if (/^(?:1\.\.\d+|ok \d+\b|SELECT \* FROM finish\(\);)$/.test(line)) {
+        throw new Error(`unexpected TAP output in native ASSERT suite: ${current}`);
+      }
+      continue;
+    }
     const plan = /^1\.\.(\d+)$/.exec(line);
     const ok = /^ok (\d+)(?:\s|$)/.exec(line);
     if (line.includes('SELECT * FROM finish();')) {
