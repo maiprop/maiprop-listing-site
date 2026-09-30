@@ -499,6 +499,22 @@ describe("Dashboard behavior", () => {
     expect(window.location.href).toBe("http://localhost/dashboard");
   });
 
+  it.each([
+    ["trial_checkout_pending", "Your trial checkout is still pending. Please try again shortly."],
+    ["trial_checkout_unresolved", "We could not confirm your earlier trial checkout. Please contact support before starting another trial."],
+    ["trial_already_used", "A free Pro trial has already been used on this account."],
+    ["trial_mock_billing_disabled", "Trial checkout requires live Stripe billing. Use Upgrade for paid checkout or configure Stripe trial billing."],
+  ])("shows %s from non-2xx response context", async (code, message) => {
+    checkoutInvokeMock.mockResolvedValue({ data: null, error: {
+      message: "Edge Function returned a non-2xx status code",
+      context: new Response(JSON.stringify({ code, error: code === "trial_mock_billing_disabled" ? code : message }), { status: 409 }),
+    } });
+    renderWithProviders(<Dashboard />);
+    fireEvent.click(screen.getByRole("button", { name: /start 7-day pro trial/i }));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(message));
+    expect(window.location.href).toBe("http://localhost/dashboard");
+  });
+
   it("refreshes entitlement after the trial return status", async () => {
     const refreshSubscription = vi.fn();
     subscriptionState.refreshSubscription = refreshSubscription;

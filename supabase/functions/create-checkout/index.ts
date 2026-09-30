@@ -43,6 +43,7 @@ import {
   normalizePlanKey,
   PricingCatalogUnavailableError,
 } from "./pricing.ts";
+import { runTrialCheckout } from "./trialOperation.ts";
 import { sanitizeRedirectPath, withCheckoutSessionId } from "./redirects.ts";
 import { getOrCreateOwnedStripeCustomer } from "./stripeCustomers.ts";
 import {
@@ -53,7 +54,6 @@ import {
 } from "./trials.ts";
 import type {
   BillingCycle,
-  CheckoutPlan,
   CheckoutProfileRow,
 } from "./types.ts";
 
@@ -112,22 +112,6 @@ const buildMockCheckoutUrl = (
   }`;
 };
 
-type SupabaseAdminClient = {
-  from(table: string): {
-    insert(payload: Record<string, unknown>): {
-      select(columns: string): {
-        single(): Promise<{ data: { id?: string } | null; error: unknown }>;
-      };
-    };
-    update(payload: Record<string, unknown>): {
-      eq(column: string, value: unknown): Promise<{ error: unknown }>;
-    };
-    delete(): {
-      eq(column: string, value: unknown): Promise<{ error: unknown }>;
-    };
-  };
-};
-
 type BillingSubscriptionLookupRow = {
   audience?: string | null;
   status?: string | null;
@@ -157,11 +141,6 @@ type SupabaseBillingLookupQuery = {
       limit(count: number): PromiseLike<BillingSubscriptionLookupResult>;
     };
   };
-};
-
-const isAlreadyClaimedError = (error: unknown): boolean => {
-  const code = (error as { code?: string } | null)?.code;
-  return code === "23505";
 };
 
 const hasExistingPaidAccess = (profile: CheckoutProfileRow | null): boolean => {
@@ -270,85 +249,6 @@ const normalizeCheckoutQuantity = (rawQuantity: unknown): number | null => {
     return null;
   }
   return parsed;
-};
-
-const reserveSubscriptionTrialClaim = async (
-  supabaseClient: SupabaseAdminClient,
-  userId: string,
-  checkoutPlan: CheckoutPlan,
-  customerId: string,
-  corsHeaders: Record<string, string>,
-): Promise<{ claimId: string } | { response: Response }> => {
-  const { data, error } = await supabaseClient
-    .from("subscription_trial_claims")
-    .insert({
-      user_id: userId,
-      plan_key: checkoutPlan.planKey,
-      pricing_audience: checkoutPlan.audience,
-      stripe_customer_id: customerId,
-      status: "checkout_started",
-      trial_days: PRO_TRIAL_DAYS,
-      runtime_mode: getStripeRuntimeMode(),
-      livemode: getStripeRuntimeMode() === "live",
-      metadata: buildTrialMetadata(),
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    if (isAlreadyClaimedError(error)) {
-      return {
-        response: jsonCheckoutError(
-          corsHeaders,
-          409,
-          "A free Pro trial has already been used on this account.",
-        ),
-      };
-    }
-    throw error;
-  }
-
-  const claimId = data?.id;
-  if (!claimId) throw new Error("Trial claim reservation failed");
-  return { claimId };
-};
-
-const markSubscriptionTrialCheckoutCreated = async (
-  supabaseClient: SupabaseAdminClient,
-  claimId: string,
-  session: Stripe.Checkout.Session,
-): Promise<void> => {
-  const { error } = await supabaseClient
-    .from("subscription_trial_claims")
-    .update({
-      status: "checkout_created",
-      stripe_checkout_session_id: session.id,
-      stripe_subscription_id: typeof session.subscription === "string"
-        ? session.subscription
-        : null,
-      runtime_mode: session.livemode ? "live" : "test",
-      livemode: Boolean(session.livemode),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", claimId);
-  if (error) throw error;
-};
-
-const releaseSubscriptionTrialClaim = async (
-  supabaseClient: SupabaseAdminClient,
-  claimId: string | null,
-): Promise<void> => {
-  if (!claimId) return;
-  const { error } = await supabaseClient
-    .from("subscription_trial_claims")
-    .delete()
-    .eq("id", claimId);
-  if (error) {
-    log.warn("failed to release unused trial claim", {
-      claimId,
-      error: String((error as { message?: string }).message ?? error),
-    });
-  }
 };
 
 const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - Checkout coordinates auth, plan eligibility, Stripe customer/session creation, and consistent error responses.
@@ -713,6 +613,70 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       );
     }
 
+    if (wantsTrial && !isStripeMockMode()) {
+      if (!isTrialCheckoutAudienceAllowed(entitlement.audience)) {
+        return jsonCheckoutError(
+          corsHeaders,
+          403,
+          "A free Pro trial is not available for this plan.",
+        );
+      }
+      const stripe = await createVerifiedStripeClient();
+      const origin = resolveCheckoutOrigin(req.headers.get("origin"));
+      return await runTrialCheckout({
+        db: supabaseClient,
+        stripe,
+        userId: user.id,
+        runtime: getStripeRuntimeMode(),
+        headers: corsHeaders,
+        selection: {
+          plan,
+          cycle: billingCycle,
+          audience: entitlement.audience,
+          success: `${origin}${
+            withCheckoutSessionId(successPath ?? "/pricing?checkout=success")
+          }`,
+          cancel: `${origin}${cancelPath ?? "/pricing?checkout=cancelled"}`,
+        },
+        prepare: async () => {
+          const trialPlan = await getCheckoutPlan(
+            supabaseClient,
+            plan,
+            billingCycle,
+          );
+          if (!trialPlan) {
+            return new Response(
+              JSON.stringify({
+                code: "plan_unavailable",
+                error:
+                  "This plan is currently unavailable. Please try again later.",
+              }),
+              {
+                status: 404,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              },
+            );
+          }
+          const customerId = await getOrCreateOwnedStripeCustomer(
+            stripe,
+            user,
+            logStep,
+          );
+          await upsertBillingCustomer(
+            supabaseClient as unknown as BillingCustomerUpsertClient,
+            {
+              userId: user.id,
+              stripeCustomerId: customerId,
+              email: user.email,
+              livemode: getStripeRuntimeMode() === "live",
+              metadata: { user_id: user.id },
+            },
+          );
+          return { plan: trialPlan, customerId };
+        },
+      });
+    }
+
     const checkoutPlan = await getCheckoutPlan(
       supabaseClient,
       plan,
@@ -830,22 +794,10 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     }`;
     const cancel = `${origin}${cancelPath ?? "/pricing?checkout=cancelled"}`;
     const trialMetadata = wantsTrial ? buildTrialMetadata() : {};
-    let trialClaimId: string | null = null;
-
-    if (wantsTrial) {
-      const reservation = await reserveSubscriptionTrialClaim(
-        supabaseClient as unknown as SupabaseAdminClient,
-        user.id,
-        checkoutPlan,
-        customerId,
-        corsHeaders,
-      );
-      if ("response" in reservation) return reservation.response;
-      trialClaimId = reservation.claimId;
-    }
+    const trialClaimId = null;
 
     let session: Stripe.Checkout.Session;
-    try {
+    {
       session = await stripe.checkout.sessions.create(
         {
           ...CHECKOUT_TAX_COLLECTION_PARAMS,
@@ -916,20 +868,6 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
             "stripe-tax-v1",
           ]),
         },
-      );
-    } catch (error) {
-      await releaseSubscriptionTrialClaim(
-        supabaseClient as unknown as SupabaseAdminClient,
-        trialClaimId,
-      );
-      throw error;
-    }
-
-    if (trialClaimId) {
-      await markSubscriptionTrialCheckoutCreated(
-        supabaseClient as unknown as SupabaseAdminClient,
-        trialClaimId,
-        session,
       );
     }
 

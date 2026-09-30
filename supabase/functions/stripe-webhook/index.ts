@@ -14,6 +14,10 @@
 
 import Stripe from "npm:stripe@22.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import {
+  reconcileTrialClaim,
+  type TrialStore,
+} from "../_shared/trialClaims.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import {
@@ -1052,12 +1056,6 @@ type SubscriptionTrialClaimStatus =
   | "canceled"
   | "expired";
 
-function isSubscriptionTrialMetadata(
-  metadata: Stripe.Metadata | null | undefined,
-): boolean {
-  return metadata?.checkout_type === "subscription_trial";
-}
-
 export function mapSubscriptionTrialStatus(
   status: string | null | undefined,
 ): SubscriptionTrialClaimStatus {
@@ -1070,121 +1068,47 @@ export function mapSubscriptionTrialStatus(
   return "checkout_created";
 }
 
-async function updateSubscriptionTrialClaim(
-  supabase: SupabaseAdminClient,
-  userId: string,
-  payload: Record<string, unknown>,
-): Promise<void> {
-  let query = supabase
-    .from("subscription_trial_claims")
-    .update({
-      ...payload,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId);
-  if (payload.stripe_checkout_session_id) {
-    query = query.eq(
-      "stripe_checkout_session_id",
-      payload.stripe_checkout_session_id,
-    );
-  } else if (payload.stripe_subscription_id) {
-    query = query.eq("stripe_subscription_id", payload.stripe_subscription_id);
-  } else {
-    query = query.in("status", [
-      "checkout_started",
-      "checkout_created",
-      "trialing",
-      "active",
-      "past_due",
-    ]);
-  }
-  const { error } = await query;
-  if (error) throw error;
-}
-
-// skipcq: JS-0067 - Top-level helper is used by the webhook switch.
 async function syncSubscriptionTrialClaim(
   supabase: SupabaseAdminClient,
   session: Stripe.Checkout.Session,
   sub: Stripe.Subscription | null,
 ): Promise<void> {
-  const sessionMetadata = session.metadata ?? {};
-  const subscriptionMetadata = sub?.metadata ?? {};
   if (
-    !isSubscriptionTrialMetadata(sessionMetadata) &&
-    !isSubscriptionTrialMetadata(subscriptionMetadata)
-  ) {
-    return;
-  }
-
-  const userId = subscriptionMetadata.user_id ?? sessionMetadata.user_id;
-  if (!userId) {
-    throw new Error("subscription trial checkout missing user_id metadata");
-  }
-
-  await updateSubscriptionTrialClaim(supabase, userId, {
-    status: sub ? mapSubscriptionTrialStatus(sub.status) : "checkout_created",
-    stripe_checkout_session_id: session.id,
-    stripe_subscription_id: sub?.id ??
-      (typeof session.subscription === "string" ? session.subscription : null),
-    stripe_customer_id: typeof session.customer === "string"
-      ? session.customer
-      : null,
-    runtime_mode: stripeRuntimeModeFromLivemode(Boolean(session.livemode)),
-    livemode: Boolean(session.livemode),
-    metadata: {
-      ...sessionMetadata,
-      ...subscriptionMetadata,
-    },
-  });
+    sub?.metadata.checkout_type === "subscription_trial" &&
+    session.metadata?.checkout_type !== "subscription_trial"
+  ) throw new Error("trial session metadata missing");
+  await reconcileTrialClaim(
+    supabase as unknown as TrialStore,
+    session,
+    "session",
+    sub ? mapSubscriptionTrialStatus(sub.status) : "checkout_created",
+    sub,
+    session.subscription,
+  );
 }
-
-// skipcq: JS-0067 - Top-level helper is used by the webhook switch.
 async function expireAbandonedTrialCheckoutSession(
   supabase: SupabaseAdminClient,
   session: Stripe.Checkout.Session,
 ): Promise<boolean> {
-  const metadata = session.metadata ?? {};
-  if (!isSubscriptionTrialMetadata(metadata)) return false;
-  const { error } = await supabase
-    .from("subscription_trial_claims")
-    .update({
-      status: "checkout_abandoned",
-      runtime_mode: stripeRuntimeModeFromLivemode(Boolean(session.livemode)),
-      livemode: Boolean(session.livemode),
-      updated_at: new Date().toISOString(),
-      metadata: {
-        ...metadata,
-        checkout_expired_at: new Date().toISOString(),
-      },
-    })
-    .eq("stripe_checkout_session_id", session.id)
-    .in("status", ["checkout_started", "checkout_created"]);
-  if (error) throw error;
-  return true;
+  return await reconcileTrialClaim(
+    supabase as unknown as TrialStore,
+    session,
+    "session",
+    "checkout_abandoned",
+    null,
+    session.subscription,
+  );
 }
-
-// skipcq: JS-0067 - Top-level helper is used by subscription lifecycle events.
 async function syncSubscriptionTrialStatus(
   supabase: SupabaseAdminClient,
   sub: Stripe.Subscription,
 ): Promise<void> {
-  const metadata = sub.metadata ?? {};
-  if (!isSubscriptionTrialMetadata(metadata)) return;
-
-  const userId = metadata.user_id;
-  if (!userId) {
-    throw new Error("subscription trial subscription missing user_id metadata");
-  }
-
-  await updateSubscriptionTrialClaim(supabase, userId, {
-    status: mapSubscriptionTrialStatus(sub.status),
-    stripe_subscription_id: sub.id,
-    stripe_customer_id: typeof sub.customer === "string" ? sub.customer : null,
-    runtime_mode: stripeRuntimeModeFromLivemode(Boolean(sub.livemode)),
-    livemode: Boolean(sub.livemode),
-    metadata,
-  });
+  await reconcileTrialClaim(
+    supabase as unknown as TrialStore,
+    sub,
+    "subscription",
+    mapSubscriptionTrialStatus(sub.status),
+  );
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -2054,7 +1978,7 @@ async function reconcileFinalizedAgentDataInputDiscount(
  * billing), check whether the customer's user has accumulated verified
  * data-input entries that have not yet been credited. If so, mark them
  * applied via the SECURITY DEFINER RPC and post a one-off negative
- * invoice_item to the draft invoice equal to subtotal Ã— pct.
+ * invoice_item to the draft invoice equal to subtotal × pct.
  *
  * Caps:
  *   - Each verified entry yields 0.5% off (server-side constant).
@@ -2062,7 +1986,7 @@ async function reconcileFinalizedAgentDataInputDiscount(
  *     i.e. at most 10% off any single invoice.
  *
  * Skipped when:
- *   - Invoice is not a draft (already finalised â€” too late).
+ *   - Invoice is not a draft (already finalised — too late).
  *   - billing_reason is "subscription_create" (initial signup, no prior
  *     verified inputs are possible yet).
  *   - Customer has no user_id metadata.
@@ -2108,7 +2032,7 @@ async function applyAgentDataInputDiscount(
   const customerId = typeof invoice.customer === "string"
     ? invoice.customer
     : invoice.customer.id;
-  // Skip initial signup invoices â€” no prior verified inputs are possible yet.
+  // Skip initial signup invoices — no prior verified inputs are possible yet.
   if (
     (invoice as unknown as Record<string, unknown>).billing_reason ===
       "subscription_create"
@@ -2222,7 +2146,7 @@ async function applyAgentDataInputDiscount(
         amount: -discountMinor, // negative = credit
         currency: invoice.currency,
         description:
-          `Data Input reward â€” ${appliedCount} verified closing(s) Ã— 0.5% (${appliedPct}% off)`,
+          `Data Input reward — ${appliedCount} verified closing(s) × 0.5% (${appliedPct}% off)`,
         metadata: {
           type: "agent_data_input_discount",
           user_id: userId,
@@ -2246,7 +2170,7 @@ async function applyAgentDataInputDiscount(
         throw stripeErr;
       }
 
-      // Stripe call failed â€” roll back the DB rows so they remain eligible
+      // Stripe call failed — roll back the DB rows so they remain eligible
       // for the next invoice cycle instead of being permanently lost.
       log.error("Definitive Stripe credit failure; releasing reservation", {
         user_id: userId,

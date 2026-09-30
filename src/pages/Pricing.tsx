@@ -1,3 +1,4 @@
+import { getCheckoutErrorMessage } from "@/lib/checkoutError";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
@@ -431,26 +432,6 @@ const PLANS: Record<AudienceId, PlanDef> = {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 const STRIPE_FUNCTION_TIMEOUT_MS = 20_000;
-
-const getCheckoutErrorMessage = async (
-  data: unknown,
-  error: unknown,
-  fallback: string,
-): Promise<string> => {
-  const dataError = (data as { error?: unknown } | null)?.error;
-  if (typeof dataError === "string" && dataError.trim()) return dataError;
-
-  const context = (error as { context?: unknown } | null)?.context;
-  if (context instanceof Response) {
-    try {
-      const body = await context.clone().json() as { error?: unknown };
-      if (typeof body.error === "string" && body.error.trim()) return body.error;
-    } catch {
-      // Supabase function errors do not always include a JSON response body.
-    }
-  }
-  return fallback;
-};
 
 export default function Pricing() {
   const { session, user, profile, profileLoading, loading: authLoading } = useAuth();

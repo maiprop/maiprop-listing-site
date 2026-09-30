@@ -1490,7 +1490,6 @@ Deno.test("add-on, investor, and trial webhook writes persist Stripe runtime mod
     "async function syncSubscriptionTrialClaim",
   );
   const investorBlock = source.slice(investorStart, trialStart);
-  const trialBlock = source.slice(trialStart);
 
   assertEquals(
     addonSource.includes("const livemode = Boolean(session.livemode)"),
@@ -1505,14 +1504,7 @@ Deno.test("add-on, investor, and trial webhook writes persist Stripe runtime mod
     investorBlock.includes("runtime_mode: stripeRuntimeModeFromLivemode"),
     true,
   );
-  assertEquals(
-    trialBlock.includes("livemode: Boolean(session.livemode)"),
-    true,
-  );
-  assertEquals(
-    trialBlock.includes("runtime_mode: stripeRuntimeModeFromLivemode"),
-    true,
-  );
+
 });
 
 Deno.test("agent data-input discount is provider-idempotent and durably records the Stripe credit", async () => {
@@ -1882,43 +1874,77 @@ Deno.test("signed unpaid add-on session is acknowledged without a purchase", asy
   });
 });
 
-Deno.test("signed expired trial checkout updates only pending claim statuses", async () => {
-  const claims = [{ id: "claim_pending", status: "checkout_started" }, { id: "claim_active", status: "active" }];
-  const route = (call: SignedWebhookCall) => {
-    if (call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH") {
-      const eligible = String(call.url.searchParams.get("status") ?? "").replace(/^in\.\(/, "").replace(/\)$/, "").split(",");
-      for (const claim of claims) {
-        if (eligible.includes(claim.status)) claim.status = JSON.parse(call.body).status;
-      }
-      return new Response(null, { status: 204 });
-    }
-    return null;
-  };
-  await signedWebhookFixture({ route }, async (invoke, calls) => {
-    const result = await invoke("checkout.session.expired", { id: "cs_expired_trial", livemode: false, metadata: { checkout_type: "subscription_trial", user_id: "user-1" } });
-    assertEquals(result.response.status, 200);
-    const update = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH");
-    assertEquals(JSON.parse(update!.body).status, "checkout_abandoned");
-    assertEquals(update!.url.searchParams.get("stripe_checkout_session_id"), "eq.cs_expired_trial");
-    assertEquals(update!.url.searchParams.get("status"), "in.(checkout_started,checkout_created)");
-    assertEquals(claims.map((claim) => claim.status), ["checkout_abandoned", "active"]);
-    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles"), false);
+const trialRow = (overrides: Record<string, unknown> = {}) => ({
+  id: "00000000-0000-4000-8000-000000000111", user_id: "user-1", runtime_mode: "test", livemode: false,
+  stripe_customer_id: "cus_trial", stripe_checkout_session_id: null, stripe_subscription_id: null,
+  status: "checkout_started", plan_key: "pro", pricing_audience: "participant", trial_days: 7,
+  metadata: { checkout_operation_v1: { revision: "00000000-0000-4000-8000-000000000112", dispatch_count: 1, key: "preserved" } }, ...overrides,
+});
+const trialLedgerRoute = (row: Record<string, unknown>, fail = false, loseCas = false) => (call: SignedWebhookCall) => {
+  if (call.url.pathname !== "/rest/v1/subscription_trial_claims") return null;
+  const matches = [...call.url.searchParams].every(([key, expected]) => {
+    if (key === "select") return true;
+    const value = key.startsWith("metadata->checkout_operation_v1->>") ? (row.metadata as { checkout_operation_v1?: Record<string, unknown> })?.checkout_operation_v1?.[key.split(">>")[1]] : row[key];
+    return expected === "is.null" ? value === null : expected.startsWith("eq.") && String(value) === expected.slice(3);
+  });
+  if (call.method === "GET") return webhookJson(matches ? [row] : []);
+  if (call.method === "PATCH") {
+    if (fail) return webhookJson({ message: "synthetic claim write failure" }, 500);
+    if (loseCas || !matches) return webhookJson([]);
+    Object.assign(row, JSON.parse(call.body)); return webhookJson([row]);
+  }
+  throw new Error("unexpected trial ledger verb");
+};
+Deno.test("signed expired trial binds null session by exact claim and duplicate expiry is harmless", async () => {
+  const row = trialRow();
+  await signedWebhookFixture({ route: trialLedgerRoute(row) }, async (invoke, calls) => {
+    const session = { id: "cs_expired_trial", customer: "cus_trial", subscription: null, livemode: false, metadata: { checkout_type: "subscription_trial", user_id: "user-1", trial_claim_id: row.id } };
+    assertEquals((await invoke("checkout.session.expired", session)).response.status, 200);
+    assertEquals(row.status, "checkout_abandoned"); assertEquals(row.stripe_checkout_session_id, session.id);
+    assertEquals(row.metadata.checkout_operation_v1.key, "preserved");
+    assertEquals((await invoke("checkout.session.expired", session)).response.status, 200);
+    assertEquals(calls.filter((c) => c.url.pathname === "/rest/v1/subscription_trial_claims" && c.method === "PATCH").length, 1);
+    const patch = calls.find((c) => c.url.pathname === "/rest/v1/subscription_trial_claims" && c.method === "PATCH")!;
+    assertEquals(patch.url.searchParams.get("stripe_subscription_id"), "is.null");
+    assertEquals(patch.url.searchParams.get("metadata->checkout_operation_v1->>revision"), "eq.00000000-0000-4000-8000-000000000112");
   });
 });
-
-Deno.test("signed expired trial claim write failure marks the event failed", async () => {
-  const route = (call: SignedWebhookCall) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH"
-    ? webhookJson({ message: "synthetic claim write failure" }, 500)
-    : null;
-  await signedWebhookFixture({ route }, async (invoke, calls, stored) => {
-    const result = await invoke("checkout.session.expired", { id: "cs_claim_write_failure", livemode: false, metadata: { checkout_type: "subscription_trial", user_id: "user-1" } }, { id: "evt_claim_write_failure" });
-    assertEquals(result.response.status, 500);
-    assertEquals(stored.get("evt_claim_write_failure")?.status, "failed");
-    const claim = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH");
-    assertEquals(claim!.url.searchParams.get("stripe_checkout_session_id"), "eq.cs_claim_write_failure");
-    assertEquals(claim!.url.searchParams.get("status"), "in.(checkout_started,checkout_created)");
-    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles"), false);
+Deno.test("signed expired legacy trial requires exact linked session and preserves owner runtime customer", async () => {
+  const row = trialRow({ metadata: {}, stripe_checkout_session_id: "cs_legacy" });
+  await signedWebhookFixture({ route: trialLedgerRoute(row) }, async (invoke) => {
+    const result = await invoke("checkout.session.expired", { id: "cs_legacy", customer: "cus_trial", subscription: null, livemode: false, metadata: { checkout_type: "subscription_trial", user_id: "user-1" } });
+    assertEquals(result.response.status, 200); assertEquals(row.status, "checkout_abandoned");
   });
+});
+Deno.test("signed expired trial write failure or lost CAS is retryable rather than released", async () => {
+  for (const loseCas of [false, true]) {
+    const row = trialRow();
+    await signedWebhookFixture({ route: trialLedgerRoute(row, !loseCas, loseCas) }, async (invoke, _calls, stored) => {
+      const result = await invoke("checkout.session.expired", { id: "cs_expired_trial", customer: "cus_trial", subscription: null, livemode: false, metadata: { checkout_type: "subscription_trial", user_id: "user-1", trial_claim_id: row.id } }, { id: "evt_claim_write_failure" });
+      assertEquals(result.response.status, 500); assertEquals(stored.get("evt_claim_write_failure")?.status, "failed"); assertEquals(row.status, "checkout_started");
+    });
+  }
+});
+Deno.test("signed trial expiry rejects identity mismatch old session and consumed admission", async () => {
+  for (const change of [
+    { customer: "cus_other" }, { livemode: true }, { subscription: "sub_exists" },
+    { metadata: { checkout_type: "subscription_trial", user_id: "other", trial_claim_id: "00000000-0000-4000-8000-000000000111" } },
+    { metadata: { checkout_type: "subscription_trial", user_id: "user-1", trial_claim_id: "00000000-0000-4000-8000-000000000999" } },
+    { metadata: { checkout_type: "subscription_trial", user_id: "user-1" } },
+  ]) {
+    const row = trialRow();
+    await signedWebhookFixture({ route: trialLedgerRoute(row) }, async (invoke) => {
+      assertEquals((await invoke("checkout.session.expired", { id: "cs_expired_trial", customer: "cus_trial", subscription: null, livemode: false, metadata: { checkout_type: "subscription_trial", user_id: "user-1", trial_claim_id: row.id }, ...change })).response.status, 500);
+      assertEquals(row.status, "checkout_started");
+    });
+  }
+  for (const status of ["trialing", "active", "canceled", "expired", "checkout_created"]) {
+    const row = trialRow({ status, stripe_subscription_id: "sub_bound" });
+    await signedWebhookFixture({ route: trialLedgerRoute(row) }, async (invoke) => {
+      assertEquals((await invoke("checkout.session.expired", { id: "cs_expired_trial", customer: "cus_trial", subscription: null, livemode: false, metadata: { checkout_type: "subscription_trial", user_id: "user-1", trial_claim_id: row.id } })).response.status, 500);
+      assertEquals(row.status, status);
+    });
+  }
 });
 
 Deno.test("signed add-on subscription update retrieves canonical state and only updates purchase status", async () => {
@@ -2484,7 +2510,10 @@ Deno.test("signed subscription during role switch stores history despite invoice
 Deno.test("signed canonical trial subscription updates the actor claim after billing and entitlement writes", async () => {
   const actor = "00000000-0000-4000-8000-000000000096";
   const canonical = { id: "sub_trial_handler", customer: "cus_trial_handler", status: "trialing", livemode: false, trial_end: 4102444800, metadata: { checkout_type: "subscription_trial", user_id: actor, plan_key: "pro", audience: "participant" }, invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] }, items: { data: [{ current_period_end: 4102444800, price: { id: "price_pro", product: "prod_pro" } }] } };
+  const row = trialRow({ user_id: actor, stripe_customer_id: "cus_trial_handler", stripe_subscription_id: "sub_trial_handler", metadata: {} });
+  const trialRoute = trialLedgerRoute(row);
   const route = (call: SignedWebhookCall) => {
+    const trial = trialRoute(call); if (trial) return trial;
     if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_trial_handler") return webhookJson(canonical);
     if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_trial_handler") return webhookJson({ id: canonical.customer, metadata: { user_id: actor } });
     if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "pro", audience: "participant", module: "user_subscription", metadata: { stripe_product_id: "prod_pro", stripe_price_id: "price_pro" } }]);
@@ -2538,5 +2567,49 @@ Deno.test("signed deleted subscription without replacement clears and lapses the
     assertEquals(professional!.url.searchParams.get("user_id"), `eq.${actor}`);
     assertEquals(JSON.parse(professional!.body).subscription_tier, "free");
     assertEquals(JSON.parse(lapse!.body).p_user_id, actor);
+  });
+});
+
+Deno.test("signed trial completion cross-checks both objects before any claim mutation", async () => {
+  for (const [mismatch, legacy] of [[false, false], [true, false], [false, true]]) {
+    const actor = "00000000-0000-4000-8000-000000000096";
+    const row = trialRow({ user_id: actor, stripe_customer_id: "cus_trial_handler", ...(legacy ? { stripe_checkout_session_id: "cs_completion", metadata: {} } : {}) });
+    const metadata = { checkout_type: "subscription_trial", ...(legacy ? {} : { trial_claim_id: row.id }), user_id: actor, plan_key: "pro", audience: "participant" };
+    const canonical = { id: "sub_trial_handler", customer: "cus_trial_handler", status: "trialing", livemode: false, metadata,
+      invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] }, items: { data: [{ current_period_end: 4102444800, price: { id: "price_pro", product: "prod_pro" } }] } };
+    const trialRoute = trialLedgerRoute(row);
+    const route = (call: SignedWebhookCall) => {
+      const trial = trialRoute(call); if (trial) return trial;
+      if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_trial_handler") return webhookJson(canonical);
+      if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_trial_handler") return webhookJson({ id: canonical.customer, metadata: { user_id: actor } });
+      if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "pro", audience: "participant", module: "user_subscription", metadata: { stripe_product_id: "prod_pro", stripe_price_id: "price_pro" } }]);
+      if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ role: "buyer", participant_type: "buyer", role_switch_in_progress_at: null });
+      if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return new Response(null, { status: 201 });
+      if (call.method === "PATCH" && call.url.pathname === "/rest/v1/profiles") return new Response(null, { status: 204 });
+      return null;
+    };
+    await signedWebhookFixture({ route }, async (invoke, calls) => {
+      const session = { id: "cs_completion", customer: canonical.customer, subscription: canonical.id, livemode: false,
+        metadata: { ...metadata, user_id: mismatch ? "other" : actor } };
+      const result = await invoke("checkout.session.completed", session);
+      assertEquals(result.response.status, mismatch ? 500 : 200);
+      assertEquals(row.stripe_subscription_id, mismatch ? null : canonical.id);
+      assertEquals(row.stripe_checkout_session_id, mismatch ? null : session.id);
+      assertEquals(row.status, mismatch ? "checkout_started" : "trialing");
+      if (!legacy) assertEquals(row.metadata.checkout_operation_v1.key, "preserved");
+      if (mismatch) assertEquals(calls.some((c) => c.url.pathname === "/rest/v1/subscription_trial_claims" && c.method === "PATCH"), false);
+      else {
+        assertEquals((await invoke("customer.subscription.updated", canonical)).response.status, 200);
+        assertEquals(row.status, "trialing");
+      }
+    });
+  }
+});
+
+Deno.test("signed old trial expiry cannot change a newer claim or revive consumed state", async () => {
+  const row = trialRow({ stripe_checkout_session_id: "cs_new" });
+  await signedWebhookFixture({ route: trialLedgerRoute(row) }, async (invoke) => {
+    const result = await invoke("checkout.session.expired", { id: "cs_old", customer: "cus_trial", subscription: null, livemode: false, metadata: { checkout_type: "subscription_trial", user_id: "user-1", trial_claim_id: row.id } });
+    assertEquals(result.response.status, 500); assertEquals(row.status, "checkout_started"); assertEquals(row.stripe_checkout_session_id, "cs_new");
   });
 });

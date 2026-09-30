@@ -1,4 +1,5 @@
 /* eslint complexity: "off" */
+import { getCheckoutErrorMessage } from "@/lib/checkoutError";
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
@@ -253,8 +254,8 @@ export default function Dashboard() { // skipcq: JS-R1005
         },
       });
       const checkout = data as { url?: string; error?: string; message?: string } | null;
-      const checkoutFailure = checkout?.message ?? checkout?.error;
-      if (checkout?.error === "trial_mock_billing_disabled") {
+      const checkoutFailure = await getCheckoutErrorMessage(data, error, checkout?.message ?? error?.message ?? "Stripe checkout URL was not returned.");
+      if (checkoutFailure === "trial_mock_billing_disabled") {
         throw new Error("Trial checkout requires live Stripe billing. Use Upgrade for paid checkout or configure Stripe trial billing.");
       }
       if (error) throw new Error(checkoutFailure ?? error.message);

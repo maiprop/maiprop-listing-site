@@ -351,36 +351,6 @@ Deno.test("real checkout fails closed when Edge and database Stripe runtimes dif
   assertEquals(source.includes("Billing runtime configuration mismatch"), true);
 });
 
-Deno.test("subscription trial checkout is reserved before Stripe session creation", async () => {
-  const source = await Deno.readTextFile(
-    new URL("./index.ts", import.meta.url),
-  );
-  const reserveIndex = source.indexOf("reserveSubscriptionTrialClaim");
-  const sessionIndex = source.indexOf(
-    "stripe.checkout.sessions.create",
-    source.indexOf("const checkoutPlan"),
-  );
-  const updateIndex = source.indexOf(
-    "await markSubscriptionTrialCheckoutCreated",
-    sessionIndex,
-  );
-
-  assertEquals(source.includes("normalizeTrialCheckoutRequest"), true);
-  assertEquals(source.includes("trial_period_days: PRO_TRIAL_DAYS"), true);
-  assertEquals(
-    source.includes(
-      'checkout_type: wantsTrial ? "subscription_trial" : "subscription"',
-    ),
-    true,
-  );
-  assertEquals(source.includes("...(wantsTrial ? trialMetadata : {})"), true);
-  assertEquals(source.includes('payment_method_collection: "always"'), true);
-  assertEquals(source.includes('missing_payment_method: "cancel"'), true);
-  assertEquals(source.includes("subscription_trial_claims"), true);
-  assertEquals(reserveIndex >= 0, true);
-  assertEquals(sessionIndex > reserveIndex, true);
-  assertEquals(updateIndex > sessionIndex, true);
-});
 
 Deno.test("subscription trial checkout requires a payment method before trial activation", async () => {
   const source = await Deno.readTextFile(
@@ -794,6 +764,14 @@ Deno.test("checkout idempotency keys include price and session shape", async () 
 
 restore();
 
+type TrialFixtureRow = Record<string, unknown> & {
+  id: string; user_id: string; runtime_mode: string; status: string;
+  stripe_customer_id: string; stripe_subscription_id: string | null; stripe_checkout_session_id: string | null;
+  metadata: { checkout_operation_v1?: Record<string, unknown> & {
+    revision: string; dispatch_count: number; api_version: string; created_at: string; replay_before: string;
+    params: { line_items: Array<{ quantity: number | string }>; metadata: { user_id: string } };
+  } };
+};
 type CheckoutCall = { method: string; url: URL; body: string; form: URLSearchParams; key: string | null };
 const checkoutJson = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 const checkoutActor = "00000000-0000-4000-8000-000000000073";
@@ -823,9 +801,16 @@ const checkoutFixture = async (
     trialDeleteError?: boolean;
     sessionError?: boolean;
     sessionStoredThenError?: boolean;
+    firstTransportCode?: string;
+    providerStatus?: number;
+    noCreatedLoss?: boolean;
+    onCreate?: (claims: TrialFixtureRow[]) => void;
+    onPatch?: (claims: TrialFixtureRow[], patch: Record<string, unknown>) => void;
     customerSaveError?: boolean;
+    customerOwner?: string;
+    retrieveError?: boolean;
   },
-  inspect: (response: Response, body: Record<string, unknown>, calls: CheckoutCall[], context: { repeat: () => Promise<{ response: Response; body: Record<string, unknown> }>; storedSessions: Map<string, string> }) => void | Promise<void>,
+  inspect: (response: Response, body: Record<string, unknown>, calls: CheckoutCall[], context: { repeat: (input?: Record<string, unknown>) => Promise<{ response: Response; body: Record<string, unknown> }>; storedSessions: Map<string, string>; claims: TrialFixtureRow[]; sessions: Map<string, Record<string, unknown>>; actor: string }) => void | Promise<void>,
 ) => {
   const priorFetch = globalThis.fetch;
   const envNames = ["STRIPE_RUNTIME_MODE", "STRIPE_EXPECTED_ACCOUNT_ID", "STRIPE_SECRET_KEY", "BILLING_MODE"];
@@ -837,7 +822,16 @@ const checkoutFixture = async (
   const calls: CheckoutCall[] = [];
   const unexpected: string[] = [];
   const storedSessions = new Map<string, string>();
-  let trialClaimCount = 0;
+  const claims: TrialFixtureRow[] = [];
+  const sessions = new Map<string, Record<string, unknown>>();
+  const matchesClaim = (row: TrialFixtureRow, url: URL) => [...url.searchParams].every(([key, value]) => {
+    if (["select", "limit"].includes(key)) return true;
+    const actual = key.startsWith("metadata->checkout_operation_v1->>") ? row.metadata?.checkout_operation_v1?.[key.split(">>")[1]] : row[key];
+    if (value === "is.null") return actual === null;
+    if (value.startsWith("neq.")) return String(actual) !== value.slice(4);
+    if (value.startsWith("eq.")) return String(actual) === value.slice(3);
+    throw new Error(`Unsupported claim filter ${key}=${value}`);
+  });
   let sessionAttempts = 0;
   const actor = `${checkoutActor.slice(0, -3)}${String(++checkoutActorNumber).padStart(3, "0")}`;
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -854,35 +848,61 @@ const checkoutFixture = async (
       if (url.pathname === "/rest/v1/billing_subscriptions" && method === "GET") return checkoutJson(options.subscriptions ?? []);
       if (url.pathname === "/rest/v1/pricing_configs" && method === "GET") return options.catalogError ? checkoutJson({ message: "catalog unavailable" }, 500) : checkoutJson(options.catalog === null ? [] : [options.catalog ?? (options.input.addon_key || options.input.addonKey ? checkoutAddonRow() : checkoutPlanRow())]);
       if (url.pathname === "/rest/v1/billing_customers" && method === "POST") return options.customerSaveError ? checkoutJson({ message: "customer save failed" }, 500) : new Response(null, { status: 201 });
-      if (url.pathname === "/rest/v1/subscription_trial_claims" && method === "POST") return options.trialInsertError ? checkoutJson({ code: options.trialInsertError, message: "claim unavailable" }, 409) : checkoutJson(options.trialMissingId ? {} : { id: `claim_checkout_handler_${++trialClaimCount}` }, 201);
-      if (url.pathname === "/rest/v1/subscription_trial_claims" && method === "PATCH") return options.trialUpdateError ? checkoutJson({ message: "claim update failed" }, 500) : new Response(null, { status: 204 });
-      if (url.pathname === "/rest/v1/subscription_trial_claims" && method === "DELETE") return options.trialDeleteError ? checkoutJson({ message: "synthetic claim release failure" }, 500) : new Response(null, { status: 204 });
+      if (url.pathname === "/rest/v1/billing_customers" && method === "GET") return checkoutJson({ stripe_customer_id: "cus_checkout_handler", livemode: false });
+      if (url.pathname === "/rest/v1/subscription_trial_claims") {
+        if (method === "GET") return checkoutJson(claims.filter((row) => matchesClaim(row, url)));
+        if (method === "POST") {
+          if (options.trialInsertError) return checkoutJson({ code: options.trialInsertError, message: "claim unavailable" }, 409);
+          const row = JSON.parse(body);
+          if (claims.some((c) => c.user_id === row.user_id && c.runtime_mode === row.runtime_mode && c.status !== "checkout_abandoned")) return checkoutJson({ code: "23505" }, 409);
+          claims.push(row);
+          return checkoutJson(options.trialMissingId ? {} : row, 201);
+        }
+        if (method === "PATCH" || method === "DELETE") {
+          if (method === "PATCH") options.onPatch?.(claims, JSON.parse(body));
+          if (method === "PATCH" && options.trialUpdateError && JSON.parse(body).status === "checkout_created" || method === "DELETE" && options.trialDeleteError) return checkoutJson({ message: "synthetic claim write failure" }, 500);
+          const selected = claims.filter((row) => matchesClaim(row, url));
+          const returned = structuredClone(selected);
+          for (const row of selected) {
+            if (method === "DELETE") claims.splice(claims.indexOf(row), 1);
+            else Object.assign(row, JSON.parse(body));
+          }
+          return checkoutJson(method === "DELETE" ? returned : selected);
+        }
+      }
     }
     if (url.hostname === "api.stripe.com") {
       if (url.pathname === "/v1/account" && method === "GET") return checkoutJson({ id: checkoutAccount });
       if (url.pathname === "/v1/balance" && method === "GET") return checkoutJson({ livemode: false, available: [], pending: [] });
       if (url.pathname === "/v1/customers/search" && method === "GET") return checkoutJson({ object: "search_result", data: [{ id: "cus_checkout_handler", metadata: { user_id: actor }, invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] } }], has_more: false });
+      if (url.pathname === "/v1/customers/cus_checkout_handler" && method === "GET") return checkoutJson({ id: "cus_checkout_handler", livemode: false, metadata: { user_id: options.customerOwner ?? actor } });
+      if (url.pathname.startsWith("/v1/checkout/sessions/") && method === "GET") return options.retrieveError ? checkoutJson({ error: { type: "invalid_request_error", message: "session unavailable" } }, 404) : checkoutJson(sessions.get(url.pathname.split("/").pop()!) ?? {});
       if (url.pathname.startsWith("/v1/prices/") && method === "GET") return checkoutJson(options.stripePrice ?? { id: "price_addon_handler", active: true, livemode: false, currency: "eur", unit_amount: 3900, product: "prod_addon_handler" });
       if (url.pathname === "/v1/checkout/sessions" && method === "POST") {
         sessionAttempts += 1;
-        if (options.sessionStoredThenError) {
-          if (!storedSessions.has(request.headers.get("Idempotency-Key") ?? "")) storedSessions.set(request.headers.get("Idempotency-Key") ?? "", `cs_stored_${storedSessions.size + 1}`);
-          if (sessionAttempts <= 3) throw new Error("synthetic ambiguous transport after stored session");
-        }
-        if (options.sessionError) return checkoutJson({ error: { message: "synthetic checkout failure", type: "invalid_request_error" } }, 400);
-        return checkoutJson({ id: options.sessionStoredThenError ? `cs_stored_${storedSessions.size}` : "cs_checkout_handler", object: "checkout.session", livemode: false, mode: form.get("mode"), status: "open", subscription: "sub_checkout_handler", url: "https://checkout.stripe.test/session" });
+        options.onCreate?.(claims);
+        if (options.firstTransportCode && sessionAttempts === 1) throw Object.assign(new Error("connection closed"), { code: options.firstTransportCode });
+        if (options.noCreatedLoss && sessionAttempts === 1) throw new Error("network unavailable");
+        const key = request.headers.get("Idempotency-Key") ?? "";
+        if (options.sessionError || options.providerStatus) return checkoutJson({ error: { message: "synthetic checkout rejection", type: "invalid_request_error" } }, options.providerStatus ?? 400);
+        if (!storedSessions.has(key)) storedSessions.set(key, `cs_stored_${storedSessions.size + 1}`);
+        const metadata = Object.fromEntries([...form].filter(([k]) => /^metadata\[/.test(k)).map(([k, v]) => [k.slice(9, -1), v]));
+        const session = { id: storedSessions.get(key), object: "checkout.session", customer: "cus_checkout_handler", client_reference_id: actor, metadata, livemode: false, mode: form.get("mode"), status: "open", subscription: null, success_url: form.get("success_url"), cancel_url: form.get("cancel_url"), url: "https://checkout.stripe.test/session" };
+        if (!sessions.has(session.id!)) sessions.set(session.id!, session);
+        if (options.sessionStoredThenError && sessionAttempts === 1) throw new Error("synthetic ambiguous transport after stored session");
+        return checkoutJson(session);
       }
     }
     unexpected.push(`${method} ${url}`);
     throw new Error(`Unexpected checkout transport ${method} ${url}`);
   };
   try {
-    const repeat = async () => {
-      const response = await handler(authedReq("POST", options.input, { "x-forwarded-for": `203.0.113.${checkoutActorNumber}` }));
+    const repeat = async (input = options.input) => {
+      const response = await handler(authedReq("POST", input, { "x-forwarded-for": `203.0.113.${checkoutActorNumber}` }));
       return { response, body: await response.json() as Record<string, unknown> };
     };
     const { response, body } = await repeat();
-    await inspect(response, body, calls, { repeat, storedSessions });
+    await inspect(response, body, calls, { repeat, storedSessions, claims, sessions, actor });
     assertEquals(unexpected, []);
   } finally {
     globalThis.fetch = priorFetch;
@@ -919,7 +939,7 @@ Deno.test("trial checkout reserves before Stripe session and marks the claim aft
     const customer = calls.find((call) => call.url.pathname === "/rest/v1/billing_customers");
     const reserve = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "POST");
     const session = calls.find((call) => call.url.pathname === "/v1/checkout/sessions");
-    const mark = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH");
+    const mark = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH" && JSON.parse(call.body).status === "checkout_created");
     assertEquals(Boolean(customer && reserve && session && mark), true);
     assertEquals(calls.indexOf(customer!) < calls.indexOf(reserve!), true);
     assertEquals(calls.indexOf(reserve!) < calls.indexOf(session!), true);
@@ -930,7 +950,10 @@ Deno.test("trial checkout reserves before Stripe session and marks the claim aft
     assertEquals(session!.form.get("client_reference_id"), JSON.parse(reserve!.body).user_id);
     assertEquals(Boolean(session!.key && session!.key.length > 12), true);
     assertEquals(JSON.parse(mark!.body).status, "checkout_created");
-    assertEquals(mark!.url.searchParams.get("id"), "eq.claim_checkout_handler_1");
+    assertEquals(mark!.url.searchParams.get("id"), `eq.${JSON.parse(reserve!.body).id}`);
+    assertEquals(session!.form.get("metadata[trial_claim_id]"), JSON.parse(reserve!.body).id);
+    assertEquals(session!.form.get("subscription_data[metadata][trial_claim_id]"), JSON.parse(reserve!.body).id);
+    assertEquals(JSON.parse(reserve!.body).metadata.checkout_operation_v1!.dispatch_count, 0);
   });
 });
 
@@ -953,39 +976,47 @@ Deno.test("trial checkout reserve storage failures never dispatch a provider ses
   }
 });
 
-Deno.test("trial Checkout transport error releases the claim and returns failure", async () => {
-  await checkoutFixture({ input: { plan: "pro", trial: true }, sessionStoredThenError: true }, async (response, _body, calls, context) => {
-    assertEquals(response.status, 500);
-    const create = calls.find((call) => call.url.pathname === "/v1/checkout/sessions");
-    const release = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "DELETE");
-    assertEquals(Boolean(create && release), true);
-    assertEquals(calls.indexOf(release!) > calls.indexOf(create!), true);
-    assertEquals(release!.url.searchParams.get("id"), "eq.claim_checkout_handler_1");
-    assertEquals(context.storedSessions.size, 1, "the fake stored the remote session before losing its response");
+Deno.test("trial Checkout transport loss retains the operation and replays the same session", async () => {
+  await checkoutFixture({ input: { plan: "pro", trial: true }, sessionStoredThenError: true }, async (response, body, calls, context) => {
+    assertEquals(response.status, 409);
+    assertEquals(body.code, "trial_checkout_pending");
+    assertEquals(calls.some((c) => c.method === "DELETE"), false);
+    assertEquals(context.storedSessions.size, 1);
     const retry = await context.repeat();
     assertEquals(retry.response.status, 200);
-    assertEquals(context.storedSessions.size, 2, "a new claim gives the same logical retry a second provider key");
-    const keys = [...context.storedSessions.keys()];
-    assertEquals(keys[0] === keys[1], false);
-    assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "POST").length, 2);
+    assertEquals(context.storedSessions.size, 1);
+    const creates = calls.filter((c) => c.url.pathname === "/v1/checkout/sessions" && c.method === "POST");
+    assertEquals(creates.length, 2);
+    assertEquals(creates[0].key, creates[1].key);
+    assertEquals(creates[0].body, creates[1].body);
+    assertEquals(calls.filter((c) => c.url.pathname === "/rest/v1/subscription_trial_claims" && c.method === "POST").length, 1);
   });
 });
 
-Deno.test("trial Checkout definitive provider rejection attempts exact claim release even when release fails", async () => {
-  for (const trialDeleteError of [false, true]) {
-    await checkoutFixture({ input: { plan: "pro", trial: true }, sessionError: true, trialDeleteError }, (response, _body, calls) => {
-      assertEquals(response.status, 500);
-      const reserve = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "POST");
-      const session = calls.find((call) => call.url.pathname === "/v1/checkout/sessions" && call.method === "POST");
-      const release = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "DELETE");
-      assertEquals(Boolean(reserve && session && release), true);
-      assertEquals(calls.indexOf(reserve!) < calls.indexOf(session!), true);
-      assertEquals(calls.indexOf(session!) < calls.indexOf(release!), true);
-      assertEquals(release!.url.searchParams.get("id"), "eq.claim_checkout_handler_1");
-      assertEquals(calls.filter((call) => call.url.pathname === "/v1/checkout/sessions" && call.method === "POST").length, 1);
-      assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH"), false);
+Deno.test("trial Checkout first rejection releases only with one actual attempt and successful CAS", async () => {
+  for (const firstTransportCode of [undefined, "ECONNRESET", "EPIPE"]) {
+    const options = { input: { plan: "pro", trial: true }, sessionError: true, firstTransportCode };
+    await checkoutFixture(options, async (response, body, calls, context) => {
+      assertEquals(response.status, firstTransportCode ? 409 : 400);
+      assertEquals(body.code, firstTransportCode ? "trial_checkout_pending" : "trial_checkout_rejected");
+      const creates = calls.filter((c) => c.url.pathname === "/v1/checkout/sessions" && c.method === "POST");
+      assertEquals(creates.length, firstTransportCode ? 2 : 1);
+      assertEquals(context.claims.length, firstTransportCode ? 1 : 0);
+      assertEquals(calls.some((c) => c.method === "DELETE"), !firstTransportCode);
+      options.sessionError = false;
+      const retry = await context.repeat();
+      assertEquals(retry.response.status, 200);
+      assertEquals(context.claims.length, 1);
+      const keys = calls.filter((c) => c.url.pathname === "/v1/checkout/sessions" && c.method === "POST").map((c) => c.key);
+      assertEquals(keys[0] === keys.at(-1), Boolean(firstTransportCode));
     });
   }
+});
+
+Deno.test("trial Checkout failed definitive release remains pending", async () => {
+  await checkoutFixture({ input: { plan: "pro", trial: true }, sessionError: true, trialDeleteError: true }, (response, body, _calls, context) => {
+    assertEquals(response.status, 409); assertEquals(body.code, "trial_checkout_pending"); assertEquals(context.claims.length, 1);
+  });
 });
 
 Deno.test("add-on checkout uses server catalog price, target, quantity and payment metadata", async () => {
@@ -1059,7 +1090,7 @@ Deno.test("checkout same-audience lookup ignores expired and unrelated rows but 
 
 Deno.test("checkout trial post-session claim-write error keeps the reservation", async () => {
   await checkoutFixture({ input: { plan: "pro", trial: true }, trialUpdateError: true }, (response, _body, calls) => {
-    assertEquals(response.status, 500);
+    assertEquals(response.status, 409);
     assertEquals(calls.filter((call) => call.url.pathname === "/v1/checkout/sessions").length, 1);
     assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "DELETE").length, 0);
   });
@@ -1111,5 +1142,130 @@ Deno.test("checkout redirects reject unsafe paths and change the provider key wh
     assertEquals(sessions[1].form.get("success_url"), "https://maiprop.co/pricing?checkout=success&session_id={CHECKOUT_SESSION_ID}#details");
     assertEquals(sessions[1].form.get("cancel_url"), "https://maiprop.co/pricing?checkout=cancelled");
     assertEquals(first.key === sessions[1].key, false);
+  });
+});
+
+Deno.test("trial Checkout uncertain outcomes and later rejection retain admission", async () => {
+  for (const providerStatus of [408, 409, 424, 429, 500, 503]) {
+    const options = { input: { plan: "pro", trial: true }, providerStatus };
+    await checkoutFixture(options, async (response, body, calls, context) => {
+      assertEquals(response.status, 409); assertEquals(body.code, "trial_checkout_pending");
+      options.providerStatus = 400;
+      assertEquals((await context.repeat()).body.code, "trial_checkout_pending");
+      options.providerStatus = 401;
+      assertEquals((await context.repeat()).body.code, "trial_checkout_pending");
+      assertEquals(context.claims.length, 1); assertEquals(calls.some((c) => c.method === "DELETE"), false);
+      assertEquals(context.claims[0].metadata.checkout_operation_v1!.dispatch_count, 3);
+    });
+  }
+});
+Deno.test("trial Checkout no-created loss retries the original operation", async () => {
+  await checkoutFixture({ input: { plan: "pro", trial: true }, noCreatedLoss: true }, async (response, _body, calls, context) => {
+    assertEquals(response.status, 409); assertEquals(context.storedSessions.size, 0);
+    assertEquals((await context.repeat()).response.status, 200); assertEquals(context.storedSessions.size, 1);
+    const creates = calls.filter((c) => c.url.pathname === "/v1/checkout/sessions" && c.method === "POST");
+    assertEquals(creates[0].key, creates[1].key); assertEquals(creates[0].body, creates[1].body);
+  });
+});
+Deno.test("trial Checkout selection changes stay pending while catalog drift replays original price", async () => {
+  const options = { input: { plan: "pro", trial: true }, sessionStoredThenError: true, catalog: checkoutPlanRow() };
+  await checkoutFixture(options, async (_response, _body, calls, context) => {
+    for (const input of [{ plan: "agent_basic" }, { billing_cycle: "annual" }, { success_url: "/other" }, { cancel_url: "/other" }]) {
+      const result = await context.repeat({ ...options.input, ...input });
+      assertEquals([403, 409].includes(result.response.status), true);
+    }
+    options.catalog = checkoutPlanRow({ metadata: { stripe_price_id_monthly: "price_new" } });
+    assertEquals((await context.repeat()).response.status, 200);
+    const creates = calls.filter((c) => c.url.pathname === "/v1/checkout/sessions" && c.method === "POST");
+    assertEquals(creates.length, 2); assertEquals(creates[1].form.get("line_items[0][price]"), "price_pro_handler");
+    assertEquals(calls.filter((c) => c.url.pathname === "/v1/customers/search").length, 1);
+    assertEquals(calls.filter((c) => c.url.pathname === "/rest/v1/pricing_configs").length, 1);
+  });
+});
+Deno.test("trial Checkout invalid envelope and aged unknown never start a replacement", async () => {
+  for (const mutate of [
+    (r: TrialFixtureRow) => delete r.metadata.checkout_operation_v1,
+    (r: TrialFixtureRow) => r.metadata.checkout_operation_v1!.api_version = "future",
+    (r: TrialFixtureRow) => r.metadata.checkout_operation_v1!.params.line_items[0].quantity = "1",
+    (r: TrialFixtureRow) => r.metadata.checkout_operation_v1!.params.metadata.user_id = "other",
+    (r: TrialFixtureRow) => r.stripe_customer_id = "cus_changed",
+    (r: TrialFixtureRow) => { r.metadata.checkout_operation_v1!.created_at = new Date(Date.now() - 23 * 3600000).toISOString(); r.metadata.checkout_operation_v1!.replay_before = new Date().toISOString(); },
+  ]) {
+    await checkoutFixture({ input: { plan: "pro", trial: true }, noCreatedLoss: true }, async (_response, _body, calls, context) => {
+      mutate(context.claims[0]);
+      assertEquals((await context.repeat()).body.code, "trial_checkout_unresolved");
+      assertEquals(calls.filter((c) => c.url.pathname === "/v1/checkout/sessions" && c.method === "POST").length, 1);
+      assertEquals(context.claims.length, 1);
+    });
+  }
+});
+Deno.test("trial Checkout consumed claims and late persistence cannot downgrade entitlement", async () => {
+  for (const status of ["trialing", "active", "past_due", "canceled", "expired", "checkout_created"]) {
+    await checkoutFixture({ input: { plan: "pro", trial: true }, onCreate: (claims) => {
+      claims[0].status = status; claims[0].stripe_subscription_id = "sub_bound";
+      claims[0].metadata.checkout_operation_v1!.revision = crypto.randomUUID();
+    } }, async (response, body, _calls, context) => {
+      assertEquals(response.status, 409); assertEquals(body.code, "trial_already_used");
+      assertEquals(context.claims[0].status, status);
+      assertEquals((await context.repeat()).body.code, "trial_already_used");
+    });
+  }
+});
+Deno.test("trial Checkout concurrent dispatch revision prevents definitive deletion", async () => {
+  await checkoutFixture({ input: { plan: "pro", trial: true }, sessionError: true, onCreate: (claims) => {
+    claims[0].metadata.checkout_operation_v1!.dispatch_count++;
+    claims[0].metadata.checkout_operation_v1!.revision = crypto.randomUUID();
+  } }, (response, body, _calls, context) => {
+    assertEquals(response.status, 409); assertEquals(body.code, "trial_checkout_pending"); assertEquals(context.claims.length, 1);
+  });
+});
+Deno.test("trial Checkout replay retrieves current expired session and restarts once", async () => {
+  await checkoutFixture({ input: { plan: "pro", trial: true }, sessionStoredThenError: true }, async (_response, _body, calls, context) => {
+    context.sessions.get("cs_stored_1")!.status = "expired";
+    assertEquals((await context.repeat()).response.status, 200);
+    assertEquals(context.claims.map((r) => r.status), ["checkout_abandoned", "checkout_created"]);
+    assertEquals(context.storedSessions.size, 2);
+    assertEquals(calls.some((c) => c.method === "GET" && c.url.pathname === "/v1/checkout/sessions/cs_stored_1"), true);
+  });
+});
+
+Deno.test("trial Checkout same actor concurrency uses one operation and one session", async () => {
+  await checkoutFixture({ input: { plan: "pro", trial: true }, noCreatedLoss: true }, async (_response, _body, calls, context) => {
+    const results = await Promise.all([context.repeat(), context.repeat()]);
+    assertEquals(results.every((r) => [200, 409].includes(r.response.status)), true);
+    assertEquals(results.some((r) => r.response.status === 200), true);
+    assertEquals(context.claims.length, 1); assertEquals(context.storedSessions.size, 1);
+    const keys = calls.filter((c) => c.url.pathname === "/v1/checkout/sessions" && c.method === "POST").map((c) => c.key);
+    assertEquals(new Set(keys).size, 1);
+  });
+});
+Deno.test("trial Checkout persistence failure recovers without a second provider operation", async () => {
+  const options = { input: { plan: "pro", trial: true }, trialUpdateError: true };
+  await checkoutFixture(options, async (response, _body, _calls, context) => {
+    assertEquals(response.status, 409); assertEquals(context.claims[0].stripe_checkout_session_id, null);
+    options.trialUpdateError = false;
+    assertEquals((await context.repeat()).response.status, 200);
+    assertEquals(context.storedSessions.size, 1); assertEquals(context.claims[0].stripe_checkout_session_id, "cs_stored_1");
+  });
+});
+Deno.test("trial Checkout resume rejects changed customer ownership and retains failed session retrieval", async () => {
+  const options = { input: { plan: "pro", trial: true }, sessionStoredThenError: true, customerOwner: "", retrieveError: false };
+  await checkoutFixture(options, async (_response, _body, calls, context) => {
+    options.customerOwner = "other";
+    assertEquals((await context.repeat()).body.code, "trial_checkout_unresolved");
+    assertEquals(calls.filter((c) => c.url.pathname === "/v1/checkout/sessions" && c.method === "POST").length, 1);
+    options.customerOwner = context.actor; options.retrieveError = true;
+    assertEquals((await context.repeat()).body.code, "trial_checkout_pending");
+    assertEquals(context.claims.length, 1); assertEquals(context.storedSessions.size, 1);
+  });
+});
+Deno.test("trial Checkout known open session reuses URL without another create; abandoned callback cannot resurrect", async () => {
+  await checkoutFixture({ input: { plan: "pro", trial: true } }, async (response, body, calls, context) => {
+    assertEquals(response.status, 200);
+    assertEquals((await context.repeat()).body.url, body.url);
+    assertEquals(calls.filter((c) => c.url.pathname === "/v1/checkout/sessions" && c.method === "POST").length, 1);
+  });
+  await checkoutFixture({ input: { plan: "pro", trial: true }, onCreate: (claims) => { claims[0].status = "checkout_abandoned"; } }, (response, body, _calls, context) => {
+    assertEquals(response.status, 409); assertEquals(body.url, undefined); assertEquals(context.claims[0].status, "checkout_abandoned");
   });
 });
