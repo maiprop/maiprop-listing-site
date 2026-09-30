@@ -84,6 +84,7 @@ vi.mock("@/hooks/useListings", () => ({
 }));
 vi.mock("@/hooks/useFavorites", () => ({
   useFavorites: () => ({ data: [], isLoading: false }),
+  useFavoriteMembership: () => ({ data: [], isLoading: false }),
   useToggleFavorite: () => ({ mutate: vi.fn() }),
 }));
 vi.mock("@/hooks/useViewings", () => ({
