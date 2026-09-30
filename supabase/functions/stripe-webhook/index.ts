@@ -1597,6 +1597,7 @@ async function syncSubscription(
   // because auth.uid() is NULL on edge-function calls without a user JWT.
   await syncProfessionalTier(
     supabase,
+    userId,
     sub,
     hasAccess || hasManualAccess,
     entitlement,
@@ -1716,7 +1717,7 @@ async function clearSubscription(
   }
 
   if (await hasManualProAccess(supabase, userId)) {
-    await syncProfessionalTier(supabase, sub, true, null);
+    await syncProfessionalTier(supabase, userId, sub, true, null);
     log.info(
       "deleted Stripe subscription cleared product but kept manual/admin Pro access",
       {
@@ -1748,6 +1749,7 @@ async function clearSubscription(
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function syncProfessionalTier(
   supabase: SupabaseAdminClient,
+  userId: string,
   sub: Stripe.Subscription,
   isActive: boolean,
   entitlement: SubscriptionEntitlement,
@@ -1758,14 +1760,6 @@ async function syncProfessionalTier(
     entitlement?.audience !== "professional" &&
     !planKey.startsWith("professional_")
   ) return;
-
-  const userId = (sub.metadata?.user_id ?? "") as string;
-  if (!userId) {
-    log.warn("professional plan subscription missing user_id metadata", {
-      sub_id: sub.id,
-    });
-    return;
-  }
 
   const tier = isActive ? "pro" : "free";
   const { error } = await supabase
