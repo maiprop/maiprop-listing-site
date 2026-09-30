@@ -31,6 +31,11 @@ import { getListingDetailPath } from "@/lib/listingRoutes";
 const TYPING_HEARTBEAT_MS = 750;
 
 export default function Messages() {
+  const { user } = useAuth();
+  return <MessagesForAccount key={user?.id ?? "anonymous"} />;
+}
+
+function MessagesForAccount() {
   const { user, session } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -54,6 +59,7 @@ export default function Messages() {
   const typingHeartbeatRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInProgressRef = useRef(false);
+  const mountedRef = useRef(true);
   const conversationDraftsRef = useRef(new Map<string, ConversationDraft>());
   const draftRevisionRef = useRef(new Map<string, number>());
   const activeConvIdRef = useRef(activeConvId);
@@ -61,6 +67,11 @@ export default function Messages() {
   const pendingFilesRef = useRef(pendingFiles);
   // Mobile: show list or chat pane
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const { data: messages = [], isLoading: msgsLoading } = useMessages(activeConvId);
   const sendMessage = useSendMessage();
@@ -192,20 +203,26 @@ export default function Messages() {
     [scheduleTypingStop, sendTypingState],
   );
 
-  // Open conversation passed from property/detail (e.g. after "Contact") or copied deep link.
+  const requestedConversationIsVisible = Boolean(
+    requestedConversationId && conversations.some((conversation) => conversation.id === requestedConversationId),
+  );
+
+  // Open a requested conversation only after it appears in this account's fetched list.
   useEffect(() => {
-    if (requestedConversationId) {
-      selectConversation(requestedConversationId, true);
+    if (requestedConversationId && !convsLoading) {
+      if (requestedConversationIsVisible) {
+        selectConversation(requestedConversationId, true);
+      }
       if (typeof openIdFromState === "string") navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [requestedConversationId, openIdFromState, location.pathname, navigate, selectConversation]);
+  }, [requestedConversationId, requestedConversationIsVisible, convsLoading, openIdFromState, location.pathname, navigate, selectConversation]);
 
   // Auto-select first conversation when none selected
   useEffect(() => {
-    if (conversations.length > 0 && !activeConvId && !requestedConversationId) {
+    if (!convsLoading && conversations.length > 0 && !activeConvId && !requestedConversationIsVisible) {
       selectConversation(conversations[0].id, false);
     }
-  }, [conversations, activeConvId, requestedConversationId, selectConversation]);
+  }, [conversations, activeConvId, convsLoading, requestedConversationIsVisible, selectConversation]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -363,6 +380,7 @@ export default function Messages() {
         content,
         attachmentPaths: filesSnapshot.length > 0 ? filesSnapshot : undefined,
       });
+      if (!mountedRef.current) return;
       const savedDraft = conversationDraftsRef.current.get(sendConversationId);
       if (savedDraft?.revision === sendDraftRevision) {
         conversationDraftsRef.current.delete(sendConversationId);
@@ -378,7 +396,7 @@ export default function Messages() {
     } catch {
       // The mutation hook reports the delivery error; keep this draft intact.
     } finally {
-      sendInProgressRef.current = false;
+      if (mountedRef.current) sendInProgressRef.current = false;
     }
   };
 
@@ -404,12 +422,14 @@ export default function Messages() {
     setUploading(true);
     try {
       for (let i = 0; i < files.length; i++) {
+        if (!mountedRef.current) return;
         const f = files[i];
         const ext = (f.name.split(".").pop() || "bin").toLowerCase();
         const path = `${user.id}/${uploadConversationId}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage.from("message-attachments").upload(path, f, {
           contentType: f.type,
         });
+        if (!mountedRef.current) return;
         if (error) throw error;
         uploaded.push({ path, filename: f.name, mime_type: f.type });
       }
@@ -431,15 +451,18 @@ export default function Messages() {
         });
       }
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       if (uploaded.length > 0) {
         await supabase.storage
           .from("message-attachments")
           .remove(uploaded.map((file) => file.path));
       }
-      toast.error((err instanceof Error ? err.message : null) || "Upload failed");
+      if (mountedRef.current) toast.error((err instanceof Error ? err.message : null) || "Upload failed");
     } finally {
-      setUploading(false);
-      e.target.value = "";
+      if (mountedRef.current) {
+        setUploading(false);
+        e.target.value = "";
+      }
     }
   };
 

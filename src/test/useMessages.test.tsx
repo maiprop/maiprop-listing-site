@@ -544,6 +544,29 @@ describe("useMessages", () => {
 });
 
 describe("useSendMessage", () => {
+  it("does not dispatch an A send after query cancellation yields to account C", async () => {
+    const client = createQueryClient();
+    const cancellation = deferred<void>();
+    const cancelQueries = vi.spyOn(client, "cancelQueries")
+      .mockImplementationOnce(() => cancellation.promise);
+    const { result } = renderHook(() => useSendMessage(), {
+      wrapper: wrapperWithClient(client),
+    });
+    let mutation!: Promise<unknown>;
+    act(() => {
+      mutation = result.current.mutateAsync({
+        conversation_id: "a-conv",
+        content: "A's pending message",
+      });
+    });
+    await waitFor(() => expect(cancelQueries).toHaveBeenCalled());
+    act(() => { transitionQueryIdentity(client, "u-2"); });
+    cancellation.resolve();
+    await act(async () => { await mutation.catch(() => undefined); });
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
   it("adds the sender message to the cache before atomic delivery resolves", async () => {
     const client = createQueryClient();
     const delivery = deferred<{ data: typeof serverMessage; error: null }>();

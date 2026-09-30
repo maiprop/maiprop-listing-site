@@ -27,6 +27,7 @@ type SendMessageInput = {
   attachmentPaths?: { path: string; filename: string; mime_type?: string }[];
   client_delivery_id?: string;
 };
+const sendOperationEpoch = new WeakMap<SendMessageInput, number>();
 type CachedMessage = Pick<
   Database["public"]["Tables"]["messages"]["Row"],
   | "id"
@@ -520,6 +521,10 @@ export function useSendMessage() {
   return useMutation({
     mutationFn: async (input: SendMessageInput) => {
       if (!user) throw new Error("Must be logged in");
+      const startedEpoch = sendOperationEpoch.get(input);
+      if (startedEpoch !== undefined && !isCurrentIdentityEpoch(startedEpoch)) {
+        throw new Error("Account changed before message send");
+      }
       const clientDeliveryId = input.client_delivery_id ?? crypto.randomUUID();
       input.client_delivery_id = clientDeliveryId;
       const { conversation_id, content, attachmentPaths } = input;
@@ -545,6 +550,7 @@ export function useSendMessage() {
     },
     onMutate: async (input): Promise<SendMessageContext> => {
       const identityEpoch = captureIdentityEpoch();
+      sendOperationEpoch.set(input, identityEpoch);
       const messageQueryKey = accountQueryKey(
         user?.id,
         "messages",
