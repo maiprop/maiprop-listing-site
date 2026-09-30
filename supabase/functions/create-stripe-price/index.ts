@@ -138,33 +138,6 @@ function getCyclePriceId(
     getStringMetadata(meta, "stripe_yearly_price_id");
 }
 
-function getCycleLastAmount(
-  meta: Record<string, unknown>,
-  cycle: StripeBillingCycle,
-  fallback?: unknown,
-): number {
-  const value = cycle === "monthly"
-    ? meta.stripe_last_amount_monthly ?? fallback
-    : meta.stripe_last_amount_annual ?? fallback;
-  return Number(value ?? -1);
-}
-
-function getCycleTaxBehavior(
-  meta: Record<string, unknown>,
-  cycle: StripeBillingCycle | null,
-): string | undefined {
-  if (cycle === "monthly") {
-    return getStringMetadata(meta, "stripe_tax_behavior_monthly") ??
-      getStringMetadata(meta, "stripe_tax_behavior");
-  }
-  if (cycle === "annual") {
-    return getStringMetadata(meta, "stripe_tax_behavior_annual") ??
-      getStringMetadata(meta, "stripe_tax_behavior_yearly") ??
-      getStringMetadata(meta, "stripe_tax_behavior");
-  }
-  return getStringMetadata(meta, "stripe_tax_behavior");
-}
-
 function applyStripeTaxMetadata(
   meta: Record<string, unknown>,
   taxCode = STRIPE_DEFAULT_PRODUCT_TAX_CODE,
@@ -211,64 +184,62 @@ function shouldCreateAnnualCompanionPrice(config: PricingConfigRow): boolean {
     PUBLIC_SUBSCRIPTION_MODULES.has(config.module ?? "");
 }
 
-async function ensureAnnualCompanionPrice(
-  stripe: Stripe,
+interface DesiredPrice {
+  recordedId: string | undefined;
+  amount: number;
+  cycle: StripeBillingCycle | null;
+  interval: "month" | "year" | null;
+  idempotencyKind: "monthly" | "annual";
+}
+
+function recordedPriceIsOwned(
+  price: Stripe.Price,
   productId: string,
+  configId: string,
+): boolean {
+  const actualProductId = typeof price.product === "string"
+    ? price.product
+    : price.product.id;
+  const actualConfigId = price.metadata?.pricing_config_id;
+  return actualProductId === productId &&
+    (!actualConfigId || actualConfigId === configId);
+}
+
+function recordedPriceMatches(
+  price: Stripe.Price,
+  desired: DesiredPrice,
   currency: string,
-  config: PricingConfigRow,
-  meta: Record<string, unknown>,
-  newMeta: Record<string, unknown>,
-  entitlementMetadata: Record<string, string>,
-  markedStagingCatalog: boolean,
-): Promise<string | null> {
-  if (!shouldCreateAnnualCompanionPrice(config)) return null;
+): boolean {
+  return price.active === true &&
+    price.currency.toLowerCase() === currency &&
+    Number.isInteger(price.unit_amount) &&
+    price.unit_amount === desired.amount &&
+    (price.recurring?.interval ?? null) === desired.interval &&
+    price.tax_behavior === STRIPE_DEFAULT_TAX_BEHAVIOR;
+}
 
-  const amountMajor = annualCompanionAmountMajor(config, meta);
-  const amount = Math.round(amountMajor * 100);
-  let annualPriceId = getCyclePriceId(meta, "annual");
-  const existingAnnualAmount = getCycleLastAmount(meta, "annual");
-  const existingAnnualTaxBehavior = getCycleTaxBehavior(meta, "annual");
+function isVerifiedMissingPrice(error: unknown): boolean {
+  const stripeError = error as { statusCode?: number; code?: string };
+  return stripeError.statusCode === 404 &&
+    stripeError.code === "resource_missing";
+}
 
-  if (
-    !annualPriceId ||
-    amountMajor !== existingAnnualAmount ||
-    existingAnnualTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR
+async function retrieveRecordedPrices(
+  stripe: Stripe,
+  ids: (string | undefined)[],
+): Promise<Map<string, Stripe.Price | null>> {
+  const prices = new Map<string, Stripe.Price | null>();
+  for (
+    const id of new Set(ids.filter((value): value is string => Boolean(value)))
   ) {
-    const previousAnnualPriceId = annualPriceId;
-    const annualPrice = await stripe.prices.create(
-      {
-        product: productId,
-        currency,
-        unit_amount: amount,
-        recurring: { interval: "year" },
-        tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR,
-        metadata: priceMetadata(entitlementMetadata, "annual"),
-      },
-      markedStagingCatalog
-        ? {
-          idempotencyKey: stagingCatalogIdempotencyKey({
-            configId: config.id,
-            kind: "annual",
-            currency,
-            amount,
-            interval: "year",
-          }),
-        }
-        : undefined,
-    );
-    annualPriceId = annualPrice.id;
-    if (previousAnnualPriceId) {
-      await stripe.prices.update(previousAnnualPriceId, { active: false });
+    try {
+      prices.set(id, await stripe.prices.retrieve(id));
+    } catch (error) {
+      if (!isVerifiedMissingPrice(error)) throw error;
+      prices.set(id, null);
     }
   }
-
-  setCycleSpecificPriceMetadata(
-    newMeta,
-    "annual",
-    annualPriceId,
-    amountMajor,
-  );
-  return annualPriceId;
+  return prices;
 }
 
 function shouldRegisterGenericProProduct(
@@ -382,10 +353,6 @@ Deno.serve(async (req) => {
       ? getCyclePriceId(meta, primaryCycle) ??
         getStringMetadata(meta, "stripe_price_id")
       : getStringMetadata(meta, "stripe_price_id");
-    const existingAmountMajor = primaryCycle
-      ? getCycleLastAmount(meta, primaryCycle, meta.stripe_last_amount)
-      : Number(meta.stripe_last_amount ?? -1);
-    const existingPriceTaxBehavior = getCycleTaxBehavior(meta, primaryCycle);
     const stripeTaxCode = resolveStripeSoftwareTaxCode({
       key: config.key,
       audience,
@@ -427,44 +394,89 @@ Deno.serve(async (req) => {
       productId = product.id;
     }
 
-    const priceParams: Stripe.PriceCreateParams = {
-      product: productId,
-      currency,
-      unit_amount: amount,
-      tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR,
-      metadata: priceMetadata(entitlementMetadata, primaryCycle ?? "one_time"),
-    };
-    if (isRecurring) {
-      priceParams.recurring = { interval };
+    const annualCompanion = shouldCreateAnnualCompanionPrice(config);
+    const annualAmountMajor = annualCompanion
+      ? annualCompanionAmountMajor(config, meta)
+      : 0;
+    const desiredPrices: DesiredPrice[] = [{
+      recordedId: existingPriceId,
+      amount,
+      cycle: primaryCycle,
+      interval: isRecurring ? interval : null,
+      idempotencyKind: primaryCycle === "annual" ? "annual" : "monthly",
+    }];
+    if (annualCompanion) {
+      desiredPrices.push({
+        recordedId: getCyclePriceId(meta, "annual"),
+        amount: Math.round(annualAmountMajor * 100),
+        cycle: "annual",
+        interval: "year",
+        idempotencyKind: "annual",
+      });
     }
 
-    const price = !existingPriceId ||
-        Number(config.amount ?? 0) !== existingAmountMajor ||
-        existingPriceTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR
-      ? await stripe.prices.create(
+    // Read every applicable recorded ID before a price write. An unknown
+    // companion retrieval failure must not follow an avoidable primary create.
+    const recordedPrices = await retrieveRecordedPrices(
+      stripe,
+      desiredPrices.map((desired) => desired.recordedId),
+    );
+    const selectedIds: string[] = [];
+    for (const desired of desiredPrices) {
+      const recorded = desired.recordedId
+        ? recordedPrices.get(desired.recordedId)
+        : null;
+      if (
+        recorded && recordedPriceIsOwned(recorded, productId, configId) &&
+        recordedPriceMatches(recorded, desired, currency)
+      ) {
+        selectedIds.push(recorded.id);
+        continue;
+      }
+      const priceParams: Stripe.PriceCreateParams = {
+        product: productId,
+        currency,
+        unit_amount: desired.amount,
+        tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR,
+        metadata: priceMetadata(
+          entitlementMetadata,
+          desired.cycle ?? "one_time",
+        ),
+      };
+      if (desired.interval) {
+        priceParams.recurring = { interval: desired.interval };
+      }
+      const created = await stripe.prices.create(
         priceParams,
         markedStagingCatalog
           ? {
             idempotencyKey: stagingCatalogIdempotencyKey({
               configId,
-              kind: primaryCycle === "annual" ? "annual" : "monthly",
+              kind: desired.idempotencyKind,
               currency,
-              amount,
-              interval,
+              amount: desired.amount,
+              interval: desired.interval ?? interval,
             }),
           }
           : undefined,
-      )
-      : { id: existingPriceId };
-    if (
-      existingPriceId &&
-      (Number(config.amount ?? 0) !== existingAmountMajor ||
-        existingPriceTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR)
-    ) {
-      await stripe.prices.update(existingPriceId, { active: false });
+      );
+      selectedIds.push(created.id);
     }
 
-    meta.stripe_price_id = price.id;
+    const finalPriceIds = new Set(selectedIds);
+    for (const [id, recorded] of recordedPrices) {
+      if (
+        recorded?.active === true && !finalPriceIds.has(id) &&
+        recordedPriceIsOwned(recorded, productId, configId)
+      ) {
+        await stripe.prices.update(id, { active: false });
+      }
+    }
+
+    const primaryPriceId = selectedIds[0];
+    const annualPriceId = annualCompanion ? selectedIds[1] : null;
+
+    meta.stripe_price_id = primaryPriceId;
     meta.stripe_product_id = productId;
     meta.stripe_last_amount = String(Number(config.amount ?? 0));
     meta.stripe_last_label = productName;
@@ -473,19 +485,17 @@ Deno.serve(async (req) => {
     setCycleSpecificPriceMetadata(
       meta,
       unit,
-      price.id,
+      primaryPriceId,
       Number(config.amount ?? 0),
     );
-    const annualPriceId = await ensureAnnualCompanionPrice(
-      stripe,
-      productId,
-      currency,
-      config,
-      config.metadata ?? {},
-      meta,
-      entitlementMetadata,
-      markedStagingCatalog,
-    );
+    if (annualPriceId) {
+      setCycleSpecificPriceMetadata(
+        meta,
+        "annual",
+        annualPriceId,
+        annualAmountMajor,
+      );
+    }
 
     const { error: updateError } = await supabaseClient
       .from("pricing_configs")
@@ -508,7 +518,7 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        price_id: price.id,
+        price_id: primaryPriceId,
         annual_price_id: annualPriceId,
         product_id: productId,
         message: "Stripe price created and saved to pricing config",

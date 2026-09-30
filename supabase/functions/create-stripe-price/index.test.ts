@@ -56,18 +56,6 @@ Deno.test("created Stripe prices persist billing-cycle-specific metadata", async
   assertStringIncludes(source, "stripe_tax_behavior_annual");
 });
 
-Deno.test("per-row price creation reuses products, archives stale prices, and returns annual companion ids", async () => {
-  const source = await Deno.readTextFile(
-    new URL("./index.ts", import.meta.url),
-  );
-  assertStringIncludes(source, "existingProductId");
-  assertStringIncludes(source, "stripe.products.update");
-  assertStringIncludes(source, "stripe.prices.update");
-  assertStringIncludes(source, "active: false");
-  assertStringIncludes(source, "ensureAnnualCompanionPrice");
-  assertStringIncludes(source, "annual_price_id");
-});
-
 Deno.test("per-row price creation writes Stripe Tax settings to Products and Prices", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
@@ -87,64 +75,12 @@ Deno.test("per-row price creation writes Stripe Tax settings to Products and Pri
   assertStringIncludes(source, "applyStripeTaxMetadata(meta, stripeTaxCode)");
 });
 
-Deno.test("per-row price replacement creates the new price before archiving the old price", async () => {
-  const source = await Deno.readTextFile(
-    new URL("./index.ts", import.meta.url),
-  );
-  const createIndex = source.indexOf("const price = !existingPriceId");
-  const archiveIndex = source.indexOf(
-    "await stripe.prices.update(existingPriceId, { active: false })",
-  );
-
-  assertEquals(createIndex > -1, true);
-  assertEquals(archiveIndex > -1, true);
-  assertEquals(createIndex < archiveIndex, true);
-  assertEquals(source.includes("is_platform_admin"), false);
-  assertStringIncludes(
-    source,
-    "existingPriceTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR",
-  );
-  assertStringIncludes(
-    source,
-    "existingAnnualTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR",
-  );
-});
-
-Deno.test("marked stage-release rows enforce sandbox identity before Stripe mutation and use idempotency options", async () => {
-  const source = await Deno.readTextFile(
-    new URL("./index.ts", import.meta.url),
-  );
-  const boundaryIndex = source.indexOf(
-    "const markedStagingCatalog = assertMarkedStagingCatalogBoundary(",
-  );
-  const productMutationIndex = source.indexOf(
-    "stripe.products.update(",
-    boundaryIndex,
-  );
-  const priceMutationIndex = source.indexOf(
-    "stripe.prices.create(",
-    boundaryIndex,
-  );
-  assertEquals(boundaryIndex > -1, true);
-  assertEquals(boundaryIndex < productMutationIndex, true);
-  assertEquals(boundaryIndex < priceMutationIndex, true);
-  assertStringIncludes(
-    source,
-    "expectedAccountId: MAIPROP_STRIPE_SANDBOX_ACCOUNT_ID",
-  );
-  assertStringIncludes(
-    source,
-    "idempotencyKey: stagingCatalogIdempotencyKey({",
-  );
-  assertStringIncludes(source, 'kind: "product"');
-  assertStringIncludes(source, 'kind: "annual"');
-  assertStringIncludes(
-    source,
-    'kind: primaryCycle === "annual" ? "annual" : "monthly"',
-  );
-});
-
 type PriceCall = { method: string; url: URL; body: string; form: URLSearchParams; key: string | null };
+type RemotePrice = {
+  id: string; object: "price"; active: boolean; product: string; currency: string;
+  unit_amount: number; recurring: { interval: string } | null; tax_behavior: string;
+  metadata: Record<string, string>; livemode: false;
+};
 const priceActor = "00000000-0000-4000-8000-000000000191";
 const priceAccount = "acct_testpricee2";
 const stageAccount = "acct_1TnuLbGfkWWBWEyh";
@@ -155,6 +91,12 @@ const basePriceConfig = () => ({
   id: "config_e2", key: "pro", audience: "participant", module: "user_subscription",
   label: "MaiProp Pro", description: "Pro access", amount: 19, currency: "eur", unit: "monthly",
   metadata: {} as Record<string, unknown>,
+});
+const remotePrice = (id: string, interval: string | null, unitAmount: number, overrides: Partial<RemotePrice> = {}): RemotePrice => ({
+  id, object: "price", active: true, product: "prod_existing", currency: "eur",
+  unit_amount: unitAmount, recurring: interval ? { interval } : null,
+  tax_behavior: "exclusive", metadata: { pricing_config_id: "config_e2" }, livemode: false,
+  ...overrides,
 });
 
 async function priceFixture(
@@ -168,6 +110,7 @@ async function priceFixture(
     failProviderPath?: string;
     stripeKey?: string;
     expectedAccount?: string;
+    seedPrices?: RemotePrice[];
   },
   inspect: (response: Response, body: Record<string, unknown>, calls: PriceCall[], state: {
     config: ReturnType<typeof basePriceConfig> | null;
@@ -187,6 +130,7 @@ async function priceFixture(
   const unexpected: string[] = [];
   let productNumber = 0;
   let priceNumber = 0;
+  const prices = new Map((options.seedPrices ?? []).map((price) => [price.id, { ...price }]));
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const url = new URL(request.url);
@@ -234,10 +178,28 @@ async function priceFixture(
         return priceJson({ id: url.pathname.split("/").pop(), object: "product", livemode: false });
       }
       if (method === "POST" && url.pathname === "/v1/prices") {
-        return priceJson({ id: `price_e2_${++priceNumber}`, object: "price", livemode: false });
+        const form = new URLSearchParams(body);
+        const price: RemotePrice = {
+          id: `price_e2_${++priceNumber}`, object: "price", active: true,
+          product: form.get("product") ?? "", currency: form.get("currency") ?? "",
+          unit_amount: Number(form.get("unit_amount")),
+          recurring: form.get("recurring[interval]") ? { interval: form.get("recurring[interval]")! } : null,
+          tax_behavior: form.get("tax_behavior") ?? "",
+          metadata: { pricing_config_id: form.get("metadata[pricing_config_id]") ?? "" },
+          livemode: false,
+        };
+        prices.set(price.id, price);
+        return priceJson(price);
+      }
+      if (method === "GET" && url.pathname.startsWith("/v1/prices/")) {
+        const price = prices.get(url.pathname.split("/").pop()!);
+        return price ? priceJson(price) : priceJson({ error: { message: "No such price", type: "invalid_request_error", code: "resource_missing" } }, 404);
       }
       if (method === "POST" && url.pathname.startsWith("/v1/prices/")) {
-        return priceJson({ id: url.pathname.split("/").pop(), object: "price", active: false, livemode: false });
+        const price = prices.get(url.pathname.split("/").pop()!);
+        if (!price) return priceJson({ error: { message: "No such price", type: "invalid_request_error", code: "resource_missing" } }, 404);
+        price.active = false;
+        return priceJson(price);
       }
     }
     unexpected.push(`${method} ${url}`);
@@ -316,6 +278,13 @@ Deno.test("price handler creates one monthly config, annual companion, then dura
     assertEquals(calls.filter((call) => call.url.pathname === "/v1/prices").length, 1);
     assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/pro_product_ids"), false);
   });
+  await priceFixture({ config: { ...basePriceConfig(), module: "listing", unit: "yearly" } }, (response, body, calls) => {
+    assertEquals(response.status, 200, JSON.stringify(body));
+    assertEquals(body.annual_price_id, null);
+    const created = calls.filter((call) => call.method === "POST" && call.url.pathname === "/v1/prices");
+    assertEquals(created.length, 1);
+    assertEquals(created[0].form.get("recurring[interval]"), "year");
+  });
 });
 
 Deno.test("price handler reuses matching prices and replaces stale tax prices before saving aliases", async () => {
@@ -325,19 +294,21 @@ Deno.test("price handler reuses matching prices and replaces stale tax prices be
     stripe_last_amount_annual: "190", stripe_tax_behavior_monthly: "exclusive",
     stripe_tax_behavior_annual: "exclusive", keep_me: "preserved",
   };
-  await priceFixture({ config: { ...basePriceConfig(), metadata: { ...existing } } }, (response, body, calls) => {
+  const seedPrices = [remotePrice("price_old_month", "month", 1900), remotePrice("price_old_year", "year", 19000)];
+  await priceFixture({ config: { ...basePriceConfig(), metadata: { ...existing } }, seedPrices }, (response, body, calls) => {
     assertEquals(response.status, 200, JSON.stringify(body));
     assertEquals(body.price_id, "price_old_month");
     assertEquals(body.annual_price_id, "price_old_year");
     assertEquals(calls.some((call) => call.url.pathname === "/v1/products/prod_existing"), true);
     assertEquals(calls.some((call) => call.url.pathname === "/v1/prices"), false);
+    assertEquals(calls.filter((call) => call.method === "GET" && call.url.pathname.startsWith("/v1/prices/")).map((call) => call.url.pathname), ["/v1/prices/price_old_month", "/v1/prices/price_old_year"]);
+    assertEquals(calls.some((call) => call.method === "POST" && call.url.pathname.startsWith("/v1/prices/")), false);
   });
-  await priceFixture({ config: { ...basePriceConfig(), amount: 25, metadata: { ...existing } } }, (response, body, calls, state) => {
+  await priceFixture({ config: { ...basePriceConfig(), amount: 25, metadata: { ...existing } }, seedPrices }, (response, body, calls, state) => {
     assertEquals(response.status, 200, JSON.stringify(body));
-    const paths = calls.map((call) => call.url.pathname);
-    assert(paths.indexOf("/v1/prices") < paths.indexOf("/v1/prices/price_old_month"));
-    assert(paths.lastIndexOf("/v1/prices") < paths.indexOf("/v1/prices/price_old_year"));
-    assert(paths.indexOf("/v1/prices/price_old_year") < paths.lastIndexOf("/rest/v1/pricing_configs"));
+    const priceWrites = calls.filter((call) => call.method === "POST" && call.url.pathname.startsWith("/v1/prices"));
+    assertEquals(priceWrites.map((call) => call.url.pathname), ["/v1/prices", "/v1/prices", "/v1/prices/price_old_month", "/v1/prices/price_old_year"]);
+    assert(calls.indexOf(priceWrites[3]) < calls.findIndex((call) => call.method === "PATCH" && call.url.pathname === "/rest/v1/pricing_configs"));
     assertEquals(state.config?.metadata.keep_me, "preserved");
     assertEquals(state.config?.metadata.stripe_price_id_monthly, "price_e2_1");
     assertEquals(state.config?.metadata.stripe_monthly_price_id, "price_e2_1");
@@ -346,7 +317,125 @@ Deno.test("price handler reuses matching prices and replaces stale tax prices be
   });
 });
 
-Deno.test("price handler currently reuses saved EUR IDs after the same row changes to USD", async () => {
+Deno.test("remote monthly amount drift replaces only that cycle despite matching saved metadata", async () => {
+  const metadata = {
+    stripe_product_id: "prod_existing", stripe_price_id: "price_old_month",
+    stripe_price_id_monthly: "price_old_month", stripe_price_id_annual: "price_old_year",
+    stripe_last_amount: "19", stripe_last_amount_monthly: "19", stripe_last_amount_annual: "190",
+    stripe_tax_behavior: "exclusive", stripe_tax_behavior_monthly: "exclusive", stripe_tax_behavior_annual: "exclusive",
+  };
+  await priceFixture({
+    config: { ...basePriceConfig(), metadata },
+    seedPrices: [remotePrice("price_old_month", "month", 2000), remotePrice("price_old_year", "year", 19000)],
+  }, (response, body, calls, state) => {
+    assertEquals(response.status, 200, JSON.stringify(body));
+    assertEquals(body.price_id, "price_e2_1");
+    assertEquals(body.annual_price_id, "price_old_year");
+    const priceWrites = calls.filter((call) => call.method === "POST" && call.url.pathname.startsWith("/v1/prices"));
+    assertEquals(priceWrites.map((call) => call.url.pathname), ["/v1/prices", "/v1/prices/price_old_month"]);
+    assertEquals(priceWrites[0].form.get("unit_amount"), "1900");
+    assertEquals(priceWrites[0].form.get("recurring[interval]"), "month");
+    assertEquals(priceWrites[1].form.get("active"), "false");
+    assertEquals(state.config?.metadata.stripe_price_id, "price_e2_1");
+    assertEquals(state.config?.metadata.stripe_price_id_monthly, "price_e2_1");
+    assertEquals(state.config?.metadata.stripe_price_id_annual, "price_old_year");
+  });
+});
+
+Deno.test("one-time currency drift replaces the recorded price without a recurring or annual price", async () => {
+  const config = { ...basePriceConfig(), module: "listing", unit: "one_time", currency: "usd", metadata: {
+    stripe_product_id: "prod_existing", stripe_price_id: "price_old_once", stripe_last_amount: "19", stripe_tax_behavior: "exclusive",
+  } };
+  await priceFixture({ config, seedPrices: [remotePrice("price_old_once", null, 1900)] }, (response, body, calls, state) => {
+    assertEquals(response.status, 200, JSON.stringify(body));
+    assertEquals(body.price_id, "price_e2_1");
+    assertEquals(body.annual_price_id, null);
+    const priceWrites = calls.filter((call) => call.method === "POST" && call.url.pathname.startsWith("/v1/prices"));
+    assertEquals(priceWrites.map((call) => call.url.pathname), ["/v1/prices", "/v1/prices/price_old_once"]);
+    assertEquals(priceWrites[0].form.get("currency"), "usd");
+    assertEquals(priceWrites[0].form.get("unit_amount"), "1900");
+    assertEquals(priceWrites[0].form.has("recurring[interval]"), false);
+    assertEquals(state.config?.metadata.stripe_price_id, "price_e2_1");
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/pro_product_ids"), false);
+  });
+});
+
+Deno.test("missing and foreign recorded prices produce owned replacements without archive", async () => {
+  for (const recorded of [
+    null,
+    remotePrice("price_old_once", null, 1900, { product: "prod_foreign" }),
+    remotePrice("price_old_once", null, 1900, { metadata: { pricing_config_id: "config_foreign" } }),
+  ]) {
+    const config = { ...basePriceConfig(), module: "listing", unit: "one_time", metadata: {
+      stripe_product_id: "prod_existing", stripe_price_id: "price_old_once", stripe_last_amount: "19", stripe_tax_behavior: "exclusive",
+    } };
+    await priceFixture({ config, seedPrices: recorded ? [recorded] : [] }, (response, body, calls, state) => {
+      assertEquals(response.status, 200, JSON.stringify(body));
+      assertEquals(body.price_id, "price_e2_1");
+      assertEquals(calls.filter((call) => call.method === "GET" && call.url.pathname === "/v1/prices/price_old_once").length, 1);
+      assertEquals(calls.filter((call) => call.method === "POST" && call.url.pathname.startsWith("/v1/prices")).map((call) => call.url.pathname), ["/v1/prices"]);
+      assertEquals(state.config?.metadata.stripe_price_id, "price_e2_1");
+    });
+  }
+});
+
+Deno.test("failed companion retrieval prevents all price writes and leaves metadata unchanged", async () => {
+  const config = { ...basePriceConfig(), metadata: {
+    stripe_product_id: "prod_existing", stripe_price_id_monthly: "price_old_month", stripe_price_id_annual: "price_old_year",
+  } };
+  await priceFixture({ config, seedPrices: [remotePrice("price_old_month", "month", 1900)], failProviderPath: "/v1/prices/price_old_year" }, (response, _body, calls, state) => {
+    assertEquals(response.status, 500);
+    assertEquals(calls.some((call) => call.method === "GET" && call.url.pathname === "/v1/prices/price_old_month"), true);
+    assertEquals(calls.some((call) => call.method === "POST" && call.url.pathname.startsWith("/v1/prices")), false);
+    assertEquals(calls.some((call) => call.method === "PATCH" && call.url.pathname === "/rest/v1/pricing_configs"), false);
+    assertEquals(state.config?.metadata.stripe_price_id_annual, "price_old_year");
+  });
+});
+
+Deno.test("shared recorded ID retained for monthly is not archived when annual is replaced", async () => {
+  const config = { ...basePriceConfig(), metadata: {
+    stripe_product_id: "prod_existing", stripe_price_id_monthly: "price_shared", stripe_price_id_annual: "price_shared",
+  } };
+  await priceFixture({ config, seedPrices: [remotePrice("price_shared", "month", 1900)] }, (response, body, calls, state) => {
+    assertEquals(response.status, 200, JSON.stringify(body));
+    assertEquals(body.price_id, "price_shared");
+    assertEquals(body.annual_price_id, "price_e2_1");
+    assertEquals(calls.filter((call) => call.method === "GET" && call.url.pathname === "/v1/prices/price_shared").length, 1);
+    assertEquals(calls.filter((call) => call.method === "POST" && call.url.pathname.startsWith("/v1/prices")).map((call) => call.url.pathname), ["/v1/prices"]);
+    assertEquals(state.config?.metadata.stripe_price_id_monthly, "price_shared");
+    assertEquals(state.config?.metadata.stripe_price_id_annual, "price_e2_1");
+  });
+});
+
+Deno.test("inactive owned recorded price is replaced without an archive", async () => {
+  const config = { ...basePriceConfig(), module: "listing", unit: "one_time", metadata: {
+    stripe_product_id: "prod_existing", stripe_price_id: "price_old_once",
+  } };
+  await priceFixture({ config, seedPrices: [remotePrice("price_old_once", null, 1900, { active: false })] }, (response, body, calls) => {
+    assertEquals(response.status, 200, JSON.stringify(body));
+    assertEquals(body.price_id, "price_e2_1");
+    assertEquals(calls.filter((call) => call.method === "POST" && call.url.pathname.startsWith("/v1/prices")).map((call) => call.url.pathname), ["/v1/prices"]);
+  });
+});
+
+Deno.test("one shared drifted price is archived once after both cycle replacements", async () => {
+  const config = { ...basePriceConfig(), currency: "usd", metadata: {
+    stripe_product_id: "prod_existing", stripe_price_id_monthly: "price_shared", stripe_price_id_annual: "price_shared",
+  } };
+  await priceFixture({ config, seedPrices: [remotePrice("price_shared", "month", 1900)] }, (response, body, calls, state) => {
+    assertEquals(response.status, 200, JSON.stringify(body));
+    assertEquals(body.price_id, "price_e2_1");
+    assertEquals(body.annual_price_id, "price_e2_2");
+    const priceWrites = calls.filter((call) => call.method === "POST" && call.url.pathname.startsWith("/v1/prices"));
+    assertEquals(priceWrites.map((call) => call.url.pathname), ["/v1/prices", "/v1/prices", "/v1/prices/price_shared"]);
+    assertEquals(priceWrites.slice(0, 2).map((call) => call.form.get("recurring[interval]")), ["month", "year"]);
+    assertEquals(calls.filter((call) => call.method === "GET" && call.url.pathname === "/v1/prices/price_shared").length, 1);
+    assertEquals(state.config?.metadata.stripe_price_id_monthly, "price_e2_1");
+    assertEquals(state.config?.metadata.stripe_price_id_annual, "price_e2_2");
+  });
+});
+
+Deno.test("price handler replaces owned EUR monthly and annual IDs when the row changes to USD, then reuses USD", async () => {
   await priceFixture({}, async (first, firstBody, calls, state) => {
     assertEquals(first.status, 200, JSON.stringify(firstBody));
     assertEquals(calls.filter((call) => call.url.pathname === "/v1/prices").length, 2);
@@ -356,15 +445,36 @@ Deno.test("price handler currently reuses saved EUR IDs after the same row chang
     state.config!.currency = "usd";
     const second = await state.repeat();
     assertEquals(second.response.status, 200, JSON.stringify(second.body));
-    assertEquals(second.body.price_id, "price_e2_1");
-    assertEquals(second.body.annual_price_id, "price_e2_2");
-    assertEquals(calls.filter((call) => call.url.pathname === "/v1/prices").length, 2);
+    assertEquals(second.body.price_id, "price_e2_3");
+    assertEquals(second.body.annual_price_id, "price_e2_4");
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/prices").length, 4);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/prices").slice(2).map((call) => call.form.get("currency")), ["usd", "usd"]);
     const secondProductUpdate = calls.find((call) => call.url.pathname === "/v1/products/prod_e2_1");
     assert(secondProductUpdate);
     const configWrites = calls.filter((call) => call.method === "PATCH" && call.url.pathname === "/rest/v1/pricing_configs");
     assertEquals(configWrites.length, 2);
-    assertEquals(JSON.parse(configWrites[1].body).metadata.stripe_price_id_monthly, "price_e2_1");
-    assertEquals(JSON.parse(configWrites[1].body).metadata.stripe_price_id_annual, "price_e2_2");
+    assertEquals(JSON.parse(configWrites[1].body).metadata.stripe_price_id_monthly, "price_e2_3");
+    assertEquals(JSON.parse(configWrites[1].body).metadata.stripe_price_id_annual, "price_e2_4");
+    const stripeCalls = calls.filter((call) => call.url.hostname === "api.stripe.com");
+    const oldReads = stripeCalls.filter((call) => call.method === "GET" && /^\/v1\/prices\/price_e2_[12]$/.test(call.url.pathname));
+    assertEquals(oldReads.length, 2);
+    const archives = stripeCalls.filter((call) => call.method === "POST" && /^\/v1\/prices\/price_e2_[12]$/.test(call.url.pathname));
+    assertEquals(archives.map((call) => call.url.pathname), ["/v1/prices/price_e2_1", "/v1/prices/price_e2_2"]);
+    assertEquals(archives.every((call) => call.form.get("active") === "false"), true);
+    assert(calls.indexOf(oldReads[1]) < calls.findIndex((call) => call.method === "POST" && call.url.pathname === "/v1/prices" && call.form.get("currency") === "usd"));
+    assert(calls.findLastIndex((call) => call.method === "POST" && call.url.pathname === "/v1/prices" && call.form.get("currency") === "usd") < calls.indexOf(archives[0]));
+    assert(calls.indexOf(archives[1]) < calls.indexOf(configWrites[1]));
+    const third = await state.repeat();
+    assertEquals(third.response.status, 200, JSON.stringify(third.body));
+    assertEquals(third.body.price_id, "price_e2_3");
+    assertEquals(third.body.annual_price_id, "price_e2_4");
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/prices").length, 4);
+    assertEquals(calls.filter((call) => call.method === "POST" && /^\/v1\/prices\/price_e2_[12]$/.test(call.url.pathname)).length, 2);
+    assertEquals(calls.filter((call) => call.method === "PATCH" && call.url.pathname === "/rest/v1/pricing_configs").length, 3);
+    assertEquals(state.config?.metadata.stripe_price_id, "price_e2_3");
+    assertEquals(state.config?.metadata.stripe_monthly_price_id, "price_e2_3");
+    assertEquals(state.config?.metadata.stripe_annual_price_id, "price_e2_4");
+    assertEquals(state.config?.metadata.stripe_yearly_price_id, "price_e2_4");
   });
 });
 
