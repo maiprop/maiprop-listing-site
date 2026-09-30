@@ -6,6 +6,7 @@ import { captureHandler, req } from "../_shared/testUtils.ts";
 
 const TRACE_ID = "11111111-1111-4111-8111-111111111111";
 const TRACE_TOKEN = "22222222-2222-4222-8222-222222222222";
+const OMIT_RETURNED_ID = Symbol("omit returned dispatch_id");
 
 function admissionFixture(path: string): Response | null {
   if (path.endsWith("/list_accepted_unapplied_email_operations_for_service")) {
@@ -138,15 +139,17 @@ Deno.test("scheduler starts and finishes an empty traced batch before returning"
 async function schedulerTraceDecision(
   decision: string,
   finishFails = false,
-  returnedId = TRACE_ID,
+  returnedId: unknown = TRACE_ID,
+  withDispatchHeader = true,
 ) {
   const oldFetch = globalThis.fetch;
   const calls: string[] = [];
-  globalThis.fetch = (async (input: string | URL | Request) => {
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const pathname =
       new URL(input instanceof Request ? input.url : String(input)).pathname;
     calls.push(pathname);
     if (pathname.endsWith("/start_scheduled_http_dispatch_for_service")) {
+      assertEquals(JSON.parse(String(init?.body)).p_dispatch_id, withDispatchHeader ? TRACE_ID : null);
       if (decision === "start_error") {
         return new Response(JSON.stringify({ message: "fixture RPC error" }), {
           status: 500,
@@ -156,7 +159,7 @@ async function schedulerTraceDecision(
       return new Response(
         JSON.stringify({
           decision,
-          dispatch_id: returnedId,
+          ...(returnedId === OMIT_RETURNED_ID ? {} : { dispatch_id: returnedId }),
           ...(decision === "run" ? { execution_token: TRACE_TOKEN } : {}),
         }),
         { headers: { "content-type": "application/json" } },
@@ -183,7 +186,7 @@ async function schedulerTraceDecision(
     const response = await handler(
       req("POST", {}, {
         "x-cron-secret": CRON_VALUE,
-        "x-maiprop-dispatch-id": TRACE_ID,
+        ...(withDispatchHeader ? { "x-maiprop-dispatch-id": TRACE_ID } : {}),
       }),
     );
     return { response, body: await response.json(), calls };
@@ -198,6 +201,35 @@ for (const decision of ["replay", "in_progress", "unknown"]) {
     assertEquals(result.response.status, 409);
     assertEquals(result.body.dispatch_id, TRACE_ID);
     assertEquals(result.body.execution_token, undefined);
+    assertEquals(result.calls, [
+      "/rest/v1/rpc/start_scheduled_http_dispatch_for_service",
+    ]);
+  });
+
+  for (const [shape, returnedId] of [
+    ["missing", OMIT_RETURNED_ID],
+    ["null", null],
+    ["malformed string", "not-a-uuid"],
+    ["non-string", 42],
+  ] as const) {
+    Deno.test(`scheduler rejects ${decision} with ${shape} returned ID and no request ID`, async () => {
+      const result = await schedulerTraceDecision(decision, false, returnedId, false);
+      assertEquals(result.response.status, 503);
+      assertEquals(result.body, {
+        error: "trace_start_failed",
+        dispatch_id: null,
+        trace_persistence_complete: false,
+      });
+      assertEquals(result.calls, [
+        "/rest/v1/rpc/start_scheduled_http_dispatch_for_service",
+      ]);
+    });
+  }
+
+  Deno.test(`scheduler accepts ${decision} with a generated ID and no request ID`, async () => {
+    const result = await schedulerTraceDecision(decision, false, TRACE_ID, false);
+    assertEquals(result.response.status, 409);
+    assertEquals(result.body, { decision, dispatch_id: TRACE_ID });
     assertEquals(result.calls, [
       "/rest/v1/rpc/start_scheduled_http_dispatch_for_service",
     ]);

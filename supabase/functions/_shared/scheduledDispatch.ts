@@ -32,8 +32,9 @@ export async function startScheduledDispatch(
     const result = data as Record<string, unknown>;
     const dispatchId = typeof result.dispatch_id === "string" && UUID.test(result.dispatch_id)
       ? result.dispatch_id : null;
-    if (supplied && dispatchId?.toLowerCase() !== supplied.toLowerCase()) throw new Error("trace_identity_mismatch");
-    if (result.decision === "run" && dispatchId && typeof result.execution_token === "string" && UUID.test(result.execution_token)) {
+    if (!dispatchId) throw new Error("trace_start_invalid_result");
+    if (supplied && dispatchId.toLowerCase() !== supplied.toLowerCase()) throw new Error("trace_identity_mismatch");
+    if (result.decision === "run" && typeof result.execution_token === "string" && UUID.test(result.execution_token)) {
       return { run: { dispatchId, executionToken: result.execution_token } };
     }
     if (result.decision === "replay" || result.decision === "in_progress" || result.decision === "unknown") {
