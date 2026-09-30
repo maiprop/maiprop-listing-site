@@ -10,8 +10,8 @@
  *
  * Rules enforced on new migrations:
  *   - CREATE TABLE              -> must include IF NOT EXISTS
- *   - CREATE INDEX              -> must include IF NOT EXISTS
- *   - CREATE UNIQUE INDEX       -> must include IF NOT EXISTS
+ *   - CREATE [UNIQUE] INDEX     -> must include IF NOT EXISTS or an immediately
+ *                                  enclosing same-name public to_regclass guard
  *   - CREATE TRIGGER            -> must be preceded by DROP TRIGGER IF EXISTS
  *                                  (or use CREATE OR REPLACE TRIGGER on PG14+)
  *   - CREATE POLICY             -> must be preceded by DROP POLICY IF EXISTS
@@ -114,14 +114,39 @@ export function lintMigration(file, sql) {
   }
 
   // ---- CREATE INDEX (covers UNIQUE INDEX too) -----------------------------
-  const createIndexRe = /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?!IF\s+NOT\s+EXISTS)/im;
-  if (createIndexRe.test(stripped)) {
-    violations.push({
-      file,
-      line: findLine(createIndexRe),
-      rule: "CREATE INDEX without IF NOT EXISTS",
-      snippet: "Use `CREATE [UNIQUE] INDEX IF NOT EXISTS <name> ON ...`.",
-    });
+  // Keep comment newlines and offsets so each statement retains its source line.
+  const indexSql = sql
+    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\r\n]/g, " "))
+    .replace(/--[^\r\n]*/g, (comment) => " ".repeat(comment.length));
+  const indexLines = indexSql.split(/\r?\n/);
+  const createIndexRe = /^[ \t]*CREATE\s+(?:UNIQUE\s+)?INDEX\b/gim;
+  let indexMatch;
+  while ((indexMatch = createIndexRe.exec(indexSql)) !== null) {
+    const startLine = indexSql.slice(0, indexMatch.index).split(/\r?\n/).length - 1;
+    const semicolon = indexSql.indexOf(";", indexMatch.index);
+    const statement = indexSql.slice(indexMatch.index, semicolon < 0 ? undefined : semicolon + 1);
+    if (/^[ \t]*CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\b/i.test(statement)) {
+      continue;
+    }
+
+    const header = /^[ \t]*CREATE\s+(?:UNIQUE\s+)?INDEX\s+([A-Za-z_]\w*)\s+ON\s+public\.[A-Za-z_]\w*\s*\(/i.exec(statement);
+    const previous = indexLines.slice(0, startLine).findLast((line) => line.trim());
+    const guard = previous?.match(/^[ \t]*IF\s+pg_catalog\.to_regclass\('public\.([A-Za-z_]\w*)'\)\s+IS\s+NULL\s+THEN[ \t]*$/i);
+    const endLine = semicolon < 0 ? -1 : indexSql.slice(0, semicolon).split(/\r?\n/).length - 1;
+    const endColumn = semicolon < 0 ? -1 : semicolon - indexSql.lastIndexOf("\n", semicolon) - 1;
+    const trailing = endLine < 0 ? "" : indexLines[endLine].slice(endColumn + 1);
+    const next = endLine < 0 ? undefined : indexLines.slice(endLine + 1).find((line) => line.trim());
+    const guarded = header && guard && guard[1] === header[1] &&
+      !trailing.trim() && /^[ \t]*END\s+IF;[ \t]*$/i.test(next ?? "");
+
+    if (!guarded) {
+      violations.push({
+        file,
+        line: startLine + 1,
+        rule: "CREATE INDEX without IF NOT EXISTS",
+        snippet: "Use `CREATE [UNIQUE] INDEX IF NOT EXISTS <name> ON ...` or an immediately enclosing same-name `IF pg_catalog.to_regclass('public.<name>') IS NULL THEN ... END IF;` around an index on `public.<table>`.",
+      });
+    }
   }
 
   // ---- CREATE TRIGGER -----------------------------------------------------

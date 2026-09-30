@@ -88,6 +88,62 @@ CREATE OR REPLACE VIEW my_v AS SELECT 1;
     expect(out[0].rule).toMatch(/CREATE INDEX/);
   });
 
+  test("accepts adjacent exact public guards for plain and unique multiline indexes", () => {
+    const sql = `DO $indexes$
+BEGIN
+  IF pg_catalog.to_regclass('public.first_idx') IS NULL THEN
+    CREATE INDEX first_idx ON public.items (created_at)
+      WHERE created_at IS NOT NULL;
+  END IF;
+  IF pg_catalog.to_regclass('public.second_uidx') IS NULL THEN
+    CREATE UNIQUE INDEX second_uidx
+      ON public.items (operation_id)
+      WHERE operation_id IS NOT NULL;
+  END IF;
+END;
+$indexes$;`;
+
+    expect(lintMigration("guarded.sql", sql)).toHaveLength(0);
+  });
+
+  test("reports each unguarded index after a guarded index at its own line", () => {
+    const sql = `IF pg_catalog.to_regclass('public.safe_idx') IS NULL THEN
+  CREATE INDEX safe_idx ON public.items (id);
+END IF;
+CREATE INDEX unsafe_idx ON public.items (created_at);
+CREATE UNIQUE INDEX unsafe_uidx ON public.items (operation_id);`;
+
+    expect(lintMigration("mixed.sql", sql)).toEqual([
+      expect.objectContaining({ rule: "CREATE INDEX without IF NOT EXISTS", line: 4 }),
+      expect.objectContaining({ rule: "CREATE INDEX without IF NOT EXISTS", line: 5 }),
+    ]);
+  });
+
+  test("preserves index line numbers across multiline and line comments", () => {
+    const sql = `/* commented index:
+CREATE INDEX ignored_idx ON public.items (id);
+*/
+-- CREATE INDEX also_ignored_idx ON public.items (id);
+CREATE INDEX unsafe_idx ON public.items (id);`;
+
+    expect(lintMigration("comments.sql", sql)).toEqual([
+      expect.objectContaining({ rule: "CREATE INDEX without IF NOT EXISTS", line: 5 }),
+    ]);
+  });
+
+  test.each([
+    ["different guard name", `IF pg_catalog.to_regclass('public.other_idx') IS NULL THEN\n  CREATE INDEX item_idx ON public.items (id);\nEND IF;`, 2],
+    ["guard elsewhere", `IF pg_catalog.to_regclass('public.item_idx') IS NULL THEN\n  SELECT 1;\n  CREATE INDEX item_idx ON public.items (id);\nEND IF;`, 3],
+    ["missing end if", `IF pg_catalog.to_regclass('public.item_idx') IS NULL THEN\n  CREATE INDEX item_idx ON public.items (id);`, 2],
+    ["missing is null", `IF pg_catalog.to_regclass('public.item_idx') THEN\n  CREATE INDEX item_idx ON public.items (id);\nEND IF;`, 2],
+    ["wrong target schema", `IF pg_catalog.to_regclass('public.item_idx') IS NULL THEN\n  CREATE INDEX item_idx ON private.items (id);\nEND IF;`, 2],
+    ["unqualified target", `IF pg_catalog.to_regclass('public.item_idx') IS NULL THEN\n  CREATE INDEX item_idx ON items (id);\nEND IF;`, 2],
+  ])("rejects %s around index creation", (_case, sql, line) => {
+    expect(lintMigration("bad-guard.sql", sql)).toEqual([
+      expect.objectContaining({ rule: "CREATE INDEX without IF NOT EXISTS", line }),
+    ]);
+  });
+
   test("flags CREATE TRIGGER without preceding DROP", () => {
     const sql = "CREATE TRIGGER t1 AFTER INSERT ON foo FOR EACH ROW EXECUTE FUNCTION noop();\n";
     const out = lintMigration("d.sql", sql);
