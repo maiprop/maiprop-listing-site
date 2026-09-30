@@ -126,8 +126,8 @@ Deno.test("scheduler starts and finishes an empty traced batch before returning"
       "/rest/v1/rpc/start_scheduled_http_dispatch_for_service",
       "/rest/v1/rpc/list_accepted_unapplied_email_operations_for_service",
       "/rest/v1/rpc/maintain_selected_email_operations_for_service",
-      "/rest/v1/email_send_log",
       "/rest/v1/marketing_leads",
+      "/rest/v1/email_send_log",
       "/rest/v1/rpc/finish_scheduled_http_dispatch_for_service",
     ]);
   } finally {
@@ -262,11 +262,13 @@ async function scheduledScenario(
   children: { status?: number; body: string }[],
   ages = [2, 9, 30],
   malformedAt: number | null = null,
+  stock?: { before: number; after: number; fail?: boolean },
 ) {
   const oldFetch = globalThis.fetch;
   Deno.env.set("SUPABASE_URL", "https://test.supabase.co");
   const sent: unknown[] = [];
   let traceFinish: Record<string, unknown> | null = null;
+  let stockReads = 0;
   globalThis.fetch =
     (async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
@@ -283,6 +285,22 @@ async function scheduledScenario(
           }),
           { headers: { "content-type": "application/json" } },
         );
+      }
+      if (url.pathname === "/rest/v1/email_send_log" && stock) {
+        stockReads++;
+        if (stock.fail) {
+          return new Response(JSON.stringify({ message: "count failed" }), {
+            status: 500,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, {
+          headers: {
+            "content-range": `*/${
+              sent.length === 0 ? stock.before : stock.after
+            }`,
+          },
+        });
       }
       const admission = admissionFixture(url.pathname);
       if (admission) return admission;
@@ -337,6 +355,7 @@ async function scheduledScenario(
       body: await response.json(),
       sent,
       traceFinish: traceFinish as Record<string, unknown> | null,
+      stockReads,
     };
   } finally {
     globalThis.fetch = oldFetch;
@@ -393,6 +412,74 @@ Deno.test("scheduler partial batch retains exact counters without retry", async 
     result.body.failed,
   ], [3, 2, 1]);
   assertEquals(result.sent.length, 3);
+});
+
+Deno.test("scheduler reads newly created canonical hold after incomplete child", async () => {
+  const result = await scheduledScenario(
+    [{ status: 503, body: '{"success":false,"reason":"transport_unknown"}' }],
+    [2],
+    null,
+    { before: 0, after: 1 },
+  );
+  assertEquals([result.stockReads, result.sent.length], [1, 1]);
+  assertEquals([result.body.heldOperations, result.body.failed], [1, 1]);
+  assertEquals(result.response.status, 503);
+});
+
+Deno.test("scheduler drops resolved canonical hold after child repair", async () => {
+  const result = await scheduledScenario(
+    [{
+      body:
+        '{"success":true,"provider_accepted":true,"persistence_complete":true}',
+    }],
+    [2],
+    null,
+    { before: 1, after: 0 },
+  );
+  assertEquals([result.stockReads, result.sent.length], [1, 1]);
+  assertEquals([result.body.heldOperations, result.body.succeeded], [0, 1]);
+  assertEquals(result.response.status, 200);
+});
+
+Deno.test("scheduler preserves completed child counts when final held stock read fails", async () => {
+  const result = await scheduledScenario(
+    [{
+      body:
+        '{"success":true,"provider_accepted":true,"persistence_complete":true}',
+    }],
+    [2],
+    null,
+    { before: 0, after: 1, fail: true },
+  );
+  assertEquals([
+    result.body.processed,
+    result.body.succeeded,
+    result.body.failed,
+  ], [1, 1, 0]);
+  assertEquals(result.body.heldOperations, null);
+  assertEquals(result.body.error, "email_hold_count_unavailable");
+  assertEquals(result.response.status, 503);
+  assertEquals(result.body.outcome, "partial");
+});
+
+Deno.test("scheduler reports reset sequence conflict child as incomplete without a second send", async () => {
+  const result = await scheduledScenario(
+    [{
+      status: 503,
+      body:
+        '{"success":false,"reason":"sequence_conflict","persistence_complete":false}',
+    }],
+    [2],
+    null,
+    { before: 0, after: 0 },
+  );
+  assertEquals(result.sent, [{ lead_id: "lead-0", step: 1 }]);
+  assertEquals([
+    result.body.succeeded,
+    result.body.failed,
+    result.body.heldOperations,
+  ], [0, 1, 0]);
+  assertEquals(result.response.status, 503);
 });
 Deno.test("scheduler no-due and empty batches make no child call", async () => {
   for (const ages of [[], [0.5, 7, 28]]) {

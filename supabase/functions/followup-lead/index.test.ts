@@ -523,10 +523,17 @@ async function automaticScenario(options: {
   recordLossOnce?: boolean;
   applyFailure?: boolean;
   existing?: boolean;
+  existingAppliedReset?: boolean;
+  existingAppliedHealthy?: boolean;
+  existingSending?: boolean;
+  initialProviderEffects?: number;
   beginDecision?: "expired" | "busy" | "unknown";
   mutateBeforeBegin?: "recipient" | "step" | "deleted";
   existingAcceptedExpired?: boolean;
   repeatAfterRejection?: boolean;
+  repeatAfterAmbiguity?: boolean;
+  retryAfterDeadline?: boolean;
+  sinkDedupe?: boolean;
   concurrentInvocations?: boolean;
   parentState?: string;
   partialContext?: boolean;
@@ -541,15 +548,22 @@ async function automaticScenario(options: {
     followup_step: 2,
     created_at: "2026-08-01T00:00:00Z",
   };
+  if (options.existingAppliedHealthy) row.followup_step = 3;
   let operation: {
     state: string;
     payload: Record<string, unknown>;
     accepted: boolean;
     token: string | null;
-  } | null = options.existing || options.existingAcceptedExpired
+  } | null = options.existing || options.existingAcceptedExpired ||
+      options.existingAppliedReset || options.existingAppliedHealthy ||
+      options.existingSending
     ? {
       state: options.existingAcceptedExpired
         ? "checkpoint_payload_expired"
+        : options.existingAppliedReset || options.existingAppliedHealthy
+        ? "applied"
+        : options.existingSending
+        ? "sending"
         : "prepared",
       payload: {
         sender: { name: "mAI Prop", email: "kr@maiprop.co" },
@@ -557,8 +571,11 @@ async function automaticScenario(options: {
         subject: "Frozen subject",
         htmlContent: "Frozen html",
       },
-      accepted: !!options.existingAcceptedExpired,
-      token: null,
+      accepted: !!options.existingAcceptedExpired ||
+        !!options.existingAppliedReset || !!options.existingAppliedHealthy,
+      token: options.existingSending
+        ? "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        : null,
     }
     : null;
   let providerCalls = 0,
@@ -566,6 +583,13 @@ async function automaticScenario(options: {
     prepareCalls = 0,
     applyCalls = 0,
     recordCalls = 0;
+  let providerEffects = options.initialProviderEffects ?? 0;
+  let beginCalls = 0;
+  const attemptTokens: string[] = [];
+  const payloadBytes: string[] = [];
+  const recordArgs: Record<string, unknown>[] = [];
+  const sinkKeys = new Set<string>();
+  const observedSinkKeys: (string | null)[] = [];
   const json = (value: unknown, status = 200) =>
     new Response(JSON.stringify(value), {
       status,
@@ -633,8 +657,10 @@ async function automaticScenario(options: {
       }
       if (url.pathname === "/rest/v1/rpc/begin_email_dispatch_for_service") {
         const args = JSON.parse(String(init?.body));
+        beginCalls++;
+        attemptTokens.push(args.p_attempt_token);
         if (!operation) throw new Error("begin before prepare");
-        if (options.beginLoss) {
+        if (options.beginLoss && beginCalls === 1) {
           operation.state = "sending";
           operation.token = args.p_attempt_token;
           throw new Error("Lost begin response after commit");
@@ -670,12 +696,17 @@ async function automaticScenario(options: {
         if (operation.state === "sending") {
           return json({ decision: "busy", operation_id: SELECTED_OP });
         }
+        if (operation.state === "unknown") {
+          return json({ decision: "unknown", operation_id: SELECTED_OP });
+        }
         if (operation.state === "retryable") {
-          return json({
-            decision: "busy",
-            operation_id: SELECTED_OP,
-            not_before: "2026-10-01T00:00:00Z",
-          });
+          if (!options.retryAfterDeadline || beginCalls < 2) {
+            return json({
+              decision: "busy",
+              operation_id: SELECTED_OP,
+              not_before: "2026-10-01T00:00:00Z",
+            });
+          }
         }
         operation.state = "sending";
         operation.token = args.p_attempt_token;
@@ -688,7 +719,18 @@ async function automaticScenario(options: {
       }
       if (url.hostname === "api.brevo.com") {
         providerCalls++;
+        const headers = new Headers(init?.headers);
+        const sinkKey = headers.get("Idempotency-Key") ??
+          headers.get("X-Idempotency-Key");
+        observedSinkKeys.push(sinkKey);
+        payloadBytes.push(String(init?.body));
         assertEquals(JSON.parse(String(init?.body)), operation?.payload);
+        if (
+          (options.providerStatus === undefined || options.transportLoss ||
+            (options.retryAfterDeadline && providerCalls === 2)) &&
+          (!options.sinkDedupe || !sinkKey || !sinkKeys.has(sinkKey))
+        ) providerEffects++;
+        if (sinkKey) sinkKeys.add(sinkKey);
         if (options.transportLoss) throw new Error("Transport response lost");
         if (options.bodyReadFailure) {
           return new Response(
@@ -701,7 +743,9 @@ async function automaticScenario(options: {
           );
         }
         return new Response(options.body ?? '{"messageId":"accepted-id"}', {
-          status: options.providerStatus ?? 201,
+          status: options.retryAfterDeadline && providerCalls === 2
+            ? 201
+            : options.providerStatus ?? 201,
         });
       }
       if (
@@ -709,6 +753,7 @@ async function automaticScenario(options: {
       ) {
         recordCalls++;
         const args = JSON.parse(String(init?.body));
+        recordArgs.push(structuredClone(args));
         if (!operation || args.p_attempt_token !== operation.token) {
           throw new Error("wrong token");
         }
@@ -733,6 +778,12 @@ async function automaticScenario(options: {
           return json({ decision: "expired", operation_id: SELECTED_OP });
         }
         if (!operation?.accepted) throw new Error("apply before acceptance");
+        if (operation.state === "applied") {
+          return json({
+            decision: "already_applied",
+            operation_id: SELECTED_OP,
+          });
+        }
         row.followup_step = 3;
         row.status = "contacted";
         operation.state = "applied";
@@ -760,7 +811,7 @@ async function automaticScenario(options: {
     const response = await first;
     const secondResponse = second
       ? await second
-      : options.repeatAfterRejection
+      : options.repeatAfterRejection || options.repeatAfterAmbiguity
       ? await handler(
         req("POST", { lead_id: MARKETING_LEAD_ID, step: 3 }, headers),
       )
@@ -776,6 +827,11 @@ async function automaticScenario(options: {
       prepareCalls,
       applyCalls,
       recordCalls,
+      recordArgs,
+      providerEffects,
+      attemptTokens,
+      payloadBytes,
+      observedSinkKeys,
     };
   } finally {
     globalThis.fetch = oldFetch;
@@ -913,6 +969,7 @@ Deno.test("lost first record response repeats only the same accepted record", as
     1,
   ]);
   assertEquals(result.operation?.state, "applied");
+  assertEquals(result.recordArgs[0], result.recordArgs[1]);
 });
 Deno.test("accepted HTTP survives optional body stream rejection", async () => {
   const result = await automaticScenario({ bodyReadFailure: true });
@@ -938,4 +995,103 @@ Deno.test("durable 429 not-before blocks next existing invocation without AI or 
   ]);
   assertEquals(result.operation?.state, "retryable");
   assertEquals(result.applyCalls, 0);
+});
+
+for (const sinkDedupe of [false, true]) {
+  for (const mode of ["begin", "transport", "record"] as const) {
+    Deno.test(`followup ${mode} ambiguity stays fenced on next invocation with sink dedupe ${sinkDedupe}`, async () => {
+      const result = await automaticScenario({
+        beginLoss: mode === "begin",
+        transportLoss: mode === "transport",
+        recordLoss: mode === "record",
+        repeatAfterAmbiguity: true,
+        sinkDedupe,
+      });
+      assertEquals(result.providerCalls, mode === "begin" ? 0 : 1);
+      assertEquals(result.providerEffects, mode === "begin" ? 0 : 1);
+      assertEquals(result.observedSinkKeys, mode === "begin" ? [] : [null]);
+      assertEquals(result.aiCalls, 1);
+      assertEquals(result.prepareCalls, 1);
+      assertEquals(result.row.followup_step, mode === "record" ? 3 : 2);
+      assertEquals(
+        result.secondResponse?.status,
+        mode === "record" ? 200 : 503,
+      );
+      assertEquals(
+        result.operation?.state,
+        mode === "begin"
+          ? "sending"
+          : mode === "transport"
+          ? "unknown"
+          : "applied",
+      );
+      if (mode === "record") {
+        assertEquals(result.recordArgs[0], result.recordArgs[1]);
+      }
+    });
+  }
+}
+
+Deno.test("followup restart after simulated death after committed begin never fetches", async () => {
+  // The fixture starts at the durable sending row left by a dead invocation.
+  const result = await automaticScenario({
+    existingSending: true,
+    initialProviderEffects: 1,
+    repeatAfterAmbiguity: true,
+  });
+  assertEquals(result.providerCalls, 0);
+  assertEquals(result.providerEffects, 1);
+  assertEquals([result.aiCalls, result.applyCalls, result.row.followup_step], [
+    0,
+    0,
+    2,
+  ]);
+  assertEquals(result.secondResponse?.status, 503);
+  assertEquals(result.operation?.state, "sending");
+});
+
+Deno.test("followup durable 429 retries the byte-identical frozen payload once after deadline", async () => {
+  const result = await automaticScenario({
+    providerStatus: 429,
+    body: '{"code":"rate_limited"}',
+    repeatAfterRejection: true,
+    retryAfterDeadline: true,
+  });
+  assertEquals([result.providerCalls, result.aiCalls, result.prepareCalls], [
+    2,
+    1,
+    1,
+  ]);
+  assertEquals(result.payloadBytes[0], result.payloadBytes[1]);
+  assertEquals(result.attemptTokens.length, 2);
+  assertEquals(result.attemptTokens[0] === result.attemptTokens[1], false);
+  assertEquals(result.operation?.state, "applied");
+  assertEquals(result.row.followup_step, 3);
+  assertEquals(result.secondResponse?.status, 200);
+});
+
+Deno.test("applied marketing step after manual reset is a sequence conflict hold", async () => {
+  const result = await automaticScenario({ existingAppliedReset: true });
+  assertEquals(result.response.status, 503);
+  assertEquals(result.body.reason, "sequence_conflict");
+  assertEquals(result.body.persistence_complete, false);
+  assertEquals([result.aiCalls, result.providerCalls, result.applyCalls], [
+    0,
+    0,
+    0,
+  ]);
+  assertEquals(result.row.followup_step, 2);
+  assertEquals(result.operation?.state, "applied");
+});
+
+Deno.test("ordinary already-applied step replay remains healthy", async () => {
+  const result = await automaticScenario({ existingAppliedHealthy: true });
+  assertEquals(result.response.status, 200);
+  assertEquals(result.body.persistence_complete, true);
+  assertEquals([result.aiCalls, result.providerCalls, result.applyCalls], [
+    0,
+    0,
+    1,
+  ]);
+  assertEquals(result.row.followup_step, 3);
 });

@@ -172,6 +172,12 @@ async function savedScenario(
     beginLoss?: boolean;
     recordLoss?: boolean;
     existing?: boolean;
+    existingSending?: boolean;
+    initialSinkEffects?: number;
+    repeatAfterAmbiguity?: boolean;
+    retryAfterDeadline?: boolean;
+    recordLossOnce?: boolean;
+    sinkDedupe?: boolean;
     includePriorListing?: boolean;
   } = {},
 ) {
@@ -195,9 +201,9 @@ async function savedScenario(
     expected: Record<string, unknown>;
     token: string | null;
     accepted: boolean;
-  } | null = options.existing
+  } | null = options.existing || options.existingSending
     ? {
-      state: "prepared",
+      state: options.existingSending ? "sending" : "prepared",
       payload: {
         sender: { email: "alerts@maiprop.co", name: "maiProp Alerts" },
         to: [{ email: "recipient@example.test" }],
@@ -211,11 +217,20 @@ async function savedScenario(
         last_alert_sent_at: row.last_alert_sent_at,
         recipient_email: "recipient@example.test",
       },
-      token: null,
+      token: options.existingSending
+        ? "99999999-9999-4999-8999-999999999999"
+        : null,
       accepted: false,
     }
     : null;
   let recordCalls = 0;
+  let beginCalls = 0;
+  let sinkEffects = options.initialSinkEffects ?? 0;
+  const attemptTokens: string[] = [];
+  const payloadBytes: string[] = [];
+  const recordArgs: Record<string, unknown>[] = [];
+  const sinkKeys = new Set<string>();
+  const observedSinkKeys: (string | null)[] = [];
   let traceSummary: Record<string, unknown> | null = null;
   const json = (value: unknown, status = 200) =>
     new Response(JSON.stringify(value), {
@@ -314,8 +329,10 @@ async function savedScenario(
       if (url.pathname === "/rest/v1/rpc/begin_email_dispatch_for_service") {
         events.push(`begin:${operation?.state ?? "absent"}`);
         const args = JSON.parse(String(init?.body));
+        beginCalls++;
+        attemptTokens.push(args.p_attempt_token);
         if (!operation) throw new Error("Begin without prepare");
-        if (options.beginLoss) {
+        if (options.beginLoss && beginCalls === 1) {
           operation.state = "sending";
           operation.token = args.p_attempt_token;
           throw new Error("Lost committed begin response");
@@ -328,6 +345,15 @@ async function savedScenario(
             decision: operation.state === "sending" ? "busy" : "unknown",
             operation_id: OP_ID,
           });
+        }
+        if (operation.state === "retryable") {
+          if (!options.retryAfterDeadline || beginCalls < 2) {
+            return json({
+              decision: "busy",
+              operation_id: OP_ID,
+              not_before: "2026-10-01T00:00:00Z",
+            });
+          }
         }
         operation.token = args.p_attempt_token;
         operation.state = "sending";
@@ -343,12 +369,18 @@ async function savedScenario(
       ) {
         recordCalls++;
         const args = JSON.parse(String(init?.body));
+        recordArgs.push(structuredClone(args));
         if (!operation || args.p_attempt_token !== operation.token) {
           throw new Error("Wrong attempt");
         }
-        operation.state = args.p_outcome;
+        operation.state = args.p_outcome === "rejected_retryable"
+          ? "retryable"
+          : args.p_outcome;
         operation.accepted = args.p_outcome === "accepted";
-        if (options.recordLoss && recordCalls <= 2) {
+        if (
+          (options.recordLoss && recordCalls <= 2) ||
+          (options.recordLossOnce && recordCalls === 1)
+        ) {
           throw new Error("Lost committed record response");
         }
         return new Response(null, { status: 204 });
@@ -384,6 +416,20 @@ async function savedScenario(
       if (url.hostname === "api.brevo.com") {
         events.push(`send:${operation?.state ?? "absent"}`);
         sends++;
+        const headers = new Headers(init?.headers);
+        const sinkKey = headers.get("Idempotency-Key") ??
+          headers.get("X-Idempotency-Key");
+        observedSinkKeys.push(sinkKey);
+        payloadBytes.push(String(init?.body));
+        assertEquals(JSON.parse(String(init?.body)), operation?.payload);
+        if (
+          (options.provider !== "rate" ||
+            (options.retryAfterDeadline && sends === 2)) &&
+          options.provider !== "reject" &&
+          options.provider !== "server" &&
+          (!options.sinkDedupe || !sinkKey || !sinkKeys.has(sinkKey))
+        ) sinkEffects++;
+        if (sinkKey) sinkKeys.add(sinkKey);
         if (options.concurrent === "filters") row.filters.city = "Patras";
         if (options.concurrent === "consent") row.email_alerts = false;
         if (options.concurrent === "ids") {
@@ -392,7 +438,11 @@ async function savedScenario(
         if (options.provider === "timeout") {
           throw new DOMException("Timed out", "TimeoutError");
         }
-        if (options.provider === "rate") {
+        if (
+          options.provider === "rate" && !(
+            options.retryAfterDeadline && sends === 2
+          )
+        ) {
           return json({ code: "rate_limited" }, 429);
         }
         if (options.provider === "server") {
@@ -465,7 +515,16 @@ async function savedScenario(
       )
       : null;
     const response = await first;
-    const secondResponse = second ? await second : null;
+    const secondResponse = second
+      ? await second
+      : options.repeatAfterAmbiguity || options.retryAfterDeadline
+      ? await handler(
+        req("POST", {}, {
+          authorization: "Bearer correct-cron-secret",
+          "x-maiprop-dispatch-id": "77777777-7777-4777-8777-777777777777",
+        }),
+      )
+      : null;
     return {
       response,
       body: await response.json(),
@@ -480,6 +539,11 @@ async function savedScenario(
       recordCalls,
       listingReads,
       authReads,
+      sinkEffects,
+      attemptTokens,
+      payloadBytes,
+      recordArgs,
+      observedSinkKeys,
     };
   } finally {
     globalThis.fetch = oldFetch;
@@ -728,10 +792,82 @@ for (
     assertEquals(result.writes, 0);
     if (options.recordLoss) assertEquals(result.recordCalls, 2);
     if (options.provider === "rate") {
-      assertEquals(result.operationState, "rejected_retryable");
+      assertEquals(result.operationState, "retryable");
     }
     if (options.provider === "server") {
       assertEquals(result.operationState, "unknown");
     }
   });
 }
+
+for (const sinkDedupe of [false, true]) {
+  for (const mode of ["begin", "transport", "record"] as const) {
+    Deno.test(`saved alert ${mode} ambiguity remains fenced on next run with sink dedupe ${sinkDedupe}`, async () => {
+      const result = await savedScenario({
+        beginLoss: mode === "begin",
+        provider: mode === "transport" ? "timeout" : undefined,
+        recordLoss: mode === "record",
+        repeatAfterAmbiguity: true,
+        sinkDedupe,
+      });
+      assertEquals(result.sends, mode === "begin" ? 0 : 1);
+      assertEquals(result.sinkEffects, mode === "begin" ? 0 : 1);
+      assertEquals(result.observedSinkKeys, mode === "begin" ? [] : [null]);
+      assertEquals(result.listingReads, 1);
+      assertEquals(result.authReads, 1);
+      assertEquals(
+        result.operationState,
+        mode === "begin"
+          ? "sending"
+          : mode === "transport"
+          ? "unknown"
+          : "applied",
+      );
+      if (mode === "record") {
+        assertEquals(result.recordArgs[0], result.recordArgs[1]);
+      }
+      assertEquals(
+        result.secondResponse?.status,
+        mode === "record" ? 200 : 503,
+      );
+    });
+  }
+}
+
+Deno.test("saved alert restart after simulated death after committed begin makes no new sink call", async () => {
+  const result = await savedScenario({
+    existingSending: true,
+    initialSinkEffects: 1,
+    repeatAfterAmbiguity: true,
+  });
+  assertEquals([result.sends, result.sinkEffects, result.writes], [0, 1, 0]);
+  assertEquals([result.listingReads, result.authReads], [0, 0]);
+  assertEquals(result.operationState, "sending");
+  assertEquals(result.secondResponse?.status, 503);
+});
+
+Deno.test("saved alert durable 429 permits one byte-identical frozen retry after deadline", async () => {
+  const result = await savedScenario({
+    provider: "rate",
+    retryAfterDeadline: true,
+  });
+  assertEquals([result.sends, result.listingReads, result.authReads], [
+    2,
+    1,
+    1,
+  ]);
+  assertEquals(result.payloadBytes[0], result.payloadBytes[1]);
+  assertEquals(result.attemptTokens.length, 2);
+  assertEquals(result.attemptTokens[0] === result.attemptTokens[1], false);
+  assertEquals(result.operationState, "applied");
+  assertEquals(result.secondResponse?.status, 200);
+  assertEquals(result.row.last_alert_listing_ids, [
+    "33333333-3333-4333-8333-333333333333",
+  ]);
+});
+
+Deno.test("saved alert lost first record response repeats identical known result", async () => {
+  const result = await savedScenario({ recordLossOnce: true });
+  assertEquals([result.sends, result.recordCalls, result.writes], [1, 2, 1]);
+  assertEquals(result.recordArgs[0], result.recordArgs[1]);
+});

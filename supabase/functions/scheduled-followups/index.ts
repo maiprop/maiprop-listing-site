@@ -120,27 +120,38 @@ Deno.serve(async (req) => {
         { processed: 0, succeeded: 0, failed: 0 },
       );
     }
-    const { count: ledgerHeld, error: heldError } = await supabase.from(
-      "email_send_log",
-    )
-      .select("id", { count: "exact", head: true })
-      .eq("producer", "marketing_followup").eq("entity_hold", true)
-      .in("dispatch_state", [
-        "sending",
-        "unknown",
-        "accepted",
-        "accepted_conflict",
-        "checkpoint_payload_expired",
-      ]);
-    if (heldError || ledgerHeld === null) {
+    const countHeldStock = async (): Promise<number | null> => {
+      try {
+        const { count, error } = await supabase.from("email_send_log")
+          .select("id", { count: "exact", head: true })
+          .eq("producer", "marketing_followup").eq("entity_hold", true)
+          .in("dispatch_state", [
+            "sending",
+            "unknown",
+            "accepted",
+            "accepted_conflict",
+            "checkpoint_payload_expired",
+          ]);
+        return error || count === null ? null : count;
+      } catch {
+        return null;
+      }
+    };
+    const countUnavailable = async () => {
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.length - succeeded;
+      const outcome = succeeded > 0 || repaired > 0 ? "partial" : "failed";
       return await terminal(
         new Response(
           JSON.stringify({
             success: false,
-            outcome: repaired > 0 ? "partial" : "failed",
+            outcome,
             error: "email_hold_count_unavailable",
-            processed: 0,
+            processed: results.length,
+            succeeded,
+            failed,
             repaired,
+            heldOperations: null,
             repairFailures: repairHeld,
           }),
           {
@@ -148,11 +159,10 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           },
         ),
-        repaired > 0 ? "partial" : "failed",
-        { processed: 0, succeeded: 0, failed: 0 },
+        outcome,
+        { processed: results.length, succeeded, failed },
       );
-    }
-    const hasHolds = ledgerHeld > 0 || repairHeld > 0;
+    };
 
     const now = new Date();
 
@@ -174,7 +184,6 @@ Deno.serve(async (req) => {
             success: false,
             outcome: repaired > 0 ? "partial" : "failed",
             repaired,
-            heldOperations: ledgerHeld,
             repairFailures: repairHeld,
           }),
           {
@@ -188,6 +197,9 @@ Deno.serve(async (req) => {
     }
 
     if (!leads || leads.length === 0) {
+      const ledgerHeld = await countHeldStock();
+      if (ledgerHeld === null) return await countUnavailable();
+      const hasHolds = ledgerHeld > 0 || repairHeld > 0;
       return await terminal(
         new Response(
           JSON.stringify({
@@ -274,6 +286,9 @@ Deno.serve(async (req) => {
     }
 
     const failed = results.filter((r) => !r.success).length;
+    const ledgerHeld = await countHeldStock();
+    if (ledgerHeld === null) return await countUnavailable();
+    const hasHolds = ledgerHeld > 0 || repairHeld > 0;
     return await terminal(
       new Response(
         JSON.stringify({

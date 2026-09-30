@@ -795,6 +795,21 @@ Deno.serve(async (req) => {
       if (existing.decision === "existing") {
         const id = operationId(existing);
         if (!id) throw new Error("email_lookup_invalid_operation");
+        // An applied step is a durable sequence barrier. A manual reset cannot
+        // turn its accepted replay into a healthy scheduled completion.
+        if (
+          existing.state === "applied" &&
+          (lead.followup_step ?? 0) < step
+        ) {
+          return automaticResponse(step, {
+            outcome: "held",
+            providerAccepted: true,
+            acceptedNow: false,
+            persistenceComplete: false,
+            emailId: null,
+            reason: "sequence_conflict",
+          });
+        }
         return automaticResponse(
           step,
           await sendSelectedEmail(
