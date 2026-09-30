@@ -144,10 +144,12 @@ Deno.test("scheduler start failure cannot reach leads or claim persisted trace",
 async function scheduledScenario(
   children: { status?: number; body: string }[],
   ages = [2, 9, 30],
+  malformedAt: number | null = null,
 ) {
   const oldFetch = globalThis.fetch;
   Deno.env.set("SUPABASE_URL", "https://test.supabase.co");
   const sent: unknown[] = [];
+  let traceFinish: Record<string, unknown> | null = null;
   globalThis.fetch =
     (async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
@@ -156,12 +158,13 @@ async function scheduledScenario(
         return new Response(JSON.stringify({ decision: "run", dispatch_id: TRACE_ID, execution_token: TRACE_TOKEN }), { headers: { "content-type": "application/json" } });
       }
       if (url.pathname === "/rest/v1/rpc/finish_scheduled_http_dispatch_for_service") {
+        traceFinish = JSON.parse(String(init?.body));
         return new Response(null, { status: 204 });
       }
       if (url.pathname === "/rest/v1/marketing_leads") {
         return new Response(
           JSON.stringify(
-            ages.map((days, index) => ({
+            ages.map((days, index) => index === malformedAt ? null : ({
               id: `lead-${index}`,
               full_name: "Fixture",
               created_at: new Date(Date.now() - days * 86400000).toISOString(),
@@ -184,7 +187,7 @@ async function scheduledScenario(
     const response = await handler(
       req("POST", {}, { "x-cron-secret": CRON_VALUE }),
     );
-    return { response, body: await response.json(), sent };
+    return { response, body: await response.json(), sent, traceFinish: traceFinish as Record<string, unknown> | null };
   } finally {
     globalThis.fetch = oldFetch;
   }
@@ -248,4 +251,24 @@ Deno.test("scheduler no-due and empty batches make no child call", async () => {
     assertEquals(result.body.processed, 0);
     assertEquals(result.sent.length, 0);
   }
+});
+
+Deno.test("scheduler late batch error retains completed child counts and partial trace", async () => {
+  const result = await scheduledScenario([{ body: '{"success":true}' }], [2, 9], 1);
+  assertEquals(result.response.status, 500);
+  assertEquals(result.sent.length, 1);
+  assertEquals(result.body.success, false);
+  assertEquals([result.body.processed, result.body.succeeded, result.body.failed], [1, 1, 0]);
+  assertEquals(result.body.outcome, "partial");
+  assertEquals(result.traceFinish?.p_outcome, "partial");
+  assertEquals(result.traceFinish?.p_summary, { processed: 1, succeeded: 1, failed: 0, outcome: "partial" });
+});
+
+Deno.test("scheduler batch error before child work records zero attempts", async () => {
+  const result = await scheduledScenario([], [2], 0);
+  assertEquals(result.response.status, 500);
+  assertEquals(result.sent.length, 0);
+  assertEquals([result.body.processed, result.body.succeeded, result.body.failed], [0, 0, 0]);
+  assertEquals(result.body.outcome, "failed");
+  assertEquals(result.traceFinish?.p_summary, { processed: 0, succeeded: 0, failed: 0, outcome: "failed" });
 });

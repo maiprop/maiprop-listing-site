@@ -1180,6 +1180,6 @@ Deno.serve(async (req) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
-    ), "failed");
+    ), imported + updated > 0 ? "partial" : "failed");
   }
 });

@@ -46,6 +46,7 @@ Deno.serve(async (req) => {
 
   let traceClient: ReturnType<typeof createClient> | null = null;
   let traceRun: ScheduledRun | null = null;
+  const results: { step: number; success: boolean; error?: string }[] = [];
   try {
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const supabaseKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -59,7 +60,6 @@ Deno.serve(async (req) => {
       finishScheduledDispatch(supabase, run, response, outcome, summary);
 
     const now = new Date();
-    const results: { step: number; success: boolean; error?: string }[] = [];
 
     // Fetch all non-closed marketing leads that haven't completed all 3 followups.
     // The generic CRM `leads` table does not have `full_name` or `followup_step`.
@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
       return await terminal(new Response(JSON.stringify({ error: "Failed to fetch leads" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }), "failed", { processed: 0, succeeded: 0, failed: 1 });
+      }), "failed", { processed: 0, succeeded: 0, failed: 0 });
     }
 
     if (!leads || leads.length === 0) {
@@ -165,13 +165,23 @@ Deno.serve(async (req) => {
     });
   } catch (error: unknown) {
     console.error("Scheduled followup error:", error);
-    const response = new Response(JSON.stringify({ error: "Internal error" }), {
+    const succeeded = results.filter((result) => result.success).length;
+    const failed = results.length - succeeded;
+    const outcome = succeeded > 0 ? "partial" : "failed";
+    const response = new Response(JSON.stringify({
+      error: "Internal error", success: false, outcome,
+      processed: results.length, succeeded, failed,
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
     return traceClient && traceRun
-      ? await finishScheduledDispatch(traceClient, traceRun, response, "failed", { processed: 0, succeeded: 0, failed: 1 })
-      : new Response(JSON.stringify({ error: "Internal error", dispatch_id: null, trace_persistence_complete: false }), {
+      ? await finishScheduledDispatch(traceClient, traceRun, response, outcome, { processed: results.length, succeeded, failed })
+      : new Response(JSON.stringify({
+        error: "Internal error", success: false, outcome,
+        processed: results.length, succeeded, failed,
+        dispatch_id: null, trace_persistence_complete: false,
+      }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
   }
