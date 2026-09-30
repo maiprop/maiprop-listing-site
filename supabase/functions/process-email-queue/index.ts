@@ -261,6 +261,7 @@ Deno.serve(async (req) => {
         }
       }
 
+      let providerAccepted = false
       try {
         const sender = parseEmailIdentity(payload.from) ?? { email: brevoFromEmail }
         await sendBrevoEmail({
@@ -277,22 +278,7 @@ Deno.serve(async (req) => {
           },
           tags: payload.label ? [payload.label] : undefined,
         })
-
-        await supabase.from('email_send_log').insert({
-          message_id: payload.message_id,
-          template_name: payload.label || queue,
-          recipient_email: payload.to,
-          status: 'sent',
-        })
-
-        const { error: delError } = await supabase.rpc('delete_email', {
-          queue_name: queue,
-          message_id: msg.msg_id,
-        })
-        if (delError) {
-          log.error('failed to delete sent message from queue', { queue, msg_id: msg.msg_id, err: String(delError.message ?? delError) })
-        }
-        totalProcessed++
+        providerAccepted = true
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
         const rateLimited = isRateLimited(error)
@@ -378,6 +364,68 @@ Deno.serve(async (req) => {
         if (payload?.message_id && typeof payload.message_id === 'string') {
           failedAttemptsByMessageId.set(payload.message_id, failedAttempts + 1)
         }
+      }
+
+      if (providerAccepted) {
+        let sentLogPersisted = false
+        let sentLogErrorCode: string | null = null
+        try {
+          const { error: sentLogError } = await supabase.from('email_send_log').insert({
+            message_id: payload.message_id,
+            template_name: payload.label || queue,
+            recipient_email: payload.to,
+            status: 'sent',
+          })
+          sentLogPersisted = !sentLogError
+          sentLogErrorCode = sentLogError?.code ?? null
+        } catch {
+          sentLogErrorCode = 'transport_failure'
+        }
+
+        let queueDeleted = false
+        let deleteErrorCode: string | null = null
+        try {
+          const { data: deleted, error: delError } = await supabase.rpc('delete_email', {
+            queue_name: queue,
+            message_id: msg.msg_id,
+          })
+          queueDeleted = !delError && deleted === true
+          deleteErrorCode = delError?.code ?? (queueDeleted ? null : 'not_deleted')
+          if (delError) {
+            log.error('failed to delete sent message from queue', {
+              queue,
+              msg_id: msg.msg_id,
+              err: deleteErrorCode,
+            })
+          }
+        } catch {
+          deleteErrorCode = 'transport_failure'
+        }
+
+        if (!sentLogPersisted || !queueDeleted) {
+          try {
+            log.error('accepted email bookkeeping failed', {
+              queue,
+              msg_id: msg.msg_id,
+              sent_log_error: sentLogErrorCode,
+              delete_error: deleteErrorCode,
+            })
+          } catch {
+            // Keep the known provider acceptance and persistence result in the response.
+          }
+          return new Response(
+            JSON.stringify({
+              processed: totalProcessed + 1,
+              stopped: 'bookkeeping_failed',
+              provider_accepted: true,
+              persistence_complete: false,
+              sent_log_persisted: sentLogPersisted,
+              queue_deleted: queueDeleted,
+            }),
+            { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+        totalProcessed++
       }
 
       if (i < typedMessages.length - 1) {

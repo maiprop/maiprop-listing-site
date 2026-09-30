@@ -18,6 +18,12 @@ interface Scenario {
   doubleStateRows?: boolean;
   wrongStateRow?: boolean;
   acceptedFirst?: boolean;
+  acceptedOnly?: boolean;
+  sentLogError?: boolean;
+  deleteError?: boolean;
+  deleteFalse?: boolean;
+  throwAfterAcceptedDeleteLog?: boolean;
+  throwOnSummaryLog?: boolean;
 }
 
 async function exercise(scenario: Scenario, verify: (proof: {
@@ -30,13 +36,14 @@ async function exercise(scenario: Scenario, verify: (proof: {
   sendCount: () => number;
 }) => Promise<void>): Promise<void> {
   const originalFetch = globalThis.fetch;
+  const originalConsoleError = console.error;
   const logs: Record<string, unknown>[] = [];
   const calls: string[] = [];
   let cooldown: string | null = null;
   let sends = 0;
   const messages = [
-    ...(scenario.acceptedFirst ? [{ msg_id: 10, read_ct: 1, message: { to: "first@example.test", html: "ok" } }] : []),
-    { msg_id: 11, read_ct: 1, message: { to: "second@example.test", html: "limit" } },
+    ...(scenario.acceptedFirst || scenario.acceptedOnly ? [{ msg_id: 10, read_ct: 1, message: { to: "first@example.test", html: "ok" } }] : []),
+    ...(!scenario.acceptedOnly ? [{ msg_id: 11, read_ct: 1, message: { to: "second@example.test", html: "limit" } }] : []),
   ];
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
     status, headers: { "Content-Type": "application/json" },
@@ -49,7 +56,7 @@ async function exercise(scenario: Scenario, verify: (proof: {
     const body = raw ? JSON.parse(raw) as Record<string, unknown> : {};
     if (url.hostname === "api.brevo.com" && url.pathname === "/v3/smtp/email") {
       sends++;
-      if (scenario.acceptedFirst && sends === 1) return json({ messageId: "accepted-1" }, 201);
+      if ((scenario.acceptedFirst || scenario.acceptedOnly) && sends === 1) return json({ messageId: "accepted-1" }, 201);
       return new Response("rate limited", { status: 429, headers: { "retry-after": "120" } });
     }
     if (url.hostname !== "test.supabase.co") throw new Error(`Denied test network: ${url.origin}`);
@@ -63,6 +70,9 @@ async function exercise(scenario: Scenario, verify: (proof: {
     }
     if (url.pathname.endsWith("/email_send_log") && method === "POST") {
       const row = body as Record<string, unknown>;
+      if (scenario.sentLogError && row.status === "sent") {
+        return json({ code: "42501", message: "injected sent-log error" }, 403);
+      }
       if (scenario.oldCheck && row.status === "rate_limited") {
         return json({ code: "23514", message: "email_send_log_status_check" }, 400);
       }
@@ -82,15 +92,34 @@ async function exercise(scenario: Scenario, verify: (proof: {
       cooldown = String(body.retry_after_until);
       return json([{ id: 1 }]);
     }
-    if (url.pathname.endsWith("/rpc/delete_email")) return json(true);
+    if (url.pathname.endsWith("/rpc/delete_email")) {
+      if (scenario.deleteFalse) return json(false);
+      if (scenario.deleteError || scenario.throwAfterAcceptedDeleteLog) {
+        return json({ code: "42501", message: "injected delete error" }, 403);
+      }
+      return json(true);
+    }
     throw new Error(`Unexpected fake request: ${method} ${url.pathname}`);
   };
+  if (scenario.throwAfterAcceptedDeleteLog || scenario.throwOnSummaryLog) {
+    console.error = (...args: unknown[]) => {
+      const line = String(args[0]);
+      if ((scenario.throwAfterAcceptedDeleteLog && line.includes('"msg":"failed to delete sent message from queue"')) ||
+          (scenario.throwOnSummaryLog && line.includes('"msg":"accepted email bookkeeping failed"'))) {
+        const error = new Error("synthetic post-acceptance 429") as Error & { status: number };
+        error.status = 429;
+        throw error;
+      }
+      originalConsoleError(...args);
+    };
+  }
   try {
     const response = await handler(serviceRequest());
     await verify({ response, logs, calls, cooldown, sends,
       repeat: () => handler(serviceRequest()), sendCount: () => sends });
   } finally {
     globalThis.fetch = originalFetch;
+    console.error = originalConsoleError;
   }
 }
 
@@ -159,5 +188,33 @@ Deno.test("earlier accepted send remains counted after later 429 log failure", a
     assertEquals(calls.filter((call) => call.includes("/rpc/delete_email")).length, 1);
   });
 });
+
+for (const [name, scenario, sentLogPersisted, queueDeleted] of [
+  ["resolved sent-log error", { acceptedOnly: true, sentLogError: true }, false, true],
+  ["resolved queue-delete error", { acceptedOnly: true, deleteError: true }, true, false],
+  ["queue-delete false result", { acceptedOnly: true, deleteFalse: true }, true, false],
+  ["thrown 429 during post-acceptance delete logging", { acceptedOnly: true, throwAfterAcceptedDeleteLog: true }, true, false],
+  ["thrown 429 during accepted-failure reporting", { acceptedOnly: true, sentLogError: true, throwOnSummaryLog: true }, false, true],
+] as const) {
+  Deno.test(`accepted send keeps its identity after ${name}`, async () => {
+    await exercise(scenario, async ({ response, logs, calls, cooldown, sends }) => {
+      assertEquals(response.status, 503);
+      assertEquals(await response.json(), {
+        processed: 1,
+        stopped: "bookkeeping_failed",
+        provider_accepted: true,
+        persistence_complete: false,
+        sent_log_persisted: sentLogPersisted,
+        queue_deleted: queueDeleted,
+      });
+      assertEquals(logs.map((row) => row.status), sentLogPersisted ? ["sent"] : []);
+      assertEquals(cooldown, null);
+      assertEquals(sends, 1);
+      assertEquals(calls.filter((call) => call.includes("/rpc/delete_email")).length, 1);
+      assertEquals(calls.filter((call) => call === "PATCH /rest/v1/email_send_state"), []);
+      assertEquals(calls.filter((call) => call.includes("/rpc/move_to_dlq")), []);
+    });
+  });
+}
 
 restore();
