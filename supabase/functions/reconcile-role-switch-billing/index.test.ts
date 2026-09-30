@@ -37,15 +37,18 @@ Deno.test("role-switch reconciliation fails closed when Stripe runtime is not ex
   assertEquals(response.status, 503);
 });
 
-type Scenario = "empty" | "success" | "claim-error" | "missing-user" | "complete-error" | "account-error";
+type Scenario = "empty" | "success" | "billing-error" | "deadline" | "release-error" |
+  "claim-error" | "missing-user" | "complete-error" | "account-error";
 
 async function runScenario(scenario: Scenario) {
   const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
   const originalKey = Deno.env.get("STRIPE_SECRET_KEY");
   const originalMode = Deno.env.get("STRIPE_RUNTIME_MODE");
   const originalLive = Deno.env.get("STRIPE_LIVE_MODE");
   const originalAccount = Deno.env.get("STRIPE_EXPECTED_ACCOUNT_ID");
   const calls: Array<{ method: string; path: string; query: string; body?: Record<string, unknown> }> = [];
+  let fireWorkDeadline: (() => void) | undefined;
   const claim = {
     audit_id: "11111111-1111-4111-8111-111111111111",
     user_id: "22222222-2222-4222-8222-222222222222",
@@ -56,6 +59,12 @@ async function runScenario(scenario: Scenario) {
   Deno.env.set("STRIPE_RUNTIME_MODE", "test");
   Deno.env.set("STRIPE_LIVE_MODE", "false");
   Deno.env.set("STRIPE_EXPECTED_ACCOUNT_ID", "acct_e3reconcile");
+  if (scenario === "deadline" || scenario === "release-error") {
+    globalThis.setTimeout = ((callback: () => void, delay?: number) => {
+      if (delay === 42_000) fireWorkDeadline = callback;
+      return originalSetTimeout(callback, delay);
+    }) as typeof setTimeout;
+  }
   const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), {
     status,
     headers: { "content-type": "application/json" },
@@ -70,7 +79,9 @@ async function runScenario(scenario: Scenario) {
         return scenario === "account-error" ? json({ error: { message: "account unavailable" } }, 500) : json({ id: "acct_e3reconcile" });
       }
       if (url.pathname === "/v1/balance" && request.method === "GET") return json({ livemode: false });
-      if (url.pathname === "/v1/customers/search" && request.method === "GET") return json({ data: [] });
+      if (url.pathname === "/v1/customers/search" && request.method === "GET") {
+        return scenario === "billing-error" ? json({ error: { message: "search ambiguous" } }, 500) : json({ data: [] });
+      }
       if (url.pathname === "/v1/subscriptions" && request.method === "GET") return json({ data: [], has_more: false });
     }
     if (url.origin === "https://test.supabase.co") {
@@ -78,11 +89,17 @@ async function runScenario(scenario: Scenario) {
         return scenario === "claim-error" ? json({ message: "claim unavailable" }, 500) : json(scenario === "empty" ? [] : [claim]);
       }
       if (url.pathname === `/auth/v1/admin/users/${claim.user_id}` && request.method === "GET") {
+        if (scenario === "deadline" || scenario === "release-error") fireWorkDeadline?.();
         return json({ user: { id: claim.user_id, email: scenario === "missing-user" ? null : "actor@example.test" } });
       }
-      if (url.pathname === "/rest/v1/billing_customers" && request.method === "GET") return json([]);
+      if (url.pathname === "/rest/v1/billing_customers" && request.method === "GET") {
+        return scenario === "billing-error" ? json({ message: "durable lookup unavailable" }, 500) : json([]);
+      }
       if (url.pathname.endsWith("/complete_role_switch_reconciliation_attempt") && request.method === "POST") {
         return scenario === "complete-error" ? json({ message: "settlement unavailable" }, 500) : json(null);
+      }
+      if (url.pathname.endsWith("/release_role_switch_reconciliation_claims") && request.method === "POST") {
+        return scenario === "release-error" ? json({ message: "release unavailable" }, 500) : json(null);
       }
     }
     throw new Error(`unexpected transport: ${request.method} ${url}`);
@@ -92,6 +109,7 @@ async function runScenario(scenario: Scenario) {
     return { calls, claim, status: response.status, contentType: response.headers.get("content-type"), body: await response.json() as Record<string, unknown> };
   } finally {
     globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
     if (originalKey === undefined) Deno.env.delete("STRIPE_SECRET_KEY"); else Deno.env.set("STRIPE_SECRET_KEY", originalKey);
     if (originalMode === undefined) Deno.env.delete("STRIPE_RUNTIME_MODE"); else Deno.env.set("STRIPE_RUNTIME_MODE", originalMode);
     if (originalLive === undefined) Deno.env.delete("STRIPE_LIVE_MODE"); else Deno.env.set("STRIPE_LIVE_MODE", originalLive);
@@ -136,6 +154,45 @@ Deno.test("reconciliation resolves verified actor with runtime-bound customer lo
   assertEquals(completion?.body?._lock_token, result.claim.lock_token);
   assertEquals(completion?.body?._billing_outcome, "not_required");
   assertEquals(result.calls.some((call) => call.method !== "GET" && call.path.startsWith("/v1/")), false);
+});
+
+Deno.test("reconciliation ambiguity settles unknown against the claimed tuple without invented success", async () => {
+  const result = await runScenario("billing-error");
+  assertEquals(result.status, 200);
+  assertEquals(result.body, { success: true, claimed: 1, completed: 0, retryable: 1, failed: 0, deferred: 0, deadlineReached: false });
+  const completion = result.calls.find((call) => call.path.endsWith("/complete_role_switch_reconciliation_attempt"));
+  assertEquals(completion?.body?._audit_id, result.claim.audit_id);
+  assertEquals(completion?.body?._user_id, result.claim.user_id);
+  assertEquals(completion?.body?._lock_token, result.claim.lock_token);
+  assertEquals(completion?.body?._billing_outcome, "unknown");
+  assertEquals(completion?.body?._billing_error, "customer_resolution_failed");
+  assertEquals(completion?.body?._cancelled_count, null);
+  assertEquals(result.calls.some((call) => call.path.startsWith("/v1/subscriptions/")), false);
+});
+
+Deno.test("work deadline releases the claimed audit before returning HTTP 504", async () => {
+  const result = await runScenario("deadline");
+  assertEquals(result.status, 504);
+  assertEquals(result.body, { success: false, claimed: 1, completed: 0, retryable: 0, failed: 0, deferred: 1, deadlineReached: true });
+  const paths = result.calls.map((call) => call.path);
+  const claimIndex = paths.indexOf("/rest/v1/rpc/claim_role_switch_reconciliation_batch");
+  const userIndex = paths.indexOf(`/auth/v1/admin/users/${result.claim.user_id}`);
+  const releaseIndex = paths.indexOf("/rest/v1/rpc/release_role_switch_reconciliation_claims");
+  assertEquals(claimIndex < userIndex && userIndex < releaseIndex, true);
+  const release = result.calls[releaseIndex];
+  assertEquals(release.body?._audit_ids, [result.claim.audit_id]);
+  assertEquals(typeof release.body?._worker_id, "string");
+  assertEquals(result.calls.some((call) => call.path.endsWith("/complete_role_switch_reconciliation_attempt")), false);
+});
+
+Deno.test("release RPC failure preserves deferred count and reports failure at HTTP 504", async () => {
+  const result = await runScenario("release-error");
+  assertEquals(result.status, 504);
+  assertEquals(result.body, { success: false, claimed: 1, completed: 0, retryable: 0, failed: 1, deferred: 1, deadlineReached: true });
+  const release = result.calls.find((call) => call.path.endsWith("/release_role_switch_reconciliation_claims"));
+  assertEquals(release?.body?._audit_ids, [result.claim.audit_id]);
+  assertEquals(result.calls.filter((call) => call.path.endsWith("/release_role_switch_reconciliation_claims")).length, 1);
+  assertEquals(result.calls.some((call) => call.path.endsWith("/complete_role_switch_reconciliation_attempt")), false);
 });
 
 Deno.test("reconciliation maps claim and completion transport errors without success", async () => {

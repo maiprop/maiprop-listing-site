@@ -46,14 +46,33 @@ Deno.test("missing auth is rejected without consuming malformed JSON", async () 
   assertEquals(request.bodyUsed, false);
 });
 
-Deno.test("fake Bearer returns 401 (Supabase getUser rejects)", async () => {
-  const res = await handler(authedReq("POST", {
-    operation_id: operationId,
-    from_type: "buyer",
-    to_type: "seller",
-    cancel_subscription: true,
-  }));
-  assertEquals([401, 503].includes(res.status), true);
+Deno.test("fake Bearer returns 401 before business work", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const request = input instanceof Request ? input : new Request(input);
+    const url = new URL(request.url);
+    calls.push(`${request.method} ${url.pathname}`);
+    if (url.origin === "https://test.supabase.co" && url.pathname === "/auth/v1/user" && request.method === "GET") {
+      return Promise.resolve(new Response(JSON.stringify({ message: "invalid token" }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      }));
+    }
+    throw new Error(`unexpected transport: ${request.method} ${url}`);
+  }) as typeof fetch;
+  try {
+    const res = await handler(authedReq("POST", {
+      operation_id: operationId,
+      from_type: "buyer",
+      to_type: "seller",
+      cancel_subscription: true,
+    }));
+    assertEquals(res.status, 401);
+    assertEquals(calls, ["GET /auth/v1/user"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 Deno.test("malformed role-switch bodies are rejected after auth but before RPC or Stripe work", async () => {
