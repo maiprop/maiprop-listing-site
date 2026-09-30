@@ -16,6 +16,8 @@ import {
 } from "@/hooks/useOpenHouseAssetControl";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import OpenHouseAssetControlPanel from "./OpenHouseAssetControlPanel";
+import { useAuth } from "@/contexts/AuthContext";
+import { useManageableOrganizations } from "@/hooks/useManageableOrganizations";
 
 import { fmtDate, fmtTime } from "@/lib/format";
 
@@ -67,12 +69,12 @@ function SectionHeading({ title, count, action }: { title: string; count?: numbe
   );
 }
 
-// ── Expandable owner listing card ─────────────────────────────────────────────
+// ── Expandable open house listing card ────────────────────────────────────────
 /** A subset of fields used by the dashboard card. The dashboard receives full listings
     via myListings, so we extend ListingWithJoins for compatibility. */
 type DashboardListing = ListingWithJoins;
 
-function OwnerListingCard({ listing }: { listing: DashboardListing }) {
+function OpenHouseListingCard({ listing, isOwner, canEdit }: { listing: DashboardListing; isOwner: boolean; canEdit: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const countdown = listing.open_house_date ? getCountdown(listing.open_house_date) : null;
 
@@ -115,7 +117,7 @@ function OwnerListingCard({ listing }: { listing: DashboardListing }) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button
+          {canEdit && <Button
             size="sm"
             variant="outline"
             className="text-xs gap-1 hidden sm:flex"
@@ -125,7 +127,7 @@ function OwnerListingCard({ listing }: { listing: DashboardListing }) {
             <Link to={`/listings/${listing.id}/edit`}>
               <Pencil className="w-3 h-3" /> Edit listing
             </Link>
-          </Button>
+          </Button>}
           <Button
             size="sm"
             variant="outline"
@@ -134,7 +136,7 @@ function OwnerListingCard({ listing }: { listing: DashboardListing }) {
             onClick={(e) => e.stopPropagation()}
           >
             <Link to={`/open-house/${listing.id}`}>
-              <Settings2 className="w-3 h-3" /> Manage
+              <Settings2 className="w-3 h-3" /> {isOwner ? "Manage" : "View"}
             </Link>
           </Button>
           {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -144,12 +146,12 @@ function OwnerListingCard({ listing }: { listing: DashboardListing }) {
       {/* Expanded: Asset Control Panel */}
       {expanded && (
         <div className="border-t border-border p-4 bg-secondary/20">
-          <OpenHouseAssetControlPanel
+          {isOwner ? <OpenHouseAssetControlPanel
             listingId={listing.id}
-            isOwner={true}
+            isOwner
             listingPrice={listing.price}
             openHouseTransactionType={listing.open_house_transaction_type === "rent" ? "rent" : "sale"}
-          />
+          /> : <p className="text-sm text-muted-foreground">Open house settings, registrations, and offers are managed by the listing owner.</p>}
         </div>
       )}
     </div>
@@ -262,10 +264,14 @@ export default function OpenHouseDashboardSection({
 }: {
   myListings: DashboardListing[];
 }) {
+  const { user } = useAuth();
+  const { data: manageableOrganizations = [], isLoading: organizationsLoading } = useManageableOrganizations();
   const { data: myRegs = [], isLoading: regsLoading } = useMyOpenHouseRegistrations();
   const { data: myOffers = [], isLoading: offersLoading } = useMyOpenHouseOffers();
 
   const ownerListings = myListings.filter((l) => l.listing_type === "open_house");
+  const hasNonownedListings = ownerListings.some((listing) => listing.owner_id !== user?.id);
+  const manageableOrganizationIds = new Set(manageableOrganizations.map((organization) => organization.id));
   const upcomingRegs = myRegs.filter((r) => r.status !== "cancelled");
   const activeOffers = myOffers.filter((o) => o.status !== "withdrawn");
 
@@ -284,7 +290,7 @@ export default function OpenHouseDashboardSection({
             Open Houses
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Your open house listings, registrations, and sealed offers.
+            {hasNonownedListings ? "Open house listings you own or can view, plus your registrations and sealed offers." : "Your open house listings, registrations, and sealed offers."}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -301,7 +307,7 @@ export default function OpenHouseDashboardSection({
       {!isEmpty && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="rounded-xl border border-border p-3 bg-card">
-            <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" />My Listings</p>
+            <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" />{hasNonownedListings ? "Listings" : "My Listings"}</p>
             <p className="font-display text-2xl font-bold mt-1">{ownerListings.length}</p>
           </div>
           <div className="rounded-xl border border-border p-3 bg-card">
@@ -324,7 +330,7 @@ export default function OpenHouseDashboardSection({
       {ownerListings.length > 0 && (
         <div className="space-y-3">
           <SectionHeading
-            title="My Open House Listings"
+            title={hasNonownedListings ? "Open House Listings" : "My Open House Listings"}
             count={ownerListings.length}
             action={
               <Button size="sm" variant="outline" className="text-xs gap-1" asChild>
@@ -334,7 +340,12 @@ export default function OpenHouseDashboardSection({
           />
           <div className="space-y-3">
             {ownerListings.map((l) => (
-              <OwnerListingCard key={l.id} listing={l} />
+              <OpenHouseListingCard
+                key={`${user?.id ?? "signed-out"}:${l.id}`}
+                listing={l}
+                isOwner={Boolean(user?.id && l.owner_id === user.id)}
+                canEdit={Boolean(user?.id && (l.owner_id === user.id || (!organizationsLoading && l.organization_id && manageableOrganizationIds.has(l.organization_id))))}
+              />
             ))}
           </div>
         </div>

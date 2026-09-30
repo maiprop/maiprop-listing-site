@@ -238,12 +238,14 @@ describe("AdminDashboard tab routing", () => {
     expect(screen.getByRole("button", { name: /User Activity/i })).toHaveClass("bg-primary");
   });
 
-  it("loads platform-wide open-house listings for admin moderation", async () => {
+  it("loads the admin open-house listing overview", async () => {
     fromMock.mockImplementation((table: string) => {
       if (table === "listing_management_catalogue") {
         return selectBuilder([
           {
             id: "oh-admin-1",
+            owner_id: "other-owner",
+            organization_id: null,
             title: "Non-owned Open House",
             listing_type: "open_house",
             status: "active",

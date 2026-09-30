@@ -12,6 +12,8 @@ import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { accountQueryKey } from "@/lib/identityQueryBoundary";
 
 type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "users-activity" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations" | "featured" | "pro-verification" | "pof-review" | "contact-inbox" | "broadcasts";
 
@@ -40,19 +42,20 @@ function AdminTabFallback() {
 }
 
 export default function AdminDashboard() {
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tabParam = searchParams.get("tab") as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
     tabParam && VALID_TABS.includes(tabParam) ? tabParam : "pipeline"
   );
-  const { data: adminOpenHouseListings = [] } = useQuery({
-    queryKey: ["admin-open-house-listings"],
-    enabled: activeTab === "open-houses",
+  const { data: adminOpenHouseListings = [], isLoading: openHouseListingsLoading } = useQuery({
+    queryKey: accountQueryKey(user?.id, "admin-open-house-listings"),
+    enabled: Boolean(user && activeTab === "open-houses"),
     queryFn: async () => {
       const { data, error } = await supabase
         .rpc("get_listing_management_catalogue")
-        .select("id,title,listing_type,status,open_house_date,views_count,cover_image_url,price")
+        .select("id,owner_id,organization_id,title,listing_type,status,open_house_date,views_count,cover_image_url,price")
         .eq("listing_type", "open_house")
         .order("open_house_date", { ascending: true, nullsFirst: false });
       if (error) throw error;
@@ -136,9 +139,11 @@ export default function AdminDashboard() {
                 <h2 className="font-display text-lg font-semibold flex items-center gap-2">
                   <DoorOpen className="w-5 h-5 text-primary" /> Open House Management
                 </h2>
-                <p className="text-sm text-muted-foreground mt-1">All open house registrations, offers, and controls across the platform.</p>
+                <p className="text-sm text-muted-foreground mt-1">Browse open house listings across the platform. Owners can manage settings, registrations, and offers for their own listings.</p>
               </div>
-              <OpenHouseDashboardSection myListings={adminOpenHouseListings} />
+              {user && (openHouseListingsLoading
+                ? <p className="text-sm text-muted-foreground">Loading open house listings...</p>
+                : <OpenHouseDashboardSection key={user.id} myListings={adminOpenHouseListings} />)}
             </div>
           )}
           {activeTab === "subscribers" && <AdminSubscribers />}

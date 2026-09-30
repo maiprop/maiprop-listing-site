@@ -49,6 +49,7 @@ const {
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
+vi.mock("@/hooks/useManageableOrganizations", () => ({ useManageableOrganizations: () => ({ data: [], isLoading: false }) }));
 vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("@/hooks/useOpenHouseAssetControl", async () => {
   const actual = await vi.importActual<typeof import("@/hooks/useOpenHouseAssetControl")>(
@@ -397,6 +398,8 @@ describe("OpenHouseAssetControlPanel", () => {
 describe("OpenHouseDashboardSection", () => {
   const listing = {
     id: "listing-1",
+    owner_id: "owner-1",
+    organization_id: null,
     title: "Owner Open House",
     listing_type: "open_house",
     status: "active",
