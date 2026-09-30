@@ -890,6 +890,7 @@ export type Database = {
           applied_at: string | null
           attempt_started_at: string | null
           attempt_token: string | null
+          attempt_tokens: string[] | null
           candidate_ids: string[] | null
           created_at: string
           dispatch_state: string | null
@@ -923,6 +924,7 @@ export type Database = {
           applied_at?: string | null
           attempt_started_at?: string | null
           attempt_token?: string | null
+          attempt_tokens?: string[] | null
           candidate_ids?: string[] | null
           created_at?: string
           dispatch_state?: string | null
@@ -956,6 +958,7 @@ export type Database = {
           applied_at?: string | null
           attempt_started_at?: string | null
           attempt_token?: string | null
+          attempt_tokens?: string[] | null
           candidate_ids?: string[] | null
           created_at?: string
           dispatch_state?: string | null

@@ -137,20 +137,20 @@ BEGIN
     AND attname='operation_id' AND NOT attisdropped);
   IF v_repeat THEN
     IF (SELECT pg_catalog.count(*) FROM pg_catalog.pg_attribute WHERE attrelid='public.email_send_log'::regclass
-      AND attnum>0 AND NOT attisdropped) <> 31
+      AND attnum>0 AND NOT attisdropped) <> 32
       OR (SELECT pg_catalog.count(*) FROM pg_catalog.pg_index WHERE indrelid='public.email_send_log'::regclass) <> 11
       OR (SELECT pg_catalog.count(*) FROM pg_catalog.pg_constraint WHERE conrelid='public.email_send_log'::regclass) <> 5
       OR (SELECT pg_catalog.md5(pg_catalog.string_agg(a.attname||':'||pg_catalog.format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull||':'||coalesce(pg_catalog.pg_get_expr(d.adbin,d.adrelid),'<null>'),'|' ORDER BY a.attnum))
         FROM pg_catalog.pg_attribute a LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
         WHERE a.attrelid='public.email_send_log'::regclass AND a.attnum>0 AND NOT a.attisdropped)
-        IS DISTINCT FROM '5bdf3d107aa6ba925b7443588afe6d3a'
+        IS DISTINCT FROM 'e7394f98472c826d312a34b0d5eefa6e'
       OR (SELECT pg_catalog.md5(pg_catalog.string_agg(x.conname||':'||x.convalidated||':'||pg_catalog.pg_get_constraintdef(x.oid),'|' ORDER BY x.conname))
         FROM pg_catalog.pg_constraint x WHERE x.conrelid='public.email_send_log'::regclass)
-        IS DISTINCT FROM '8f32dd4195dda0f15b88c5fe2806cb0e'
+        IS DISTINCT FROM 'ffc8456561c1e0cb503d3b9ec488f683'
       OR (SELECT pg_catalog.md5(pg_catalog.string_agg(ic.relname||':'||i.indisvalid||':'||pg_catalog.pg_get_indexdef(i.indexrelid),'|' ORDER BY ic.relname))
         FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class ic ON ic.oid=i.indexrelid
         WHERE i.indrelid='public.email_send_log'::regclass)
-        IS DISTINCT FROM '3fde4d9bfeb0a5e9969b3bb6591c1d00' THEN
+        IS DISTINCT FROM '12399807dd3dee78297c81808378a123' THEN
       RAISE EXCEPTION 'selected_email_repeat_shape_drift';
     END IF;
     IF (SELECT pg_catalog.count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
@@ -161,14 +161,14 @@ BEGIN
             WHEN 'private.selected_email_expire_locked' THEN '723e552584dca235ad7ca5e88ca6501f'
             WHEN 'private.selected_email_hash' THEN '95aba8971b3f7173758fc137327ad602'
             WHEN 'private.selected_email_parent_valid' THEN '436db7d6053a774d07e3d00ec6ecb105'
-            WHEN 'private.selected_email_payload_valid' THEN 'd6dfc660a22251d0fee1b5f6f0ee67f6'
+            WHEN 'private.selected_email_payload_valid' THEN 'bdcc962814e13c32558d74c8304ef84f'
             WHEN 'public.apply_email_dispatch_result_for_service' THEN '989faa767744f316996719647f176b0f'
-            WHEN 'public.begin_email_dispatch_for_service' THEN '7baf568ec599c4fce004d6e9535dccba'
+            WHEN 'public.begin_email_dispatch_for_service' THEN '0acd3adf07cc31a2292ab7eafae64b1e'
             WHEN 'public.get_selected_email_operation_for_service' THEN '05d543490f7bf50f2648a33e994ed5e8'
-            WHEN 'public.list_accepted_unapplied_email_operations_for_service' THEN 'db686f3d2fbc0decf5a444ce8b680664'
+            WHEN 'public.list_accepted_unapplied_email_operations_for_service' THEN 'a94c615064df0a4a15c71ae6a088f57a'
             WHEN 'public.maintain_selected_email_operations_for_service' THEN '2697c8a71908218aec40c9acaf766a4c'
-            WHEN 'public.prepare_marketing_followup_for_service' THEN '446ee06f33dfd20b136abc74789e987f'
-            WHEN 'public.prepare_saved_search_alert_for_service' THEN 'd3aacc779e8a6ca9009b48d2a10b2498'
+            WHEN 'public.prepare_marketing_followup_for_service' THEN '850a9afa8970b1a2bfede6138a97cd0c'
+            WHEN 'public.prepare_saved_search_alert_for_service' THEN '00ae7fe46d07a20f93527c613762ce5b'
             WHEN 'public.record_email_dispatch_result_for_service' THEN '68243eb29a487c375feef55b5d410298'
             END
           OR pg_catalog.pg_get_userbyid(p.proowner)<>'postgres'
@@ -214,6 +214,7 @@ ALTER TABLE public.email_send_log
   ADD COLUMN IF NOT EXISTS first_dispatch_id uuid,
   ADD COLUMN IF NOT EXISTS dispatch_state text,
   ADD COLUMN IF NOT EXISTS attempt_token uuid,
+  ADD COLUMN IF NOT EXISTS attempt_tokens uuid[],
   ADD COLUMN IF NOT EXISTS attempt_started_at timestamptz,
   ADD COLUMN IF NOT EXISTS provider_message_id text,
   ADD COLUMN IF NOT EXISTS provider_http_status integer,
@@ -246,6 +247,8 @@ BEGIN
           ('prepared','sending','unknown','retryable','rejected_final','accepted','applied',
            'accepted_conflict','expired_unsent','checkpoint_payload_expired','superseded')
         AND entity_hold IS NOT NULL AND expires_at IS NOT NULL
+        AND attempt_tokens IS NOT NULL
+        AND (attempt_token IS NULL OR attempt_token=ANY(attempt_tokens))
         AND payload_fingerprint IS NOT NULL AND pg_catalog.length(payload_fingerprint)=64
         AND (accepted_at IS NULL OR status='sent' OR status IN ('bounced','complained'))
         AND (applied_at IS NULL OR accepted_at IS NOT NULL)
@@ -276,7 +279,8 @@ BEGIN
   END IF;
   IF pg_catalog.to_regclass('public.selected_email_repair_idx') IS NULL THEN
     CREATE INDEX selected_email_repair_idx ON public.email_send_log(accepted_at,operation_id)
-      WHERE operation_id IS NOT NULL AND accepted_at IS NOT NULL AND applied_at IS NULL;
+      WHERE operation_id IS NOT NULL AND accepted_at IS NOT NULL AND applied_at IS NULL
+        AND dispatch_state='accepted';
   END IF;
   IF pg_catalog.to_regclass('public.selected_email_expiry_idx') IS NULL THEN
     CREATE INDEX selected_email_expiry_idx ON public.email_send_log(expires_at,operation_id)
@@ -299,7 +303,7 @@ REVOKE ALL ON FUNCTION private.selected_email_hash(jsonb) FROM PUBLIC, anon, aut
 
 CREATE OR REPLACE FUNCTION private.selected_email_payload_valid(p_payload jsonb,p_recipient text)
 RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path = '' AS $body$
-  SELECT p_payload IS NOT NULL AND pg_catalog.jsonb_typeof(p_payload)='object'
+  SELECT coalesce(p_payload IS NOT NULL AND pg_catalog.jsonb_typeof(p_payload)='object'
     AND (SELECT pg_catalog.array_agg(k ORDER BY k) FROM pg_catalog.jsonb_object_keys(p_payload) k)
       = ARRAY['htmlContent','sender','subject','to']::text[]
     AND pg_catalog.jsonb_typeof(p_payload->'sender')='object'
@@ -320,7 +324,7 @@ RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path = '' AS $body$
     AND pg_catalog.jsonb_typeof(p_payload->'subject')='string'
     AND pg_catalog.jsonb_typeof(p_payload->'htmlContent')='string'
     AND pg_catalog.length(p_payload->>'subject') BETWEEN 1 AND 500
-    AND pg_catalog.length(p_payload->>'htmlContent') BETWEEN 1 AND 200000;
+    AND pg_catalog.length(p_payload->>'htmlContent') BETWEEN 1 AND 200000,false);
 $body$;
 REVOKE ALL ON FUNCTION private.selected_email_payload_valid(jsonb,text) FROM PUBLIC, anon, authenticated, service_role;
 
@@ -413,16 +417,16 @@ BEGIN
     OR v_lead.status IS DISTINCT FROM p_expected->>'status'
     OR v_lead.status='closed' OR p_step<>coalesce(v_lead.followup_step,0)+1
     OR v_lead.created_at+pg_catalog.make_interval(days=>v_days)>pg_catalog.now()
-    OR NOT private.selected_email_payload_valid(p_payload,v_lead.email) THEN
+    OR private.selected_email_payload_valid(p_payload,v_lead.email) IS NOT TRUE THEN
     RETURN pg_catalog.jsonb_build_object('decision','conflict','reason','current_eligibility');
   END IF;
   v_expected:=pg_catalog.jsonb_build_object('email',v_lead.email,'followup_step',v_lead.followup_step,
     'status',v_lead.status);
   INSERT INTO public.email_send_log(template_name,recipient_email,status,metadata,error_message,
-    operation_id,operation_key,producer,entity_id,step,first_dispatch_id,dispatch_state,
+    operation_id,operation_key,producer,entity_id,step,first_dispatch_id,dispatch_state,attempt_tokens,
     payload_fingerprint,prepared_payload,expected_state,expires_at,entity_hold)
   VALUES ('marketing_followup_step_'||p_step,v_lead.email,'pending','{}'::jsonb,NULL,
-    pg_catalog.gen_random_uuid(),v_key,'marketing_followup',p_lead_id,p_step,p_dispatch_id,'prepared',
+    pg_catalog.gen_random_uuid(),v_key,'marketing_followup',p_lead_id,p_step,p_dispatch_id,'prepared',ARRAY[]::uuid[],
     v_fingerprint,p_payload,v_expected,pg_catalog.now()+INTERVAL '7 days',true)
   RETURNING * INTO v_existing;
   RETURN pg_catalog.jsonb_build_object('decision','prepared','operation_id',v_existing.operation_id,'state','prepared');
@@ -468,7 +472,7 @@ BEGIN
     OR v_search.last_alert_sent_at IS DISTINCT FROM v_expected_at
     OR v_email IS DISTINCT FROM p_expected->>'recipient_email'
     OR NOT v_search.email_alerts
-    OR NOT private.selected_email_payload_valid(p_payload,v_email) THEN
+    OR private.selected_email_payload_valid(p_payload,v_email) IS NOT TRUE THEN
     RETURN pg_catalog.jsonb_build_object('decision','conflict','reason','current_eligibility');
   END IF;
   SELECT * INTO v_old FROM public.email_send_log WHERE producer='saved_search_alert'
@@ -501,10 +505,10 @@ BEGIN
     'last_alert_listing_ids',coalesce(pg_catalog.to_jsonb(v_search.last_alert_listing_ids),'null'::jsonb),
     'last_alert_sent_at',v_search.last_alert_sent_at,'recipient_email',v_email);
   INSERT INTO public.email_send_log(template_name,recipient_email,status,metadata,error_message,
-    operation_id,operation_key,producer,entity_id,first_dispatch_id,dispatch_state,
+    operation_id,operation_key,producer,entity_id,first_dispatch_id,dispatch_state,attempt_tokens,
     payload_fingerprint,prepared_payload,expected_state,candidate_ids,sent_ids,expires_at,entity_hold)
   VALUES ('saved_search_alert',v_email,'pending','{}'::jsonb,NULL,
-    pg_catalog.gen_random_uuid(),v_key,'saved_search_alert',p_search_id,p_dispatch_id,'prepared',
+    pg_catalog.gen_random_uuid(),v_key,'saved_search_alert',p_search_id,p_dispatch_id,'prepared',ARRAY[]::uuid[],
     v_fingerprint,p_payload,v_expected,p_candidate_ids,p_sent_ids,pg_catalog.now()+INTERVAL '7 days',true)
   RETURNING * INTO v_hold;
   RETURN pg_catalog.jsonb_build_object('decision','prepared','operation_id',v_hold.operation_id,'state','prepared');
@@ -552,6 +556,10 @@ BEGIN
   IF v_row.not_before IS NOT NULL AND v_row.not_before>pg_catalog.now() THEN
     RETURN pg_catalog.jsonb_build_object('decision','busy','operation_id',p_operation_id,'not_before',v_row.not_before);
   END IF;
+  IF p_attempt_token=ANY(v_row.attempt_tokens) THEN
+    RETURN pg_catalog.jsonb_build_object('decision','conflict','operation_id',p_operation_id,
+      'reason','attempt_token_reused');
+  END IF;
   IF v_row.producer='marketing_followup' THEN
     v_days:=CASE v_row.step WHEN 1 THEN 1 WHEN 2 THEN 8 ELSE 29 END;
     v_valid:=v_lead.id IS NOT NULL AND v_lead.email=v_row.recipient_email
@@ -577,6 +585,7 @@ BEGIN
     RETURN pg_catalog.jsonb_build_object('decision','conflict','operation_id',p_operation_id,'reason','current_eligibility');
   END IF;
   UPDATE public.email_send_log SET dispatch_state='sending',attempt_token=p_attempt_token,
+    attempt_tokens=attempt_tokens||p_attempt_token,
     attempt_started_at=pg_catalog.now(),result_outcome=NULL,result_error_code=NULL,
     provider_message_id=NULL,provider_http_status=NULL,not_before=NULL,status='pending'
     WHERE operation_id=p_operation_id;
@@ -745,6 +754,9 @@ BEGIN
     'accepted_at',x.accepted_at) ORDER BY x.accepted_at,x.operation_id)
     FROM (SELECT operation_id,producer,dispatch_state,accepted_at FROM public.email_send_log
       WHERE operation_id IS NOT NULL AND accepted_at IS NOT NULL AND applied_at IS NULL
+        AND dispatch_state='accepted' AND expires_at>pg_catalog.now()
+        AND expected_state IS NOT NULL
+        AND (producer<>'saved_search_alert' OR candidate_ids IS NOT NULL)
       ORDER BY accepted_at,operation_id LIMIT p_limit) x),'[]'::jsonb);
 END;
 $body$;
