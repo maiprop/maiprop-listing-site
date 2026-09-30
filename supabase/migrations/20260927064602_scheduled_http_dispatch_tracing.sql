@@ -38,7 +38,7 @@ BEGIN
   IF (SELECT count(*) FROM pg_catalog.pg_attribute a WHERE a.attrelid='public.sync_log'::regclass
       AND a.attnum>0 AND NOT a.attisdropped) <> (CASE WHEN v_repeat THEN 10 ELSE 9 END)
      OR (SELECT pg_catalog.md5(pg_catalog.string_agg(a.attname||':'||a.atttypid::regtype::text||':'||a.attnotnull::text,'|' ORDER BY a.attnum))
-         FROM pg_catalog.pg_attribute a WHERE a.attrelid='public.sync_log'::regclass AND a.attnum>0 AND NOT a.attisdropped AND a.attname<>'dispatch_id') <> '1d7bddfe603e34ad4c4056c84b418141'
+         FROM pg_catalog.pg_attribute a WHERE a.attrelid='public.sync_log'::regclass AND a.attnum>0 AND NOT a.attisdropped AND a.attname<>'dispatch_id') IS DISTINCT FROM '1d7bddfe603e34ad4c4056c84b418141'
      OR EXISTS (SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid='public.sync_log'::regclass
        AND a.attnum>0 AND NOT a.attisdropped AND (a.attname,a.atttypid::regtype::text,a.attnotnull) NOT IN
        (('id','uuid',true),('direction','text',true),('entity_type','text',true),('entity_id','text',true),
@@ -47,12 +47,13 @@ BEGIN
      OR EXISTS (SELECT 1 FROM pg_catalog.pg_index i WHERE i.indrelid='public.sync_log'::regclass AND NOT i.indisvalid)
      OR EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c WHERE c.conrelid='public.sync_log'::regclass AND NOT c.convalidated)
      OR (SELECT pg_catalog.md5(pg_catalog.string_agg(c.conname||':'||pg_catalog.pg_get_constraintdef(c.oid),'|' ORDER BY c.conname))
-       FROM pg_catalog.pg_constraint c WHERE c.conrelid='public.sync_log'::regclass AND c.conname<>'sync_log_dispatch_id_fkey') <> '23a7708bbe410ec1dbaac1681c9418b1'
+       FROM pg_catalog.pg_constraint c WHERE c.conrelid='public.sync_log'::regclass AND c.conname<>'sync_log_dispatch_id_fkey') IS DISTINCT FROM '23a7708bbe410ec1dbaac1681c9418b1'
      OR (SELECT pg_catalog.md5(pg_catalog.string_agg(c.relname||':'||pg_catalog.pg_get_indexdef(i.indexrelid),'|' ORDER BY c.relname))
-       FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE i.indrelid='public.sync_log'::regclass) <> 'd8e3de08bd361dad888c778cc36832e2'
+       FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE i.indrelid='public.sync_log'::regclass) IS DISTINCT FROM 'd8e3de08bd361dad888c778cc36832e2'
      OR (SELECT pg_catalog.md5(pg_catalog.string_agg(p.polname||':'||pg_catalog.pg_get_expr(p.polqual,p.polrelid)||':'||coalesce(pg_catalog.pg_get_expr(p.polwithcheck,p.polrelid),''),'|' ORDER BY p.polname))
-       FROM pg_catalog.pg_policy p WHERE p.polrelid='public.sync_log'::regclass) <> '9cf6542c885daa5801d2886d0ada8c9b'
+       FROM pg_catalog.pg_policy p WHERE p.polrelid='public.sync_log'::regclass) IS DISTINCT FROM '9cf6542c885daa5801d2886d0ada8c9b'
      OR (SELECT count(*) FROM pg_catalog.pg_trigger t WHERE t.tgrelid='public.sync_log'::regclass AND NOT t.tgisinternal) <> 0
+     OR (SELECT c.relacl::text FROM pg_catalog.pg_class c WHERE c.oid='public.sync_log'::regclass) IS NULL
      OR (SELECT c.relacl::text FROM pg_catalog.pg_class c WHERE c.oid='public.sync_log'::regclass) NOT IN
        ('{postgres=arwdDxt/postgres,authenticated=arwdDxt/postgres,anon=arwdDxt/postgres,service_role=arwdDxt/postgres}',
         '{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}')
@@ -63,7 +64,7 @@ BEGIN
     RAISE EXCEPTION 'scheduled_dispatch_sync_log_conflict' USING ERRCODE = '22023';
   END IF;
   IF EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
-      WHERE n.nspname='public' AND c.relname IN ('scheduled_http_dispatches_dispatch_id_key','scheduled_http_dispatches_net_request_id_key','scheduled_http_dispatches_net_request_id_idx')
+      WHERE n.nspname='public' AND c.relname IN ('scheduled_http_dispatches_dispatch_id_key','scheduled_http_dispatches_net_request_id_key','scheduled_http_dispatches_net_request_id_idx','scheduled_http_dispatches_reconcile_pending_idx')
       AND c.oid NOT IN (SELECT i.indexrelid FROM pg_catalog.pg_index i WHERE i.indrelid=pg_catalog.to_regclass('public.scheduled_http_dispatches')))
   THEN
     RAISE EXCEPTION 'scheduled_dispatch_index_name_conflict' USING ERRCODE = '22023';
@@ -74,21 +75,25 @@ BEGIN
        OR EXISTS (SELECT 1 FROM pg_catalog.pg_index i WHERE i.indrelid='public.scheduled_http_dispatches'::regclass AND NOT i.indisvalid)
        OR (SELECT count(*) FROM pg_catalog.pg_attribute a WHERE a.attrelid='public.scheduled_http_dispatches'::regclass AND a.attnum>0 AND NOT a.attisdropped) <> 16
        OR (SELECT count(*) FROM pg_catalog.pg_constraint c WHERE c.conrelid='public.scheduled_http_dispatches'::regclass) <> 11
-       OR (SELECT count(*) FROM pg_catalog.pg_index i WHERE i.indrelid='public.scheduled_http_dispatches'::regclass) <> 3
+       OR (SELECT count(*) FROM pg_catalog.pg_index i WHERE i.indrelid='public.scheduled_http_dispatches'::regclass) <> 4
        OR (SELECT pg_catalog.md5(pg_catalog.string_agg(a.attname||':'||a.atttypid::regtype::text||':'||a.attnotnull::text,'|' ORDER BY a.attnum))
-         FROM pg_catalog.pg_attribute a WHERE a.attrelid='public.scheduled_http_dispatches'::regclass AND a.attnum>0 AND NOT a.attisdropped) <> '4edab01fee72b1c7409d22c8e37226ac'
+         FROM pg_catalog.pg_attribute a WHERE a.attrelid='public.scheduled_http_dispatches'::regclass AND a.attnum>0 AND NOT a.attisdropped) IS DISTINCT FROM '4edab01fee72b1c7409d22c8e37226ac'
        OR (SELECT pg_catalog.md5(pg_catalog.string_agg(c.conname||':'||pg_catalog.pg_get_constraintdef(c.oid),'|' ORDER BY c.conname))
-         FROM pg_catalog.pg_constraint c WHERE c.conrelid='public.scheduled_http_dispatches'::regclass) <> 'bc2bcfc6faae6d764f97d32bafd5558d'
+         FROM pg_catalog.pg_constraint c WHERE c.conrelid='public.scheduled_http_dispatches'::regclass) IS DISTINCT FROM 'bc2bcfc6faae6d764f97d32bafd5558d'
        OR (SELECT pg_catalog.md5(pg_catalog.string_agg(c.relname||':'||pg_catalog.pg_get_indexdef(i.indexrelid),'|' ORDER BY c.relname))
-         FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE i.indrelid='public.scheduled_http_dispatches'::regclass) <> '7b97a7be2322ad6a21b7949de15811e1'
+         FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE i.indrelid='public.scheduled_http_dispatches'::regclass) IS DISTINCT FROM '068cfb3d7bfed68df8e63c82e2a7caab'
+       OR (SELECT c.relacl::text FROM pg_catalog.pg_class c WHERE c.oid='public.scheduled_http_dispatches'::regclass) IS NULL
        OR (SELECT c.relacl::text FROM pg_catalog.pg_class c WHERE c.oid='public.scheduled_http_dispatches'::regclass) NOT IN
          ('{postgres=arwdDxt/postgres,service_role=r/postgres}',
           '{postgres=arwdDxtm/postgres,service_role=r/postgres}')
        OR (SELECT count(*) FROM pg_catalog.pg_policy p WHERE p.polrelid='public.scheduled_http_dispatches'::regclass) <> 0
        OR (SELECT count(*) FROM pg_catalog.pg_trigger t WHERE t.tgrelid='public.scheduled_http_dispatches'::regclass AND NOT t.tgisinternal) <> 0
     THEN RAISE EXCEPTION 'scheduled_dispatch_existing_relation_drift' USING ERRCODE='22023'; END IF;
-    IF (SELECT pg_catalog.pg_get_constraintdef(c.oid) FROM pg_catalog.pg_constraint c
-      WHERE c.conrelid='public.sync_log'::regclass AND c.conname='sync_log_dispatch_id_fkey') <>
+    IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c
+        WHERE c.conrelid='public.sync_log'::regclass AND c.conname='sync_log_dispatch_id_fkey'
+          AND c.contype='f' AND c.convalidated AND c.confrelid='public.scheduled_http_dispatches'::regclass)
+       OR (SELECT pg_catalog.pg_get_constraintdef(c.oid) FROM pg_catalog.pg_constraint c
+      WHERE c.conrelid='public.sync_log'::regclass AND c.conname='sync_log_dispatch_id_fkey') IS DISTINCT FROM
       'FOREIGN KEY (dispatch_id) REFERENCES scheduled_http_dispatches(dispatch_id) ON DELETE SET NULL' THEN
       RAISE EXCEPTION 'scheduled_dispatch_link_drift' USING ERRCODE='22023';
     END IF;
@@ -98,12 +103,12 @@ BEGIN
         'reconcile_scheduled_http_dispatches_for_service','reconcile_scheduled_http_dispatches',
         'scheduled_dispatch_summary_valid','invoke_saved_search_alerts_traced')
         AND n.nspname IN ('public','private')
-        AND (p.proowner <> 'postgres'::regrole OR
-          p.proconfig <> ARRAY['search_path=""'] OR
-          p.prosecdef <> (p.proname<>'scheduled_dispatch_summary_valid') OR
-          p.proacl::text <> CASE WHEN n.nspname='private' THEN '{postgres=X/postgres}'
+        AND (p.proowner IS DISTINCT FROM 'postgres'::regrole OR
+          p.proconfig IS DISTINCT FROM ARRAY['search_path=""'] OR
+          p.prosecdef IS DISTINCT FROM (p.proname<>'scheduled_dispatch_summary_valid') OR
+          p.proacl::text IS DISTINCT FROM CASE WHEN n.nspname='private' THEN '{postgres=X/postgres}'
             ELSE '{postgres=X/postgres,service_role=X/postgres}' END OR
-          pg_catalog.md5(pg_catalog.replace(p.prosrc,E'\r\n',E'\n')) <> CASE (n.nspname||'.'||p.proname)
+          pg_catalog.md5(pg_catalog.replace(p.prosrc,E'\r\n',E'\n')) IS DISTINCT FROM CASE (n.nspname||'.'||p.proname)
             WHEN 'public.start_scheduled_http_dispatch_for_service' THEN '688410f09695b81380c2418c6cb34bb0'
             WHEN 'public.finish_scheduled_http_dispatch_for_service' THEN '54d690c4bee147a0ee53d57e9034324f'
             WHEN 'public.reconcile_scheduled_http_dispatches_for_service' THEN '2a098e096ccff0b8f3c6f95d287750a9'
@@ -125,7 +130,7 @@ BEGIN
   IF pg_catalog.to_regprocedure('net.http_post(text,jsonb,jsonb,integer)') IS NULL
      OR (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
        WHERE n.nspname='net' AND p.proname='http_post') <> 1
-     OR pg_catalog.pg_get_function_result('net.http_post(text,jsonb,jsonb,integer)'::regprocedure) <> 'bigint'
+     OR pg_catalog.pg_get_function_result('net.http_post(text,jsonb,jsonb,integer)'::regprocedure) IS DISTINCT FROM 'bigint'
      OR pg_catalog.to_regclass('net._http_response') IS NULL
      OR (SELECT count(*) FROM pg_catalog.pg_attribute a WHERE a.attrelid='net._http_response'::regclass
        AND a.attnum>0 AND NOT a.attisdropped AND (a.attname,a.atttypid::regtype::text) IN
@@ -145,20 +150,20 @@ BEGIN
     FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
     WHERE (n.nspname,p.proname) IN (('private','invoke_poll_os_auctions_cron'),('private','invoke_scheduled_followups_cron'),('public','invoke_send_saved_search_alerts_cron'))
   LOOP
-    IF r.args <> '' OR r.result <> 'void' OR r.proowner <> 'postgres'::regrole OR NOT r.prosecdef THEN
+    IF r.args IS DISTINCT FROM '' OR r.result IS DISTINCT FROM 'void' OR r.proowner IS DISTINCT FROM 'postgres'::regrole OR r.prosecdef IS DISTINCT FROM true THEN
       RAISE EXCEPTION 'scheduled_dispatch_invoker_identity_drift:%',r.proname USING ERRCODE='22023';
     END IF;
     IF r.proname='invoke_poll_os_auctions_cron' THEN
       v_expected := '4eb2ec70811d2d8f9819476ce3bb59c0';
-      IF r.proconfig <> ARRAY['search_path=private, public'] OR r.acl <> '{postgres=X/postgres,service_role=X/postgres}' THEN
+      IF r.proconfig IS DISTINCT FROM ARRAY['search_path=private, public'] OR r.acl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres}' THEN
         RAISE EXCEPTION 'scheduled_dispatch_poll_acl_drift' USING ERRCODE='22023'; END IF;
     ELSIF r.proname='invoke_scheduled_followups_cron' THEN
       v_expected := '3740851e4519e30a7ae27efe3e1731a7';
-      IF r.proconfig <> ARRAY['search_path=""'] OR r.acl <> '{postgres=X/postgres}' THEN
+      IF r.proconfig IS DISTINCT FROM ARRAY['search_path=""'] OR r.acl IS DISTINCT FROM '{postgres=X/postgres}' THEN
         RAISE EXCEPTION 'scheduled_dispatch_followup_acl_drift' USING ERRCODE='22023'; END IF;
     ELSE
       v_expected := '298f66b973474b0b95b9220e14613d05';
-      IF r.proconfig <> ARRAY['search_path=public'] OR r.acl <> '{postgres=X/postgres,service_role=X/postgres}' THEN
+      IF r.proconfig IS DISTINCT FROM ARRAY['search_path=public'] OR r.acl IS DISTINCT FROM '{postgres=X/postgres,service_role=X/postgres}' THEN
         RAISE EXCEPTION 'scheduled_dispatch_alert_acl_drift' USING ERRCODE='22023'; END IF;
     END IF;
     IF (NOT v_repeat AND r.body_md5 NOT IN (v_expected,
@@ -209,6 +214,11 @@ BEGIN
   IF pg_catalog.to_regclass('public.scheduled_http_dispatches_net_request_id_idx') IS NULL THEN
     CREATE INDEX scheduled_http_dispatches_net_request_id_idx ON public.scheduled_http_dispatches (net_request_id)
       WHERE net_request_id IS NOT NULL;
+  END IF;
+  IF pg_catalog.to_regclass('public.scheduled_http_dispatches_reconcile_pending_idx') IS NULL THEN
+    CREATE INDEX scheduled_http_dispatches_reconcile_pending_idx
+      ON public.scheduled_http_dispatches (requested_at,dispatch_id)
+      WHERE transport_state='enqueued' OR application_state IN ('queued','running');
   END IF;
 END;
 $linked$;
