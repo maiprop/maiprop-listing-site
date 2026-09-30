@@ -8,18 +8,40 @@
  * Invoke: POST with empty body or cron.
  */
 
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.2";
+import {
+  createClient,
+  type SupabaseClient,
+} from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { finishScheduledDispatch, startScheduledDispatch, type ScheduledOutcome } from "../_shared/scheduledDispatch.ts";
+import {
+  finishScheduledDispatch,
+  type ScheduledOutcome,
+  startScheduledDispatch,
+} from "../_shared/scheduledDispatch.ts";
+import {
+  type EmailResult,
+  lookupEmailOperation,
+  operationId,
+  prepareSavedEmail,
+  repairSelectedEmailOperations,
+  sendSelectedEmail,
+} from "../_shared/emailDispatch.ts";
 
 const structuredLog = createLogger("send-saved-search-alerts");
 
 // Redirect the legacy `log(msg, data?)` helper through the structured logger
 // so all existing call sites emit JSON without modification.
 function log(msg: string, data?: unknown) {
-  structuredLog.info(msg, data && typeof data === "object" ? data as Record<string, unknown> : data !== undefined ? { data } : undefined);
+  structuredLog.info(
+    msg,
+    data && typeof data === "object"
+      ? data as Record<string, unknown>
+      : data !== undefined
+      ? { data }
+      : undefined,
+  );
 }
 
 // Prevent unauthenticated callers from triggering bulk email sends.
@@ -60,7 +82,10 @@ function propertyUrl(appUrl: string, id: string): string {
   return `${appUrl.replace(/\/$/, "")}/property/${encodeURIComponent(id)}`;
 }
 
-function buildListingsQuery(supabase: SupabaseClient, filters: Record<string, unknown>) {
+function buildListingsQuery(
+  supabase: SupabaseClient,
+  filters: Record<string, unknown>,
+) {
   let query = supabase
     .from("listings")
     .select("id, title, city, price, cover_image_url, listing_type")
@@ -71,7 +96,9 @@ function buildListingsQuery(supabase: SupabaseClient, filters: Record<string, un
   const f = filters as Record<string, string>;
   if (f.city) query = query.ilike("city", `%${f.city}%`);
   if (f.listing_type) query = query.eq("listing_type", f.listing_type);
-  if (f.type || f.property_type) query = query.eq("property_type", f.type || f.property_type);
+  if (f.type || f.property_type) {
+    query = query.eq("property_type", f.type || f.property_type);
+  }
   if (f.price) {
     const [min, max] = (f.price || "").split("-").map(Number);
     if (!isNaN(min) && min > 0) query = query.gte("price", min);
@@ -100,84 +127,236 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !supabaseKey) {
-    return new Response(JSON.stringify({ ok: false, error: "internal_configuration_unavailable", dispatch_id: null, trace_persistence_complete: false }), {
-      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
-  const trace = await startScheduledDispatch(supabase, req, "saved_search_alerts", corsHeaders);
-  if (trace.response) return trace.response;
-  const run = trace.run!;
-  const terminal = (response: Response, outcome: ScheduledOutcome, summary: Record<string, boolean | number>) =>
-    finishScheduledDispatch(supabase, run, response, outcome, summary);
-
-  const BREVO_KEY = Deno.env.get("BREVO_API_KEY");
-  if (!BREVO_KEY) {
-    return await terminal(new Response(
+    return new Response(
       JSON.stringify({
         ok: false,
-        error: "email_service_not_configured",
-        processed: 0,
-        emailsSent: 0,
+        error: "internal_configuration_unavailable",
+        dispatch_id: null,
+        trace_persistence_complete: false,
       }),
       {
         status: 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
-    ), "skipped", { processed: 0, emailsSent: 0, checkpointsPersisted: 0, failed: 0 });
+    );
+  }
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false },
+  });
+  const trace = await startScheduledDispatch(
+    supabase,
+    req,
+    "saved_search_alerts",
+    corsHeaders,
+  );
+  if (trace.response) return trace.response;
+  const run = trace.run!;
+  const terminal = (
+    response: Response,
+    outcome: ScheduledOutcome,
+    summary: Record<string, boolean | number>,
+  ) => finishScheduledDispatch(supabase, run, response, outcome, summary);
+
+  const BREVO_KEY = Deno.env.get("BREVO_API_KEY");
+  if (!BREVO_KEY) {
+    return await terminal(
+      new Response(
+        JSON.stringify({
+          ok: false,
+          error: "email_service_not_configured",
+          processed: 0,
+          emailsSent: 0,
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      ),
+      "skipped",
+      { processed: 0, emailsSent: 0, checkpointsPersisted: 0, failed: 0 },
+    );
   }
 
   const APP_URL = Deno.env.get("MAIPROP_APP_URL") ||
     "https://portal.maiprop.co/";
   const FROM_EMAIL = Deno.env.get("BREVO_FROM_EMAIL") || "alerts@maiprop.co";
 
+  let repaired = 0;
+  let repairHeld = 0;
+  try {
+    const repair = await repairSelectedEmailOperations(supabase);
+    repaired = repair.applied;
+    repairHeld = repair.held;
+    if (!repair.maintenanceComplete) {
+      const outcome = repaired > 0 ? "partial" : "failed";
+      return await terminal(
+        new Response(
+          JSON.stringify({
+            ok: false,
+            outcome,
+            error: "email_maintenance_unavailable",
+            processed: 0,
+            emailsSent: 0,
+            checkpointsPersisted: 0,
+            repaired,
+            heldAttempts: repairHeld,
+          }),
+          {
+            status: 503,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        ),
+        outcome,
+        { processed: 0, emailsSent: 0, checkpointsPersisted: 0, failed: 0 },
+      );
+    }
+  } catch {
+    return await terminal(
+      new Response(
+        JSON.stringify({
+          ok: false,
+          error: "email_repair_unavailable",
+          processed: 0,
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      ),
+      "failed",
+      { processed: 0, emailsSent: 0, checkpointsPersisted: 0, failed: 0 },
+    );
+  }
+
   let sent = 0,
     checkpointed = 0,
     failed = 0,
     rejected = 0,
     unknown = 0,
+    heldAttempts = repairHeld,
     processed = 0;
+  let heldOperations = 0;
+  const countHolds = async () => {
+    const { count, error } = await supabase.from("email_send_log")
+      .select("id", { count: "exact", head: true })
+      .eq("producer", "saved_search_alert").eq("entity_hold", true)
+      .in("dispatch_state", [
+        "sending",
+        "unknown",
+        "accepted",
+        "accepted_conflict",
+        "checkpoint_payload_expired",
+      ]);
+    if (error || count === null) {
+      throw new Error("email_hold_count_unavailable");
+    }
+    return count;
+  };
+  const collect = (result: EmailResult) => {
+    if (result.acceptedNow) sent++;
+    if (result.persistenceComplete && result.acceptedNow) checkpointed++;
+    if (
+      result.persistenceComplete && !result.acceptedNow &&
+      result.providerAccepted === true
+    ) repaired++;
+    if (result.outcome !== "applied") {
+      failed++;
+      if (result.outcome === "rejected") rejected++;
+      else {
+        heldAttempts++;
+        if (result.providerAccepted === null) unknown++;
+      }
+    }
+  };
+  const hasHolds = () => heldAttempts > 0 || heldOperations > 0;
   const respond = () =>
-    terminal(new Response(
-      JSON.stringify({
-        ok: failed === 0,
+    terminal(
+      new Response(
+        JSON.stringify({
+          ok: failed === 0 && !hasHolds(),
+          processed,
+          emailsSent: sent,
+          checkpointsPersisted: checkpointed,
+          failed,
+          sendsRejected: rejected,
+          sendsUnknown: unknown,
+          repaired,
+          heldOperations,
+          heldAttempts,
+          outcome: failed === 0 && !hasHolds()
+            ? "succeeded"
+            : sent > 0 || repaired > 0 || hasHolds()
+            ? "partial"
+            : "failed",
+          provider_accepted: sent > 0 || repaired > 0,
+          persistence_complete: checkpointed === sent && !hasHolds(),
+        }),
+        {
+          status: failed === 0 && !hasHolds() ? 200 : 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      ),
+      failed === 0 && !hasHolds()
+        ? sent === 0 && repaired === 0 ? "skipped" : "succeeded"
+        : sent > 0 || repaired > 0 || hasHolds()
+        ? "partial"
+        : "failed",
+      {
         processed,
         emailsSent: sent,
         checkpointsPersisted: checkpointed,
         failed,
-        sendsRejected: rejected,
-        sendsUnknown: unknown,
-        outcome: failed === 0 ? "succeeded" : sent > 0 ? "partial" : "failed",
-        provider_accepted: sent > 0,
-        persistence_complete: checkpointed === sent,
-      }),
-      {
-        status: failed === 0 ? 200 : 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        provider_accepted: sent > 0 || repaired > 0,
+        persistence_complete: checkpointed === sent && !hasHolds(),
       },
-    ), failed === 0 ? sent === 0 ? "skipped" : "succeeded" : sent > 0 ? "partial" : "failed", {
-      processed, emailsSent: sent, checkpointsPersisted: checkpointed, failed,
-      provider_accepted: sent > 0, persistence_complete: checkpointed === sent,
-    });
+    );
   try {
     const { data: searches, error: searchError } = await supabase
       .from("saved_searches")
-      .select("id, user_id, name, filters, last_alert_listing_ids")
+      .select(
+        "id, user_id, name, filters, last_alert_listing_ids, last_alert_sent_at",
+      )
       .eq("email_alerts", true);
 
     if (searchError) throw searchError;
     if (!searches || searches.length === 0) {
       log("No saved searches with alerts");
-      return await terminal(new Response(JSON.stringify({ ok: true, processed: 0 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }), "skipped", { processed: 0, emailsSent: 0, checkpointsPersisted: 0, failed: 0 });
+      heldOperations = await countHolds();
+      return await respond();
     }
 
     processed = searches.length;
 
     for (const s of searches) {
       try {
+        const existing = await lookupEmailOperation(
+          supabase,
+          "saved_search_alert",
+          s.id,
+        );
+        if (existing.decision === "existing") {
+          const id = operationId(existing);
+          if (!id) throw new Error("email_lookup_invalid_operation");
+          collect(
+            await sendSelectedEmail(
+              supabase,
+              id,
+              (payload) =>
+                fetchWithTimeout("https://api.brevo.com/v3/smtp/email", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "api-key": BREVO_KEY,
+                  },
+                  body: JSON.stringify(payload),
+                }),
+            ),
+          );
+          continue;
+        }
+        if (existing.decision !== "absent") {
+          throw new Error("email_lookup_invalid_decision");
+        }
         const filters = (s.filters as Record<string, unknown>) || {};
         const { data: listings, error: listError } = await buildListingsQuery(
           supabase,
@@ -236,71 +415,58 @@ Deno.serve(async (req) => {
         <p><a href="${listingsUrl}">View all listings</a></p>
       `;
 
-        {
-          let res: Response;
-          try {
-            res = await fetchWithTimeout(
-              "https://api.brevo.com/v3/smtp/email",
-              {
+        const prepared = await prepareSavedEmail(
+          supabase,
+          s.id,
+          run.dispatchId,
+          run.executionToken,
+          {
+            user_id: s.user_id,
+            filters: s.filters,
+            last_alert_listing_ids: s.last_alert_listing_ids,
+            last_alert_sent_at: s.last_alert_sent_at,
+            recipient_email: email,
+          },
+          listingIds,
+          listingsToSend.map((l: { id: string }) => l.id),
+          {
+            sender: { email: FROM_EMAIL, name: "maiProp Alerts" },
+            to: [{ email }],
+            subject,
+            htmlContent: html,
+          },
+        );
+        if (
+          prepared.decision !== "prepared" && prepared.decision !== "existing"
+        ) {
+          failed++;
+          heldAttempts++;
+          continue;
+        }
+        const id = operationId(prepared);
+        if (!id) throw new Error("email_prepare_invalid_operation");
+        collect(
+          await sendSelectedEmail(
+            supabase,
+            id,
+            (payload) =>
+              fetchWithTimeout("https://api.brevo.com/v3/smtp/email", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   "api-key": BREVO_KEY,
                 },
-                body: JSON.stringify({
-                  sender: { email: FROM_EMAIL, name: "maiProp Alerts" },
-                  to: [{ email }],
-                  subject,
-                  htmlContent: html,
-                }),
-              },
-            );
-          } catch {
-            unknown++;
-            failed++;
-            log("Email acceptance unknown");
-            continue;
-          }
-          if (!res.ok) {
-            rejected++;
-            failed++;
-            log("Email rejected", { status: res.status });
-            continue;
-          }
-          sent++;
-        }
-
-        let checkpoint = supabase
-          .from("saved_searches")
-          .update({
-            last_alert_sent_at: new Date().toISOString(),
-            last_alert_listing_ids: listingIds,
-          })
-          .eq("id", s.id)
-          .eq("user_id", s.user_id)
-          .eq("email_alerts", true)
-          .eq("filters", JSON.stringify(s.filters));
-        checkpoint = s.last_alert_listing_ids === null
-          ? checkpoint.is("last_alert_listing_ids", null)
-          : checkpoint.eq(
-            "last_alert_listing_ids",
-            `{${(s.last_alert_listing_ids as string[]).join(",")}}`,
-          );
-        const { data: updated, error: updateError } = await checkpoint.select(
-          "id",
+                body: JSON.stringify(payload),
+              }),
+          ),
         );
-        if (updateError || updated?.length !== 1) {
-          failed++;
-          log("Accepted email checkpoint failed");
-        } else {
-          checkpointed++;
-        }
       } catch {
         failed++;
         log("Saved alert processing failed");
       }
     }
 
+    heldOperations = await countHolds();
     return respond();
   } catch {
     failed++;

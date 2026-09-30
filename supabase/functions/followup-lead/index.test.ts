@@ -7,10 +7,14 @@ import { captureHandler, req } from "../_shared/testUtils.ts";
 const SERVICE_ROLE = "placeholder-supabase-service-role";
 const CRM_LEAD_ID = "11111111-1111-4111-8111-111111111111";
 const MARKETING_LEAD_ID = "22222222-2222-4222-8222-222222222222";
-const { handler, restore } = await captureHandler(import.meta.url, "./index.ts", {
-  SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE,
-  OPENAI_API_KEY: "placeholder-openai",
-});
+const { handler, restore } = await captureHandler(
+  import.meta.url,
+  "./index.ts",
+  {
+    SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE,
+    OPENAI_API_KEY: "placeholder-openai",
+  },
+);
 
 Deno.test("CRM lead preview defaults to step 1 and uses OpenAI with vetted recency rules", async () => {
   const originalFetch = globalThis.fetch;
@@ -25,62 +29,87 @@ Deno.test("CRM lead preview defaults to step 1 and uses OpenAI with vetted recen
       : input.url;
 
     if (url.includes("ai.gateway.lovable.dev")) {
-      throw new Error("followup-lead must not use the legacy Lovable/Gemini gateway");
+      throw new Error(
+        "followup-lead must not use the legacy Lovable/Gemini gateway",
+      );
     }
 
     if (url.includes("api.openai.com")) {
       providerUrl = url;
       const body = JSON.parse(String(init?.body ?? "{}"));
       systemPrompt = String(body.messages?.[0]?.content ?? "");
-      return Promise.resolve(new Response(JSON.stringify({
-        choices: [{ message: { content: "Budget-specific follow-up.\nThe mAI Prop Team" } }],
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            choices: [{
+              message: {
+                content: "Budget-specific follow-up.\nThe mAI Prop Team",
+              },
+            }],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
     }
 
     if (url.includes("/rest/v1/marketing_leads")) {
-      return Promise.resolve(new Response("null", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }));
+      return Promise.resolve(
+        new Response("null", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
     }
 
     if (url.includes("/rest/v1/leads")) {
-      return Promise.resolve(new Response(JSON.stringify({
-        id: "lead-1",
-        name: "Alex Buyer",
-        email: "alex@example.com",
-        source: "manual",
-        status: "new",
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: "lead-1",
+            name: "Alex Buyer",
+            email: "alex@example.com",
+            source: "manual",
+            status: "new",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
     }
 
     if (url.includes("/rest/v1/properties")) {
-      return Promise.resolve(new Response(JSON.stringify([{
-        id: "property-1",
-        title: "Glyfada Apartment",
-        location: "Glyfada",
-        price: 260000,
-        size: 72,
-        bedrooms: 2,
-        yield: "4.5%",
-        images: [],
-        description: "Compact coastal apartment.",
-      }]), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([{
+            id: "property-1",
+            title: "Glyfada Apartment",
+            location: "Glyfada",
+            price: 260000,
+            size: 72,
+            bedrooms: 2,
+            yield: "4.5%",
+            images: [],
+            description: "Compact coastal apartment.",
+          }]),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
     }
 
-    return Promise.resolve(new Response(JSON.stringify({}), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }));
+    return Promise.resolve(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
   }) as typeof fetch;
 
   try {
@@ -94,8 +123,16 @@ Deno.test("CRM lead preview defaults to step 1 and uses OpenAI with vetted recen
     assertEquals(res.status, 200);
     assertEquals(providerUrl, "https://api.openai.com/v1/chat/completions");
     assertEquals(systemPrompt.includes("Current date:"), true);
-    assertEquals(systemPrompt.includes("Do not claim live/current facts"), true);
-    assertEquals(systemPrompt.includes("Never cite, imply, or fabricate sources you have not actually used"), true);
+    assertEquals(
+      systemPrompt.includes("Do not claim live/current facts"),
+      true,
+    );
+    assertEquals(
+      systemPrompt.includes(
+        "Never cite, imply, or fabricate sources you have not actually used",
+      ),
+      true,
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -115,33 +152,50 @@ Deno.test("Golden Visa follow-up preview avoids unsupported static urgency and e
       const body = JSON.parse(String(init?.body ?? "{}"));
       const prompt = String(body.messages?.[1]?.content ?? "");
       assertEquals(prompt.includes("must be verified"), true);
-      return Promise.resolve(new Response(JSON.stringify({
-        choices: [{ message: { content: "Eligibility and benefits must be checked against current official rules.\nThe mAI Prop Team" } }],
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            choices: [{
+              message: {
+                content:
+                  "Eligibility and benefits must be checked against current official rules.\nThe mAI Prop Team",
+              },
+            }],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
     }
 
     if (url.includes("/rest/v1/marketing_leads")) {
-      return Promise.resolve(new Response(JSON.stringify({
-        id: "lead-visa",
-        full_name: "Alex Buyer",
-        email: "alex@example.com",
-        nationality: "Canadian",
-        investment_budget: 280000,
-        preferred_location: "Athens",
-        status: "new",
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: "lead-visa",
+            full_name: "Alex Buyer",
+            email: "alex@example.com",
+            nationality: "Canadian",
+            investment_budget: 280000,
+            preferred_location: "Athens",
+            status: "new",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
     }
 
-    return Promise.resolve(new Response(JSON.stringify({}), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }));
+    return Promise.resolve(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
   }) as typeof fetch;
 
   try {
@@ -155,10 +209,18 @@ Deno.test("Golden Visa follow-up preview avoids unsupported static urgency and e
     const body = await res.json() as { subject?: string; html?: string };
 
     assertEquals(res.status, 200);
-    assertEquals(body.subject?.includes("act before thresholds increase"), false);
+    assertEquals(
+      body.subject?.includes("act before thresholds increase"),
+      false,
+    );
     assertEquals(body.html?.includes("6-9 Months"), false);
     assertEquals(body.html?.includes("27 Countries"), false);
-    assertEquals(body.html?.includes("<p style=\"margin:0;color:#e0fafa;font-size:15px;\">None</p>"), false);
+    assertEquals(
+      body.html?.includes(
+        '<p style="margin:0;color:#e0fafa;font-size:15px;">None</p>',
+      ),
+      false,
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -187,12 +249,14 @@ Deno.test("invalid follow-up bodies return structured 400 before database or pro
   });
 
   try {
-    for (const request of [
-      malformed,
-      requestFor({ lead_id: "x".repeat(1000) }),
-      requestFor({ lead_id: 42 }),
-      requestFor({ lead_id: CRM_LEAD_ID, invented: true }),
-    ]) {
+    for (
+      const request of [
+        malformed,
+        requestFor({ lead_id: "x".repeat(1000) }),
+        requestFor({ lead_id: 42 }),
+        requestFor({ lead_id: CRM_LEAD_ID, invented: true }),
+      ]
+    ) {
       const res = await handler(request);
       const body = await res.json() as {
         code?: string;
@@ -287,8 +351,10 @@ async function followupScenario(
             ? "is.null"
             : `eq.${row.followup_step}`;
           if (
-            (url.searchParams.has("followup_step") && url.searchParams.get("followup_step") !== expected) ||
-            (url.searchParams.has("status") && url.searchParams.get("status") !== `eq.${row.status}`)
+            (url.searchParams.has("followup_step") &&
+              url.searchParams.get("followup_step") !== expected) ||
+            (url.searchParams.has("status") &&
+              url.searchParams.get("status") !== `eq.${row.status}`)
           ) return json([]);
         }
         if (options.failure === "zero") return json([]);
@@ -425,13 +491,451 @@ for (const failure of ["error", "zero"]) {
   });
 }
 
-Deno.test('followup authorization blocks sending before any transport', async () => {
+Deno.test("followup authorization blocks sending before any transport", async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = (() => { calls++; throw new Error('Unexpected transport'); }) as typeof fetch;
+  globalThis.fetch = (() => {
+    calls++;
+    throw new Error("Unexpected transport");
+  }) as typeof fetch;
   try {
-    const response = await handler(req('POST', { lead_id: MARKETING_LEAD_ID, step: 1 }));
+    const response = await handler(
+      req("POST", { lead_id: MARKETING_LEAD_ID, step: 1 }),
+    );
     assertEquals(response.status, 401);
     assertEquals(calls, 0);
-  } finally { globalThis.fetch = originalFetch; }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+const PARENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const PARENT_TOKEN = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const SELECTED_OP = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+async function automaticScenario(options: {
+  body?: string;
+  providerStatus?: number;
+  transportLoss?: boolean;
+  bodyReadFailure?: boolean;
+  beginLoss?: boolean;
+  recordLoss?: boolean;
+  recordLossOnce?: boolean;
+  applyFailure?: boolean;
+  existing?: boolean;
+  beginDecision?: "expired" | "busy" | "unknown";
+  mutateBeforeBegin?: "recipient" | "step" | "deleted";
+  existingAcceptedExpired?: boolean;
+  repeatAfterRejection?: boolean;
+  concurrentInvocations?: boolean;
+  parentState?: string;
+  partialContext?: boolean;
+  wrongCredential?: boolean;
+} = {}) {
+  const oldFetch = globalThis.fetch;
+  const row = {
+    id: MARKETING_LEAD_ID,
+    full_name: "Fixture",
+    email: "fixture@example.test",
+    status: "new",
+    followup_step: 2,
+    created_at: "2026-08-01T00:00:00Z",
+  };
+  let operation: {
+    state: string;
+    payload: Record<string, unknown>;
+    accepted: boolean;
+    token: string | null;
+  } | null = options.existing || options.existingAcceptedExpired
+    ? {
+      state: options.existingAcceptedExpired
+        ? "checkpoint_payload_expired"
+        : "prepared",
+      payload: {
+        sender: { name: "mAI Prop", email: "kr@maiprop.co" },
+        to: [{ email: row.email, name: "Fixture" }],
+        subject: "Frozen subject",
+        htmlContent: "Frozen html",
+      },
+      accepted: !!options.existingAcceptedExpired,
+      token: null,
+    }
+    : null;
+  let providerCalls = 0,
+    aiCalls = 0,
+    prepareCalls = 0,
+    applyCalls = 0,
+    recordCalls = 0;
+  const json = (value: unknown, status = 200) =>
+    new Response(JSON.stringify(value), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  globalThis.fetch =
+    (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname === "/rest/v1/scheduled_http_dispatches") {
+        return json({
+          dispatch_id: PARENT_ID,
+          integration: "scheduled_followups",
+          application_state: options.parentState ?? "running",
+          execution_token: PARENT_TOKEN,
+        });
+      }
+      if (url.pathname === "/rest/v1/marketing_leads") {
+        return json(structuredClone(row));
+      }
+      if (
+        url.pathname === "/rest/v1/rpc/get_selected_email_operation_for_service"
+      ) {
+        return json(
+          operation
+            ? {
+              decision: "existing",
+              operation_id: SELECTED_OP,
+              state: operation.state,
+              accepted: operation.accepted,
+              payload: operation.payload,
+            }
+            : { decision: "absent" },
+        );
+      }
+      if (url.hostname === "api.openai.com") {
+        aiCalls++;
+        return json({
+          choices: [{ message: { content: "Fixture selected followup." } }],
+        });
+      }
+      if (
+        url.pathname === "/rest/v1/rpc/prepare_marketing_followup_for_service"
+      ) {
+        prepareCalls++;
+        const args = JSON.parse(String(init?.body));
+        assertEquals(args.p_expected, {
+          email: row.email,
+          followup_step: 2,
+          status: "new",
+        });
+        assertEquals(args.p_dispatch_id, PARENT_ID);
+        assertEquals(args.p_execution_token, PARENT_TOKEN);
+        if (operation) {
+          return json({ decision: "existing", operation_id: SELECTED_OP });
+        }
+        if (!operation) {
+          operation = {
+            state: "prepared",
+            payload: args.p_payload,
+            accepted: false,
+            token: null,
+          };
+        }
+        return json({ decision: "prepared", operation_id: SELECTED_OP });
+      }
+      if (url.pathname === "/rest/v1/rpc/begin_email_dispatch_for_service") {
+        const args = JSON.parse(String(init?.body));
+        if (!operation) throw new Error("begin before prepare");
+        if (options.beginLoss) {
+          operation.state = "sending";
+          operation.token = args.p_attempt_token;
+          throw new Error("Lost begin response after commit");
+        }
+        if (options.mutateBeforeBegin) {
+          if (options.mutateBeforeBegin === "recipient") {
+            row.email = "changed@example.test";
+          }
+          if (options.mutateBeforeBegin === "step") row.followup_step = 3;
+          if (options.mutateBeforeBegin === "deleted") row.status = "closed";
+          operation.state = "superseded";
+          return json({
+            decision: "conflict",
+            operation_id: SELECTED_OP,
+            reason: "current_eligibility",
+          });
+        }
+        if (operation.accepted) {
+          return json({
+            decision: "replay_accepted",
+            operation_id: SELECTED_OP,
+          });
+        }
+        if (options.beginDecision) {
+          return json({
+            decision: options.beginDecision,
+            operation_id: SELECTED_OP,
+            ...(options.beginDecision === "busy"
+              ? { not_before: "2026-10-01T00:00:00Z" }
+              : {}),
+          });
+        }
+        if (operation.state === "sending") {
+          return json({ decision: "busy", operation_id: SELECTED_OP });
+        }
+        if (operation.state === "retryable") {
+          return json({
+            decision: "busy",
+            operation_id: SELECTED_OP,
+            not_before: "2026-10-01T00:00:00Z",
+          });
+        }
+        operation.state = "sending";
+        operation.token = args.p_attempt_token;
+        return json({
+          decision: "send",
+          operation_id: SELECTED_OP,
+          attempt_token: args.p_attempt_token,
+          payload: operation.payload,
+        });
+      }
+      if (url.hostname === "api.brevo.com") {
+        providerCalls++;
+        assertEquals(JSON.parse(String(init?.body)), operation?.payload);
+        if (options.transportLoss) throw new Error("Transport response lost");
+        if (options.bodyReadFailure) {
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(new Error("Optional provider body lost"));
+              },
+            }),
+            { status: 201 },
+          );
+        }
+        return new Response(options.body ?? '{"messageId":"accepted-id"}', {
+          status: options.providerStatus ?? 201,
+        });
+      }
+      if (
+        url.pathname === "/rest/v1/rpc/record_email_dispatch_result_for_service"
+      ) {
+        recordCalls++;
+        const args = JSON.parse(String(init?.body));
+        if (!operation || args.p_attempt_token !== operation.token) {
+          throw new Error("wrong token");
+        }
+        operation.state = args.p_outcome === "rejected_retryable"
+          ? "retryable"
+          : args.p_outcome;
+        operation.accepted = args.p_outcome === "accepted";
+        if (
+          (options.recordLoss && recordCalls <= 2) ||
+          (options.recordLossOnce && recordCalls === 1)
+        ) {
+          throw new Error("Lost record response after commit");
+        }
+        return new Response(null, { status: 204 });
+      }
+      if (
+        url.pathname === "/rest/v1/rpc/apply_email_dispatch_result_for_service"
+      ) {
+        applyCalls++;
+        if (options.applyFailure) return json({ message: "db error" }, 500);
+        if (options.existingAcceptedExpired) {
+          return json({ decision: "expired", operation_id: SELECTED_OP });
+        }
+        if (!operation?.accepted) throw new Error("apply before acceptance");
+        row.followup_step = 3;
+        row.status = "contacted";
+        operation.state = "applied";
+        return json({ decision: "applied", operation_id: SELECTED_OP });
+      }
+      throw new Error(`Unexpected selected fixture route ${url.pathname}`);
+    }) as typeof fetch;
+  Deno.env.set("BREVO_API_KEY", "synthetic-brevo");
+  try {
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${
+        options.wrongCredential ? "wrong" : SERVICE_ROLE
+      }`,
+      "x-maiprop-parent-dispatch-id": PARENT_ID,
+    };
+    if (!options.partialContext) {
+      headers["x-maiprop-parent-execution-token"] = PARENT_TOKEN;
+    }
+    const first = handler(
+      req("POST", { lead_id: MARKETING_LEAD_ID, step: 3 }, headers),
+    );
+    const second = options.concurrentInvocations
+      ? handler(req("POST", { lead_id: MARKETING_LEAD_ID, step: 3 }, headers))
+      : null;
+    const response = await first;
+    const secondResponse = second
+      ? await second
+      : options.repeatAfterRejection
+      ? await handler(
+        req("POST", { lead_id: MARKETING_LEAD_ID, step: 3 }, headers),
+      )
+      : null;
+    return {
+      response,
+      body: await response.json(),
+      secondResponse,
+      row,
+      operation,
+      providerCalls,
+      aiCalls,
+      prepareCalls,
+      applyCalls,
+      recordCalls,
+    };
+  } finally {
+    globalThis.fetch = oldFetch;
+    Deno.env.set("BREVO_API_KEY", "placeholder-brevo");
+  }
+}
+
+for (
+  const body of [
+    '{"messageId":"accepted-id"}',
+    '{"message_id":"alias-id"}',
+    "",
+    "not-json",
+  ]
+) {
+  Deno.test(`automatic followup records accepted HTTP body ${JSON.stringify(body)}`, async () => {
+    const result = await automaticScenario({ body });
+    assertEquals(result.response.status, 200);
+    assertEquals(
+      [result.providerCalls, result.prepareCalls, result.applyCalls],
+      [1, 1, 1],
+    );
+    assertEquals(result.operation?.state, "applied");
+    assertEquals(result.row.followup_step, 3);
+    assertEquals(
+      result.body.email_id,
+      body.includes("alias-id")
+        ? "alias-id"
+        : body.includes("accepted-id")
+        ? "accepted-id"
+        : null,
+    );
+  });
+}
+Deno.test("automatic followup reuses frozen payload without AI", async () => {
+  const result = await automaticScenario({ existing: true });
+  assertEquals([result.aiCalls, result.prepareCalls, result.providerCalls], [
+    0,
+    0,
+    1,
+  ]);
+  assertEquals(result.operation?.state, "applied");
+});
+Deno.test("concurrent automatic followups admit one provider request", async () => {
+  const result = await automaticScenario({ concurrentInvocations: true });
+  assertEquals(result.secondResponse !== null, true);
+  assertEquals(result.providerCalls, 1);
+  assertEquals(result.operation?.state, "applied");
+});
+for (
+  const options of [{ beginLoss: true }, { transportLoss: true }, {
+    recordLoss: true,
+  }]
+) {
+  Deno.test(`automatic followup holds ambiguous ${JSON.stringify(options)}`, async () => {
+    const result = await automaticScenario(options);
+    assertEquals(result.response.status, 503);
+    assertEquals(result.applyCalls, 0);
+    assertEquals(result.providerCalls, options.beginLoss ? 0 : 1);
+    assertEquals(result.row.followup_step, 2);
+  });
+}
+Deno.test("automatic accepted followup keeps durable acceptance after apply failure", async () => {
+  const result = await automaticScenario({ applyFailure: true });
+  assertEquals(result.body.provider_accepted, true);
+  assertEquals(result.body.persistence_complete, false);
+  assertEquals(result.operation?.accepted, true);
+  assertEquals(result.providerCalls, 1);
+});
+for (
+  const [status, expectedState] of [[429, "retryable"], [
+    403,
+    "rejected_final",
+  ], [503, "unknown"]] as const
+) {
+  Deno.test(`automatic followup records HTTP ${status} without checkpoint`, async () => {
+    const result = await automaticScenario({
+      providerStatus: status,
+      body: '{"code":"invalid_parameter"}',
+    });
+    assertEquals(result.response.status, 503);
+    assertEquals([result.providerCalls, result.applyCalls], [1, 0]);
+    assertEquals(result.operation?.state, expectedState);
+    assertEquals(result.row.followup_step, 2);
+  });
+}
+for (
+  const options of [{ partialContext: true }, { wrongCredential: true }, {
+    parentState: "finished",
+  }]
+) {
+  Deno.test(`automatic context rejects ${JSON.stringify(options)} before AI`, async () => {
+    const result = await automaticScenario(options);
+    assertEquals([result.providerCalls, result.aiCalls, result.prepareCalls], [
+      0,
+      0,
+      0,
+    ]);
+    assertEquals(
+      result.response.status === 400 || result.response.status === 403,
+      true,
+    );
+  });
+}
+for (const beginDecision of ["expired", "busy", "unknown"] as const) {
+  Deno.test(`automatic followup ${beginDecision} begin never fetches provider`, async () => {
+    const result = await automaticScenario({ beginDecision });
+    assertEquals([result.providerCalls, result.applyCalls], [0, 0]);
+    assertEquals(result.response.status, 503);
+  });
+}
+for (const mutateBeforeBegin of ["recipient", "step", "deleted"] as const) {
+  Deno.test(`automatic followup changed ${mutateBeforeBegin} before begin cannot send`, async () => {
+    const result = await automaticScenario({ mutateBeforeBegin });
+    assertEquals([result.providerCalls, result.applyCalls], [0, 0]);
+    assertEquals(result.operation?.state, "superseded");
+  });
+}
+Deno.test("accepted expired followup payload remains held without rerender or resend", async () => {
+  const result = await automaticScenario({ existingAcceptedExpired: true });
+  assertEquals([result.aiCalls, result.providerCalls, result.applyCalls], [
+    0,
+    0,
+    1,
+  ]);
+  assertEquals(result.body.provider_accepted, true);
+  assertEquals(result.body.persistence_complete, false);
+  assertEquals(result.response.status, 503);
+});
+Deno.test("lost first record response repeats only the same accepted record", async () => {
+  const result = await automaticScenario({ recordLossOnce: true });
+  assertEquals([result.providerCalls, result.recordCalls, result.applyCalls], [
+    1,
+    2,
+    1,
+  ]);
+  assertEquals(result.operation?.state, "applied");
+});
+Deno.test("accepted HTTP survives optional body stream rejection", async () => {
+  const result = await automaticScenario({ bodyReadFailure: true });
+  assertEquals([result.providerCalls, result.recordCalls, result.applyCalls], [
+    1,
+    1,
+    1,
+  ]);
+  assertEquals(result.body.email_id, null);
+  assertEquals(result.operation?.state, "applied");
+});
+Deno.test("durable 429 not-before blocks next existing invocation without AI or resend", async () => {
+  const result = await automaticScenario({
+    providerStatus: 429,
+    body: '{"code":"rate_limited"}',
+    repeatAfterRejection: true,
+  });
+  assertEquals(result.secondResponse?.status, 503);
+  assertEquals([result.providerCalls, result.aiCalls, result.prepareCalls], [
+    1,
+    1,
+    1,
+  ]);
+  assertEquals(result.operation?.state, "retryable");
+  assertEquals(result.applyCalls, 0);
 });

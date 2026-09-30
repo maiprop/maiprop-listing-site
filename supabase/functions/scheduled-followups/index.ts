@@ -1,5 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { finishScheduledDispatch, startScheduledDispatch, type ScheduledOutcome, type ScheduledSummary, type ScheduledRun } from "../_shared/scheduledDispatch.ts";
+import {
+  finishScheduledDispatch,
+  type ScheduledOutcome,
+  type ScheduledRun,
+  type ScheduledSummary,
+  startScheduledDispatch,
+} from "../_shared/scheduledDispatch.ts";
+import { repairSelectedEmailOperations } from "../_shared/emailDispatch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,17 +54,105 @@ Deno.serve(async (req) => {
   let traceClient: ReturnType<typeof createClient> | null = null;
   let traceRun: ScheduledRun | null = null;
   const results: { step: number; success: boolean; error?: string }[] = [];
+  let repaired = 0;
+  let repairHeld = 0;
   try {
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const supabaseKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
     const supabase = createClient(supabaseUrl, supabaseKey);
     traceClient = supabase;
-    const trace = await startScheduledDispatch(supabase, req, "scheduled_followups", corsHeaders);
+    const trace = await startScheduledDispatch(
+      supabase,
+      req,
+      "scheduled_followups",
+      corsHeaders,
+    );
     if (trace.response) return trace.response;
     const run = trace.run!;
     traceRun = run;
-    const terminal = (response: Response, outcome: ScheduledOutcome, summary: ScheduledSummary) =>
-      finishScheduledDispatch(supabase, run, response, outcome, summary);
+    const terminal = (
+      response: Response,
+      outcome: ScheduledOutcome,
+      summary: ScheduledSummary,
+    ) => finishScheduledDispatch(supabase, run, response, outcome, summary);
+
+    // Accepted checkpoints can need repair after their lead leaves the due query.
+    try {
+      const repair = await repairSelectedEmailOperations(supabase);
+      repaired = repair.applied;
+      repairHeld = repair.held;
+      if (!repair.maintenanceComplete) {
+        const outcome = repaired > 0 ? "partial" : "failed";
+        return await terminal(
+          new Response(
+            JSON.stringify({
+              success: false,
+              outcome,
+              error: "email_maintenance_unavailable",
+              processed: 0,
+              repaired,
+              repairFailures: repairHeld,
+            }),
+            {
+              status: 503,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          ),
+          outcome,
+          { processed: 0, succeeded: 0, failed: 0 },
+        );
+      }
+    } catch {
+      return await terminal(
+        new Response(
+          JSON.stringify({
+            success: false,
+            outcome: "failed",
+            error: "email_repair_unavailable",
+            processed: 0,
+          }),
+          {
+            status: 503,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        ),
+        "failed",
+        { processed: 0, succeeded: 0, failed: 0 },
+      );
+    }
+    const { count: ledgerHeld, error: heldError } = await supabase.from(
+      "email_send_log",
+    )
+      .select("id", { count: "exact", head: true })
+      .eq("producer", "marketing_followup").eq("entity_hold", true)
+      .in("dispatch_state", [
+        "sending",
+        "unknown",
+        "accepted",
+        "accepted_conflict",
+        "checkpoint_payload_expired",
+      ]);
+    if (heldError || ledgerHeld === null) {
+      return await terminal(
+        new Response(
+          JSON.stringify({
+            success: false,
+            outcome: repaired > 0 ? "partial" : "failed",
+            error: "email_hold_count_unavailable",
+            processed: 0,
+            repaired,
+            repairFailures: repairHeld,
+          }),
+          {
+            status: 503,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        ),
+        repaired > 0 ? "partial" : "failed",
+        { processed: 0, succeeded: 0, failed: 0 },
+      );
+    }
+    const hasHolds = ledgerHeld > 0 || repairHeld > 0;
 
     const now = new Date();
 
@@ -72,24 +167,50 @@ Deno.serve(async (req) => {
 
     if (error) {
       console.error("Failed to fetch leads:", error);
-      return await terminal(new Response(JSON.stringify({ error: "Failed to fetch leads" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }), "failed", { processed: 0, succeeded: 0, failed: 0 });
+      return await terminal(
+        new Response(
+          JSON.stringify({
+            error: "Failed to fetch leads",
+            success: false,
+            outcome: repaired > 0 ? "partial" : "failed",
+            repaired,
+            heldOperations: ledgerHeld,
+            repairFailures: repairHeld,
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        ),
+        repaired > 0 ? "partial" : "failed",
+        { processed: 0, succeeded: 0, failed: 0 },
+      );
     }
 
     if (!leads || leads.length === 0) {
-      return await terminal(new Response(
-        JSON.stringify({
-          success: true,
-          processed: 0,
-          message: "No leads need followup",
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      ), "skipped", { processed: 0, succeeded: 0, failed: 0 });
+      return await terminal(
+        new Response(
+          JSON.stringify({
+            success: !hasHolds,
+            outcome: hasHolds
+              ? "partial"
+              : repaired > 0
+              ? "succeeded"
+              : "skipped",
+            processed: 0,
+            repaired,
+            heldOperations: ledgerHeld,
+            repairFailures: repairHeld,
+            message: "No leads need followup",
+          }),
+          {
+            status: hasHolds ? 503 : 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        ),
+        hasHolds ? "partial" : repaired > 0 ? "succeeded" : "skipped",
+        { processed: 0, succeeded: 0, failed: 0 },
+      );
     }
 
     for (const lead of leads) {
@@ -114,6 +235,8 @@ Deno.serve(async (req) => {
             headers: {
               Authorization: `Bearer ${supabaseKey}`,
               "Content-Type": "application/json",
+              "x-maiprop-parent-dispatch-id": run.dispatchId,
+              "x-maiprop-parent-execution-token": run.executionToken,
             },
             body: JSON.stringify({
               lead_id: lead.id,
@@ -125,9 +248,12 @@ Deno.serve(async (req) => {
         const followupData = await followupRes.json();
         const complete = followupRes.ok && followupData?.success === true &&
           followupData.preview !== true &&
-          (followupData.provider_accepted === undefined || followupData.provider_accepted === true) &&
-          (followupData.persistence_complete === undefined || followupData.persistence_complete === true) &&
-          (followupData.outcome === undefined || followupData.outcome === "succeeded");
+          (followupData.provider_accepted === undefined ||
+            followupData.provider_accepted === true) &&
+          (followupData.persistence_complete === undefined ||
+            followupData.persistence_complete === true) &&
+          (followupData.outcome === undefined ||
+            followupData.outcome === "succeeded");
         results.push({
           step: nextSchedule.step,
           success: complete,
@@ -148,41 +274,76 @@ Deno.serve(async (req) => {
     }
 
     const failed = results.filter((r) => !r.success).length;
-    return await terminal(new Response(
-      JSON.stringify({
-        success: failed === 0,
-        outcome: failed === 0 ? "succeeded" : "partial",
-        processed: results.length,
-        succeeded: results.filter((r) => r.success).length,
-        failed,
-      }),
+    return await terminal(
+      new Response(
+        JSON.stringify({
+          success: failed === 0 && !hasHolds,
+          outcome: failed === 0 && !hasHolds ? "succeeded" : "partial",
+          processed: results.length,
+          succeeded: results.filter((r) => r.success).length,
+          failed,
+          repaired,
+          heldOperations: ledgerHeld,
+          repairFailures: repairHeld,
+        }),
+        {
+          status: failed === 0 && !hasHolds ? 200 : 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      ),
+      failed === 0 && !hasHolds ? "succeeded" : "partial",
       {
-        status: failed === 0 ? 200 : 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        processed: results.length,
+        succeeded: results.length - failed,
+        failed,
       },
-    ), failed === 0 ? "succeeded" : "partial", {
-      processed: results.length, succeeded: results.length - failed, failed,
-    });
+    );
   } catch (error: unknown) {
     console.error("Scheduled followup error:", error);
     const succeeded = results.filter((result) => result.success).length;
     const failed = results.length - succeeded;
-    const outcome = succeeded > 0 ? "partial" : "failed";
-    const response = new Response(JSON.stringify({
-      error: "Internal error", success: false, outcome,
-      processed: results.length, succeeded, failed,
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const outcome = succeeded > 0 || repaired > 0 ? "partial" : "failed";
+    const response = new Response(
+      JSON.stringify({
+        error: "Internal error",
+        success: false,
+        outcome,
+        processed: results.length,
+        succeeded,
+        failed,
+        repaired,
+        repairFailures: repairHeld,
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
     return traceClient && traceRun
-      ? await finishScheduledDispatch(traceClient, traceRun, response, outcome, { processed: results.length, succeeded, failed })
-      : new Response(JSON.stringify({
-        error: "Internal error", success: false, outcome,
-        processed: results.length, succeeded, failed,
-        dispatch_id: null, trace_persistence_complete: false,
-      }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      ? await finishScheduledDispatch(
+        traceClient,
+        traceRun,
+        response,
+        outcome,
+        { processed: results.length, succeeded, failed },
+      )
+      : new Response(
+        JSON.stringify({
+          error: "Internal error",
+          success: false,
+          outcome,
+          processed: results.length,
+          succeeded,
+          failed,
+          repaired,
+          repairFailures: repairHeld,
+          dispatch_id: null,
+          trace_persistence_complete: false,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
   }
 });
