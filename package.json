@@ -20,7 +20,7 @@
   },
   "type": "module",
   "overrides": {
-    "js-yaml": "4.3.0",
+    "js-yaml": "4.3.1",
     "tmp": "^0.2.7",
     "tar": "7.5.21",
     "uuid": "^14.0.0",
@@ -250,7 +250,7 @@
     "globals": "^15.15.0",
     "husky": "^9.1.7",
     "i18next-scanner": "^4.6.0",
-    "js-yaml": "4.3.0",
+    "js-yaml": "4.3.1",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.26",
     "remotion": "^4.0.482",
