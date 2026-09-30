@@ -6,6 +6,8 @@ import {
   assertRejects,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
+import Stripe from "npm:stripe@22.3.0";
+import { buildIdempotencyKey } from "../_shared/stripeClient.ts";
 
 const { handler, restore } = await captureHandler(
   import.meta.url,
@@ -1683,3 +1685,657 @@ Deno.test("investor payment activation computes a one-year expiry from one activ
 });
 
 restore();
+
+type SignedWebhookCall = { method: string; url: URL; body: string; form: URLSearchParams };
+const webhookJson = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
+let signedWebhookNumber = 0;
+
+const signedWebhookEvent = async (type: string, object: Record<string, unknown>, overrides: Record<string, unknown> = {}) => {
+  const payload = JSON.stringify({ id: `evt_handler_${++signedWebhookNumber}`, object: "event", api_version: "2026-06-24.dahlia", created: Math.floor(Date.now() / 1000), livemode: false, type, data: { object }, ...overrides });
+  const signature = await Stripe.webhooks.generateTestHeaderStringAsync({ payload, secret: "placeholder-stripe-webhook", timestamp: Math.floor(Date.now() / 1000) });
+  return new Request("https://functions.supabase.co/fn", { method: "POST", headers: { "content-type": "application/json", "stripe-signature": signature, origin: "https://maiprop.co" }, body: payload });
+};
+
+const signedWebhookFixture = async (
+  options: {
+    route?: (call: SignedWebhookCall) => Response | null | Promise<Response | null>;
+    stored?: Map<string, Record<string, unknown>>;
+    account?: string;
+  },
+  exercise: (invoke: (type: string, object: Record<string, unknown>, overrides?: Record<string, unknown>) => Promise<{ response: Response; body: Record<string, unknown> }>, calls: SignedWebhookCall[], stored: Map<string, Record<string, unknown>>) => void | Promise<void>,
+) => {
+  const oldFetch = globalThis.fetch;
+  const previousKey = Deno.env.get("STRIPE_SECRET_KEY");
+  Deno.env.set("STRIPE_SECRET_KEY", `sk_test_signed_handler_${++signedWebhookNumber}`);
+  const stored = options.stored ?? new Map<string, Record<string, unknown>>();
+  const calls: SignedWebhookCall[] = [];
+  const unknown: string[] = [];
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    const method = request.method;
+    const body = await request.text();
+    const call = { method, url, body, form: new URLSearchParams(body) };
+    calls.push(call);
+    if (url.hostname === "api.stripe.com") {
+      if (method === "GET" && url.pathname === "/v1/account") return webhookJson({ id: options.account ?? "acct_testmaiprop" });
+      if (method === "GET" && url.pathname === "/v1/balance") return webhookJson({ livemode: false, available: [], pending: [] });
+    }
+    if (url.hostname === "test.supabase.co" && url.pathname === "/rest/v1/stripe_webhook_events") {
+      if (method === "POST") {
+        const row = JSON.parse(body) as Record<string, unknown>;
+        const eventId = String(row.event_id);
+        if (stored.has(eventId)) return webhookJson({ code: "23505", message: "duplicate event" }, 409);
+        stored.set(eventId, { ...row, updated_at: new Date().toISOString() });
+        return new Response(null, { status: 201 });
+      }
+      if (method === "GET") {
+        const eventId = String(url.searchParams.get("event_id") ?? "").replace(/^eq\./, "");
+        return webhookJson(stored.get(eventId) ?? null);
+      }
+      if (method === "PATCH") {
+        const eventId = String(url.searchParams.get("event_id") ?? "").replace(/^eq\./, "");
+        const row = stored.get(eventId);
+        const token = String(url.searchParams.get("metadata->>processing_claim_token") ?? "").replace(/^eq\./, "");
+        const requiredStatus = String(url.searchParams.get("status") ?? "").replace(/^eq\./, "");
+        if (!row || row.status !== requiredStatus || (token && (row.metadata as Record<string, unknown>)?.processing_claim_token !== token)) return webhookJson(null);
+        Object.assign(row, JSON.parse(body), { updated_at: new Date().toISOString() });
+        return webhookJson({ event_id: eventId });
+      }
+    }
+    const routed = await options.route?.(call);
+    if (routed) return routed;
+    unknown.push(`${method} ${url}`);
+    throw new Error(`Unexpected signed webhook transport ${method} ${url}`);
+  };
+  const invoke = async (type: string, object: Record<string, unknown>, overrides: Record<string, unknown> = {}) => {
+    const response = await handler(await signedWebhookEvent(type, object, overrides));
+    return { response, body: await response.json() as Record<string, unknown> };
+  };
+  try {
+    await exercise(invoke, calls, stored);
+    assertEquals(unknown, []);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (previousKey === undefined) Deno.env.delete("STRIPE_SECRET_KEY");
+    else Deno.env.set("STRIPE_SECRET_KEY", previousKey);
+  }
+};
+
+Deno.test("signed webhook dispatch claims, finishes, deduplicates, and retries an in-progress lease", async () => {
+  await signedWebhookFixture({}, async (invoke, calls, stored) => {
+    const eventId = "evt_signed_ledger";
+    const first = await invoke("unrecognized.billing.event", { id: "obj_unknown" }, { id: eventId });
+    assertEquals(first.response.status, 200, JSON.stringify(calls.map((call) => `${call.method} ${call.url}`)));
+    assertEquals(first.body.received, true);
+    assertEquals(stored.get(eventId)?.status, "processed");
+    assertEquals(stored.get(eventId)?.runtime_mode, "test");
+    const claimsBefore = calls.filter((call) => call.url.pathname === "/rest/v1/stripe_webhook_events" && call.method === "PATCH").length;
+    const duplicate = await invoke("unrecognized.billing.event", { id: "obj_unknown" }, { id: eventId });
+    assertEquals(duplicate.response.status, 200);
+    assertEquals(duplicate.body.duplicate, true);
+    assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/stripe_webhook_events" && call.method === "PATCH").length, claimsBefore);
+    stored.set("evt_processing_ledger", { event_id: "evt_processing_ledger", status: "processing", updated_at: new Date().toISOString(), metadata: { processing_started_at: new Date().toISOString(), processing_claim_token: "existing-token" } });
+    const processing = await invoke("unrecognized.billing.event", { id: "obj_processing" }, { id: "evt_processing_ledger" });
+    assertEquals(processing.response.status, 503);
+    assertEquals(processing.response.headers.get("Retry-After"), "30");
+    assertEquals(processing.body.in_progress, true);
+    assertEquals(stored.get("evt_processing_ledger")?.status, "processing");
+  });
+});
+
+Deno.test("signed webhook rejects wrong event account before creating ledger row", async () => {
+  await signedWebhookFixture({}, async (invoke, calls) => {
+    const result = await invoke("unrecognized.billing.event", { id: "obj_bad_account" }, { account: "acct_wrongaccount" });
+    assertEquals(result.response.status, 500);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/stripe_webhook_events"), false);
+  });
+});
+
+Deno.test("signed paid add-on dispatch writes one session identity across event retries", async () => {
+  const purchaseSessions = new Set<string>();
+  const route = (call: SignedWebhookCall) => {
+    if (call.url.pathname === "/rest/v1/rpc/current_billing_runtime_mode" && call.method === "POST") return webhookJson("test");
+    if (call.url.pathname === "/rest/v1/profiles" && call.method === "GET") return webhookJson({ user_id: "user-1" });
+    if (call.url.pathname === "/rest/v1/billing_customers" && call.method === "GET") return webhookJson({ user_id: "user-1", stripe_customer_id: "cus_user_1" });
+    if (call.url.pathname === "/rest/v1/addon_purchases" && call.method === "POST") {
+      purchaseSessions.add(String(JSON.parse(call.body).stripe_session_id));
+      return new Response(null, { status: 201 });
+    }
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls, stored) => {
+    const session = paidPromotionSession();
+    const first = await invoke("checkout.session.completed", session, { id: "evt_addon_paid_1" });
+    assertEquals(first.response.status, 200);
+    assertEquals(stored.get("evt_addon_paid_1")?.status, "processed");
+    const duplicate = await invoke("checkout.session.completed", session, { id: "evt_addon_paid_1" });
+    assertEquals(duplicate.body.duplicate, true);
+    const replay = await invoke("checkout.session.completed", session, { id: "evt_addon_paid_2" });
+    assertEquals(replay.response.status, 200);
+    const writes = calls.filter((call) => call.url.pathname === "/rest/v1/addon_purchases" && call.method === "POST");
+    assertEquals(writes.length, 2);
+    assertEquals(purchaseSessions.size, 1);
+    assertEquals(JSON.parse(writes[0].body).stripe_session_id, "cs_test_featured");
+    assertEquals(JSON.parse(writes[0].body).runtime_mode, "test");
+    assertEquals(writes[0].url.searchParams.get("on_conflict"), "stripe_session_id");
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/billing_subscriptions" || call.url.pathname === "/rest/v1/professionals"), false);
+  });
+});
+
+Deno.test("signed unpaid add-on session is acknowledged without a purchase", async () => {
+  await signedWebhookFixture({}, async (invoke, calls) => {
+    const result = await invoke("checkout.session.completed", paidPromotionSession({ payment_status: "unpaid" }));
+    assertEquals(result.response.status, 200);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/addon_purchases"), false);
+  });
+});
+
+Deno.test("signed expired trial checkout updates only pending claim statuses", async () => {
+  const route = (call: SignedWebhookCall) => {
+    if (call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH") return new Response(null, { status: 204 });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const result = await invoke("checkout.session.expired", { id: "cs_expired_trial", livemode: false, metadata: { checkout_type: "subscription_trial", user_id: "user-1" } });
+    assertEquals(result.response.status, 200);
+    const update = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH");
+    assertEquals(JSON.parse(update!.body).status, "checkout_abandoned");
+    assertEquals(update!.url.searchParams.get("stripe_checkout_session_id"), "eq.cs_expired_trial");
+    assertEquals(update!.url.searchParams.get("status"), "in.(checkout_started,checkout_created)");
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles"), false);
+  });
+});
+
+Deno.test("signed add-on subscription update retrieves canonical state and only updates purchase status", async () => {
+  const canonical = {
+    id: "sub_addon_canonical", customer: "cus_addon", status: "canceled", livemode: false,
+    metadata: { checkout_type: "addon", addon_key: "featured_listing", user_id: "user-1" },
+    invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] },
+    items: { data: [] },
+  };
+  const route = (call: SignedWebhookCall) => {
+    if (call.url.pathname === "/v1/subscriptions/sub_addon_canonical" && call.method === "GET") return webhookJson(canonical);
+    if (call.url.pathname === "/rest/v1/addon_purchases" && call.method === "PATCH") return new Response(null, { status: 204 });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const result = await invoke("customer.subscription.updated", { id: canonical.id, status: "active", customer: canonical.customer, livemode: false });
+    assertEquals(result.response.status, 200);
+    const update = calls.find((call) => call.url.pathname === "/rest/v1/addon_purchases" && call.method === "PATCH");
+    assertEquals(JSON.parse(update!.body).status, "cancelled");
+    assertEquals(update!.url.searchParams.get("stripe_subscription_id"), "eq.sub_addon_canonical");
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles" || call.url.pathname === "/rest/v1/billing_subscriptions"), false);
+  });
+});
+
+Deno.test("signed professional subscription cannot update a different actor from conflicting metadata", async () => {
+  const actorA = "00000000-0000-4000-8000-000000000081";
+  const actorB = "00000000-0000-4000-8000-000000000082";
+  const canonical = {
+    id: "sub_professional_conflict", customer: "cus_professional_a", status: "active", livemode: false,
+    current_period_end: 4102444800,
+    metadata: { checkout_type: "subscription", user_id: actorB, plan_key: "professional_pro", audience: "professional", billing_cycle: "monthly" },
+    invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] },
+    items: { data: [{ id: "si_conflict", current_period_end: 4102444800, price: { id: "price_professional", product: "prod_professional" } }] },
+  };
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_professional_conflict") return webhookJson(canonical);
+    if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_professional_a") return webhookJson({ id: "cus_professional_a", email: "actor-a@maiprop.test", metadata: { user_id: actorA } });
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "professional_pro", audience: "professional", module: "professional_subscription", metadata: { stripe_product_id: "prod_professional", stripe_price_id: "price_professional" } }]);
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ role: "professional", participant_type: null, role_switch_in_progress_at: null });
+    if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return new Response(null, { status: 201 });
+    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/profiles") return new Response(null, { status: 204 });
+    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/professionals") return new Response(null, { status: 204 });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const result = await invoke("customer.subscription.updated", { id: canonical.id, status: "old", customer: canonical.customer, livemode: false });
+    assertEquals(result.response.status, 200);
+    const customer = calls.find((call) => call.url.pathname === "/rest/v1/billing_customers" && call.method === "POST");
+    const subscription = calls.find((call) => call.url.pathname === "/rest/v1/billing_subscriptions" && call.method === "POST");
+    assertEquals(JSON.parse(customer!.body).user_id, actorA);
+    assertEquals(JSON.parse(subscription!.body).user_id, actorA);
+    const profile = calls.find((call) => call.url.pathname === "/rest/v1/profiles" && call.method === "PATCH");
+    assertEquals(profile!.url.searchParams.get("user_id"), `eq.${actorA}`);
+    const professional = calls.find((call) => call.url.pathname === "/rest/v1/professionals" && call.method === "PATCH");
+    assertEquals(professional?.url.searchParams.get("user_id"), `eq.${actorA}`, "the subscription's untrusted B metadata must not mutate B's professional entitlement");
+  });
+});
+
+const agentInvoiceCreditFixture = async (
+  mode: "create" | "existing" | "definitive_failure" | "ambiguous_failure" | "finalized_missing" | "finalized_existing" | "finalized_persisted_missing" | "persistence_failure" | "release_failure",
+  inspect: (result: { response: Response; body: Record<string, unknown> }, calls: SignedWebhookCall[]) => void | Promise<void>,
+) => {
+  const userId = "00000000-0000-4000-8000-000000000091";
+  const invoiceId = "in_credit_handler";
+  let operationKey = await buildIdempotencyKey("agent-data-input-invoice-credit", [invoiceId, userId]);
+  let created = false;
+  const credit = () => ({
+    id: "ii_credit_handler", object: "invoiceitem", amount: -100, currency: "eur", customer: "cus_credit_handler", invoice: invoiceId,
+    metadata: { type: "agent_data_input_discount", user_id: userId, applied_count: "2", applied_pct: "1", operation_key: operationKey, expected_amount_cents: "100", invoice_id: invoiceId },
+  });
+  const reservations = () => [1, 2].map((n) => ({ id: `adi_credit_${n}`, stripe_credit_id: mode === "finalized_persisted_missing" ? "ii_missing" : null, stripe_credit_expected_amount_cents: 100, stripe_credit_operation_key: operationKey }));
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_credit_handler") return webhookJson({ id: "cus_credit_handler", metadata: { user_id: userId } });
+    if (call.method === "POST" && call.url.pathname === "/rest/v1/rpc/apply_verified_data_input_discount") {
+      operationKey = JSON.parse(call.body).p_operation_key;
+      return webhookJson({ applied_count: 2, applied_pct: 1, expected_amount_cents: 100, operation_key: operationKey });
+    }
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/agent_data_inputs") return webhookJson(reservations());
+    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/agent_data_inputs") return webhookJson(mode === "persistence_failure" || mode === "release_failure" ? [{ id: "adi_credit_1" }] : [{ id: "adi_credit_1" }, { id: "adi_credit_2" }]);
+    if (call.method === "GET" && call.url.pathname === "/v1/invoiceitems") return webhookJson({ object: "list", data: created || mode === "existing" || mode === "finalized_existing" ? [credit()] : [], has_more: false });
+    if (call.method === "POST" && call.url.pathname === "/v1/invoiceitems") {
+      if (mode === "definitive_failure" || mode === "release_failure") return webhookJson({ error: { message: "definitive synthetic rejection", type: "invalid_request_error" } }, 400);
+      if (mode === "ambiguous_failure") return webhookJson({ error: { message: "ambiguous synthetic provider error", type: "api_error" } }, 500);
+      created = true;
+      return webhookJson(credit());
+    }
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const type = mode.startsWith("finalized_") ? "invoice.finalized" : "invoice.created";
+    const object = { id: invoiceId, customer: "cus_credit_handler", status: "draft", billing_reason: "subscription_cycle", subtotal: 10000, currency: "eur", livemode: false };
+    const result = await invoke(type, object);
+    await inspect(result, calls);
+  });
+};
+
+Deno.test("signed draft invoice reserves, validates, creates one provider credit, then persists rows", async () => {
+  await agentInvoiceCreditFixture("create", (result, calls) => {
+    assertEquals(result.response.status, 200);
+    const reserve = calls.find((call) => call.url.pathname === "/rest/v1/rpc/apply_verified_data_input_discount");
+    const read = calls.find((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "GET");
+    const list = calls.find((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "GET");
+    const create = calls.find((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST");
+    const persist = calls.find((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH");
+    assertEquals(Boolean(reserve && read && list && create && persist), true);
+    assertEquals(calls.indexOf(reserve!) < calls.indexOf(read!), true);
+    assertEquals(calls.indexOf(read!) < calls.indexOf(list!), true);
+    assertEquals(calls.indexOf(list!) < calls.indexOf(create!), true);
+    assertEquals(calls.indexOf(create!) < calls.indexOf(persist!), true);
+    const key = JSON.parse(reserve!.body).p_operation_key;
+    assertEquals(create!.form.get("amount"), "-100");
+    assertEquals(create!.form.get("invoice"), "in_credit_handler");
+    assertEquals(create!.form.get("metadata[operation_key]"), key);
+    assertEquals(create!.url.pathname, "/v1/invoiceitems");
+    assertEquals(JSON.parse(persist!.body).stripe_credit_id, "ii_credit_handler");
+    assertEquals(persist!.url.searchParams.get("user_id"), "eq.00000000-0000-4000-8000-000000000091");
+    assertEquals(persist!.url.searchParams.get("discount_invoice_id"), "eq.in_credit_handler");
+  });
+});
+
+Deno.test("signed draft invoice finds canonical existing credit and never creates a duplicate", async () => {
+  await agentInvoiceCreditFixture("existing", (result, calls) => {
+    assertEquals(result.response.status, 200);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST").length, 0);
+    assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH").length, 1);
+  });
+});
+
+Deno.test("signed draft invoice releases reservations on definitive Stripe rejection", async () => {
+  await agentInvoiceCreditFixture("definitive_failure", (result, calls) => {
+    assertEquals(result.response.status, 200);
+    const release = calls.find((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH");
+    assertEquals(JSON.parse(release!.body).discount_applied, false);
+    assertEquals(release!.url.searchParams.get("discount_invoice_id"), "eq.in_credit_handler");
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST").length, 1);
+  });
+});
+
+Deno.test("signed draft invoice keeps reservations retryable after ambiguous Stripe failure", async () => {
+  await agentInvoiceCreditFixture("ambiguous_failure", (result, calls) => {
+    assertEquals(result.response.status, 500);
+    assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH").length, 0);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST").length > 0, true);
+  });
+});
+
+Deno.test("signed draft invoice reports persistence failure after provider credit and keeps reservation", async () => {
+  await agentInvoiceCreditFixture("persistence_failure", (result, calls) => {
+    assertEquals(result.response.status, 500);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST").length, 1);
+    const patches = calls.filter((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH");
+    assertEquals(patches.length, 1);
+    assertEquals(JSON.parse(patches[0].body).stripe_credit_id, "ii_credit_handler");
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH" && JSON.parse(call.body).discount_applied === false), false);
+  });
+});
+
+Deno.test("signed invoice finalization persists canonical credit or releases unfulfilled reservations", async () => {
+  await agentInvoiceCreditFixture("finalized_existing", (result, calls) => {
+    assertEquals(result.response.status, 200);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST").length, 0);
+    const patch = calls.find((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH");
+    assertEquals(JSON.parse(patch!.body).stripe_credit_id, "ii_credit_handler");
+  });
+  await agentInvoiceCreditFixture("finalized_missing", (result, calls) => {
+    assertEquals(result.response.status, 200);
+    const patch = calls.find((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH");
+    assertEquals(JSON.parse(patch!.body).discount_applied, false);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST").length, 0);
+  });
+});
+
+Deno.test("signed invoice finalization refuses persisted credit absent from Stripe", async () => {
+  await agentInvoiceCreditFixture("finalized_persisted_missing", (result, calls) => {
+    assertEquals(result.response.status, 500);
+    assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH").length, 0);
+  });
+});
+
+Deno.test("signed invoice credit release-row mismatch fails the event", async () => {
+  await agentInvoiceCreditFixture("release_failure", (result, calls) => {
+    assertEquals(result.response.status, 500);
+    const patch = calls.find((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH");
+    assertEquals(JSON.parse(patch!.body).discount_applied, false);
+  });
+});
+
+Deno.test("signed tagged refund stays failed until purchase exists, then reconciles immutable identity", async () => {
+  let purchaseExists = false;
+  const purchase = { id: "purchase_refund_handler", user_id: "user-1", addon_key: "featured_listing", stripe_payment_intent_id: "pi_refund_handler", stripe_customer_id: "cus_refund_handler", stripe_amount_total: 3900, runtime_mode: "test", livemode: false };
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/payment_intents/pi_refund_handler") return webhookJson({ id: "pi_refund_handler", metadata: { checkout_type: "addon", addon_key: "featured_listing" } });
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/addon_purchases") return webhookJson(purchaseExists ? purchase : null);
+    if (call.method === "POST" && call.url.pathname === "/rest/v1/rpc/reconcile_addon_refund_event") return webhookJson({ credits_refunded: 1 });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls, stored) => {
+    const refund = {
+      id: "re_refund_handler", object: "refund", amount: 1300, status: "succeeded", livemode: false,
+      charge: { id: "ch_refund_handler", object: "charge", amount: 3900, customer: "cus_refund_handler", payment_intent: "pi_refund_handler", currency: "eur" },
+      payment_intent: "pi_refund_handler", metadata: { checkout_type: "addon", addon_key: "featured_listing", stripe_session_id: "cs_refund_handler" },
+    };
+    const first = await invoke("refund.updated", refund, { id: "evt_refund_handler" });
+    assertEquals(first.response.status, 500);
+    assertEquals(stored.get("evt_refund_handler")?.status, "failed");
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/rpc/reconcile_addon_refund_event"), false);
+    purchaseExists = true;
+    const retry = await invoke("refund.updated", refund, { id: "evt_refund_handler" });
+    assertEquals(retry.response.status, 200);
+    assertEquals(stored.get("evt_refund_handler")?.status, "processed");
+    const rpc = calls.find((call) => call.url.pathname === "/rest/v1/rpc/reconcile_addon_refund_event");
+    const payload = JSON.parse(rpc!.body);
+    assertEquals(payload.p_purchase_id, "purchase_refund_handler");
+    assertEquals(payload.p_stripe_refund_id, "re_refund_handler");
+    assertEquals(payload.p_refunded_amount, 1300);
+    assertEquals(payload.p_total_amount, 3900);
+    assertEquals(payload.p_runtime_mode, "test");
+    assertEquals(rpc!.url.pathname, "/rest/v1/rpc/reconcile_addon_refund_event");
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/addon_purchases" && call.method !== "GET"), false);
+  });
+});
+
+Deno.test("signed investor payment activates only the exact pending user-tier-session row", async () => {
+  const userId = "00000000-0000-4000-8000-000000000092";
+  const session = { id: "cs_investor_handler", customer: "cus_investor_handler", payment_status: "paid", mode: "payment", livemode: false, metadata: { checkout_type: "investor_payment", user_id: userId, plan_key: "investor_private", access_period_days: "365" } };
+  const route = (call: SignedWebhookCall) => {
+    if (call.url.pathname === "/rest/v1/investor_subscriptions" && call.method === "PATCH") return webhookJson({ id: "is_investor_handler", status: "active", stripe_session_id: session.id });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const result = await invoke("checkout.session.completed", session);
+    assertEquals(result.response.status, 200);
+    const update = calls.find((call) => call.url.pathname === "/rest/v1/investor_subscriptions" && call.method === "PATCH");
+    assertEquals(update!.url.searchParams.get("user_id"), `eq.${userId}`);
+    assertEquals(update!.url.searchParams.get("tier"), "eq.private");
+    assertEquals(update!.url.searchParams.get("stripe_session_id"), "eq.cs_investor_handler");
+    assertEquals(update!.url.searchParams.get("status"), "eq.pending_payment");
+    const payload = JSON.parse(update!.body);
+    assertEquals(payload.runtime_mode, "test");
+    assertEquals(payload.status, "active");
+    assertEquals(new Date(payload.expires_at).getTime() - new Date(payload.started_at).getTime(), 365 * 86400000);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/billing_subscriptions" || call.url.pathname === "/rest/v1/addon_purchases"), false);
+  });
+});
+
+Deno.test("signed unpaid investor session acknowledges without activating", async () => {
+  await signedWebhookFixture({}, async (invoke, calls) => {
+    const result = await invoke("checkout.session.completed", { id: "cs_investor_unpaid", payment_status: "unpaid", livemode: false, metadata: { checkout_type: "investor_payment", user_id: "user-1", plan_key: "investor_private" } });
+    assertEquals(result.response.status, 200);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/investor_subscriptions"), false);
+  });
+});
+
+Deno.test("signed schedule and invoice events retrieve the named canonical add-on subscription", async () => {
+  const canonical = { id: "sub_schedule_handler", customer: "cus_schedule_handler", status: "active", livemode: false, metadata: { checkout_type: "addon", addon_key: "valuation_single" }, invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] }, items: { data: [] } };
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_schedule_handler") return webhookJson(canonical);
+    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/addon_purchases") return new Response(null, { status: 204 });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const schedule = await invoke("subscription_schedule.updated", { id: "sub_sched_1", subscription: { id: canonical.id } });
+    assertEquals(schedule.response.status, 200);
+    const invoice = await invoke("invoice.payment_succeeded", { id: "in_schedule_1", customer: null, parent: { subscription_details: { subscription: canonical.id } } });
+    assertEquals(invoice.response.status, 200);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/subscriptions/sub_schedule_handler").length, 2);
+    assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/addon_purchases" && call.method === "PATCH").length, 2);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles"), false);
+  });
+});
+
+Deno.test("signed invoice payment without subscription finishes without entitlement mutation", async () => {
+  await signedWebhookFixture({}, async (invoke, calls) => {
+    const result = await invoke("invoice.payment_failed", { id: "in_no_subscription", customer: null, subscription: null });
+    assertEquals(result.response.status, 200);
+    assertEquals(calls.some((call) => call.url.pathname.startsWith("/v1/subscriptions/") || call.url.pathname === "/rest/v1/profiles"), false);
+  });
+});
+
+Deno.test("signed subscription records processed after a failed profile write while professional tier succeeds", async () => {
+  const userId = "00000000-0000-4000-8000-000000000093";
+  const canonical = {
+    id: "sub_profile_write_failure", customer: "cus_profile_write_failure", status: "active", livemode: false, current_period_end: 4102444800,
+    metadata: { checkout_type: "subscription", user_id: userId, plan_key: "professional_pro", audience: "professional", billing_cycle: "monthly" },
+    invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] },
+    items: { data: [{ current_period_end: 4102444800, price: { id: "price_professional", product: "prod_professional" } }] },
+  };
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_profile_write_failure") return webhookJson(canonical);
+    if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_profile_write_failure") return webhookJson({ id: "cus_profile_write_failure", metadata: { user_id: userId } });
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "professional_pro", audience: "professional", module: "professional_subscription", metadata: { stripe_product_id: "prod_professional", stripe_price_id: "price_professional" } }]);
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ role: "professional", role_switch_in_progress_at: null });
+    if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return new Response(null, { status: 201 });
+    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ message: "synthetic profile write failure" }, 500);
+    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/professionals") return new Response(null, { status: 204 });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls, stored) => {
+    const result = await invoke("customer.subscription.updated", { id: canonical.id, status: "old", customer: canonical.customer }, { id: "evt_profile_write_failure" });
+    assertEquals(result.response.status, 200);
+    assertEquals(stored.get("evt_profile_write_failure")?.status, "processed");
+    const profile = calls.find((call) => call.url.pathname === "/rest/v1/profiles" && call.method === "PATCH");
+    const professional = calls.find((call) => call.url.pathname === "/rest/v1/professionals" && call.method === "PATCH");
+    const finish = calls.findLast((call) => call.url.pathname === "/rest/v1/stripe_webhook_events" && call.method === "PATCH");
+    assertEquals(Boolean(profile && professional && finish), true);
+    assertEquals(calls.indexOf(profile!) < calls.indexOf(professional!), true);
+    assertEquals(calls.indexOf(professional!) < calls.indexOf(finish!), true);
+    assertEquals(JSON.parse(profile!.body).subscription_product_id, "prod_professional");
+    assertEquals(JSON.parse(professional!.body).subscription_tier, "pro");
+    assertEquals(JSON.parse(finish!.body).status, "processed");
+  });
+});
+
+Deno.test("signed professional subscription uses customer actor with matching or missing subscription actor", async () => {
+  const actor = "00000000-0000-4000-8000-000000000081";
+  for (const subscriptionActor of [actor, undefined]) {
+    const canonical = {
+      id: "sub_professional_actor", customer: "cus_professional_actor", status: "active", livemode: false,
+      current_period_end: 4102444800,
+      metadata: { checkout_type: "subscription", ...(subscriptionActor ? { user_id: subscriptionActor } : {}), plan_key: "professional_pro", audience: "professional" },
+      invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] },
+      items: { data: [{ id: "si_actor", current_period_end: 4102444800, price: { id: "price_professional", product: "prod_professional" } }] },
+    };
+    const route = (call: SignedWebhookCall) => {
+      if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_professional_actor") return webhookJson(canonical);
+      if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_professional_actor") return webhookJson({ id: canonical.customer, email: "actor@maiprop.test", metadata: { user_id: actor } });
+      if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "professional_pro", audience: "professional", module: "professional_subscription", metadata: { stripe_product_id: "prod_professional", stripe_price_id: "price_professional" } }]);
+      if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ role: "professional", participant_type: null, role_switch_in_progress_at: null });
+      if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return new Response(null, { status: 201 });
+      if (call.method === "PATCH" && ["/rest/v1/profiles", "/rest/v1/professionals"].includes(call.url.pathname)) return new Response(null, { status: 204 });
+      return null;
+    };
+    await signedWebhookFixture({ route }, async (invoke, calls) => {
+      const result = await invoke("customer.subscription.updated", { id: canonical.id, customer: canonical.customer, livemode: false });
+      assertEquals(result.response.status, 200);
+      const professional = calls.filter((call) => call.url.pathname === "/rest/v1/professionals" && call.method === "PATCH");
+      assertEquals(professional.length, 1);
+      assertEquals(professional[0].url.searchParams.get("user_id"), `eq.${actor}`);
+      assertEquals(JSON.parse(professional[0].body).subscription_tier, "pro");
+    });
+  }
+});
+
+Deno.test("signed deleted professional subscription keeps manual access on customer actor", async () => {
+  const actorA = "00000000-0000-4000-8000-000000000081";
+  const actorB = "00000000-0000-4000-8000-000000000082";
+  const canonical = {
+    id: "sub_professional_deleted", customer: "cus_professional_deleted", status: "canceled", livemode: false,
+    metadata: { checkout_type: "subscription", user_id: actorB, plan_key: "professional_pro", audience: "professional" },
+    items: { data: [{ id: "si_deleted", price: { id: "price_professional", product: "prod_professional" } }] },
+  };
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_professional_deleted") return webhookJson(canonical);
+    if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_professional_deleted") return webhookJson({ id: canonical.customer, email: "actor-a@maiprop.test", metadata: { user_id: actorA } });
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions") return webhookJson({ data: [], has_more: false, object: "list", url: "/v1/subscriptions" });
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "professional_pro", audience: "professional", module: "professional_subscription", metadata: { stripe_product_id: "prod_professional", stripe_price_id: "price_professional" } }]);
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") {
+      return webhookJson(call.url.searchParams.get("select")?.includes("force_pro_access")
+        ? { role: "professional", force_pro_access: true, is_platform_admin: false }
+        : { role: "professional", participant_type: null, role_switch_in_progress_at: null });
+    }
+    if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return new Response(null, { status: 201 });
+    if (call.method === "PATCH" && ["/rest/v1/profiles", "/rest/v1/professionals"].includes(call.url.pathname)) return new Response(null, { status: 204 });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const result = await invoke("customer.subscription.deleted", { id: canonical.id, customer: canonical.customer, livemode: false });
+    assertEquals(result.response.status, 200);
+    const customer = calls.find((call) => call.url.pathname === "/rest/v1/billing_customers" && call.method === "POST");
+    const subscription = calls.find((call) => call.url.pathname === "/rest/v1/billing_subscriptions" && call.method === "POST");
+    assertEquals(JSON.parse(customer!.body).user_id, actorA);
+    assertEquals(JSON.parse(subscription!.body).user_id, actorA);
+    const profile = calls.find((call) => call.url.pathname === "/rest/v1/profiles" && call.method === "PATCH");
+    assertEquals(profile!.url.searchParams.get("user_id"), `eq.${actorA}`);
+    assertEquals(JSON.parse(profile!.body).subscription_product_id, null);
+    const professional = calls.filter((call) => call.url.pathname === "/rest/v1/professionals" && call.method === "PATCH");
+    assertEquals(professional.length, 1);
+    assertEquals(professional[0].url.searchParams.get("user_id"), `eq.${actorA}`);
+    assertEquals(JSON.parse(professional[0].body).subscription_tier, "pro");
+  });
+});
+
+Deno.test("signed deleted subscription syncs a replacement before any entitlement clear", async () => {
+  const actor = "00000000-0000-4000-8000-000000000094";
+  const customer = "cus_replacement_handler";
+  const deleted = { id: "sub_deleted_handler", customer, status: "canceled", livemode: false, metadata: { plan_key: "professional_pro", audience: "professional" }, items: { data: [{ price: { id: "price_professional", product: "prod_professional" } }] } };
+  const replacement = { id: "sub_replacement_handler", customer, status: "active", livemode: false, created: 1800000000, current_period_end: 4102444800, metadata: { plan_key: "professional_pro", audience: "professional" }, invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] }, items: { data: [{ current_period_end: 4102444800, price: { id: "price_professional", product: "prod_professional" } }] } };
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_deleted_handler") return webhookJson(deleted);
+    if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_replacement_handler") return webhookJson({ id: customer, metadata: { user_id: actor } });
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions") return webhookJson({ object: "list", data: [replacement], has_more: false });
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "professional_pro", audience: "professional", module: "professional_subscription", metadata: { stripe_product_id: "prod_professional", stripe_price_id: "price_professional" } }]);
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ role: "professional", role_switch_in_progress_at: null });
+    if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return new Response(null, { status: 201 });
+    if (call.method === "PATCH" && ["/rest/v1/profiles", "/rest/v1/professionals"].includes(call.url.pathname)) return new Response(null, { status: 204 });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const result = await invoke("customer.subscription.deleted", { id: deleted.id, customer, livemode: false });
+    assertEquals(result.response.status, 200);
+    const history = calls.filter((call) => call.url.pathname === "/rest/v1/billing_subscriptions" && call.method === "POST");
+    assertEquals(history.map((call) => JSON.parse(call.body).stripe_subscription_id), [deleted.id, replacement.id]);
+    const profile = calls.filter((call) => call.url.pathname === "/rest/v1/profiles" && call.method === "PATCH");
+    assertEquals(profile.length, 1);
+    assertEquals(profile[0].url.searchParams.get("user_id"), `eq.${actor}`);
+    assertEquals(JSON.parse(profile[0].body).subscription_product_id, "prod_professional");
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/rpc/apply_subscription_lapse_controls"), false);
+  });
+});
+
+Deno.test("signed subscription during role switch stores history despite invoice-settings failure", async () => {
+  const actor = "00000000-0000-4000-8000-000000000095";
+  const canonical = { id: "sub_role_switch_handler", customer: "cus_role_switch_handler", status: "active", livemode: false, current_period_end: 4102444800, metadata: { plan_key: "professional_pro", audience: "professional" }, invoice_settings: { custom_fields: [] }, items: { data: [{ current_period_end: 4102444800, price: { id: "price_professional", product: "prod_professional" } }] } };
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_role_switch_handler") return webhookJson(canonical);
+    if (call.method === "POST" && call.url.pathname === "/v1/subscriptions/sub_role_switch_handler") return webhookJson({ error: { type: "invalid_request_error", message: "synthetic invoice settings rejection" } }, 400);
+    if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_role_switch_handler") return webhookJson({ id: canonical.customer, metadata: { user_id: actor } });
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "professional_pro", audience: "professional", module: "professional_subscription", metadata: { stripe_product_id: "prod_professional", stripe_price_id: "price_professional" } }]);
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ role: "professional", role_switch_in_progress_at: "2026-09-30T00:00:00Z" });
+    if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return new Response(null, { status: 201 });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const result = await invoke("customer.subscription.updated", { id: canonical.id, customer: canonical.customer, status: "older", livemode: false });
+    assertEquals(result.response.status, 200);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/subscriptions/sub_role_switch_handler" && call.method === "POST").length > 0, true);
+    const history = calls.find((call) => call.url.pathname === "/rest/v1/billing_subscriptions" && call.method === "POST");
+    assertEquals(JSON.parse(history!.body).user_id, actor);
+    assertEquals(JSON.parse(history!.body).status, "active");
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles" && call.method === "PATCH"), false);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/professionals"), false);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/rpc/apply_subscription_lapse_controls"), false);
+  });
+});
+
+Deno.test("signed canonical trial subscription updates the actor claim after billing and entitlement writes", async () => {
+  const actor = "00000000-0000-4000-8000-000000000096";
+  const canonical = { id: "sub_trial_handler", customer: "cus_trial_handler", status: "trialing", livemode: false, trial_end: 4102444800, metadata: { checkout_type: "subscription_trial", user_id: actor, plan_key: "pro", audience: "participant" }, invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] }, items: { data: [{ current_period_end: 4102444800, price: { id: "price_pro", product: "prod_pro" } }] } };
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_trial_handler") return webhookJson(canonical);
+    if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_trial_handler") return webhookJson({ id: canonical.customer, metadata: { user_id: actor } });
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "pro", audience: "participant", module: "user_subscription", metadata: { stripe_product_id: "prod_pro", stripe_price_id: "price_pro" } }]);
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ role: "buyer", participant_type: "buyer", role_switch_in_progress_at: null });
+    if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return new Response(null, { status: 201 });
+    if (call.method === "PATCH" && ["/rest/v1/profiles", "/rest/v1/subscription_trial_claims"].includes(call.url.pathname)) return new Response(null, { status: 204 });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const result = await invoke("customer.subscription.updated", { id: canonical.id, customer: canonical.customer, status: "active", livemode: false });
+    assertEquals(result.response.status, 200);
+    const history = calls.find((call) => call.url.pathname === "/rest/v1/billing_subscriptions" && call.method === "POST");
+    const profile = calls.find((call) => call.url.pathname === "/rest/v1/profiles" && call.method === "PATCH");
+    const claim = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH");
+    assertEquals(Boolean(history && profile && claim), true);
+    assertEquals(calls.indexOf(history!) < calls.indexOf(profile!), true);
+    assertEquals(calls.indexOf(profile!) < calls.indexOf(claim!), true);
+    assertEquals(JSON.parse(history!.body).status, "trialing");
+    assertEquals(JSON.parse(profile!.body).subscription_product_id, "prod_pro");
+    assertEquals(JSON.parse(claim!.body).status, "trialing");
+    assertEquals(claim!.url.searchParams.get("user_id"), `eq.${actor}`);
+    assertEquals(claim!.url.searchParams.get("stripe_subscription_id"), "eq.sub_trial_handler");
+  });
+});
+
+Deno.test("signed deleted subscription without replacement clears and lapses the customer actor", async () => {
+  const actor = "00000000-0000-4000-8000-000000000097";
+  const canonical = { id: "sub_deleted_lapse_handler", customer: "cus_deleted_lapse_handler", status: "canceled", livemode: false, metadata: { plan_key: "professional_pro", audience: "professional" }, items: { data: [{ price: { id: "price_professional", product: "prod_professional" } }] } };
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_deleted_lapse_handler") return webhookJson(canonical);
+    if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_deleted_lapse_handler") return webhookJson({ id: canonical.customer, metadata: { user_id: actor } });
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions") return webhookJson({ object: "list", data: [], has_more: false });
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "professional_pro", audience: "professional", module: "professional_subscription", metadata: { stripe_product_id: "prod_professional", stripe_price_id: "price_professional" } }]);
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") return webhookJson(call.url.searchParams.get("select")?.includes("force_pro_access") ? { role: "professional", force_pro_access: false, is_platform_admin: false } : { role: "professional", role_switch_in_progress_at: null });
+    if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return new Response(null, { status: 201 });
+    if (call.method === "PATCH" && ["/rest/v1/profiles", "/rest/v1/professionals"].includes(call.url.pathname)) return new Response(null, { status: 204 });
+    if (call.method === "POST" && call.url.pathname === "/rest/v1/rpc/apply_subscription_lapse_controls") return webhookJson({ applied: true });
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls) => {
+    const result = await invoke("customer.subscription.deleted", { id: canonical.id, customer: canonical.customer, livemode: false });
+    assertEquals(result.response.status, 200);
+    const profile = calls.find((call) => call.url.pathname === "/rest/v1/profiles" && call.method === "PATCH");
+    const professional = calls.find((call) => call.url.pathname === "/rest/v1/professionals" && call.method === "PATCH");
+    const lapse = calls.find((call) => call.url.pathname === "/rest/v1/rpc/apply_subscription_lapse_controls");
+    assertEquals(Boolean(profile && professional && lapse), true);
+    assertEquals(calls.indexOf(profile!) < calls.indexOf(professional!), true);
+    assertEquals(calls.indexOf(professional!) < calls.indexOf(lapse!), true);
+    assertEquals(profile!.url.searchParams.get("user_id"), `eq.${actor}`);
+    assertEquals(JSON.parse(profile!.body).subscription_product_id, null);
+    assertEquals(professional!.url.searchParams.get("user_id"), `eq.${actor}`);
+    assertEquals(JSON.parse(professional!.body).subscription_tier, "free");
+    assertEquals(JSON.parse(lapse!.body).p_user_id, actor);
+  });
+});
