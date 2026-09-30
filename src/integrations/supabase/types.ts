@@ -886,33 +886,102 @@ export type Database = {
       }
       email_send_log: {
         Row: {
+          accepted_at: string | null
+          applied_at: string | null
+          attempt_started_at: string | null
+          attempt_token: string | null
+          candidate_ids: string[] | null
           created_at: string
+          dispatch_state: string | null
+          entity_hold: boolean | null
+          entity_id: string | null
           error_message: string | null
+          expected_state: Json | null
+          expires_at: string | null
+          first_dispatch_id: string | null
           id: string
           message_id: string | null
           metadata: Json | null
-          recipient_email: string
+          not_before: string | null
+          operation_id: string | null
+          operation_key: string | null
+          payload_fingerprint: string | null
+          prepared_payload: Json | null
+          producer: string | null
+          provider_http_status: number | null
+          provider_message_id: string | null
+          recipient_email: string | null
+          result_error_code: string | null
+          result_outcome: string | null
+          sent_ids: string[] | null
           status: string
+          step: number | null
           template_name: string
         }
         Insert: {
+          accepted_at?: string | null
+          applied_at?: string | null
+          attempt_started_at?: string | null
+          attempt_token?: string | null
+          candidate_ids?: string[] | null
           created_at?: string
+          dispatch_state?: string | null
+          entity_hold?: boolean | null
+          entity_id?: string | null
           error_message?: string | null
+          expected_state?: Json | null
+          expires_at?: string | null
+          first_dispatch_id?: string | null
           id?: string
           message_id?: string | null
           metadata?: Json | null
-          recipient_email: string
+          not_before?: string | null
+          operation_id?: string | null
+          operation_key?: string | null
+          payload_fingerprint?: string | null
+          prepared_payload?: Json | null
+          producer?: string | null
+          provider_http_status?: number | null
+          provider_message_id?: string | null
+          recipient_email?: string | null
+          result_error_code?: string | null
+          result_outcome?: string | null
+          sent_ids?: string[] | null
           status: string
+          step?: number | null
           template_name: string
         }
         Update: {
+          accepted_at?: string | null
+          applied_at?: string | null
+          attempt_started_at?: string | null
+          attempt_token?: string | null
+          candidate_ids?: string[] | null
           created_at?: string
+          dispatch_state?: string | null
+          entity_hold?: boolean | null
+          entity_id?: string | null
           error_message?: string | null
+          expected_state?: Json | null
+          expires_at?: string | null
+          first_dispatch_id?: string | null
           id?: string
           message_id?: string | null
           metadata?: Json | null
-          recipient_email?: string
+          not_before?: string | null
+          operation_id?: string | null
+          operation_key?: string | null
+          payload_fingerprint?: string | null
+          prepared_payload?: Json | null
+          producer?: string | null
+          provider_http_status?: number | null
+          provider_message_id?: string | null
+          recipient_email?: string | null
+          result_error_code?: string | null
+          result_outcome?: string | null
+          sent_ids?: string[] | null
           status?: string
+          step?: number | null
           template_name?: string
         }
         Relationships: []
@@ -5704,6 +5773,60 @@ export type Database = {
       }
     }
     Functions: {
+      apply_email_dispatch_result_for_service: {
+        Args: { p_operation_id: string }
+        Returns: Json
+      }
+      begin_email_dispatch_for_service: {
+        Args: { p_operation_id: string; p_attempt_token: string }
+        Returns: Json
+      }
+      get_selected_email_operation_for_service: {
+        Args: { p_entity_id: string; p_producer: string; p_step?: number | null }
+        Returns: Json
+      }
+      list_accepted_unapplied_email_operations_for_service: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      maintain_selected_email_operations_for_service: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      prepare_marketing_followup_for_service: {
+        Args: {
+          p_dispatch_id: string
+          p_execution_token: string
+          p_expected: Json
+          p_lead_id: string
+          p_payload: Json
+          p_step: number
+        }
+        Returns: Json
+      }
+      prepare_saved_search_alert_for_service: {
+        Args: {
+          p_candidate_ids: string[]
+          p_dispatch_id: string
+          p_execution_token: string
+          p_expected: Json
+          p_payload: Json
+          p_search_id: string
+          p_sent_ids: string[]
+        }
+        Returns: Json
+      }
+      record_email_dispatch_result_for_service: {
+        Args: {
+          p_error_code?: string | null
+          p_http_status: number | null
+          p_operation_id: string
+          p_outcome: string
+          p_provider_message_id: string | null
+          p_attempt_token: string
+        }
+        Returns: undefined
+      }
       accept_open_house_offer: {
         Args: { p_offer_id: string }
         Returns: {
