@@ -107,6 +107,8 @@ beforeEach(() => {
   useAuthMock.mockReturnValue({
     user: { id: "u-1" },
     profile: { role: "seller", participant_type: "seller" },
+    loading: false,
+    profileLoading: false,
   });
   useSubMock.mockReset();
   useSubMock.mockReturnValue({ isPro: false });
@@ -176,6 +178,7 @@ describe("CreateListing", () => {
 
     expect(screen.getByText(/Edit Listing/i)).toBeInTheDocument();
     expect(screen.queryByText(/Listing unavailable/i)).not.toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it("redirects non-eligible users (participant_type=buyer) and toasts an error", () => {
@@ -334,8 +337,203 @@ describe("CreateListing", () => {
 
     expect(screen.getByText(/Redirecting/i)).toBeInTheDocument();
     expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/managed from Projects/i));
-    expect(navigateMock).toHaveBeenCalledWith("/projects", { replace: true });
+    expect(navigateMock).toHaveBeenCalledWith("/projects/project-1", { replace: true });
     expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+  });
+
+  it("routes another member's manageable organization project ad to its linked project", () => {
+    paramsState.listingId = "project-ad";
+    useManageableOrganizationsMock.mockReturnValue({
+      data: [{ id: "org-1", name: "Athens Agency", role: "admin" }],
+      isLoading: false,
+    });
+    useListingMock.mockReturnValue({
+      data: {
+        id: "project-ad",
+        owner_id: "another-member",
+        organization_id: "org-1",
+        listing_type: "new_build",
+        project_id: "project-1",
+        listing_images: [],
+      },
+      isLoading: false,
+    });
+
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(screen.getByText(/Redirecting/i)).toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith("/projects/project-1", { replace: true });
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps an unauthorized project ad unavailable without navigating to its project", () => {
+    paramsState.listingId = "project-ad";
+    useListingMock.mockReturnValue({
+      data: {
+        id: "project-ad",
+        owner_id: "another-member",
+        organization_id: "org-1",
+        listing_type: "new_build",
+        project_id: "project-1",
+        listing_images: [],
+      },
+      isLoading: false,
+    });
+
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(screen.getByText(/Listing unavailable/i)).toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the legacy Projects fallback for an owner's unlinked project ad", () => {
+    paramsState.listingId = "project-ad";
+    useListingMock.mockReturnValue({
+      data: {
+        id: "project-ad",
+        owner_id: "u-1",
+        listing_type: "new_build",
+        project_id: null,
+        listing_images: [],
+      },
+      isLoading: false,
+    });
+
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(screen.getByText(/Redirecting/i)).toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith("/projects", { replace: true });
+  });
+
+  it("shows an unavailable return for another member's unlinked organization project ad", () => {
+    paramsState.listingId = "project-ad";
+    useManageableOrganizationsMock.mockReturnValue({
+      data: [{ id: "org-1", name: "Athens Agency", role: "admin" }],
+      isLoading: false,
+    });
+    useListingMock.mockReturnValue({
+      data: {
+        id: "project-ad",
+        owner_id: "another-member",
+        organization_id: "org-1",
+        listing_type: "new_build",
+        project_id: null,
+        listing_images: [],
+      },
+      isLoading: false,
+    });
+
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(screen.getByText(/Project ad unavailable/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Back to Listings/i })).toHaveAttribute("href", "/dashboard/listings");
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+  });
+
+  it("waits for listing and organization membership before routing a project ad", () => {
+    paramsState.listingId = "project-ad";
+    const listing = {
+      id: "project-ad",
+      owner_id: "another-member",
+      organization_id: "org-1",
+      listing_type: "new_build",
+      project_id: "project-1",
+      listing_images: [],
+    };
+    useListingMock.mockReturnValue({ data: listing, isLoading: true });
+    useManageableOrganizationsMock.mockReturnValue({
+      data: [{ id: "org-1", name: "Athens Agency", role: "admin" }],
+      isLoading: true,
+    });
+
+    const view = render(<CreateListing />, { wrapper: wrap });
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    useListingMock.mockReturnValue({ data: listing, isLoading: false });
+    view.rerender(<CreateListing />);
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    useManageableOrganizationsMock.mockReturnValue({
+      data: [{ id: "org-1", name: "Athens Agency", role: "admin" }],
+      isLoading: false,
+    });
+    view.rerender(<CreateListing />);
+    expect(navigateMock).toHaveBeenCalledWith("/projects/project-1", { replace: true });
+  });
+
+  it("does not route a cached owner project ad until authentication settles", () => {
+    paramsState.listingId = "project-ad";
+    useListingMock.mockReturnValue({
+      data: {
+        id: "project-ad",
+        owner_id: "u-1",
+        listing_type: "new_build",
+        project_id: "project-1",
+        listing_images: [],
+      },
+      isLoading: false,
+    });
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { role: "seller", participant_type: "seller" },
+      loading: true,
+      profileLoading: true,
+    });
+
+    const view = render(<CreateListing />, { wrapper: wrap });
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { role: "seller", participant_type: "seller" },
+      loading: false,
+      profileLoading: false,
+    });
+    view.rerender(<CreateListing />);
+    expect(navigateMock).toHaveBeenCalledWith("/projects/project-1", { replace: true });
+  });
+
+  it("does not route a cached prior actor project ad during an account switch", () => {
+    paramsState.listingId = "project-ad";
+    useListingMock.mockReturnValue({
+      data: {
+        id: "project-ad",
+        owner_id: "another-member",
+        organization_id: "org-1",
+        listing_type: "new_build",
+        project_id: "project-1",
+        listing_images: [],
+      },
+      isLoading: false,
+    });
+    useManageableOrganizationsMock.mockReturnValue({
+      data: [{ id: "org-1", name: "Athens Agency", role: "admin" }],
+      isLoading: true,
+    });
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { role: "seller", participant_type: "seller" },
+      loading: true,
+      profileLoading: true,
+    });
+
+    const view = render(<CreateListing />, { wrapper: wrap });
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    useAuthMock.mockReturnValue({
+      user: { id: "u-2" },
+      profile: { role: "seller", participant_type: "seller" },
+      loading: false,
+      profileLoading: false,
+    });
+    view.rerender(<CreateListing />);
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    useManageableOrganizationsMock.mockReturnValue({ data: [], isLoading: false });
+    view.rerender(<CreateListing />);
+    expect(screen.getByText(/Listing unavailable/i)).toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it("routes unavailable edit states back to the canonical listings dashboard", () => {

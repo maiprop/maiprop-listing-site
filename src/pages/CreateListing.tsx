@@ -67,7 +67,7 @@ export default function CreateListing() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { listingId } = useParams<{ listingId?: string }>();
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading, profileLoading } = useAuth();
   const isEditMode = Boolean(listingId);
   const { data: editListing, isLoading: editListingLoading } = useListing(listingId ?? "");
   const {
@@ -167,22 +167,38 @@ export default function CreateListing() {
     }
   }, [form.is_pre_sale, formListingType, set]);
 
-  const redirectingProjectAdEdit = Boolean(
+  const projectAdEditReady = Boolean(
     isEditMode &&
     user &&
+    !authLoading &&
+    !profileLoading &&
+    canCreateListing &&
     editListing &&
-    editListing.owner_id === user.id &&
+    !editListingLoading &&
+    !manageableOrganizationsLoading &&
+    canManageEditedListing &&
     isProjectAdRecord(editListing),
   );
-  const projectAdRedirectedRef = useRef(false);
+  const projectAdRedirectTarget = projectAdEditReady
+    ? editListing?.project_id
+      ? `/projects/${editListing.project_id}`
+      : editListing?.owner_id === user?.id
+        ? "/projects"
+        : null
+    : null;
+  const redirectingProjectAdEdit = Boolean(projectAdRedirectTarget);
+  const unlinkedOrganizationProjectAd = projectAdEditReady && !projectAdRedirectTarget;
+  const projectAdRedirectedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!redirectingProjectAdEdit || projectAdRedirectedRef.current) return;
-    projectAdRedirectedRef.current = true;
+    if (!projectAdRedirectTarget) return;
+    const redirectKey = `${user?.id}:${listingId}:${projectAdRedirectTarget}`;
+    if (projectAdRedirectedRef.current === redirectKey) return;
+    projectAdRedirectedRef.current = redirectKey;
     toast.error(
       tr("createListing.edit.projectAdManagedInProjects", "Project ads are managed from Projects. Use Create New Building for project inventory."),
     );
-    navigate("/projects", { replace: true });
-  }, [navigate, redirectingProjectAdEdit, tr]);
+    navigate(projectAdRedirectTarget, { replace: true });
+  }, [listingId, navigate, projectAdRedirectTarget, tr, user?.id]);
 
   // Field refs for scroll-to-error
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -265,7 +281,7 @@ export default function CreateListing() {
 
   if (
     isEditMode
-    && (editListingLoading || (Boolean(user) && manageableOrganizationsLoading))
+    && (authLoading || profileLoading || editListingLoading || (Boolean(user) && manageableOrganizationsLoading))
   ) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -313,6 +329,27 @@ export default function CreateListing() {
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <span className="text-sm text-muted-foreground">{tr("createListing.guard.redirecting", "Redirecting...")}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (unlinkedOrganizationProjectAd) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-4">
+          <h1 className="font-display text-2xl font-bold">
+            {tr("createListing.edit.projectAdUnavailableTitle", "Project ad unavailable")}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {tr(
+              "createListing.edit.projectAdUnavailableBody",
+              "This project ad has no linked project. Check your Developer account and plan for project access, or return to Listings.",
+            )}
+          </p>
+          <Button asChild variant="outline">
+            <Link to="/dashboard/listings">{tr("createListing.edit.backToListings", "Back to Listings")}</Link>
+          </Button>
         </div>
       </div>
     );

@@ -460,6 +460,19 @@ describe("SellerRoute", () => {
 // ─── DeveloperRoute ─────────────────────────────────────────────────────────
 
 describe("DeveloperRoute", () => {
+  const renderLinkedProjectDestination = () => renderWithProviders(
+    <Routes>
+      <Route
+        path="/projects/:id"
+        element={<DeveloperRoute><div>PROJECT DETAIL</div></DeveloperRoute>}
+      />
+      <Route path="/login" element={<div>at-login</div>} />
+      <Route path="/onboarding" element={<div>at-onboarding</div>} />
+      <Route path="/dashboard" element={<div>at-dashboard</div>} />
+    </Routes>,
+    { initialPath: "/projects/project-1" },
+  );
+
   const renderDeveloperRoute = () => renderWithProviders(
     <Routes>
       <Route
@@ -515,6 +528,37 @@ describe("DeveloperRoute", () => {
     renderDeveloperRoute();
     expect(screen.getByText(/Developer Access Required/i)).toBeInTheDocument();
     expect(screen.queryByText("PROJECTS")).toBeNull();
+  });
+
+  it("shows the Developer recovery view at a linked project destination for an agent", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "agent", participant_type: "agent" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: false, loading: false });
+
+    renderLinkedProjectDestination();
+
+    expect(screen.getByText(/Developer Access Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("PROJECT DETAIL")).toBeNull();
+  });
+
+  it("opens a linked project destination for a Developer Pro account", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "developer", participant_type: "developer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: true, loading: false });
+
+    renderLinkedProjectDestination();
+
+    expect(screen.getByText("PROJECT DETAIL")).toBeInTheDocument();
   });
 
   it("blocks Developer accounts without Pro", () => {
