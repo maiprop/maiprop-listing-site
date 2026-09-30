@@ -1,81 +1,75 @@
--- Disposable local proof of the SQL predicates serialized by trialClaims.ts.
--- No provider or hosted database effects. Synthetic fixtures roll back.
+\set ON_ERROR_STOP on
 BEGIN;
-DO $$
-BEGIN
-  IF current_database() <> 'maiprop_t13trial_20260930_cas01'
+DO $$ BEGIN
+  IF current_setting('maiprop.test_disposable_database',true) IS DISTINCT FROM current_database()
     OR inet_server_addr() IS NOT NULL
-    OR current_user <> 'postgres'
-    OR EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid())
-    OR EXISTS (SELECT 1 FROM pg_prepared_xacts WHERE database=current_database())
-  THEN RAISE EXCEPTION 'trial CAS proof requires its exclusively owned local clone'; END IF;
-  IF EXISTS (SELECT 1 FROM unnest(ARRAY['anon','authenticated']) AS r
-    WHERE has_table_privilege(r,'public.subscription_trial_claims','INSERT,UPDATE,DELETE')
-    OR has_any_column_privilege(r,'public.subscription_trial_claims','INSERT,UPDATE'))
-  THEN RAISE EXCEPTION 'trial envelope browser write authority exists'; END IF;
-  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='public.subscription_trial_claims'::regclass)
-  THEN RAISE EXCEPTION 'trial claims RLS disabled'; END IF;
+    OR current_database() IN ('postgres','template0','template1','maiprop_replay_current_20260921','maiprop_t12q_20260930_source')
+  THEN RAISE EXCEPTION 'Explicit matching disposable socket database required'; END IF;
+  IF current_setting('session_replication_role') <> 'origin' THEN RAISE EXCEPTION 'Normal triggers required'; END IF;
 END $$;
-SET LOCAL session_replication_role=replica;
+SET LOCAL statement_timeout='20s';
+SET LOCAL lock_timeout='3s';
+SET LOCAL search_path=public,extensions;
+CREATE EXTENSION IF NOT EXISTS pgtap;
+SELECT plan(14);
+SELECT is(current_setting('session_replication_role'),'origin','normal triggers are enabled');
+SELECT ok(NOT EXISTS (SELECT 1 FROM unnest(ARRAY['anon','authenticated']) AS r
+  WHERE has_table_privilege(r,'public.subscription_trial_claims','INSERT,UPDATE,DELETE')
+  OR has_any_column_privilege(r,'public.subscription_trial_claims','INSERT,UPDATE')),
+  'browser roles have no effective trial envelope write privilege');
+SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid='public.subscription_trial_claims'::regclass),'trial claims have RLS');
+SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim.role','service_role',true),set_config('request.jwt.claims','{"role":"service_role"}',true);
 INSERT INTO auth.users(id,email) VALUES
  ('00000000-0000-4000-8000-000000000731','trial-cas-731@example.invalid'),
  ('00000000-0000-4000-8000-000000000732','trial-cas-732@example.invalid');
-SET LOCAL session_replication_role=origin;
+SELECT is((SELECT count(*)::integer FROM public.profiles WHERE user_id IN ('00000000-0000-4000-8000-000000000731','00000000-0000-4000-8000-000000000732')),2,'normal auth triggers created both profiles');
 SET LOCAL ROLE service_role;
+SELECT lives_ok($q$
 INSERT INTO public.subscription_trial_claims(id,user_id,plan_key,pricing_audience,stripe_customer_id,runtime_mode,livemode,status,metadata)
 VALUES ('00000000-0000-4000-8000-000000000733','00000000-0000-4000-8000-000000000731','pro','participant','cus_local_trial_cas','test',false,'checkout_started',
- '{"trial_days":"7","checkout_operation_v1":{"revision":"00000000-0000-4000-8000-000000000734","dispatch_count":0,"key":"local-only"}}');
-DO $$
-DECLARE n integer;
-BEGIN
-  WITH changed AS (
-    UPDATE public.subscription_trial_claims SET metadata=jsonb_set(jsonb_set(metadata,'{checkout_operation_v1,revision}','"00000000-0000-4000-8000-000000000735"'),'{checkout_operation_v1,dispatch_count}','1')
-    WHERE id='00000000-0000-4000-8000-000000000733' AND user_id='00000000-0000-4000-8000-000000000731'
-      AND runtime_mode='test' AND livemode=false AND stripe_customer_id='cus_local_trial_cas'
-      AND status='checkout_started' AND stripe_subscription_id IS NULL AND stripe_checkout_session_id IS NULL
-      AND metadata->'checkout_operation_v1'->>'revision'='00000000-0000-4000-8000-000000000734'
-      AND metadata->'checkout_operation_v1'->>'dispatch_count'='0' RETURNING *) SELECT count(*) INTO n FROM changed;
-  IF n<>1 THEN RAISE EXCEPTION 'first guarded dispatch did not win'; END IF;
-  WITH changed AS (
-    UPDATE public.subscription_trial_claims SET metadata='{}'
-    WHERE id='00000000-0000-4000-8000-000000000733'
-      AND metadata->'checkout_operation_v1'->>'revision'='00000000-0000-4000-8000-000000000734' RETURNING *) SELECT count(*) INTO n FROM changed;
-  IF n<>0 THEN RAISE EXCEPTION 'stale revision overwrote envelope'; END IF;
-  WITH changed AS (
-    DELETE FROM public.subscription_trial_claims WHERE id='00000000-0000-4000-8000-000000000733'
-      AND user_id='00000000-0000-4000-8000-000000000732' AND runtime_mode='test'
-      AND metadata->'checkout_operation_v1'->>'revision'='00000000-0000-4000-8000-000000000735' RETURNING *) SELECT count(*) INTO n FROM changed;
-  IF n<>0 THEN RAISE EXCEPTION 'cross-actor delete'; END IF;
-  BEGIN
-    INSERT INTO public.subscription_trial_claims(user_id,plan_key,pricing_audience,runtime_mode,livemode)
-    VALUES ('00000000-0000-4000-8000-000000000731','pro','participant','test',false);
-    RAISE EXCEPTION 'second reserved trial admitted';
-  EXCEPTION WHEN unique_violation THEN NULL; END;
-  UPDATE public.subscription_trial_claims SET stripe_subscription_id='sub_local_trial',status='trialing'
-    WHERE id='00000000-0000-4000-8000-000000000733';
-  WITH changed AS (
-    UPDATE public.subscription_trial_claims SET status='checkout_abandoned'
-    WHERE id='00000000-0000-4000-8000-000000000733' AND status='checkout_started'
-      AND stripe_subscription_id IS NULL AND stripe_checkout_session_id IS NULL RETURNING *) SELECT count(*) INTO n FROM changed;
-  IF n<>0 THEN RAISE EXCEPTION 'consumed trial was abandoned'; END IF;
-  IF (SELECT metadata->'checkout_operation_v1'->>'key' FROM public.subscription_trial_claims WHERE id='00000000-0000-4000-8000-000000000733') <> 'local-only'
-  THEN RAISE EXCEPTION 'operation lost'; END IF;
-END $$;
+ '{"trial_days":"7","checkout_operation_v1":{"revision":"00000000-0000-4000-8000-000000000734","dispatch_count":0,"key":"local-only"}}')
+$q$,'service creates the durable trial reservation with normal triggers');
+WITH changed AS (
+  UPDATE public.subscription_trial_claims SET metadata=jsonb_set(jsonb_set(metadata,'{checkout_operation_v1,revision}','"00000000-0000-4000-8000-000000000735"'),'{checkout_operation_v1,dispatch_count}','1')
+  WHERE id='00000000-0000-4000-8000-000000000733' AND user_id='00000000-0000-4000-8000-000000000731'
+    AND runtime_mode='test' AND livemode=false AND stripe_customer_id='cus_local_trial_cas'
+    AND status='checkout_started' AND stripe_subscription_id IS NULL AND stripe_checkout_session_id IS NULL
+    AND metadata->'checkout_operation_v1'->>'revision'='00000000-0000-4000-8000-000000000734'
+    AND metadata->'checkout_operation_v1'->>'dispatch_count'='0' RETURNING *)
+SELECT is((SELECT count(*)::integer FROM changed),1,'first full identity revision/count CAS wins');
+WITH changed AS (
+  UPDATE public.subscription_trial_claims SET metadata='{}'
+  WHERE id='00000000-0000-4000-8000-000000000733'
+    AND metadata->'checkout_operation_v1'->>'revision'='00000000-0000-4000-8000-000000000734' RETURNING *)
+SELECT is((SELECT count(*)::integer FROM changed),0,'stale revision returns zero rows without overwriting envelope');
+WITH changed AS (
+  DELETE FROM public.subscription_trial_claims WHERE id='00000000-0000-4000-8000-000000000733'
+    AND user_id='00000000-0000-4000-8000-000000000732' AND runtime_mode='test'
+    AND metadata->'checkout_operation_v1'->>'revision'='00000000-0000-4000-8000-000000000735' RETURNING *)
+SELECT is((SELECT count(*)::integer FROM changed),0,'wrong actor cannot delete reservation');
+SELECT throws_ok($q$
+  INSERT INTO public.subscription_trial_claims(user_id,plan_key,pricing_audience,runtime_mode,livemode)
+  VALUES ('00000000-0000-4000-8000-000000000731','pro','participant','test',false)
+$q$,'23505',NULL,'unique index prevents a second non-abandoned trial');
+UPDATE public.subscription_trial_claims SET stripe_subscription_id='sub_local_trial',status='trialing'
+  WHERE id='00000000-0000-4000-8000-000000000733';
+WITH changed AS (
+  UPDATE public.subscription_trial_claims SET status='checkout_abandoned'
+  WHERE id='00000000-0000-4000-8000-000000000733' AND status='checkout_started'
+    AND stripe_subscription_id IS NULL AND stripe_checkout_session_id IS NULL RETURNING *)
+SELECT is((SELECT count(*)::integer FROM changed),0,'late pending expiry cannot abandon a consumed trial');
+SELECT is((SELECT metadata->'checkout_operation_v1'->>'key' FROM public.subscription_trial_claims WHERE id='00000000-0000-4000-8000-000000000733'),'local-only','original operation key survives updates');
 RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000731',true),set_config('request.jwt.claim.role','authenticated',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"00000000-0000-4000-8000-000000000731"}',true);
 SET LOCAL ROLE authenticated;
-SELECT set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000731',true);
-DO $$
-BEGIN
-  IF (SELECT count(*) FROM public.subscription_trial_claims WHERE id='00000000-0000-4000-8000-000000000733')<>1 THEN RAISE EXCEPTION 'owner cannot read'; END IF;
-  BEGIN
-    UPDATE public.subscription_trial_claims SET metadata='{}' WHERE id='00000000-0000-4000-8000-000000000733';
-    RAISE EXCEPTION 'authenticated envelope mutation allowed';
-  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
-END $$;
-SELECT set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000732',true);
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM public.subscription_trial_claims WHERE id='00000000-0000-4000-8000-000000000733') THEN RAISE EXCEPTION 'other actor reads claim'; END IF;
-END $$;
+SELECT is((SELECT count(*)::integer FROM public.subscription_trial_claims WHERE id='00000000-0000-4000-8000-000000000733'),1,'owner reads own claim');
+SELECT throws_ok($q$
+  UPDATE public.subscription_trial_claims SET metadata='{}' WHERE id='00000000-0000-4000-8000-000000000733'
+$q$,'42501','permission denied for table subscription_trial_claims','authenticated actor cannot alter operation envelope');
 RESET ROLE;
-SELECT 'trial JSON revision CAS, admission, and server-only envelope proof passed' AS result;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000732',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"00000000-0000-4000-8000-000000000732"}',true);
+SET LOCAL ROLE authenticated;
+SELECT is((SELECT count(*)::integer FROM public.subscription_trial_claims WHERE id='00000000-0000-4000-8000-000000000733'),0,'other actor cannot read claim');
+RESET ROLE;
+SELECT * FROM finish();
 ROLLBACK;
