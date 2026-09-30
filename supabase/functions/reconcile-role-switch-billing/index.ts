@@ -103,13 +103,13 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Service unavailable" }, 503);
   }
 
-  const supabase = createClient<FunctionDatabase>(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const stripe = await createVerifiedStripeClient(stripeKey);
-  const workerId = crypto.randomUUID();
-
   try {
+    const supabase = createClient<FunctionDatabase>(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const stripe = await createVerifiedStripeClient(stripeKey);
+    const workerId = crypto.randomUUID();
+
     const result = await processReconciliationBatch({
       claim: async (signal) => {
         const { data, error } = await supabase
