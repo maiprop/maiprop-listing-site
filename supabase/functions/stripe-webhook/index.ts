@@ -1580,6 +1580,7 @@ async function syncSubscription(
       filter,
       err: String(error.message ?? error),
     });
+    throw new Error(`Failed to persist subscription product for ${userId}: ${error.message ?? error}`);
   } else {
     log.info("updated profile subscription", {
       filter,
@@ -1712,6 +1713,7 @@ async function clearSubscription(
       filter,
       err: String(error.message ?? error),
     });
+    throw new Error(`Failed to clear subscription product for ${userId}: ${error.message ?? error}`);
   } else {
     log.info("cleared subscription", { filter });
   }
@@ -1739,6 +1741,7 @@ async function clearSubscription(
         user_id: userId,
         err: String(profErr.message ?? profErr),
       });
+      throw new Error(`Failed to clear professional tier for ${userId}: ${profErr.message ?? profErr}`);
     }
   }
 
@@ -1773,6 +1776,7 @@ async function syncProfessionalTier(
       tier,
       err: String(error.message ?? error),
     });
+    throw new Error(`Failed to persist professional tier for ${userId}: ${error.message ?? error}`);
   } else {
     log.info("updated professional tier", {
       user_id: userId,
@@ -1821,7 +1825,7 @@ async function hasManualProAccess(
       user_id: userId,
       err: String(error.message ?? error),
     });
-    return false;
+    throw new Error(`Failed to check manual Pro access for ${userId}: ${error.message ?? error}`);
   }
 
   const profile = data as {
@@ -1855,7 +1859,7 @@ async function applySubscriptionLapseControls(
       status,
       err: String(error.message ?? error),
     });
-    return;
+    throw new Error(`Failed to apply subscription lapse controls for ${userId}: ${error.message ?? error}`);
   }
 
   log.info("subscription lapse controls applied", {

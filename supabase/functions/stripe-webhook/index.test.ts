@@ -2250,37 +2250,112 @@ Deno.test("signed invoice payment without subscription finishes without entitlem
   });
 });
 
-Deno.test("signed subscription records processed after a failed profile write while professional tier succeeds", async () => {
-  const userId = "00000000-0000-4000-8000-000000000093";
+type EntitlementFailureStep = "profile" | "professional" | "manual" | "lapse";
+type EntitlementFailurePath = "active" | "terminal" | "deleted";
+
+const signedEntitlementFailureFixture = async (
+  path: EntitlementFailurePath,
+  step: EntitlementFailureStep,
+  inspect: (context: {
+    first: { response: Response; body: Record<string, unknown> };
+    retry: () => Promise<{ response: Response; body: Record<string, unknown> }>;
+    calls: SignedWebhookCall[];
+    stored: Map<string, Record<string, unknown>>;
+    actor: string;
+  }) => void | Promise<void>,
+) => {
+  const actor = "00000000-0000-4000-8000-000000000093";
   const canonical = {
-    id: "sub_profile_write_failure", customer: "cus_profile_write_failure", status: "active", livemode: false, current_period_end: 4102444800,
-    metadata: { checkout_type: "subscription", user_id: userId, plan_key: "professional_pro", audience: "professional", billing_cycle: "monthly" },
+    id: `sub_entitlement_${path}`, customer: `cus_entitlement_${path}`,
+    status: path === "active" ? "active" : "canceled", livemode: false,
+    current_period_end: 4102444800,
+    metadata: { checkout_type: "subscription", user_id: actor, plan_key: "professional_pro", audience: "professional" },
     invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] },
     items: { data: [{ current_period_end: 4102444800, price: { id: "price_professional", product: "prod_professional" } }] },
   };
+  let fail = true;
   const route = (call: SignedWebhookCall) => {
-    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_profile_write_failure") return webhookJson(canonical);
-    if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_profile_write_failure") return webhookJson({ id: "cus_profile_write_failure", metadata: { user_id: userId } });
+    if (call.method === "GET" && call.url.pathname === `/v1/subscriptions/${canonical.id}`) return webhookJson(canonical);
+    if (call.method === "GET" && call.url.pathname === `/v1/customers/${canonical.customer}`) return webhookJson({ id: canonical.customer, metadata: { user_id: actor } });
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions") return webhookJson({ object: "list", data: [], has_more: false });
     if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "professional_pro", audience: "professional", module: "professional_subscription", metadata: { stripe_product_id: "prod_professional", stripe_price_id: "price_professional" } }]);
-    if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ role: "professional", role_switch_in_progress_at: null });
+    if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") {
+      if (call.url.searchParams.get("select")?.includes("force_pro_access")) {
+        return fail && step === "manual"
+          ? webhookJson({ message: "synthetic manual lookup failure" }, 500)
+          : webhookJson({ role: "professional", force_pro_access: false, is_platform_admin: false });
+      }
+      return webhookJson({ role: "professional", role_switch_in_progress_at: null });
+    }
     if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return new Response(null, { status: 201 });
-    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ message: "synthetic profile write failure" }, 500);
-    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/professionals") return new Response(null, { status: 204 });
+    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/profiles") return fail && step === "profile" ? webhookJson({ message: "synthetic profile persistence failure" }, 500) : new Response(null, { status: 204 });
+    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/professionals") return fail && step === "professional" ? webhookJson({ message: "synthetic professional persistence failure" }, 500) : new Response(null, { status: 204 });
+    if (call.method === "POST" && call.url.pathname === "/rest/v1/rpc/apply_subscription_lapse_controls") return fail && step === "lapse" ? webhookJson({ message: "synthetic lapse persistence failure" }, 500) : webhookJson({ applied: true });
     return null;
   };
   await signedWebhookFixture({ route }, async (invoke, calls, stored) => {
-    const result = await invoke("customer.subscription.updated", { id: canonical.id, status: "old", customer: canonical.customer }, { id: "evt_profile_write_failure" });
-    assertEquals(result.response.status, 200);
-    assertEquals(stored.get("evt_profile_write_failure")?.status, "processed");
-    const profile = calls.find((call) => call.url.pathname === "/rest/v1/profiles" && call.method === "PATCH");
-    const professional = calls.find((call) => call.url.pathname === "/rest/v1/professionals" && call.method === "PATCH");
-    const finish = calls.findLast((call) => call.url.pathname === "/rest/v1/stripe_webhook_events" && call.method === "PATCH");
-    assertEquals(Boolean(profile && professional && finish), true);
-    assertEquals(calls.indexOf(profile!) < calls.indexOf(professional!), true);
-    assertEquals(calls.indexOf(professional!) < calls.indexOf(finish!), true);
+    const type = path === "deleted" ? "customer.subscription.deleted" : "customer.subscription.updated";
+    const event = { id: canonical.id, customer: canonical.customer, livemode: false, status: "old" };
+    const overrides = { id: `evt_entitlement_${path}_${step}` };
+    const retry = () => invoke(type, event, overrides);
+    const first = await retry();
+    await inspect({ first, retry: () => { fail = false; return retry(); }, calls, stored, actor });
+  });
+};
+
+for (const [path, step, later] of [
+  ["active", "profile", ["/rest/v1/professionals"]],
+  ["active", "professional", []],
+  ["terminal", "manual", ["/rest/v1/profiles#PATCH", "/rest/v1/professionals", "/rest/v1/rpc/apply_subscription_lapse_controls"]],
+  ["terminal", "profile", ["/rest/v1/professionals", "/rest/v1/rpc/apply_subscription_lapse_controls"]],
+  ["terminal", "professional", ["/rest/v1/rpc/apply_subscription_lapse_controls"]],
+  ["terminal", "lapse", []],
+  ["deleted", "profile", ["/rest/v1/professionals", "/rest/v1/rpc/apply_subscription_lapse_controls"]],
+  ["deleted", "manual", ["/rest/v1/professionals", "/rest/v1/rpc/apply_subscription_lapse_controls"]],
+  ["deleted", "professional", ["/rest/v1/rpc/apply_subscription_lapse_controls"]],
+  ["deleted", "lapse", []],
+] as const) {
+  Deno.test(`signed ${path} subscription ${step} failure leaves event retryable`, async () => {
+    await signedEntitlementFailureFixture(path, step, ({ first, calls, stored, actor }) => {
+      assertEquals(first.response.status, 500);
+      assertEquals(String(first.body.error).includes(actor), true);
+      assertEquals(String(first.body.error).includes("synthetic"), true);
+      assertEquals(stored.get(`evt_entitlement_${path}_${step}`)?.status, "failed");
+      assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/billing_subscriptions" && call.method === "POST" && JSON.parse(call.body).user_id === actor), true);
+      const failurePath = step === "profile" ? "/rest/v1/profiles" : step === "professional" ? "/rest/v1/professionals" : step === "manual" ? "/rest/v1/profiles" : "/rest/v1/rpc/apply_subscription_lapse_controls";
+      const failing = calls.findLast((call) => call.url.pathname === failurePath && (step === "manual" ? call.method === "GET" && call.url.searchParams.get("select")?.includes("force_pro_access") : step === "lapse" ? call.method === "POST" : call.method === "PATCH"));
+      assertEquals(Boolean(failing), true);
+      assertEquals(failing!.url.searchParams.get("user_id") ?? (step === "lapse" ? JSON.parse(failing!.body).p_user_id : null), step === "lapse" ? actor : `eq.${actor}`);
+      const after = calls.slice(calls.indexOf(failing!) + 1);
+      for (const forbidden of later) {
+        const [pathName, method] = forbidden.split("#");
+        assertEquals(after.some((call) => call.url.pathname === pathName && (!method || call.method === method)), false);
+      }
+      assertEquals(after.filter((call) => call.url.pathname === "/rest/v1/stripe_webhook_events" && call.method === "PATCH").map((call) => JSON.parse(call.body).status), ["failed"]);
+    });
+  });
+}
+
+Deno.test("signed active subscription reclaims a failed event and persists both entitlements from canonical state", async () => {
+  await signedEntitlementFailureFixture("active", "profile", async ({ first, retry, calls, stored, actor }) => {
+    assertEquals(first.response.status, 500);
+    assertEquals(stored.get("evt_entitlement_active_profile")?.status, "failed");
+    const retryStart = calls.length;
+    const second = await retry();
+    assertEquals(second.response.status, 200);
+    assertEquals(stored.get("evt_entitlement_active_profile")?.status, "processed");
+    const retryCalls = calls.slice(retryStart);
+    assertEquals(retryCalls.filter((call) => call.url.pathname === "/v1/subscriptions/sub_entitlement_active" && call.method === "GET").length, 1);
+    const profile = retryCalls.find((call) => call.url.pathname === "/rest/v1/profiles" && call.method === "PATCH");
+    const professional = retryCalls.find((call) => call.url.pathname === "/rest/v1/professionals" && call.method === "PATCH");
+    assertEquals(Boolean(profile && professional), true);
+    assertEquals(profile!.url.searchParams.get("user_id"), `eq.${actor}`);
     assertEquals(JSON.parse(profile!.body).subscription_product_id, "prod_professional");
+    assertEquals(professional!.url.searchParams.get("user_id"), `eq.${actor}`);
     assertEquals(JSON.parse(professional!.body).subscription_tier, "pro");
-    assertEquals(JSON.parse(finish!.body).status, "processed");
+    assertEquals(retryCalls.indexOf(profile!) < retryCalls.indexOf(professional!), true);
+    const ledgerUpdates = retryCalls.filter((call) => call.url.pathname === "/rest/v1/stripe_webhook_events" && call.method === "PATCH");
+    assertEquals(ledgerUpdates.map((call) => JSON.parse(call.body).status), ["processing", "processed"]);
   });
 });
 
