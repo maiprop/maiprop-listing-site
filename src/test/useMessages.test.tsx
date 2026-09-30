@@ -567,6 +567,35 @@ describe("useSendMessage", () => {
     expect(toastMock.error).not.toHaveBeenCalled();
   });
 
+  it("does not recreate an optimistic A message after A to C to A during cancellation", async () => {
+    const client = createQueryClient();
+    transitionQueryIdentity(client, "u-1");
+    const cancellation = deferred<void>();
+    const cancelQueries = vi.spyOn(client, "cancelQueries")
+      .mockImplementationOnce(() => cancellation.promise);
+    const { result } = renderHook(() => useSendMessage(), {
+      wrapper: wrapperWithClient(client),
+    });
+    let mutation!: Promise<unknown>;
+    act(() => {
+      mutation = result.current.mutateAsync({
+        conversation_id: "a-conv",
+        content: "A's interrupted message",
+      });
+    });
+    await waitFor(() => expect(cancelQueries).toHaveBeenCalled());
+    act(() => {
+      transitionQueryIdentity(client, "u-2");
+      transitionQueryIdentity(client, "u-1");
+    });
+    expect(client.getQueryData(messageQueryKey("a-conv"))).toBeUndefined();
+    cancellation.resolve();
+    await act(async () => { await mutation.catch(() => undefined); });
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(client.getQueryData(messageQueryKey("a-conv"))).toBeUndefined();
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
   it("adds the sender message to the cache before atomic delivery resolves", async () => {
     const client = createQueryClient();
     const delivery = deferred<{ data: typeof serverMessage; error: null }>();

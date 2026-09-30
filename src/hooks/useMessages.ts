@@ -573,6 +573,14 @@ export function useSendMessage() {
       const { conversation_id, content, attachmentPaths } = input;
 
       await queryClient.cancelQueries({ queryKey: messageQueryKey });
+      if (!isCurrentIdentityEpoch(identityEpoch)) {
+        return {
+          optimisticId: null,
+          identityEpoch,
+          messageQueryKey,
+          conversationsQueryKey,
+        };
+      }
       const optimisticId = `optimistic:${crypto.randomUUID()}`;
       const optimisticMessage: CachedMessage = {
         id: optimisticId,

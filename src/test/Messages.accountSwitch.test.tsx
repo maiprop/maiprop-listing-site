@@ -40,6 +40,8 @@ vi.mock("sonner", () => ({ toast: { error: mocks.toastError, success: vi.fn() } 
 
 import Messages from "@/pages/Messages";
 
+const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true } as const;
+
 function conversation(a: string, b: string, id: string) {
   return {
     id, participant_a: a, participant_b: b, listing_id: null, last_message_at: null,
@@ -79,7 +81,7 @@ beforeEach(() => {
 });
 
 it("resets A selection, draft, and attachment before C's first message lookup", async () => {
-  const view = render(<MemoryRouter initialEntries={["/messages"]}><Messages /></MemoryRouter>);
+  const view = render(<MemoryRouter future={routerFuture} initialEntries={["/messages"]}><Messages /></MemoryRouter>);
   const composer = await screen.findByPlaceholderText("Type a message...") as HTMLInputElement;
   expect(screen.getByText("signed attachment")).toBeInTheDocument();
   fireEvent.change(composer, { target: { value: "A private draft" } });
@@ -94,7 +96,7 @@ it("resets A selection, draft, and attachment before C's first message lookup", 
 
   mocks.useMessages.mockClear();
   mocks.actor = { id: "C" };
-  view.rerender(<MemoryRouter initialEntries={["/messages"]}><Messages /></MemoryRouter>);
+  view.rerender(<MemoryRouter future={routerFuture} initialEntries={["/messages"]}><Messages /></MemoryRouter>);
 
   expect(mocks.useMessages.mock.calls.filter(([actor]) => actor === "C")[0]).toEqual(["C", ""]);
   expect(mocks.useMessages).not.toHaveBeenCalledWith("C", "a-conv");
@@ -115,7 +117,7 @@ it("resets A selection, draft, and attachment before C's first message lookup", 
 it("does not start a second A upload after switching to C", async () => {
   const firstUpload = deferred<{ error: Error | null }>();
   mocks.upload.mockReturnValueOnce(firstUpload.promise);
-  const view = render(<MemoryRouter initialEntries={["/messages"]}><Messages /></MemoryRouter>);
+  const view = render(<MemoryRouter future={routerFuture} initialEntries={["/messages"]}><Messages /></MemoryRouter>);
   await screen.findByPlaceholderText("Type a message...");
   const fileInput = view.container.querySelector('input[type="file"]') as HTMLInputElement;
   Object.defineProperty(fileInput, "files", {
@@ -128,7 +130,7 @@ it("does not start a second A upload after switching to C", async () => {
   fireEvent.change(fileInput);
   await waitFor(() => expect(mocks.upload).toHaveBeenCalledTimes(1));
   mocks.actor = { id: "C" };
-  view.rerender(<MemoryRouter initialEntries={["/messages"]}><Messages /></MemoryRouter>);
+  view.rerender(<MemoryRouter future={routerFuture} initialEntries={["/messages"]}><Messages /></MemoryRouter>);
   await screen.findByPlaceholderText("Type a message...");
   await act(async () => { firstUpload.resolve({ error: null }); });
   expect(mocks.upload).toHaveBeenCalledTimes(1);
@@ -140,7 +142,7 @@ it("does not start a second A upload after switching to C", async () => {
 it("does not show an A upload failure in C's view", async () => {
   const firstUpload = deferred<{ error: Error | null }>();
   mocks.upload.mockReturnValueOnce(firstUpload.promise);
-  const view = render(<MemoryRouter initialEntries={["/messages"]}><Messages /></MemoryRouter>);
+  const view = render(<MemoryRouter future={routerFuture} initialEntries={["/messages"]}><Messages /></MemoryRouter>);
   await screen.findByPlaceholderText("Type a message...");
   const fileInput = view.container.querySelector('input[type="file"]') as HTMLInputElement;
   Object.defineProperty(fileInput, "files", {
@@ -150,7 +152,7 @@ it("does not show an A upload failure in C's view", async () => {
   fireEvent.change(fileInput);
   await waitFor(() => expect(mocks.upload).toHaveBeenCalledTimes(1));
   mocks.actor = { id: "C" };
-  view.rerender(<MemoryRouter initialEntries={["/messages"]}><Messages /></MemoryRouter>);
+  view.rerender(<MemoryRouter future={routerFuture} initialEntries={["/messages"]}><Messages /></MemoryRouter>);
   await screen.findByPlaceholderText("Type a message...");
   await act(async () => { firstUpload.resolve({ error: new Error("A upload failed") }); });
   expect(mocks.toastError).not.toHaveBeenCalled();
@@ -159,7 +161,7 @@ it("does not show an A upload failure in C's view", async () => {
 it("does not let a completed A send change C's composer", async () => {
   const delivery = deferred<{ id: string }>();
   mocks.send.mockReturnValueOnce(delivery.promise);
-  const view = render(<MemoryRouter initialEntries={["/messages"]}><Messages /></MemoryRouter>);
+  const view = render(<MemoryRouter future={routerFuture} initialEntries={["/messages"]}><Messages /></MemoryRouter>);
   const aComposer = await screen.findByPlaceholderText("Type a message...") as HTMLInputElement;
   fireEvent.change(aComposer, { target: { value: "A pending send" } });
   fireEvent.keyDown(aComposer, { key: "Enter" });
@@ -167,7 +169,7 @@ it("does not let a completed A send change C's composer", async () => {
     conversation_id: "a-conv", content: "A pending send",
   })));
   mocks.actor = { id: "C" };
-  view.rerender(<MemoryRouter initialEntries={["/messages"]}><Messages /></MemoryRouter>);
+  view.rerender(<MemoryRouter future={routerFuture} initialEntries={["/messages"]}><Messages /></MemoryRouter>);
   const cComposer = await screen.findByPlaceholderText("Type a message...") as HTMLInputElement;
   fireEvent.change(cComposer, { target: { value: "C unsent draft" } });
   await act(async () => { delivery.resolve({ id: "a-sent" }); });
@@ -177,11 +179,11 @@ it("does not let a completed A send change C's composer", async () => {
 });
 
 it("ignores a retained A query deep link when C's fetched list excludes it", async () => {
-  const view = render(<MemoryRouter initialEntries={["/messages?conversation=a-conv"]}><Messages /></MemoryRouter>);
+  const view = render(<MemoryRouter future={routerFuture} initialEntries={["/messages?conversation=a-conv"]}><Messages /></MemoryRouter>);
   await screen.findByPlaceholderText("Type a message...");
   mocks.useMessages.mockClear();
   mocks.actor = { id: "C" };
-  view.rerender(<MemoryRouter initialEntries={["/messages?conversation=a-conv"]}><Messages /></MemoryRouter>);
+  view.rerender(<MemoryRouter future={routerFuture} initialEntries={["/messages?conversation=a-conv"]}><Messages /></MemoryRouter>);
   await waitFor(() => expect(mocks.useMessages).toHaveBeenCalledWith("C", "c-conv"));
   expect(mocks.useMessages).not.toHaveBeenCalledWith("C", "a-conv");
 });
@@ -189,12 +191,12 @@ it("ignores a retained A query deep link when C's fetched list excludes it", asy
 it("ignores a retained A navigation state request when C's fetched list excludes it", async () => {
   mocks.conversationsLoading = true;
   const entry = { pathname: "/messages", state: { openConversationId: "a-conv" } };
-  const view = render(<MemoryRouter initialEntries={[entry]}><Messages /></MemoryRouter>);
+  const view = render(<MemoryRouter future={routerFuture} initialEntries={[entry]}><Messages /></MemoryRouter>);
   expect(mocks.useMessages).toHaveBeenCalledWith("A", "");
   mocks.actor = { id: "C" };
   mocks.conversationsLoading = false;
   mocks.useMessages.mockClear();
-  view.rerender(<MemoryRouter initialEntries={[entry]}><Messages /></MemoryRouter>);
+  view.rerender(<MemoryRouter future={routerFuture} initialEntries={[entry]}><Messages /></MemoryRouter>);
   await waitFor(() => expect(mocks.useMessages).toHaveBeenCalledWith("C", "c-conv"));
   expect(mocks.useMessages).not.toHaveBeenCalledWith("C", "a-conv");
 });
@@ -202,11 +204,11 @@ it("ignores a retained A navigation state request when C's fetched list excludes
 it("waits for C's list, then honors a C conversation deep link", async () => {
   mocks.actor = { id: "C" };
   mocks.conversationsLoading = true;
-  const view = render(<MemoryRouter initialEntries={["/messages?conversation=c-conv"]}><Messages /></MemoryRouter>);
+  const view = render(<MemoryRouter future={routerFuture} initialEntries={["/messages?conversation=c-conv"]}><Messages /></MemoryRouter>);
   expect(mocks.useMessages).toHaveBeenCalledWith("C", "");
   expect(mocks.useMessages).not.toHaveBeenCalledWith("C", "c-conv");
   mocks.conversationsLoading = false;
-  view.rerender(<MemoryRouter initialEntries={["/messages?conversation=c-conv"]}><Messages /></MemoryRouter>);
+  view.rerender(<MemoryRouter future={routerFuture} initialEntries={["/messages?conversation=c-conv"]}><Messages /></MemoryRouter>);
   await waitFor(() => expect(mocks.useMessages).toHaveBeenCalledWith("C", "c-conv"));
   expect(mocks.useMessages).not.toHaveBeenCalledWith("C", "a-conv");
 });
