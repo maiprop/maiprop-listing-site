@@ -295,33 +295,72 @@ Deno.serve(async (req) => {
         totalProcessed++
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
+        const rateLimited = isRateLimited(error)
         log.error('email send failed', {
           queue,
           msg_id: msg.msg_id,
           read_ct: msg.read_ct,
           failed_attempts: failedAttempts,
-          err: errorMsg,
+          err: rateLimited ? 'rate_limited' : errorMsg,
         })
 
-        if (isRateLimited(error)) {
-          await supabase.from('email_send_log').insert({
-            message_id: payload.message_id,
-            template_name: payload.label || queue,
-            recipient_email: payload.to,
-            status: 'rate_limited',
-            error_message: errorMsg.slice(0, 1000),
-          })
-
+        if (rateLimited) {
           const retryAfterSecs = getRetryAfterSeconds(error)
-          await supabase
-            .from('email_send_state')
-            .update({
-              retry_after_until: new Date(
-                Date.now() + retryAfterSecs * 1000
-              ).toISOString(),
-              updated_at: new Date().toISOString(),
+          let logPersisted = false
+          let logErrorCode: string | null = null
+          try {
+            const { error: logError } = await supabase.from('email_send_log').insert({
+              message_id: payload.message_id,
+              template_name: payload.label || queue,
+              recipient_email: payload.to,
+              status: 'rate_limited',
+              error_message: errorMsg.slice(0, 1000),
             })
-            .eq('id', 1)
+            logPersisted = !logError
+            logErrorCode = logError?.code ?? null
+          } catch {
+            logErrorCode = 'transport_failure'
+          }
+
+          let statePersisted = false
+          let stateErrorCode: string | null = null
+          let stateRows = 0
+          try {
+            const { data: updatedState, error: stateError } = await supabase
+              .from('email_send_state')
+              .update({
+                retry_after_until: new Date(
+                  Date.now() + retryAfterSecs * 1000
+                ).toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', 1)
+              .select('id')
+            stateRows = updatedState?.length ?? 0
+            statePersisted = !stateError && stateRows === 1 && updatedState[0]?.id === 1
+            stateErrorCode = stateError?.code ?? null
+          } catch {
+            stateErrorCode = 'transport_failure'
+          }
+
+          if (!logPersisted || !statePersisted) {
+            log.error('rate-limit persistence failed', {
+              queue,
+              msg_id: msg.msg_id,
+              log_error: logErrorCode,
+              state_error: stateErrorCode,
+              state_rows: stateRows,
+            })
+            return new Response(
+              JSON.stringify({
+                processed: totalProcessed,
+                stopped: 'rate_limited',
+                log_persisted: logPersisted,
+                state_persisted: statePersisted,
+              }),
+              { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
 
           return new Response(
             JSON.stringify({ processed: totalProcessed, stopped: 'rate_limited' }),
