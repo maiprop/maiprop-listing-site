@@ -1,10 +1,8 @@
 /**
- * Admin-only: Sync all pricing_configs to Stripe.
- * - For each active config with amount > 0:
- *   - If no stripe_product_id: create product + price, save IDs
- *   - If product exists but label changed: update product name/description
- *   - If price exists but amount changed (prices are immutable): archive old price, create new price, save new price_id
- * - Returns a summary of actions taken per config.
+ * Admin-only reconciliation of active pricing configs with the Stripe catalog.
+ * Preflight cycle ownership, recover positively identified products, select
+ * canonical immutable prices, then archive owned replacements and save aliases.
+ * Remote operations and local metadata persistence remain non-transactional.
  */
 import Stripe from "npm:stripe@22.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
@@ -138,17 +136,6 @@ function getCyclePriceId(
     meta.stripe_yearly_price_id;
 }
 
-function getCycleLastAmount(
-  meta: Record<string, string>,
-  cycle: StripeBillingCycle,
-  fallback?: string,
-): number {
-  const value = cycle === "monthly"
-    ? meta.stripe_last_amount_monthly ?? fallback
-    : meta.stripe_last_amount_annual ?? fallback;
-  return Number(value ?? -1);
-}
-
 function setCycleSpecificPriceMetadata(
   meta: Record<string, string>,
   cycle: StripeBillingCycle,
@@ -169,21 +156,6 @@ function setCycleSpecificPriceMetadata(
   meta.stripe_last_amount_annual = String(amountMajor);
   meta.stripe_tax_behavior_annual = STRIPE_DEFAULT_TAX_BEHAVIOR;
   meta.stripe_tax_behavior_yearly = STRIPE_DEFAULT_TAX_BEHAVIOR;
-}
-
-function getCycleTaxBehavior(
-  meta: Record<string, string>,
-  cycle: StripeCatalogBillingCycle,
-): string | undefined {
-  if (cycle === "monthly") {
-    return meta.stripe_tax_behavior_monthly ?? meta.stripe_tax_behavior;
-  }
-  if (cycle === "annual") {
-    return meta.stripe_tax_behavior_annual ??
-      meta.stripe_tax_behavior_yearly ??
-      meta.stripe_tax_behavior;
-  }
-  return meta.stripe_tax_behavior;
 }
 
 function applyStripeTaxMetadata(
@@ -235,7 +207,11 @@ async function findActivePriceByLookupKey(
     active: true,
     limit: 1,
   });
-  return prices.data[0] ?? null;
+  const price = prices.data[0] ?? null;
+  if (price && (price.active !== true || price.lookup_key !== lookupKey)) {
+    throw new Error(`Invalid active Stripe lookup result for ${lookupKey}`);
+  }
+  return price;
 }
 
 function priceMatches(
@@ -248,21 +224,75 @@ function priceMatches(
   const priceProduct = typeof price.product === "string"
     ? price.product
     : price.product?.id;
-  return priceProduct === productId &&
+  return price.active === true && priceProduct === productId &&
     price.currency === currency &&
     Number(price.unit_amount) === unitAmount &&
     (price.recurring?.interval ?? null) === interval &&
     price.tax_behavior === STRIPE_DEFAULT_TAX_BEHAVIOR;
 }
 
-async function archiveActiveLookupPrice(
+function priceProductId(price: Stripe.Price): string | undefined {
+  return typeof price.product === "string" ? price.product : price.product?.id;
+}
+
+function ownedPrice(
+  price: Stripe.Price,
+  productId: string,
+  configId: string,
+): boolean {
+  const identity = price.metadata?.pricing_config_id;
+  return priceProductId(price) === productId &&
+    (!identity || identity === configId);
+}
+
+type CyclePlan = {
+  cycle: StripeCatalogBillingCycle;
+  amountMajor: number;
+  interval: "month" | "year" | null;
+  lookupKey: string;
+  recordedId?: string;
+  lookup: Stripe.Price | null;
+  recorded?: Stripe.Price | null;
+  selected?: Stripe.Price;
+};
+
+async function retrieveRecordedPrice(
   stripe: Stripe,
-  activeLookupPrice: Stripe.Price | null,
-  replacedPriceId: string | undefined,
-): Promise<void> {
-  if (activeLookupPrice && activeLookupPrice.id !== replacedPriceId) {
-    await stripe.prices.update(activeLookupPrice.id, { active: false });
+  id: string,
+): Promise<Stripe.Price | null> {
+  try {
+    return await stripe.prices.retrieve(id);
+  } catch (error) {
+    // A failed request is not evidence that a recorded resource is absent.
+    if (
+      error instanceof Stripe.errors.StripeInvalidRequestError &&
+      error.statusCode === 404 && error.code === "resource_missing"
+    ) return null;
+    throw error;
   }
+}
+
+async function reconcileCycle(
+  stripe: Stripe,
+  plan: CyclePlan,
+  productId: string,
+  currency: string,
+  entitlementMeta: Record<string, string>,
+): Promise<"created" | "price_updated" | "no_change"> {
+  if (plan.selected) return "no_change";
+  const activeLookupPrice = plan.lookup;
+  const lookupKey = plan.lookupKey;
+  plan.selected = await stripe.prices.create({
+    product: productId,
+    currency,
+    unit_amount: Math.round(plan.amountMajor * 100),
+    ...(plan.interval ? { recurring: { interval: plan.interval } } : {}),
+    tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR,
+    lookup_key: lookupKey,
+    transfer_lookup_key: Boolean(activeLookupPrice),
+    metadata: priceMetadata(entitlementMeta, plan.cycle, lookupKey),
+  });
+  return plan.recordedId || plan.lookup ? "price_updated" : "created";
 }
 
 function annualCompanionAmountMajor(
@@ -280,71 +310,6 @@ function annualCompanionAmountMajor(
 function shouldCreateAnnualCompanionPrice(config: PricingConfigRow): boolean {
   return (config.unit ?? "monthly") === "monthly" &&
     PUBLIC_SUBSCRIPTION_MODULES.has(config.module ?? "");
-}
-
-async function ensureAnnualCompanionPrice(
-  stripe: Stripe,
-  productId: string,
-  currency: string,
-  config: PricingConfigRow,
-  meta: Record<string, string>,
-  newMeta: Record<string, string>,
-  entitlementMeta: Record<string, string>,
-): Promise<
-  { priceId: string; action: "created" | "price_updated" | "no_change" }
-> {
-  const amountMajor = annualCompanionAmountMajor(config, meta);
-  const amount = Math.round(amountMajor * 100);
-  const existingAnnualPriceId = getCyclePriceId(meta, "annual");
-  const existingAnnualAmount = getCycleLastAmount(meta, "annual");
-  const existingAnnualTaxBehavior = getCycleTaxBehavior(meta, "annual");
-  const lookupKey = stripeLookupKeyForConfig(config, "annual");
-  const activeLookupPrice = await findActivePriceByLookupKey(stripe, lookupKey);
-
-  let priceId = existingAnnualPriceId;
-  let action: "created" | "price_updated" | "no_change" = "no_change";
-  if (
-    !priceId &&
-    activeLookupPrice &&
-    priceMatches(activeLookupPrice, productId, currency, amount, "year")
-  ) {
-    priceId = activeLookupPrice.id;
-  } else if (!priceId) {
-    const price = await stripe.prices.create({
-      product: productId,
-      currency,
-      unit_amount: amount,
-      recurring: { interval: "year" },
-      tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR,
-      lookup_key: lookupKey,
-      transfer_lookup_key: Boolean(activeLookupPrice),
-      metadata: priceMetadata(entitlementMeta, "annual", lookupKey),
-    });
-    priceId = price.id;
-    action = "created";
-    await archiveActiveLookupPrice(stripe, activeLookupPrice, priceId);
-  } else if (
-    amountMajor !== existingAnnualAmount ||
-    existingAnnualTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR
-  ) {
-    const price = await stripe.prices.create({
-      product: productId,
-      currency,
-      unit_amount: amount,
-      recurring: { interval: "year" },
-      tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR,
-      lookup_key: lookupKey,
-      transfer_lookup_key: Boolean(activeLookupPrice),
-      metadata: priceMetadata(entitlementMeta, "annual", lookupKey),
-    });
-    await stripe.prices.update(priceId, { active: false });
-    priceId = price.id;
-    action = "price_updated";
-    await archiveActiveLookupPrice(stripe, activeLookupPrice, priceId);
-  }
-
-  setCycleSpecificPriceMetadata(newMeta, "annual", priceId, amountMajor);
-  return { priceId, action };
 }
 
 function mergeStripeSyncAction(
@@ -455,16 +420,12 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       const existingTaxCode = meta.stripe_tax_code ?? "";
 
       const amountMajor = Number(config.amount);
-      const amount = Math.round(amountMajor * 100); // cents
       const currency = (config.currency ?? "EUR").toLowerCase();
       const unit = config.unit ?? "monthly";
       const primaryCycle = stripeBillingCycleForUnit(unit);
       const existingPriceId = primaryCycle
         ? getCyclePriceId(meta, primaryCycle) ?? meta.stripe_price_id
         : meta.stripe_price_id;
-      const existingAmount = primaryCycle
-        ? getCycleLastAmount(meta, primaryCycle, meta.stripe_last_amount)
-        : Number(meta.stripe_last_amount ?? -1);
       const isRecurring = ["monthly", "yearly", "annual"].includes(unit);
       const interval = primaryCycle === "annual" ? "year" : "month";
       const catalogCycle: StripeCatalogBillingCycle = primaryCycle ??
@@ -483,11 +444,6 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         entitlementMeta,
         stripeTaxCode,
       );
-      const existingPriceTaxBehavior = getCycleTaxBehavior(
-        meta,
-        catalogCycle,
-      );
-
       const result: SyncResult = {
         id: config.id,
         key: config.key,
@@ -496,11 +452,114 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
       try {
         let productId = existingProductId;
-        let priceId = existingPriceId;
         const newMeta = { ...meta };
-        let activeLookupPrice: Stripe.Price | null = null;
+        const plans: CyclePlan[] = [{
+          cycle: catalogCycle,
+          amountMajor,
+          interval: isRecurring ? interval : null,
+          lookupKey,
+          recordedId: existingPriceId,
+          lookup: null,
+        }];
+        if (shouldCreateAnnualCompanionPrice(config)) {
+          plans.push({
+            cycle: "annual",
+            amountMajor: annualCompanionAmountMajor(config, meta),
+            interval: "year",
+            lookupKey: stripeLookupKeyForConfig(config, "annual"),
+            recordedId: getCyclePriceId(meta, "annual"),
+            lookup: null,
+          });
+        }
 
-        // ── Create product if missing ────────────────────────────────────────
+        // Read every applicable cycle before any product or price mutation.
+        for (const plan of plans) {
+          plan.lookup = await findActivePriceByLookupKey(
+            stripe,
+            plan.lookupKey,
+          );
+        }
+        if (!productId) {
+          const found = plans.flatMap((plan) =>
+            plan.lookup ? [plan.lookup] : []
+          );
+          if (found.length) {
+            const recoveredId = priceProductId(found[0]);
+            if (
+              !recoveredId ||
+              found.some((price) => !ownedPrice(price, recoveredId, config.id))
+            ) {
+              throw new Error(
+                `Conflicting Stripe lookup ownership for ${config.key}`,
+              );
+            }
+            const product = await stripe.products.retrieve(recoveredId);
+            if (
+              product.deleted || !product.active ||
+              product.metadata.pricing_config_id !== config.id
+            ) {
+              throw new Error(
+                `Unverified Stripe product ownership for ${config.key}`,
+              );
+            }
+            productId = recoveredId;
+            newMeta.stripe_product_id = productId;
+            result.action = "product_updated";
+          }
+          // Empty lookups cannot distinguish a fresh config from an earlier
+          // failed/concurrent creation. Preserve creation; this is not a lock.
+        }
+
+        const retrieved = new Map<string, Stripe.Price | null>();
+        for (const plan of plans) {
+          if (plan.lookup) retrieved.set(plan.lookup.id, plan.lookup);
+          if (
+            plan.lookup &&
+            (!productId || !ownedPrice(plan.lookup, productId, config.id))
+          ) {
+            throw new Error(
+              `Conflicting Stripe lookup ownership for ${config.key}`,
+            );
+          }
+        }
+        for (const plan of plans) {
+          if (
+            productId && plan.lookup &&
+            priceMatches(
+              plan.lookup,
+              productId,
+              currency,
+              Math.round(plan.amountMajor * 100),
+              plan.interval,
+            )
+          ) {
+            plan.selected = plan.lookup;
+            continue;
+          }
+          if (plan.recordedId) {
+            if (!retrieved.has(plan.recordedId)) {
+              retrieved.set(
+                plan.recordedId,
+                await retrieveRecordedPrice(stripe, plan.recordedId),
+              );
+            }
+            plan.recorded = retrieved.get(plan.recordedId);
+          }
+          if (
+            productId && !plan.lookup && plan.recorded &&
+            ownedPrice(plan.recorded, productId, config.id) &&
+            priceMatches(
+              plan.recorded,
+              productId,
+              currency,
+              Math.round(plan.amountMajor * 100),
+              plan.interval,
+            )
+          ) {
+            plan.selected = plan.recorded;
+          }
+        }
+
         if (!productId) {
           const product = await stripe.products.create({
             name: productName,
@@ -512,10 +571,9 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
           newMeta.stripe_product_id = productId;
           result.action = "created";
         } else if (
-          productName !== existingLabel ||
-          existingTaxCode !== stripeTaxCode
+          productName !== existingLabel || existingTaxCode !== stripeTaxCode ||
+          existingAudience !== entitlementMeta.audience
         ) {
-          // ── Update product name if label changed ─────────────────────────
           await stripe.products.update(productId, {
             name: productName,
             ...(productDesc && { description: productDesc }),
@@ -523,150 +581,68 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
             metadata: stripeProductMetadata,
           });
           result.action = "product_updated";
-        } else if (existingAudience !== entitlementMeta.audience) {
-          await stripe.products.update(productId, {
-            tax_code: stripeTaxCode,
-            metadata: stripeProductMetadata,
-          });
-          result.action = "product_updated";
         }
 
-        // ── Create price if missing ──────────────────────────────────────────
-        if (!productId) {
-          throw new Error(
-            `Stripe product id missing for pricing config ${config.key}`,
-          );
-        }
-
-        activeLookupPrice = await findActivePriceByLookupKey(stripe, lookupKey);
-
-        if (
-          !priceId &&
-          activeLookupPrice &&
-          priceMatches(
-            activeLookupPrice,
+        const oldPrices = new Map<string, Stripe.Price>();
+        for (const plan of plans) {
+          const replacing = !plan.selected;
+          const action = await reconcileCycle(
+            stripe,
+            plan,
             productId,
             currency,
-            amount,
-            isRecurring ? interval : null,
-          )
+            entitlementMeta,
+          );
+          result.action = mergeStripeSyncAction(result.action, action);
+          if (replacing) {
+            for (const old of [plan.lookup, plan.recorded]) {
+              if (old?.active && ownedPrice(old, productId, config.id)) {
+                oldPrices.set(old.id, old);
+              }
+            }
+          }
+        }
+        // A stale alias can be shared by two cycles. Never archive a price
+        // retained by either cycle, even when the other needed replacement.
+        const selectedIds = new Set(plans.map((plan) => plan.selected!.id));
+        for (const old of oldPrices.values()) {
+          if (!selectedIds.has(old.id)) {
+            await stripe.prices.update(old.id, { active: false });
+          }
+        }
+        const priceId = plans[0].selected!.id;
+        if (
+          existingAudience !== entitlementMeta.audience &&
+          existingPriceId === priceId
         ) {
-          priceId = activeLookupPrice.id;
-          newMeta.stripe_price_id = priceId;
-          newMeta.stripe_last_amount = String(amountMajor);
-          newMeta.stripe_last_label = productName;
-          newMeta.stripe_last_audience = entitlementMeta.audience;
-          if (primaryCycle) {
-            setCycleSpecificPriceMetadata(
-              newMeta,
-              primaryCycle,
-              priceId,
-              amountMajor,
-            );
-          }
-          result.action = result.action === "no_change"
-            ? "product_updated"
-            : result.action;
-        } else if (!priceId) {
-          const priceParams: Stripe.PriceCreateParams = {
-            product: productId,
-            currency,
-            unit_amount: amount,
-            tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR,
-            lookup_key: lookupKey,
-            transfer_lookup_key: Boolean(activeLookupPrice),
-            metadata: priceMetadata(entitlementMeta, catalogCycle, lookupKey),
-          };
-          if (isRecurring) priceParams.recurring = { interval };
-          const price = await stripe.prices.create(priceParams);
-          priceId = price.id;
-          newMeta.stripe_price_id = priceId;
-          newMeta.stripe_last_amount = String(amountMajor);
-          newMeta.stripe_last_label = productName;
-          newMeta.stripe_last_audience = entitlementMeta.audience;
-          if (primaryCycle) {
-            setCycleSpecificPriceMetadata(
-              newMeta,
-              primaryCycle,
-              priceId,
-              amountMajor,
-            );
-          }
-          result.action = "created";
-          await archiveActiveLookupPrice(stripe, activeLookupPrice, priceId);
-        } else if (
-          amountMajor !== existingAmount ||
-          existingPriceTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR
-        ) {
-          // ── Amount changed: archive old price, create new ────────────────
-          const priceParams: Stripe.PriceCreateParams = {
-            product: productId,
-            currency,
-            unit_amount: amount,
-            tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR,
-            lookup_key: lookupKey,
-            transfer_lookup_key: Boolean(activeLookupPrice),
-            metadata: priceMetadata(entitlementMeta, catalogCycle, lookupKey),
-          };
-          if (isRecurring) priceParams.recurring = { interval };
-          const newPrice = await stripe.prices.create(priceParams);
-          await stripe.prices.update(priceId, { active: false });
-          priceId = newPrice.id;
-          newMeta.stripe_price_id = priceId;
-          newMeta.stripe_last_amount = String(amountMajor);
-          newMeta.stripe_last_label = productName;
-          newMeta.stripe_last_audience = entitlementMeta.audience;
-          if (primaryCycle) {
-            setCycleSpecificPriceMetadata(
-              newMeta,
-              primaryCycle,
-              priceId,
-              amountMajor,
-            );
-          }
-          result.action = "price_updated";
-          await archiveActiveLookupPrice(stripe, activeLookupPrice, priceId);
-        } else if (productName !== existingLabel) {
-          newMeta.stripe_last_label = productName;
-          result.action = "product_updated";
-        } else if (existingAudience !== entitlementMeta.audience) {
           await stripe.prices.update(priceId, {
             metadata: priceMetadata(entitlementMeta, catalogCycle, lookupKey),
           });
-          newMeta.stripe_last_audience = entitlementMeta.audience;
-          result.action = "product_updated";
         }
+        newMeta.stripe_price_id = priceId;
+        newMeta.stripe_last_amount = String(amountMajor);
+        newMeta.stripe_last_label = productName;
+        newMeta.stripe_last_audience = entitlementMeta.audience;
         applyStripeTaxMetadata(newMeta, stripeTaxCode);
-        if (primaryCycle && priceId) {
-          const before = JSON.stringify(newMeta);
-          setCycleSpecificPriceMetadata(
-            newMeta,
-            primaryCycle,
-            priceId,
-            amountMajor,
-          );
-          if (
-            before !== JSON.stringify(newMeta) && result.action === "no_change"
-          ) {
-            result.action = "product_updated";
+        for (const plan of plans) {
+          if (plan.cycle !== "one_time") {
+            setCycleSpecificPriceMetadata(
+              newMeta,
+              plan.cycle,
+              plan.selected!.id,
+              plan.amountMajor,
+            );
           }
         }
-
-        if (productId && shouldCreateAnnualCompanionPrice(config)) {
-          const annual = await ensureAnnualCompanionPrice(
-            stripe,
-            productId,
-            currency,
-            config,
-            meta,
-            newMeta,
-            entitlementMeta,
-          );
-          result.annual_price_id = annual.priceId;
-          result.action = mergeStripeSyncAction(result.action, annual.action);
+        if (plans.length > 1) result.annual_price_id = plans[1].selected!.id;
+        if (
+          JSON.stringify(newMeta) !== JSON.stringify(meta) &&
+          result.action === "no_change"
+        ) {
+          result.action = "product_updated";
         }
 
-        // ── Save updated metadata back to DB ────────────────────────────────
+        // Save only after every required remote operation succeeds.
         if (result.action !== "no_change") {
           const { error: updateError } = await supabase
             .from("pricing_configs")
