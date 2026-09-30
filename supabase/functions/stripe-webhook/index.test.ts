@@ -1678,7 +1678,7 @@ Deno.test("investor payment activation computes a one-year expiry from one activ
 
 restore();
 
-type SignedWebhookCall = { method: string; url: URL; body: string; form: URLSearchParams };
+type SignedWebhookCall = { method: string; url: URL; body: string; form: URLSearchParams; key: string | null };
 const webhookJson = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 let signedWebhookNumber = 0;
 
@@ -1709,7 +1709,7 @@ const signedWebhookFixture = async (
     const url = new URL(request.url);
     const method = request.method;
     const body = await request.text();
-    const call = { method, url, body, form: new URLSearchParams(body) };
+    const call = { method, url, body, form: new URLSearchParams(body), key: request.headers.get("Idempotency-Key") };
     calls.push(call);
     if (url.hostname === "api.stripe.com") {
       if (method === "GET" && url.pathname === "/v1/account") return webhookJson({ id: options.account ?? "acct_testmaiprop" });
@@ -2107,10 +2107,17 @@ Deno.test("signed draft invoice releases reservations on definitive Stripe rejec
 });
 
 Deno.test("signed draft invoice keeps reservations retryable after ambiguous Stripe failure", async () => {
-  await agentInvoiceCreditFixture("ambiguous_failure", (result, calls) => {
+  await agentInvoiceCreditFixture("ambiguous_failure", async (result, calls, context) => {
     assertEquals(result.response.status, 500);
     assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH").length, 0);
-    assertEquals(calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST").length > 0, true);
+    const beforeRetry = calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST");
+    assertEquals(beforeRetry.length > 0, true);
+    assertEquals(beforeRetry[0].form.get("description"), "Data Input reward \u2014 2 verified closing(s) \u00d7 0.5% (1% off)");
+    assertEquals(beforeRetry[0].key, beforeRetry[0].form.get("metadata[operation_key]"));
+    assertEquals((await context.retry()).response.status, 500);
+    const allCreates = calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST");
+    assertEquals(allCreates.length > beforeRetry.length, true);
+    assertEquals(allCreates.every((call) => call.key === beforeRetry[0].key && call.body === beforeRetry[0].body), true);
   });
 });
 
@@ -2132,6 +2139,7 @@ Deno.test("signed draft invoice retry finds the provider credit created before f
     const firstCreates = calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST");
     const firstPatches = calls.filter((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH");
     assertEquals(firstCreates.length, 1);
+    assertEquals(firstCreates[0].form.get("description"), "Data Input reward \u2014 2 verified closing(s) \u00d7 0.5% (1% off)");
     assertEquals(firstPatches.length, 1);
     assertEquals(JSON.parse(firstPatches[0].body).stripe_credit_id, "ii_credit_handler");
     const firstKey = firstCreates[0].form.get("metadata[operation_key]");

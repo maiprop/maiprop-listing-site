@@ -1978,7 +1978,7 @@ async function reconcileFinalizedAgentDataInputDiscount(
  * billing), check whether the customer's user has accumulated verified
  * data-input entries that have not yet been credited. If so, mark them
  * applied via the SECURITY DEFINER RPC and post a one-off negative
- * invoice_item to the draft invoice equal to subtotal × pct.
+ * invoice_item to the draft invoice equal to subtotal Ã— pct.
  *
  * Caps:
  *   - Each verified entry yields 0.5% off (server-side constant).
@@ -1986,7 +1986,7 @@ async function reconcileFinalizedAgentDataInputDiscount(
  *     i.e. at most 10% off any single invoice.
  *
  * Skipped when:
- *   - Invoice is not a draft (already finalised — too late).
+ *   - Invoice is not a draft (already finalised â€” too late).
  *   - billing_reason is "subscription_create" (initial signup, no prior
  *     verified inputs are possible yet).
  *   - Customer has no user_id metadata.
@@ -2032,7 +2032,7 @@ async function applyAgentDataInputDiscount(
   const customerId = typeof invoice.customer === "string"
     ? invoice.customer
     : invoice.customer.id;
-  // Skip initial signup invoices — no prior verified inputs are possible yet.
+  // Skip initial signup invoices â€” no prior verified inputs are possible yet.
   if (
     (invoice as unknown as Record<string, unknown>).billing_reason ===
       "subscription_create"
@@ -2146,7 +2146,7 @@ async function applyAgentDataInputDiscount(
         amount: -discountMinor, // negative = credit
         currency: invoice.currency,
         description:
-          `Data Input reward — ${appliedCount} verified closing(s) × 0.5% (${appliedPct}% off)`,
+          `Data Input reward â€” ${appliedCount} verified closing(s) Ã— 0.5% (${appliedPct}% off)`,
         metadata: {
           type: "agent_data_input_discount",
           user_id: userId,
@@ -2170,7 +2170,7 @@ async function applyAgentDataInputDiscount(
         throw stripeErr;
       }
 
-      // Stripe call failed — roll back the DB rows so they remain eligible
+      // Stripe call failed â€” roll back the DB rows so they remain eligible
       // for the next invoice cycle instead of being permanently lost.
       log.error("Definitive Stripe credit failure; releasing reservation", {
         user_id: userId,
