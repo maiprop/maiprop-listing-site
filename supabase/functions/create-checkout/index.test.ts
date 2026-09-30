@@ -61,10 +61,26 @@ Deno.test("GET does not create checkout sessions", async () => {
 });
 
 Deno.test("fake Bearer token results in auth failure, not internal error", async () => {
-  const res = await handler(authedReq("POST", { priceId: "price_test" }));
-  assertEquals(res.status, 401);
-  const body = await res.json();
-  assertEquals(typeof body.error, "string");
+  const previousFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    calls.push(`${request.method} ${url.pathname}`);
+    if (url.hostname === "test.supabase.co" && request.method === "GET" && url.pathname === "/auth/v1/user") {
+      return Promise.resolve(checkoutJson({ code: 401, msg: "invalid token" }, 401));
+    }
+    throw new Error(`Unexpected checkout auth transport ${request.method} ${url}`);
+  };
+  try {
+    const res = await handler(authedReq("POST", { priceId: "price_test" }));
+    assertEquals(res.status, 401);
+    const body = await res.json();
+    assertEquals(typeof body.error, "string");
+    assertEquals(calls, ["GET /auth/v1/user"]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
 
 Deno.test("checkout plan keys are allowlisted and investor plans remain invitation-only", () => {
@@ -804,6 +820,7 @@ const checkoutFixture = async (
     trialInsertError?: string;
     trialMissingId?: boolean;
     trialUpdateError?: boolean;
+    trialDeleteError?: boolean;
     sessionError?: boolean;
     sessionStoredThenError?: boolean;
     customerSaveError?: boolean;
@@ -839,7 +856,7 @@ const checkoutFixture = async (
       if (url.pathname === "/rest/v1/billing_customers" && method === "POST") return options.customerSaveError ? checkoutJson({ message: "customer save failed" }, 500) : new Response(null, { status: 201 });
       if (url.pathname === "/rest/v1/subscription_trial_claims" && method === "POST") return options.trialInsertError ? checkoutJson({ code: options.trialInsertError, message: "claim unavailable" }, 409) : checkoutJson(options.trialMissingId ? {} : { id: `claim_checkout_handler_${++trialClaimCount}` }, 201);
       if (url.pathname === "/rest/v1/subscription_trial_claims" && method === "PATCH") return options.trialUpdateError ? checkoutJson({ message: "claim update failed" }, 500) : new Response(null, { status: 204 });
-      if (url.pathname === "/rest/v1/subscription_trial_claims" && method === "DELETE") return new Response(null, { status: 204 });
+      if (url.pathname === "/rest/v1/subscription_trial_claims" && method === "DELETE") return options.trialDeleteError ? checkoutJson({ message: "synthetic claim release failure" }, 500) : new Response(null, { status: 204 });
     }
     if (url.hostname === "api.stripe.com") {
       if (url.pathname === "/v1/account" && method === "GET") return checkoutJson({ id: checkoutAccount });
@@ -952,6 +969,23 @@ Deno.test("trial Checkout transport error releases the claim and returns failure
     assertEquals(keys[0] === keys[1], false);
     assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "POST").length, 2);
   });
+});
+
+Deno.test("trial Checkout definitive provider rejection attempts exact claim release even when release fails", async () => {
+  for (const trialDeleteError of [false, true]) {
+    await checkoutFixture({ input: { plan: "pro", trial: true }, sessionError: true, trialDeleteError }, (response, _body, calls) => {
+      assertEquals(response.status, 500);
+      const reserve = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "POST");
+      const session = calls.find((call) => call.url.pathname === "/v1/checkout/sessions" && call.method === "POST");
+      const release = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "DELETE");
+      assertEquals(Boolean(reserve && session && release), true);
+      assertEquals(calls.indexOf(reserve!) < calls.indexOf(session!), true);
+      assertEquals(calls.indexOf(session!) < calls.indexOf(release!), true);
+      assertEquals(release!.url.searchParams.get("id"), "eq.claim_checkout_handler_1");
+      assertEquals(calls.filter((call) => call.url.pathname === "/v1/checkout/sessions" && call.method === "POST").length, 1);
+      assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH"), false);
+    });
+  }
 });
 
 Deno.test("add-on checkout uses server catalog price, target, quantity and payment metadata", async () => {

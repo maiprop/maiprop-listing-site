@@ -403,3 +403,25 @@ Deno.test("invoice handler selects the paid embedded payment receipt without ext
     assertEquals(calls.some((call) => call.url.pathname.startsWith("/v1/invoices/") || call.url.pathname.startsWith("/v1/payment_intents/") || call.url.pathname.startsWith("/v1/charges/")), false);
   });
 });
+
+Deno.test("invoice handler retains payment evidence and invoice after receipt enrichment failures", async () => {
+  const owned = { id: "cus_receipt_failure", metadata: { user_id: invoiceUser } };
+  const base = { id: "in_receipt_failure", status: "paid", amount_paid: 1900, amount_due: 0, subtotal: 1900, total: 1900, currency: "eur", created: 1700000000, lines: { data: [] } };
+  for (const failure of [
+    { invoice: { ...base, payment_intent: "pi_receipt_failure", charge: "ch_surviving" }, path: "/v1/payment_intents/pi_receipt_failure", expectedIntent: "pi_receipt_failure", expectedCharge: "ch_surviving" },
+    { invoice: { ...base, charge: "ch_receipt_failure" }, path: "/v1/charges/ch_receipt_failure", expectedIntent: null, expectedCharge: "ch_receipt_failure" },
+  ]) {
+    await invoiceFixture({ searchCustomers: [owned], invoices: [failure.invoice], stripeError: failure.path }, (response, body, calls) => {
+      assertEquals(response.status, 200);
+      assertEquals(body.billing_reason, "ok");
+      const invoices = body.invoices as Array<Record<string, unknown>>;
+      assertEquals(invoices.length, 1);
+      assertEquals(invoices[0].id, base.id);
+      assertEquals(invoices[0].payment_intent_id, failure.expectedIntent);
+      assertEquals(invoices[0].charge_id, failure.expectedCharge);
+      assertEquals(invoices[0].receipt_url, null);
+      assertEquals(calls.filter((call) => call.url.pathname === failure.path).length > 0, true);
+      assertEquals(calls.some((call) => call.method !== "GET"), false);
+    });
+  }
+});

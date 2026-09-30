@@ -21,10 +21,26 @@ Deno.test("missing Authorization returns error", async () => {
 });
 
 Deno.test("fake Bearer returns auth/permission error", async () => {
-  const res = await handler(authedReq("POST"));
-  assertEquals([401, 403].includes(res.status), true);
-  const body = await res.json();
-  assertEquals(typeof body.error, "string");
+  const previousFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    calls.push(`${request.method} ${url.pathname}`);
+    if (url.hostname === "test.supabase.co" && request.method === "GET" && url.pathname === "/auth/v1/user") {
+      return Promise.resolve(pricingJson({ code: 401, msg: "invalid token" }, 401));
+    }
+    throw new Error(`Unexpected pricing auth transport ${request.method} ${url}`);
+  };
+  try {
+    const res = await handler(authedReq("POST"));
+    assertEquals(res.status, 401);
+    const body = await res.json();
+    assertEquals(typeof body.error, "string");
+    assertEquals(calls, ["GET /auth/v1/user"]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
 
 Deno.test("pricing sync stores monthly and annual Stripe price IDs distinctly", async () => {
@@ -130,8 +146,10 @@ const pricingFixture = async (
     configs?: Array<Record<string, unknown>>;
     lookupPrices?: Record<string, Record<string, unknown>>;
     failPath?: string;
+    failProductOnce?: boolean;
     failDbPatch?: boolean;
     failPro?: boolean;
+    stripeAccount?: string;
   },
   inspect: (response: Response, result: Record<string, unknown>, calls: PricingCall[], repeat: () => Promise<{ response: Response; result: Record<string, unknown> }>) => void | Promise<void>,
 ) => {
@@ -145,6 +163,7 @@ const pricingFixture = async (
   const unexpected: string[] = [];
   let productNumber = 0;
   let priceNumber = 0;
+  let productFailures = 0;
   const lookupPrices = { ...options.lookupPrices };
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -167,10 +186,13 @@ const pricingFixture = async (
       if (url.pathname === "/rest/v1/pro_product_ids" && method === "POST") return options.failPro ? pricingJson({ message: "synthetic Pro failure" }, 500) : new Response(null, { status: 201 });
     }
     if (url.hostname === "api.stripe.com") {
-      if (url.pathname === "/v1/account" && method === "GET") return pricingJson({ id: pricingAccount });
+      if (url.pathname === "/v1/account" && method === "GET") return pricingJson({ id: options.stripeAccount ?? pricingAccount });
       if (url.pathname === "/v1/balance" && method === "GET") return pricingJson({ livemode: false, available: [], pending: [] });
       if (options.failPath === url.pathname) return pricingJson({ error: { message: "synthetic Stripe failure", type: "api_error" } }, 400);
-      if (url.pathname === "/v1/products" && method === "POST") return pricingJson({ id: `prod_pricing_${++productNumber}`, object: "product" });
+      if (url.pathname === "/v1/products" && method === "POST") {
+        if (options.failProductOnce && productFailures++ === 0) return pricingJson({ error: { message: "synthetic first-product failure", type: "api_error" } }, 400);
+        return pricingJson({ id: `prod_pricing_${++productNumber}`, object: "product" });
+      }
       if (url.pathname.startsWith("/v1/products/") && method === "POST") return pricingJson({ id: url.pathname.split("/").pop(), object: "product" });
       if (url.pathname === "/v1/prices" && method === "GET") {
         const lookup = url.searchParams.get("lookup_keys[0]") ?? "";
@@ -376,5 +398,48 @@ Deno.test("pricing handler retry after metadata-save failure creates a new produ
     assertEquals(saved.stripe_product_id, "prod_pricing_2");
     assertEquals(saved.stripe_price_id_monthly, "price_pricing_3");
     assertEquals(saved.stripe_price_id_annual, "price_pricing_4");
+  });
+});
+
+Deno.test("pricing handler isolates a remote product failure and continues with the second config", async () => {
+  const configs = [pricingConfig({ id: "cfg_remote_bad", key: "remote_bad" }), pricingConfig({ id: "cfg_remote_good", key: "remote_good", module: "adhoc_charges", unit: "per_listing" })];
+  await pricingFixture({ admin: true, configs, failProductOnce: true }, (response, body, calls) => {
+    assertEquals(response.status, 200);
+    const results = body.results as Array<Record<string, unknown>>;
+    assertEquals(results.map((result) => [result.id, result.action]), [["cfg_remote_bad", "error"], ["cfg_remote_good", "created"]]);
+    assertEquals(String(results[0].error).includes("synthetic first-product failure"), true);
+    assertEquals((body.summary as Record<string, unknown>).errors, 1);
+    assertEquals((body.summary as Record<string, unknown>).created, 1);
+    const products = calls.filter((call) => call.url.pathname === "/v1/products" && call.method === "POST");
+    const price = calls.find((call) => call.url.pathname === "/v1/prices" && call.method === "POST");
+    const save = calls.find((call) => call.url.pathname === "/rest/v1/pricing_configs" && call.method === "PATCH");
+    assertEquals(products.length, 2);
+    assertEquals(Boolean(price && save), true);
+    assertEquals(calls.indexOf(products[1]) < calls.indexOf(price!), true);
+    assertEquals(calls.indexOf(price!) < calls.indexOf(save!), true);
+    assertEquals(save!.url.searchParams.get("id"), "eq.cfg_remote_good");
+    assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/pricing_configs" && call.method === "PATCH").length, 1);
+  });
+});
+
+Deno.test("pricing handler rejects a mismatched Stripe account before remote catalog writes", async () => {
+  await pricingFixture({ admin: true, configs: [pricingConfig()], stripeAccount: "acct_wrong_pricing" }, (response, _body, calls) => {
+    assertEquals(response.status, 500);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/account" && call.method === "GET").length, 1);
+    assertEquals(calls.some((call) => call.url.pathname === "/v1/products" || call.url.pathname === "/v1/prices"), false);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/pricing_configs" && call.method === "PATCH"), false);
+  });
+});
+
+Deno.test("pricing handler existing price currently leaves currency drift unchanged", async () => {
+  const metadata = { stripe_product_id: "prod_currency", stripe_price_id: "price_currency", stripe_last_amount: "19", stripe_last_label: "Pro", stripe_last_audience: "participant", stripe_tax_code: "txcd_10103000", stripe_tax_behavior: "exclusive" };
+  const lookup = "maiprop_featured_listing";
+  await pricingFixture({ admin: true, configs: [pricingConfig({ key: "featured_listing", module: "adhoc_charges", unit: "per_listing", currency: "USD", metadata })], lookupPrices: { [lookup]: { id: "price_currency", active: true, product: "prod_currency", currency: "eur", unit_amount: 1900, recurring: null, tax_behavior: "exclusive" } } }, (response, body, calls) => {
+    assertEquals(response.status, 200);
+    assertEquals((body.summary as Record<string, unknown>).no_change, 1);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/prices" && call.method === "GET").length, 1);
+    assertEquals(calls.some((call) => call.url.pathname === "/v1/prices" && call.method === "POST"), false);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/pricing_configs" && call.method === "PATCH"), false);
+    assertEquals(metadata.stripe_price_id, "price_currency");
   });
 });

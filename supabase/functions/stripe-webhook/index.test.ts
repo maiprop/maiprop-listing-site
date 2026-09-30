@@ -1701,6 +1701,8 @@ const signedWebhookFixture = async (
     route?: (call: SignedWebhookCall) => Response | null | Promise<Response | null>;
     stored?: Map<string, Record<string, unknown>>;
     account?: string;
+    finishNoRows?: boolean;
+    failFailureMark?: boolean;
   },
   exercise: (invoke: (type: string, object: Record<string, unknown>, overrides?: Record<string, unknown>) => Promise<{ response: Response; body: Record<string, unknown> }>, calls: SignedWebhookCall[], stored: Map<string, Record<string, unknown>>) => void | Promise<void>,
 ) => {
@@ -1736,10 +1738,16 @@ const signedWebhookFixture = async (
       if (method === "PATCH") {
         const eventId = String(url.searchParams.get("event_id") ?? "").replace(/^eq\./, "");
         const row = stored.get(eventId);
+        const next = JSON.parse(body) as Record<string, unknown>;
+        if (options.failFailureMark && next.status === "failed") return webhookJson({ message: "synthetic failure-mark error" }, 500);
+        if (options.finishNoRows && next.status === "processed" && row) {
+          row.metadata = { processing_started_at: new Date().toISOString(), processing_claim_token: "replacement-worker-token" };
+          return webhookJson(null);
+        }
         const token = String(url.searchParams.get("metadata->>processing_claim_token") ?? "").replace(/^eq\./, "");
         const requiredStatus = String(url.searchParams.get("status") ?? "").replace(/^eq\./, "");
         if (!row || row.status !== requiredStatus || (token && (row.metadata as Record<string, unknown>)?.processing_claim_token !== token)) return webhookJson(null);
-        Object.assign(row, JSON.parse(body), { updated_at: new Date().toISOString() });
+        Object.assign(row, next, { updated_at: new Date().toISOString() });
         return webhookJson({ event_id: eventId });
       }
     }
@@ -1792,6 +1800,49 @@ Deno.test("signed webhook rejects wrong event account before creating ledger row
   });
 });
 
+Deno.test("signed webhook does not finish a lease whose claim token was replaced", async () => {
+  await signedWebhookFixture({ finishNoRows: true }, async (invoke, calls, stored) => {
+    const eventId = "evt_finish_replaced";
+    const result = await invoke("unrecognized.billing.event", { id: "obj_finish_replaced" }, { id: eventId });
+    assertEquals(result.response.status, 200);
+    assertEquals(stored.get(eventId)?.status, "processing");
+    assertEquals((stored.get(eventId)?.metadata as Record<string, unknown>).processing_claim_token, "replacement-worker-token");
+    const finish = calls.find((call) => call.url.pathname === "/rest/v1/stripe_webhook_events" && call.method === "PATCH");
+    assertEquals(JSON.parse(finish!.body).status, "processed");
+    assertEquals(finish!.url.searchParams.get("status"), "eq.processing");
+    assertEquals(finish!.url.searchParams.has("metadata->>processing_claim_token"), true);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/billing_customers" || call.url.pathname === "/rest/v1/billing_subscriptions"), false);
+  });
+});
+
+Deno.test("signed subscription customer or history failure stays retryable without entitlement writes", async () => {
+  const actor = "00000000-0000-4000-8000-000000000098";
+  const canonical = { id: "sub_history_failure", customer: "cus_history_failure", status: "active", livemode: false, current_period_end: 4102444800, metadata: { plan_key: "professional_pro", audience: "professional" }, invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] }, items: { data: [{ current_period_end: 4102444800, price: { id: "price_professional", product: "prod_professional" } }] } };
+  for (const failPath of ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"]) {
+    const route = (call: SignedWebhookCall) => {
+      if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_history_failure") return webhookJson(canonical);
+      if (call.method === "GET" && call.url.pathname === "/v1/customers/cus_history_failure") return webhookJson({ id: canonical.customer, metadata: { user_id: actor } });
+      if (call.method === "GET" && call.url.pathname === "/rest/v1/pricing_configs") return webhookJson([{ key: "professional_pro", audience: "professional", module: "professional_subscription", metadata: { stripe_product_id: "prod_professional", stripe_price_id: "price_professional" } }]);
+      if (call.method === "GET" && call.url.pathname === "/rest/v1/profiles") return webhookJson({ role: "professional", role_switch_in_progress_at: null });
+      if (call.method === "POST" && ["/rest/v1/billing_customers", "/rest/v1/billing_subscriptions"].includes(call.url.pathname)) return call.url.pathname === failPath ? webhookJson({ message: "synthetic billing persistence failure" }, 500) : new Response(null, { status: 201 });
+      return null;
+    };
+    const eventId = failPath.endsWith("customers") ? "evt_customer_failure" : "evt_history_failure";
+    await signedWebhookFixture({ route, failFailureMark: failPath.endsWith("subscriptions") }, async (invoke, calls, stored) => {
+      const result = await invoke("customer.subscription.updated", { id: canonical.id, customer: canonical.customer, livemode: false }, { id: eventId });
+      assertEquals(result.response.status, 500);
+      assertEquals(calls.some((call) => call.url.pathname === failPath && call.method === "POST"), true);
+      assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles" && call.method === "PATCH"), false);
+      assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/professionals"), false);
+      const failureMark = calls.find((call) => call.url.pathname === "/rest/v1/stripe_webhook_events" && call.method === "PATCH");
+      assertEquals(JSON.parse(failureMark!.body).status, "failed");
+      assertEquals(failureMark!.url.searchParams.get("status"), "eq.processing");
+      assertEquals(failureMark!.url.searchParams.has("metadata->>processing_claim_token"), true);
+      assertEquals(stored.get(eventId)?.status, failPath.endsWith("customers") ? "failed" : "processing");
+    });
+  }
+});
+
 Deno.test("signed paid add-on dispatch writes one session identity across event retries", async () => {
   const purchaseSessions = new Set<string>();
   const route = (call: SignedWebhookCall) => {
@@ -1832,8 +1883,15 @@ Deno.test("signed unpaid add-on session is acknowledged without a purchase", asy
 });
 
 Deno.test("signed expired trial checkout updates only pending claim statuses", async () => {
+  const claims = [{ id: "claim_pending", status: "checkout_started" }, { id: "claim_active", status: "active" }];
   const route = (call: SignedWebhookCall) => {
-    if (call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH") return new Response(null, { status: 204 });
+    if (call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH") {
+      const eligible = String(call.url.searchParams.get("status") ?? "").replace(/^in\.\(/, "").replace(/\)$/, "").split(",");
+      for (const claim of claims) {
+        if (eligible.includes(claim.status)) claim.status = JSON.parse(call.body).status;
+      }
+      return new Response(null, { status: 204 });
+    }
     return null;
   };
   await signedWebhookFixture({ route }, async (invoke, calls) => {
@@ -1843,6 +1901,22 @@ Deno.test("signed expired trial checkout updates only pending claim statuses", a
     assertEquals(JSON.parse(update!.body).status, "checkout_abandoned");
     assertEquals(update!.url.searchParams.get("stripe_checkout_session_id"), "eq.cs_expired_trial");
     assertEquals(update!.url.searchParams.get("status"), "in.(checkout_started,checkout_created)");
+    assertEquals(claims.map((claim) => claim.status), ["checkout_abandoned", "active"]);
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles"), false);
+  });
+});
+
+Deno.test("signed expired trial claim write failure marks the event failed", async () => {
+  const route = (call: SignedWebhookCall) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH"
+    ? webhookJson({ message: "synthetic claim write failure" }, 500)
+    : null;
+  await signedWebhookFixture({ route }, async (invoke, calls, stored) => {
+    const result = await invoke("checkout.session.expired", { id: "cs_claim_write_failure", livemode: false, metadata: { checkout_type: "subscription_trial", user_id: "user-1" } }, { id: "evt_claim_write_failure" });
+    assertEquals(result.response.status, 500);
+    assertEquals(stored.get("evt_claim_write_failure")?.status, "failed");
+    const claim = calls.find((call) => call.url.pathname === "/rest/v1/subscription_trial_claims" && call.method === "PATCH");
+    assertEquals(claim!.url.searchParams.get("stripe_checkout_session_id"), "eq.cs_claim_write_failure");
+    assertEquals(claim!.url.searchParams.get("status"), "in.(checkout_started,checkout_created)");
     assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles"), false);
   });
 });
@@ -1865,6 +1939,24 @@ Deno.test("signed add-on subscription update retrieves canonical state and only 
     const update = calls.find((call) => call.url.pathname === "/rest/v1/addon_purchases" && call.method === "PATCH");
     assertEquals(JSON.parse(update!.body).status, "cancelled");
     assertEquals(update!.url.searchParams.get("stripe_subscription_id"), "eq.sub_addon_canonical");
+    assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles" || call.url.pathname === "/rest/v1/billing_subscriptions"), false);
+  });
+});
+
+Deno.test("signed add-on subscription update failure leaves the event retryable without profile writes", async () => {
+  const canonical = { id: "sub_addon_write_failure", customer: "cus_addon_write_failure", status: "canceled", livemode: false, metadata: { checkout_type: "addon", addon_key: "featured_listing" }, invoice_settings: { custom_fields: [{ name: "Company VAT", value: "EL802708301" }] }, items: { data: [] } };
+  const route = (call: SignedWebhookCall) => {
+    if (call.method === "GET" && call.url.pathname === "/v1/subscriptions/sub_addon_write_failure") return webhookJson(canonical);
+    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/addon_purchases") return webhookJson({ message: "synthetic add-on status write failure" }, 500);
+    return null;
+  };
+  await signedWebhookFixture({ route }, async (invoke, calls, stored) => {
+    const result = await invoke("customer.subscription.updated", { id: canonical.id, customer: canonical.customer, status: "active", livemode: false }, { id: "evt_addon_write_failure" });
+    assertEquals(result.response.status, 500);
+    assertEquals(stored.get("evt_addon_write_failure")?.status, "failed");
+    const update = calls.find((call) => call.url.pathname === "/rest/v1/addon_purchases" && call.method === "PATCH");
+    assertEquals(JSON.parse(update!.body).status, "cancelled");
+    assertEquals(update!.url.searchParams.get("stripe_subscription_id"), "eq.sub_addon_write_failure");
     assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/profiles" || call.url.pathname === "/rest/v1/billing_subscriptions"), false);
   });
 });
@@ -1904,13 +1996,14 @@ Deno.test("signed professional subscription cannot update a different actor from
 });
 
 const agentInvoiceCreditFixture = async (
-  mode: "create" | "existing" | "definitive_failure" | "ambiguous_failure" | "finalized_missing" | "finalized_existing" | "finalized_persisted_missing" | "persistence_failure" | "release_failure",
-  inspect: (result: { response: Response; body: Record<string, unknown> }, calls: SignedWebhookCall[]) => void | Promise<void>,
+  mode: "create" | "existing" | "definitive_failure" | "ambiguous_failure" | "finalized_missing" | "finalized_existing" | "finalized_persisted_missing" | "persistence_failure" | "persistence_retry" | "release_failure",
+  inspect: (result: { response: Response; body: Record<string, unknown> }, calls: SignedWebhookCall[], context: { retry: () => Promise<{ response: Response; body: Record<string, unknown> }>; stored: Map<string, Record<string, unknown>> }) => void | Promise<void>,
 ) => {
   const userId = "00000000-0000-4000-8000-000000000091";
   const invoiceId = "in_credit_handler";
   let operationKey = await buildIdempotencyKey("agent-data-input-invoice-credit", [invoiceId, userId]);
   let created = false;
+  let persistenceAttempts = 0;
   const credit = () => ({
     id: "ii_credit_handler", object: "invoiceitem", amount: -100, currency: "eur", customer: "cus_credit_handler", invoice: invoiceId,
     metadata: { type: "agent_data_input_discount", user_id: userId, applied_count: "2", applied_pct: "1", operation_key: operationKey, expected_amount_cents: "100", invoice_id: invoiceId },
@@ -1923,7 +2016,10 @@ const agentInvoiceCreditFixture = async (
       return webhookJson({ applied_count: 2, applied_pct: 1, expected_amount_cents: 100, operation_key: operationKey });
     }
     if (call.method === "GET" && call.url.pathname === "/rest/v1/agent_data_inputs") return webhookJson(reservations());
-    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/agent_data_inputs") return webhookJson(mode === "persistence_failure" || mode === "release_failure" ? [{ id: "adi_credit_1" }] : [{ id: "adi_credit_1" }, { id: "adi_credit_2" }]);
+    if (call.method === "PATCH" && call.url.pathname === "/rest/v1/agent_data_inputs") {
+      persistenceAttempts += 1;
+      return webhookJson(mode === "persistence_failure" || mode === "release_failure" || (mode === "persistence_retry" && persistenceAttempts === 1) ? [{ id: "adi_credit_1" }] : [{ id: "adi_credit_1" }, { id: "adi_credit_2" }]);
+    }
     if (call.method === "GET" && call.url.pathname === "/v1/invoiceitems") return webhookJson({ object: "list", data: created || mode === "existing" || mode === "finalized_existing" ? [credit()] : [], has_more: false });
     if (call.method === "POST" && call.url.pathname === "/v1/invoiceitems") {
       if (mode === "definitive_failure" || mode === "release_failure") return webhookJson({ error: { message: "definitive synthetic rejection", type: "invalid_request_error" } }, 400);
@@ -1933,11 +2029,12 @@ const agentInvoiceCreditFixture = async (
     }
     return null;
   };
-  await signedWebhookFixture({ route }, async (invoke, calls) => {
+  await signedWebhookFixture({ route }, async (invoke, calls, stored) => {
     const type = mode.startsWith("finalized_") ? "invoice.finalized" : "invoice.created";
     const object = { id: invoiceId, customer: "cus_credit_handler", status: "draft", billing_reason: "subscription_cycle", subtotal: 10000, currency: "eur", livemode: false };
-    const result = await invoke(type, object);
-    await inspect(result, calls);
+    const retry = () => invoke(type, object, { id: "evt_credit_same_state" });
+    const result = await retry();
+    await inspect(result, calls, { retry, stored });
   });
 };
 
@@ -1999,6 +2096,35 @@ Deno.test("signed draft invoice reports persistence failure after provider credi
     assertEquals(patches.length, 1);
     assertEquals(JSON.parse(patches[0].body).stripe_credit_id, "ii_credit_handler");
     assertEquals(calls.some((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH" && JSON.parse(call.body).discount_applied === false), false);
+  });
+});
+
+Deno.test("signed draft invoice retry finds the provider credit created before failed durable persistence", async () => {
+  await agentInvoiceCreditFixture("persistence_retry", async (first, calls, context) => {
+    assertEquals(first.response.status, 500);
+    assertEquals(context.stored.get("evt_credit_same_state")?.status, "failed");
+    const firstCreates = calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST");
+    const firstPatches = calls.filter((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH");
+    assertEquals(firstCreates.length, 1);
+    assertEquals(firstPatches.length, 1);
+    assertEquals(JSON.parse(firstPatches[0].body).stripe_credit_id, "ii_credit_handler");
+    const firstKey = firstCreates[0].form.get("metadata[operation_key]");
+    const beforeRetry = calls.length;
+    const second = await context.retry();
+    assertEquals(second.response.status, 200);
+    assertEquals(context.stored.get("evt_credit_same_state")?.status, "processed");
+    const retried = calls.slice(beforeRetry);
+    const secondReservation = retried.find((call) => call.url.pathname === "/rest/v1/rpc/apply_verified_data_input_discount");
+    const secondList = retried.find((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "GET");
+    const secondPersist = retried.find((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH");
+    assertEquals(Boolean(secondReservation && secondList && secondPersist), true);
+    assertEquals(JSON.parse(secondReservation!.body).p_operation_key, firstKey);
+    assertEquals(calls.indexOf(secondReservation!) < calls.indexOf(secondList!), true);
+    assertEquals(calls.indexOf(secondList!) < calls.indexOf(secondPersist!), true);
+    assertEquals(retried.some((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST"), false);
+    assertEquals(calls.filter((call) => call.url.pathname === "/v1/invoiceitems" && call.method === "POST").length, 1);
+    assertEquals(calls.filter((call) => call.url.pathname === "/rest/v1/agent_data_inputs" && call.method === "PATCH").length, 2);
+    assertEquals(JSON.parse(secondPersist!.body).stripe_credit_id, "ii_credit_handler");
   });
 });
 
