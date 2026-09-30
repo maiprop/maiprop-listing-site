@@ -12,6 +12,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.5
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { finishScheduledDispatch, startScheduledDispatch, type ScheduledOutcome } from "../_shared/scheduledDispatch.ts";
 
 const structuredLog = createLogger("send-saved-search-alerts");
 
@@ -96,9 +97,23 @@ Deno.serve(async (req) => {
     });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseKey) {
+    return new Response(JSON.stringify({ ok: false, error: "internal_configuration_unavailable", dispatch_id: null, trace_persistence_complete: false }), {
+      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+  const trace = await startScheduledDispatch(supabase, req, "saved_search_alerts", corsHeaders);
+  if (trace.response) return trace.response;
+  const run = trace.run!;
+  const terminal = (response: Response, outcome: ScheduledOutcome, summary: Record<string, boolean | number>) =>
+    finishScheduledDispatch(supabase, run, response, outcome, summary);
+
   const BREVO_KEY = Deno.env.get("BREVO_API_KEY");
   if (!BREVO_KEY) {
-    return new Response(
+    return await terminal(new Response(
       JSON.stringify({
         ok: false,
         error: "email_service_not_configured",
@@ -109,15 +124,8 @@ Deno.serve(async (req) => {
         status: 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
-    );
+    ), "skipped", { processed: 0, emailsSent: 0, checkpointsPersisted: 0, failed: 0 });
   }
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    {
-      auth: { persistSession: false },
-    },
-  );
 
   const APP_URL = Deno.env.get("MAIPROP_APP_URL") ||
     "https://portal.maiprop.co/";
@@ -130,7 +138,7 @@ Deno.serve(async (req) => {
     unknown = 0,
     processed = 0;
   const respond = () =>
-    new Response(
+    terminal(new Response(
       JSON.stringify({
         ok: failed === 0,
         processed,
@@ -147,7 +155,10 @@ Deno.serve(async (req) => {
         status: failed === 0 ? 200 : 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
-    );
+    ), failed === 0 ? sent === 0 ? "skipped" : "succeeded" : sent > 0 ? "partial" : "failed", {
+      processed, emailsSent: sent, checkpointsPersisted: checkpointed, failed,
+      provider_accepted: sent > 0, persistence_complete: checkpointed === sent,
+    });
   try {
     const { data: searches, error: searchError } = await supabase
       .from("saved_searches")
@@ -157,10 +168,10 @@ Deno.serve(async (req) => {
     if (searchError) throw searchError;
     if (!searches || searches.length === 0) {
       log("No saved searches with alerts");
-      return new Response(JSON.stringify({ ok: true, processed: 0 }), {
+      return await terminal(new Response(JSON.stringify({ ok: true, processed: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
-      });
+      }), "skipped", { processed: 0, emailsSent: 0, checkpointsPersisted: 0, failed: 0 });
     }
 
     processed = searches.length;

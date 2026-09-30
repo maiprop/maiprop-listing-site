@@ -9,6 +9,7 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { finishScheduledDispatch, startScheduledDispatch, type ScheduledOutcome } from "../_shared/scheduledDispatch.ts";
 import { createLogger } from "../_shared/logger.ts";
 import {
   makeRateLimiter,
@@ -282,6 +283,7 @@ async function logSync(
   error_message?: string | null,
   payload?: unknown,
   records_affected = 0,
+  dispatch_id?: string,
 ): Promise<boolean> {
   try {
     const { error } = await table(sb, "sync_log").insert({
@@ -292,6 +294,7 @@ async function logSync(
       error_message: error_message ?? null,
       payload: payload ?? null,
       records_affected,
+      dispatch_id: dispatch_id ?? null,
     });
     if (error) {
       log.warn("Sync outcome persistence failed");
@@ -768,12 +771,26 @@ Deno.serve(async (req) => {
   const auth = await authorizeSyncRequest(req, sb, corsHeaders);
   if (auth instanceof Response) return auth;
 
+  const trace = await startScheduledDispatch(sb, req, "poll_os_auctions", corsHeaders);
+  if (trace.response) return trace.response;
+  const run = trace.run!;
+  const terminal = async (response: Response, outcome: ScheduledOutcome) => {
+    let body: Record<string, unknown> = {};
+    try { body = await response.clone().json(); } catch { /* Use a safe empty summary. */ }
+    const summary: Record<string, boolean | number> = {};
+    for (const key of ["imported", "updated", "errors", "page_fetch_failures", "total", "import_complete", "persistence_complete", "ok"] as const) {
+      const value = body[key];
+      if (typeof value === "boolean" || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0)) summary[key] = value;
+    }
+    return finishScheduledDispatch(sb, run, response, outcome, summary);
+  };
+
   let body: PollOsAuctionsRequest;
   try {
     body = await parsePollOsAuctionsRequest(req);
   } catch (err: unknown) {
     if (err instanceof SchemaValidationError) {
-      return new Response(
+      return await terminal(new Response(
         JSON.stringify({
           error: err.message,
           code: err.code,
@@ -783,13 +800,25 @@ Deno.serve(async (req) => {
           status: err.status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
-      );
+      ), "failed");
     }
-    throw err;
+    return await terminal(new Response(JSON.stringify({ error: "Invalid request" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }), "failed");
   }
 
-  if (await limiter.isLimited(await getAuthorizedRateLimitKey(auth))) {
-    return tooManyRequestsResponse(corsHeaders);
+  let limited: boolean;
+  try {
+    limited = await limiter.isLimited(await getAuthorizedRateLimitKey(auth));
+  } catch {
+    return await terminal(new Response(JSON.stringify({ error: "Rate limit unavailable" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }), "failed");
+  }
+  if (limited) {
+    return await terminal(tooManyRequestsResponse(corsHeaders), "skipped");
   }
 
   let imported = 0, updated = 0, errors = 0;
@@ -817,8 +846,8 @@ Deno.serve(async (req) => {
         pool_count_before: existingDailyPoolCount,
         pool_count_after: finalDailyPoolCount,
         prunedPoolRows,
-      });
-      return new Response(
+      }, 0, run.dispatchId);
+      return await terminal(new Response(
         JSON.stringify({
           ok: persisted,
           persistence_complete: persisted,
@@ -834,7 +863,7 @@ Deno.serve(async (req) => {
           status: persisted ? 200 : 503,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
-      );
+      ), persisted ? "skipped" : "partial");
     }
 
     const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
@@ -846,8 +875,11 @@ Deno.serve(async (req) => {
         sb,
         "skipped",
         "OS credentials not configured",
+        undefined,
+        0,
+        run.dispatchId,
       );
-      return new Response(
+      return await terminal(new Response(
         JSON.stringify({
           ok: persisted,
           persistence_complete: persisted,
@@ -858,7 +890,7 @@ Deno.serve(async (req) => {
           status: persisted ? 200 : 503,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
-      );
+      ), persisted ? "skipped" : "partial");
     }
 
     // Build the provider filter only from the validated allowlist.
@@ -961,8 +993,8 @@ Deno.serve(async (req) => {
         page,
         sourcePages: samplePages,
         page_fetch_failures: pageFetchFailures,
-      }, 0);
-      return new Response(
+      }, 0, run.dispatchId);
+      return await terminal(new Response(
         JSON.stringify({
           ok: complete && persisted,
           import_complete: complete,
@@ -980,7 +1012,7 @@ Deno.serve(async (req) => {
           status: complete && persisted ? 200 : 503,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
-      );
+      ), complete && persisted ? "succeeded" : "partial");
     }
 
     const validAuctions = dedupeOsAuctionsById(auctions);
@@ -1106,11 +1138,12 @@ Deno.serve(async (req) => {
       complete ? null : `${errors} item(s) and ${pageFetchFailures} selected page(s) failed`,
       summary,
       imported + updated,
+      run.dispatchId,
     );
 
     log.info("poll done", { summary });
 
-    return new Response(
+    return await terminal(new Response(
       JSON.stringify({
         ok: complete && persisted,
         ...summary,
@@ -1122,7 +1155,7 @@ Deno.serve(async (req) => {
         status: complete && persisted ? 200 : 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
-    );
+    ), complete && persisted ? "succeeded" : "partial");
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     log.error("poll error", { err: message });
@@ -1131,8 +1164,8 @@ Deno.serve(async (req) => {
       updated,
       errors,
       page_fetch_failures: pageFetchFailures,
-    }, imported + updated);
-    return new Response(
+    }, imported + updated, run.dispatchId);
+    return await terminal(new Response(
       JSON.stringify({
         ok: false,
         error: message,
@@ -1147,6 +1180,6 @@ Deno.serve(async (req) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
-    );
+    ), "failed");
   }
 });

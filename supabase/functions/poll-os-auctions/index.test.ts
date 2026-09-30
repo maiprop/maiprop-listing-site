@@ -7,6 +7,7 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, jsonBody, req } from "../_shared/testUtils.ts";
 import { MAX_OS_FILTER_BODY_BYTES } from "../fetch-os-auctions/osFilterContract.ts";
+import { getAuctionSamplePageNumbers } from "../fetch-os-auctions/auctionSampling.ts";
 
 const { handler, restore } = await captureHandler(
   import.meta.url,
@@ -49,6 +50,17 @@ function rawPost(body: string): Request {
   });
 }
 
+function fakePollTrace(input: string | URL | Request): Response | null {
+  const pathname = new URL(input instanceof Request ? input.url : String(input)).pathname;
+  if (pathname === "/rest/v1/rpc/start_scheduled_http_dispatch_for_service") {
+    return new Response(JSON.stringify({ decision: "run", dispatch_id: "55555555-5555-4555-8555-555555555555", execution_token: "66666666-6666-4666-8666-666666666666" }), {
+      headers: { "content-type": "application/json" },
+    });
+  }
+  if (pathname === "/rest/v1/rpc/finish_scheduled_http_dispatch_for_service") return new Response(null, { status: 204 });
+  return null;
+}
+
 async function assertBoundaryRejection(
   request: Request,
   expectedCode: string,
@@ -56,7 +68,9 @@ async function assertBoundaryRejection(
 ): Promise<void> {
   const originalFetch = globalThis.fetch;
   let externalRequests = 0;
-  globalThis.fetch = (() => {
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const trace = fakePollTrace(input);
+    if (trace) return Promise.resolve(trace);
     externalRequests += 1;
     return Promise.resolve(
       new Response(JSON.stringify({ message: "unexpected request" }), {
@@ -203,7 +217,9 @@ Deno.test("unknown OS enum values are rejected after cron auth but before sync w
 Deno.test("invalid bodies bypass the production DB-backed limiter transport", async () => {
   const originalFetch = globalThis.fetch;
   let transportCalls = 0;
-  globalThis.fetch = (() => {
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const trace = fakePollTrace(input);
+    if (trace) return Promise.resolve(trace);
     transportCalls += 1;
     return Promise.resolve(new Response("{}", { status: 500 }));
   }) as typeof fetch;
@@ -239,6 +255,9 @@ Deno.test("a guarded zero-row canonical update fails polling before pool pruning
     const request = input instanceof Request ? input : null;
     const url = String(request?.url ?? input);
     const method = request?.method ?? init?.method ?? "GET";
+
+    const trace = fakePollTrace(input);
+    if (trace) return Promise.resolve(trace);
 
     if (url.endsWith("/auth/login")) {
       return Promise.resolve(new Response(JSON.stringify({ token: "os-token" }), {
@@ -369,14 +388,17 @@ async function pollOutcomeScenario(
   mode: "import" | "empty" | "full" | "config" | "primary" | "partial",
   logFailure?: "resolved" | "rejected",
   sampling?: { failedPages: number[] },
+  traceDecision: "run" | "replay" = "run",
 ) {
   const oldFetch = globalThis.fetch;
   const oldNow = Date.now;
   pollClock += 60_001;
   Date.now = () => pollClock;
-  let logCalls = 0, providerCalls = 0, inserted = 0;
+  let logCalls = 0, providerCalls = 0, inserted = 0, traceStarts = 0, traceFinishes = 0;
+  const dispatchId = "55555555-5555-4555-8555-555555555555";
+  const executionToken = "66666666-6666-4666-8666-666666666666";
   const requestedPages: number[] = [];
-  const outcomes: { status: string; payload: { page_fetch_failures: number } }[] = [];
+  const outcomes: { status: string; dispatch_id?: string; payload: { page_fetch_failures: number } }[] = [];
   const json = (value: unknown, status = 200) =>
     new Response(JSON.stringify(value), {
       status,
@@ -387,6 +409,18 @@ async function pollOutcomeScenario(
       const url = new URL(input instanceof Request ? input.url : String(input));
       const method = init?.method ??
         (input instanceof Request ? input.method : "GET");
+      if (url.pathname === "/rest/v1/rpc/start_scheduled_http_dispatch_for_service") {
+        traceStarts++;
+        assertEquals(JSON.parse(String(init?.body)).p_dispatch_id, dispatchId);
+        return json({ decision: traceDecision, dispatch_id: dispatchId, ...(traceDecision === "run" ? { execution_token: executionToken } : {}) });
+      }
+      if (url.pathname === "/rest/v1/rpc/finish_scheduled_http_dispatch_for_service") {
+        traceFinishes++;
+        const body = JSON.parse(String(init?.body));
+        assertEquals(body.p_dispatch_id, dispatchId);
+        assertEquals(body.p_execution_token, executionToken);
+        return new Response(null, { status: 204 });
+      }
       if (url.pathname === "/rest/v1/sync_log") {
         logCalls++;
         outcomes.push(JSON.parse(String(init?.body)));
@@ -445,6 +479,7 @@ async function pollOutcomeScenario(
     const response = await handler(
       req("POST", sampling ? { pageSize: 1, sampleAcrossGreece: true } : { page: 0, pageSize: 1, sampleAcrossGreece: false }, {
         authorization: `Bearer ${Deno.env.get("CRON_SECRET")}`,
+        "x-maiprop-dispatch-id": dispatchId,
       }),
     );
     return {
@@ -455,6 +490,8 @@ async function pollOutcomeScenario(
       inserted,
       requestedPages,
       outcomes,
+      traceStarts,
+      traceFinishes,
     };
   } finally {
     globalThis.fetch = oldFetch;
@@ -514,24 +551,47 @@ Deno.test('poll ordinary import reports both catalogue and outcome persistence',
 });
 
 for (const scenario of [
-  { name: 'mixed page results', mode: 'import' as const, failedPages: [5, 7], expectedImported: 1, expectedTotal: 2 },
-  { name: 'empty results with unavailable pages', mode: 'empty' as const, failedPages: [3, 5, 7], expectedImported: 0, expectedTotal: 0 },
-  { name: 'all selected pages available', mode: 'import' as const, failedPages: [], expectedImported: 1, expectedTotal: 4 },
+  { name: 'mixed page results', mode: 'import' as const, failed: 'last-two', expectedImported: 1 },
+  { name: 'empty results with unavailable pages', mode: 'empty' as const, failed: 'all-extra', expectedImported: 0 },
+  { name: 'all selected pages available', mode: 'import' as const, failed: 'none', expectedImported: 1 },
 ]) Deno.test(`sampled poll truthfully records ${scenario.name}`, async () => {
-  const result = await pollOutcomeScenario(scenario.mode, undefined, { failedPages: scenario.failedPages });
-  const complete = scenario.failedPages.length === 0;
+  const selectedPages = getAuctionSamplePageNumbers(10, 1, 4);
+  const failedPages = scenario.failed === 'last-two' ? selectedPages.slice(-2)
+    : scenario.failed === 'all-extra' ? selectedPages.filter((page) => page !== 0) : [];
+  const expectedTotal = scenario.mode === 'empty' ? 0
+    : 1 + selectedPages.filter((page) => page !== 0 && !failedPages.includes(page)).length;
+  const result = await pollOutcomeScenario(scenario.mode, undefined, { failedPages });
+  const complete = failedPages.length === 0;
   assertEquals(result.response.status, complete ? 200 : 503);
   assertEquals(result.body.ok, complete);
   assertEquals(result.body.import_complete, complete);
   assertEquals(result.body.persistence_complete, true);
   assertEquals(result.body.outcome, complete ? 'succeeded' : 'partial');
-  assertEquals(result.body.page_fetch_failures, scenario.failedPages.length);
+  assertEquals(result.body.page_fetch_failures, failedPages.length);
   assertEquals(result.body.imported, scenario.expectedImported);
   assertEquals(result.body.updated, 0);
   assertEquals(result.body.errors ?? 0, 0);
-  assertEquals(result.body.total, scenario.expectedTotal);
-  assertEquals(result.requestedPages.sort((a, b) => a - b), [0, 3, 5, 7]);
+  assertEquals(result.body.total, expectedTotal);
+  assertEquals(result.requestedPages.sort((a, b) => a - b), [0, ...selectedPages.filter((page) => page !== 0)].sort((a, b) => a - b));
   assertEquals(result.logCalls, 1);
   assertEquals(result.outcomes[0].status, complete ? 'success' : 'error');
-  assertEquals(result.outcomes[0].payload.page_fetch_failures, scenario.failedPages.length);
+  assertEquals(result.outcomes[0].payload.page_fetch_failures, failedPages.length);
+});
+
+Deno.test("poll links one outcome log to its scheduled trace", async () => {
+  const result = await pollOutcomeScenario("full");
+  assertEquals(result.traceStarts, 1);
+  assertEquals(result.traceFinishes, 1);
+  assertEquals(result.logCalls, 1);
+  assertEquals(result.outcomes[0].dispatch_id, result.body.dispatch_id);
+});
+
+Deno.test("poll replay leaves catalogue and sync log untouched", async () => {
+  const result = await pollOutcomeScenario("import", undefined, undefined, "replay");
+  assertEquals(result.response.status, 409);
+  assertEquals(result.traceStarts, 1);
+  assertEquals(result.traceFinishes, 0);
+  assertEquals(result.providerCalls, 0);
+  assertEquals(result.logCalls, 0);
+  assertEquals(result.inserted, 0);
 });

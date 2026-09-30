@@ -37,6 +37,10 @@ Deno.test("correct cron secret returns an empty batch without provider work", as
   globalThis.fetch = (async (input: string | URL | Request) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     calls.push(url.pathname);
+    if (url.pathname === "/rest/v1/rpc/start_scheduled_http_dispatch_for_service") {
+      return new Response(JSON.stringify({ decision: "run", dispatch_id: "55555555-5555-4555-8555-555555555555", execution_token: "66666666-6666-4666-8666-666666666666" }), { headers: { "content-type": "application/json" } });
+    }
+    if (url.pathname === "/rest/v1/rpc/finish_scheduled_http_dispatch_for_service") return new Response(null, { status: 204 });
     if (url.pathname !== "/rest/v1/saved_searches") {
       throw new Error("Unexpected fake transport");
     }
@@ -50,13 +54,46 @@ Deno.test("correct cron secret returns an empty batch without provider work", as
     );
     assertEquals(res.status, 200);
     assertEquals((await res.json()).processed, 0);
-    assertEquals(calls, ["/rest/v1/saved_searches"]);
+    assertEquals(calls, ["/rest/v1/rpc/start_scheduled_http_dispatch_for_service", "/rest/v1/saved_searches", "/rest/v1/rpc/finish_scheduled_http_dispatch_for_service"]);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
 restore();
+
+Deno.test("saved alerts trace missing email configuration without querying searches", async () => {
+  const oldFetch = globalThis.fetch;
+  const oldKey = Deno.env.get("BREVO_API_KEY");
+  Deno.env.set("SUPABASE_URL", "https://test.supabase.co");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "synthetic-service-key");
+  Deno.env.delete("BREVO_API_KEY");
+  const calls: string[] = [];
+  const dispatchId = "33333333-3333-4333-8333-333333333333";
+  const token = "44444444-4444-4444-8444-444444444444";
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    calls.push(url.pathname);
+    if (url.pathname.endsWith("/start_scheduled_http_dispatch_for_service")) {
+      assertEquals(JSON.parse(String(init?.body)).p_integration, "saved_search_alerts");
+      return new Response(JSON.stringify({ decision: "run", dispatch_id: dispatchId, execution_token: token }), { headers: { "content-type": "application/json" } });
+    }
+    if (url.pathname.endsWith("/finish_scheduled_http_dispatch_for_service")) {
+      assertEquals(JSON.parse(String(init?.body)).p_outcome, "skipped");
+      return new Response(null, { status: 204 });
+    }
+    throw new Error(`Unexpected fake transport ${url.pathname}`);
+  }) as typeof fetch;
+  try {
+    const response = await handler(req("POST", {}, { authorization: "Bearer correct-cron-secret", "x-maiprop-dispatch-id": dispatchId }));
+    assertEquals(response.status, 503);
+    assertEquals((await response.json()).dispatch_id, dispatchId);
+    assertEquals(calls, ["/rest/v1/rpc/start_scheduled_http_dispatch_for_service", "/rest/v1/rpc/finish_scheduled_http_dispatch_for_service"]);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) Deno.env.delete("BREVO_API_KEY"); else Deno.env.set("BREVO_API_KEY", oldKey);
+  }
+});
 
 async function savedScenario(
   options: {
@@ -65,6 +102,8 @@ async function savedScenario(
     failure?: string;
     provider?: string;
     concurrent?: string;
+    traceDecision?: "run" | "replay";
+    finishFails?: boolean;
   } = {},
 ) {
   const oldFetch = globalThis.fetch;
@@ -77,7 +116,8 @@ async function savedScenario(
     last_alert_listing_ids: options.ids === undefined ? [] : options.ids,
   };
   const listingId = "33333333-3333-4333-8333-333333333333";
-  let sends = 0, writes = 0;
+  let sends = 0, writes = 0, searchReads = 0;
+  let traceSummary: Record<string, unknown> | null = null;
   const json = (value: unknown, status = 200) =>
     new Response(JSON.stringify(value), {
       status,
@@ -88,6 +128,18 @@ async function savedScenario(
       const url = new URL(input instanceof Request ? input.url : String(input));
       const method = init?.method ??
         (input instanceof Request ? input.method : "GET");
+      if (url.pathname === "/rest/v1/rpc/start_scheduled_http_dispatch_for_service") {
+        const requestedId = JSON.parse(String(init?.body)).p_dispatch_id;
+        assertEquals(["55555555-5555-4555-8555-555555555555", "77777777-7777-4777-8777-777777777777"].includes(requestedId), true);
+        const decision = options.traceDecision ?? "run";
+        return json({ decision, dispatch_id: requestedId, ...(decision === "run" ? { execution_token: "66666666-6666-4666-8666-666666666666" } : {}) });
+      }
+      if (url.pathname === "/rest/v1/rpc/finish_scheduled_http_dispatch_for_service") {
+        traceSummary = JSON.parse(String(init?.body)).p_summary;
+        return options.finishFails
+          ? json({ message: "fixture finish failure" }, 500)
+          : new Response(null, { status: 204 });
+      }
       if (url.hostname === "api.brevo.com") {
         sends++;
         if (options.concurrent === "filters") row.filters.city = "Patras";
@@ -103,6 +155,7 @@ async function savedScenario(
           : new Response("", { status: 201 });
       }
       if (url.pathname === "/rest/v1/saved_searches" && method === "GET") {
+        searchReads++;
         return options.failure === "search"
           ? json({ message: "private-db" }, 500)
           : json([structuredClone(row)]);
@@ -151,7 +204,7 @@ async function savedScenario(
       const unauthorized = await handler(req("POST", {}));
       assertEquals(unauthorized.status, 401);
       const unavailable = await handler(
-        req("POST", {}, { authorization: "Bearer correct-cron-secret" }),
+        req("POST", {}, { authorization: "Bearer correct-cron-secret", "x-maiprop-dispatch-id": "77777777-7777-4777-8777-777777777777" }),
       );
       assertEquals(unavailable.status, 503);
       assertEquals(writes, 0);
@@ -160,9 +213,9 @@ async function savedScenario(
       Deno.env.set("BREVO_API_KEY", "placeholder");
     }
     const response = await handler(
-      req("POST", {}, { authorization: "Bearer correct-cron-secret" }),
+      req("POST", {}, { authorization: "Bearer correct-cron-secret", "x-maiprop-dispatch-id": "55555555-5555-4555-8555-555555555555" }),
     );
-    return { response, body: await response.json(), row, sends, writes };
+    return { response, body: await response.json(), row, sends, writes, searchReads, traceSummary };
   } finally {
     globalThis.fetch = oldFetch;
     Deno.env.set("BREVO_API_KEY", "placeholder-brevo");
@@ -230,4 +283,34 @@ Deno.test('already checkpointed saved match does not send or write again', async
   assertEquals(result.sends, 0);
   assertEquals(result.writes, 0);
   assertEquals(result.body.emailsSent, 0);
+});
+
+Deno.test("saved alert trace summary retains counts without recipient or content", async () => {
+  const result = await savedScenario();
+  assertEquals(result.traceSummary, {
+    processed: 1, emailsSent: 1, checkpointsPersisted: 1, failed: 0,
+    provider_accepted: true, persistence_complete: true, outcome: "succeeded",
+  });
+  assertEquals(result.body.dispatch_id !== undefined, true);
+});
+
+Deno.test("saved alert replay never looks up a recipient or sends", async () => {
+  const result = await savedScenario({ traceDecision: "replay" });
+  assertEquals(result.response.status, 409);
+  assertEquals(result.sends, 0);
+  assertEquals(result.writes, 0);
+  assertEquals(result.searchReads, 0);
+  assertEquals(result.traceSummary, null);
+});
+
+Deno.test("saved alert finish failure keeps accepted send and checkpoint visible", async () => {
+  const result = await savedScenario({ finishFails: true });
+  assertEquals(result.response.status, 503);
+  assertEquals(result.sends, 1);
+  assertEquals(result.writes, 1);
+  assertEquals(result.body.emailsSent, 1);
+  assertEquals(result.body.checkpointsPersisted, 1);
+  assertEquals(result.body.provider_accepted, true);
+  assertEquals(result.body.persistence_complete, true);
+  assertEquals(result.body.trace_persistence_complete, false);
 });

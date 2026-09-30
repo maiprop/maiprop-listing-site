@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { finishScheduledDispatch, startScheduledDispatch, type ScheduledOutcome, type ScheduledSummary, type ScheduledRun } from "../_shared/scheduledDispatch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,10 +44,19 @@ Deno.serve(async (req) => {
   }
   // ────────────────────────────────────────────────────────────────────────
 
+  let traceClient: ReturnType<typeof createClient> | null = null;
+  let traceRun: ScheduledRun | null = null;
   try {
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const supabaseKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
     const supabase = createClient(supabaseUrl, supabaseKey);
+    traceClient = supabase;
+    const trace = await startScheduledDispatch(supabase, req, "scheduled_followups", corsHeaders);
+    if (trace.response) return trace.response;
+    const run = trace.run!;
+    traceRun = run;
+    const terminal = (response: Response, outcome: ScheduledOutcome, summary: ScheduledSummary) =>
+      finishScheduledDispatch(supabase, run, response, outcome, summary);
 
     const now = new Date();
     const results: { step: number; success: boolean; error?: string }[] = [];
@@ -62,14 +72,14 @@ Deno.serve(async (req) => {
 
     if (error) {
       console.error("Failed to fetch leads:", error);
-      return new Response(JSON.stringify({ error: "Failed to fetch leads" }), {
+      return await terminal(new Response(JSON.stringify({ error: "Failed to fetch leads" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      }), "failed", { processed: 0, succeeded: 0, failed: 1 });
     }
 
     if (!leads || leads.length === 0) {
-      return new Response(
+      return await terminal(new Response(
         JSON.stringify({
           success: true,
           processed: 0,
@@ -79,7 +89,7 @@ Deno.serve(async (req) => {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
-      );
+      ), "skipped", { processed: 0, succeeded: 0, failed: 0 });
     }
 
     for (const lead of leads) {
@@ -138,7 +148,7 @@ Deno.serve(async (req) => {
     }
 
     const failed = results.filter((r) => !r.success).length;
-    return new Response(
+    return await terminal(new Response(
       JSON.stringify({
         success: failed === 0,
         outcome: failed === 0 ? "succeeded" : "partial",
@@ -150,12 +160,19 @@ Deno.serve(async (req) => {
         status: failed === 0 ? 200 : 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
-    );
+    ), failed === 0 ? "succeeded" : "partial", {
+      processed: results.length, succeeded: results.length - failed, failed,
+    });
   } catch (error: unknown) {
     console.error("Scheduled followup error:", error);
-    return new Response(JSON.stringify({ error: "Internal error" }), {
+    const response = new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+    return traceClient && traceRun
+      ? await finishScheduledDispatch(traceClient, traceRun, response, "failed", { processed: 0, succeeded: 0, failed: 1 })
+      : new Response(JSON.stringify({ error: "Internal error", dispatch_id: null, trace_persistence_complete: false }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
   }
 });

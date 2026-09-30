@@ -4,6 +4,9 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
+const TRACE_ID = "11111111-1111-4111-8111-111111111111";
+const TRACE_TOKEN = "22222222-2222-4222-8222-222222222222";
+
 const CRON_VALUE = crypto.randomUUID();
 const { handler, restore } = await captureHandler(import.meta.url, "./index.ts", {
   CRON_SECRET: CRON_VALUE,
@@ -40,6 +43,104 @@ Deno.test("valid cron secret reaches handler and missing env fails closed", asyn
 
 restore();
 
+Deno.test("scheduler starts and finishes an empty traced batch before returning", async () => {
+  const oldFetch = globalThis.fetch;
+  Deno.env.set("SUPABASE_URL", "https://test.supabase.co");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "synthetic-service-key");
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    calls.push(url.pathname);
+    if (url.pathname.endsWith("/start_scheduled_http_dispatch_for_service")) {
+      assertEquals(JSON.parse(String(init?.body)), { p_dispatch_id: TRACE_ID, p_integration: "scheduled_followups" });
+      return new Response(JSON.stringify({ decision: "run", dispatch_id: TRACE_ID, execution_token: TRACE_TOKEN }), { headers: { "content-type": "application/json" } });
+    }
+    if (url.pathname === "/rest/v1/marketing_leads") return new Response("[]", { headers: { "content-type": "application/json" } });
+    if (url.pathname.endsWith("/finish_scheduled_http_dispatch_for_service")) {
+      const body = JSON.parse(String(init?.body));
+      assertEquals(body.p_dispatch_id, TRACE_ID);
+      assertEquals(body.p_execution_token, TRACE_TOKEN);
+      assertEquals(body.p_outcome, "skipped");
+      return new Response(null, { status: 204 });
+    }
+    throw new Error(`Unexpected fake transport ${url.pathname}`);
+  }) as typeof fetch;
+  try {
+    const response = await handler(req("POST", {}, { "x-cron-secret": CRON_VALUE, "x-maiprop-dispatch-id": TRACE_ID }));
+    assertEquals(response.status, 200);
+    assertEquals((await response.json()).dispatch_id, TRACE_ID);
+    assertEquals(calls, ["/rest/v1/rpc/start_scheduled_http_dispatch_for_service", "/rest/v1/marketing_leads", "/rest/v1/rpc/finish_scheduled_http_dispatch_for_service"]);
+  } finally { globalThis.fetch = oldFetch; }
+});
+
+async function schedulerTraceDecision(decision: string, finishFails = false, returnedId = TRACE_ID) {
+  const oldFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const pathname = new URL(input instanceof Request ? input.url : String(input)).pathname;
+    calls.push(pathname);
+    if (pathname.endsWith("/start_scheduled_http_dispatch_for_service")) {
+      if (decision === "start_error") return new Response(JSON.stringify({ message: "fixture RPC error" }), { status: 500, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ decision, dispatch_id: returnedId, ...(decision === "run" ? { execution_token: TRACE_TOKEN } : {}) }), { headers: { "content-type": "application/json" } });
+    }
+    if (pathname === "/rest/v1/marketing_leads") return new Response("[]", { headers: { "content-type": "application/json" } });
+    if (pathname.endsWith("/finish_scheduled_http_dispatch_for_service")) {
+      return finishFails ? new Response(JSON.stringify({ message: "fixture failure" }), { status: 500, headers: { "content-type": "application/json" } }) : new Response(null, { status: 204 });
+    }
+    throw new Error(`Unexpected fake transport ${pathname}`);
+  }) as typeof fetch;
+  try {
+    const response = await handler(req("POST", {}, { "x-cron-secret": CRON_VALUE, "x-maiprop-dispatch-id": TRACE_ID }));
+    return { response, body: await response.json(), calls };
+  } finally { globalThis.fetch = oldFetch; }
+}
+
+for (const decision of ["replay", "in_progress", "unknown"]) {
+  Deno.test(`scheduler ${decision} trace does no business work`, async () => {
+    const result = await schedulerTraceDecision(decision);
+    assertEquals(result.response.status, 409);
+    assertEquals(result.body.dispatch_id, TRACE_ID);
+    assertEquals(result.body.execution_token, undefined);
+    assertEquals(result.calls, ["/rest/v1/rpc/start_scheduled_http_dispatch_for_service"]);
+  });
+}
+
+Deno.test("scheduler preserves empty business result when trace finish fails", async () => {
+  const result = await schedulerTraceDecision("run", true);
+  assertEquals(result.response.status, 503);
+  assertEquals(result.body.success, true);
+  assertEquals(result.body.processed, 0);
+  assertEquals(result.body.trace_persistence_complete, false);
+  assertEquals(result.body.dispatch_id, TRACE_ID);
+});
+
+Deno.test("scheduler rejects malformed dispatch correlation before any RPC or business work", async () => {
+  const oldFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (() => { calls++; throw new Error("Unexpected transport"); }) as typeof fetch;
+  try {
+    const response = await handler(req("POST", {}, { "x-cron-secret": CRON_VALUE, "x-maiprop-dispatch-id": "not-a-uuid" }));
+    assertEquals(response.status, 400);
+    assertEquals((await response.json()).dispatch_id, null);
+    assertEquals(calls, 0);
+  } finally { globalThis.fetch = oldFetch; }
+});
+
+Deno.test("scheduler refuses a start result for another dispatch", async () => {
+  const result = await schedulerTraceDecision("run", false, "77777777-7777-4777-8777-777777777777");
+  assertEquals(result.response.status, 503);
+  assertEquals(result.body.trace_persistence_complete, false);
+  assertEquals(result.calls, ["/rest/v1/rpc/start_scheduled_http_dispatch_for_service"]);
+});
+
+Deno.test("scheduler start failure cannot reach leads or claim persisted trace", async () => {
+  const result = await schedulerTraceDecision("start_error");
+  assertEquals(result.response.status, 503);
+  assertEquals(result.body.dispatch_id, TRACE_ID);
+  assertEquals(result.body.trace_persistence_complete, false);
+  assertEquals(result.calls, ["/rest/v1/rpc/start_scheduled_http_dispatch_for_service"]);
+});
+
 async function scheduledScenario(
   children: { status?: number; body: string }[],
   ages = [2, 9, 30],
@@ -50,6 +151,13 @@ async function scheduledScenario(
   globalThis.fetch =
     (async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname === "/rest/v1/rpc/start_scheduled_http_dispatch_for_service") {
+        assertEquals(JSON.parse(String(init?.body)).p_dispatch_id, null);
+        return new Response(JSON.stringify({ decision: "run", dispatch_id: TRACE_ID, execution_token: TRACE_TOKEN }), { headers: { "content-type": "application/json" } });
+      }
+      if (url.pathname === "/rest/v1/rpc/finish_scheduled_http_dispatch_for_service") {
+        return new Response(null, { status: 204 });
+      }
       if (url.pathname === "/rest/v1/marketing_leads") {
         return new Response(
           JSON.stringify(
