@@ -207,6 +207,10 @@ async function priceFixture(
           : priceJson({ code: "PGRST116", details: "The result contains 0 rows", message: "Cannot coerce the result to a single JSON object" }, 406);
       }
       if (method === "PATCH" && url.pathname === "/rest/v1/pricing_configs") {
+        if (url.searchParams.getAll("id").length !== 1 || url.searchParams.get("id") !== "eq.config_e2") {
+          unexpected.push(`${method} ${url}`);
+          throw new Error(`Pricing metadata PATCH is not bound to config_e2: ${url}`);
+        }
         if (options.patchError) return priceJson({ message: "synthetic metadata save failure" }, 500);
         if (config) Object.assign(config, JSON.parse(body));
         return new Response(null, { status: 204 });
@@ -290,6 +294,8 @@ Deno.test("price handler creates one monthly config, annual companion, then dura
     assert(paths.indexOf("/v1/products") < paths.indexOf("/v1/prices"));
     assert(paths.lastIndexOf("/v1/prices") < paths.lastIndexOf("/rest/v1/pricing_configs"));
     assert(paths.lastIndexOf("/rest/v1/pricing_configs") < paths.indexOf("/rest/v1/pro_product_ids"));
+    const metadataWrite = calls.find((call) => call.method === "PATCH" && call.url.pathname === "/rest/v1/pricing_configs");
+    assertEquals(metadataWrite?.url.searchParams.getAll("id"), ["eq.config_e2"]);
     const product = calls.find((call) => call.url.pathname === "/v1/products")!;
     const prices = calls.filter((call) => call.url.pathname === "/v1/prices");
     assertEquals(product.form.get("name"), "MaiProp Pro");
@@ -381,6 +387,9 @@ Deno.test("marked stage row verifies exact sandbox identity and retries with sta
       assert(firstCreates.every((call) => call.key?.startsWith("maiprop-stage-catalog-v1:")));
       const again = await state.repeat();
       assertEquals(again.response.status, 500);
+      const writes = calls.filter((call) => call.method === "PATCH" && call.url.pathname === "/rest/v1/pricing_configs");
+      assertEquals(writes.length, 2);
+      assertEquals(writes.map((call) => call.url.searchParams.getAll("id")), [["eq.config_e2"], ["eq.config_e2"]]);
       const creates = calls.filter((call) => call.url.pathname === "/v1/products" || call.url.pathname === "/v1/prices");
       assertEquals(creates.slice(0, 3).map((call) => call.key), creates.slice(3).map((call) => call.key));
       assertEquals(state.config?.metadata.staging_catalog_initialized_by_stage_release, true);
