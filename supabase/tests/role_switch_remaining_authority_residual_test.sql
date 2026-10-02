@@ -1,7 +1,7 @@
 -- D2 residual role authority under closed strict/reconciliation gates.
 BEGIN;
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pgtap') THEN CREATE EXTENSION pgtap; END IF; END $$;
-SELECT plan(70);
+SELECT plan(69);
 SELECT is(current_setting('session_replication_role'),'origin','normal triggers remain enabled');
 SELECT ok((SELECT NOT strict_enrollment_enabled AND legacy_begin_enabled AND NOT reconciliation_enabled
  FROM private.role_switch_rollout_control WHERE singleton),'rollout gates start false/true/false');
@@ -104,36 +104,73 @@ SELECT ok(has_function_privilege('service_role','public.complete_onboarding_role
 
 INSERT INTO public.conversations(id,participant_a,participant_b)
 VALUES('d2150003-0000-4000-8000-000000000001','d2150001-0000-4000-8000-000000000001','d2150001-0000-4000-8000-000000000002');
-SELECT is((SELECT count(*)::integer FROM public.conversations WHERE id='d2150003-0000-4000-8000-000000000001'),1,
- 'ordinary open conversation fixture exists');
-SELECT lives_ok($q$SELECT public.record_role_switch_audit_for_user('d2150001-0000-4000-8000-000000000001','buyer','seller','same-tier',false,false)$q$,
- 'legacy explicit-user recorder accepts actual service/no-sub');
-SELECT ok((SELECT count(*)=1 FROM public.role_switch_history WHERE user_id='d2150001-0000-4000-8000-000000000001'
- AND from_type='buyer' AND to_type='seller' AND switch_kind='same-tier' AND billing_outcome='legacy'),
- 'legacy recorder creates exactly one legacy audit without strict binding');
+-- Existing rows make preservation of prior history and notifications nonvacuous.
+SELECT public.record_role_switch_audit_for_user('d2150001-0000-4000-8000-000000000002','buyer','buyer','same-tier',false,false);
+INSERT INTO public.notifications(user_id,title,body,type,link)
+VALUES('d2150001-0000-4000-8000-000000000002','Prior notice','Preserve this existing notice.','general','/dashboard');
+CREATE FUNCTION pg_temp.d2_append_member(p_state jsonb,p_array text,p_row jsonb)
+RETURNS jsonb LANGUAGE sql AS $$ SELECT jsonb_set(p_state,ARRAY[p_array],
+ (SELECT jsonb_agg(member ORDER BY member->>'id') FROM (
+  SELECT value AS member FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p_state->p_array)='array'
+   THEN p_state->p_array ELSE '[]'::jsonb END) AS prior(value)
+  UNION ALL SELECT p_row) AS expected(member))) $$;
+CREATE FUNCTION pg_temp.d2_patch_member(p_state jsonb,p_array text,p_key text,p_value text,p_delta jsonb)
+RETURNS jsonb LANGUAGE sql AS $$ SELECT jsonb_set(p_state,ARRAY[p_array],
+ (SELECT jsonb_agg(CASE WHEN member->>p_key=p_value THEN member||p_delta ELSE member END ORDER BY ordinal)
+  FROM jsonb_array_elements(p_state->p_array) WITH ORDINALITY AS members(member,ordinal))) $$;
+CREATE TEMP TABLE d2_role_before_record AS SELECT state FROM d2_role_remaining_state;
+SELECT is(current_user,'service_role','legacy recorder uses actual service role');
+SELECT is(auth.uid(),NULL::uuid,'legacy recorder service role has no subject');
+CREATE TEMP TABLE d2_role_record_result AS
+ SELECT public.record_role_switch_audit_for_user('d2150001-0000-4000-8000-000000000001','buyer','seller','same-tier',false,false) AS audit_id;
+SELECT ok((SELECT audit_id IS NOT NULL FROM d2_role_record_result),'legacy recorder returns a UUID');
+CREATE TEMP TABLE d2_role_expected_history AS SELECT jsonb_build_object(
+ 'id',(SELECT audit_id FROM d2_role_record_result),'user_id','d2150001-0000-4000-8000-000000000001',
+ 'from_type','buyer','to_type','seller','from_plan_key',NULL,'to_plan_key',NULL,'switch_kind','same-tier',
+ 'had_active_sub',false,'sub_cancelled',false,'switched_at',now(),'billing_outcome','legacy',
+ 'billing_error',NULL,'billing_subscription_count',NULL,'billing_cancelled_count',NULL,
+ 'billing_reconciliation_required',false,'billing_reconciliation_attempt_count',0,
+ 'billing_reconciliation_last_attempt_at',NULL,'billing_reconciliation_next_attempt_at',NULL,
+ 'billing_reconciliation_locked_at',NULL,'billing_reconciliation_lock_token',NULL,
+ 'billing_reconciliation_exhausted_at',NULL,'billing_finalized_at',NULL,'legacy_invalid_facts',NULL
+) AS expected_row;
+SELECT is((SELECT to_jsonb(h) FROM public.role_switch_history h WHERE h.id=(SELECT audit_id FROM d2_role_record_result)),
+ (SELECT expected_row FROM d2_role_expected_history),'returned UUID identifies the complete expected legacy row and defaults');
+SELECT is((SELECT state FROM d2_role_remaining_state),
+ (SELECT pg_temp.d2_append_member(state,'history',(SELECT expected_row FROM d2_role_expected_history)) FROM d2_role_before_record),
+ 'recorder appends exactly its returned row; profiles, projection, prior history, professionals, notices and conversation stay exact');
+CREATE TEMP TABLE d2_role_before_begin AS SELECT state FROM d2_role_remaining_state;
+SELECT is(current_user,'service_role','legacy begin uses actual service role');
+SELECT is(auth.uid(),NULL::uuid,'legacy begin service role has no subject');
 SELECT lives_ok($q$SELECT public.begin_role_switch_for_user('d2150001-0000-4000-8000-000000000001')$q$,
  'legacy explicit-user begin reaches ordinary cleanup under service/no-sub');
-SELECT ok((SELECT role='buyer' AND participant_type IS NULL AND role_switch_in_progress_at IS NOT NULL
- AND role_switch_audit_id IS NULL AND NOT role_switch_audit_required
- FROM public.profiles WHERE user_id='d2150001-0000-4000-8000-000000000001'),
- 'legacy begin preserves role, clears participant type, and records unbound sentinel');
-SELECT ok((SELECT closed_at IS NOT NULL AND closed_reason='role_switch'
- AND closed_by='d2150001-0000-4000-8000-000000000001'
- FROM public.conversations WHERE id='d2150003-0000-4000-8000-000000000001'),
- 'normal cleanup closes the actor conversation with exact reason and actor');
-SELECT is((SELECT count(*)::integer FROM public.conversations WHERE id='d2150003-0000-4000-8000-000000000001'),1,
- 'cleanup preserves the underlying conversation');
-SELECT ok((SELECT count(*)=1 FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000002'
- AND title='Conversation closed' AND type='role_switch' AND link='/messages'),
- 'conversation counterparty receives one exact closure notice');
-SELECT ok((SELECT count(*)=1 FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000001'
- AND title='Account type switch started' AND type='role_switch' AND link='/onboarding'),
- 'switching actor receives one exact start notice');
-SELECT is((SELECT count(*)::integer FROM public.role_switch_history WHERE user_id='d2150001-0000-4000-8000-000000000001'),1,
- 'legacy begin does not create another audit');
-SELECT ok((SELECT role='buyer' AND participant_type='buyer' AND role_switch_in_progress_at IS NULL
- FROM public.profiles WHERE user_id='d2150001-0000-4000-8000-000000000002'),
- 'counterparty profile remains unchanged by cleanup');
+CREATE TEMP TABLE d2_role_expected_notices AS SELECT
+ jsonb_build_object('id',(SELECT id FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000002' AND title='Conversation closed'),
+  'user_id','d2150001-0000-4000-8000-000000000002','title','Conversation closed',
+  'body','This conversation was closed because the other participant switched account type.',
+  'type','role_switch','read',false,'created_at',now(),'link','/messages') AS counterparty,
+ jsonb_build_object('id',(SELECT id FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000001' AND title='Account type switch started'),
+  'user_id','d2150001-0000-4000-8000-000000000001','title','Account type switch started',
+  'body','Your active listings and open requests were paused or cancelled while you choose a new account type.',
+  'type','role_switch','read',false,'created_at',now(),'link','/onboarding') AS actor;
+SELECT ok((SELECT counterparty->>'id' IS NOT NULL AND actor->>'id' IS NOT NULL
+ AND counterparty->>'id' <> actor->>'id' FROM d2_role_expected_notices),
+ 'both generated notices have distinct IDs');
+SELECT is((SELECT state FROM d2_role_remaining_state),
+ (SELECT pg_temp.d2_append_member(
+    pg_temp.d2_append_member(
+     pg_temp.d2_patch_member(
+      pg_temp.d2_patch_member(
+       pg_temp.d2_patch_member(state,'profiles','user_id','d2150001-0000-4000-8000-000000000001',
+        jsonb_build_object('participant_type',NULL,'bio',NULL,'role_switch_in_progress_at',now(),'updated_at',now())),
+       'public_profiles','user_id','d2150001-0000-4000-8000-000000000001',
+       jsonb_build_object('owner_participant_type',NULL)),
+      'conversations','id','d2150003-0000-4000-8000-000000000001',
+       jsonb_build_object('closed_at',now(),'closed_reason','role_switch','closed_by','d2150001-0000-4000-8000-000000000001')),
+     'notifications',(SELECT counterparty FROM d2_role_expected_notices)),
+    'notifications',(SELECT actor FROM d2_role_expected_notices))
+  FROM d2_role_before_begin),
+ 'legacy begin changes only named profile, projection, conversation and two complete notices; all prior rows stay exact');
 RESET ROLE;
 SELECT is(current_user,'postgres','test returns to owner after actual service calls');
 CREATE TEMP TABLE d2_role_remaining_after_legacy AS SELECT state FROM d2_role_remaining_state;
