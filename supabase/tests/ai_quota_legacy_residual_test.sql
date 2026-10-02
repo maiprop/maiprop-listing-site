@@ -12,7 +12,7 @@ DO $$ BEGIN
   THEN RAISE EXCEPTION 'D2 quota fixture collision'; END IF;
 END $$;
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pgtap') THEN CREATE EXTENSION pgtap; END IF; END $$;
-SELECT plan(76);
+SELECT plan(88);
 SET LOCAL statement_timeout='30s';
 SET LOCAL lock_timeout='3s';
 SELECT is(current_setting('session_replication_role'),'origin','quota actions retain normal triggers');
@@ -22,12 +22,24 @@ SELECT ok(NOT has_table_privilege('service_role','public.usage_ai_calls','INSERT
 SELECT ok((SELECT tgenabled='O' FROM pg_trigger WHERE tgrelid='public.usage_ai_calls'::regclass AND tgname='trg_check_ai_call_monthly_limit'),'usage cap trigger enabled');
 
 -- Full scoped arrays, including every earlier row, are compared after denials.
-CREATE FUNCTION pg_temp.quota_state() RETURNS jsonb LANGUAGE sql AS $$
+-- This temp observer only reads scoped state; actions still run as their SET ROLE.
+CREATE FUNCTION pg_temp.quota_state() RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
  SELECT jsonb_build_object(
   'usage', COALESCE((SELECT jsonb_agg(to_jsonb(u) ORDER BY u.id) FROM public.usage_ai_calls u WHERE u.user_id::text LIKE 'd2160001-%'),'[]'::jsonb),
   'purchases', COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM public.addon_purchases p WHERE p.user_id::text LIKE 'd2160001-%'),'[]'::jsonb)
  )
 $$;
+-- A successful statement returns a mismatching envelope. An exception is
+-- captured with all three diagnostics; the caller asserts their exact values.
+CREATE FUNCTION pg_temp.error_diagnostics(statement text) RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE error_code text; error_message text; error_hint text;
+BEGIN
+ EXECUTE statement;
+ RETURN jsonb_build_object('caught',false);
+EXCEPTION WHEN OTHERS THEN
+ GET STACKED DIAGNOSTICS error_code=RETURNED_SQLSTATE,error_message=MESSAGE_TEXT,error_hint=PG_EXCEPTION_HINT;
+ RETURN jsonb_build_object('sqlstate',error_code,'message',error_message,'hint',error_hint);
+END $$;
 -- Construct the entire expected state from the saved pre-action arrays. Only
 -- the named new usage row and (optionally) one credit counter/touch may differ.
 CREATE FUNCTION pg_temp.expected_after_one(before_state jsonb,new_usage uuid,changed_purchase uuid DEFAULT NULL)
@@ -48,6 +60,8 @@ RETURNS jsonb LANGUAGE sql AS $$
 $$;
 CREATE TEMP TABLE quota_snapshots(label text PRIMARY KEY, state jsonb);
 CREATE TEMP TABLE quota_receipts(label text PRIMARY KEY, result jsonb);
+GRANT SELECT ON quota_snapshots TO service_role;
+GRANT EXECUTE ON FUNCTION pg_temp.quota_state() TO service_role;
 GRANT INSERT, SELECT ON quota_receipts TO service_role;
 
 SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim.role','service_role',true),set_config('request.jwt.claims','{"role":"service_role"}',true);
@@ -73,17 +87,26 @@ SET LOCAL ROLE service_role;
 SELECT is(current_user,'service_role','batch checks execute as service role');
 SELECT is(auth.uid(),NULL::uuid,'batch checks have no subject');
 SELECT throws_ok($$SELECT public.check_ai_quotas_for_user(NULL,ARRAY['property-valuation'])$$,'22023','user id is required','batch null actor rejected');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='batch-errors'),'null actor rejection preserves full arrays');
 SELECT throws_ok($$SELECT public.check_ai_quotas_for_user('d2160001-0000-4000-8000-000000000001',NULL)$$,'22023','invalid AI quota buckets','batch null array rejected');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='batch-errors'),'null array rejection preserves full arrays');
 SELECT throws_ok($$SELECT public.check_ai_quotas_for_user('d2160001-0000-4000-8000-000000000001',ARRAY[]::text[])$$,'22023','invalid AI quota buckets','batch empty array rejected');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='batch-errors'),'empty array rejection preserves full arrays');
 SELECT throws_ok($$SELECT public.check_ai_quotas_for_user('d2160001-0000-4000-8000-000000000001',array_fill('property-valuation'::text,ARRAY[13]))$$,'22023','invalid AI quota buckets','batch oversized array rejected');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='batch-errors'),'oversized array rejection preserves full arrays');
 SELECT throws_ok($$SELECT public.check_ai_quotas_for_user('d2160001-0000-4000-8000-000000000001',ARRAY['property-valuation',NULL])$$,'22023','invalid AI quota buckets','batch null element rejected');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='batch-errors'),'null element rejection preserves full arrays');
 SELECT throws_ok($$SELECT public.check_ai_quotas_for_user('d2160001-0000-4000-8000-000000000001',ARRAY['INVALID'])$$,'22023','invalid AI quota buckets','batch malformed element rejected');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='batch-errors'),'malformed element rejection preserves full arrays');
 SELECT is(public.check_ai_quota_for_user(NULL,'property-valuation'),'{"allowed":false,"reason":"not_authenticated","used":0,"limit":0}'::jsonb,'single explicit status null actor envelope');
 SELECT is(public.check_ai_quota_for_user('d2160001-0000-4000-8000-000000000001','property-valuation'),'{"allowed":true,"reason":null,"used":0,"limit":5}'::jsonb,'single explicit status allowed before usage');
 SELECT is(public.check_ai_quota_for_user('d2160001-0000-4000-8000-000000000001','unknown-bucket'),'{"allowed":false,"reason":"plan_does_not_include_feature","used":0,"limit":0}'::jsonb,'single explicit status unknown bucket denied');
 SELECT is(public.check_ai_quota('property-valuation'),'{"allowed":false,"reason":"not_authenticated","used":0,"limit":0}'::jsonb,'legacy status requires subject even under service');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='batch-errors'),'no-sub legacy status preserves full arrays');
 SELECT is(public.reserve_ai_quota('property-valuation'),'{"allowed":false,"reason":"not_authenticated","used":0,"limit":0}'::jsonb,'legacy reserve requires subject even under service');
-SELECT throws_ok($$SELECT public.record_ai_call('property-valuation')$$,'P0001','ai_call_monthly_limit_reached','legacy record without subject raises');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='batch-errors'),'no-sub legacy reserve preserves full arrays');
+SELECT is(pg_temp.error_diagnostics($$SELECT public.record_ai_call('property-valuation')$$),'{"sqlstate":"P0001","message":"ai_call_monthly_limit_reached","hint":"Bucket=property-valuation"}'::jsonb,'legacy record without subject has exact SQLSTATE, message and hint');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='batch-errors'),'no-sub legacy record preserves full arrays');
 RESET ROLE;
 SELECT is(pg_temp.quota_state(),(SELECT state FROM quota_snapshots WHERE label='batch-errors'),'all quota rows and all purchase rows unchanged after read-only and no-sub denials');
 
@@ -148,8 +171,11 @@ SELECT is(pg_temp.quota_state(),pg_temp.expected_after_one((SELECT state FROM qu
 INSERT INTO quota_snapshots VALUES('exhausted',pg_temp.quota_state());
 SET LOCAL ROLE service_role;
 SELECT is(public.reserve_ai_quota('property-valuation'),'{"allowed":false,"reason":"monthly_limit_reached","used":6,"limit":6}'::jsonb,'legacy exhausted reserve denied');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='exhausted'),'exhausted legacy reserve preserves full arrays');
 SELECT is(public.reserve_ai_quota('   ')->>'reason','invalid_bucket','legacy invalid bucket denied');
-SELECT throws_ok($$SELECT public.record_ai_call('property-valuation')$$,'P0001','ai_call_monthly_limit_reached','legacy exhausted record raises');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='exhausted'),'invalid legacy reserve preserves full arrays');
+SELECT is(pg_temp.error_diagnostics($$SELECT public.record_ai_call('property-valuation')$$),'{"sqlstate":"P0001","message":"ai_call_monthly_limit_reached","hint":"Bucket=property-valuation"}'::jsonb,'legacy exhausted record has exact SQLSTATE, message and hint');
+SELECT is(pg_temp.quota_state(),(SELECT state FROM pg_temp.quota_snapshots WHERE label='exhausted'),'exhausted legacy record preserves full arrays');
 RESET ROLE;
 SELECT is(pg_temp.quota_state(),(SELECT state FROM quota_snapshots WHERE label='exhausted'),'full usage and purchase arrays unchanged after legacy denials');
 
@@ -172,7 +198,7 @@ RESET ROLE;
 SELECT is(pg_temp.quota_state(),(SELECT state FROM quota_snapshots WHERE label='service-insert'),'direct service denial preserved every usage and purchase row');
 
 -- Fixture-owner normal INSERT reaches the installed cap trigger, with no bypass.
-SELECT throws_ok($$INSERT INTO public.usage_ai_calls(user_id,bucket) VALUES('d2160001-0000-4000-8000-000000000003','property-valuation')$$,'P0001','ai_call_monthly_limit_reached','fixture-owner normal insert reaches cap trigger');
+SELECT is(pg_temp.error_diagnostics($$INSERT INTO public.usage_ai_calls(user_id,bucket) VALUES('d2160001-0000-4000-8000-000000000003','property-valuation')$$),'{"sqlstate":"P0001","message":"ai_call_monthly_limit_reached","hint":"Bucket=property-valuation user=d2160001-0000-4000-8000-000000000003"}'::jsonb,'fixture-owner normal insert has exact cap trigger SQLSTATE, message and hint');
 SELECT is(pg_temp.quota_state(),(SELECT state FROM quota_snapshots WHERE label='service-insert'),'trigger cap denial preserved every usage and purchase row');
 
 -- Credit helper true/no-balance false are isolated in a savepoint.
