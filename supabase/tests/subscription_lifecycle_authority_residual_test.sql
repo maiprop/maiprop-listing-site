@@ -5,7 +5,7 @@ DO $$ BEGIN
     CREATE EXTENSION pgtap;
   END IF;
 END $$;
-SELECT plan(128);
+SELECT plan(129);
 SELECT is(current_setting('session_replication_role'), 'origin', 'lifecycle uses normal triggers');
 SELECT ok((SELECT NOT strict_enrollment_enabled AND legacy_begin_enabled AND NOT reconciliation_enabled
  FROM private.role_switch_rollout_control WHERE singleton), 'role switch rollout remains closed');
@@ -80,6 +80,22 @@ CREATE TEMP VIEW d2_lifecycle_state AS SELECT jsonb_build_object(
  'billing',(SELECT jsonb_agg(to_jsonb(b) ORDER BY b.id) FROM public.billing_subscriptions b WHERE b.user_id::text LIKE 'd2150001-%'),
  'investor',(SELECT jsonb_agg(to_jsonb(i) ORDER BY i.id) FROM public.investor_subscriptions i WHERE i.user_id::text LIKE 'd2150001-%'),
  'notifications',(SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd2150001-%')) AS state;
+-- Build expected full-state snapshots by changing only one named member.
+CREATE FUNCTION pg_temp.d2_patch_member(p_state jsonb,p_array text,p_key text,p_value text,p_delta jsonb)
+RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_set(p_state,ARRAY[p_array],
+    (SELECT jsonb_agg(CASE WHEN member->>p_key=p_value THEN member||p_delta ELSE member END ORDER BY ordinal)
+     FROM jsonb_array_elements(p_state->p_array) WITH ORDINALITY AS members(member,ordinal)))
+$$;
+-- The generated notice ID/time come from the inserted row; its payload and total count are asserted separately.
+CREATE FUNCTION pg_temp.d2_append_notice(p_state jsonb,p_notice jsonb)
+RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_set(p_state,'{notifications}',
+    (SELECT jsonb_agg(member ORDER BY member->>'id') FROM (
+       SELECT member FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p_state->'notifications')='array'
+         THEN p_state->'notifications' ELSE '[]'::jsonb END) AS prior(member)
+       UNION ALL SELECT p_notice) AS expected(member)))
+$$;
 CREATE TEMP TABLE d2_lifecycle_before AS SELECT state FROM d2_lifecycle_state;
 SET LOCAL ROLE service_role;
 SELECT is(auth.uid(),NULL::uuid,'force-Pro setup uses service without subject');
@@ -131,13 +147,20 @@ SELECT is((SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM public.listings l
    ELSE row END ORDER BY id) FROM d2_listing_before),
  'first seller lapse preserves every listing field except intended status and timestamp');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000001'
- AND title='Subscription access updated' AND type='billing' AND link='/dashboard/billing'
+ AND title='Subscription access updated' AND type='billing' AND link='/dashboard/billing' AND read=false
  AND body='2 listing(s) were paused to match your current plan.'),1::bigint,'seller gets exact one listing notice');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000001'),
  1::bigint,'seller has no extra nonmatching notice');
-SELECT is((SELECT (state-'listings'-'notifications') FROM d2_lifecycle_state),
- (SELECT (state-'listings'-'notifications') FROM d2_lifecycle_before),
- 'first seller lapse preserves all unrelated scoped state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_append_notice(
+   pg_temp.d2_patch_member(
+     pg_temp.d2_patch_member((SELECT state FROM d2_lifecycle_before),'listings','id',
+       'd2150002-0000-4000-8000-000000000003',jsonb_build_object('status','paused','updated_at',now())),
+     'listings','id','d2150002-0000-4000-8000-000000000004',
+       jsonb_build_object('status','paused','updated_at',now())),
+   (SELECT to_jsonb(n) FROM public.notifications n
+    WHERE n.user_id='d2150001-0000-4000-8000-000000000001')),
+ 'first seller lapse equals exact full-state delta and one notice');
 CREATE TEMP TABLE d2_seller_after AS SELECT state FROM d2_lifecycle_state;
 SET LOCAL ROLE service_role;
 SELECT is(public.apply_subscription_lapse_controls('d2150001-0000-4000-8000-000000000001'),
@@ -169,14 +192,24 @@ SELECT is((SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id) FROM public.auction_alert
    ELSE row END ORDER BY id) FROM d2_auction_before),
  'first buyer lapse preserves every auction-alert field except intended active flag');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000002'
- AND title='Subscription access updated' AND type='billing' AND link='/dashboard/billing'
+ AND title='Subscription access updated' AND type='billing' AND link='/dashboard/billing' AND read=false
  AND body='2 saved-search email alert(s) were turned off. 2 auction alert(s) were turned off.'),
  1::bigint,'buyer gets exact one combined notice');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000002'),
  1::bigint,'buyer has no extra nonmatching notice');
-SELECT is((SELECT (state-'searches'-'alerts'-'notifications') FROM d2_lifecycle_state),
- (SELECT (state-'searches'-'alerts'-'notifications') FROM d2_seller_after),
- 'first buyer lapse preserves all unrelated scoped state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_append_notice(
+   pg_temp.d2_patch_member(pg_temp.d2_patch_member(
+     pg_temp.d2_patch_member(pg_temp.d2_patch_member((SELECT state FROM d2_seller_after),
+       'searches','id','d2150003-0000-4000-8000-000000000001',
+       jsonb_build_object('email_alerts',false,'updated_at',now())),
+       'searches','id','d2150003-0000-4000-8000-000000000002',
+       jsonb_build_object('email_alerts',false,'updated_at',now())),
+       'alerts','id','d2150004-0000-4000-8000-000000000001',jsonb_build_object('active',false)),
+       'alerts','id','d2150004-0000-4000-8000-000000000002',jsonb_build_object('active',false)),
+   (SELECT to_jsonb(n) FROM public.notifications n
+    WHERE n.user_id='d2150001-0000-4000-8000-000000000002')),
+ 'first buyer lapse preserves prior seller notice and equals exact full-state delta');
 CREATE TEMP TABLE d2_buyer_after AS SELECT state FROM d2_lifecycle_state;
 SET LOCAL ROLE service_role;
 SELECT is(public.apply_subscription_lapse_controls('d2150001-0000-4000-8000-000000000002'),
@@ -243,9 +276,10 @@ SELECT is(current_user,'service_role','pending tier update uses actual service r
 UPDATE public.investor_subscriptions SET tier='developer'
  WHERE user_id='d2150001-0000-4000-8000-000000000004';
 RESET ROLE;
-SELECT is((SELECT state-'investor' FROM d2_lifecycle_state),
- (SELECT state-'investor' FROM d2_pending_before),
- 'pending tier update preserves full profiles, notifications and unrelated state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_patch_member((SELECT state FROM d2_pending_before),'investor','user_id',
+   'd2150001-0000-4000-8000-000000000004',jsonb_build_object('tier','developer','updated_at',now())),
+ 'pending tier update equals exact full-state delta');
 SELECT is((SELECT to_jsonb(s) FROM public.investor_subscriptions s
  WHERE user_id='d2150001-0000-4000-8000-000000000004'),
  (SELECT (SELECT value FROM jsonb_array_elements(state->'investor') value
@@ -263,9 +297,10 @@ SET LOCAL ROLE service_role;
 UPDATE public.investor_subscriptions SET tier='institutional'
  WHERE user_id='d2150001-0000-4000-8000-000000000004';
 RESET ROLE;
-SELECT is((SELECT state-'investor' FROM d2_lifecycle_state),
- (SELECT state-'investor' FROM d2_pending_before),
- 'restoring pending institutional tier still leaves full profile and notice state unchanged');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_patch_member((SELECT state FROM d2_pending_before),'investor','user_id',
+   'd2150001-0000-4000-8000-000000000004',jsonb_build_object('updated_at',now())),
+ 'restored pending tier equals exact full-state delta');
 SELECT is((SELECT to_jsonb(s) FROM public.investor_subscriptions s
  WHERE user_id='d2150001-0000-4000-8000-000000000004'),
  (SELECT value || jsonb_build_object('updated_at',now())
@@ -295,12 +330,22 @@ SELECT is((SELECT to_jsonb(s) FROM public.investor_subscriptions s WHERE user_id
   FROM d2_activation_before),'activation changes only subscription status and timestamp');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000003'
  AND title='Investor access active' AND body='Your investor access is active.' AND type='subscription'
- AND link='/investor-dashboard'),1::bigint,'service activation sends exact access notice');
+ AND link='/investor-dashboard' AND read=false),1::bigint,'service activation sends exact access notice');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000003'),
  1::bigint,'activation creates no extra nonmatching notice');
-SELECT is((SELECT (state-'profiles'-'profiles_public'-'investor'-'notifications') FROM d2_lifecycle_state),
- (SELECT (state-'profiles'-'profiles_public'-'investor'-'notifications') FROM d2_activation_before),
- 'activation preserves all unrelated scoped state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_append_notice(
+   pg_temp.d2_patch_member(pg_temp.d2_patch_member(
+     pg_temp.d2_patch_member((SELECT state FROM d2_activation_before),'profiles','user_id',
+       'd2150001-0000-4000-8000-000000000003',
+       jsonb_build_object('role','investor','participant_type','investor','updated_at',now())),
+     'profiles_public','user_id','d2150001-0000-4000-8000-000000000003',
+       jsonb_build_object('role','investor','owner_participant_type',NULL)),
+     'investor','user_id','d2150001-0000-4000-8000-000000000003',
+       jsonb_build_object('status','active','updated_at',now())),
+   (SELECT to_jsonb(n) FROM public.notifications n
+    WHERE n.user_id='d2150001-0000-4000-8000-000000000003')),
+ 'activation equals exact full-state delta with prior rows preserved');
 CREATE TEMP TABLE d2_trial_before AS SELECT
  (SELECT ctid FROM public.profiles p WHERE user_id='d2150001-0000-4000-8000-000000000003') AS profile_ctid,
  (SELECT state FROM d2_lifecycle_state) AS state;
@@ -311,9 +356,10 @@ UPDATE public.investor_subscriptions SET status='trial' WHERE user_id='d2150001-
 RESET ROLE;
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000003'),
  1::bigint,'active to trial and same-status repeat send no notice');
-SELECT is((SELECT state-'investor' FROM d2_lifecycle_state),
- (SELECT state-'investor' FROM d2_trial_before),
- 'active-to-trial and repeat preserve complete profiles and notices');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_patch_member((SELECT state FROM d2_trial_before),'investor','user_id',
+   'd2150001-0000-4000-8000-000000000003',jsonb_build_object('status','trial','updated_at',now())),
+ 'active-to-trial and repeat equal exact full-state delta');
 SELECT is((SELECT to_jsonb(s) FROM public.investor_subscriptions s
  WHERE user_id='d2150001-0000-4000-8000-000000000003'),
  (SELECT value || jsonb_build_object('status','trial','updated_at',now())
@@ -344,9 +390,16 @@ SELECT is((SELECT to_jsonb(s) FROM public.investor_subscriptions s WHERE user_id
   FROM d2_tier_before),'institutional tier changes only subscription tier and timestamp');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000003'),
  1::bigint,'tier-only update sends no status notice');
-SELECT is((SELECT (state-'profiles'-'profiles_public'-'investor') FROM d2_lifecycle_state),
- (SELECT (state-'profiles'-'profiles_public'-'investor') FROM d2_tier_before),
- 'tier-only update preserves all notices and unrelated state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_patch_member(pg_temp.d2_patch_member(
+   pg_temp.d2_patch_member((SELECT state FROM d2_tier_before),'profiles','user_id',
+     'd2150001-0000-4000-8000-000000000003',
+     jsonb_build_object('role','institutional','participant_type','institutional','updated_at',now())),
+   'profiles_public','user_id','d2150001-0000-4000-8000-000000000003',
+     jsonb_build_object('role','institutional','owner_participant_type',NULL)),
+   'investor','user_id','d2150001-0000-4000-8000-000000000003',
+     jsonb_build_object('tier','institutional','updated_at',now())),
+ 'institutional tier equals exact full-state delta');
 TRUNCATE d2_tier_before;
 INSERT INTO d2_tier_before SELECT
  (SELECT to_jsonb(p) FROM public.profiles p WHERE user_id='d2150001-0000-4000-8000-000000000003'),
@@ -367,9 +420,16 @@ SELECT is((SELECT to_jsonb(p) FROM public.profiles_public p WHERE user_id='d2150
 SELECT is((SELECT to_jsonb(s) FROM public.investor_subscriptions s WHERE user_id='d2150001-0000-4000-8000-000000000003'),
  (SELECT subscription_row || jsonb_build_object('tier','developer','updated_at',now())
   FROM d2_tier_before),'developer tier changes only subscription tier and timestamp');
-SELECT is((SELECT (state-'profiles'-'profiles_public'-'investor') FROM d2_lifecycle_state),
- (SELECT (state-'profiles'-'profiles_public'-'investor') FROM d2_tier_before),
- 'developer tier preserves full notices and unrelated state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_patch_member(pg_temp.d2_patch_member(
+   pg_temp.d2_patch_member((SELECT state FROM d2_tier_before),'profiles','user_id',
+     'd2150001-0000-4000-8000-000000000003',
+     jsonb_build_object('role','developer','participant_type','developer','updated_at',now())),
+   'profiles_public','user_id','d2150001-0000-4000-8000-000000000003',
+     jsonb_build_object('role','developer','owner_participant_type','agent')),
+   'investor','user_id','d2150001-0000-4000-8000-000000000003',
+     jsonb_build_object('tier','developer','updated_at',now())),
+ 'developer tier equals exact full-state delta');
 SELECT is(public.is_pro('d2150001-0000-4000-8000-000000000003'),false,
  'developer tier alone does not grant investor audience entitlement');
 TRUNCATE d2_tier_before;
@@ -390,9 +450,16 @@ SELECT is((SELECT to_jsonb(p) FROM public.profiles_public p WHERE user_id='d2150
 SELECT is((SELECT to_jsonb(s) FROM public.investor_subscriptions s WHERE user_id='d2150001-0000-4000-8000-000000000003'),
  (SELECT subscription_row || jsonb_build_object('tier','private','updated_at',now())
   FROM d2_tier_before),'return to private tier changes only subscription tier and timestamp');
-SELECT is((SELECT (state-'profiles'-'profiles_public'-'investor') FROM d2_lifecycle_state),
- (SELECT (state-'profiles'-'profiles_public'-'investor') FROM d2_tier_before),
- 'return to private tier preserves full notices and unrelated state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_patch_member(pg_temp.d2_patch_member(
+   pg_temp.d2_patch_member((SELECT state FROM d2_tier_before),'profiles','user_id',
+     'd2150001-0000-4000-8000-000000000003',
+     jsonb_build_object('role','investor','participant_type','investor','updated_at',now())),
+   'profiles_public','user_id','d2150001-0000-4000-8000-000000000003',
+     jsonb_build_object('role','investor','owner_participant_type',NULL)),
+   'investor','user_id','d2150001-0000-4000-8000-000000000003',
+     jsonb_build_object('tier','private','updated_at',now())),
+ 'return to private tier equals exact full-state delta');
 SELECT is(public.is_pro('d2150001-0000-4000-8000-000000000003'),true,
  'matching active investor audience grants independent entitlement');
 SELECT is((SELECT status FROM public.billing_subscriptions
@@ -442,12 +509,20 @@ SELECT is((SELECT to_jsonb(s) FROM public.investor_subscriptions s WHERE user_id
  'cancellation changes only subscription status and timestamp');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000003'
  AND title='Investor access updated' AND body='Your investor subscription was cancelled and investor mode has been turned off.'
- AND type='subscription' AND link='/dashboard/billing'),1::bigint,'cancellation sends exact status notice');
+ AND type='subscription' AND link='/dashboard/billing' AND read=false),1::bigint,'cancellation sends exact status notice');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000003'),
  2::bigint,'cancellation creates exactly one new notice overall');
-SELECT is((SELECT (state-'profiles'-'investor'-'notifications') FROM d2_lifecycle_state),
- (SELECT (state-'profiles'-'investor'-'notifications') FROM d2_cancel_before),
- 'cancellation preserves all unrelated scoped state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_append_notice(
+   pg_temp.d2_patch_member(pg_temp.d2_patch_member((SELECT state FROM d2_cancel_before),
+     'profiles','user_id','d2150001-0000-4000-8000-000000000003',
+       jsonb_build_object('investor_mode',false,'updated_at',now())),
+     'investor','user_id','d2150001-0000-4000-8000-000000000003',
+       jsonb_build_object('status','cancelled','updated_at',now())),
+   (SELECT to_jsonb(n) FROM public.notifications n
+    WHERE n.user_id='d2150001-0000-4000-8000-000000000003'
+      AND n.title='Investor access updated')),
+ 'cancellation preserves activation notice and equals exact full-state delta');
 CREATE TEMP TABLE d2_cancel_repeat_before AS SELECT
  (SELECT ctid FROM public.profiles p WHERE user_id='d2150001-0000-4000-8000-000000000003') AS profile_ctid,
  (SELECT state FROM d2_lifecycle_state) AS state;
@@ -459,9 +534,10 @@ SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-000
  2::bigint,'same cancelled status sends no duplicate notice');
 SELECT is((SELECT role::text||'|'||investor_mode::text FROM public.profiles WHERE user_id='d2150001-0000-4000-8000-000000000003'),
  'investor|false','repeat cancellation preserves profile state');
-SELECT is((SELECT state-'investor' FROM d2_lifecycle_state),
- (SELECT state-'investor' FROM d2_cancel_repeat_before),
- 'repeat cancellation preserves complete profiles, notices and unrelated state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_patch_member((SELECT state FROM d2_cancel_repeat_before),'investor','user_id',
+   'd2150001-0000-4000-8000-000000000003',jsonb_build_object('updated_at',now())),
+ 'repeat cancellation preserves complete state except intended subscription timestamp');
 SELECT is((SELECT ctid::text FROM public.profiles p WHERE user_id='d2150001-0000-4000-8000-000000000003'),
  (SELECT profile_ctid::text FROM d2_cancel_repeat_before),
  'repeat cancellation does not rewrite profile tuple');
@@ -487,9 +563,22 @@ SELECT is((SELECT to_jsonb(s) FROM public.investor_subscriptions s WHERE user_id
   FROM d2_second_trial_before),'pending-to-trial changes only subscription status and timestamp');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000004'),
  1::bigint,'service trial activation sends one access notice');
-SELECT is((SELECT (state-'profiles'-'profiles_public'-'investor'-'notifications') FROM d2_lifecycle_state),
- (SELECT (state-'profiles'-'profiles_public'-'investor'-'notifications') FROM d2_second_trial_before),
- 'pending-to-trial preserves all unrelated scoped state');
+SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000004'
+ AND title='Investor access active' AND body='Your investor access is active.' AND type='subscription'
+ AND link='/investor-dashboard' AND read=false),1::bigint,'trial activation notice has exact payload');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_append_notice(
+   pg_temp.d2_patch_member(pg_temp.d2_patch_member(
+     pg_temp.d2_patch_member((SELECT state FROM d2_second_trial_before),'profiles','user_id',
+       'd2150001-0000-4000-8000-000000000004',
+       jsonb_build_object('role','institutional','participant_type','institutional','updated_at',now())),
+     'profiles_public','user_id','d2150001-0000-4000-8000-000000000004',
+       jsonb_build_object('role','institutional','owner_participant_type',NULL)),
+     'investor','user_id','d2150001-0000-4000-8000-000000000004',
+       jsonb_build_object('status','trial','updated_at',now())),
+   (SELECT to_jsonb(n) FROM public.notifications n
+    WHERE n.user_id='d2150001-0000-4000-8000-000000000004')),
+ 'pending-to-trial equals exact full-state delta and one notice');
 CREATE TEMP TABLE d2_self_cancel_before AS SELECT
  (SELECT ctid FROM public.profiles p WHERE user_id='d2150001-0000-4000-8000-000000000004') AS profile_ctid,
  (SELECT state FROM d2_lifecycle_state) AS state;
@@ -502,9 +591,10 @@ SELECT is((SELECT status FROM public.investor_subscriptions WHERE user_id='d2150
  'cancelled','self actor terminal status transition persisted');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000004'),
  1::bigint,'self actor suppresses terminal notification');
-SELECT is((SELECT state-'investor' FROM d2_lifecycle_state),
- (SELECT state-'investor' FROM d2_self_cancel_before),
- 'self actor terminal update preserves full profiles, notices and unrelated state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_patch_member((SELECT state FROM d2_self_cancel_before),'investor','user_id',
+   'd2150001-0000-4000-8000-000000000004',jsonb_build_object('status','cancelled','updated_at',now())),
+ 'self actor terminal update equals exact full-state delta without a notice');
 SELECT is((SELECT ctid::text FROM public.profiles p WHERE user_id='d2150001-0000-4000-8000-000000000004'),
  (SELECT profile_ctid::text FROM d2_self_cancel_before),
  'self actor terminal update does not rewrite already-false profile');
@@ -529,7 +619,7 @@ UPDATE public.investor_subscriptions SET status='expired' WHERE user_id='d215000
 RESET ROLE;
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id='d2150001-0000-4000-8000-000000000005'
  AND title='Investor access updated' AND body='Your investor subscription expired and investor mode has been turned off.'
- AND type='subscription' AND link='/dashboard/billing'),1::bigint,
+ AND type='subscription' AND link='/dashboard/billing' AND read=false),1::bigint,
  'service without subject sends exact expiry notice');
 SELECT is((SELECT role::text||'|'||investor_mode::text FROM public.profiles WHERE user_id='d2150001-0000-4000-8000-000000000005'),
  'investor|false','expiry preserves role and already-false investor mode');
@@ -539,9 +629,13 @@ SELECT is((SELECT to_jsonb(s) FROM public.investor_subscriptions s
   FROM d2_expiry_before, jsonb_array_elements(state->'investor') value
   WHERE value->>'user_id'='d2150001-0000-4000-8000-000000000005'),
  'expiry changes only subscription status and timestamp');
-SELECT is((SELECT state-'investor'-'notifications' FROM d2_lifecycle_state),
- (SELECT state-'investor'-'notifications' FROM d2_expiry_before),
- 'expiry preserves complete profiles and unrelated persisted state');
+SELECT is((SELECT state FROM d2_lifecycle_state),
+ pg_temp.d2_append_notice(
+   pg_temp.d2_patch_member((SELECT state FROM d2_expiry_before),'investor','user_id',
+     'd2150001-0000-4000-8000-000000000005',jsonb_build_object('status','expired','updated_at',now())),
+   (SELECT to_jsonb(n) FROM public.notifications n
+    WHERE n.user_id='d2150001-0000-4000-8000-000000000005')),
+ 'expiry equals exact full-state delta and one notice');
 SELECT is((SELECT ctid::text FROM public.profiles p WHERE user_id='d2150001-0000-4000-8000-000000000005'),
  (SELECT profile_ctid::text FROM d2_expiry_before),
  'already-false investor mode avoids profile tuple rewrite on expiry');
