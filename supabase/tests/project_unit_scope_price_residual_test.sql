@@ -11,7 +11,7 @@ SET LOCAL statement_timeout='30s';
 SET LOCAL lock_timeout='3s';
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path=public,extensions;
-SELECT plan(44);
+SELECT plan(50);
 
 SELECT is(current_setting('session_replication_role'),'origin','normal triggers active before fixture setup');
 SELECT ok(NOT (SELECT cleanup_enabled FROM private.storage_cleanup_rollout_control WHERE singleton),'cleanup stays disabled');
@@ -62,6 +62,17 @@ CREATE TEMP VIEW d2_project_state AS SELECT jsonb_build_object(
  'notices',(SELECT jsonb_agg(to_jsonb(n) ORDER BY id) FROM public.notifications n WHERE user_id::text LIKE 'd2160001-%')
 ) AS state;
 CREATE TEMP TABLE d2_project_before AS SELECT state FROM d2_project_state;
+-- Compare the whole graph after price writes, omitting only the two rows'
+-- update clocks. Their clocks are checked separately below.
+CREATE TEMP VIEW d2_price_comparable_state AS
+SELECT jsonb_set(state,'{units}',(
+  SELECT jsonb_agg(CASE WHEN unit->>'id' IN (
+    'd2160004-0000-4000-8000-000000000001',
+    'd2160004-0000-4000-8000-000000000002'
+  ) THEN unit - 'updated_at' ELSE unit END ORDER BY unit->>'id')
+  FROM jsonb_array_elements(state->'units') AS unit
+)) AS state FROM d2_project_state;
+CREATE TEMP TABLE d2_price_start AS SELECT state FROM d2_price_comparable_state;
 
 SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim.role','service_role',true),set_config('request.jwt.claims','{"role":"service_role"}',true);
 SET LOCAL ROLE service_role;
@@ -72,10 +83,29 @@ RESET ROLE;
 SELECT is((SELECT jsonb_agg(jsonb_build_array(id,price,price_per_sqm) ORDER BY id) FROM public.project_units WHERE project_id='d2160002-0000-4000-8000-000000000001'),
  '[ ["d2160004-0000-4000-8000-000000000001",220001,2750.01],["d2160004-0000-4000-8000-000000000002",1099,366.33],["d2160004-0000-4000-8000-000000000003",50000,null],["d2160004-0000-4000-8000-000000000004",null,null] ]'::jsonb,'exact rounded prices; reserved and null-priced rows unchanged');
 SELECT is((SELECT price FROM public.project_units WHERE id='d2160004-0000-4000-8000-000000000005'),300000::numeric,'other project unchanged');
+SELECT is((SELECT state FROM d2_price_comparable_state),
+ (SELECT jsonb_set(state,'{units}',(
+   SELECT jsonb_agg(CASE unit->>'id'
+     WHEN 'd2160004-0000-4000-8000-000000000001' THEN unit || '{"price":220001,"price_per_sqm":2750.01}'::jsonb
+     WHEN 'd2160004-0000-4000-8000-000000000002' THEN unit || '{"price":1099,"price_per_sqm":366.33}'::jsonb
+     ELSE unit END ORDER BY unit->>'id')
+   FROM jsonb_array_elements(state->'units') AS unit
+ )) FROM d2_price_start),'positive price write changes only two intended unit values in full state');
+SELECT ok((SELECT bool_and(unit.updated_at >= (original->>'updated_at')::timestamptz
+  AND unit.updated_at <= clock_timestamp())
+ FROM public.project_units unit
+ JOIN LATERAL jsonb_array_elements((SELECT state->'units' FROM d2_project_before)) AS original
+   ON original->>'id'=unit.id::text
+ WHERE unit.id IN ('d2160004-0000-4000-8000-000000000001','d2160004-0000-4000-8000-000000000002')),
+ 'positive price update clocks stay within fixture and observation time');
 CREATE TEMP TABLE d2_price_before_denials AS SELECT state FROM d2_project_state;
 SET LOCAL ROLE service_role;
 SELECT throws_ok($q$SELECT public.bulk_update_project_unit_prices_for_user(NULL,'d2160002-0000-4000-8000-000000000001',10)$q$,'42501','user_id is required','explicit-user price requires actor');
 SELECT throws_ok($q$SELECT public.bulk_update_project_unit_prices_for_user('d2160001-0000-4000-8000-000000000001',NULL,10)$q$,'22023','project_id is required','explicit-user price requires project');
+SELECT throws_ok($q$SELECT public.bulk_update_project_unit_prices_for_user('d2160001-0000-4000-8000-000000000001','d2160002-0000-4000-8000-000000000999',10)$q$,'42501','Project not found','non-null missing project is refused');
+RESET ROLE;
+SELECT is((SELECT state FROM d2_project_state),(SELECT state FROM d2_price_before_denials),'missing project denial preserves full prior state');
+SET LOCAL ROLE service_role;
 SELECT throws_ok($q$SELECT public.bulk_update_project_unit_prices_for_user('d2160001-0000-4000-8000-000000000001','d2160002-0000-4000-8000-000000000001',NULL)$q$,'22023','percentage must be a finite non-zero value between -100 and 1000','null percentage refused');
 SELECT throws_ok($q$SELECT public.bulk_update_project_unit_prices_for_user('d2160001-0000-4000-8000-000000000001','d2160002-0000-4000-8000-000000000001',0)$q$,'22023','percentage must be a finite non-zero value between -100 and 1000','zero percentage refused');
 SELECT throws_ok($q$SELECT public.bulk_update_project_unit_prices_for_user('d2160001-0000-4000-8000-000000000001','d2160002-0000-4000-8000-000000000001','NaN'::numeric)$q$,'22023','percentage must be a finite non-zero value between -100 and 1000','NaN percentage refused');
@@ -90,6 +120,21 @@ SELECT is(public.bulk_update_project_unit_prices_for_user('d2160001-0000-4000-80
 RESET ROLE;
 SELECT is((SELECT jsonb_agg(jsonb_build_array(id,price,price_per_sqm) ORDER BY id) FROM public.project_units WHERE id IN ('d2160004-0000-4000-8000-000000000001','d2160004-0000-4000-8000-000000000002')),
  '[["d2160004-0000-4000-8000-000000000001",110001,1375.01],["d2160004-0000-4000-8000-000000000002",550,183.33]]'::jsonb,'negative percent uses numeric rounding and recomputes sqm');
+SELECT is((SELECT state FROM d2_price_comparable_state),
+ (SELECT jsonb_set(state,'{units}',(
+   SELECT jsonb_agg(CASE unit->>'id'
+     WHEN 'd2160004-0000-4000-8000-000000000001' THEN unit || '{"price":110001,"price_per_sqm":1375.01}'::jsonb
+     WHEN 'd2160004-0000-4000-8000-000000000002' THEN unit || '{"price":550,"price_per_sqm":183.33}'::jsonb
+     ELSE unit END ORDER BY unit->>'id')
+   FROM jsonb_array_elements(state->'units') AS unit
+ )) FROM d2_price_start),'negative price write preserves every other row and field in full state');
+SELECT ok((SELECT bool_and(unit.updated_at >= (original->>'updated_at')::timestamptz
+  AND unit.updated_at <= clock_timestamp())
+ FROM public.project_units unit
+ JOIN LATERAL jsonb_array_elements((SELECT state->'units' FROM d2_project_before)) AS original
+   ON original->>'id'=unit.id::text
+ WHERE unit.id IN ('d2160004-0000-4000-8000-000000000001','d2160004-0000-4000-8000-000000000002')),
+ 'negative price update clocks stay within fixture and observation time');
 CREATE TEMP TABLE d2_scope_before AS SELECT state FROM d2_project_state;
 
 SELECT set_config('request.jwt.claim.sub','d2160001-0000-4000-8000-000000000001',true),set_config('request.jwt.claim.role','authenticated',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"d2160001-0000-4000-8000-000000000001"}',true);
