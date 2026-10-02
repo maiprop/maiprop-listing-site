@@ -3,7 +3,7 @@
 BEGIN;
 SET LOCAL statement_timeout = '30s';
 SET LOCAL lock_timeout = '5s';
-SELECT plan(77);
+SELECT plan(86);
 SELECT ok(has_function_privilege('service_role','public.get_open_house_capacity_for_user(uuid,uuid)','EXECUTE'),'service executes active capacity RPC');
 SELECT ok(NOT has_function_privilege('authenticated','public.get_open_house_capacity_for_user(uuid,uuid)','EXECUTE'),'authenticated lacks active capacity EXECUTE');
 SELECT ok(NOT has_function_privilege('anon','public.get_open_house_capacity_for_user(uuid,uuid)','EXECUTE'),'anon lacks active capacity EXECUTE');
@@ -40,11 +40,11 @@ SELECT lives_ok($q$SELECT public.create_open_house_registration_for_user('d13100
 SELECT set_config('maiprop.open_house_registration_rpc','',true);
 SELECT lives_ok($q$SELECT public.create_open_house_registration_for_user('d1310001-0000-4000-8000-000000000004','d1310002-0000-4000-8000-000000000001',1,'C','c@example.test','+3003',NULL,NULL,true,true,true)$q$,'active service admits slot one');
 RESET ROLE;
-SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000003',true),set_config('request.jwt.claim.role','authenticated',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000003"}',true);
+SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000003',true),set_config('request.jwt.claim.role','authenticated',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000003"}',true),set_config('maiprop.open_house_registration_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT lives_ok($q$UPDATE public.open_house_registrations SET status='cancelled' WHERE requester_id='d1310001-0000-4000-8000-000000000003' AND listing_id='d1310002-0000-4000-8000-000000000001'$q$,'visitor cancellation uses normal update guard');
 RESET ROLE;
-SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000001',true),set_config('request.jwt.claim.role','authenticated',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000001"}',true);
+SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000001',true),set_config('request.jwt.claim.role','authenticated',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000001"}',true),set_config('maiprop.open_house_registration_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT lives_ok($q$UPDATE public.open_house_registrations SET status='rejected' WHERE requester_id='d1310001-0000-4000-8000-000000000004' AND listing_id='d1310002-0000-4000-8000-000000000001'$q$,'owner rejection uses normal update guard');
 RESET ROLE;
@@ -65,17 +65,17 @@ SELECT is((SELECT to_jsonb(c) FROM public.get_open_house_capacity_for_user('d131
   'no settings returns zero aggregate, not an empty result');
 SELECT throws_ok($q$SELECT * FROM public.get_open_house_capacity_for_user(NULL,'d1310002-0000-4000-8000-000000000001')$q$,'28000','not_authenticated','explicit capacity actor required');
 RESET ROLE;
-SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000002',true),set_config('request.jwt.claim.role','service_role',true),set_config('request.jwt.claims','{"role":"service_role","sub":"d1310001-0000-4000-8000-000000000002"}',true);
+SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000002',true),set_config('request.jwt.claim.role','service_role',true),set_config('request.jwt.claims','{"role":"service_role","sub":"d1310001-0000-4000-8000-000000000002"}',true),set_config('maiprop.open_house_registration_rpc','',true);
 SET LOCAL ROLE service_role;
 SELECT is((SELECT to_jsonb(c) FROM public.get_open_house_capacity('d1310002-0000-4000-8000-000000000001') c),
   (SELECT to_jsonb(c) FROM public.get_open_house_capacity_for_user('d1310001-0000-4000-8000-000000000002','d1310002-0000-4000-8000-000000000001') c),
   'legacy service with real subject matches explicit capacity aggregate');
 RESET ROLE;
-SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim.role','anon',true),set_config('request.jwt.claims','{"role":"anon"}',true);
+SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim.role','anon',true),set_config('request.jwt.claims','{"role":"anon"}',true),set_config('maiprop.open_house_registration_rpc','',true);
 SET LOCAL ROLE anon;
 SELECT throws_ok($q$SELECT * FROM public.get_open_house_capacity_for_user('d1310001-0000-4000-8000-000000000002','d1310002-0000-4000-8000-000000000001')$q$,'42501','permission denied for function get_open_house_capacity_for_user','anon cannot execute active RPC');
 RESET ROLE;
-SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000002',true),set_config('request.jwt.claim.role','authenticated',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000002"}',true);
+SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000002',true),set_config('request.jwt.claim.role','authenticated',true),set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000002"}',true),set_config('maiprop.open_house_registration_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT throws_ok($q$SELECT * FROM public.get_open_house_capacity_for_user('d1310001-0000-4000-8000-000000000002','d1310002-0000-4000-8000-000000000001')$q$,'42501','permission denied for function get_open_house_capacity_for_user','authenticated cannot execute active RPC');
 RESET ROLE;
@@ -89,7 +89,9 @@ CREATE TEMP TABLE d13_receipt AS SELECT to_jsonb(r) doc FROM public.open_house_r
 GRANT SELECT ON d13_receipt TO service_role;
 CREATE TEMP TABLE d13_state_before AS SELECT
  (SELECT count(*) FROM public.open_house_registrations WHERE requester_id::text LIKE 'd1310001-%') regs,
- (SELECT count(*) FROM public.notifications WHERE user_id::text LIKE 'd1310001-%') notices;
+ (SELECT count(*) FROM public.notifications WHERE user_id::text LIKE 'd1310001-%') notices,
+ (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM public.open_house_registrations r WHERE r.requester_id::text LIKE 'd1310001-%') reg_rows,
+ (SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%') notification_rows;
 SET LOCAL ROLE service_role;
 SELECT throws_ok($q$SELECT public.create_open_house_registration_for_user(NULL,'d1310002-0000-4000-8000-000000000001',0,'X','x@example.test','+3000',NULL,NULL,true,true,true)$q$,'28000','not_authenticated','explicit registration actor required');
 SELECT throws_ok($q$SELECT public.create_open_house_registration_for_user('d1310001-0000-4000-8000-000000000006','d1310002-0000-4000-8000-000000000099',NULL,'X','x@example.test','+3000',NULL,NULL,true,true,true)$q$,'23503','open_house_listing_not_found','service rejects missing listing');
@@ -106,11 +108,16 @@ SELECT is(to_jsonb(public.create_open_house_registration_for_user('d1310001-0000
 RESET ROLE;
 SELECT is((SELECT count(*) FROM public.open_house_registrations WHERE requester_id::text LIKE 'd1310001-%'),(SELECT regs FROM d13_state_before),'service denials and retry leave registration count unchanged');
 SELECT is((SELECT count(*) FROM public.notifications WHERE user_id::text LIKE 'd1310001-%'),(SELECT notices FROM d13_state_before),'service denials and retry leave notifications unchanged');
+SELECT is((SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM public.open_house_registrations r WHERE r.requester_id::text LIKE 'd1310001-%'),(SELECT reg_rows FROM d13_state_before),'valid duplicate and denials preserve persisted registration rows');
+SELECT is((SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%'),(SELECT notification_rows FROM d13_state_before),'valid duplicate and denials preserve persisted notification rows');
 
 -- Retained service RPC is a distinct subject-bound contract. Each request
 -- clears the explicit wrapper marker; no end-user claim is injected into it.
 SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000006',true),set_config('request.jwt.claim.role','service_role',true),
        set_config('request.jwt.claims','{"role":"service_role","sub":"d1310001-0000-4000-8000-000000000006"}',true),set_config('maiprop.open_house_registration_rpc','',true);
+CREATE TEMP TABLE d13_legacy_before AS SELECT
+ (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM public.open_house_registrations r WHERE r.requester_id::text LIKE 'd1310001-%') reg_rows,
+ (SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%') notification_rows;
 SET LOCAL ROLE service_role;
 SELECT throws_ok($q$SELECT public.create_open_house_registration('d1310002-0000-4000-8000-000000000004',NULL,'','x@example.test','+3000',NULL,NULL,true,true,true)$q$,'23514','open_house_contact_name_required','legacy blank name denied');
 SELECT throws_ok($q$SELECT public.create_open_house_registration('d1310002-0000-4000-8000-000000000004',NULL,'X','','+3000',NULL,NULL,true,true,true)$q$,'23514','open_house_contact_email_required','legacy blank email denied');
@@ -119,6 +126,12 @@ SELECT throws_ok($q$SELECT public.create_open_house_registration('d1310002-0000-
 SELECT throws_ok($q$SELECT public.create_open_house_registration('d1310002-0000-4000-8000-000000000004',NULL,'X','x@example.test','+3000',NULL,NULL,true,false,true)$q$,'23514','open_house_id_verification_consent_required','legacy ID consent required');
 SELECT throws_ok($q$SELECT public.create_open_house_registration('d1310002-0000-4000-8000-000000000004',NULL,'X','x@example.test','+3000',NULL,NULL,true,true,false)$q$,'23514','open_house_privacy_acknowledgement_required','legacy privacy acknowledgement required');
 SELECT throws_ok($q$SELECT public.create_open_house_registration('d1310002-0000-4000-8000-000000000001',1,'X','x@example.test','+3000',NULL,NULL,true,true,true)$q$,'23514','open_house_timeslot_capacity_reached','legacy full slot denied');
+RESET ROLE;
+SELECT is((SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM public.open_house_registrations r WHERE r.requester_id::text LIKE 'd1310001-%'),(SELECT reg_rows FROM d13_legacy_before),'legacy validation and full slot denials preserve all registration rows');
+SELECT is((SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%'),(SELECT notification_rows FROM d13_legacy_before),'legacy validation and full slot denials preserve notification rows');
+SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000006',true),set_config('request.jwt.claim.role','service_role',true),
+       set_config('request.jwt.claims','{"role":"service_role","sub":"d1310001-0000-4000-8000-000000000006"}',true),set_config('maiprop.open_house_registration_rpc','',true);
+SET LOCAL ROLE service_role;
 SELECT lives_ok($q$SELECT public.create_open_house_registration('d1310002-0000-4000-8000-000000000004',NULL,'  X  ',' X@EXAMPLE.TEST ',' +3000 ',NULL,NULL,true,true,true)$q$,'legacy no-settings admission succeeds');
 RESET ROLE;
 SELECT ok((SELECT contact_name='X' AND contact_email='x@example.test' AND contact_phone='+3000' AND contact_permission_at IS NOT NULL AND id_verification_consent_at IS NOT NULL AND privacy_acknowledged_at IS NOT NULL FROM public.open_house_registrations WHERE listing_id='d1310002-0000-4000-8000-000000000004' AND requester_id='d1310001-0000-4000-8000-000000000006'),'legacy contact normalization and consent timestamps stored');
@@ -128,12 +141,17 @@ SET LOCAL ROLE service_role;
 SELECT throws_ok($q$SELECT public.create_open_house_registration('d1310002-0000-4000-8000-000000000005',0,'Y','y@example.test','+3008',NULL,NULL,true,true,true)$q$,'22023','open_house_timeslot_invalid','legacy empty-slot index denied');
 SELECT lives_ok($q$SELECT public.create_open_house_registration('d1310002-0000-4000-8000-000000000006',NULL,'Y','y@example.test','+3008',NULL,NULL,true,true,true)$q$,'legacy fills one-person total capacity');
 RESET ROLE;
+CREATE TEMP TABLE d13_total_before AS SELECT
+ (SELECT to_jsonb(r) FROM public.open_house_registrations r WHERE r.listing_id='d1310002-0000-4000-8000-000000000006') reg_row,
+ (SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%') notification_rows;
 SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000006',true),set_config('request.jwt.claim.role','service_role',true),
        set_config('request.jwt.claims','{"role":"service_role","sub":"d1310001-0000-4000-8000-000000000006"}',true),set_config('maiprop.open_house_registration_rpc','',true);
 SET LOCAL ROLE service_role;
 SELECT throws_ok($q$SELECT public.create_open_house_registration('d1310002-0000-4000-8000-000000000006',NULL,'X','x@example.test','+3000',NULL,NULL,true,true,true)$q$,'23514','open_house_total_capacity_reached','legacy total capacity denied');
 RESET ROLE;
 SELECT is((SELECT count(*)::int FROM public.open_house_registrations WHERE listing_id='d1310002-0000-4000-8000-000000000006'),1,'full total denial preserves one row');
+SELECT is((SELECT to_jsonb(r) FROM public.open_house_registrations r WHERE r.listing_id='d1310002-0000-4000-8000-000000000006'),(SELECT reg_row FROM d13_total_before),'legacy full total denial preserves complete stored row');
+SELECT is((SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%'),(SELECT notification_rows FROM d13_total_before),'legacy full total denial preserves notification rows');
 
 -- A valid receipt is recorded before the event closes. Both contracts check
 -- event date before duplicate lookup, so a closed retry is denied unchanged.
@@ -142,6 +160,9 @@ SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim
 SET LOCAL ROLE service_role;
 SELECT lives_ok($q$SELECT public.create_open_house_registration_for_user('d1310001-0000-4000-8000-000000000008','d1310002-0000-4000-8000-000000000007',NULL,'Y','y@example.test','+3008',NULL,NULL,true,true,true)$q$,'future event receipt created');
 RESET ROLE;
+CREATE TEMP TABLE d13_closed_before AS SELECT
+ (SELECT to_jsonb(r) FROM public.open_house_registrations r WHERE r.listing_id='d1310002-0000-4000-8000-000000000007') reg_row,
+ (SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%') notification_rows;
 UPDATE public.listings SET open_house_date=now()-interval '1 hour' WHERE id='d1310002-0000-4000-8000-000000000007';
 SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim.role','service_role',true),
        set_config('request.jwt.claims','{"role":"service_role"}',true),set_config('maiprop.open_house_registration_rpc','',true);
@@ -153,10 +174,14 @@ SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000008'
 SET LOCAL ROLE service_role;
 SELECT throws_ok($q$SELECT public.create_open_house_registration('d1310002-0000-4000-8000-000000000007',NULL,'Changed','changed@example.test','+3999',NULL,NULL,true,true,true)$q$,'23514','open_house_registration_closed','legacy closed-event retry denied');
 RESET ROLE;
-SELECT ok((SELECT count(*)=1 AND min(contact_name)='Y' FROM public.open_house_registrations WHERE listing_id='d1310002-0000-4000-8000-000000000007'),'closed retries preserve original registration');
+SELECT is((SELECT to_jsonb(r) FROM public.open_house_registrations r WHERE r.listing_id='d1310002-0000-4000-8000-000000000007'),(SELECT reg_row FROM d13_closed_before),'closed service and legacy retries preserve complete original registration');
+SELECT is((SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%'),(SELECT notification_rows FROM d13_closed_before),'closed service and legacy retries preserve notification rows');
 
 -- Bid/POF residual denials use the installed invoker submit and bounded
 -- definer accept/reopen. No offer is manufactured outside normal triggers.
+CREATE TEMP TABLE d13_early_bid_before AS SELECT
+ (SELECT to_jsonb(r) FROM public.open_house_registrations r WHERE r.listing_id='d1310002-0000-4000-8000-000000000007') reg_row,
+ (SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%') notification_rows;
 SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim.role','service_role',true),
        set_config('request.jwt.claims','{"role":"service_role"}',true),set_config('maiprop.open_house_accept_rpc','',true),
        set_config('maiprop.open_house_reopen_rpc','',true);
@@ -166,7 +191,7 @@ SELECT throws_ok($q$SELECT public.reopen_open_house_offer_selection('d1310002-00
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000006',true),set_config('request.jwt.claim.role','authenticated',true),
        set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000006"}',true),
-       set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
+       set_config('maiprop.open_house_registration_rpc','',true),set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT throws_ok($q$SELECT public.submit_open_house_offer('d1310002-0000-4000-8000-000000000007',210000,'bid','EUR')$q$,'P0001','only_attendees_can_submit_offers','nonattendee offer rejected');
 SELECT throws_ok($q$SELECT public.reopen_open_house_offer_selection('d1310002-0000-4000-8000-000000000007')$q$,'P0001','only_host_can_reopen_offer_selection','outsider cannot reopen');
@@ -174,15 +199,17 @@ RESET ROLE;
 SELECT is((SELECT count(*)::int FROM public.open_house_offers WHERE listing_id='d1310002-0000-4000-8000-000000000007'),0,'null actor and nonattendee create no offers');
 SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000008',true),set_config('request.jwt.claim.role','authenticated',true),
        set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000008"}',true),
-       set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
+       set_config('maiprop.open_house_registration_rpc','',true),set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT throws_ok($q$SELECT public.submit_open_house_offer('d1310002-0000-4000-8000-000000000007',210000,'bid','EUR')$q$,'P0001','only_attendees_can_submit_offers','pending registrant cannot bid');
 SELECT throws_ok($q$UPDATE public.open_house_registrations SET pof_verified_status='verified' WHERE listing_id='d1310002-0000-4000-8000-000000000007'$q$,'P0001','host_controlled_open_house_fields','requester cannot self verify POF');
 RESET ROLE;
 SELECT ok((SELECT pof_verified_status='unreviewed' AND status='pending' FROM public.open_house_registrations WHERE listing_id='d1310002-0000-4000-8000-000000000007'),'requester denials leave registration and POF unchanged');
+SELECT is((SELECT to_jsonb(r) FROM public.open_house_registrations r WHERE r.listing_id='d1310002-0000-4000-8000-000000000007'),(SELECT reg_row FROM d13_early_bid_before),'early bid and self POF denials preserve complete registration row');
+SELECT is((SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%'),(SELECT notification_rows FROM d13_early_bid_before),'early bid and self POF denials preserve notification rows');
 SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000001',true),set_config('request.jwt.claim.role','authenticated',true),
        set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000001"}',true),
-       set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
+       set_config('maiprop.open_house_registration_rpc','',true),set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT throws_ok($q$UPDATE public.open_house_registrations SET status='attended' WHERE listing_id='d1310002-0000-4000-8000-000000000007'$q$,'P0001','only_approved_registrations_can_be_attended','host cannot skip approval');
 SELECT lives_ok($q$UPDATE public.open_house_registrations SET status='approved',approved_by='d1310001-0000-4000-8000-000000000001',approved_at=now() WHERE listing_id='d1310002-0000-4000-8000-000000000007'$q$,'host approves through normal trigger');
@@ -190,49 +217,59 @@ SELECT lives_ok($q$UPDATE public.open_house_registrations SET status='attended',
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000008',true),set_config('request.jwt.claim.role','authenticated',true),
        set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000008"}',true),
-       set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
+       set_config('maiprop.open_house_registration_rpc','',true),set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT lives_ok($q$SELECT public.submit_open_house_offer('d1310002-0000-4000-8000-000000000007',210000,'bid','EUR')$q$,'attended bidder submits normal offer');
 RESET ROLE;
 CREATE TEMP TABLE d13_offer_before AS SELECT to_jsonb(o) doc,id FROM public.open_house_offers o WHERE listing_id='d1310002-0000-4000-8000-000000000007';
 GRANT SELECT ON d13_offer_before TO authenticated;
-CREATE TEMP TABLE d13_notice_before AS SELECT count(*) n FROM public.notifications WHERE user_id::text LIKE 'd1310001-%';
+CREATE TEMP TABLE d13_notice_before AS SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) rows FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%';
 SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000001',true),set_config('request.jwt.claim.role','authenticated',true),
        set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000001"}',true),
-       set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
+       set_config('maiprop.open_house_registration_rpc','',true),set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT throws_ok($q$SELECT public.accept_open_house_offer('00000000-0000-0000-0000-000000000000')$q$,'P0001','open_house_offer_not_found','host missing offer rejected');
 SELECT throws_ok($q$SELECT public.reopen_open_house_offer_selection('00000000-0000-0000-0000-000000000000')$q$,'P0001','open_house_listing_not_found','host missing reopen listing rejected');
 SELECT throws_ok($q$SELECT public.accept_open_house_offer((SELECT id FROM d13_offer_before))$q$,'P0001','only_revealed_offers_can_be_accepted','unrevealed offer cannot be accepted');
 RESET ROLE;
 SELECT ok((SELECT to_jsonb(o)=b.doc FROM public.open_house_offers o CROSS JOIN d13_offer_before b WHERE o.id=b.id),'failed host decisions preserve offer row');
-SELECT is((SELECT count(*) FROM public.notifications WHERE user_id::text LIKE 'd1310001-%'),(SELECT n FROM d13_notice_before),'failed decisions add no notification');
+SELECT is((SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%'),(SELECT rows FROM d13_notice_before),'failed host decisions preserve notification rows');
 SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000001',true),set_config('request.jwt.claim.role','authenticated',true),
        set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000001"}',true),
-       set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
+       set_config('maiprop.open_house_registration_rpc','',true),set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT lives_ok($q$UPDATE public.open_house_offers SET status='revealed',revealed_at=now() WHERE listing_id='d1310002-0000-4000-8000-000000000007'$q$,'host reveals after event gate');
 RESET ROLE;
+CREATE TEMP TABLE d13_revealed_before AS SELECT to_jsonb(o) doc,id FROM public.open_house_offers o WHERE listing_id='d1310002-0000-4000-8000-000000000007';
+CREATE TEMP TABLE d13_revealed_notice_before AS SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) rows FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%';
 SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000006',true),set_config('request.jwt.claim.role','authenticated',true),
        set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000006"}',true),
-       set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
+       set_config('maiprop.open_house_registration_rpc','',true),set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT throws_ok($q$SELECT public.accept_open_house_offer((SELECT id FROM d13_offer_before))$q$,'P0001','only_host_can_accept_offer','outsider cannot accept revealed offer');
 RESET ROLE;
-CREATE TEMP TABLE d13_revealed_before AS SELECT to_jsonb(o) doc,id FROM public.open_house_offers o WHERE listing_id='d1310002-0000-4000-8000-000000000007';
-CREATE TEMP TABLE d13_revealed_notice_before AS SELECT count(*) n FROM public.notifications WHERE user_id::text LIKE 'd1310001-%';
 SELECT set_config('request.jwt.claim.sub','d1310001-0000-4000-8000-000000000008',true),set_config('request.jwt.claim.role','authenticated',true),
        set_config('request.jwt.claims','{"role":"authenticated","sub":"d1310001-0000-4000-8000-000000000008"}',true),
-       set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
+       set_config('maiprop.open_house_registration_rpc','',true),set_config('maiprop.open_house_accept_rpc','',true),set_config('maiprop.open_house_reopen_rpc','',true);
 SET LOCAL ROLE authenticated;
 SELECT throws_ok($q$SELECT public.submit_open_house_offer('d1310002-0000-4000-8000-000000000007',230000,'changed','EUR')$q$,'P0001','offer_no_longer_editable','revealed offer cannot be resubmitted');
 RESET ROLE;
 SELECT ok((SELECT to_jsonb(o)=b.doc FROM public.open_house_offers o CROSS JOIN d13_revealed_before b WHERE o.id=b.id),'noneditable retry and outsider accept preserve revealed offer');
 SELECT is((SELECT status::text FROM public.listings WHERE id='d1310002-0000-4000-8000-000000000007'),'active','denied offer actions do not pause listing');
-SELECT is((SELECT count(*) FROM public.notifications WHERE user_id::text LIKE 'd1310001-%'),(SELECT n FROM d13_revealed_notice_before),'denied offer actions add no notification');
+SELECT is((SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM public.notifications n WHERE n.user_id::text LIKE 'd1310001-%'),(SELECT rows FROM d13_revealed_notice_before),'outsider accept and noneditable retry preserve notification rows');
 
 SELECT * FROM finish();
 ROLLBACK;
 SELECT count(*) AS residual_users_after_rollback FROM auth.users WHERE id::text LIKE 'd1310001-%';
-SELECT current_user AS role_after_rollback, current_setting('request.jwt.claim.sub',true) AS sub_after_rollback,
-       current_setting('request.jwt.claims',true) AS claims_after_rollback;
+\pset format unaligned
+\pset tuples_only on
+SELECT 'D13_CLEANUP_CONTEXT',jsonb_build_object(
+ 'current_user',current_user,
+ 'sub',NULLIF(current_setting('request.jwt.claim.sub',true),''),
+ 'claim_role',NULLIF(current_setting('request.jwt.claim.role',true),''),
+ 'claims',NULLIF(current_setting('request.jwt.claims',true),''),
+ 'registration_marker',NULLIF(current_setting('maiprop.open_house_registration_rpc',true),''),
+ 'accept_marker',NULLIF(current_setting('maiprop.open_house_accept_rpc',true),''),
+ 'reopen_marker',NULLIF(current_setting('maiprop.open_house_reopen_rpc',true),''),
+ 'pof_marker',NULLIF(current_setting('maiprop.open_house_pof_review_rpc',true),'')
+);
