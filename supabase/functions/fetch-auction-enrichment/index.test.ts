@@ -149,5 +149,72 @@ Deno.test("invalid bodies bypass the production DB-backed limiter transport", as
   }
 });
 
+Deno.test("a non-auction listing is rejected before OS enrichment or writes", async () => {
+  const originalFetch = globalThis.fetch;
+  const userId = "55555555-5555-4555-8555-555555555555";
+  const calls: Array<{ method: string; url: URL }> = [];
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    calls.push({ method: request.method, url });
+
+    if (url.origin !== "https://test.supabase.co" || request.method !== "GET") {
+      throw new Error(`Unexpected transport: ${request.method} ${url}`);
+    }
+    if (url.pathname === "/auth/v1/user" && url.search === "") {
+      assertEquals(request.headers.get("authorization"), "Bearer boundary-test-token");
+      return Promise.resolve(json({ id: userId, aud: "authenticated", role: "authenticated" }));
+    }
+    if (url.pathname === "/rest/v1/profiles") {
+      assertEquals(url.searchParams.get("user_id"), `eq.${userId}`);
+      assertEquals(
+        url.searchParams.get("select"),
+        "role,participant_type,role_switch_in_progress_at,force_pro_access",
+      );
+      assertEquals([...url.searchParams.keys()].sort(), ["select", "user_id"]);
+      return Promise.resolve(json({
+        role: "investor",
+        participant_type: null,
+        role_switch_in_progress_at: null,
+        force_pro_access: true,
+      }));
+    }
+    if (url.pathname === "/rest/v1/listings") {
+      assertEquals(url.searchParams.get("id"), `eq.${listingId}`);
+      assertEquals(url.searchParams.get("select"), "id,tags,listing_type");
+      assertEquals([...url.searchParams.keys()].sort(), ["id", "select"]);
+      return Promise.resolve(json({
+        id: listingId,
+        listing_type: "sale",
+        tags: ["os_auction:should-not-be-fetched"],
+      }));
+    }
+    throw new Error(`Unexpected transport: ${request.method} ${url}`);
+  }) as typeof fetch;
+
+  try {
+    const response = await handler(rawPost(JSON.stringify({ listing_id: listingId }), "10.0.3.7"));
+    assertEquals(response.status, 400);
+    assertEquals(await jsonBody(response), { ok: false, error: "Listing is not an auction" });
+    assertEquals(response.headers.get("Access-Control-Allow-Origin"), "https://maiprop.co");
+    assertEquals(
+      calls.map(({ method, url }) => `${method} ${url.pathname}`),
+      ["GET /auth/v1/user", "GET /rest/v1/profiles", "GET /rest/v1/listings"],
+    );
+    assertEquals(calls.filter(({ url }) => url.pathname === "/rest/v1/listings").length, 1);
+    assertEquals(calls.filter(({ url }) => url.pathname.startsWith("/rest/v1/rpc/")).length, 0);
+    assertEquals(calls.filter(({ url }) => url.pathname === "/auth/login" || url.pathname.includes("/enrichment")).length, 0);
+    assertEquals(calls.filter(({ method }) => method !== "GET").length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 restore();
 restoreProductionBoundary();
