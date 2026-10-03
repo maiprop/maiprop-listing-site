@@ -1,16 +1,38 @@
 \set ON_ERROR_STOP on
-SELECT set_config('maiprop.fixture_backend',pg_backend_pid()::text,false);
-BEGIN;
 DO $$ BEGIN
- IF current_database() !~ '^maiprop_(d0_[0-9]{8}_[a-z0-9_]+|d6_[0-9]{8}_consult[0-9]{2})$'
+ IF current_database() !~ '^(maiprop_d0_[a-z0-9_]{6,48}|maiprop_d6_[0-9]{8}_consult[0-9]{2})$'
     OR current_database() IN ('postgres','template0','template1','maiprop_t12q_20260930_source')
     OR current_setting('maiprop.test_disposable_database',true) IS DISTINCT FROM current_database()
-    OR current_user IS DISTINCT FROM 'postgres'
+    OR current_user IS DISTINCT FROM 'postgres' OR session_user IS DISTINCT FROM 'postgres'
     OR (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()) IS DISTINCT FROM 'postgres'
     OR inet_server_addr() IS NOT NULL
     OR current_setting('session_replication_role') IS DISTINCT FROM 'origin'
+    OR (SELECT count(*) FROM pg_stat_activity WHERE datname='maiprop_t12q_20260930_source') <> 0
+    OR (SELECT count(*) FROM pg_prepared_xacts WHERE database IN (current_database(),'maiprop_t12q_20260930_source')) <> 0
+    OR EXISTS (SELECT 1 FROM pg_class WHERE relnamespace=pg_my_temp_schema() AND relname LIKE 'd6_%')
+    OR EXISTS (SELECT 1 FROM pg_proc WHERE pronamespace=pg_my_temp_schema() AND proname LIKE 'd6_%')
  THEN RAISE EXCEPTION 'D6 requires a matching postgres-owned disposable socket database with origin triggers'; END IF;
 END $$;
+CREATE TEMP TABLE d6_consult_baseline AS
+ SELECT pg_backend_pid() pid,current_user db_role,session_user session_role,
+ current_setting('maiprop.test_disposable_database',true) marker,
+ current_setting('session_replication_role') replication_role,
+ auth.uid() actor,auth.jwt() jwt,
+ current_setting('request.jwt.claim.sub',true) sub_claim,
+ current_setting('request.jwt.claims',true) claims,
+ current_setting('request.jwt.claim.role',true) role_claim,
+ (SELECT jsonb_object_agg(p.oid::regprocedure::text,encode(digest(pg_get_functiondef(p.oid),'sha256'),'hex'))
+  FROM pg_proc p WHERE p.oid IN (
+   'public.enforce_professional_pro_consultation_request()'::regprocedure,
+   'public.validate_consultation_request_availability()'::regprocedure,
+   'private.capture_consultation_owner_lead()'::regprocedure,
+   'private.upsert_owner_lead(uuid,text,uuid,uuid,uuid,text,text,text,text,text,text,timestamptz)'::regprocedure,
+   'private.notify_consultation_created()'::regprocedure,
+   'private.notify_consultation_status_changed()'::regprocedure,
+   'private.insert_interaction_notification(uuid,uuid,text,text,text,text)'::regprocedure)) source_hashes;
+SELECT 'PRE' AS phase,pid,db_role,session_role,marker,replication_role,actor,jwt,
+ sub_claim,claims,role_claim,source_hashes FROM d6_consult_baseline;
+BEGIN;
 SET LOCAL statement_timeout='20s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL TIME ZONE 'Europe/Athens';
@@ -296,14 +318,17 @@ SET LOCAL ROLE authenticated;
 WITH changed AS (UPDATE public.consultation_requests SET status='cancelled' WHERE id=:'c1_id'::uuid RETURNING id)
  SELECT is((SELECT count(*)::integer FROM changed),0,'requester UPDATE returns zero rows under RLS');
 RESET ROLE;
+SELECT is(pg_temp.d6_graph(),(SELECT graph FROM d6_before WHERE label='c3denied'),
+ 'requester status denial preserves complete requests/leads/notices graph');
+SELECT pg_temp.d6_snapshot('c3outsider');
 SELECT set_config('request.jwt.claim.sub','d6000001-0000-4000-8000-000000000004',true);
 SELECT set_config('request.jwt.claims','{"sub":"d6000001-0000-4000-8000-000000000004","role":"authenticated"}',true);
 SET LOCAL ROLE authenticated;
 WITH changed AS (UPDATE public.consultation_requests SET status='cancelled' WHERE id=:'c1_id'::uuid RETURNING id)
  SELECT is((SELECT count(*)::integer FROM changed),0,'outsider UPDATE returns zero rows under RLS');
 RESET ROLE;
-SELECT is(pg_temp.d6_graph(),(SELECT graph FROM d6_before WHERE label='c3denied'),
- 'requester and outsider denials preserve complete requests/leads/notices graph');
+SELECT is(pg_temp.d6_graph(),(SELECT graph FROM d6_before WHERE label='c3outsider'),
+ 'outsider status denial independently preserves complete requests/leads/notices graph');
 
 -- C4: manual/no-active paths, inclusive endpoints, distinct validation errors and UPDATE schedule.
 SELECT pg_temp.d6_snapshot('c4manual');
@@ -557,16 +582,52 @@ SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim
 
 SELECT * FROM finish();
 ROLLBACK;
-DO $$ BEGIN
- IF pg_backend_pid() IS DISTINCT FROM current_setting('maiprop.fixture_backend')::integer
- OR current_user IS DISTINCT FROM 'postgres'
- OR current_setting('session_replication_role') IS DISTINCT FROM 'origin'
- OR coalesce(current_setting('request.jwt.claim.sub',true),'') <> ''
- OR coalesce(current_setting('request.jwt.claims',true),'') <> ''
- OR (SELECT count(*) FROM pg_class WHERE relnamespace=pg_my_temp_schema()) <> 0
- OR (SELECT count(*) FROM auth.users WHERE id::text LIKE 'd6000001-%') <> 0
- OR (SELECT count(*) FROM public.professionals WHERE id::text LIKE 'd6000002-%') <> 0
- OR (SELECT count(*) FROM pg_prepared_xacts WHERE database=current_database()) <> 0
- THEN RAISE EXCEPTION 'D6 same-backend rollback residue or role/JWT/trigger leak'; END IF;
+SELECT 'POST' AS phase,pg_backend_pid() AS pid,current_user AS db_role,session_user AS session_role,
+ current_setting('maiprop.test_disposable_database',true) AS marker,
+ current_setting('session_replication_role') AS replication_role,
+ auth.uid() AS actor,auth.jwt() AS jwt,
+ current_setting('request.jwt.claim.sub',true) AS sub_claim,
+ current_setting('request.jwt.claims',true) AS claims,
+ current_setting('request.jwt.claim.role',true) AS role_claim;
+DO $$ DECLARE b record; v_hashes jsonb; BEGIN
+ SELECT * INTO STRICT b FROM d6_consult_baseline;
+ SELECT jsonb_object_agg(p.oid::regprocedure::text,encode(digest(pg_get_functiondef(p.oid),'sha256'),'hex'))
+ INTO v_hashes FROM pg_proc p WHERE p.oid IN (
+   'public.enforce_professional_pro_consultation_request()'::regprocedure,
+   'public.validate_consultation_request_availability()'::regprocedure,
+   'private.capture_consultation_owner_lead()'::regprocedure,
+   'private.upsert_owner_lead(uuid,text,uuid,uuid,uuid,text,text,text,text,text,text,timestamptz)'::regprocedure,
+   'private.notify_consultation_created()'::regprocedure,
+   'private.notify_consultation_status_changed()'::regprocedure,
+   'private.insert_interaction_notification(uuid,uuid,text,text,text,text)'::regprocedure);
+ IF b.pid IS DISTINCT FROM pg_backend_pid()
+ OR b.db_role IS DISTINCT FROM current_user OR b.session_role IS DISTINCT FROM session_user
+ OR b.marker IS DISTINCT FROM current_setting('maiprop.test_disposable_database',true)
+ OR b.replication_role IS DISTINCT FROM current_setting('session_replication_role')
+ OR b.actor IS DISTINCT FROM auth.uid() OR b.jwt IS DISTINCT FROM auth.jwt()
+ OR NULLIF(b.sub_claim,'') IS DISTINCT FROM NULLIF(current_setting('request.jwt.claim.sub',true),'')
+ OR NULLIF(b.claims,'') IS DISTINCT FROM NULLIF(current_setting('request.jwt.claims',true),'')
+ OR NULLIF(b.role_claim,'') IS DISTINCT FROM NULLIF(current_setting('request.jwt.claim.role',true),'')
+ OR b.source_hashes IS DISTINCT FROM v_hashes
+ THEN RAISE EXCEPTION 'D6 same-backend identity, JWT, marker, origin or source was not restored'; END IF;
+ IF EXISTS (SELECT 1 FROM pg_class WHERE relnamespace=pg_my_temp_schema()
+   AND relname LIKE 'd6_%' AND relname <> 'd6_consult_baseline')
+ OR EXISTS (SELECT 1 FROM pg_proc WHERE pronamespace=pg_my_temp_schema() AND proname LIKE 'd6_%')
+ THEN RAISE EXCEPTION 'D6 temporary relation or function remains'; END IF;
+ IF EXISTS (SELECT 1 FROM auth.users WHERE id::text LIKE 'd6000001-%')
+ OR EXISTS (SELECT 1 FROM public.profiles WHERE user_id::text LIKE 'd6000001-%')
+ OR EXISTS (SELECT 1 FROM public.profiles_public WHERE user_id::text LIKE 'd6000001-%')
+ OR EXISTS (SELECT 1 FROM public.professionals WHERE id::text LIKE 'd6000002-%' OR user_id::text LIKE 'd6000001-%')
+ OR EXISTS (SELECT 1 FROM public.professional_availability WHERE professional_id::text LIKE 'd6000002-%')
+ OR EXISTS (SELECT 1 FROM public.consultation_requests
+    WHERE professional_id::text LIKE 'd6000002-%' OR requester_id::text LIKE 'd6000001-%')
+ OR EXISTS (SELECT 1 FROM public.leads
+    WHERE owner_id::text LIKE 'd6000001-%' OR professional_id::text LIKE 'd6000002-%')
+ OR EXISTS (SELECT 1 FROM public.notifications WHERE user_id::text LIKE 'd6000001-%')
+ THEN RAISE EXCEPTION 'D6 scoped fixture residue after rollback'; END IF;
+ IF (SELECT count(*) FROM pg_stat_activity WHERE datname='maiprop_t12q_20260930_source') <> 0
+ OR (SELECT count(*) FROM pg_prepared_xacts WHERE database IN (current_database(),'maiprop_t12q_20260930_source')) <> 0
+ THEN RAISE EXCEPTION 'D6 source session or prepared transaction remains'; END IF;
 END $$;
-RESET maiprop.fixture_backend;
+DROP TABLE d6_consult_baseline;
+SELECT 'D6_CONSULT_SAME_BACKEND_CLEAN' AS result;
