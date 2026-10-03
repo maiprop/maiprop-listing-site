@@ -13,7 +13,7 @@ SET LOCAL statement_timeout='20s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL search_path=public,extensions;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(130);
+SELECT plan(135);
 SELECT pg_backend_pid() AS fixture_backend_pid,current_database() AS fixture_database,
  current_role AS fixture_role,current_setting('session_replication_role') AS fixture_trigger_mode,
  current_setting('maiprop.test_disposable_database',true) AS fixture_gate;
@@ -592,20 +592,38 @@ SELECT is((SELECT row FROM d3_return WHERE label='verify3'),
   pg_temp.d3_review_delta('verified',NULL,'d3220001-0000-4000-8000-000000000001') FROM d3_before),
  'three-argument verify returns independently expected full composite');
 TRUNCATE d3_before; INSERT INTO d3_before SELECT pg_temp.d3_state();
-SELECT set_config('request.jwt.claim.sub','d3220001-0000-4000-8000-000000000007',true),
- set_config('request.jwt.claims','{"role":"authenticated","sub":"d3220001-0000-4000-8000-000000000007"}',true);
+SELECT set_config('request.jwt.claim.sub','d3220001-0000-4000-8000-000000000002',true),
+ set_config('request.jwt.claims','{"role":"authenticated","sub":"d3220001-0000-4000-8000-000000000002"}',true);
 SET LOCAL ROLE authenticated;
-SELECT pg_temp.d3_attempt('browser_admin_update',$q$WITH u AS (
+SELECT pg_temp.d3_attempt('browser_own_select',$q$INSERT INTO d3_return(label,id,row)
+ SELECT 'browser_own_select',i.id,to_jsonb(i) FROM public.agent_data_inputs i
+ WHERE i.user_id=auth.uid() AND i.property_address='D3 Direct Athens 12'$q$);
+SELECT pg_temp.d3_attempt('browser_own_admin_update',$q$WITH u AS (
  UPDATE public.agent_data_inputs SET status='flagged',rejection_reason='browser attempt'
- WHERE id='d3220002-0000-4000-8000-000000000001' RETURNING *)
- INSERT INTO d3_return SELECT 'browser_admin_update',u.id,to_jsonb(u) FROM u$q$);
+ WHERE user_id=auth.uid() AND property_address='D3 Direct Athens 12' RETURNING *)
+ INSERT INTO d3_return SELECT 'browser_own_admin_update',u.id,to_jsonb(u) FROM u$q$);
 RESET ROLE;
-SELECT is((SELECT sqlstate FROM d3_outcome WHERE label='browser_admin_update'),NULL::text,
- 'authenticated nonadmin direct UPDATE is row-filtered without SQL error');
-SELECT is((SELECT count(*)::integer FROM d3_return WHERE label='browser_admin_update'),0,
- 'nonadmin direct admin-column UPDATE returns zero rows');
+SELECT is((SELECT sqlstate FROM d3_outcome WHERE label='browser_own_select'),NULL::text,
+ 'authenticated owning agent SELECT completes without SQL error');
+SELECT is((SELECT count(*)::integer FROM d3_return WHERE label='browser_own_select'),1,
+ 'own input is exactly one SELECT-visible row under actual authenticated actor');
+SELECT is((SELECT id FROM d3_return WHERE label='browser_own_select'),
+ (SELECT id FROM d3_return WHERE label='direct'),
+ 'SELECT-visible row is the exact previously inserted direct input');
+SELECT is((SELECT row FROM d3_return WHERE label='browser_own_select'),
+ (SELECT state->'inputs'->id::text FROM d3_before,d3_return WHERE label='direct'),
+ 'own SELECT sees the complete unchanged target record');
+SELECT ok((SELECT s.actor_role='authenticated' AND u.actor_role=s.actor_role
+ AND s.subject='d3220001-0000-4000-8000-000000000002' AND u.subject=s.subject
+ FROM d3_outcome s,d3_outcome u
+ WHERE s.label='browser_own_select' AND u.label='browser_own_admin_update'),
+ 'own SELECT and UPDATE use the same actual authenticated agent subject');
+SELECT is((SELECT sqlstate FROM d3_outcome WHERE label='browser_own_admin_update'),NULL::text,
+ 'authenticated owning nonadmin direct UPDATE is row-filtered without SQL error');
+SELECT is((SELECT count(*)::integer FROM d3_return WHERE label='browser_own_admin_update'),0,
+ 'own visible input admin-column UPDATE returns zero rows');
 SELECT is(pg_temp.d3_state(),(SELECT state FROM d3_before),
- 'nonadmin direct UPDATE leaves complete input/ban/credit graph unchanged');
+ 'own visible input admin-column UPDATE leaves complete input/ban/credit graph unchanged');
 TRUNCATE d3_before; INSERT INTO d3_before SELECT pg_temp.d3_state();
 SELECT set_config('request.jwt.claim.sub','d3220001-0000-4000-8000-000000000007',true),
  set_config('request.jwt.claims','{"role":"service_role","sub":"d3220001-0000-4000-8000-000000000007"}',true);
@@ -850,9 +868,13 @@ SELECT label,actor_role,subject,sqlstate,message,
  END AS first_denial_layer
 FROM d3_outcome WHERE sqlstate IS NOT NULL ORDER BY label;
 SELECT o.label,o.actor_role,o.subject,o.sqlstate,
- (SELECT count(*)::integer FROM d3_return WHERE label='browser_admin_update') AS returned_rows,
- 'authenticated UPDATE RLS row filter; no trigger hit established' AS first_boundary
-FROM d3_outcome o WHERE label='browser_admin_update';
+ (SELECT actor_role FROM d3_outcome WHERE label='browser_own_select') AS select_actor_role,
+ (SELECT subject FROM d3_outcome WHERE label='browser_own_select') AS select_subject,
+ (SELECT id FROM d3_return WHERE label='browser_own_select') AS visible_id,
+ (SELECT count(*)::integer FROM d3_return WHERE label='browser_own_select') AS visible_rows,
+ (SELECT count(*)::integer FROM d3_return WHERE label='browser_own_admin_update') AS returned_rows,
+ 'authenticated own-row UPDATE admin RLS row filter; no trigger hit established' AS first_boundary
+FROM d3_outcome o WHERE label='browser_own_admin_update';
 
 SELECT * FROM finish();
 ROLLBACK;
