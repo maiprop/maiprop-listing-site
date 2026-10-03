@@ -84,6 +84,22 @@ CREATE FUNCTION pg_temp.a13_bindings() RETURNS jsonb LANGUAGE sql STABLE AS $$
    ORDER BY CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,a.privilege_type)
    FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a)) ORDER BY p.oid::regprocedure::text),'[]'::jsonb))
   FROM pg_proc p JOIN selected s ON s.oid=p.oid),
+ 'trigger_closure',(WITH trigger_rows AS (
+  SELECT DISTINCT t.tgfoid oid FROM pg_trigger t WHERE NOT t.tgisinternal
+   AND t.tgrelid IN ('auth.users'::regclass,'public.profiles'::regclass,
+    'public.profiles_public'::regclass,'public.user_auth_activity_events'::regclass,
+    'public.notifications'::regclass)
+ ), records AS (
+  SELECT format('%I.%I(%s)',n.nspname,p.proname,pg_get_function_identity_arguments(p.oid)) signature,
+   encode(digest(pg_get_functiondef(p.oid),'sha256'),'hex') body,
+   pg_get_userbyid(p.proowner) owner,p.prosecdef definer,p.proconfig config,
+   (SELECT coalesce(jsonb_agg(jsonb_build_object('grantee',
+    CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
+    'grantor',pg_get_userbyid(a.grantor),'privilege',a.privilege_type,'grantable',a.is_grantable)
+    ORDER BY CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,a.privilege_type),'[]'::jsonb)
+    FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a) acl
+  FROM trigger_rows tr JOIN pg_proc p ON p.oid=tr.oid JOIN pg_namespace n ON n.oid=p.pronamespace)
+  SELECT coalesce(jsonb_agg(to_jsonb(records) ORDER BY signature),'[]'::jsonb) FROM records),
  'triggers',(SELECT coalesce(jsonb_agg(jsonb_build_object('table',t.tgrelid::regclass::text,
   'name',t.tgname,'enabled',t.tgenabled,'definition',pg_get_triggerdef(t.oid,true),
   'body',t.tgfoid::regprocedure::text) ORDER BY t.tgrelid::regclass::text,t.tgname),'[]'::jsonb)
@@ -100,12 +116,24 @@ CREATE FUNCTION pg_temp.a13_bindings() RETURNS jsonb LANGUAGE sql STABLE AS $$
   FROM pg_class c WHERE c.oid IN ('auth.users'::regclass,'public.profiles'::regclass,
    'public.profiles_public'::regclass,'public.user_auth_activity_events'::regclass,
    'public.notifications'::regclass)),
- 'policies',(SELECT coalesce(jsonb_agg(jsonb_build_object('table',polrelid::regclass::text,'name',polname,
-  'command',polcmd,'permissive',polpermissive,'roles',ARRAY(SELECT CASE WHEN r=0 THEN 'PUBLIC' ELSE pg_get_userbyid(r) END
-   FROM unnest(polroles) r ORDER BY 1),'using',pg_get_expr(polqual,polrelid),
-  'check',pg_get_expr(polwithcheck,polrelid)) ORDER BY polrelid::regclass::text,polname),'[]'::jsonb)
-  FROM pg_policy WHERE polrelid IN ('public.profiles'::regclass,'public.profiles_public'::regclass,
-   'public.user_auth_activity_events'::regclass,'public.notifications'::regclass)),
+ 'constraints',(WITH records AS (
+  SELECT con.conrelid::regclass::text table_name,con.conname name,con.contype kind,
+   pg_get_constraintdef(con.oid,true) definition,con.convalidated valid,
+   con.condeferrable is_deferrable,con.condeferred initially_deferred,
+   con.conkey keys,con.confkey foreign_keys,
+   CASE WHEN con.confrelid=0 THEN NULL ELSE con.confrelid::regclass::text END foreign_table
+  FROM pg_constraint con WHERE con.conrelid IN
+  ('auth.users'::regclass,'public.profiles'::regclass,'public.profiles_public'::regclass,
+   'public.user_auth_activity_events'::regclass,'public.notifications'::regclass))
+  SELECT coalesce(jsonb_agg(to_jsonb(records) ORDER BY table_name,name),'[]'::jsonb) FROM records),
+ 'policies',(WITH records AS (
+  SELECT polrelid::regclass::text table_name,polname name,polcmd command,polpermissive permissive,
+   ARRAY(SELECT CASE WHEN r=0 THEN 'PUBLIC' ELSE pg_get_userbyid(r) END FROM unnest(polroles) r ORDER BY 1) roles,
+   pg_get_expr(polqual,polrelid) using_expr,pg_get_expr(polwithcheck,polrelid) check_expr
+  FROM pg_policy WHERE polrelid IN
+  ('auth.users'::regclass,'public.profiles'::regclass,'public.profiles_public'::regclass,
+   'public.user_auth_activity_events'::regclass,'public.notifications'::regclass))
+  SELECT coalesce(jsonb_agg(to_jsonb(records) ORDER BY table_name,name),'[]'::jsonb) FROM records),
  'effective_acl',(SELECT jsonb_agg(jsonb_build_object('role',v.role,
   'public_schema',has_schema_privilege(v.role,'public','USAGE'),
   'private_schema',has_schema_privilege(v.role,'private','USAGE'),
@@ -137,7 +165,7 @@ BEGIN;
 SET LOCAL statement_timeout='20s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL search_path=public,extensions;
-SELECT plan(38);
+SELECT plan(47);
 SELECT is(current_setting('session_replication_role'),'origin','normal triggers enabled');
 SELECT ok((SELECT (bindings->'routines'->>'named_count')::int=9
  AND (bindings->'routines'->>'missing_named')::int=0
@@ -167,6 +195,28 @@ SELECT ok((SELECT count(*)=10 AND bool_and(tgenabled='O') FROM pg_trigger
  WHERE NOT tgisinternal AND tgrelid IN ('auth.users'::regclass,'public.profiles'::regclass,
  'public.profiles_public'::regclass,'public.user_auth_activity_events'::regclass,
  'public.notifications'::regclass)), 'all ten scoped triggers enabled');
+SELECT ok((SELECT jsonb_array_length(bindings->'trigger_closure')=10
+ AND encode(digest((bindings->'trigger_closure')::text,'sha256'),'hex')
+ ='40ffc9f384d52c02759462087730a55760ff863cf99cfeac6473ac4f3df3199c' FROM a13_pre),
+ 'accepted ten trigger signatures, bodies, config and default-expanded ACL match canonical pin');
+SELECT ok((SELECT jsonb_array_length(bindings->'triggers')=10
+ AND encode(digest((bindings->'triggers')::text,'sha256'),'hex')
+ ='7cb7ea4b9bb52a86e4cec3220d8cd20b823ea9b8b44a8bc9b0a3df5ec19a0d9b' FROM a13_pre),
+ 'ten enabled trigger attachments match accepted names, definitions and body identities');
+SELECT ok((SELECT jsonb_array_length(bindings->'tables')=5
+ AND encode(digest((bindings->'tables')::text,'sha256'),'hex')
+ ='513dddfa756b46a39509131a7dece3730c78bce7faeebd15961cc61909afa8c4' FROM a13_pre),
+ 'five graph table ACL, RLS, type, default and generated metadata records match accepted pin');
+SELECT ok((SELECT jsonb_array_length(bindings->'constraints')=17
+ AND encode(digest((bindings->'constraints')::text,'sha256'),'hex')
+ ='3f95552920fb378fe472e1206cb4e38e8166909b8f35e6fd963e20a01812e412' FROM a13_pre),
+ 'accepted seventeen named FK, check and uniqueness constraints match keys and validation/deferrability');
+SELECT ok((SELECT jsonb_array_length(bindings->'policies')=7
+ AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(bindings->'policies') pol
+  WHERE pol->>'table_name'='auth.users')
+ AND encode(digest((bindings->'policies')::text,'sha256'),'hex')
+ ='223e3aa5d7f0a5f029436e98e1c4c3b5b3b21518ece5be24dd564c06c5e8da98' FROM a13_pre),
+ 'all five scoped table policy catalogs match accepted named-role pin, including zero auth.users policies');
 
 INSERT INTO auth.users(id,email) VALUES
  ('a1300001-0000-4000-8000-000000000001','auth-activity-a@example.test'),
@@ -213,8 +263,41 @@ SELECT ok((SELECT (pg_temp.a13_graph()->'users')-ARRAY['a1300001-0000-4000-8000-
  AND pg_temp.a13_graph()->'notifications'=graph->'notifications' FROM a13_pre),
  'fixture adds only independently modeled users, profiles and projections; all old rows preserved');
 CREATE TEMP TABLE a13_expected AS SELECT pg_temp.a13_graph() graph;
-SELECT is((SELECT jsonb_object_keys(graph->'auth_events') FROM a13_expected LIMIT 1),NULL::text,
- 'fixture starts with no new auth event');
+SELECT ok((SELECT graph->'auth_events' FROM a13_expected)
+ =(SELECT graph->'auth_events' FROM a13_pre),
+ 'validated auth/profile fixture adds no event and preserves exact prior event membership');
+
+SELECT set_config('request.jwt.claim.sub','a1300001-0000-4000-8000-000000000002',true),
+ set_config('request.jwt.claims','{"role":"authenticated","sub":"a1300001-0000-4000-8000-000000000002","session_id":"session-sentinel"}',true),
+ set_config('request.jwt.claim.role','authenticated',true),
+ set_config('request.headers','{"user-agent":"A13/sentinel"}',true);
+SET LOCAL ROLE authenticated;
+SELECT ok(pg_temp.a13_identity('authenticated','a1300001-0000-4000-8000-000000000002','session-sentinel',
+ '{"user-agent":"A13/sentinel"}'::jsonb),
+ 'unrelated sentinel uses actual authenticated B with distinct session and header');
+SELECT public.record_user_auth_activity('session_restored','/sentinel',
+ '{"source":"fixture-sentinel"}'::jsonb) AS a13_sentinel_id \gset
+RESET ROLE;
+SELECT ok(pg_temp.a13_clear(),'sentinel action restores role, full claims and headers');
+SELECT ok(:'a13_sentinel_id'::uuid IS NOT NULL
+ AND NOT ((SELECT graph->'auth_events' FROM a13_pre) ? :'a13_sentinel_id')
+ AND (SELECT count(*)=1 FROM public.user_auth_activity_events WHERE id=:'a13_sentinel_id'::uuid)
+ AND (SELECT to_jsonb(e)=jsonb_build_object(
+  'id',:'a13_sentinel_id'::uuid,'user_id','a1300001-0000-4000-8000-000000000002'::uuid,
+  'event_type','session_restored','session_id','session-sentinel','route','/sentinel',
+  'user_agent','A13/sentinel','metadata','{"source":"fixture-sentinel"}'::jsonb,
+  'created_at',transaction_timestamp())
+ FROM public.user_auth_activity_events e WHERE id=:'a13_sentinel_id'::uuid),
+ 'sentinel UUID and full persisted row match independent actor/session/event model');
+UPDATE a13_expected SET graph=jsonb_set(graph,'{auth_events}',
+ (graph->'auth_events')||jsonb_build_object(:'a13_sentinel_id',
+  jsonb_build_object('id',:'a13_sentinel_id'::uuid,'user_id','a1300001-0000-4000-8000-000000000002'::uuid,
+  'event_type','session_restored','session_id','session-sentinel','route','/sentinel',
+  'user_agent','A13/sentinel','metadata','{"source":"fixture-sentinel"}'::jsonb,
+  'created_at',transaction_timestamp())));
+SELECT ok(pg_temp.a13_graph()=(SELECT graph FROM a13_expected)
+ AND (SELECT count(*) FROM public.user_auth_activity_events WHERE user_id::text LIKE 'a1300001-%')=1,
+ 'sentinel adds exactly one independently modeled event while preserving all prior rows');
 
 SELECT set_config('request.jwt.claim.sub','a1300001-0000-4000-8000-000000000001',true),
  set_config('request.jwt.claims','{"role":"authenticated","sub":"a1300001-0000-4000-8000-000000000001","session_id":"session-a"}',true),
