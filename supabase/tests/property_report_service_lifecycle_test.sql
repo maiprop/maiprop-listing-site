@@ -30,7 +30,7 @@ BEGIN;
 SET LOCAL statement_timeout='30s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL search_path=public,extensions;
-SELECT plan(81);
+SELECT plan(83);
 SELECT is(current_setting('session_replication_role'),'origin','fixture and action triggers use origin');
 SELECT is((SELECT count(*)::integer FROM pg_trigger WHERE tgrelid IN
  ('auth.users'::regclass,'public.profiles'::regclass,'public.listings'::regclass,'public.addon_purchases'::regclass,
@@ -50,8 +50,19 @@ SELECT ok((SELECT bool_and(encode(digest(pg_get_functiondef(to_regprocedure(sig)
  ('public.is_pro(uuid)','0c23c93f8ec994c7bf6aa2393f09c3ba87a0cad5648e40aed9c66b6012f9ddc5'),
  ('public.get_available_addon_credits(uuid,text)','430adaa2ee4075d77da76dcc0e13b1082731c6bbafac0843bd4ec7d7e9e78898'),
  ('public.consume_addon_credit_for_user(uuid,text)','d6065caab4e39399a6116772c581d83e120b132f1f61bb59079dbf230926b5b5'),
+ ('public.get_addon_credit_balance(uuid,text)','f30decb68912a0170b0f2e5a42df452957b5bd324e51ecebfd78c10025c9615f'),
+ ('public.addon_credit_bucket(text)','e16a307eb097a347a022c4c6f209965d8fabc39abe21cbc675758b3531d5f12e'),
  ('public.current_billing_runtime_mode()','c6fe7fbb91891586bca0ee1f2290a9e87b767d40ca8f9b4c3eb3dda1272ed940')) x(sig,sha)),
- 'five entitlement and credit dependencies match accepted installed bodies');
+ 'seven entitlement and credit dependencies match installed bodies');
+SELECT ok(has_function_privilege('service_role','public.get_addon_credit_balance(uuid,text)','EXECUTE')
+ AND NOT has_function_privilege('authenticated','public.get_addon_credit_balance(uuid,text)','EXECUTE')
+ AND NOT has_function_privilege('anon','public.get_addon_credit_balance(uuid,text)','EXECUTE')
+ AND NOT has_function_privilege('public','public.get_addon_credit_balance(uuid,text)','EXECUTE')
+ AND has_function_privilege('service_role','public.addon_credit_bucket(text)','EXECUTE')
+ AND has_function_privilege('authenticated','public.addon_credit_bucket(text)','EXECUTE')
+ AND NOT has_function_privilege('anon','public.addon_credit_bucket(text)','EXECUTE')
+ AND NOT has_function_privilege('public','public.addon_credit_bucket(text)','EXECUTE'),
+ 'credit balance service-only and bucket service/authenticated effective EXECUTE match installed ACLs');
 SELECT is((SELECT encode(digest(jsonb_agg(to_jsonb(p) ORDER BY schemaname,tablename,policyname)::text,'sha256'),'hex')
  FROM pg_policies p WHERE schemaname='public' AND tablename IN
  ('profiles','listings','addon_purchases','usage_property_reports','property_report_cache')),
@@ -64,6 +75,8 @@ SELECT is((SELECT encode(digest(jsonb_agg(jsonb_build_object('schema',n.nspname,
  OR (n.nspname='private' AND c.relname='property_report_generation_leases')),
  '06abd959b71da3e32776dabbaf13cd543d9494a51943fa273ccdbbe0587c0c15',
  'table ACL and RLS flags match installed set');
+-- This digest binds trigger attachments and enablement, not trigger function
+-- bodies. Their observed fixture side effects are asserted below.
 SELECT is((SELECT encode(digest(jsonb_agg(jsonb_build_object('table',n.nspname||'.'||c.relname,
  'name',t.tgname,'enabled',t.tgenabled,'definition',pg_get_triggerdef(t.oid))
  ORDER BY n.nspname,c.relname,t.tgname)::text,'sha256'),'hex') FROM pg_trigger t
@@ -73,7 +86,7 @@ SELECT is((SELECT encode(digest(jsonb_agg(jsonb_build_object('table',n.nspname||
  OR (n.nspname='private' AND c.relname='property_report_generation_leases')
  OR (n.nspname='auth' AND c.relname='users'))),
  'b7fedcf251f693dc0e4c4d64bc1e0f1fb6c4d1fc9a61b75aee48e05656bb6881',
- 'relevant normal-trigger definitions match installed set');
+ 'relevant normal-trigger attachments match installed set');
 SELECT ok((SELECT bool_and(has_function_privilege('service_role',sig,'EXECUTE')
  AND NOT has_function_privilege('authenticated',sig,'EXECUTE')
  AND NOT has_function_privilege('anon',sig,'EXECUTE')
@@ -177,11 +190,15 @@ SELECT is((SELECT count(*)::integer FROM public.profiles WHERE user_id::text LIK
  'normal onboarding created six authoritative participant roles');
 SET LOCAL ROLE service_role;
 SELECT is(auth.uid(),NULL::uuid,'business service calls have no JWT subject');
-SELECT is((public.authorize_property_report_generation('d7130001-0000-4000-8000-000000000002'))->>'source','included','Pro participant admitted on included allowance');
+SELECT is(public.authorize_property_report_generation('d7130001-0000-4000-8000-000000000002'),
+ jsonb_build_object('allowed',true,'source','included','remaining_base',3),
+ 'Pro included authorization returns complete admission record');
 SELECT throws_ok($sql$SELECT public.authorize_property_report_generation('d7130001-0000-4000-8000-000000000003')$sql$,
  'P0001','report_not_allowed','free user without add-on rejected at authorization');
 SELECT is(pg_temp.rpt13_graph(),(SELECT graph FROM rpt13_snap WHERE label='seed'),'free authorization denial changes no graph node');
-SELECT is((public.authorize_property_report_generation('d7130001-0000-4000-8000-000000000004'))->>'source','addon','valid paid add-on admitted');
+SELECT is(public.authorize_property_report_generation('d7130001-0000-4000-8000-000000000004'),
+ jsonb_build_object('allowed',true,'source','addon','available_addon_credits',1),
+ 'valid paid add-on authorization returns complete admission record');
 SELECT throws_ok($sql$SELECT public.authorize_property_report_generation(NULL)$sql$,'22023','report_user_id_required','null actor fails validation');
 SELECT is(pg_temp.rpt13_graph(),(SELECT graph FROM rpt13_snap WHERE label='seed'),'null authorization denial changes no graph node');
 SELECT throws_ok($sql$SELECT public.authorize_property_report_generation('d7130001-0000-4000-8000-000000000006')$sql$,
@@ -243,6 +260,10 @@ INSERT INTO rpt13_receipt(label,result)
  'd7130002-0000-4000-8000-000000000001',(SELECT (result->>'generated_at')::timestamptz FROM rpt13_receipt WHERE label='cache'));
 RESET ROLE;
 SELECT is((SELECT count(*)::integer FROM public.property_report_cache WHERE listing_id='d7130002-0000-4000-8000-000000000001' AND report_type='valuation' AND lang='en' AND source='os' AND html='<p>synthetic provider payload</p>' AND ai='{"score":1}' AND features='{"bedrooms":2}' AND file_name='rpt13.html'),1,'one exact synthetic cache row stored');
+SELECT is((SELECT result FROM rpt13_receipt WHERE label='cache'),
+ pg_temp.rpt13_expected((SELECT graph FROM rpt13_snap WHERE label='seed'),true,true,false,false,false)
+ ->'cache'->(SELECT result->>'id' FROM rpt13_receipt WHERE label='cache'),
+ 'returned cache record matches every independently modeled field');
 SELECT is((SELECT count(*)::integer FROM public.usage_property_reports WHERE user_id='d7130001-0000-4000-8000-000000000002' AND listing_id='d7130002-0000-4000-8000-000000000001'),1,'one exact Pro usage row stored');
 SELECT is((SELECT result->>'usage_id' FROM rpt13_receipt WHERE label='pro-charge'),(SELECT id::text FROM public.usage_property_reports WHERE user_id='d7130001-0000-4000-8000-000000000002'),'Pro charge receipt identifies persisted usage');
 SELECT is((SELECT result - 'usage_id' FROM rpt13_receipt WHERE label='pro-charge'),' {"charged":true,"alreadyPaid":false,"addon_credit_consumed":false}'::jsonb,'Pro charge fields show included allowance');
