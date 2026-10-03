@@ -1,12 +1,12 @@
 \set ON_ERROR_STOP on
 BEGIN;
 DO $$ BEGIN
- IF current_database() IS DISTINCT FROM 'maiprop_t13d3_20261003_delete01'
-    OR current_setting('maiprop.test_disposable_database',true) IS DISTINCT FROM current_database()
+ IF current_setting('maiprop.test_disposable_database',true) IS DISTINCT FROM current_database()
+    OR current_database() IN ('postgres','template0','template1','maiprop_t12q_20260930_source')
     OR current_user IS DISTINCT FROM 'postgres'
     OR inet_server_addr() IS NOT NULL
     OR current_setting('session_replication_role') IS DISTINCT FROM 'origin'
- THEN RAISE EXCEPTION 'Owned D3 delete clone with normal triggers required'; END IF;
+ THEN RAISE EXCEPTION 'Explicit matching disposable socket database with normal triggers required'; END IF;
 END $$;
 SET LOCAL statement_timeout='20s';
 SET LOCAL lock_timeout='3s';
