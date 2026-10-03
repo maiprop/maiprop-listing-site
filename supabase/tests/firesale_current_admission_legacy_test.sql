@@ -14,8 +14,12 @@ END $$;
 SET LOCAL statement_timeout='20s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL search_path=public,extensions;
-CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(59);
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pgtap') THEN
+   CREATE EXTENSION pgtap;
+ END IF;
+END $$;
+SELECT plan(75);
 SELECT is(current_setting('session_replication_role'),'origin','normal triggers');
 SELECT ok((SELECT bool_and(has_function_privilege('service_role',oid,'EXECUTE')
  AND NOT has_function_privilege('authenticated',oid,'EXECUTE')
@@ -40,13 +44,74 @@ $$;
 CREATE FUNCTION pg_temp.fs_put(s jsonb,k text,row_id text,r jsonb) RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
  SELECT jsonb_set(s,ARRAY[k,row_id],r,true)
 $$;
+CREATE FUNCTION pg_temp.fs_identity(p_role text,p_subject uuid) RETURNS boolean LANGUAGE sql STABLE AS $$
+ SELECT current_user=p_role AND session_user='postgres' AND current_setting('session_replication_role')='origin'
+ AND auth.uid() IS NOT DISTINCT FROM p_subject
+ AND NULLIF(current_setting('request.jwt.claim.sub',true),'') IS NOT DISTINCT FROM p_subject::text
+ AND auth.jwt()->>'role'='service_role'
+ AND (auth.jwt()->>'sub') IS NOT DISTINCT FROM p_subject::text
+$$;
+CREATE FUNCTION pg_temp.fs_interest_row(p_id uuid,p_investor uuid,p_message text) RETURNS jsonb LANGUAGE sql STABLE AS $$
+ SELECT jsonb_build_object('id',p_id,'deal_id','d3180002-0000-4000-8000-000000000001',
+ 'investor_id',p_investor,'status','interested','message',p_message,'proof_amount',NULL,
+ 'proof_of_funds_url',NULL,'created_at',now(),'updated_at',now(),'last_status_changed_at',now(),
+ 'proof_of_funds_verified_at',NULL,'proof_of_funds_verified_by',NULL,'reservation_expires_at',NULL,
+ 'reserved_at',NULL,'reserved_by',NULL,'admin_note',NULL)
+$$;
+CREATE FUNCTION pg_temp.fs_interest_state(s jsonb,p_id uuid,p_investor uuid,p_message text) RETURNS jsonb LANGUAGE sql STABLE AS $$
+ SELECT pg_temp.fs_put(pg_temp.fs_put(s,'interest',p_id::text,pg_temp.fs_interest_row(p_id,p_investor,p_message)),
+ 'audit',a.id::text,jsonb_build_object('id',a.id,'interest_id',p_id,
+ 'deal_id','d3180002-0000-4000-8000-000000000001','actor_id',p_investor,
+ 'action','interest_created','from_status',NULL,'to_status','interested',
+ 'metadata',jsonb_build_object('proof_amount',NULL,'reservation_expires_at',NULL),'created_at',now()))
+ FROM public.firesale_interest_audit_log a WHERE a.interest_id=p_id AND NOT (s->'audit' ? a.id::text)
+$$;
+CREATE FUNCTION pg_temp.fs_hold_state(s jsonb,p_id uuid) RETURNS jsonb LANGUAGE sql STABLE AS $$
+ SELECT pg_temp.fs_put(pg_temp.fs_put(s,'interest',p_id::text,
+ (s->'interest'->p_id::text)||jsonb_build_object('status','reserved','reservation_expires_at',now()+interval '3 hours',
+ 'reserved_at',now(),'reserved_by','d3180001-0000-4000-8000-000000000005','updated_at',now(),
+ 'last_status_changed_at',now())),
+ 'audit',a.id::text,jsonb_build_object('id',a.id,'interest_id',p_id,
+ 'deal_id','d3180002-0000-4000-8000-000000000001','actor_id','d3180001-0000-4000-8000-000000000005',
+ 'action','reservation_assigned','from_status','interested','to_status','reserved',
+ 'metadata',jsonb_build_object('proof_amount_before',NULL,'proof_amount_after',NULL,
+ 'reservation_expires_at_before',NULL,'reservation_expires_at_after',now()+interval '3 hours'),
+ 'created_at',now()))
+ FROM public.firesale_interest_audit_log a WHERE a.interest_id=p_id AND NOT (s->'audit' ? a.id::text)
+$$;
+CREATE FUNCTION pg_temp.fs_publication_state(s jsonb,p_id uuid,p_address text) RETURNS jsonb LANGUAGE sql STABLE AS $$
+ WITH request_row AS (SELECT (s->'requests'->p_id::text)||jsonb_build_object(
+ 'status','reviewed','published_to_investors',true,'updated_at',now()) r),
+ new_notice_rows AS (SELECT n.id,n.user_id FROM public.notifications n WHERE NOT (s->'notifications' ? n.id::text)),
+ expected_notices AS (SELECT jsonb_object_agg(n.id::text,jsonb_build_object('id',n.id,'user_id',e.user_id,
+ 'title',e.title,'body',e.body,'type',e.kind,'read',false,'link',e.link,'created_at',now())) v
+ FROM new_notice_rows n JOIN (VALUES
+ ('d3180001-0000-4000-8000-000000000001'::uuid,'Quick Sale request reviewed',
+  'Your Quick Sale request for '||p_address||' has been reviewed by the mAI Prop team.','quick_sale','/dashboard'),
+ ('d3180001-0000-4000-8000-000000000002'::uuid,'New Quick Sale deal available',
+  'A new Quick Sale opportunity at '||p_address||' is now available in your investor dashboard.','investor_alert','/investor-dashboard'),
+ ('d3180001-0000-4000-8000-000000000003'::uuid,'New Quick Sale deal available',
+  'A new Quick Sale opportunity at '||p_address||' is now available in your investor dashboard.','investor_alert','/investor-dashboard'),
+ ('d3180001-0000-4000-8000-000000000004'::uuid,'New Quick Sale deal available',
+  'A new Quick Sale opportunity at '||p_address||' is now available in your investor dashboard.','investor_alert','/investor-dashboard'))
+ e(user_id,title,body,kind,link) ON e.user_id=n.user_id)
+ SELECT jsonb_set(pg_temp.fs_put(pg_temp.fs_put(s,'requests',p_id::text,(SELECT r FROM request_row)),
+ 'feed',p_id::text,jsonb_build_object('id',p_id,'created_at',(SELECT r->'created_at' FROM request_row),
+ 'address',(SELECT r->'address' FROM request_row),'city','Athens',
+ 'property_type',(SELECT r->'property_type' FROM request_row),'sqm',(SELECT r->'sqm' FROM request_row),
+ 'bedrooms',(SELECT r->'bedrooms' FROM request_row),'condition','good',
+ 'ai_estimate',(SELECT r->'ai_estimate' FROM request_row),
+ 'asking_price',(SELECT r->'asking_price' FROM request_row),'status','reviewed')),
+ '{notifications}',(s->'notifications')||(SELECT v FROM expected_notices))
+$$;
 CREATE TEMP TABLE fs_before(state jsonb);
 INSERT INTO auth.users(id,email) VALUES
  ('d3180001-0000-4000-8000-000000000001','fs-seller@example.test'),
  ('d3180001-0000-4000-8000-000000000002','fs-investor-a@example.test'),
  ('d3180001-0000-4000-8000-000000000003','fs-investor-b@example.test'),
  ('d3180001-0000-4000-8000-000000000004','fs-expired@example.test'),
- ('d3180001-0000-4000-8000-000000000005','kr@maiprop.co');
+ ('d3180001-0000-4000-8000-000000000005','kr@maiprop.co'),
+ ('d3180001-0000-4000-8000-000000000006','fs-unpaid@example.test');
 SELECT set_config('maiprop.owner_auth_trigger_active','false',true);
 SELECT is((SELECT role::text FROM public.profiles WHERE user_id='d3180001-0000-4000-8000-000000000005'),'admin','owner trigger makes real admin');
 SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{"role":"service_role"}',true);
@@ -55,6 +120,7 @@ SELECT public.complete_onboarding_role_for_user('d3180001-0000-4000-8000-0000000
 SELECT public.complete_onboarding_role_for_user('d3180001-0000-4000-8000-000000000002','buyer','buyer');
 SELECT public.complete_onboarding_role_for_user('d3180001-0000-4000-8000-000000000003','buyer','buyer');
 SELECT public.complete_onboarding_role_for_user('d3180001-0000-4000-8000-000000000004','buyer','buyer');
+SELECT public.complete_onboarding_role_for_user('d3180001-0000-4000-8000-000000000006','buyer','buyer');
 INSERT INTO public.investor_subscriptions(user_id,tier,status,expires_at,runtime_mode,livemode) VALUES
  ('d3180001-0000-4000-8000-000000000002','private','pending_payment',now()+interval '30 days',public.current_billing_runtime_mode(),public.current_billing_runtime_mode()='live'),
  ('d3180001-0000-4000-8000-000000000003','private','pending_payment',now()+interval '30 days',public.current_billing_runtime_mode(),public.current_billing_runtime_mode()='live'),
@@ -63,13 +129,23 @@ UPDATE public.investor_subscriptions SET status='active' WHERE user_id::text LIK
 INSERT INTO public.firesale_requests(id,user_id,address,city,sqm,condition,contact_email,asking_price) VALUES
  ('d3180002-0000-4000-8000-000000000001','d3180001-0000-4000-8000-000000000001','FS deal one','Athens',80,'good','fs-seller@example.test',350000),
  ('d3180002-0000-4000-8000-000000000002','d3180001-0000-4000-8000-000000000001','FS deal two','Athens',90,'good','fs-seller@example.test',450000);
-SELECT * FROM public.admin_set_firesale_investor_publication_for_user(
- 'd3180001-0000-4000-8000-000000000005','d3180002-0000-4000-8000-000000000001',true);
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{"role":"service_role"}',true);
 SELECT is(private.has_investor_subscription_for_user('d3180001-0000-4000-8000-000000000004'),false,'expired control lacks current entitlement');
 SELECT is(private.has_investor_subscription_for_user('d3180001-0000-4000-8000-000000000002'),true,'first investor has current entitlement');
+SELECT is((SELECT count(*)::int FROM public.investor_subscriptions WHERE user_id='d3180001-0000-4000-8000-000000000006'),0,'unpaid control has no subscription');
 INSERT INTO fs_before SELECT pg_temp.fs_state();
+SET LOCAL ROLE service_role;
+CREATE TEMP TABLE fs_setup_pub AS SELECT * FROM public.admin_set_firesale_investor_publication_for_user(
+ 'd3180001-0000-4000-8000-000000000005','d3180002-0000-4000-8000-000000000001',true);
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','',true);
+SELECT is((SELECT to_jsonb(p) FROM fs_setup_pub p),
+ jsonb_build_object('deal_id','d3180002-0000-4000-8000-000000000001','status','reviewed','published_to_investors',true),
+ 'necessary active publication returns exact row');
+SELECT is(pg_temp.fs_state(),(SELECT pg_temp.fs_publication_state(state,'d3180002-0000-4000-8000-000000000001','FS deal one, Athens') FROM fs_before),
+ 'necessary active publication has independent full graph oracle');
+UPDATE fs_before SET state=pg_temp.fs_state();
 SET LOCAL ROLE service_role;
 SELECT throws_ok($q$SELECT public.submit_firesale_interest_for_user(NULL,'d3180002-0000-4000-8000-000000000001',NULL,NULL,NULL)$q$,'P0001','not_authenticated','null actor denied first');
 RESET ROLE;
@@ -96,15 +172,39 @@ SELECT throws_ok($q$SELECT public.submit_firesale_interest_for_user('d3180001-00
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','',true);
 SELECT is(pg_temp.fs_state(),(SELECT state FROM fs_before),'missing deal full graph unchanged');
--- Two ordinary interests and first hold are setup for one new same-session conflict assertion.
+-- Two ordinary interests and first hold are necessary setup for one new same-session conflict assertion.
 SET LOCAL ROLE service_role;
 CREATE TEMP TABLE fs_interest_a AS WITH called AS MATERIALIZED (SELECT public.submit_firesale_interest_for_user('d3180001-0000-4000-8000-000000000002','d3180002-0000-4000-8000-000000000001','A',NULL,NULL) r) SELECT (r).* FROM called;
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','',true);
+SELECT is((SELECT to_jsonb(i) FROM fs_interest_a i),
+ (SELECT pg_temp.fs_interest_row(id,'d3180001-0000-4000-8000-000000000002','A') FROM fs_interest_a),
+ 'necessary first interest exact return');
+SELECT is(pg_temp.fs_state(),(SELECT pg_temp.fs_interest_state(state,(SELECT id FROM fs_interest_a),'d3180001-0000-4000-8000-000000000002','A') FROM fs_before),
+ 'necessary first interest independent full graph');
+UPDATE fs_before SET state=pg_temp.fs_state();
+SET LOCAL ROLE service_role;
 CREATE TEMP TABLE fs_interest_b AS WITH called AS MATERIALIZED (SELECT public.submit_firesale_interest_for_user('d3180001-0000-4000-8000-000000000003','d3180002-0000-4000-8000-000000000001','B',NULL,NULL) r) SELECT (r).* FROM called;
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','',true);
+SELECT is((SELECT to_jsonb(i) FROM fs_interest_b i),
+ (SELECT pg_temp.fs_interest_row(id,'d3180001-0000-4000-8000-000000000003','B') FROM fs_interest_b),
+ 'necessary second interest exact return');
+SELECT is(pg_temp.fs_state(),(SELECT pg_temp.fs_interest_state(state,(SELECT id FROM fs_interest_b),'d3180001-0000-4000-8000-000000000003','B') FROM fs_before),
+ 'necessary second interest independent full graph');
+UPDATE fs_before SET state=pg_temp.fs_state();
+SET LOCAL ROLE service_role;
 CREATE TEMP TABLE fs_hold_a AS WITH called AS MATERIALIZED (SELECT public.admin_update_firesale_interest_workflow_for_user('d3180001-0000-4000-8000-000000000005',(SELECT id FROM fs_interest_a),'reserved',3,false,NULL,NULL) r) SELECT (r).* FROM called;
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','',true);
-SELECT is((SELECT status FROM fs_hold_a),'reserved','first hold setup succeeded');
-SELECT is((SELECT reservation_expires_at FROM fs_hold_a),now()+interval '3 hours','first hold expiry exact');
+SELECT is((SELECT to_jsonb(h) FROM fs_hold_a h),
+ (SELECT (state->'interest'->(SELECT id::text FROM fs_interest_a))||jsonb_build_object(
+ 'status','reserved','reservation_expires_at',now()+interval '3 hours','reserved_at',now(),
+ 'reserved_by','d3180001-0000-4000-8000-000000000005','updated_at',now(),
+ 'last_status_changed_at',now()) FROM fs_before),
+ 'necessary first hold exact returned row');
+SELECT is(pg_temp.fs_state(),(SELECT pg_temp.fs_hold_state(state,(SELECT id FROM fs_interest_a)) FROM fs_before),
+ 'necessary first hold independent full graph');
 UPDATE fs_before SET state=pg_temp.fs_state();
 SET LOCAL ROLE service_role;
 SELECT throws_ok($q$SELECT public.admin_update_firesale_interest_workflow_for_user('d3180001-0000-4000-8000-000000000005',(SELECT id FROM fs_interest_b),'reserved',3,false,NULL,NULL)$q$,'P0001','active_reservation_exists_for_deal','same-session second hold rejected by guard');
@@ -130,8 +230,11 @@ RESET ROLE;
 SELECT is(pg_temp.fs_state(),(SELECT state FROM fs_before),'legacy workflow denial full graph unchanged');
 SELECT set_config('request.jwt.claim.sub','d3180001-0000-4000-8000-000000000005',true),set_config('request.jwt.claims','{"role":"service_role","sub":"d3180001-0000-4000-8000-000000000005"}',true);
 SET LOCAL ROLE service_role;
+SELECT ok(pg_temp.fs_identity('service_role','d3180001-0000-4000-8000-000000000005'),'legacy publication verified admin subject and role');
 CREATE TEMP TABLE fs_legacy_pub AS SELECT * FROM public.admin_set_firesale_investor_publication('d3180002-0000-4000-8000-000000000002',true);
 RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{"role":"service_role"}',true);
+SELECT ok(pg_temp.fs_identity('postgres',NULL),'legacy publication restores neutral role and JWT');
 SELECT is((SELECT to_jsonb(p) FROM fs_legacy_pub p),jsonb_build_object('deal_id','d3180002-0000-4000-8000-000000000002','status','reviewed','published_to_investors',true),'legacy publication exact return');
 SELECT is((SELECT count(*)::int FROM public.notifications n WHERE NOT ((SELECT state->'notifications' FROM fs_before) ? n.id::text)),4,'legacy publication adds seller and three status-active investor notices');
 SELECT is((SELECT jsonb_agg(to_jsonb(n)-'id' ORDER BY n.user_id) FROM public.notifications n WHERE NOT ((SELECT state->'notifications' FROM fs_before) ? n.id::text)),
@@ -163,8 +266,11 @@ SELECT is((pg_temp.fs_state())->'notifications',(SELECT notices FROM expected),'
 UPDATE fs_before SET state=pg_temp.fs_state();
 SELECT set_config('request.jwt.claim.sub','d3180001-0000-4000-8000-000000000003',true),set_config('request.jwt.claims','{"role":"service_role","sub":"d3180001-0000-4000-8000-000000000003"}',true);
 SET LOCAL ROLE service_role;
+SELECT ok(pg_temp.fs_identity('service_role','d3180001-0000-4000-8000-000000000003'),'legacy submit verified investor subject and role');
 CREATE TEMP TABLE fs_legacy_interest AS WITH called AS MATERIALIZED (SELECT public.submit_firesale_interest('d3180002-0000-4000-8000-000000000002','legacy',100000,NULL) r) SELECT (r).* FROM called;
 RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{"role":"service_role"}',true);
+SELECT ok(pg_temp.fs_identity('postgres',NULL),'legacy submit restores neutral role and JWT');
 SELECT is((SELECT to_jsonb(i) FROM fs_legacy_interest i),(SELECT jsonb_build_object('id',i.id,'deal_id','d3180002-0000-4000-8000-000000000002','investor_id','d3180001-0000-4000-8000-000000000003','status','prioritized','message','legacy','proof_amount',100000,'proof_of_funds_url',NULL,'created_at',now(),'updated_at',now(),'last_status_changed_at',now(),'proof_of_funds_verified_at',NULL,'proof_of_funds_verified_by',NULL,'reservation_expires_at',NULL,'reserved_at',NULL,'reserved_by',NULL,'admin_note',NULL) FROM fs_legacy_interest i),'legacy submit exact returned row');
 SELECT is((SELECT to_jsonb(i) FROM public.firesale_interest i WHERE id=(SELECT id FROM fs_legacy_interest)),(SELECT to_jsonb(i) FROM fs_legacy_interest i),'legacy submit persisted return');
 SELECT is((SELECT count(*)::int FROM public.firesale_interest_audit_log a WHERE deal_id='d3180002-0000-4000-8000-000000000002'),1,'legacy submit one audit row');
@@ -193,8 +299,11 @@ SELECT is(pg_temp.fs_state(),(SELECT pg_temp.fs_put(pg_temp.fs_put(b.state,'inte
 UPDATE fs_before SET state=pg_temp.fs_state();
 SELECT set_config('request.jwt.claim.sub','d3180001-0000-4000-8000-000000000005',true),set_config('request.jwt.claims','{"role":"service_role","sub":"d3180001-0000-4000-8000-000000000005"}',true);
 SET LOCAL ROLE service_role;
+SELECT ok(pg_temp.fs_identity('service_role','d3180001-0000-4000-8000-000000000005'),'legacy workflow verified admin subject and role');
 CREATE TEMP TABLE fs_legacy_hold AS WITH called AS MATERIALIZED (SELECT public.admin_update_firesale_interest_workflow((SELECT id FROM fs_legacy_interest),'reserved',2,true,'verified',NULL) r) SELECT (r).* FROM called;
 RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{"role":"service_role"}',true);
+SELECT ok(pg_temp.fs_identity('postgres',NULL),'legacy workflow restores neutral role and JWT');
 SELECT is((SELECT to_jsonb(h) FROM fs_legacy_hold h),(SELECT to_jsonb(i) || jsonb_build_object('status','reserved','reservation_expires_at',now()+interval '2 hours','reserved_at',now(),'reserved_by','d3180001-0000-4000-8000-000000000005','proof_of_funds_verified_at',now(),'proof_of_funds_verified_by','d3180001-0000-4000-8000-000000000005','admin_note','verified','updated_at',now(),'last_status_changed_at',now()) FROM fs_legacy_interest i),'legacy workflow exact returned row');
 SELECT is((SELECT to_jsonb(i) FROM public.firesale_interest i WHERE id=(SELECT id FROM fs_legacy_interest)),(SELECT to_jsonb(h) FROM fs_legacy_hold h),'legacy workflow persisted return');
 SELECT is((SELECT count(*)::int FROM public.firesale_interest_audit_log a WHERE deal_id='d3180002-0000-4000-8000-000000000002'),2,'legacy workflow one additional audit');
@@ -224,9 +333,13 @@ WITH expected_interest AS (
 SELECT is(pg_temp.fs_state(),(SELECT pg_temp.fs_put(pg_temp.fs_put(b.state,'interest',i.k,i.row),'audit',a.k,a.row)
  FROM fs_before b,expected_interest i,expected_audit a),'legacy workflow full independently modeled graph');
 UPDATE fs_before SET state=pg_temp.fs_state();
+SELECT set_config('request.jwt.claim.sub','d3180001-0000-4000-8000-000000000005',true),set_config('request.jwt.claims','{"role":"service_role","sub":"d3180001-0000-4000-8000-000000000005"}',true);
 SET LOCAL ROLE service_role;
+SELECT ok(pg_temp.fs_identity('service_role','d3180001-0000-4000-8000-000000000005'),'legacy pipeline verified fresh admin subject and role');
 CREATE TEMP TABLE fs_legacy_pipeline AS SELECT * FROM public.admin_update_firesale_pipeline_deal('d3180002-0000-4000-8000-000000000002','closed','counter response',425000,'countered',425000);
 RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{"role":"service_role"}',true);
+SELECT ok(pg_temp.fs_identity('postgres',NULL),'legacy pipeline restores neutral role and JWT');
 SELECT is((SELECT to_jsonb(p) FROM fs_legacy_pipeline p),jsonb_build_object('deal_id','d3180002-0000-4000-8000-000000000002','status','closed','notified',3),'legacy pipeline exact return and notice count');
 SELECT is((SELECT count(*)::int FROM public.notifications n WHERE NOT ((SELECT state->'notifications' FROM fs_before) ? n.id::text)),3,'legacy pipeline inserts three notices');
 SELECT is((SELECT jsonb_agg(jsonb_build_object('user_id',n.user_id,'title',n.title,'body',n.body,'type',n.type,'read',n.read,'link',n.link,'created_at',n.created_at) ORDER BY n.title) FROM public.notifications n WHERE NOT ((SELECT state->'notifications' FROM fs_before) ? n.id::text)),
@@ -266,6 +379,9 @@ SELECT is(pg_temp.fs_state(),(SELECT state FROM expected),'legacy pipeline full 
 SELECT is((SELECT status FROM public.firesale_requests WHERE id='d3180002-0000-4000-8000-000000000002'),'closed','legacy pipeline closes persisted request');
 SELECT is((SELECT seller_response FROM public.firesale_requests WHERE id='d3180002-0000-4000-8000-000000000002'),'countered','legacy pipeline stores counter response');
 SELECT is((SELECT status FROM public.firesale_requests_investor_feed WHERE id='d3180002-0000-4000-8000-000000000002'),'closed','normal trigger updates feed status');
+SELECT is((SELECT to_jsonb(p) FROM public.profiles p WHERE user_id='d3180001-0000-4000-8000-000000000006'),
+ (SELECT state->'profiles'->'d3180001-0000-4000-8000-000000000006' FROM fs_before),
+ 'unpaid profile remains unchanged across legacy actions');
 SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{"role":"service_role"}',true);
 SELECT is(current_setting('session_replication_role'),'origin','normal triggers remain enabled');
 SELECT * FROM finish();
