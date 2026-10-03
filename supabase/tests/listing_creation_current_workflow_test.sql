@@ -32,6 +32,9 @@ CREATE FUNCTION pg_temp.list13_bindings() RETURNS jsonb LANGUAGE sql STABLE AS $
    'private.check_listing_quota_for_principal(uuid,uuid)'::regprocedure,
    'public.get_listing_limit(uuid)'::regprocedure,
    'public.authoritative_role(uuid)'::regprocedure,
+   'private.authoritative_role(uuid)'::regprocedure,
+   'public.complete_onboarding_role_for_user(uuid,public.user_role,text,text,text,text)'::regprocedure,
+   'private.complete_onboarding_role_transaction(uuid,public.user_role,text,text,text,text,jsonb)'::regprocedure,
    'public.normalize_location_text(text)'::regprocedure,
    'public.expand_location_search_aliases(text)'::regprocedure,
    'private.enforce_listing_project_owner()'::regprocedure,
@@ -50,6 +53,23 @@ CREATE FUNCTION pg_temp.list13_bindings() RETURNS jsonb LANGUAGE sql STABLE AS $
   FROM pg_trigger t WHERE t.tgrelid IN ('auth.users'::regclass,'public.profiles'::regclass,
    'public.listings'::regclass,'public.organizations'::regclass,
    'public.organization_memberships'::regclass) AND NOT t.tgisinternal),
+ 'tables',(SELECT jsonb_object_agg(c.oid::regclass::text,jsonb_build_object(
+  'owner',pg_get_userbyid(c.relowner),'acl',to_jsonb(c.relacl),
+  'rls',c.relrowsecurity,'force_rls',c.relforcerowsecurity,
+  'columns',(SELECT coalesce(jsonb_agg(jsonb_build_object(
+   'name',a.attname,'type',format_type(a.atttypid,a.atttypmod),
+   'not_null',a.attnotnull,'identity',a.attidentity,'generated',a.attgenerated,
+   'expression',pg_get_expr(d.adbin,d.adrelid)) ORDER BY a.attnum),'[]'::jsonb)
+   FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+   WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped),
+  'policies',(SELECT coalesce(jsonb_agg(jsonb_build_object(
+   'name',p.polname,'command',p.polcmd,'permissive',p.polpermissive,
+   'roles',p.polroles,'using',pg_get_expr(p.polqual,p.polrelid),
+   'check',pg_get_expr(p.polwithcheck,p.polrelid)) ORDER BY p.polname),'[]'::jsonb)
+   FROM pg_policy p WHERE p.polrelid=c.oid)))
+  FROM pg_class c WHERE c.oid IN ('auth.users'::regclass,'public.profiles'::regclass,
+   'public.profiles_public'::regclass,'public.organizations'::regclass,
+   'public.organization_memberships'::regclass,'public.listings'::regclass)),
  'acl',jsonb_build_object(
   'public_authenticated',has_schema_privilege('authenticated','public','USAGE'),
   'private_authenticated',has_schema_privilege('authenticated','private','USAGE'),
@@ -86,6 +106,7 @@ CREATE TEMP TABLE list13_baseline AS SELECT pg_backend_pid() pid,current_user db
  pg_temp.list13_graph() graph;
 SELECT 'LIST13_PRE',pid,db_role,session_role,marker,origin,actor,jwt,
  sub_claim,claims,role_claim,bindings,seqs,
+ encode(digest((bindings->'tables')::text,'sha256'),'hex') tables_sha256,
  encode(digest(settings::text,'sha256'),'hex') settings_sha256,
  encode(digest(graph::text,'sha256'),'hex') graph_sha256 FROM list13_baseline;
 
@@ -94,7 +115,7 @@ SET LOCAL statement_timeout='40s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL search_path=public,extensions;
 SET LOCAL client_min_messages=warning;
-SELECT plan(41);
+SELECT plan(53);
 SELECT is(current_setting('session_replication_role'),'origin','ordinary triggers stay active');
 SELECT is((SELECT count(*)::integer FROM pg_trigger t WHERE t.tgrelid IN
  ('auth.users'::regclass,'public.profiles'::regclass,'public.listings'::regclass,
@@ -104,12 +125,21 @@ SELECT ok((SELECT bool_and(encode(digest(pg_get_functiondef(to_regprocedure(sig)
  FROM (VALUES
  ('private.create_listing_for_actor(jsonb,uuid)','3a9322852a0d2f0165bdcdce175957eb5c5fbb581c89e4d38cc6c61a03b9c412'),
  ('public.create_listing_for_user(jsonb,uuid)','201acef7fe88e8a70344dd78ca9252cf6d572783e2fce78a97f40e6264a8c3d6'),
+ ('public.complete_onboarding_role_for_user(uuid,public.user_role,text,text,text,text)','dbc9df43d9873efeb303ff936f7258228c8a2df42dffd9f11c59ef85f5fdaaf4'),
+ ('private.complete_onboarding_role_transaction(uuid,public.user_role,text,text,text,text,jsonb)','d2af0bebce7342533370f01d7d6142b1a21007019810671db0c3e8e4ff8d9a57'),
+ ('private.authoritative_role(uuid)','3d9aa1bd94c46f94fedf8e876904c66e4d8ab4ecff13180421ad1d84d24b9a3d'),
  ('public.release_expired_firesale_reservations(uuid)','d407139144d8ad3a0ed4bfe49edca50e14a465b21c8fe3f993816dcfe37fbc08'),
  ('public.audit_firesale_interest_mutation()','7085921d35e04cc57beddda7b0b495736cda701374596264e02c7d960d847c1c'),
  ('public.has_platform_admin(uuid)','31374ac294981f0d938178be1c91778ae53603f94b32c170304fd62b0cecfb12'),
  ('private.has_platform_admin(uuid)','ca2dbbea33761a2bed3ace2a1c20bed17767c220dd4213caa47fe93e4e26c5ce'),
  ('public.admin_review_invitation_request(uuid,uuid,text,text,text)','4f25f37c8f7eb1e0a0c89d6bcf54108921710973fa38fe7f97289b171483b511')) x(sig,sha)),
- 'creation and five October changed routine hashes exact');
+ 'creation, fixture authority and five October changed routine hashes exact');
+SELECT is((SELECT count(*)::integer FROM list13_baseline b,
+ LATERAL jsonb_object_keys(b.bindings->'tables') AS bound_table),6,
+ 'six fixture and target tables bind defaults, generated expressions and RLS');
+SELECT is(encode(digest((SELECT bindings->'tables' FROM list13_baseline)::text,'sha256'),'hex'),
+ '8b3056a31ec5bfaf8d1e63571d407c3cbc3832904d24a1c98f7fa4b2deb28052',
+ 'installed six-table default/generated/RLS metadata matches adopted schema');
 SELECT is((SELECT bindings->'acl' FROM list13_baseline),
  jsonb_build_object('public_authenticated',true,'private_authenticated',true,
  'wrapper_authenticated',true,'wrapper_anon',false,'helper_authenticated',true,'helper_anon',false),
@@ -120,21 +150,21 @@ SELECT is((SELECT count(*)::integer FROM public.organizations WHERE id::text LIK
 
 INSERT INTO auth.users(id,email)
 SELECT ('a1310001-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
- 't13listing-'||n||'@example.test' FROM generate_series(1,3)n;
+ 't13listing-'||n||'@example.test' FROM generate_series(1,4)n;
 SELECT set_config('request.jwt.claim.sub','',true),
  set_config('request.jwt.claims','{"role":"service_role"}',true),
  set_config('request.jwt.claim.role','service_role',true);
 SET LOCAL ROLE service_role;
 SELECT public.complete_onboarding_role_for_user(
  ('a1310001-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'seller','seller')
-FROM generate_series(1,3)n;
+FROM generate_series(1,4)n;
 RESET ROLE;
 SELECT set_config('request.jwt.claims','{}',true),set_config('request.jwt.claim.role','',true);
 INSERT INTO public.organizations(id,name,slug,created_by)
 VALUES('a1310002-0000-4000-8000-000000000001','T13 listing managed org','t13-listing-managed-org',
  'a1310001-0000-4000-8000-000000000002');
-SELECT is((SELECT count(*)::integer FROM public.profiles WHERE user_id::text LIKE 'a1310001-%'),3,
- 'normal auth and onboarding yield three seller profiles');
+SELECT is((SELECT count(*)::integer FROM public.profiles WHERE user_id::text LIKE 'a1310001-%'),4,
+ 'normal auth and onboarding yield four seller profiles');
 SELECT is((SELECT bool_and(private.authoritative_role(user_id)::text='seller')
  FROM public.profiles WHERE user_id::text LIKE 'a1310001-%'),true,
  'all actors have genuine seller authority');
@@ -144,20 +174,21 @@ SELECT ok(private.has_org_permission('a1310002-0000-4000-8000-000000000001',
  'listing:manage','a1310001-0000-4000-8000-000000000003'),
  'real org manager admitted and unrelated seller excluded');
 SELECT ok(public.get_listing_limit('a1310001-0000-4000-8000-000000000001')>0
- AND public.get_listing_limit('a1310001-0000-4000-8000-000000000002')>0,
- 'both seller fixtures have real positive listing entitlement');
+ AND public.get_listing_limit('a1310001-0000-4000-8000-000000000002')>0
+ AND public.get_listing_limit('a1310001-0000-4000-8000-000000000004')>0,
+ 'business and sentinel sellers have real positive listing entitlement');
 
 -- Independently model setup from literals and copied defaults; generated IDs
 -- only bind row identities, never role, membership or listing business facts.
 CREATE TEMP TABLE list13_expected_user (LIKE auth.users INCLUDING DEFAULTS);
 INSERT INTO list13_expected_user(id,email)
 SELECT ('a1310001-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
- 't13listing-'||n||'@example.test' FROM generate_series(1,3)n;
+ 't13listing-'||n||'@example.test' FROM generate_series(1,4)n;
 CREATE TEMP TABLE list13_expected_profile (LIKE public.profiles INCLUDING DEFAULTS);
 INSERT INTO list13_expected_profile(id,user_id,role,participant_type,created_at,updated_at)
 SELECT p.id,('a1310001-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
  'seller','seller',now(),now()
-FROM generate_series(1,3)n JOIN public.profiles p
+FROM generate_series(1,4)n JOIN public.profiles p
  ON p.user_id=('a1310001-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
 CREATE TEMP TABLE list13_expected_public_profile (LIKE public.profiles_public INCLUDING DEFAULTS);
 INSERT INTO list13_expected_public_profile(user_id,role,owner_participant_type)
@@ -182,6 +213,43 @@ SELECT is(pg_temp.list13_graph(),(SELECT graph FROM list13_expected),
  'entire normal setup graph matches literals, defaults, and bound generated identities');
 
 CREATE TEMP TABLE list13_expected_listing (LIKE public.listings INCLUDING DEFAULTS);
+-- A fourth eligible seller creates an unrelated listing through the same
+-- normal browser boundary before the two business cases. Its complete row is
+-- independently modeled and remains in every later expected graph.
+SELECT set_config('request.jwt.claim.sub','a1310001-0000-4000-8000-000000000004',true),
+ set_config('request.jwt.claims','{"sub":"a1310001-0000-4000-8000-000000000004","role":"authenticated"}',true),
+ set_config('request.jwt.claim.role','authenticated',true);
+SET LOCAL ROLE authenticated;
+SELECT current_user='authenticated' AND auth.uid()='a1310001-0000-4000-8000-000000000004'::uuid
+ AND auth.jwt()->>'sub'='a1310001-0000-4000-8000-000000000004' AS actor_ok \gset
+SELECT public.create_listing_for_user('{"title":"T13 Unrelated Sentinel","city":"Athens","price":160000,"sqm":64,"property_type":"apartment","listing_type":"sale","status":"active"}'::jsonb,NULL) AS sentinel_result \gset
+RESET ROLE;
+SELECT ok(:'actor_ok'::boolean,'unrelated sentinel uses actual authenticated seller');
+SELECT ok((:'sentinel_result'::jsonb->>'id')::uuid IS NOT NULL
+ AND NOT ((SELECT graph->'listings' FROM list13_expected) ? (:'sentinel_result'::jsonb->>'id')),
+ 'unrelated sentinel result binds a fresh listing identity');
+SELECT is(:'sentinel_result'::jsonb,jsonb_build_object('id',(:'sentinel_result'::jsonb->>'id')::uuid,
+ 'owner_id','a1310001-0000-4000-8000-000000000004'::uuid,'organization_id',NULL,
+ 'status','active','listing_type','sale','updated_at',now()),
+ 'unrelated sentinel returns the exact six-key contract');
+INSERT INTO list13_expected_listing(id,owner_id,title,city,price,sqm,property_type,listing_type,status,price_per_sqm)
+VALUES((:'sentinel_result'::jsonb->>'id')::uuid,'a1310001-0000-4000-8000-000000000004',
+ 'T13 Unrelated Sentinel','Athens',160000,64,'apartment','sale','active',2500);
+UPDATE list13_expected_listing SET location_search_text=
+ public.expand_location_search_aliases(public.normalize_location_text(
+ coalesce(title,'')||' '||coalesce(address,'')||' '||coalesce(city,'')||' '||
+ coalesce(region,'')||' '||coalesce(postal_code,'')));
+UPDATE list13_expected SET graph=jsonb_set(graph,ARRAY['listings',(:'sentinel_result'::jsonb->>'id')],
+ (SELECT to_jsonb(l) FROM list13_expected_listing l WHERE l.id=(:'sentinel_result'::jsonb->>'id')::uuid),true);
+SELECT is(pg_temp.list13_graph(),(SELECT graph FROM list13_expected),
+ 'unrelated complete listing and all normal trigger effects exactly match independent graph');
+SELECT is((SELECT count(*)::integer FROM public.listings WHERE id=(:'sentinel_result'::jsonb->>'id')::uuid
+ AND owner_id='a1310001-0000-4000-8000-000000000004'),1,
+ 'unrelated sentinel exists before business cases');
+SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{}',true),
+ set_config('request.jwt.claim.role','',true);
+SELECT ok(current_user='postgres' AND auth.uid() IS NULL,'unrelated sentinel caller restored');
+
 -- Case 1: personal sale via the actual browser role and public RPC.
 SELECT set_config('request.jwt.claim.sub','a1310001-0000-4000-8000-000000000001',true),
  set_config('request.jwt.claims','{"sub":"a1310001-0000-4000-8000-000000000001","role":"authenticated"}',true),
@@ -324,6 +392,25 @@ SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claim
  set_config('request.jwt.claim.role','',true);
 SELECT ok(current_user='postgres' AND auth.uid() IS NULL,'project-boundary caller restored');
 
+-- Admission proof: anon has no wrapper EXECUTE; this is not an extra business case.
+TRUNCATE list13_denial_before; INSERT INTO list13_denial_before SELECT pg_temp.list13_graph();
+SELECT set_config('request.jwt.claim.sub','',true),
+ set_config('request.jwt.claims','{"role":"anon"}',true),
+ set_config('request.jwt.claim.role','anon',true);
+SET LOCAL ROLE anon;
+SELECT current_user='anon' AND auth.uid() IS NULL
+ AND auth.jwt()->>'role'='anon' AS actor_ok \gset
+SELECT throws_ok($q$SELECT public.create_listing_for_user('{"title":"Denied Anonymous Sale","city":"Athens","price":200000,"sqm":80,"property_type":"apartment","listing_type":"sale","status":"active"}'::jsonb,NULL)$q$,
+ '42501','permission denied for function create_listing_for_user',
+ 'anon cannot execute listing creation wrapper');
+RESET ROLE;
+SELECT ok(:'actor_ok'::boolean,'anon denial used actual anon role with no subject');
+SELECT is(pg_temp.list13_graph(),(SELECT graph FROM list13_denial_before),
+ 'anon denial preserves its own complete prestate');
+SELECT set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{}',true),
+ set_config('request.jwt.claim.role','',true);
+SELECT ok(current_user='postgres' AND auth.uid() IS NULL,'anon caller context restored');
+
 SELECT is(pg_temp.list13_graph(),(SELECT graph FROM list13_expected),
  'all cases end at independently predicted complete graph');
 SELECT * FROM finish();
@@ -369,6 +456,7 @@ SELECT 'LIST13_POST',pg_backend_pid(),current_user,session_user,
  current_setting('request.jwt.claims',true),current_setting('request.jwt.claim.role',true),
  pg_temp.list13_bindings(),
  (SELECT jsonb_object_agg(schemaname||'.'||sequencename,to_jsonb(last_value)) FROM pg_sequences),
+ encode(digest((pg_temp.list13_bindings()->'tables')::text,'sha256'),'hex'),
  encode(digest((SELECT jsonb_object_agg(name,setting) FROM pg_settings)::text,'sha256'),'hex'),
  encode(digest(pg_temp.list13_graph()::text,'sha256'),'hex');
 DROP TABLE list13_baseline;
