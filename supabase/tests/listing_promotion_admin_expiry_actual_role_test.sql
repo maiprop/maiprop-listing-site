@@ -12,6 +12,8 @@ DO $$ BEGIN
  OR (SELECT count(*) FROM pg_stat_activity WHERE datname='maiprop_t12q_20260930_source') <> 0
  OR (SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()) <> 0
  OR (SELECT count(*) FROM pg_prepared_xacts WHERE database IN (current_database(),'maiprop_t12q_20260930_source')) <> 0
+ OR EXISTS (SELECT 1 FROM pg_class WHERE relnamespace=pg_my_temp_schema())
+ OR EXISTS (SELECT 1 FROM pg_proc WHERE pronamespace=pg_my_temp_schema())
  OR EXISTS (SELECT 1 FROM auth.users WHERE id::text LIKE 'e1300001-%')
  THEN RAISE EXCEPTION 'admin expiry proof needs clean owned socket clone and origin triggers'; END IF;
 END $$;
@@ -36,14 +38,64 @@ CREATE FUNCTION pg_temp.e13_graph() RETURNS jsonb LANGUAGE sql STABLE AS $$
 $$;
 CREATE FUNCTION pg_temp.e13_bindings() RETURNS jsonb LANGUAGE sql STABLE AS $$
  SELECT jsonb_build_object(
- 'routines',(SELECT jsonb_build_object('count',count(*),'rows',jsonb_agg(jsonb_build_object(
+ 'routines',(WITH named(sig) AS (VALUES
+  ('auth.uid()'),('auth.jwt()'),('auth.role()'),
+  ('public.complete_onboarding_role_for_user(uuid,public.user_role,text,text,text,text)'),
+  ('private.complete_onboarding_role_transaction(uuid,public.user_role,text,text,text,text,jsonb)'),
+  ('private.complete_onboarding_role_strict(uuid,public.user_role,text,text,text,text)'),
+  ('private.complete_onboarding_role_legacy(uuid,public.user_role,text,text,text,text)'),
+  ('public.unarchive_role_data(uuid,text)'),('public.archive_role_data(uuid,text)'),
+  ('public.authoritative_role(uuid)'),('private.authoritative_role(uuid)'),
+  ('private.authoritative_role()'),('public.has_platform_admin(uuid)'),
+  ('private.has_platform_admin(uuid)'),
+  ('public.admin_set_listing_promotions(uuid,boolean,timestamptz,boolean,uuid)'),
+  ('private.admin_set_listing_promotions(uuid,boolean,timestamptz,boolean,uuid)'),
+  ('public.admin_update_listing_promotion_expiry(uuid,text,timestamptz,uuid)'),
+  ('private.admin_update_listing_promotion_expiry(uuid,text,timestamptz,uuid)'),
+  ('public.get_admin_listing_promotion_campaigns()'),
+  ('private.get_admin_listing_promotion_campaigns_internal()'),
+  ('private.sync_listing_promotion_projection(uuid)'),
+  ('private.insert_interaction_notification(uuid,uuid,text,text,text,text)'),
+  ('public.normalize_location_text(text)'),('public.expand_location_search_aliases(text)'),
+  ('public.current_billing_runtime_mode()'),
+  ('private.check_listing_quota_for_principal(uuid,uuid)'),
+  ('private.check_listing_quota_for_owner(uuid)'),
+  ('private.has_org_permission(uuid,text,uuid)'),
+  ('public.get_listing_limit(uuid)'),
+  ('public.is_account_deletion_active(uuid)'),
+  ('public.profile_pricing_audience(public.user_role,text)'),
+  ('private.current_listing_promotion_plan_subscription(uuid)'),
+  ('public.release_expired_firesale_reservations(uuid)'),
+  ('public.audit_firesale_interest_mutation()'),
+  ('public.admin_review_invitation_request(uuid,uuid,text,text,text)')
+ ), trigger_functions AS (
+  SELECT DISTINCT t.tgfoid oid FROM pg_trigger t WHERE NOT t.tgisinternal
+   AND t.tgrelid IN ('auth.users'::regclass,'public.profiles'::regclass,
+    'public.profiles_public'::regclass,'public.listings'::regclass,
+    'public.listing_promotion_allocations'::regclass,'public.notifications'::regclass)
+ ), selected AS (
+  SELECT to_regprocedure(sig) oid FROM named UNION SELECT oid FROM trigger_functions
+ ) SELECT jsonb_build_object('named_count',(SELECT count(*) FROM named),
+  'missing_named',(SELECT count(*) FROM named WHERE to_regprocedure(sig) IS NULL),
+  'trigger_function_count',(SELECT count(*) FROM trigger_functions),
+  'count',count(*),'rows',jsonb_agg(jsonb_build_object(
   'signature',p.oid::regprocedure::text,'body',encode(digest(pg_get_functiondef(p.oid),'sha256'),'hex'),
   'owner',pg_get_userbyid(p.proowner),'definer',p.prosecdef,'config',p.proconfig,
   'acl',(SELECT jsonb_agg(jsonb_build_object('grantee',CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
    'grantor',pg_get_userbyid(a.grantor),'privilege',a.privilege_type,'grantable',a.is_grantable)
    ORDER BY CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,a.privilege_type)
    FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a)) ORDER BY p.oid::regprocedure::text))
-  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('auth','public','private')),
+  FROM pg_proc p JOIN selected s ON s.oid=p.oid),
+ 'required_extension',(SELECT jsonb_build_object('signature',p.oid::regprocedure::text,
+  'body',encode(digest(pg_get_functiondef(p.oid),'sha256'),'hex'),
+  'owner',pg_get_userbyid(p.proowner),'config',p.proconfig,
+  'acl',(SELECT jsonb_agg(jsonb_build_object('grantee',CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
+   'grantor',pg_get_userbyid(a.grantor),'privilege',a.privilege_type,'grantable',a.is_grantable)
+   ORDER BY CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,a.privilege_type)
+   FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a),
+  'schema_usage_postgres',has_schema_privilege('postgres','extensions','USAGE'),
+  'execute_postgres',has_function_privilege('postgres',p.oid,'EXECUTE'))
+  FROM pg_proc p WHERE p.oid='extensions.similarity(text,text)'::regprocedure),
  'triggers',(SELECT jsonb_agg(jsonb_build_object('table',t.tgrelid::regclass::text,'name',t.tgname,
   'enabled',t.tgenabled,'definition',pg_get_triggerdef(t.oid,true),'body',t.tgfoid::regprocedure::text)
   ORDER BY t.tgrelid::regclass::text,t.tgname) FROM pg_trigger t WHERE NOT t.tgisinternal
@@ -106,7 +158,7 @@ BEGIN;
 SET LOCAL statement_timeout='40s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL search_path=public,extensions;
-SELECT no_plan();
+SELECT plan(44);
 CREATE FUNCTION pg_temp.e13_identity(p_role text,p_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $$
  SELECT current_user=p_role AND session_user='postgres' AND auth.uid()=p_id
  AND current_setting('request.jwt.claim.sub',true)=p_id::text
@@ -132,11 +184,17 @@ SELECT ok((SELECT count(*)=5 AND bool_and(coalesce(encode(digest(pg_get_function
  ('private.has_platform_admin(uuid)','ca2dbbea33761a2bed3ace2a1c20bed17767c220dd4213caa47fe93e4e26c5ce'),
  ('public.admin_review_invitation_request(uuid,uuid,text,text,text)','4f25f37c8f7eb1e0a0c89d6bcf54108921710973fa38fe7f97289b171483b511')) x(sig,sha)),
  'all five October installed definitions match');
-SELECT is((SELECT (bindings->'routines'->>'count')::integer FROM e13_pre),1570,
- 'complete auth/public/private routine closure has exact cardinality');
+SELECT ok((SELECT (bindings->'routines'->>'named_count')::integer=35
+ AND (bindings->'routines'->>'missing_named')::integer=0
+ AND (bindings->'routines'->>'trigger_function_count')::integer=25
+ AND (bindings->'routines'->>'count')::integer=60
+ AND bindings->'required_extension'->>'body'=
+ '6c4e016b0c9b4b5e1692abf990dce186b66130a92ca9181ab8f1a4f1ab034acc'
+ FROM e13_pre),
+ 'all named and trigger closure members resolve at exact cardinalities with separately pinned extension');
 SELECT is((SELECT encode(digest(bindings::text,'sha256'),'hex') FROM e13_pre),
- 'df7cff6e0ade26cc11ece62d272a15a265475d5b1eeec767bdb02f1829c923ae',
- 'entire executed-body superset, effective ACL, trigger, default and named-policy binding matches clone pin');
+ '126c7331b64a3d84b39c20617cb869a0bde4aaac179c2330b09bb57873caf5ac',
+ 'bounded body, extension, effective ACL, trigger, default and named-policy binding matches clone pin');
 SELECT 'E13_BINDING', (bindings->'routines'->>'count')::integer,
  encode(digest(bindings::text,'sha256'),'hex'),bindings->'effective_acl' FROM e13_pre;
 SELECT ok(NOT has_function_privilege('anon','public.admin_update_listing_promotion_expiry(uuid,text,timestamptz,uuid)','EXECUTE')
@@ -508,11 +566,7 @@ DO $$ DECLARE b record; actual_settings jsonb; actual_seqs jsonb; BEGIN
  SELECT jsonb_object_agg(name,setting) INTO actual_settings FROM pg_settings;
  IF b.settings IS DISTINCT FROM actual_settings THEN
   RAISE EXCEPTION 'admin expiry full settings changed'; END IF;
- IF EXISTS(SELECT 1 FROM pg_class WHERE relnamespace=pg_my_temp_schema()
-  AND relname LIKE 'e13_%' AND relname<>'e13_pre')
- OR EXISTS(SELECT 1 FROM pg_proc WHERE pronamespace=pg_my_temp_schema()
-  AND proname LIKE 'e13_%' AND proname NOT IN ('e13_graph','e13_bindings'))
- OR EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'e1300001-%')
+ IF EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'e1300001-%')
  OR EXISTS(SELECT 1 FROM public.profiles WHERE user_id::text LIKE 'e1300001-%')
  OR EXISTS(SELECT 1 FROM public.profiles_public WHERE user_id::text LIKE 'e1300001-%')
  OR EXISTS(SELECT 1 FROM public.listings WHERE id::text LIKE 'e1300002-%')
@@ -527,3 +581,27 @@ SELECT 'E13_POST',pg_backend_pid(),current_user,session_user,
  encode(digest(pg_temp.e13_graph()::text,'sha256'),'hex'),
  encode(digest(pg_temp.e13_bindings()::text,'sha256'),'hex'),
  (SELECT jsonb_object_agg(schemaname||'.'||sequencename,to_jsonb(last_value)) FROM pg_sequences);
+DROP TABLE e13_pre;
+DROP FUNCTION pg_temp.e13_graph();
+DROP FUNCTION pg_temp.e13_bindings();
+DO $$ BEGIN
+ IF current_user <> 'postgres' OR current_setting('session_replication_role') <> 'origin'
+ OR COALESCE(current_setting('request.jwt.claim.sub',true),'') <> ''
+ OR COALESCE(current_setting('request.jwt.claim.role',true),'') <> ''
+ OR COALESCE(current_setting('request.jwt.claims',true),'') NOT IN ('','{}')
+ THEN RAISE EXCEPTION 'admin expiry leaked D0 role, claims, or replication state'; END IF;
+ IF to_regprocedure('public.dblink_get_connections()') IS NOT NULL THEN
+  IF COALESCE(array_length(public.dblink_get_connections(),1),0) <> 0
+  THEN RAISE EXCEPTION 'admin expiry leaked D0 dblink connection'; END IF;
+ END IF;
+ IF pg_my_temp_schema() <> 0 AND EXISTS (
+  SELECT 1 FROM pg_class WHERE relnamespace=pg_my_temp_schema() AND relpersistence='t'
+   AND relkind IN ('r','p','v','m','S','f'))
+ THEN RAISE EXCEPTION 'admin expiry leaked D0 temporary relation'; END IF;
+ IF EXISTS (SELECT 1 FROM pg_class WHERE relnamespace=pg_my_temp_schema())
+ OR EXISTS (SELECT 1 FROM pg_proc WHERE pronamespace=pg_my_temp_schema())
+ THEN RAISE EXCEPTION 'admin expiry did not restore complete temp relation/function inventory'; END IF;
+END $$;
+SELECT 'E13_SAME_BACKEND_TEMP_CLEAN',pg_backend_pid(),
+ (SELECT count(*) FROM pg_class WHERE relnamespace=pg_my_temp_schema()) temp_relations,
+ (SELECT count(*) FROM pg_proc WHERE pronamespace=pg_my_temp_schema()) temp_functions;
