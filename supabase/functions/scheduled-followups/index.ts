@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
   }
   // ────────────────────────────────────────────────────────────────────────
 
-  let traceClient: ReturnType<typeof createClient> | null = null;
+  let traceClient: Parameters<typeof finishScheduledDispatch>[0] | null = null;
   let traceRun: ScheduledRun | null = null;
   const results: { step: number; success: boolean; error?: string }[] = [];
   let repaired = 0;
