@@ -3,7 +3,8 @@ BEGIN;
 DO $$ BEGIN
  IF current_setting('maiprop.test_disposable_database',true) IS DISTINCT FROM current_database()
     OR current_database() IN ('postgres','template0','template1','maiprop_t12q_20260930_source')
-    OR current_database() !~ '^maiprop_t13d3_[0-9]{8}_agent[0-9]{2}$'
+    OR (current_database() !~ '^maiprop_t13d3_[0-9]{8}_agent[0-9]{2}$'
+        AND current_database() !~ '^maiprop_d0_[a-z0-9_]{6,48}$')
     OR current_user IS DISTINCT FROM 'postgres' OR inet_server_addr() IS NOT NULL
     OR (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()) IS DISTINCT FROM 'postgres'
     OR current_setting('session_replication_role') IS DISTINCT FROM 'origin'
