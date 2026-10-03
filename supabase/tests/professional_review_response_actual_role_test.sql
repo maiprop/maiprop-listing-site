@@ -19,6 +19,13 @@ BEGIN;
 SET LOCAL statement_timeout='20s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL search_path=public,extensions;
+DO $$ BEGIN
+ IF current_setting('maiprop.owner_auth_trigger_active',true) = 'true' THEN
+  RAISE EXCEPTION 'professional response suite requires an inactive incoming owner marker';
+ END IF;
+END $$;
+CREATE TEMP TABLE d613_incoming_owner_marker ON COMMIT DROP AS
+ SELECT current_setting('maiprop.owner_auth_trigger_active',true) AS raw_value;
 SELECT no_plan();
 SELECT is(current_setting('session_replication_role'),'origin','normal triggers remain enabled');
 SELECT is((SELECT count(*)::integer FROM pg_trigger WHERE tgrelid='public.professional_review_responses'::regclass
@@ -241,7 +248,7 @@ SELECT is((SELECT graph FROM d613_baseline WHERE label='empty'),
  'consultations','{}'::jsonb,'leads','{}'::jsonb,'reviews','{}'::jsonb,'responses','{}'::jsonb,'notifications','{}'::jsonb),
  'all fixture graph relations begin empty');
 
--- Auth user origin triggers create unprivileged profiles. No bypass marker.
+-- Auth user origin triggers create unprivileged profiles without changing the incoming marker.
 SELECT pg_temp.d613_clear_identity();
 INSERT INTO auth.users(id,email) VALUES
  ('d6130001-0000-4000-8000-000000000001','d613-reviewer@example.test'),
@@ -258,8 +265,9 @@ SELECT ok(:'reviewer_profile_id'::uuid <> :'owner_profile_id'::uuid
  AND :'owner_profile_id'::uuid <> :'outsider_profile_id'::uuid
  AND :'reviewer_profile_id'::uuid <> :'outsider_profile_id'::uuid,
  'generated profile IDs are distinct bindings');
-SELECT is(current_setting('maiprop.owner_auth_trigger_active',true),NULL::text,
- 'ordinary signup did not set privileged owner bypass marker');
+SELECT ok(current_setting('maiprop.owner_auth_trigger_active',true)
+ IS NOT DISTINCT FROM (SELECT raw_value FROM d613_incoming_owner_marker),
+ 'ordinary signup leaves the inactive incoming owner marker exactly unchanged');
 INSERT INTO public.professionals(id,user_id,category,title,subscription_tier)
 VALUES ('d6130002-0000-4000-8000-000000000001','d6130001-0000-4000-8000-000000000002','architect','D613 Architect','pro');
 SELECT is((SELECT count(*)::integer FROM public.professionals WHERE id::text LIKE 'd6130002-%'),1,'one Pro professional exists');
