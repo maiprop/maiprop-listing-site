@@ -19,7 +19,7 @@ DO $$ BEGIN
    CREATE EXTENSION pgtap;
  END IF;
 END $$;
-SELECT plan(75);
+SELECT plan(77);
 SELECT is(current_setting('session_replication_role'),'origin','normal triggers');
 SELECT ok((SELECT bool_and(has_function_privilege('service_role',oid,'EXECUTE')
  AND NOT has_function_privilege('authenticated',oid,'EXECUTE')
@@ -143,6 +143,25 @@ SELECT set_config('request.jwt.claim.sub','',true);
 SELECT is((SELECT to_jsonb(p) FROM fs_setup_pub p),
  jsonb_build_object('deal_id','d3180002-0000-4000-8000-000000000001','status','reviewed','published_to_investors',true),
  'necessary active publication returns exact row');
+SELECT is((SELECT count(*)::int FROM public.notifications n
+ WHERE NOT ((SELECT state->'notifications' FROM fs_before) ? n.id::text)),4,
+ 'necessary active publication inserts exactly four notices');
+SELECT is((SELECT jsonb_agg(to_jsonb(n)-'id' ORDER BY n.user_id) FROM public.notifications n
+ WHERE NOT ((SELECT state->'notifications' FROM fs_before) ? n.id::text)),
+ jsonb_build_array(
+ jsonb_build_object('user_id','d3180001-0000-4000-8000-000000000001','title','Quick Sale request reviewed',
+ 'body','Your Quick Sale request for FS deal one, Athens has been reviewed by the mAI Prop team.',
+ 'type','quick_sale','read',false,'link','/dashboard','created_at',now()),
+ jsonb_build_object('user_id','d3180001-0000-4000-8000-000000000002','title','New Quick Sale deal available',
+ 'body','A new Quick Sale opportunity at FS deal one, Athens is now available in your investor dashboard.',
+ 'type','investor_alert','read',false,'link','/investor-dashboard','created_at',now()),
+ jsonb_build_object('user_id','d3180001-0000-4000-8000-000000000003','title','New Quick Sale deal available',
+ 'body','A new Quick Sale opportunity at FS deal one, Athens is now available in your investor dashboard.',
+ 'type','investor_alert','read',false,'link','/investor-dashboard','created_at',now()),
+ jsonb_build_object('user_id','d3180001-0000-4000-8000-000000000004','title','New Quick Sale deal available',
+ 'body','A new Quick Sale opportunity at FS deal one, Athens is now available in your investor dashboard.',
+ 'type','investor_alert','read',false,'link','/investor-dashboard','created_at',now())),
+ 'necessary active publication has exact independent recipient/content multiset');
 SELECT is(pg_temp.fs_state(),(SELECT pg_temp.fs_publication_state(state,'d3180002-0000-4000-8000-000000000001','FS deal one, Athens') FROM fs_before),
  'necessary active publication has independent full graph oracle');
 UPDATE fs_before SET state=pg_temp.fs_state();
