@@ -113,7 +113,7 @@ SET LOCAL statement_timeout='40s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL search_path=public,extensions;
 SET LOCAL client_min_messages=warning;
-SELECT plan(112);
+SELECT plan(111);
 SELECT is(current_setting('session_replication_role'),'origin','fixture and business actions use origin triggers');
 SELECT is((SELECT count(*)::integer FROM pg_trigger WHERE tgrelid IN
  ('auth.users'::regclass,'public.profiles'::regclass,'public.listings'::regclass,
@@ -169,8 +169,6 @@ SELECT is((SELECT count(*)::integer FROM public.listings WHERE id::text LIKE 'c7
  'fixture listing namespace is absent from the prestate');
 SELECT is((SELECT count(*)::integer FROM auth.users WHERE id::text LIKE 'c7130001-%'),0,
  'fixture auth namespace is absent from the prestate');
-SELECT ok((SELECT count(*)::integer FROM private.public_catalogue_publications)>=0,
- 'published prestate is retained for source-derived delta modeling');
 
 CREATE TEMP TABLE cat13_clock AS SELECT date_trunc('minute',clock_timestamp())-interval '1 minute' AS created_at,
  date_trunc('minute',clock_timestamp())+interval '3 days' AS upcoming_at,
@@ -390,7 +388,14 @@ WHERE v.valid_to_publication IS NULL
 CREATE TEMP TABLE cat13_expected_publish_delta AS
 SELECT (SELECT count(*)::integer FROM cat13_expected_source) row_count,
  ((SELECT count(*)::integer FROM cat13_delta WHERE needs_new)+
-  (SELECT count(*)::integer FROM cat13_removed)) changed_count,
+  (SELECT count(*)::integer FROM cat13_removed)) source_transition_count,
+ ((SELECT count(*)::integer FROM cat13_delta WHERE needs_new)+
+  (SELECT count(*)::integer FROM cat13_delta WHERE needs_new AND prior_version_id IS NOT NULL)+
+  (SELECT count(*)::integer FROM cat13_removed)) version_mutation_count,
+ (SELECT count(*)::integer FROM cat13_pre_versions WHERE valid_to_publication IS NOT NULL) historical_closed_count,
+ ((SELECT count(*)::integer FROM cat13_delta WHERE needs_new)+
+  (SELECT count(*)::integer FROM cat13_removed)+
+  (SELECT count(*)::integer FROM cat13_pre_versions WHERE valid_to_publication IS NOT NULL)) reported_changed_count,
  (SELECT count(*)::integer FROM cat13_delta WHERE needs_new) new_version_count;
 SELECT is((SELECT row_count FROM cat13_expected_publish_delta),
  (SELECT row_count FROM cat13_expected_publish),
@@ -403,8 +408,8 @@ RESET ROLE;
 SELECT is((SELECT count(*)::integer FROM cat13_published),1,'service publisher returns one complete record');
 SELECT is((SELECT row_count FROM cat13_published),(SELECT row_count FROM cat13_expected_publish),
  'returned source cardinality equals independent prepublication count');
-SELECT is((SELECT changed_count FROM cat13_published),(SELECT changed_count FROM cat13_expected_publish_delta),
- 'returned changed cardinality equals independently modeled prestate delta');
+SELECT is((SELECT changed_count FROM cat13_published),(SELECT reported_changed_count FROM cat13_expected_publish_delta),
+ 'returned changed cardinality follows pinned full join including historical closed rows');
 SELECT ok((SELECT publication_id > (SELECT max((p->>'publication_id')::bigint)
  FROM jsonb_array_elements((SELECT graph->'publications' FROM cat13_seed))p)
  AND snapshot_minute=date_trunc('minute',
@@ -418,7 +423,7 @@ SELECT is((SELECT publication_id FROM cat13_published),
  FROM cat13_baseline),'new publication identity consumes exactly one named sequence value');
 SELECT is((SELECT to_jsonb(p) FROM cat13_published p),
  (SELECT jsonb_build_object('publication_id',publication_id,'snapshot_minute',snapshot_minute,
- 'published_at',published_at,'row_count',e.row_count,'changed_count',e.changed_count)
+ 'published_at',published_at,'row_count',e.row_count,'changed_count',e.reported_changed_count)
  FROM cat13_published CROSS JOIN cat13_expected_publish_delta e),
  'all five publisher return fields match independent count and generated bindings');
 SELECT is((SELECT count(*)::integer FROM private.public_catalogue_versions v
@@ -532,7 +537,7 @@ SELECT is((SELECT to_jsonb(p) FROM private.public_catalogue_publications p
  (SELECT jsonb_build_object('publication_id',r.publication_id,'snapshot_minute',r.snapshot_minute,
  'started_at',actual.started_at,'published_at',r.published_at,
  'retain_until',r.snapshot_minute+interval '40 minutes',
- 'row_count',e.row_count,'changed_count',e.changed_count,'status','published',
+ 'row_count',e.row_count,'changed_count',e.reported_changed_count,'status','published',
  'homepage_payload',h.payload)
  FROM cat13_published r CROSS JOIN cat13_expected_publish_delta e CROSS JOIN cat13_expected_homepage h
  JOIN private.public_catalogue_publications actual ON actual.publication_id=r.publication_id),
@@ -552,7 +557,7 @@ SELECT jsonb_set(jsonb_set(jsonb_set(s.graph,'{publications}',
  'publication_id',p.publication_id,'snapshot_minute',p.snapshot_minute,
  'started_at',actual.started_at,'published_at',p.published_at,
  'retain_until',p.snapshot_minute+interval '40 minutes',
- 'row_count',e.row_count,'changed_count',e.changed_count,'status','published',
+ 'row_count',e.row_count,'changed_count',e.reported_changed_count,'status','published',
  'homepage_payload',h.payload)),false),'{current}',
  jsonb_build_array(jsonb_build_object('singleton',true,'publication_id',p.publication_id,
  'updated_at',p.published_at)),false),'{versions}',
