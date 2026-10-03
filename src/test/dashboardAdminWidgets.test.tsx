@@ -10,7 +10,7 @@ const { fromMock, rpcMock, invokeMock, getSessionMock, getUserMock, toastMock, u
   invokeMock: vi.fn(),
   getSessionMock: vi.fn(),
   getUserMock: vi.fn(),
-  toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+  toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
   useAuthMock: vi.fn(),
   useMyListingsMock: vi.fn(),
 }));
@@ -192,6 +192,7 @@ beforeEach(() => {
   toastMock.success.mockReset();
   toastMock.error.mockReset();
   toastMock.info.mockReset();
+  toastMock.warning.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "admin-user" }, profile: { role: "admin" }, refreshProfile: vi.fn().mockResolvedValue(undefined) });
   useMyListingsMock.mockReturnValue({ data: [], isLoading: false });
   getSessionMock.mockResolvedValue({ data: { session: { access_token: "token" } } });
@@ -440,7 +441,7 @@ describe("AdminInvitationRequests", () => {
 
   it("filters, expands details, rejects with a reason, and approves linked requests", async () => {
     fromMock.mockImplementation(tableBuilder({ invitation_requests: [request, { ...request, id: "req-2", email: "done@example.com", full_name: "Approved Applicant", status: "approved" }] }));
-    invokeMock.mockResolvedValue({ data: { success: true, result: { granted_role: "institutional" } }, error: null });
+    invokeMock.mockResolvedValue({ data: { success: true, result: { granted_role: "institutional", subscription_status: "pending_payment" } }, error: null });
 
     renderWithProviders(<AdminInvitationRequests />);
 
@@ -479,7 +480,7 @@ describe("AdminInvitationRequests", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Approve$/i }));
     fireEvent.click((await screen.findAllByRole("button", { name: /^Approve$/i })).at(-1)!);
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/Approved/)));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/Request approved/i)));
   });
 
   it("does not approve an applicant without a linked user account", async () => {
@@ -491,6 +492,79 @@ describe("AdminInvitationRequests", () => {
     fireEvent.click((await screen.findAllByRole("button", { name: /^Approve$/i })).at(-1)!);
 
     expect(toastMock.error).toHaveBeenCalledWith("Cannot approve: this applicant has no linked user account yet.");
+  });
+
+  it("reports pending payment and sends the approval payment email", async () => {
+    fromMock.mockImplementation(tableBuilder({ invitation_requests: [request] }));
+    invokeMock.mockResolvedValue({
+      data: { success: true, result: { granted_role: "investor", subscription_status: "pending_payment" } },
+      error: null,
+    });
+
+    renderWithProviders(<AdminInvitationRequests />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Approve$/i }));
+    fireEvent.click((await screen.findAllByRole("button", { name: /^Approve$/i })).at(-1)!);
+
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/private payment pending.*email sent/i)));
+    expect(invokeMock.mock.calls.filter(([name]) => name === "invitation-notify")).toHaveLength(1);
+    expect(toastMock.success.mock.calls.flat().join(" ")).not.toMatch(/1 year/i);
+  });
+
+  it("reports email failure without treating a pending-payment approval as failed", async () => {
+    fromMock.mockImplementation(tableBuilder({ invitation_requests: [request] }));
+    invokeMock.mockImplementation((name: string) => name === "invitation-notify"
+      ? Promise.resolve({ data: null, error: new Error("Mail unavailable") })
+      : Promise.resolve({ data: { success: true, result: { subscription_status: "pending_payment" } }, error: null }));
+
+    renderWithProviders(<AdminInvitationRequests />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Approve$/i }));
+    fireEvent.click((await screen.findAllByRole("button", { name: /^Approve$/i })).at(-1)!);
+
+    await waitFor(() => expect(toastMock.warning).toHaveBeenCalledWith(expect.stringMatching(/payment pending.*email failed/i)));
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
+  it.each(["active", "trial"])("does not send a payment email for an existing %s subscription", async (subscriptionStatus) => {
+    fromMock.mockImplementation(tableBuilder({ invitation_requests: [request] }));
+    invokeMock.mockResolvedValue({
+      data: { success: true, result: { granted_role: "investor", subscription_status: subscriptionStatus } },
+      error: null,
+    });
+
+    renderWithProviders(<AdminInvitationRequests />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Approve$/i }));
+    fireEvent.click((await screen.findAllByRole("button", { name: /^Approve$/i })).at(-1)!);
+
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringContaining(`subscription remains ${subscriptionStatus}`)));
+    expect(invokeMock.mock.calls.filter(([name]) => name === "invitation-notify")).toHaveLength(0);
+    expect(toastMock.success.mock.calls.flat().join(" ")).not.toMatch(/1 year|email sent|email failed/i);
+  });
+
+  it.each([undefined, "unexpected_status"])("does not send a payment email for uncertain status %s", async (subscriptionStatus) => {
+    fromMock.mockImplementation(tableBuilder({ invitation_requests: [request] }));
+    invokeMock.mockResolvedValue({
+      data: { success: true, result: { granted_role: "investor", subscription_status: subscriptionStatus } },
+      error: null,
+    });
+
+    renderWithProviders(<AdminInvitationRequests />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Approve$/i }));
+    fireEvent.click((await screen.findAllByRole("button", { name: /^Approve$/i })).at(-1)!);
+
+    await waitFor(() => expect(toastMock.warning).toHaveBeenCalledWith(expect.stringMatching(/approved.*status unavailable/i)));
+    expect(invokeMock.mock.calls.filter(([name]) => name === "invitation-notify")).toHaveLength(0);
+  });
+
+  it("does not send an email when review fails", async () => {
+    fromMock.mockImplementation(tableBuilder({ invitation_requests: [request] }));
+    invokeMock.mockResolvedValue({ data: null, error: new Error("Review failed") });
+
+    renderWithProviders(<AdminInvitationRequests />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Approve$/i }));
+    fireEvent.click((await screen.findAllByRole("button", { name: /^Approve$/i })).at(-1)!);
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Review failed"));
+    expect(invokeMock.mock.calls.filter(([name]) => name === "invitation-notify")).toHaveLength(0);
   });
 });
 

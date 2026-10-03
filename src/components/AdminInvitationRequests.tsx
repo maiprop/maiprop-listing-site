@@ -105,6 +105,7 @@ async function reviewInvitationRequest(params: {
     success: boolean;
     result?: {
       granted_role?: string | null;
+      subscription_status?: string | null;
     };
   };
 }
@@ -230,29 +231,33 @@ export default function AdminInvitationRequests() {
         decision: "approved",
         tier,
       });
-      const grantedRole = review.result?.granted_role ?? "investor";
-
-      const emailSent = await sendNotificationEmail({
-        type: "approved",
-        email: req.email,
-        full_name: req.full_name,
-        tier,
-      }).then(
-        () => true,
-        (emailError: unknown) => {
-          logger.warn(
-            "Invitation approval email failed:",
-            emailError instanceof Error ? emailError.message : emailError,
-          );
-          return false;
-        },
-      );
-
+      const subscriptionStatus = review.result?.subscription_status;
       qc.invalidateQueries({ queryKey: ["admin-invitation-requests"] });
-      if (emailSent) {
-        toast.success(`Approved — role: ${grantedRole}, subscription: ${tier} (1 year) — email sent`);
+      if (subscriptionStatus === "pending_payment") {
+        const emailSent = await sendNotificationEmail({
+          type: "approved",
+          email: req.email,
+          full_name: req.full_name,
+          tier,
+        }).then(
+          () => true,
+          (emailError: unknown) => {
+            logger.warn(
+              "Invitation approval email failed:",
+              emailError instanceof Error ? emailError.message : emailError,
+            );
+            return false;
+          },
+        );
+        if (emailSent) {
+          toast.success(`Request approved — ${tier} payment pending — email sent`);
+        } else {
+          toast.warning(`Request approved — ${tier} payment pending — email failed`);
+        }
+      } else if (subscriptionStatus === "active" || subscriptionStatus === "trial") {
+        toast.success(`Request already approved — ${tier} subscription remains ${subscriptionStatus}`);
       } else {
-        toast.warning(`Approved — role: ${grantedRole}, subscription: ${tier} (1 year) — email failed`);
+        toast.warning("Request approved — subscription status unavailable");
       }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Could not approve");
