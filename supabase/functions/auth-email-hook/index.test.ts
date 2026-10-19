@@ -11,13 +11,13 @@ Deno.test("OPTIONS preflight returns 200", async () => {
   assertEquals(res.status, 200);
 });
 
-Deno.test("missing hook secret returns 401", async () => {
+Deno.test("unsigned hook request returns exactly 401", async () => {
   const res = await handler(req("POST", {
     user: { email: "test@example.com", id: "user_1" },
     email_data: { token: "123456", token_hash: "abc", redirect_to: "https://maiprop.co" },
   }));
-  // Auth hook validates the Supabase hook signing secret
-  assertEquals([401, 403, 500].includes(res.status), true);
+  assertEquals(res.status, 401);
+  assertEquals(await res.json(), { error: "Invalid webhook payload" });
 });
 
 Deno.test("well-formed OPTIONS returns CORS headers", async () => {

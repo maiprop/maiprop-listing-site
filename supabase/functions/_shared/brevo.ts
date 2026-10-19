@@ -44,9 +44,7 @@ export function getBrevoSender(fallbackName = "maiProp"): BrevoSender {
   };
 }
 
-export async function sendBrevoEmail(input: SendBrevoEmailInput): Promise<{
-  messageId?: string;
-}> {
+export async function sendBrevoEmailRaw(input: SendBrevoEmailInput): Promise<Response> {
   const apiKey = Deno.env.get("BREVO_API_KEY");
   if (!apiKey) {
     throw new Error("BREVO_API_KEY is not configured");
@@ -57,7 +55,7 @@ export async function sendBrevoEmail(input: SendBrevoEmailInput): Promise<{
     throw new Error("At least one recipient is required");
   }
 
-  const response = await fetch(BREVO_API_URL, {
+  return await fetch(BREVO_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -74,6 +72,12 @@ export async function sendBrevoEmail(input: SendBrevoEmailInput): Promise<{
       tags: input.tags,
     }),
   });
+}
+
+export async function sendBrevoEmail(input: SendBrevoEmailInput): Promise<{
+  messageId?: string;
+}> {
+  const response = await sendBrevoEmailRaw(input);
 
   if (!response.ok) {
     const errorBody = await response.text();

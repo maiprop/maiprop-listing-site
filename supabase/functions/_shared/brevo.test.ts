@@ -6,7 +6,7 @@ import {
   assertEquals,
   assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { getBrevoSender, parseEmailIdentity } from "./brevo.ts";
+import { getBrevoSender, parseEmailIdentity, sendBrevoEmail, sendBrevoEmailRaw } from "./brevo.ts";
 
 // ── getBrevoSender ────────────────────────────────────────────────────────────
 
@@ -98,4 +98,44 @@ Deno.test("parseEmailIdentity: handles whitespace around angle brackets", () => 
 Deno.test("parseEmailIdentity: handles angle bracket email with no name", () => {
   const result = parseEmailIdentity("<noreply@maiprop.co>");
   assertEquals(result, { email: "noreply@maiprop.co" });
+});
+
+Deno.test("raw Brevo transport returns a known 2xx without reading its body", async () => {
+  const originalFetch = globalThis.fetch;
+  const priorKey = Deno.env.get("BREVO_API_KEY");
+  Deno.env.set("BREVO_API_KEY", "synthetic-key");
+  globalThis.fetch = async (input, init) => {
+    assertEquals(String(input), "https://api.brevo.com/v3/smtp/email");
+    assertEquals(init?.method, "POST");
+    return new Response(new ReadableStream({ pull() { throw new Error("body unreadable"); } }), { status: 201 });
+  };
+  try {
+    const response = await sendBrevoEmailRaw({ to: "user@example.test", sender: { email: "sender@example.test" }, subject: "Test", html: "<p>Test</p>" });
+    assertEquals(response.status, 201);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (priorKey) Deno.env.set("BREVO_API_KEY", priorKey);
+    else Deno.env.delete("BREVO_API_KEY");
+  }
+});
+
+Deno.test("legacy Brevo helper still parses message IDs and throws on rejection", async () => {
+  const originalFetch = globalThis.fetch;
+  const priorKey = Deno.env.get("BREVO_API_KEY");
+  Deno.env.set("BREVO_API_KEY", "synthetic-key");
+  const input = { to: "user@example.test", sender: { email: "sender@example.test" }, subject: "Test", html: "<p>Test</p>" };
+  try {
+    globalThis.fetch = async () => new Response('{"messageId":"synthetic-id"}', { status: 201 });
+    assertEquals(await sendBrevoEmail(input), { messageId: "synthetic-id" });
+    globalThis.fetch = async () => new Response("synthetic rejection", { status: 503 });
+    let rejected = false;
+    try { await sendBrevoEmail(input); } catch (error) {
+      rejected = error instanceof Error && error.message.includes("synthetic rejection");
+    }
+    assertEquals(rejected, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (priorKey) Deno.env.set("BREVO_API_KEY", priorKey);
+    else Deno.env.delete("BREVO_API_KEY");
+  }
 });

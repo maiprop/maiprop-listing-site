@@ -2,7 +2,9 @@
 import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { Webhook } from 'npm:standardwebhooks@1.0.0'
-import { getBrevoSender, sendBrevoEmail } from '../_shared/brevo.ts'
+import { createClient } from 'npm:@supabase/supabase-js@2.57.2'
+import { getBrevoSender, sendBrevoEmailRaw } from '../_shared/brevo.ts'
+import { dispatchAuthEmail, type AuthEmailSlot } from '../_shared/authEmailDispatch.ts'
 import { SignupEmail } from '../_shared/email-templates/signup.tsx'
 import { InviteEmail } from '../_shared/email-templates/invite.tsx'
 import { MagicLinkEmail } from '../_shared/email-templates/magic-link.tsx'
@@ -48,7 +50,7 @@ interface OutboundAuthEmail {
   subject: string
   html: string
   text: string
-  templateName: string
+  templateName: AuthEmailSlot
 }
 
 const EMAIL_SUBJECTS: Record<AuthEmailActionType, string> = {
@@ -326,14 +328,12 @@ async function handleWebhook(req: Request, corsHeaders: Record<string, string>):
 
   const payloadText = await req.text()
   const headers = Object.fromEntries(req.headers)
-  const webhook = new Webhook(getWebhookVerifierSecret())
-
   let payload: SendEmailHookPayload
   try {
+    const webhook = new Webhook(getWebhookVerifierSecret())
     payload = webhook.verify(payloadText, headers) as SendEmailHookPayload
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Invalid webhook payload'
-    log.error('webhook verification failed', { err: message })
+  } catch {
+    log.error('webhook verification failed', { code: 'invalid_signature' })
     return new Response(
       JSON.stringify({ error: 'Invalid webhook payload' }),
       { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -341,27 +341,41 @@ async function handleWebhook(req: Request, corsHeaders: Record<string, string>):
   }
 
   try {
+    // The signed header is trusted only after verification of the exact raw body.
+    const webhookId = req.headers.get('webhook-id')
+    if (!webhookId || webhookId.length > 512 || webhookId !== webhookId.trim()) {
+      throw new Error('invalid_webhook_identity')
+    }
     const outboundEmails = await buildOutboundEmails(payload)
     const sender = getBrevoSender(SITE_NAME)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!supabaseUrl || !serviceRoleKey || !Deno.env.get('BREVO_API_KEY')) {
+      throw new Error('auth_email_configuration_missing')
+    }
+    const client = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
 
     for (const outboundEmail of outboundEmails) {
-      await sendBrevoEmail({
-        to: outboundEmail.to,
-        sender,
-        subject: outboundEmail.subject,
-        html: outboundEmail.html,
-        text: outboundEmail.text,
-        tags: [outboundEmail.templateName],
-        headers: {
-          'X-MaiProp-Template': outboundEmail.templateName,
-          'X-MaiProp-Auth-User': payload.user.id,
-        },
-      })
+      const accepted = await dispatchAuthEmail(client, webhookId, outboundEmail.templateName, () =>
+        sendBrevoEmailRaw({
+          to: outboundEmail.to,
+          sender,
+          subject: outboundEmail.subject,
+          html: outboundEmail.html,
+          text: outboundEmail.text,
+          tags: [outboundEmail.templateName],
+          headers: {
+            'X-MaiProp-Template': outboundEmail.templateName,
+            'X-MaiProp-Auth-User': payload.user.id,
+          },
+        }))
+      if (!accepted) throw new Error('auth_email_dispatch_incomplete')
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to send email'
-    log.error('auth email hook error', { err: message })
-    return new Response(JSON.stringify({ error: message }), {
+  } catch {
+    log.error('auth email hook error', { code: 'dispatch_incomplete' })
+    return new Response(JSON.stringify({ error: 'Auth email dispatch incomplete' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
@@ -390,10 +404,9 @@ Deno.serve(async (req) => {
 
   try {
     return await handleWebhook(req, corsHeaders)
-  } catch (error) {
-    log.error('webhook handler error', { err: error instanceof Error ? error.message : String(error) })
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return new Response(JSON.stringify({ error: message }), {
+  } catch {
+    log.error('webhook handler error', { code: 'handler_failed' })
+    return new Response(JSON.stringify({ error: 'Auth email dispatch incomplete' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
