@@ -35,7 +35,7 @@ BEGIN;
 SET LOCAL statement_timeout='40s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL search_path=public,extensions;
-SELECT plan(26);
+SELECT plan(28);
 SELECT is(current_setting('session_replication_role'),'origin','ordinary triggers');
 SELECT is((SELECT catalog->'routines'->'admin_update_firesale_pipeline_deal_for_user(uuid,uuid,text,text,numeric,text,numeric)'->>'sha' FROM fr_baseline),'d755da61395c22f7fe5cebc156cd11b37c64d6223a4f98924d23f1a8eb65f9f9','active pipeline installed identity');
 SELECT ok((SELECT bool_and(tgenabled='O') FROM pg_trigger WHERE tgrelid IN ('auth.users'::regclass,'public.profiles'::regclass,'public.investor_subscriptions'::regclass,'public.firesale_requests'::regclass,'public.firesale_interest'::regclass) AND NOT tgisinternal),'normal trigger attachments');
@@ -62,15 +62,30 @@ RESET ROLE;
 SELECT is((SELECT count(*)::integer FROM public.investor_subscriptions WHERE user_id::text LIKE 'a13f1001-%' AND status='pending_payment'),4,'normal approval gives four pending subscriptions');
 SELECT is((SELECT count(*)::integer FROM public.investor_subscriptions WHERE user_id='a13f1001-0000-4000-8000-000000000006'),0,'nonparticipant has no entitlement');
 -- Local synthetic checkout-session persistence: exact create-investor-payment PATCH fields/predicates.
+CREATE TEMP TABLE fr_pending AS SELECT n,s.id,s.user_id FROM generate_series(2,5) n JOIN public.investor_subscriptions s ON s.user_id=('a13f1001-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid WHERE s.tier='private' AND s.status='pending_payment' AND s.stripe_session_id IS NULL;
+CREATE TEMP TABLE fr_linked (LIKE public.investor_subscriptions);
+CREATE TEMP TABLE fr_link_effects(n integer,user_id uuid,affected integer);
+CREATE TEMP TABLE fr_before_link AS SELECT pg_temp.fr_graph() graph;
+GRANT SELECT ON fr_pending TO service_role;
+GRANT INSERT,SELECT ON fr_linked,fr_link_effects TO service_role;
 SET LOCAL ROLE service_role;
-CREATE TEMP TABLE fr_linked AS WITH linked AS (
- UPDATE public.investor_subscriptions s SET stripe_customer_id='cus_fr_'||right(s.user_id::text,1),stripe_session_id='cs_fr_'||right(s.user_id::text,1),runtime_mode=public.current_billing_runtime_mode(),livemode=public.current_billing_runtime_mode()='live',updated_at=now()
- WHERE s.user_id::text LIKE 'a13f1001-%' AND s.tier='private' AND s.status='pending_payment' AND s.stripe_session_id IS NULL
- RETURNING s.*
-) SELECT * FROM linked;
+DO $fr$ DECLARE p record; rows_changed integer; BEGIN
+ FOR p IN SELECT n,id,user_id FROM fr_pending ORDER BY n LOOP
+  UPDATE public.investor_subscriptions s
+  SET stripe_customer_id='cus_fr_'||p.n, stripe_session_id='cs_fr_'||p.n,
+      runtime_mode=public.current_billing_runtime_mode(),
+      livemode=public.current_billing_runtime_mode()='live',updated_at=now()
+  WHERE s.id=p.id AND s.status='pending_payment' AND s.stripe_session_id IS NULL;
+  GET DIAGNOSTICS rows_changed=ROW_COUNT;
+  INSERT INTO fr_link_effects VALUES (p.n,p.user_id,rows_changed);
+  INSERT INTO fr_linked SELECT s.* FROM public.investor_subscriptions s WHERE s.id=p.id;
+ END LOOP;
+END $fr$;
 RESET ROLE;
 SELECT is((SELECT count(*)::integer FROM fr_linked),4,'source-shaped checkout persistence updates four exact pending rows');
+SELECT is((SELECT jsonb_agg(jsonb_build_array(n,user_id,affected) ORDER BY n) FROM fr_link_effects),'[[2,"a13f1001-0000-4000-8000-000000000002",1],[3,"a13f1001-0000-4000-8000-000000000003",1],[4,"a13f1001-0000-4000-8000-000000000004",1],[5,"a13f1001-0000-4000-8000-000000000005",1]]'::jsonb,'each exact pending subscription ID updated once');
 SELECT ok((SELECT bool_and(status='pending_payment' AND stripe_session_id IS NOT NULL AND runtime_mode=public.current_billing_runtime_mode()) FROM fr_linked),'all persisted sessions retain pending state and matching runtime');
+SELECT is(pg_temp.fr_graph()->'subscriptions',(SELECT jsonb_object_agg(k,CASE WHEN value->>'user_id' LIKE 'a13f1001-%' THEN value||jsonb_build_object('stripe_customer_id','cus_fr_'||right(value->>'user_id',1),'stripe_session_id','cs_fr_'||right(value->>'user_id',1),'runtime_mode',public.current_billing_runtime_mode(),'livemode',public.current_billing_runtime_mode()='live','updated_at',now()) ELSE value END) FROM jsonb_each((SELECT graph->'subscriptions' FROM fr_before_link)) q(k,value)),'complete subscription graph matches exact checkout persistence fields');
 CREATE TEMP TABLE fr_before_activation AS SELECT pg_temp.fr_graph() graph;
 -- Local synthetic paid-session callback: exact stripe-webhook activation fields/predicates; no provider assertion.
 SET LOCAL ROLE service_role;
