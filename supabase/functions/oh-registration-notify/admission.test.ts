@@ -2,6 +2,7 @@ import {
   assert,
   assertEquals,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { dispatchOHStatusEvent } from "../_shared/ohStatusEvent.ts";
 
 // Capture the actual entrypoint without changing the shared test environment.
 Deno.test("actual OH handler enforces admission, transition rendering, uncertainty and privacy", async () => {
@@ -28,6 +29,7 @@ Deno.test("actual OH handler enforces admission, transition rendering, uncertain
   let state = "ready";
   let mode = "normal";
   let checkpoints = 0;
+  let begins = 0;
   let lookups = 0;
   let token = "";
   let lastArgs: unknown;
@@ -58,6 +60,7 @@ Deno.test("actual OH handler enforces admission, transition rendering, uncertain
         url.pathname ===
           "/rest/v1/rpc/begin_oh_registration_status_event_for_service"
       ) {
+        begins++;
         const args = JSON.parse(String((init as { body?: unknown })?.body));
         assertEquals(args.p_event_id, id);
         if (mode === "db-down") throw new Error(privateValue);
@@ -249,6 +252,7 @@ Deno.test("actual OH handler enforces admission, transition rendering, uncertain
       state = "ready";
       sends = 0;
       checkpoints = 0;
+      begins = 0;
       lookups = 0;
       lastArgs = undefined;
     };
@@ -347,6 +351,29 @@ Deno.test("actual OH handler enforces admission, transition rendering, uncertain
       assert(!html.includes("SPOOF_REASON"));
     }
     assertEquals(sends, 3);
+    reset("normal");
+    id = "d1200003-0000-4000-8000-00000000000a";
+    const uppercasePayload = { ...payload, event_id: id.toUpperCase() };
+    const uppercaseResponse = await invoke(uppercasePayload);
+    assertEquals(uppercaseResponse.status, 200);
+    assertEquals(await uppercaseResponse.json(), { ok: true, status: "approved" });
+    assertEquals(begins, 1);
+    assertEquals(checkpoints, 1);
+    assertEquals(sends, 1);
+    assertEquals((await invoke(uppercasePayload)).status, 200);
+    assertEquals(begins, 2);
+    assertEquals(checkpoints, 1);
+    assertEquals(sends, 1);
+    let malformedRpcs = 0;
+    assertEquals(
+      await dispatchOHStatusEvent(
+        { rpc: () => { malformedRpcs++; throw new Error("unexpected RPC"); } },
+        "malformed-event-id",
+        async () => async () => new Response(null, { status: 204 }),
+      ),
+      null,
+    );
+    assertEquals(malformedRpcs, 0);
     const capturedPath = originalGet.call(Deno.env, "OH_CAPTURED_PAYLOADS");
     if (capturedPath) {
       const captured = (await Deno.readTextFile(capturedPath)).split(/\r?\n/)

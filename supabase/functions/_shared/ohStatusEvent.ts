@@ -49,18 +49,20 @@ export async function dispatchOHStatusEvent(
   eventId: string,
   prepare: (row: OHSnapshot) => Promise<() => Promise<Response>>,
 ): Promise<"approved" | "rejected" | null> {
+  if (!isEventId(eventId)) return null;
+  const canonicalEventId = eventId.toLowerCase();
   const token = crypto.randomUUID();
   let begin;
   try {
     begin = await rpc(
       client,
       "begin_oh_registration_status_event_for_service",
-      { p_event_id: eventId, p_attempt_token: token },
+      { p_event_id: canonicalEventId, p_attempt_token: token },
     );
   } catch {
     return null;
   }
-  if (!begin || begin.event_id !== eventId) return null;
+  if (!begin || begin.event_id !== canonicalEventId) return null;
   if (begin.decision === "replay_accepted") {
     return begin.state === "accepted" &&
         (begin.new_status === "approved" || begin.new_status === "rejected")
@@ -93,7 +95,7 @@ export async function dispatchOHStatusEvent(
     // Acceptance is known from status; response content is unnecessary evidence.
   } catch { /* Preserve only the phase's fixed code. */ }
   const args = {
-    p_event_id: eventId,
+    p_event_id: canonicalEventId,
     p_attempt_token: token,
     p_outcome: outcome,
     p_http_status: status,
@@ -107,7 +109,8 @@ export async function dispatchOHStatusEvent(
         args,
       );
       if (
-        result?.decision === "recorded" && result.event_id === eventId &&
+        result?.decision === "recorded" &&
+        result.event_id === canonicalEventId &&
         result.attempt_token === token && result.state === outcome
       ) {
         return outcome === "accepted" && row ? row.status : null;
