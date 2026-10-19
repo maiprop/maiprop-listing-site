@@ -13,6 +13,7 @@ const { describe, it } = testRuntime;
 
 const root = resolve(import.meta.dirname, "..");
 const releaseWorkflows = [
+  "deploy-advisor-index.yml",
   "approve-production-release.yml",
   "deploy-edge-functions.yml",
   "deploy-production-release.yml",
@@ -127,7 +128,7 @@ describe("changed production release workflow Bash syntax", () => {
         }
       }
     }
-    assert.equal(runBlockCount, 143);
+    assert.equal(runBlockCount, 153);
     assert.ok(helperCount > 0, "no generated release helper shell bodies were checked");
   });
 });

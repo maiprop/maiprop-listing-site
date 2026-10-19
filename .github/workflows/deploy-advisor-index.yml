@@ -1,0 +1,128 @@
+name: Deploy Selected Advisor Index
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha: { description: "Reviewed current main SHA for advisor-index-20260901180000", required: true, type: string }
+      ci_run_id: { description: "Successful original main CI run", required: true, type: string }
+      incident_id: { description: "Configured production-deploy incident", required: true, type: string }
+      reason: { description: "Reason identifying advisor-index-20260901180000 and exact SHA", required: true, type: string }
+      confirm: { description: "Exact existing production break-glass confirmation", required: true, type: string }
+permissions: { contents: read, actions: read }
+concurrency: { group: maiprop-production-release, cancel-in-progress: false }
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1 && github.actor == github.triggering_actor && vars.PRODUCTION_RELEASE_ENABLED == 'true'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      ADVISOR_CI_RUN_ID: ${{ inputs.ci_run_id }}
+      RELEASE_INCIDENT_ID: ${{ inputs.incident_id }}
+      RELEASE_REASON: ${{ inputs.reason }}
+      RELEASE_CONFIRM: ${{ inputs.confirm }}
+      RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
+      RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}
+    steps:
+      - name: Reject untrusted checkout before executing repository code
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_REPOSITORY" = maiprop/maiprop-listing-site
+          test "$RELEASE_SHA" = "$GITHUB_WORKFLOW_SHA"
+          test "$RELEASE_SHA" = "$(gh api repos/maiprop/maiprop-listing-site/commits/main --jq .sha)"
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with: { ref: '${{ inputs.release_sha }}', fetch-depth: 1, persist-credentials: false }
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with: { node-version-file: .node-version, cache: npm }
+      - name: Install pinned tooling
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+      - name: Capture configured grant and package immutable index
+        env:
+          PRODUCTION_RELEASE_ENABLED: ${{ vars.PRODUCTION_RELEASE_ENABLED }}
+          PRODUCTION_RELEASE_DEPLOYERS: ${{ vars.PRODUCTION_RELEASE_DEPLOYERS }}
+          PRODUCTION_BREAK_GLASS_ACTOR: ${{ vars.PRODUCTION_BREAK_GLASS_ACTOR }}
+          PRODUCTION_BREAK_GLASS_RELEASE_SHA: ${{ vars.PRODUCTION_BREAK_GLASS_RELEASE_SHA }}
+          PRODUCTION_BREAK_GLASS_INCIDENT_ID: ${{ vars.PRODUCTION_BREAK_GLASS_INCIDENT_ID }}
+          PRODUCTION_BREAK_GLASS_EXPIRES_AT: ${{ vars.PRODUCTION_BREAK_GLASS_EXPIRES_AT }}
+        run: node scripts/advisor-index-release.mjs package
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: selected
+        with:
+          name: advisor-index-selected-${{ inputs.release_sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/advisor-index/selected/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Sign selected artifact
+        env:
+          ARTIFACT_ID: ${{ steps.selected.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.selected.outputs.artifact-digest }}
+        run: node scripts/advisor-index-release.mjs sign selected "$ARTIFACT_ID" "$ARTIFACT_DIGEST"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: advisor-index-selected-${{ inputs.release_sha }}-${{ github.run_id }}-binding
+          path: ${{ runner.temp }}/advisor-index/selected-binding/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Prepare exact singleton dry-run
+        env: &database
+          TARGET_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+        run: bash scripts/advisor-index-db.sh prepare-db
+      - name: Consume existing production-deploy grant
+        id: consume
+        run: node scripts/advisor-index-release.mjs consume
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: receipt
+        with:
+          name: ${{ steps.consume.outputs.receipt_name }}
+          path: ${{ runner.temp }}/advisor-index/receipt/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Sign consumed grant
+        env:
+          ARTIFACT_ID: ${{ steps.receipt.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.receipt.outputs.artifact-digest }}
+        run: node scripts/advisor-index-release.mjs sign receipt "$ARTIFACT_ID" "$ARTIFACT_DIGEST"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.consume.outputs.receipt_name }}-binding
+          path: ${{ runner.temp }}/advisor-index/receipt-binding/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Issue bounded signed index lease
+        env: *database
+        run: node scripts/advisor-index-release.mjs issue-lease
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: lease
+        with:
+          name: advisor-index-lease-${{ inputs.release_sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/advisor-index/lease/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Sign index lease
+        env:
+          ARTIFACT_ID: ${{ steps.lease.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.lease.outputs.artifact-digest }}
+        run: node scripts/advisor-index-release.mjs sign lease "$ARTIFACT_ID" "$ARTIFACT_DIGEST"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: advisor-index-lease-${{ inputs.release_sha }}-${{ github.run_id }}-binding
+          path: ${{ runner.temp }}/advisor-index/lease-binding/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Recheck and apply index once
+        env: *database
+        run: bash scripts/advisor-index-db.sh apply
+      - name: Preserve outcome and revocation limitation
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: advisor-index-evidence-${{ inputs.release_sha }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/advisor-index/evidence/
+            ${{ runner.temp }}/advisor-index/selected/manifest.json
+          if-no-files-found: ignore
+          retention-days: 90

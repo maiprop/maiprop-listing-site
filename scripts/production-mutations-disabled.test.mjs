@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { auctionRecoveryWorkflowViolations } from "./auction-recovery-workflow-contract.mjs";
+import { workflowViolations as advisorIndexWorkflowViolations } from "./advisor-index-release.mjs";
 import { resolve } from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
@@ -183,6 +184,10 @@ describe("production mutation boundaries", () => {
       /\bI_KNOW_THIS_IS_PROD\b|\bSUPABASE_SERVICE_ROLE_KEY\b|\bSUPABASE_STAGING_DB_URL\b|\bstaging-load-dataset\.mjs\b|\bsupabase\s+(?:db\s+push|functions\s+deploy|migration\s+repair)\b|\bpages\s+deploy\b/;
 
     for (const name of workflowNames) {
+      if (name === "deploy-advisor-index.yml") {
+        expect(advisorIndexWorkflowViolations(parsedWorkflow(name))).toEqual([]);
+        continue;
+      }
       if (name === "deploy-auction-recovery.yml") {
         const script = name => readFileSync(resolve(root,"scripts",name),"utf8");
         expect(auctionRecoveryWorkflowViolations({

@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import yaml from "js-yaml";
 import { checkSlsaReadiness } from "./check-slsa-readiness.mjs";
 import { auctionRecoveryWorkflowViolations } from "./auction-recovery-workflow-contract.mjs";
+import { workflowViolations as advisorIndexWorkflowViolations, classifyDispatchWorkflows } from "./advisor-index-release.mjs";
 import {
   cloudflareHttpMutationViolation as cloudflarePolicyViolation,
   findCloudflareHttpMutations as findPolicyCloudflareHttpMutations,
@@ -70,6 +71,7 @@ const documentedEnvAllowlist = new Set([
   "PRODUCTION_APP_URL",
   "PRODUCTION_SUPABASE_PUBLISHABLE_KEY",
   "PRODUCTION_SUPABASE_URL",
+  "RUNNER_TEMP",
   "SSR",
 ]);
 
@@ -1183,6 +1185,7 @@ export function scanWorkflows() {
   }
 
   const authorizedMutationWorkflows = new Set([
+    ".github/workflows/deploy-advisor-index.yml",
     ".github/workflows/deploy-auction-recovery.yml",
     ".github/workflows/deploy-catalogue-performance-hotfix.yml",
     ".github/workflows/deploy-edge-functions.yml",
@@ -1193,6 +1196,11 @@ export function scanWorkflows() {
     ".github/workflows/stage-release.yml",
     ".github/workflows/reusable-supabase-staging.yml",
   ]);
+  try {
+    classifyDispatchWorkflows(workflowText);
+  } catch (error) {
+    violations.push(`Advisor index replay inventory: ${error.message}`);
+  }
   const forbiddenMutationWiring =
     /\bI_KNOW_THIS_IS_PROD\b|\bSUPABASE_SERVICE_ROLE_KEY\b|\bSUPABASE_STAGING_DB_URL\b|\bstaging-load-dataset\.mjs\b|\bsupabase\s+(?:db\s+push|functions\s+deploy|migration\s+repair)\b|\bpages\s+deploy\b/;
   for (const [workflowPath, text] of Object.entries(workflowText)) {
@@ -1220,6 +1228,7 @@ export function scanWorkflows() {
   const catalogueHotfixWorkflow =
     ".github/workflows/deploy-catalogue-performance-hotfix.yml";
   const auctionWorkflow=".github/workflows/deploy-auction-recovery.yml";
+  violations.push(...advisorIndexWorkflowViolations(workflowYaml[".github/workflows/deploy-advisor-index.yml"]));
   violations.push(...auctionRecoveryWorkflowViolations({parsed:workflowYaml[auctionWorkflow],text:workflowText[auctionWorkflow]??"",driver:read(join(root,"scripts/auction-recovery-target.sh")),control:read(join(root,"scripts/auction-recovery-control.mjs")),pages:read(join(root,"scripts/auction-recovery-pages.mjs")),database:read(join(root,"scripts/auction-recovery-db.sh"))}));
   const catalogueHotfixText = workflowText[catalogueHotfixWorkflow] ?? "";
   if (!catalogueHotfixText) {
