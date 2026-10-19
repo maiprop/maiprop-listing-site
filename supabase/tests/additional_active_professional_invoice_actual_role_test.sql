@@ -328,3 +328,4 @@ DO $$ BEGIN
  THEN RAISE EXCEPTION 'rollback left graph, catalog, or fixture residue'; END IF;
 END $$;
 SELECT 'A139_ROLLBACK_CLEAN';
+DROP TABLE pg_temp.a139_pre;

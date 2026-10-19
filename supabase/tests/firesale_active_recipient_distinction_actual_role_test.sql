@@ -159,3 +159,4 @@ SELECT * FROM finish();
 ROLLBACK;
 SELECT 'FR_POST',pg_backend_pid(),encode(digest(pg_temp.fr_catalog()::text,'sha256'),'hex'),encode(digest(pg_temp.fr_graph()::text,'sha256'),'hex');
 SELECT (SELECT pid FROM fr_baseline)=pg_backend_pid() AS same_backend,(SELECT catalog FROM fr_baseline)=pg_temp.fr_catalog() AS catalog_restored,(SELECT graph FROM fr_baseline)=pg_temp.fr_graph() AS graph_restored;
+DROP TABLE pg_temp.fr_baseline;

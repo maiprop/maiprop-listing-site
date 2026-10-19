@@ -132,3 +132,4 @@ SELECT * FROM finish();
 ROLLBACK;
 SELECT 'PF_POST',pg_backend_pid(),current_user,session_user,current_setting('maiprop.test_disposable_database',true),current_setting('session_replication_role'),auth.uid(),encode(digest(pg_temp.pf_catalog()::text,'sha256'),'hex'),encode(digest(pg_temp.pf_graph()::text,'sha256'),'hex');
 SELECT (SELECT catalog FROM pf_baseline)=pg_temp.pf_catalog() AS catalog_restored,(SELECT graph FROM pf_baseline)=pg_temp.pf_graph() AS graph_restored,(SELECT pid FROM pf_baseline)=pg_backend_pid() AS same_backend;
+DROP TABLE pg_temp.pf_baseline;
