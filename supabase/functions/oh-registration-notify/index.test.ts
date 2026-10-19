@@ -71,7 +71,7 @@ Deno.test("invalid JSON returns validation error instead of notify crash", async
   assertEquals(res.status, 400);
   const body = await res.json();
   assertEquals(body.ok, false);
-  assertEquals(body.error, "Invalid JSON body");
+  assertEquals(body.code, "oh_payload_invalid");
 });
 
 restore();
