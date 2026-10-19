@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { HelmetProvider } from "react-helmet-async";
 import { MemoryRouter, Route, Routes, type InitialEntry } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { APP_ORIGIN } from "@/lib/config";
 
 const mocks = vi.hoisted(() => ({
   language: "en",
@@ -334,7 +335,7 @@ describe("AuctionDetail branch coverage", () => {
     fireEvent.click(screen.getByRole("button", { name: "share auction" }));
     await waitFor(() => expect(mocks.share).toHaveBeenCalledWith({
       title: "Athens Auction Flat",
-      url: "https://portal.maiprop.co/auction/auction-1",
+      url: `${APP_ORIGIN}/auction/auction-1`,
     }));
     expect(mocks.writeText).not.toHaveBeenCalled();
     native.unmount();
@@ -342,14 +343,14 @@ describe("AuctionDetail branch coverage", () => {
     mocks.share.mockRejectedValueOnce(new Error("share cancelled"));
     const cancelled = renderDetail({ auction: auction() });
     fireEvent.click(screen.getByRole("button", { name: "share auction" }));
-    await waitFor(() => expect(mocks.share).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.share).toHaveBeenCalledTimes(2));
     expect(mocks.writeText).not.toHaveBeenCalled();
     cancelled.unmount();
 
     Object.defineProperty(navigator, "share", { configurable: true, value: undefined });
     renderDetail({ auction: auction() });
     fireEvent.click(screen.getByRole("button", { name: "share auction" }));
-    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith("https://portal.maiprop.co/auction/auction-1"));
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(`${APP_ORIGIN}/auction/auction-1`));
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Link copied");
   });
 

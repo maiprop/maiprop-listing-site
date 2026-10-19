@@ -207,6 +207,10 @@ vi.mock("@/hooks/useListings", () => ({
 }));
 vi.mock("@/hooks/useFavorites", () => ({
   useFavorites: () => ({ data: mocks.favorites, isLoading: false }),
+  useIsFavorited: (listingId: string) => ({
+    data: mocks.favorites.some((favorite) => favorite.listing_id === listingId),
+    isLoading: false,
+  }),
   useToggleFavorite: () => mocks.toggleFavorite,
 }));
 vi.mock("@/hooks/useOpenHouseAssetControl", () => ({

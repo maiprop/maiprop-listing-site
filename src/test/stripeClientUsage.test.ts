@@ -99,8 +99,11 @@ describe("Stripe client runtime guard", () => {
       expect(source, `${name} should set price tax behavior`).toContain(
         "tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR",
       );
-      expect(source, `${name} should replace stale immutable prices`).toContain(
-        "existingPriceTaxBehavior !== STRIPE_DEFAULT_TAX_BEHAVIOR",
+      expect(source, `${name} should reject stale immutable prices`).toContain(
+        "price.tax_behavior === STRIPE_DEFAULT_TAX_BEHAVIOR",
+      );
+      expect(source, `${name} should retire replaced prices`).toContain(
+        "active: false",
       );
     }
   });

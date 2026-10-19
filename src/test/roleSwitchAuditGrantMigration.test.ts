@@ -42,6 +42,10 @@ const completeOnboardingEdgeFunction = readFileSync(
   resolve(process.cwd(), "supabase/functions/complete-onboarding-role/index.ts"),
   "utf8",
 );
+const compatibilityBridge = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260927013928_restore_role_switch_compatibility_bridge.sql"),
+  "utf8",
+);
 
 const reconciliationEdgeFunction = readFileSync(
   resolve(process.cwd(), "supabase/functions/reconcile-role-switch-billing/index.ts"),
@@ -138,8 +142,12 @@ describe("role-switch audit RPC grant hardening", () => {
     expect(auditIntegrityMigration).toContain("billing_reconciliation_required = false");
     expect(beginEdgeFunction).toContain("_audit_id: auditId");
     expect(completeOnboardingEdgeFunction).toContain(
-      'supabase.rpc("complete_onboarding_role_for_user"',
+      '"complete_onboarding_role_with_profile_for_user"',
     );
+    expect(completeOnboardingEdgeFunction).toContain("p_user_id: caller.id");
+    expect(compatibilityBridge).toContain("RETURN private.complete_onboarding_role_transaction(p_user_id,p_role,p_participant_type,p_display_name,p_city,p_phone,p_professional_profile)");
+    expect(compatibilityBridge).toContain("FROM PUBLIC,anon,authenticated;");
+    expect(compatibilityBridge).toContain("TO service_role;");
   });
 
   it("rejects direct completion RPC role changes outside a finalized bound audit", () => {

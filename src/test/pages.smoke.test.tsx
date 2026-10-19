@@ -151,6 +151,7 @@ vi.mock("@/hooks/useListingsFilters", () => ({
 }));
 
 vi.mock("@/hooks/useFavorites", () => ({
+  useFavoriteMembership: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useFavorites: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useToggleFavorite: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useIsFavorited: vi.fn().mockReturnValue(false),

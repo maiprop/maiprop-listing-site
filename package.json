@@ -97,7 +97,7 @@
     "check:type-debt": "node scripts/check-type-debt.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "node scripts/run-native-coverage-tools.mjs && vitest run",
     "test:catalogue-hotfix": "node --test scripts/catalogue-hotfix-behavioral-probe.test.mjs scripts/catalogue-hotfix-source-quality-probe.test.mjs scripts/catalogue-hotfix-workflow-helpers.test.mjs scripts/catalogue-performance-hotfix-workflow.test.mjs",
     "test:coverage": "node scripts/run-vitest-coverage.mjs",
     "test:watch": "vitest",

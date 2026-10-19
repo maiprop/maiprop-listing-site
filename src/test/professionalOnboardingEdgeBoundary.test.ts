@@ -13,12 +13,16 @@ describe("professional onboarding edge boundary", () => {
 
   it("keeps the professional profile creation in the authenticated Edge function", () => {
     const source = readText("supabase/functions/complete-onboarding-role/index.ts");
+    const bridge = readText("supabase/migrations/20260927013928_restore_role_switch_compatibility_bridge.sql");
 
     expect(source).toContain('verifyBearerToken');
-    expect(source).toContain('.from("professionals")');
-    expect(source).toContain("upsert");
-    expect(source).toContain("user_id: caller.id");
-    expect(source).toContain("professionalProfile");
+    expect(source).toContain('"complete_onboarding_role_with_profile_for_user"');
+    expect(source).toContain("p_user_id: caller.id");
+    expect(source).toContain("p_professional_profile: payload.professionalProfile ?? null");
+    expect(bridge).toContain("INSERT INTO public.professionals(user_id,title,category,display_name,city,license_number)");
+    expect(bridge).toContain("ON CONFLICT(user_id) DO UPDATE");
+    expect(bridge).toContain("RETURN private.complete_onboarding_role_transaction(p_user_id,p_role,p_participant_type,p_display_name,p_city,p_phone,p_professional_profile)");
+    expect(bridge).toContain("TO service_role;");
   });
 
   it("does not keep an Onboarding browser mutation exception for professionals", () => {

@@ -45,8 +45,10 @@ describe("Pro trial wiring", () => {
       "supabase/functions/stripe-webhook/index.ts",
       "utf8",
     );
+    const shared = readFileSync("supabase/functions/_shared/trialClaims.ts", "utf8");
     expect(source).toContain("syncSubscriptionTrialClaim");
-    expect(source).toContain("subscription_trial_claims");
+    expect(source).toContain("reconcileTrialClaim(");
+    expect(shared).toContain('db.from("subscription_trial_claims")');
     expect(source).toContain("checkout_type");
     expect(source).toContain("subscription_trial");
   });
@@ -80,6 +82,10 @@ describe("Pro trial wiring", () => {
       "supabase/functions/stripe-webhook/index.ts",
       "utf8",
     );
-    expect(webhook).toContain('status: "checkout_abandoned"');
+    const shared = readFileSync("supabase/functions/_shared/trialClaims.ts", "utf8");
+    expect(webhook).toContain('"checkout_abandoned"');
+    expect(webhook).toContain("expireAbandonedTrialCheckoutSession");
+    expect(shared).toContain('if (status === "checkout_abandoned")');
+    expect(shared).toContain('throw new Error("consumed trial cannot be abandoned")');
   });
 });

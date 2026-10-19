@@ -608,7 +608,6 @@ export default function Pricing() {
 
   const invalidateCheckoutConfirmation = useCallback(() => {
     checkoutAttemptRef.current += 1;
-    completedCheckoutRef.current = null;
     checkoutToastKeyRef.current = null;
     if (checkoutSuccessToastIdRef.current !== null) {
       toast.dismiss(checkoutSuccessToastIdRef.current);
@@ -625,6 +624,7 @@ export default function Pricing() {
   const clearCheckoutReturn = useCallback((
     expectedCheckoutSessionId: string | null,
     expectedContextKey: string | null = null,
+    recordCompletion = true,
   ) => {
     const currentParams = new URLSearchParams(checkoutContextRef.current.search);
     if (expectedCheckoutSessionId) {
@@ -635,7 +635,7 @@ export default function Pricing() {
     }
     ["checkout", "pro", "billing_mode", "plan", "billing_cycle", "checkout_session_id", "session_id"]
       .forEach((key) => currentParams.delete(key));
-    if (expectedCheckoutSessionId && expectedContextKey) {
+    if (recordCompletion && expectedCheckoutSessionId && expectedContextKey) {
       completedCheckoutRef.current = {
         contextKey: expectedContextKey,
         checkoutSessionId: expectedCheckoutSessionId,
@@ -829,6 +829,14 @@ export default function Pricing() {
         message: "Sign in to confirm your subscription.",
         contextKey: checkoutContextKey,
       });
+      return undefined;
+    }
+
+    // A verified return can outlive its URL cleanup when the auth context
+    // changes. Retire that old return before it can confirm under a new session.
+    if (completed?.checkoutSessionId === identity.checkoutSessionId &&
+        completed.contextKey !== checkoutContextKey) {
+      clearCheckoutReturn(identity.checkoutSessionId, checkoutContextKey, false);
       return undefined;
     }
 

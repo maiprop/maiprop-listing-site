@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
     info: vi.fn(() => "unrelated-toast-id"),
     dismiss: vi.fn(),
   },
+  holdCheckoutCleanup: false,
+  pendingCheckoutCleanup: null as (() => void) | null,
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -33,6 +35,18 @@ vi.mock("react-router-dom", async () => {
   return {
     ...actual,
     useNavigate: () => mocks.navigateMock,
+    useSearchParams: () => {
+      const [params, setParams] = actual.useSearchParams();
+      const controlledSetParams = React.useCallback((...args: Parameters<typeof setParams>) => {
+        if (mocks.holdCheckoutCleanup && args[0] instanceof URLSearchParams &&
+            !args[0].has("checkout")) {
+          mocks.pendingCheckoutCleanup = () => setParams(...args);
+          return;
+        }
+        setParams(...args);
+      }, [setParams]);
+      return [params, controlledSetParams] as ReturnType<typeof actual.useSearchParams>;
+    },
   };
 });
 
@@ -306,6 +320,8 @@ function ReplacePricingSearch({ next }: { next: string }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.holdCheckoutCleanup = false;
+  mocks.pendingCheckoutCleanup = null;
   mocks.navigateMock.mockReset();
   mocks.invokeMock.mockResolvedValue({ data: { url: "https://stripe.example/checkout" }, error: null });
   mocks.useAuthMock.mockReturnValue({
@@ -936,6 +952,57 @@ describe("Pricing focused page behavior", () => {
     expect(refreshSubscription).toHaveBeenCalledTimes(1);
     expect(mocks.toast.dismiss).toHaveBeenCalledWith("checkout-toast-id");
     expect(mocks.toast.dismiss).not.toHaveBeenCalledWith("unrelated-toast-id");
+  });
+
+  it("does not reconfirm a completed checkout while its URL cleanup waits across a new known session", async () => {
+    mocks.holdCheckoutCleanup = true;
+    const initialAuth = {
+      user: { id: "actor-a" },
+      session: pricingSession("actor-a", "known-session-a"),
+      profile: { role: "buyer", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+    };
+    mocks.useAuthMock.mockReturnValue(initialAuth);
+    const refreshSubscription = vi.fn().mockImplementation(async (checkoutSessionId: string) => ({
+      status: "verified",
+      checkoutSessionId,
+      userId: "actor-a",
+      receipt: {
+        checkout_session_id: checkoutSessionId,
+        user_id: "actor-a",
+        kind: "subscription",
+        product_id: "prod_participant",
+        plan_key: "pro",
+        audience: "participant",
+        status: "active",
+        subscription_end: "2099-01-01T00:00:00.000Z",
+      },
+    }));
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, refreshSubscription });
+    const { default: Pricing } = await import("@/pages/Pricing");
+    const view = renderWithProviders(<><Pricing /><ReplacePricingSearch next="checkout=success&session_id=cs_test_new_checkout" /></>, {
+      initialPath: "/pricing?checkout=success&session_id=cs_test_old_checkout",
+    });
+    expect(await screen.findByText(/Subscription confirmed/i)).toBeInTheDocument();
+    expect(mocks.pendingCheckoutCleanup).toBeTypeOf("function");
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
+
+    mocks.useAuthMock.mockReturnValue({
+      ...initialAuth,
+      session: pricingSession("actor-a", "known-session-b"),
+    });
+    view.rerender(<><Pricing /><ReplacePricingSearch next="checkout=success&session_id=cs_test_new_checkout" /></>);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByText(/Subscription confirmed/i)).not.toBeInTheDocument();
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
+
+    mocks.holdCheckoutCleanup = false;
+    await act(async () => { mocks.pendingCheckoutCleanup?.(); });
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "replace pricing search" }));
+    await waitFor(() => expect(refreshSubscription).toHaveBeenCalledTimes(2));
+    expect(refreshSubscription).toHaveBeenLastCalledWith("cs_test_new_checkout");
   });
 
   it("keeps completed checkout state across a token refresh in the same known session", async () => {

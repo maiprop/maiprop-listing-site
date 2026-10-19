@@ -52,13 +52,14 @@ describe("CI command ownership", () => {
   it("runs the full Vitest suite once through coverage and retains the excluded catalogue gate", () => {
     const commands = runCommands("quality");
 
-    expect(packageJson.scripts.test).toBe("vitest run");
+    expect(packageJson.scripts.test).toBe("node scripts/run-native-coverage-tools.mjs && vitest run");
     expect(packageJson.scripts["test:coverage"]).toBe(
       "node scripts/run-vitest-coverage.mjs",
     );
     expect(coverageRunner).toContain(
       'spawn(process.execPath, [vitestBin, "run", "--coverage"]',
     );
+    expect(coverageRunner).toContain('run-native-coverage-tools.mjs');
     expect(npmCommands(commands).filter((command) => command === "npm test")).toHaveLength(0);
     expect(
       npmCommands(commands).filter((command) => command === "npm run test:coverage"),

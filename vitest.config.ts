@@ -40,6 +40,9 @@ export default defineConfig({
       "scripts/catalogue-hotfix-workflow-helpers.test.mjs",
       "scripts/catalogue-performance-hotfix-contract.test.mjs",
       "scripts/catalogue-performance-hotfix-workflow.test.mjs",
+      // These Node-native suites run through both local and coverage test gates.
+      "scripts/deno-edge-coverage.test.mjs",
+      "scripts/run-db-plpgsql-coverage.test.mjs",
     ],
     coverage: {
       provider: "v8",

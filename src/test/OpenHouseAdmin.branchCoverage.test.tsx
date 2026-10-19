@@ -23,10 +23,14 @@ const state = vi.hoisted(() => ({
   revealAll: { mutate: vi.fn(), isPending: false },
   upsertSettings: { mutate: vi.fn(), isPending: false },
   toastError: vi.fn(),
+  manageableOrganizations: [] as Array<{ id: string }>,
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: state.user }) }));
 vi.mock("@/hooks/useFocusTrap", () => ({ useFocusTrap: () => vi.fn() }));
+vi.mock("@/hooks/useManageableOrganizations", () => ({
+  useManageableOrganizations: () => ({ data: state.manageableOrganizations, isLoading: false }),
+}));
 vi.mock("sonner", () => ({ toast: { error: (...args: unknown[]) => state.toastError(...args) } }));
 vi.mock("@/hooks/useOpenHouseAssetControl", () => ({
   useOpenHouseSettings: () => ({ data: state.settings, isLoading: false }),
@@ -102,6 +106,7 @@ function renderDashboard(myListings: Array<Record<string, unknown>> = []) {
 beforeEach(() => {
   vi.clearAllMocks();
   state.user = { id: "owner-1" };
+  state.manageableOrganizations = [];
   state.settings = baseSettings;
   state.registrations = [];
   state.registrationLoading = false;
@@ -281,6 +286,25 @@ describe("OpenHouseAssetControlPanel branch coverage", () => {
 });
 
 describe("OpenHouseDashboardSection branch coverage", () => {
+  it("separates owner management, organization editing, and view-only access", () => {
+    state.manageableOrganizations = [{ id: "managed-org" }];
+    renderDashboard([
+      { id: "owned", owner_id: "owner-1", organization_id: null, listing_type: "open_house", title: "Owned Home", status: "active" },
+      { id: "managed", owner_id: "other-owner", organization_id: "managed-org", listing_type: "open_house", title: "Managed Home", status: "active" },
+      { id: "view-only", owner_id: "other-owner", organization_id: "other-org", listing_type: "open_house", title: "View Only Home", status: "active" },
+    ]);
+
+    const owned = screen.getByText("Owned Home").closest(".glass-card")!;
+    const managed = screen.getByText("Managed Home").closest(".glass-card")!;
+    const viewOnly = screen.getByText("View Only Home").closest(".glass-card")!;
+    expect(within(owned as HTMLElement).getByRole("link", { name: /manage/i })).toHaveAttribute("href", "/open-house/owned");
+    expect(within(owned as HTMLElement).getByRole("link", { name: /edit listing/i })).toHaveAttribute("href", "/listings/owned/edit");
+    expect(within(managed as HTMLElement).getByRole("link", { name: /view/i })).toHaveAttribute("href", "/open-house/managed");
+    expect(within(managed as HTMLElement).getByRole("link", { name: /edit listing/i })).toHaveAttribute("href", "/listings/managed/edit");
+    expect(within(viewOnly as HTMLElement).getByRole("link", { name: /view/i })).toHaveAttribute("href", "/open-house/view-only");
+    expect(within(viewOnly as HTMLElement).queryByRole("link", { name: /edit listing/i })).not.toBeInTheDocument();
+  });
+
   it("renders empty and independent registration/offer loading states", () => {
     const empty = renderDashboard();
     expect(screen.getByText(/no open house activity yet/i)).toBeInTheDocument();
@@ -296,10 +320,10 @@ describe("OpenHouseDashboardSection branch coverage", () => {
   it("renders owner countdown variants and expands sale/rent management", () => {
     const now = Date.now();
     const listings = [
-      { id: "soon", listing_type: "open_house", title: "Soon", status: "active", price: 950, open_house_transaction_type: "rent", open_house_date: new Date(now + 30 * 60_000).toISOString(), cover_image_url: "https://img/soon.jpg", views_count: 4 },
-      { id: "today", listing_type: "open_house", title: "Today", status: "paused", price: 350000, open_house_transaction_type: "sale", open_house_date: new Date(now + 8 * 3_600_000).toISOString(), cover_image_url: null, views_count: null },
-      { id: "later", listing_type: "open_house", title: "Later", status: "active", price: 400000, open_house_date: new Date(now + 72 * 3_600_000).toISOString() },
-      { id: "undated", listing_type: "open_house", title: "Undated", status: "draft", price: 100000, open_house_date: null },
+      { id: "soon", owner_id: "owner-1", listing_type: "open_house", title: "Soon", status: "active", price: 950, open_house_transaction_type: "rent", open_house_date: new Date(now + 30 * 60_000).toISOString(), cover_image_url: "https://img/soon.jpg", views_count: 4 },
+      { id: "today", owner_id: "owner-1", listing_type: "open_house", title: "Today", status: "paused", price: 350000, open_house_transaction_type: "sale", open_house_date: new Date(now + 8 * 3_600_000).toISOString(), cover_image_url: null, views_count: null },
+      { id: "later", owner_id: "owner-1", listing_type: "open_house", title: "Later", status: "active", price: 400000, open_house_date: new Date(now + 72 * 3_600_000).toISOString() },
+      { id: "undated", owner_id: "owner-1", listing_type: "open_house", title: "Undated", status: "draft", price: 100000, open_house_date: null },
       { id: "ordinary", listing_type: "sale", title: "Not open house" },
     ];
     renderDashboard(listings);

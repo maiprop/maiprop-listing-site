@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, parse } from "node:path";
 
@@ -33,6 +33,14 @@ function findVitestBin(startDir) {
 }
 
 const vitestBin = findVitestBin(root);
+
+const nativeResult = spawnSync(process.execPath, [join(root, "scripts", "run-native-coverage-tools.mjs")], {
+  cwd: root,
+  stdio: "inherit",
+  env: process.env,
+});
+if (nativeResult.error) console.error(nativeResult.error);
+if (nativeResult.status !== 0) process.exit(nativeResult.status ?? 1);
 
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
