@@ -5,6 +5,7 @@ import { join } from 'node:path';
 const { it } = typeof globalThis.it === 'function' ? globalThis : await import('node:test');
 const api = await import('./advisor-index-release.mjs').catch(e => { if (e.code === 'ERR_MODULE_NOT_FOUND')
     return {}; throw e; });
+const dryRecord = (stderr, stdout = 'Finished supabase db push.\n') => ({ stdout, stderr, status: 0, signal: null, error: false });
 const filename = '20260901180000_index_auction_quarantine_canonical_fk.sql';
 const history = [{
         version: '20260101000000', name: 'baseline', statement_count: 1, statements_sha256: 'a'.repeat(64)
@@ -22,9 +23,9 @@ const before = () => ({
 });
 it('rejects all non-singleton or truncated pending lists before preparing mutation', () => {
     assert.equal(typeof api.validateDryRun, 'function');
-    assert.equal(api.validateDryRun(`DRY RUN: migrations will *not* be pushed to the database.\nConnecting to remote database...\nWould push these migrations:\n • ${filename}\nFinished supabase db push.\n`), filename);
-    for (const text of ['', ` • ${filename}\n`, `Would push these migrations:\n • ${filename}\n • ${filename}\n`, `Would push these migrations:\n • ${filename}\n • 20260102000000_extra.sql\n`, `Would push these migrations:\n • ${filename.slice(0, -4)}\n`])
-        assert.throws(() => api.validateDryRun(text));
+    assert.equal(api.validateDryRun(dryRecord(`DRY RUN: migrations will *not* be pushed to the database.\nConnecting to remote database...\nWould push these migrations:\n \u2022 ${filename}\n`)), filename);
+    for (const text of ['', ` \u2022 ${filename}\n`, `Would push these migrations:\n \u2022 ${filename}\n \u2022 ${filename}\n`, `Would push these migrations:\n \u2022 ${filename}\n \u2022 20260102000000_extra.sql\n`, `Would push these migrations:\n \u2022 ${filename.slice(0, -4)}\n`])
+        assert.throws(() => api.validateDryRun(dryRecord(text)));
 });
 it('rejects duplicate, malformed, already applied history and unsafe existing indexes', () => {
     assert.equal(typeof api.validateBefore, 'function');
@@ -292,7 +293,7 @@ function flowFixture() {
                 };
             if (args.includes('--dry-run'))
                 return {
-                    status: 0, stdout: `Would push these migrations:\n • ${filename}\nFinished supabase db push.\n`, stderr: ''
+                    status: 0, stdout: 'Finished supabase db push.\n', stderr: `NotFound: FileSystem.readFile (/var/lib/postgresql/.supabase/profile)\nDRY RUN: migrations will *not* be pushed to the database.\nConnecting to remote database...\nWould push these migrations:\n \u2022 ${filename}\n`, ...state.dryRun
                 };
             state.applies++;
             if (state.outcome !== 'success')
@@ -338,6 +339,10 @@ it('successful real orchestration invokes one selected CLI mutation and verifies
     flow.state.outcome = 'success';
     const result = flow.execute('apply');
     assert.equal(flow.state.applies, 1);
+    const saved = JSON.parse(readFileSync(join(flow.root, 'advisor-index/evidence/dry-run.json'), 'utf8'));
+    assert.equal(saved.stdout, 'Finished supabase db push.\n');
+    assert.match(saved.stderr, /NotFound: FileSystem/);
+    assert.equal(api.validateDryRun(saved), filename);
     assert.equal(result.history_verified, true);
     assert.equal(result.catalog_verified, true);
     assert.equal(flow.state.commands.filter(x => x.args.includes('--dry-run')).length, 1);
@@ -367,7 +372,7 @@ it('every preflight rejects before the official CLI mutation, including missing 
         f => writeFileSync(join(f.root, 'advisor-index/lease/lease.json'), '{}'),
         f => writeFileSync(join(f.root, 'advisor-index/receipt/receipt.json'), '{}'),
         f => writeFileSync(join(f.root, 'advisor-index/apply-work/supabase/migrations/20260102000000_extra.sql'), 'select 1;'),
-        f => writeFileSync(join(f.root, 'advisor-index/evidence/dry-run.log'), `Would push these migrations:\n • ${filename}\n • ${filename}\n`),
+        f => writeFileSync(join(f.root, 'advisor-index/evidence/dry-run.json'), JSON.stringify(dryRecord('invalid'))),
     ];
     for (const mutate of failures) {
         const flow = flowFixture();
@@ -443,7 +448,7 @@ it('workflow database phases execute only the bounded driver and reject extra ar
     }
 });
 it('rejects a zero-exit but truncated dry-run before the completed pending-list marker', () => {
-    assert.throws(() => api.validateDryRun(`Would push these migrations:\n • ${filename}\n`));
+    assert.throws(() => api.validateDryRun(dryRecord(`Would push these migrations:\n \u2022 ${filename}\n`, '')));
 });
 import { mkdirSync, symlinkSync } from 'node:fs';
 it('rejects changed source SQL and directory junctions without preparing a selected workdir', () => {
@@ -489,4 +494,33 @@ it('classifies replay roots from exact-tree workflow inventory and permits unrel
 it('current workflow source inventory has exactly the reviewed production-deploy roots',()=>{
  const sources=Object.fromEntries(readdirSync('.github/workflows').filter(x=>/\.ya?ml$/.test(x)).map(x=>[`.github/workflows/${x}`,readFileSync(`.github/workflows/${x}`,'utf8')]));
  const result=api.classifyDispatchWorkflows(sources);assert.equal(result.consumers.length,5);assert.ok(result.nonconsuming.includes('.github/workflows/staging-scale-proof.yml'));assert.ok(result.nonconsuming.includes('.github/workflows/live-operational-smoke.yml'));
+});
+
+it('separate CLI streams retain singleton, completion and ambiguity gates before mutation', () => {
+    const valid = { stdout: 'Finished supabase db push.\n', stderr: `Would push these migrations:\n \u2022 ${filename}\n` };
+    assert.equal(api.validateDryRun(dryRecord(valid.stderr, valid.stdout)), filename);
+    for (const dryRun of [
+        { ...valid, stdout: '' },
+        { ...valid, status: 1 },
+        { ...valid, signal: 'SIGKILL' },
+        { ...valid, error: true },
+        { ...valid, stdout: valid.stdout.repeat(2) },
+        { ...valid, stderr: valid.stderr.repeat(2) },
+        { ...valid, stderr: valid.stderr + ` \u2022 ${filename}\n` },
+        { ...valid, stderr: valid.stderr + ' \u2022 20260102000000_extra.sql\n' },
+        { ...valid, stderr: valid.stderr + 'unrecognized trailing diagnostic\n' },
+        { ...valid, stdout: valid.stdout + 'unrecognized trailing diagnostic\n' },
+        { stdout: valid.stdout + valid.stderr, stderr: '' },
+        { ...valid, stderr: valid.stderr.replace('.sql', '') },
+        { stdout: valid.stderr, stderr: valid.stdout },
+        { ...valid, stderr: 'unknown prefix\n' + valid.stderr },
+        { ...valid, stderr: '\u001b[0m' + valid.stderr },
+    ]) {
+        assert.throws(() => api.validateDryRun({ ...dryRecord(dryRun.stderr, dryRun.stdout), ...dryRun }));
+        const flow = flowFixture();
+        flow.state.dryRun = dryRun;
+        assert.throws(() => flow.prepare());
+        assert.equal(flow.state.applies, 0);
+        assert.equal(flow.state.artifacts.some(x => x.name.startsWith('production-break-glass-consumed-')), false);
+    }
 });

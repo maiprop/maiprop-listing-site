@@ -97,15 +97,24 @@ export function validateAfter(before, after) {
         history_verified: true, catalog_verified: true, data_evidence: stableJson(before.metrics) === stableJson(after.metrics) ? 'metrics unchanged; no row-content proof' : 'inconclusive: concurrent data/metric change'
     };
 }
-export function validateDryRun(text) {
-    requireValue(typeof text === 'string' && !text.includes('\u001b'), 'ambiguous dry-run output');
-    const lines = text.replaceAll('\r', '').trim().split('\n');
-    requireValue(lines.filter(x => x === 'Would push these migrations:').length === 1, 'missing/duplicate pending header');
-    const pending = lines.filter(x => /^\s*•/.test(x));
-    equal(pending, [` • ${filename}`], 'singleton pending migration');
-    requireValue((text.match(/\.sql/g) ?? []).length === 1, 'extra/ambiguous migration filename');
-    const tail = lines.slice(lines.indexOf('Would push these migrations:') + 1);
-    equal(tail, [` • ${filename}`, 'Finished supabase db push.'], 'complete pending list');
+export function validateDryRun(record) {
+    requireValue(record?.status === 0 && record.signal === null && record.error === false, 'CLI dry-run failed');
+    for (const text of [record.stdout, record.stderr])
+        requireValue(typeof text === 'string' && !text.includes('\u001b') && !text.replaceAll('\r\n', '\n').includes('\r'), 'ambiguous dry-run output');
+    const lines = text => text.replaceAll('\r\n', '\n').replace(/\n$/, '').split('\n');
+    // The pinned CLI emits completion on stdout and the pending list on stderr.
+    // Preserve stream identity: concatenation cannot establish temporal ordering.
+    equal(lines(record.stdout), ['Finished supabase db push.'], 'complete dry-run stdout');
+    const diagnostics = lines(record.stderr);
+    const header = diagnostics.indexOf('Would push these migrations:');
+    requireValue(header >= 0, 'missing pending header');
+    equal(diagnostics.slice(header), ['Would push these migrations:', ` \u2022 ${filename}`], 'singleton pending migration');
+    const prefix = diagnostics.slice(0, header);
+    requireValue(new Set(prefix).size === prefix.length && prefix.every(line =>
+        line === 'DRY RUN: migrations will *not* be pushed to the database.' ||
+        line === 'Connecting to remote database...' ||
+        /^NotFound: FileSystem\.readFile \(\/[a-zA-Z0-9_./-]+\/\.supabase\/profile\)$/.test(line)), 'unknown dry-run diagnostic');
+    requireValue(((record.stdout + record.stderr).match(/\.sql/g) ?? []).length === 1, 'extra/ambiguous migration filename');
     return filename;
 }
 export function databaseTarget(raw) {
@@ -442,7 +451,7 @@ export function execute(command, args = [], { env = process.env, adapters = defa
     const before = () => jsonFile(join(evidence, 'before.json'));
     const target = () => databaseTarget(env.TARGET_DB_URL);
     const input = current => ({
-        artifact: selected(current), consumption: receipt(current), target: target().identity, before: before(), pending: validateDryRun(regular(join(evidence, 'dry-run.log')).toString())
+        artifact: selected(current), consumption: receipt(current), target: target().identity, before: before(), pending: validateDryRun(jsonFile(join(evidence, 'dry-run.json')))
     });
     const cli = join(source, 'node_modules/@supabase/cli-linux-x64/bin/supabase');
     const version = () => { const result = invoke(cli, ['--version'], { timeout: 10000, killSignal: 'SIGKILL' }); requireValue(!result.error && result.status === 0 && result.stdout.trim() === CONTRACT.cli, 'pinned CLI version required'); };
@@ -483,10 +492,14 @@ export function execute(command, args = [], { env = process.env, adapters = defa
         validateBefore(initial);
         prepareDb(source, initial, join(root, 'dry-work'));
         const result = invoke(cli, ['db', 'push', '--workdir', join(root, 'dry-work'), '--db-url', url, '--skip-vault', '--include-all', '--dry-run'], { timeout: CONTRACT.budgets.process_ms, killSignal: 'SIGKILL' });
-        const text = redacted(`${result.stdout ?? ''}\n${result.stderr ?? ''}`, url);
-        writeFileSync(join(evidence, 'dry-run.log'), text);
-        requireValue(!result.error && result.status === 0, 'CLI dry-run failed');
-        validateDryRun(text);
+        const record = {
+            stdout: redacted(result.stdout ?? '', url), stderr: redacted(result.stderr ?? '', url),
+            status: result.status, signal: result.signal ?? null, error: Boolean(result.error)
+        };
+        saveJson(join(evidence, 'dry-run.json'), record);
+        writeFileSync(join(evidence, 'dry-run.log'), record.stdout);
+        writeFileSync(join(evidence, 'dry-run.stderr.log'), record.stderr);
+        validateDryRun(record);
         // A fresh apply directory excludes mutable CLI cache files created by dry-run.
         prepareDb(source, initial, join(root, 'apply-work'));
         validateRecheck(initial, snapshot('prepared-recheck', url));
@@ -496,7 +509,7 @@ export function execute(command, args = [], { env = process.env, adapters = defa
         const current = context();
         selected(current);
         validateBefore(before());
-        validateDryRun(regular(join(evidence, 'dry-run.log')).toString());
+        validateDryRun(jsonFile(join(evidence, 'dry-run.json')));
         validateRecheck(before(), jsonFile(join(evidence, 'prepared-recheck.json')));
         verifyPrepared(source, before(), join(root, 'apply-work'));
         validateReplay(allArtifacts(), evidenceName('receipt', current));
