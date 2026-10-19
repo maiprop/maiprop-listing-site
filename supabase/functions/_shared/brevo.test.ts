@@ -106,7 +106,7 @@ Deno.test("raw Brevo transport returns a known 2xx without reading its body", as
   Deno.env.set("BREVO_API_KEY", "synthetic-key");
   globalThis.fetch = async (input, init) => {
     assertEquals(String(input), "https://api.brevo.com/v3/smtp/email");
-    assertEquals(init?.method, "POST");
+    assertEquals(init && "method" in init ? init.method : undefined, "POST");
     return new Response(new ReadableStream({ pull() { throw new Error("body unreadable"); } }), { status: 201 });
   };
   try {

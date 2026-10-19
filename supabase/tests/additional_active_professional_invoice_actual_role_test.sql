@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP on
 DO $$ BEGIN
- IF current_database() !~ '^maiprop_t13_additional_[a-z0-9_]+$'
+ IF current_database() !~ '^(maiprop_t13_additional_[a-z0-9_]+|maiprop_d0_[a-z0-9_]{6,48})$'
  OR current_setting('maiprop.test_disposable_database',true) IS DISTINCT FROM current_database()
  OR current_user <> 'postgres' OR session_user <> 'postgres' OR inet_server_addr() IS NOT NULL
  OR current_setting('session_replication_role') <> 'origin'
