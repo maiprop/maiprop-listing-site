@@ -38,6 +38,12 @@ Deno.serve(async (req) => {
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
+  let failureCategory:
+    | "configuration"
+    | "authentication"
+    | "authorization"
+    | "validation"
+    | "delivery" = "configuration";
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -53,6 +59,7 @@ Deno.serve(async (req) => {
     );
 
     const token = authHeader.slice("Bearer ".length).trim();
+    failureCategory = "authentication";
     const {
       data: { user },
       error: authErr,
@@ -64,6 +71,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    failureCategory = "authorization";
     const { data: adminProfile } = await supabase
       .from("profiles")
       .select("role, is_platform_admin")
@@ -76,6 +84,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    failureCategory = "validation";
     const body = await parseJsonBody(req, invitationNotificationSchema);
     const { type, email, full_name, rejection_reason, tier, payment_url } = body;
 
@@ -212,6 +221,7 @@ Deno.serve(async (req) => {
       );
     }
 
+    failureCategory = "delivery";
     await sendBrevoEmail({
       to: email,
       subject,
@@ -228,15 +238,20 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     if (err instanceof SchemaValidationError) {
-      return new Response(JSON.stringify({ error: err.message, code: err.code, issues: err.issues }), {
+      const invalidJson = err.code === "invalid_json";
+      return new Response(JSON.stringify({
+        error: invalidJson ? "Invalid JSON body" : "Invalid request body",
+        code: invalidJson ? "invalid_json" : "validation_error",
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    log.error("invitation-notify error", {
-      err: err instanceof Error ? err.message : String(err),
-    });
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
+    log.error("invitation_notification_failed", { category: failureCategory, status: 500 });
+    return new Response(JSON.stringify({
+      error: "Invitation notification failed",
+      code: "notification_failed",
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

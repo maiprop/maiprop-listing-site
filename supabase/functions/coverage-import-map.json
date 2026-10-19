@@ -33,9 +33,6 @@
       "./_shared/auditLog.ts": "./_shared/coverage-test-support/create-new-building-listing-audit.ts",
       "./_shared/proGate.ts": "./_shared/coverage-test-support/create-new-building-listing-pro-gate.ts"
     },
-    "./invitation-notify/": {
-      "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/invitation-notify-supabase.ts"
-    },
     "./open-house-capacity/": {
       "npm:@supabase/supabase-js@2.57.2": "./_shared/coverage-test-support/open-house-capacity-supabase.ts"
     },
