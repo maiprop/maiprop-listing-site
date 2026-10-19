@@ -1,5 +1,16 @@
 \set ON_ERROR_STOP on
 BEGIN;
+-- D0 supplies a fresh clone and a clean postgres backend for this suite.
+DO $test$
+BEGIN
+  IF current_user <> 'postgres'
+    OR nullif(pg_catalog.current_setting('request.jwt.claim.role',true),'') IS NOT NULL
+    OR EXISTS (SELECT 1 FROM public.auth_email_dispatch)
+  THEN RAISE EXCEPTION 'auth_email_dirty_initial_context'; END IF;
+END $test$;
+SELECT plan(13);
+SELECT is((SELECT pg_catalog.count(*) FROM public.auth_email_dispatch),0::bigint,
+  'fresh Auth admission ledger starts empty');
 SET LOCAL request.jwt.claim.role = 'service_role';
 
 DO $test$
@@ -26,6 +37,22 @@ BEGIN
           AND (NOT p.prosecdef OR p.proconfig IS DISTINCT FROM ARRAY['search_path=""']))
   THEN RAISE EXCEPTION 'auth_email_metadata_mismatch'; END IF;
 END $test$;
+SELECT is((SELECT c.relrowsecurity FROM pg_catalog.pg_class c
+  WHERE c.oid='public.auth_email_dispatch'::regclass),true,'Auth ledger has RLS enabled');
+SELECT is((SELECT pg_catalog.count(*) FROM pg_catalog.pg_policies
+  WHERE schemaname='public' AND tablename='auth_email_dispatch'),0::bigint,
+  'Auth ledger has no user policies');
+SELECT is(pg_catalog.has_function_privilege('anon',
+  'public.begin_auth_email_dispatch_for_service(text,text,uuid)','EXECUTE'),false,
+  'anon cannot begin Auth dispatch');
+SELECT is(pg_catalog.has_function_privilege('authenticated',
+  'public.record_auth_email_dispatch_result_for_service(text,text,uuid,text,integer,text)','EXECUTE'),false,
+  'authenticated cannot record Auth dispatch');
+SELECT is(pg_catalog.has_function_privilege('service_role',
+  'public.begin_auth_email_dispatch_for_service(text,text,uuid)','EXECUTE'),true,
+  'service role can call Auth admission RPC');
+SELECT is(pg_catalog.has_table_privilege('service_role','public.auth_email_dispatch','SELECT'),false,
+  'service role cannot directly read Auth ledger');
 
 SET LOCAL ROLE anon;
 DO $test$
@@ -110,6 +137,17 @@ BEGIN
   END;
 END $test$;
 RESET ROLE;
+SELECT is((SELECT state FROM public.auth_email_dispatch
+  WHERE webhook_id='evt-service' AND slot='email_change_current'),'accepted'::text,
+  'original attempt records late acceptance and remains terminal');
+SELECT is((SELECT http_status FROM public.auth_email_dispatch
+  WHERE webhook_id='evt-service' AND slot='email_change_current'),201,
+  'accepted slot retains the exact 2xx status');
+SELECT is((SELECT state FROM public.auth_email_dispatch
+  WHERE webhook_id='evt-independent' AND slot='email_change_current'),'sending'::text,
+  'distinct verified event is independently admitted');
+SELECT is((SELECT pg_catalog.count(*) FROM public.auth_email_dispatch
+  WHERE webhook_id='evt-bad'),0::bigint,'invalid slot creates no ledger row');
 
 -- Operational timeout is a one-way unknown classification, never a new send lease.
 UPDATE public.auth_email_dispatch SET attempt_started_at=pg_catalog.now()-INTERVAL '16 minutes'
@@ -124,6 +162,13 @@ BEGIN
   IF v_result->>'state'<>'accepted' THEN RAISE EXCEPTION 'expired_late_acceptance_%',v_result; END IF;
 END $test$;
 RESET ROLE;
+SELECT is((SELECT state FROM public.auth_email_dispatch
+  WHERE webhook_id='evt-independent' AND slot='email_change_current'),'accepted'::text,
+  'expired original attempt resolves only through late 2xx evidence');
+SELECT is((SELECT http_status FROM public.auth_email_dispatch
+  WHERE webhook_id='evt-independent' AND slot='email_change_current'),202,
+  'late acceptance retains its exact response status');
+SELECT * FROM finish();
 ROLLBACK;
 DO $test$
 BEGIN

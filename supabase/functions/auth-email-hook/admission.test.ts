@@ -82,28 +82,69 @@ async function network(run: (sends: string[], rpcArgs: Record<string, unknown>[]
   try { await run(sends, rpcArgs); } finally { globalThis.fetch = original; }
 }
 
+async function captureConsole(run: (lines: string[]) => Promise<void>) {
+  const original = { error: console.error, warn: console.warn, log: console.log };
+  const lines: string[] = [];
+  const capture = (...values: unknown[]) => lines.push(values.map(String).join(" "));
+  console.error = capture;
+  console.warn = capture;
+  console.log = capture;
+  try { await run(lines); } finally {
+    console.error = original.error;
+    console.warn = original.warn;
+    console.log = original.log;
+  }
+}
+
+function assertSafeSurfaces(responses: string[], logs: string[], rpcArgs: Record<string, unknown>[]) {
+  for (const response of responses.slice(0, 2)) {
+    assertEquals(JSON.parse(response), { error: "Auth email dispatch incomplete" });
+  }
+  if (responses.length === 3) assertEquals(JSON.parse(responses[2]), { success: true });
+  const exposed = [...responses, ...logs, JSON.stringify(rpcArgs)].join("\n");
+  for (const sentinel of [
+    "private-current-token", "private-current-hash", "private-new-token", "private-new-hash",
+    "current@example.test", "next@example.test", "synthetic-user", "synthetic-brevo-key",
+    "provider-body-sentinel", "provider-throw-sentinel",
+  ]) assertEquals(exposed.includes(sentinel), false, `sensitive sentinel leaked: ${sentinel}`);
+  for (const args of rpcArgs) {
+    assertEquals(Object.keys(args).sort(), "p_outcome" in args
+      ? ["p_attempt_token", "p_http_status", "p_outcome", "p_result_code", "p_slot", "p_webhook_id"]
+      : ["p_attempt_token", "p_slot", "p_webhook_id"]);
+  }
+  for (const line of logs) {
+    const parsed = JSON.parse(line) as Record<string, unknown>;
+    assertEquals(Object.keys(parsed).sort(), ["code", "fn", "level", "msg", "ts"]);
+    assertEquals(parsed.fn, "auth-email-hook");
+    assertEquals(parsed.code, "dispatch_incomplete");
+  }
+}
+
 Deno.test("signed partial 503 holds both slots and new ID with identical payload is independent", async () => {
-  await network(async (sends, rpcArgs) => {
+  await captureConsole(async (logs) => network(async (sends, rpcArgs) => {
     const replay = signed("evt-partial", change);
-    assertEquals((await handler(replay())).status, 500);
-    assertEquals((await handler(replay())).status, 500);
+    const first = await handler(replay());
+    const second = await handler(replay());
+    assertEquals([first.status, second.status], [500, 500]);
     assertEquals(sends, ["email_change_current", "email_change_new"]);
-    assertEquals((await handler(signed("evt-independent", change)())).status, 200);
+    const independent = await handler(signed("evt-independent", change)());
+    assertEquals(independent.status, 200);
     assertEquals(sends, ["email_change_current", "email_change_new", "email_change_current", "email_change_new"]);
-    const recorded = JSON.stringify(rpcArgs);
-    assertEquals(recorded.includes("private-current-token"), false);
-    assertEquals(recorded.includes("private-new-hash"), false);
-    assertEquals(recorded.includes("current@example.test"), false);
-  }, async (_slot, ordinal) => new Response(null, { status: ordinal === 2 ? 503 : 201 }));
+    assertEquals(logs.length, 2);
+    assertSafeSurfaces([await first.text(), await second.text(), await independent.text()], logs, rpcArgs);
+  }, async (_slot, ordinal) => new Response(ordinal === 2 ? "provider-body-sentinel" : null, { status: ordinal === 2 ? 503 : 201 })));
 });
 
 Deno.test("lost response holds new slot without resending accepted current", async () => {
-  await network(async (sends) => {
+  await captureConsole(async (logs) => network(async (sends, rpcArgs) => {
     const replay = signed("evt-lost", change);
-    assertEquals((await handler(replay())).status, 500);
-    assertEquals((await handler(replay())).status, 500);
+    const first = await handler(replay());
+    const second = await handler(replay());
+    assertEquals([first.status, second.status], [500, 500]);
     assertEquals(sends, ["email_change_current", "email_change_new"]);
-  }, async (_slot, ordinal) => ordinal === 2 ? Promise.reject(new Error("private-token")) : new Response(null, { status: 201 }));
+    assertEquals(logs.length, 2);
+    assertSafeSurfaces([await first.text(), await second.text()], logs, rpcArgs);
+  }, async (_slot, ordinal) => ordinal === 2 ? Promise.reject(new Error("provider-throw-sentinel")) : new Response(null, { status: 201 })));
 });
 
 Deno.test("complete signed replay returns success without another provider send", async () => {
@@ -154,6 +195,52 @@ Deno.test("tampered signature has no admission or provider effect", async () => 
     const valid = signed("evt-valid", change)();
     const tampered = new Request(valid, { headers: { ...Object.fromEntries(valid.headers), "webhook-id": "evt-tampered" } });
     assertEquals((await handler(tampered)).status, 401);
+    assertEquals(sends, []);
+    assertEquals(rpcArgs, []);
+  });
+});
+
+Deno.test("OPTIONS and authorized or unauthorized preview have zero admission and provider effects", async () => {
+  await network(async (sends, rpcArgs) => {
+    const url = "https://functions.supabase.co/auth-email-hook/preview";
+    assertEquals((await handler(new Request(url, { method: "OPTIONS" }))).status, 200);
+    assertEquals((await handler(new Request(url, { method: "POST", body: JSON.stringify({ type: "signup" }),
+      headers: { authorization: "Bearer wrong-preview-secret" } }))).status, 401);
+    assertEquals((await handler(new Request(url, { method: "POST", body: JSON.stringify({ type: "signup" }),
+      headers: { authorization: `Bearer v1,whsec_${signingKey}` } }))).status, 200);
+    assertEquals(sends, []);
+    assertEquals(rpcArgs, []);
+  });
+});
+
+Deno.test("missing and oversized signed identity have zero admission and provider effects", async () => {
+  await network(async (sends, rpcArgs) => {
+    const valid = signed("evt-identity", change)();
+    const missingHeaders = new Headers(valid.headers);
+    missingHeaders.delete("webhook-id");
+    assertEquals((await handler(new Request(valid, { headers: missingHeaders }))).status, 401);
+    const oversized = signed("x".repeat(513), change);
+    const rejected = await handler(oversized());
+    assertEquals(rejected.status, 500);
+    assertEquals(await rejected.json(), { error: "Auth email dispatch incomplete" });
+    assertEquals(sends, []);
+    assertEquals(rpcArgs, []);
+  });
+});
+
+Deno.test("missing service or Brevo configuration has zero admission and provider effects", async () => {
+  await network(async (sends, rpcArgs) => {
+    for (const key of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "BREVO_FROM_EMAIL", "BREVO_API_KEY"]) {
+      const prior = Deno.env.get(key);
+      Deno.env.delete(key);
+      try {
+        const response = await handler(signed(`evt-missing-${key}`, change)());
+        assertEquals(response.status, 500);
+        assertEquals(await response.json(), { error: "Auth email dispatch incomplete" });
+      } finally {
+        if (prior !== undefined) Deno.env.set(key, prior);
+      }
+    }
     assertEquals(sends, []);
     assertEquals(rpcArgs, []);
   });
