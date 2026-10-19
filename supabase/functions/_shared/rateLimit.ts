@@ -202,6 +202,15 @@ export function makeDbRateLimiter(
     return client;
   }
 
+  function logFailure(category: "rpc_error" | "exception"): void {
+    console.error(JSON.stringify({
+      level: "error",
+      event: failClosed ? "rate_limit_fail_closed" : "rate_limit_fail_open",
+      category,
+      alert: true,
+    }));
+  }
+
   async function callRpc(key: string): Promise<RpcResponse | null> {
     const timeoutMs = databaseTimeoutMs ?? readPositiveIntEnv(
       "RATE_LIMIT_DB_TIMEOUT_MS",
@@ -218,33 +227,12 @@ export function makeDbRateLimiter(
         })
         .abortSignal(controller.signal);
       if (error) {
-        console.error(
-          JSON.stringify({
-            level: "error",
-            event: failClosed
-              ? "rate_limit_fail_closed"
-              : "rate_limit_fail_open",
-            bucket,
-            key,
-            reason: error.message,
-            alert: true,
-          }),
-        );
+        logFailure("rpc_error");
         return null;
       }
       return data as RpcResponse;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error(
-        JSON.stringify({
-          level: "error",
-          event: failClosed ? "rate_limit_fail_closed" : "rate_limit_fail_open",
-          bucket,
-          key,
-          reason: msg,
-          alert: true,
-        }),
-      );
+    } catch {
+      logFailure("exception");
       return null;
     } finally {
       clearTimeout(timeoutId);
