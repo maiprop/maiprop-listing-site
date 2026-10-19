@@ -35,7 +35,7 @@ BEGIN;
 SET LOCAL statement_timeout='40s';
 SET LOCAL lock_timeout='3s';
 SET LOCAL search_path=public,extensions;
-SELECT plan(28);
+SELECT plan(29);
 SELECT is(current_setting('session_replication_role'),'origin','ordinary triggers');
 SELECT is((SELECT catalog->'routines'->'admin_update_firesale_pipeline_deal_for_user(uuid,uuid,text,text,numeric,text,numeric)'->>'sha' FROM fr_baseline),'d755da61395c22f7fe5cebc156cd11b37c64d6223a4f98924d23f1a8eb65f9f9','active pipeline installed identity');
 SELECT ok((SELECT bool_and(tgenabled='O') FROM pg_trigger WHERE tgrelid IN ('auth.users'::regclass,'public.profiles'::regclass,'public.investor_subscriptions'::regclass,'public.firesale_requests'::regclass,'public.firesale_interest'::regclass) AND NOT tgisinternal),'normal trigger attachments');
@@ -88,14 +88,29 @@ SELECT ok((SELECT bool_and(status='pending_payment' AND stripe_session_id IS NOT
 SELECT is(pg_temp.fr_graph()->'subscriptions',(SELECT jsonb_object_agg(k,CASE WHEN value->>'user_id' LIKE 'a13f1001-%' THEN value||jsonb_build_object('stripe_customer_id','cus_fr_'||right(value->>'user_id',1),'stripe_session_id','cs_fr_'||right(value->>'user_id',1),'runtime_mode',public.current_billing_runtime_mode(),'livemode',public.current_billing_runtime_mode()='live','updated_at',now()) ELSE value END) FROM jsonb_each((SELECT graph->'subscriptions' FROM fr_before_link)) q(k,value)),'complete subscription graph matches exact checkout persistence fields');
 CREATE TEMP TABLE fr_before_activation AS SELECT pg_temp.fr_graph() graph;
 -- Local synthetic paid-session callback: exact stripe-webhook activation fields/predicates; no provider assertion.
+CREATE TEMP TABLE fr_activated (LIKE public.investor_subscriptions);
+CREATE TEMP TABLE fr_activation_effects(n integer,user_id uuid,affected integer);
+GRANT INSERT,SELECT ON fr_activated,fr_activation_effects TO service_role;
 SET LOCAL ROLE service_role;
-CREATE TEMP TABLE fr_activated AS WITH activated AS (
- UPDATE public.investor_subscriptions s SET status='active',started_at=now(),expires_at=now()+interval '365 days',updated_at=now(),activated_at=now(),stripe_customer_id='cus_fr_'||right(s.user_id::text,1),stripe_session_id='cs_fr_'||right(s.user_id::text,1),runtime_mode=public.current_billing_runtime_mode(),livemode=public.current_billing_runtime_mode()='live'
- WHERE s.user_id::text LIKE 'a13f1001-%' AND s.tier='private' AND s.stripe_session_id='cs_fr_'||right(s.user_id::text,1) AND s.status='pending_payment'
- RETURNING s.*
-) SELECT * FROM activated;
+DO $fr$ DECLARE p record; rows_changed integer; BEGIN
+ FOR p IN SELECT n,user_id FROM fr_pending ORDER BY n LOOP
+  UPDATE public.investor_subscriptions s
+  SET status='active',started_at=now(),expires_at=now()+interval '365 days',
+      updated_at=now(),activated_at=now(),stripe_customer_id='cus_fr_'||p.n,
+      stripe_session_id='cs_fr_'||p.n,
+      runtime_mode=public.current_billing_runtime_mode(),
+      livemode=public.current_billing_runtime_mode()='live'
+  WHERE s.user_id=p.user_id AND s.tier='private'
+    AND s.stripe_session_id='cs_fr_'||p.n AND s.status='pending_payment';
+  GET DIAGNOSTICS rows_changed=ROW_COUNT;
+  INSERT INTO fr_activation_effects VALUES (p.n,p.user_id,rows_changed);
+  INSERT INTO fr_activated SELECT s.* FROM public.investor_subscriptions s
+   WHERE s.user_id=p.user_id AND s.tier='private' AND s.stripe_session_id='cs_fr_'||p.n;
+ END LOOP;
+END $fr$;
 RESET ROLE;
 SELECT is((SELECT count(*)::integer FROM fr_activated),4,'source-shaped service activation updates each matched pending row once');
+SELECT is((SELECT jsonb_agg(jsonb_build_array(n,user_id,affected) ORDER BY n) FROM fr_activation_effects),'[[2,"a13f1001-0000-4000-8000-000000000002",1],[3,"a13f1001-0000-4000-8000-000000000003",1],[4,"a13f1001-0000-4000-8000-000000000004",1],[5,"a13f1001-0000-4000-8000-000000000005",1]]'::jsonb,'each exact user/tier/session pending activation affects one row');
 SELECT is(pg_temp.fr_graph()->'subscriptions',(SELECT jsonb_object_agg(k,CASE WHEN value->>'user_id' LIKE 'a13f1001-%' THEN value||jsonb_build_object('status','active','started_at',now(),'expires_at',now()+interval '365 days','updated_at',now(),'activated_at',now(),'stripe_customer_id','cus_fr_'||right(value->>'user_id',1),'stripe_session_id','cs_fr_'||right(value->>'user_id',1),'runtime_mode',public.current_billing_runtime_mode(),'livemode',public.current_billing_runtime_mode()='live') ELSE value END) FROM jsonb_each((SELECT graph->'subscriptions' FROM fr_before_activation)) q(k,value)),'complete subscription graph matches exact source activation fields');
 SELECT ok((SELECT bool_and(private.has_investor_subscription_for_user(user_id)) FROM fr_activated),'four investor entitlements recognized before interest');
 SELECT ok((SELECT bool_and(role::text='investor' OR participant_type::text='investor') FROM public.profiles WHERE user_id IN (SELECT user_id FROM fr_activated)),'normal subscription trigger yields investor participant access');
