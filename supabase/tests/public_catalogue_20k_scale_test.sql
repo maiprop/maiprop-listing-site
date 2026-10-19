@@ -85,6 +85,11 @@ FROM generate_series(1, 20000) AS scale(id);
 
 SET LOCAL session_replication_role = origin;
 
+-- Model a maintained 20,000-row catalogue with representative listing
+-- statistics before measuring publication, rather than an immediate bulk
+-- import whose transaction-local inserts have not been analyzed.
+ANALYZE public.listings;
+
 SET LOCAL ROLE service_role;
 SELECT performs_ok(
   $$SELECT count(*) FROM public.publish_public_catalogue()$$,
