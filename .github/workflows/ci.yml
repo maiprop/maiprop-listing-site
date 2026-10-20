@@ -167,6 +167,9 @@ jobs:
         with:
           deno-version: 2.7.12
 
+      - name: Export Deno path for coverage contracts
+        run: echo "MAIPROP_DENO=$(which deno)" >> "$GITHUB_ENV"
+
       - name: Coverage
         run: npm run test:coverage
         env:
