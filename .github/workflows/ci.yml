@@ -162,6 +162,9 @@ jobs:
       - name: Test catalogue hotfix release contracts
         run: npm run test:catalogue-hotfix
 
+      - name: Test advisor index release contracts
+        run: node --test scripts/advisor-index-release.test.mjs
+
       - name: Install Deno for coverage contracts
         uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:

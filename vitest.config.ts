@@ -43,6 +43,8 @@ export default defineConfig({
       // These Node-native suites run through both local and coverage test gates.
       "scripts/deno-edge-coverage.test.mjs",
       "scripts/run-db-plpgsql-coverage.test.mjs",
+      // Imports node:test directly; Vite cannot bundle the built-in for jsdom.
+      "scripts/advisor-index-release.test.mjs",
     ],
     coverage: {
       provider: "v8",
