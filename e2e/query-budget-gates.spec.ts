@@ -47,9 +47,11 @@ type QueryRouteMeasurement = {
 };
 
 const QUERY_BUDGETS: Record<string, QueryBudget> = {
-  "/": { auth: 2, rest: 8, functions: 2, total: 12 },
+  // "/": mount settles the subscription twice by contract (initial check + audience handoff, see AuthContext handoff tests) plus one streetview cover fallback, so functions/total carry +1 each.
+  "/": { auth: 2, rest: 8, functions: 3, total: 13 },
   "/listings": { auth: 2, rest: 10, functions: 2, total: 14 },
-  "/auctions": { auth: 2, rest: 5, functions: 2, total: 8 },
+  // "/auctions": same pinned mount handoff + one streetview cover fallback as "/".
+  "/auctions": { auth: 2, rest: 5, functions: 3, total: 9 },
   "/open-houses": { auth: 2, rest: 6, functions: 2, total: 10 },
   "/pricing": { auth: 2, rest: 8, functions: 3, total: 13 },
   [`/property/${PERF_LISTING_ID}`]: { auth: 2, rest: 14, functions: 6, total: 20 },

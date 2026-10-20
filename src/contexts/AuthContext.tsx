@@ -166,26 +166,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const mountRestoreCheckRef = useRef<{
     userId: string;
     authSessionIdentity: AuthSessionIdentity | null;
-    audience: PricingAudienceId | null;
   } | null>(null);
 
   // Claims the single mount-time restore check for this session. Returns false
   // when an identical claim already ran, so the INITIAL_SESSION + getSession
   // pair cannot invoke twice. Checkout reconciliations bypass the claim at
-  // their call sites and always run.
+  // their call sites and always run. The key is user + session identity only:
+  // the profile (hence the pricing audience) routinely lands between the two
+  // restore paths, and the audience is not part of the edge request, so keying
+  // on it would defeat the dedup on every authenticated mount.
   const claimMountRestoreCheck = useCallback((sess: Session | null) => {
     if (!sess?.user) return false;
     const userId = sess.user.id;
     const identity = authSessionIdentityFor(sess);
-    const audience = subscriptionAudienceRef.current;
     const claimed = mountRestoreCheckRef.current;
     const sameIdentity = !claimed?.authSessionIdentity || !identity
       ? claimed?.authSessionIdentity === identity
       : !isDefinitelyDifferentAuthSession(claimed.authSessionIdentity, identity);
-    if (claimed && claimed.userId === userId && claimed.audience === audience && sameIdentity) {
+    if (claimed && claimed.userId === userId && sameIdentity) {
       return false;
     }
-    mountRestoreCheckRef.current = { userId, authSessionIdentity: identity, audience };
+    mountRestoreCheckRef.current = { userId, authSessionIdentity: identity };
     return true;
   }, []);
 

@@ -208,11 +208,11 @@ export const HomepageAuctionsSection = ({ listings, isLoading, isError = false, 
             <p className="col-span-full py-12 text-center text-sm text-muted-foreground">
               {t("home.catalogue.auctionsEmpty")}
             </p>
-          ) : featuredListings.map((listing, index) => (
+          ) : featuredListings.map((listing) => (
+              // Below-fold cards load images lazily (PropertyCard default), so cover fallbacks such as the streetview proxy are only requested when scrolled into view. Offscreen-render deferral stays disabled per section contract.
               <PropertyCard
                 key={listing.id}
                 property={toAuctionCardProperty(listing, dateLocale)}
-                imagePriority={index < 4}
                 deferOffscreenRendering={false}
               />
             ))}
