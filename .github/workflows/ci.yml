@@ -173,6 +173,9 @@ jobs:
       - name: Coverage
         run: npm run test:coverage
         env:
+          # Deno colorizes failure keywords even when piped; the coverage
+          # contract assertions match plain "error: Test failed" output.
+          NO_COLOR: "1"
           # The components smoke-test file alone renders ~150 React components
           # in one process; with the default 2 GB Node heap on Linux runners
           # the V8 GC starts thrashing and OOM-kills the worker. 4 GB leaves
