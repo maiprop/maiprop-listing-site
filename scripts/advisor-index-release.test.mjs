@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, writeFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 const { it } = typeof globalThis.it === 'function' ? globalThis : await import('node:test');
 const api = await import('./advisor-index-release.mjs').catch(e => { if (e.code === 'ERR_MODULE_NOT_FOUND')
     return {}; throw e; });
@@ -462,7 +463,7 @@ it('rejects changed source SQL and directory junctions without preparing a selec
     assert.throws(() => api.sourceSql(linkRoot));
 });
 it('importing validators requires no workflow context and executes no GitHub/database process', () => {
-    const url = new URL('./advisor-index-release.mjs', import.meta.url).href;
+    const url = pathToFileURL(join(process.cwd(), 'scripts', 'advisor-index-release.mjs')).href;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(url)});console.log('imported')`], {
         cwd: tmpdir(), env: {}, encoding: 'utf8'
     });
