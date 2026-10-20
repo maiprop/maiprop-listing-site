@@ -15,7 +15,7 @@ MaiProp is currently a single npm package with multiple runtime surfaces. This d
 | `remotion-video/` | Separate Remotion package with its own TypeScript config. |
 | `docs/` | ADRs, governance, security, operations, procurement, and audit evidence. |
 
-## Proposed future layout (not implemented)
+## Target layout (proposed, not implemented)
 
 ```text
 /apps
