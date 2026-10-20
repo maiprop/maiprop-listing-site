@@ -21,5 +21,32 @@
     <script src="https://cdn.redoc.ly/redoc/v2.5.2/bundles/redoc.standalone.js"
             integrity="sha384-70P5pmIdaQdVbxvjhrcTDv1uKcKqalZ3OHi7S2J+uzDl0PW8dO6L+pHOpm9EEjGJ"
             crossorigin="anonymous"></script>
-  </body>
+  <script> 
+  (function () { 
+    function describeSelect(select) { 
+      var first = select && select.options && select.options[select.selectedIndex || 0]; 
+      var text = first && first.text ? first.text.replace(/\s+/g, " ").trim() : ""; 
+      return "Example" + (text ? ": " + text.slice(0, 80) : ""); 
+    } 
+    function harden(scope) { 
+      var root = scope || document; 
+      if (!root.querySelectorAll) return; 
+      var selects = root.querySelectorAll("redoc select:not([aria-label])"); 
+      for (var i = 0; i < selects.length; i++) selects[i].setAttribute("aria-label", describeSelect(selects[i])); 
+      var pres = root.querySelectorAll("redoc pre:not([tabindex])"); 
+      for (var j = 0; j < pres.length; j++) { 
+        pres[j].setAttribute("tabindex", "0"); 
+        if (!pres[j].getAttribute("aria-label")) pres[j].setAttribute("aria-label", "Response example"); 
+      } 
+    } 
+    function hardenAll() { harden(document); } 
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hardenAll); 
+    hardenAll(); 
+    var target = document.querySelector("redoc") || document.body; 
+    if (target && typeof MutationObserver !== "undefined") { 
+      new MutationObserver(hardenAll).observe(target, { childList: true, subtree: true }); 
+    } 
+  })(); 
+</script> 
+</body>
 </html>

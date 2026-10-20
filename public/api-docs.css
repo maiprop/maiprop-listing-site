@@ -22,3 +22,30 @@ redoc h5 span {
 redoc li.tab-error[role="tab"] {
   color: #ff9a90 !important;
 }
+ 
+redoc .redoc-json code .token.punctuation { 
+  color: #ece9e2 !important; 
+} 
+ 
+redoc pre[tabindex="0"]:focus-visible { 
+  outline: 2px solid #7aa2ff; 
+  outline-offset: 2px; 
+}
+ 
+body redoc .react-tabs__tab-list > li[role="tab"] { 
+  color: #ece9e2 !important; 
+} 
+ 
+body redoc .react-tabs__tab-list > li[role="tab"][aria-selected="true"] { 
+  color: #1a2b33 !important; 
+} 
+ 
+body redoc .react-tabs__tab-list > li.tab-success[role="tab"] { 
+  color: #8ce99a !important; 
+} 
+ 
+body redoc .react-tabs__tab-list > li.tab-success[role="tab"][aria-selected="true"] { 
+  color: #14601f !important; 
+} 
+ 
+

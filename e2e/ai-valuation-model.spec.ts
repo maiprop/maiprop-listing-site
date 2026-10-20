@@ -1,13 +1,15 @@
 /**
  * AI valuation model e2e coverage.
  *
- * Scenario coverage for the hybrid clean-market valuation issue:
- * 1. Listing/auction detail AI insights prefer auctionAdjustedValue.
- * 2. Listing/auction detail valuation panel uses auctionAdjustedValue as primary.
- * 3. Listing/auction detail still shows estimatedValue as the auction bid value.
- * 4. New-build detail supports snake_case auction_adjusted_value.
- * 5. Compare drawer normalizes clean-market responses.
- * 6. Compare drawer handles sparse successful valuation payloads without crashing.
+ * Scenario coverage for the sourced-evidence (V2) valuation model:
+ * 1. Auction detail AI insights prefer auctionAdjustedValue as primary.
+ * 2. Auction detail valuation panel keeps the OS auction estimate separate.
+ * 3. New-build detail shows the primary clean-market valuation response.
+ * 4. Compare drawer shows clean-market values and marks sparse payloads unavailable.
+ * 5. Quick Sale shows Unavailable when the valuation comes back empty.
+ * 6. Quick Sale shows the AI estimate when the valuation succeeds.
+ * 7. Quick Sale provider errors surface the unavailable toast and keep Unavailable.
+ * 8. Supabase auth/profile/function/storage calls are mocked, so no live data is mutated.
  * 7. Quick Sale sparse success falls back to asking price and applies the 5% discount.
  * 8. Quick Sale provider errors surface a fallback-estimate toast.
  * 9. Supabase auth/profile/function/storage calls are mocked, so no live data is mutated.
@@ -264,6 +266,104 @@ const mockAuth = async (page: Page, role: "buyer" | "seller") => {
   });
 };
 
+const NUMERIC_V2_FIELDS: string[] = [
+  "estimatedValue",
+  "auctionAdjustedValue",
+  "rangeLow",
+  "rangeHigh",
+  "executionValue",
+  "pricePerSqmEstimate",
+  "rentalYieldEstimate",
+  "objectiveValueProxy",
+  "confidence",
+  "liquidityScore",
+  "legalCleanliness",
+  "planningCertainty",
+  "taxFriction",
+  "transferReadiness",
+  "listingQualityScore",
+  "marketComparisonPct"
+];
+
+type V2Overrides = Record<string, unknown>;
+
+const v2ValuationResponse = (overrides: V2Overrides = {}): Record<string, unknown> => {
+  const merged: Record<string, unknown> = {
+    responseVersion: 2,
+    status: "available",
+    transaction: "sale",
+    valueUnit: "EUR",
+    estimateBasis: "market_value",
+    providerPrediction: null,
+    estimatedValue: 130000,
+    auctionAdjustedValue: 154000,
+    rangeLow: 120000,
+    rangeHigh: 140000,
+    rangeBasis: "estimatedValue",
+    executionValue: 115000,
+    pricePerSqmEstimate: 1711,
+    rentalYieldEstimate: 4.5,
+    objectiveValueProxy: null,
+    confidence: 82,
+    confidenceLabel: "High",
+    liquidityScore: 50,
+    legalCleanliness: null,
+    planningCertainty: null,
+    taxFriction: null,
+    transferReadiness: null,
+    listingQualityScore: null,
+    marketComparison: "below_market",
+    marketComparisonPct: -44,
+    pricingPosition: "overpriced",
+    summary: "Supported valuation evidence for e2e coverage.",
+    legalSummary: null,
+    taxSummary: null,
+    renovationPotential: null,
+    highestBestUseHint: null,
+    keyFactors: [],
+    redFlags: [],
+    methodUsed: "E2E deterministic valuation fixture",
+    ...overrides,
+    evidence: {
+      independentlyVerified: false,
+      fields: {
+        estimatedValue: "ai_estimate",
+        auctionAdjustedValue: "ai_estimate",
+        rangeLow: "derived_ai",
+        rangeHigh: "derived_ai",
+        executionValue: "derived_ai",
+        pricePerSqmEstimate: "derived_ai",
+        rentalYieldEstimate: "ai_estimate",
+        objectiveValueProxy: "unavailable",
+        confidence: "ai_estimate",
+        liquidityScore: "ai_estimate",
+        legalCleanliness: "unavailable",
+        planningCertainty: "unavailable",
+        taxFriction: "unavailable",
+        transferReadiness: "unavailable",
+        listingQualityScore: "unavailable",
+        marketComparisonPct: "derived_ai",
+      },
+      analysis: "ai_estimate",
+      limitations: ["Not a formal appraisal."],
+    },
+  };
+  const evidence = merged.evidence as Record<string, unknown>;
+  const fields = evidence.fields as Record<string, string>;
+  for (const key of NUMERIC_V2_FIELDS) {
+    if (merged[key] === null || merged[key] === undefined) fields[key] = "unavailable";
+    else if (fields[key] === "unavailable") fields[key] = "ai_estimate";
+  }
+  return merged;
+};
+
+const defaultValuationFor = (body: Record<string, unknown>): Record<string, unknown> => {
+  if (body.listingType === "auction") {
+    return v2ValuationResponse({ transaction: "auction", estimateBasis: "auction_value" });
+  }
+  return v2ValuationResponse({});
+};
+
 const mockBackend = async (
   page: Page,
   listings: ListingRow[],
@@ -273,21 +373,8 @@ const mockBackend = async (
   } = {},
 ) => {
   await mockAuth(page, options.role ?? "buyer");
-  const valuation = options.valuation ?? (() => ({
-    estimatedValue: 130000,
-    auctionAdjustedValue: 154000,
-    rangeLow: 120000,
-    rangeHigh: 140000,
-    confidence: 82,
-    confidenceLabel: "High",
-    liquidityScore: 50,
-    marketComparison: "below_market",
-    marketComparisonPct: -44,
-    pricingPosition: "overpriced",
-    rentalYieldEstimate: 4.5,
-    executionValue: 115000,
-    pricePerSqmEstimate: 1711,
-  }));
+
+  const valuation = options.valuation ?? defaultValuationFor;
 
   await page.route(/\/api\/public\/similar-listings(?:\?|$)/, async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: [] }) });
@@ -400,7 +487,7 @@ const fillQuickSaleForm = async (page: Page) => {
 };
 
 test.describe("AI valuation model e2e coverage", () => {
-  test("auction detail uses the hybrid clean-market value in insights and valuation panel", async ({ page }) => {
+  test("auction detail prefers the auction-adjusted value in insights and valuation panel", async ({ page }) => {
     const errors = collectPageErrors(page);
     const auction = makeListing({
       id: AUCTION_ID,
@@ -419,42 +506,45 @@ test.describe("AI valuation model e2e coverage", () => {
     await page.getByRole("button", { name: /Load AI insights/i }).click();
     await expect(page.getByText(numberPattern(154000)).first()).toBeVisible();
 
-    await page.getByRole("button", { name: /Run AI Valuation/i }).click();
-    await expect(page.getByText(/Hybrid clean-market value/i)).toBeVisible();
+    await page.getByRole("button", { name: /Run valuation analysis/i }).click();
+    await expect(page.getByText(/Primary estimate/i)).toBeVisible();
     await expect(page.getByText(numberPattern(154000)).first()).toBeVisible();
-    await expect(page.getByText(/Auction-adjusted bid value/i)).toBeVisible();
+    await expect(page.getByText(/Separate OS auction-model estimate/i)).toBeVisible();
     await expect(page.getByText(numberPattern(130000)).first()).toBeVisible();
     expect(errors).toEqual([]);
   });
 
-  test("new-build detail supports snake_case clean-market valuation responses", async ({ page }) => {
+  test("new-build detail shows the primary clean-market valuation response", async ({ page }) => {
     const newBuild = makeListing({
       id: NEW_BUILD_ID,
-      title: "Snake Case New Build",
+      title: "Clean Market New Build",
       listing_type: "new_build",
       is_pre_sale: false,
       construction_status: "foundation",
       price: 420000,
     });
     await mockBackend(page, [newBuild], {
-      valuation: () => ({
-        estimated_value: 430000,
-        auction_adjusted_value: 500000,
-        marketComparisonPct: 19,
-        marketComparison: "above_market",
-        rentalYieldEstimate: 4.4,
-        confidenceLabel: "High",
-      }),
+    valuation: () => v2ValuationResponse({
+      estimatedValue: 430000,
+      auctionAdjustedValue: null,
+      rangeLow: null,
+      rangeHigh: null,
+      rangeBasis: null,
+      marketComparisonPct: 19,
+      marketComparison: "above_market",
+      rentalYieldEstimate: 4.4,
+      confidenceLabel: "High",
+    }),
     });
 
     await page.goto(`/new-build/${NEW_BUILD_ID}`);
-    await expect(page.getByText("Snake Case New Build").first()).toBeVisible();
+    await expect(page.getByText("Clean Market New Build").first()).toBeVisible();
     await expect(page.getByText("AI Market Insights").first()).toBeVisible();
     await page.getByRole("button", { name: /Load AI insights/i }).click();
-    await expect(page.getByText(numberPattern(500000)).first()).toBeVisible();
+    await expect(page.getByText(numberPattern(430000)).first()).toBeVisible();
   });
 
-  test("compare drawer covers clean-market and sparse-success valuation payloads", async ({ page }) => {
+  test("compare drawer shows clean-market values and marks sparse payloads unavailable", async ({ page }) => {
     // The compare drawer is a desktop/table interaction; mobile cards expose
     // detail-first navigation and the hover compare affordance is not reliable
     // under touch emulation.
@@ -467,16 +557,17 @@ test.describe("AI valuation model e2e coverage", () => {
     await mockBackend(page, listings, {
       valuation: (body) => body.listingId === COMPARE_SPARSE_ID
         ? {}
-        : {
-            estimatedValue: 240000,
-            auctionAdjustedValue: 300000,
-            rangeLow: 270000,
-            rangeHigh: 330000,
-            confidence: 80,
-            marketComparison: "above_market",
-            marketComparisonPct: 20,
-            rentalYieldEstimate: 4.5,
-          },
+        : v2ValuationResponse({
+          estimatedValue: 240000,
+          auctionAdjustedValue: null,
+          rangeLow: null,
+          rangeHigh: null,
+          rangeBasis: null,
+          confidence: 80,
+          marketComparison: "above_market",
+          marketComparisonPct: 20,
+          rentalYieldEstimate: 4.5,
+        }),
     });
 
     await page.goto("/listings");
@@ -491,13 +582,12 @@ test.describe("AI valuation model e2e coverage", () => {
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: /Run AI Analysis/i }).click();
     const aiValueCells = dialog.locator('tr:has-text("AI Value") td');
-    await expect(aiValueCells.nth(1)).toContainText(numberPattern(300000));
-    await expect(aiValueCells.nth(2)).toContainText(numberPattern(250000));
-    await expect(aiValueCells.nth(2)).toContainText(/At Market/i);
+    await expect(aiValueCells.nth(1)).toContainText(numberPattern(240000));
+    await expect(aiValueCells.nth(2)).toContainText("—");
     expect(errors).toEqual([]);
   });
 
-  test("quick sale sparse success falls back to asking price with the quick-sale discount", async ({ page }) => {
+  test("quick sale shows Unavailable when the valuation comes back empty", async ({ page }) => {
     await mockBackend(page, [], { role: "seller", valuation: () => ({}) });
 
     await page.goto("/firesale");
@@ -505,11 +595,23 @@ test.describe("AI valuation model e2e coverage", () => {
     await fillQuickSaleForm(page);
     await page.getByRole("button", { name: /Get AI Estimate/i }).click();
 
-    await expect(page.getByText(/AI Estimated Offer/i)).toBeVisible();
-    await expect(page.getByText(numberPattern(332500)).first()).toBeVisible();
+    await expect(page.getByText(/Market estimate/i).first()).toBeVisible();
+    await expect(page.getByText("Unavailable").first()).toBeVisible();
   });
 
-  test("quick sale provider errors are visible and keep the fallback estimate path", async ({ page }) => {
+  test("quick sale shows the AI estimate when the valuation succeeds", async ({ page }) => {
+    await mockBackend(page, [], { role: "seller", valuation: () => v2ValuationResponse({ estimatedValue: 340000 }) });
+
+    await page.goto("/firesale");
+    await expect(page.getByText("Property Details").first()).toBeVisible();
+    await fillQuickSaleForm(page);
+    await page.getByRole("button", { name: /Get AI Estimate/i }).click();
+
+    await expect(page.getByText(/Market estimate/i).first()).toBeVisible();
+    await expect(page.getByText(numberPattern(340000)).first()).toBeVisible();
+  });
+
+  test("quick sale provider errors surface the unavailable toast and keep the estimate unavailable", async ({ page }) => {
     await mockBackend(page, [], { role: "seller", valuation: () => ({ error: "provider_down" }) });
 
     await page.goto("/firesale");
@@ -517,8 +619,8 @@ test.describe("AI valuation model e2e coverage", () => {
     await fillQuickSaleForm(page);
     await page.getByRole("button", { name: /Get AI Estimate/i }).click();
 
-    await expect(page.getByText(/AI estimate is temporarily unavailable\. Using fallback estimate\./i)).toBeVisible();
-    await expect(page.getByText(/AI Estimated Offer/i)).toBeVisible();
-    await expect(page.getByText(numberPattern(184000)).first()).toBeVisible();
+    await expect(page.getByText("AI estimate is temporarily unavailable.").first()).toBeVisible();
+    await expect(page.getByText(/Market estimate/i).first()).toBeVisible();
+    await expect(page.getByText("Unavailable").first()).toBeVisible();
   });
 });
