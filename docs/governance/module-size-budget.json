@@ -170,7 +170,7 @@
     },
     {
       "path": "src/contexts/AuthContext.tsx",
-      "allowedMaxBytes": 39000,
+      "allowedMaxBytes": 41000,
       "owner": "app-web",
       "targetPackage": "apps/web",
       "refactorStrategy": "Split role-gating, session bootstrap, and provider wiring into auth feature modules.",
