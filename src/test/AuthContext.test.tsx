@@ -1800,6 +1800,52 @@ describe("AuthProvider auth API methods", () => {
     expect(exactCalls).toHaveLength(1);
   });
 
+  it("runs the mount-time restore check only once for INITIAL_SESSION + getSession", async () => {
+    const session = sessionFixture("u-mount-once", null);
+    let releaseSession!: (value: { data: { session: unknown } }) => void;
+    supabaseMock.auth.getSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseSession = resolve;
+        }),
+    );
+    supabaseMock.functions.invoke.mockResolvedValue({
+      data: {
+        subscribed: false,
+        product_id: null,
+        subscription_end: null,
+        source: "database",
+        sync_status: "synced",
+      },
+      error: null,
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    // Let the mount getSession restore run first and finish its check.
+    await act(async () => {
+      releaseSession({ data: { session } });
+    });
+    await waitFor(() =>
+      expect(
+        supabaseMock.functions.invoke.mock.calls.filter(([name]) => name === "check-subscription"),
+      ).toHaveLength(1),
+    );
+    // The late INITIAL_SESSION for the same session must not check again.
+    await act(async () => {
+      authStateCallbackHolder.current?.("INITIAL_SESSION", session);
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const subCalls = supabaseMock.functions.invoke.mock.calls.filter(
+      ([name]) => name === "check-subscription",
+    );
+    expect(subCalls).toHaveLength(1);
+  });
+
+
   it("keeps an old service response without an exact receipt pending", async () => {
     const sess = sessionFixture("u-old-service", "session-old-service");
     supabaseMock.auth.getSession.mockResolvedValue({ data: { session: sess } });

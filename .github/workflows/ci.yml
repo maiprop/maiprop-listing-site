@@ -408,6 +408,13 @@ jobs:
             CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           DO $$ BEGIN
             CREATE ROLE service_role; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          -- Replicate Supabase default privileges: tables created by later
+          -- migrations start with full grants (the June revoke migration
+          -- removes future defaults mid-chain, mirroring production).
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            GRANT ALL PRIVILEGES ON TABLES TO anon, authenticated, service_role;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            GRANT ALL PRIVILEGES ON SEQUENCES TO anon, authenticated, service_role;
           CREATE SCHEMA IF NOT EXISTS auth;
           -- Stub auth.users with full Supabase column set
           CREATE TABLE IF NOT EXISTS auth.users (
@@ -466,6 +473,13 @@ jobs:
           CREATE SCHEMA IF NOT EXISTS extensions;
           -- Stub pg_net used by private cron invoker migrations
           CREATE SCHEMA IF NOT EXISTS net;
+          DO $$ BEGIN
+            IF pg_catalog.to_regclass('net._http_response') IS NULL THEN
+              CREATE TYPE net._http_response AS (
+                id bigint, status_code integer, content text,
+                timed_out boolean, error_msg text);
+            END IF;
+          END $$;
           CREATE OR REPLACE FUNCTION net.http_post(
             url text,
             headers jsonb DEFAULT '{}'::jsonb,
@@ -535,7 +549,7 @@ jobs:
             updated_at timestamptz DEFAULT now()
           );
           CREATE OR REPLACE VIEW vault.decrypted_secrets AS
-            SELECT id, name, description, secret, key_id, nonce, created_at, updated_at
+            SELECT id, name, description, secret AS decrypted_secret, key_id, nonce, created_at, updated_at
             FROM vault.secrets;
           SQL
 

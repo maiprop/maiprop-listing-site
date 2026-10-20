@@ -159,6 +159,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authMutationTailRef = useRef<Promise<void>>(Promise.resolve());
   // Guard: avoid duplicate auth telemetry from INITIAL_SESSION + getSession races.
   const lastAuthActivityRef = useRef<{ key: string; at: number } | null>(null);
+  // Guard: the mount-time INITIAL_SESSION + getSession restore pair must check
+  // only once for the same session (instant-resolving backends complete the
+  // first check before the second starts, defeating the in-flight coalescing).
+  // Explicit refreshes, retries, and checkout reconciliations are unaffected.
+  const mountRestoreCheckRef = useRef<{
+    userId: string;
+    authSessionIdentity: AuthSessionIdentity | null;
+    audience: PricingAudienceId | null;
+  } | null>(null);
+
+  // Claims the single mount-time restore check for this session. Returns false
+  // when an identical claim already ran, so the INITIAL_SESSION + getSession
+  // pair cannot invoke twice. Checkout reconciliations bypass the claim at
+  // their call sites and always run.
+  const claimMountRestoreCheck = useCallback((sess: Session | null) => {
+    if (!sess?.user) return false;
+    const userId = sess.user.id;
+    const identity = authSessionIdentityFor(sess);
+    const audience = subscriptionAudienceRef.current;
+    const claimed = mountRestoreCheckRef.current;
+    const sameIdentity = !claimed?.authSessionIdentity || !identity
+      ? claimed?.authSessionIdentity === identity
+      : !isDefinitelyDifferentAuthSession(claimed.authSessionIdentity, identity);
+    if (claimed && claimed.userId === userId && claimed.audience === audience && sameIdentity) {
+      return false;
+    }
+    mountRestoreCheckRef.current = { userId, authSessionIdentity: identity, audience };
+    return true;
+  }, []);
 
   const adoptAuthSessionIdentity = useCallback((currentSession: Session | null) => {
     const nextIdentity = authSessionIdentityFor(currentSession);
@@ -622,8 +651,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           logger.warn("Profile fetch failed:", err);
         });
         // setTimeout(0) avoids a Supabase deadlock when invoking functions
-        // inside onAuthStateChange; the dedup ref prevents concurrent calls.
-        setTimeout(() => checkSubscription(sess), 0);
+        // inside onAuthStateChange; the in-flight ref prevents concurrent calls
+        // and the mount-restore claim prevents a repeat check when getSession
+        // restore already covered the same INITIAL_SESSION.
+        setTimeout(() => {
+          if (_event !== "INITIAL_SESSION" || claimMountRestoreCheck(sess)) {
+            checkSubscription(sess);
+          }
+        }, 0);
         const authActivityType = eventToAuthActivity(_event);
         if (authActivityType) {
           setTimeout(() => recordAuthActivity(authActivityType, sess, "on_auth_state_change"), 0);
@@ -668,15 +703,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchProfile(sess.user.id, "coalesce").catch((err) => {
           logger.warn("Profile fetch failed during session restore:", err);
         });
-        checkSubscription(
-          sess,
-          checkoutSessionIdForReconciliation(),
-        ).catch((err: unknown) => {
-          logger.warn(
-            "[AuthContext] subscription restore failed:",
-            err instanceof Error ? err.message : err,
-          );
-        });
+        // The INITIAL_SESSION event carries the same session; the mount-restore
+        // claim runs it at most once (checkout reconciliations always run).
+        const restoreCheckoutSessionId = checkoutSessionIdForReconciliation();
+        if (restoreCheckoutSessionId || claimMountRestoreCheck(sess)) {
+          checkSubscription(
+            sess,
+            restoreCheckoutSessionId
+          ).catch((err: unknown) => {
+            logger.warn(
+              "[AuthContext] subscription restore failed:",
+              err instanceof Error ? err.message : err,
+            );
+          });
+        }
         recordAuthActivity("session_restored", sess, "get_session_restore");
       })
       .catch(() => {
@@ -731,6 +771,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     adoptAuthSessionIdentity,
     cancelSubscriptionRetry,
     shouldSuppressAuthStateChange,
+    claimMountRestoreCheck,
   ]);
 
   useEffect(() => {

@@ -122,7 +122,7 @@ BEGIN
     OR pg_catalog.has_table_privilege('authenticated','public.email_send_log','SELECT')
     OR (SELECT pg_catalog.md5(pg_catalog.string_agg(p.polname||':'||p.polcmd::text||':'||p.polroles::text||':'||coalesce(pg_catalog.pg_get_expr(p.polqual,p.polrelid),'<null>')||':'||coalesce(pg_catalog.pg_get_expr(p.polwithcheck,p.polrelid),'<null>'),'|' ORDER BY p.polname))
       FROM pg_catalog.pg_policy p WHERE p.polrelid='public.email_send_log'::regclass)
-      IS DISTINCT FROM 'ed82d6b54e3a11434fe21f6a6bcef9ae'
+      IS DISTINCT FROM '4daa5a716a312fcb9111cd582d3bfc52'
     OR (SELECT pg_catalog.md5(pg_catalog.string_agg(p.polname||':'||p.polcmd::text||':'||p.polroles::text||':'||coalesce(pg_catalog.pg_get_expr(p.polqual,p.polrelid),'<null>')||':'||coalesce(pg_catalog.pg_get_expr(p.polwithcheck,p.polrelid),'<null>'),'|' ORDER BY p.polname))
       FROM pg_catalog.pg_policy p WHERE p.polrelid='public.marketing_leads'::regclass)
       IS DISTINCT FROM '2c6c312e89e53f4855ade87ae82348d5'
