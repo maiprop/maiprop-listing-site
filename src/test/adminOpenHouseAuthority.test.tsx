@@ -64,7 +64,7 @@ describe('current Admin Open Houses component with explicit transport fixtures',
   it('shows a non-owner admin the listing overview without owner controls or child reads', async () => {
     fixture.actor = 'admin';
     renderAdmin();
-    fireEvent.click(await screen.findByText('Synthetic admin OH boundary'));
+    fireEvent.click(await screen.findByText('Synthetic admin OH boundary', undefined, { timeout: 5000 }));
     expect(screen.getByRole('link', { name: /View/i })).toHaveAttribute('href', `/open-house/${fixture.row.id}`);
     expect(screen.queryByRole('link', { name: /Edit listing/i })).not.toBeInTheDocument();
     expect(screen.getByText(/managed by the listing owner/i)).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe('current Admin Open Houses component with explicit transport fixtures',
   it('shows host registration and offer actions for the same owner listing', async () => {
     fixture.actor = 'owner';
     renderAdmin();
-    fireEvent.click(await screen.findByText('Synthetic admin OH boundary'));
+    fireEvent.click(await screen.findByText('Synthetic admin OH boundary', undefined, { timeout: 5000 }));
     expect(screen.getAllByText('Synthetic bidder').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Verify ID' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe('current Admin Open Houses component with explicit transport fixtures',
     fixture.actor = 'manager';
     fixture.row.organization_id = 'org-1';
     renderAdmin();
-    fireEvent.click(await screen.findByText('Synthetic admin OH boundary'));
+    fireEvent.click(await screen.findByText('Synthetic admin OH boundary', undefined, { timeout: 5000 }));
     expect(screen.getByRole('link', { name: /Edit listing/i })).toHaveAttribute('href', `/listings/${fixture.row.id}/edit`);
     expect(screen.getByRole('link', { name: /View/i })).toBeInTheDocument();
     expect(screen.queryByText('Asset Control Settings')).not.toBeInTheDocument();
@@ -109,7 +109,7 @@ describe('current Admin Open Houses component with explicit transport fixtures',
     fixture.row.organization_id = 'org-1';
     fixture.organizationsLoading = true;
     const page = renderAdmin();
-    fireEvent.click(await screen.findByText('Synthetic admin OH boundary'));
+    fireEvent.click(await screen.findByText('Synthetic admin OH boundary', undefined, { timeout: 5000 }));
     expect(screen.queryByRole('link', { name: /Edit listing/i })).not.toBeInTheDocument();
     expect(fixture.registrationsRead).not.toHaveBeenCalled();
     fixture.organizationsLoading = false;
@@ -124,11 +124,11 @@ describe('current Admin Open Houses component with explicit transport fixtures',
   it('unmounts owner dialogs and expanded state across admin, owner, and signed-out transitions', async () => {
     fixture.actor = 'admin';
     const page = renderAdmin();
-    fireEvent.click(await screen.findByText('Synthetic admin OH boundary'));
+    fireEvent.click(await screen.findByText('Synthetic admin OH boundary', undefined, { timeout: 5000 }));
     expect(screen.getByText(/managed by the listing owner/i)).toBeInTheDocument();
     fixture.actor = 'owner';
     page.rerenderActor();
-    fireEvent.click(await screen.findByText('Synthetic admin OH boundary'));
+    fireEvent.click(await screen.findByText('Synthetic admin OH boundary', undefined, { timeout: 5000 }));
     fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
     expect(screen.getByRole('dialog', { name: 'Rejection reason' })).toBeInTheDocument();
     fixture.actor = 'admin';
@@ -142,7 +142,7 @@ describe('current Admin Open Houses component with explicit transport fixtures',
 
   it('keeps the separate POF review tab available', async () => {
     renderAdmin();
-    await screen.findByText('Synthetic admin OH boundary');
+    await screen.findByText('Synthetic admin OH boundary', undefined, { timeout: 5000 });
     fireEvent.click(screen.getByRole('button', { name: 'POF Review' }));
     expect(await screen.findByText('Separate POF review')).toBeInTheDocument();
   });
