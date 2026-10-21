@@ -51,7 +51,7 @@ BEGIN
      OR (SELECT pg_catalog.md5(pg_catalog.string_agg(c.relname||':'||pg_catalog.pg_get_indexdef(i.indexrelid),'|' ORDER BY c.relname))
        FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE i.indrelid='public.sync_log'::regclass) IS DISTINCT FROM 'd8e3de08bd361dad888c778cc36832e2'
      OR (SELECT pg_catalog.md5(pg_catalog.string_agg(p.polname||':'||pg_catalog.pg_get_expr(p.polqual,p.polrelid)||':'||coalesce(pg_catalog.pg_get_expr(p.polwithcheck,p.polrelid),''),'|' ORDER BY p.polname))
-       FROM pg_catalog.pg_policy p WHERE p.polrelid='public.sync_log'::regclass) IS DISTINCT FROM 'ff532fe5503dc209f7849939a59f20c2'
+       FROM pg_catalog.pg_policy p WHERE p.polrelid='public.sync_log'::regclass) IS DISTINCT FROM '9cf6542c885daa5801d2886d0ada8c9b'
      OR (SELECT count(*) FROM pg_catalog.pg_trigger t WHERE t.tgrelid='public.sync_log'::regclass AND NOT t.tgisinternal) <> 0
      OR (SELECT c.relacl::text FROM pg_catalog.pg_class c WHERE c.oid='public.sync_log'::regclass) IS NULL
      OR (SELECT c.relacl::text FROM pg_catalog.pg_class c WHERE c.oid='public.sync_log'::regclass) NOT IN
