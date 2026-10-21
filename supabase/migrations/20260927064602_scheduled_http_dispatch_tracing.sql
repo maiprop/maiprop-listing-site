@@ -127,10 +127,8 @@ BEGIN
        ('send-saved-search-alerts','0 0,6,12,18 * * *','SELECT public.invoke_send_saved_search_alerts_cron();')) AND active) <> 3 THEN
     RAISE EXCEPTION 'scheduled_dispatch_cron_drift' USING ERRCODE='22023';
   END IF;
-  IF pg_catalog.to_regprocedure('net.http_post(text,jsonb,jsonb,integer)') IS NULL
-     OR (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
-       WHERE n.nspname='net' AND p.proname='http_post') <> 1
-     OR pg_catalog.pg_get_function_result('net.http_post(text,jsonb,jsonb,integer)'::regprocedure) IS DISTINCT FROM 'bigint'
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='net' AND p.proname='http_post' AND pg_catalog.pg_get_function_result(p.oid)='bigint')
      OR pg_catalog.to_regclass('net._http_response') IS NULL
      OR (SELECT count(*) FROM pg_catalog.pg_attribute a WHERE a.attrelid='net._http_response'::regclass
        AND a.attnum>0 AND NOT a.attisdropped AND (a.attname,a.atttypid::regtype::text) IN
@@ -360,6 +358,67 @@ $body$;
 REVOKE ALL ON FUNCTION public.reconcile_scheduled_http_dispatches_for_service(integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.reconcile_scheduled_http_dispatches_for_service(integer) TO service_role;
 
+-- Version-tolerant pg_net dispatcher. pg_net minors expose different http_post
+-- overloads (arguments added/renamed across 0.2x), so the cron invokers below call
+-- this stable wrapper instead of net.http_post directly. It binds (url, headers,
+-- body, timeout) to whatever bigint-returning overload the local pg_net provides at
+-- RUNTIME, supplying '{}' for unmapped params-like formals. Unknown required formals
+-- (or no suitable overload at all) raise loudly instead of silently misrouting a
+-- dispatch. Most-arg overload wins when several bind.
+CREATE OR REPLACE FUNCTION private.net_http_post_compat(
+  url text,
+  headers jsonb,
+  body jsonb,
+  timeout_milliseconds integer
+) RETURNS bigint
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $body$
+DECLARE
+  r record;
+  v_formal text;
+  v_assign text[];
+  v_ok boolean;
+  v_sql text;
+  v_out bigint;
+BEGIN
+  FOR r IN
+    SELECT p.oid AS proc,
+      p.proargnames AS names,
+      p.pronargs AS nargs
+    FROM pg_catalog.pg_proc p
+    JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'net' AND p.proname = 'http_post'
+      AND pg_catalog.pg_get_function_result(p.oid) = 'bigint'
+    ORDER BY p.pronargs DESC
+  LOOP
+    v_assign := '{}';
+    v_ok := true;
+    FOR i IN 1..r.nargs LOOP
+      v_formal := lower(COALESCE(r.names[i], ''));
+      IF v_formal LIKE '%url%' THEN
+        v_assign := v_assign || format('%I := %L::text', r.names[i], url);
+      ELSIF v_formal LIKE '%body%' THEN
+        v_assign := v_assign || format('%I := %L::jsonb', r.names[i], body::text);
+      ELSIF v_formal LIKE '%header%' THEN
+        v_assign := v_assign || format('%I := %L::jsonb', r.names[i], headers::text);
+      ELSIF v_formal LIKE '%timeout%' OR v_formal LIKE '%millis%' THEN
+        v_assign := v_assign || format('%I := %s::integer', r.names[i], timeout_milliseconds);
+      ELSIF v_formal LIKE '%param%' OR v_formal LIKE '%query%' THEN
+        v_assign := v_assign || format('%I := %L::jsonb', r.names[i], '{}');
+      ELSE
+        v_ok := false;
+        EXIT;
+      END IF;
+    END LOOP;
+    IF NOT v_ok THEN CONTINUE; END IF;
+    v_sql := 'SELECT net.http_post(' || array_to_string(v_assign, ', ') || ')';
+    EXECUTE v_sql INTO v_out;
+    RETURN v_out;
+  END LOOP;
+  RAISE EXCEPTION 'net_http_post_compat_no_suitable_overload' USING ERRCODE = '22023';
+END;
+$body$;
+REVOKE ALL ON FUNCTION private.net_http_post_compat(text, jsonb, jsonb, integer) FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION private.invoke_poll_os_auctions_cron()
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = private, public AS $body$
 DECLARE
@@ -407,7 +466,7 @@ BEGIN
     RETURN;
   END;
   BEGIN
-    SELECT net.http_post(
+    SELECT private.net_http_post_compat(
       url := rtrim(v_supabase_url,'/') || '/functions/v1/poll-os-auctions',
       headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer ' || v_cron_secret,
         'x-maiprop-dispatch-id',v_dispatch_id::text),
@@ -456,7 +515,7 @@ BEGIN
     RETURN;
   END;
   BEGIN
-    SELECT net.http_post(
+    SELECT private.net_http_post_compat(
       url := rtrim(v_supabase_url,'/') || '/functions/v1/scheduled-followups',
       headers := jsonb_build_object('Content-Type','application/json','x-cron-secret',v_cron_secret,
         'x-maiprop-dispatch-id',v_dispatch_id::text),
@@ -525,7 +584,7 @@ BEGIN
     RETURN;
   END;
   BEGIN
-    SELECT net.http_post(
+    SELECT private.net_http_post_compat(
       url := v_supabase_url,
       headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer ' || v_cron_secret,
         'x-maiprop-dispatch-id',v_dispatch_id::text),
