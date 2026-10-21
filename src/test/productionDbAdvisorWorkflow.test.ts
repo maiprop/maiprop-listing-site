@@ -73,7 +73,7 @@ describe("production DB advisor workflow", () => {
     expect(productionWorkflow).toContain("production_repair_markers");
     expect(productionWorkflow).toContain("production_execution_drift");
     expect(productionWorkflow).toContain("'statements_sha256', encode(");
-    expect(productionWorkflow).toContain("extensions.digest(");
+    expect(productionWorkflow).toContain("public.digest(");
     expect(productionWorkflow).toContain(
       "expected.statements_sha256 !== migration.statements_sha256",
     );
