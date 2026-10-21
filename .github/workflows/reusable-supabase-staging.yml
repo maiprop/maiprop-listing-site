@@ -835,7 +835,7 @@ jobs:
                       FALSE
                     ),
                     'statements_sha256', encode(
-                      extensions.digest(
+                      public.digest(
                         convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
                         'sha256'
                       ),

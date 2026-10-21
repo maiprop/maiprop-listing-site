@@ -84,7 +84,7 @@ function_observed AS (
     CASE
       WHEN procedure_state.oid IS NULL THEN NULL
       ELSE encode(
-        extensions.digest(
+        public.digest(
           convert_to(pg_get_functiondef(procedure_state.oid), 'UTF8'),
           'sha256'
         ),
@@ -120,7 +120,7 @@ function_checks AS (
       ELSE observed.oid IS NULL
     END AS ok,
     'sha256:' || encode(
-      extensions.digest(
+      public.digest(
         convert_to(
           jsonb_build_object(
             'signature', observed.signature,
@@ -199,7 +199,7 @@ index_checks AS (
       AND NOT observed.has_expression
       AND observed.indexed_column = observed.column_name AS ok,
     'sha256:' || encode(
-      extensions.digest(
+      public.digest(
         convert_to(
           jsonb_build_object(
             'index_name', observed.index_name,
@@ -291,7 +291,7 @@ agent_policy_check AS (
       FALSE
     ) AS ok,
     'sha256:' || encode(
-      extensions.digest(
+      public.digest(
         convert_to(
           jsonb_build_object(
             'table_exists', state.table_oid IS NOT NULL,
@@ -319,7 +319,7 @@ aggregate_checks AS (
     'legacy.20260602034000_collision_converged'::TEXT AS name,
     bool_and(check_state.ok) AS ok,
     'sha256:' || encode(
-      extensions.digest(
+      public.digest(
         convert_to(
           jsonb_agg(
             jsonb_build_object(
@@ -346,7 +346,7 @@ aggregate_checks AS (
     'legacy.20260602032000_040000_marker_effects_converged'::TEXT AS name,
     bool_and(check_state.ok) AS ok,
     'sha256:' || encode(
-      extensions.digest(
+      public.digest(
         convert_to(
           jsonb_agg(
             jsonb_build_object(
