@@ -63,12 +63,16 @@ BEGIN
         OR pg_catalog.pg_get_triggerdef(oid) NOT LIKE '%update_updated_at_column()%')) THEN
     RAISE EXCEPTION 'selected_email_trigger_drift';
   END IF;
-  IF (SELECT pg_catalog.md5(pg_catalog.pg_get_functiondef('public.check_saved_search_alert_on_update()'::regprocedure)))
-       IS DISTINCT FROM '6c0f0c6e5893702ced2f639d4af90263'
-    OR (SELECT pg_catalog.md5(pg_catalog.pg_get_functiondef('public.check_saved_search_limit()'::regprocedure)))
-       IS DISTINCT FROM '8dcdec37a330938962ac8093d191f792'
-    OR (SELECT pg_catalog.md5(pg_catalog.pg_get_functiondef('public.update_updated_at_column()'::regprocedure)))
-       IS DISTINCT FROM '47b72756852a143198dccf4db5943afc' THEN
+  -- Whitespace-tolerant helper pins: long-lived staging/prod databases carry
+  -- the same helper logic with reformatted prosrc whitespace (edited-in-place
+  -- migrations apply by version, not content hash), so compare
+  -- whitespace-collapsed definitions instead of exact bytes.
+  IF (SELECT pg_catalog.md5(pg_catalog.regexp_replace(pg_catalog.pg_get_functiondef('public.check_saved_search_alert_on_update()'::regprocedure), '\s+', ' ', 'g')))
+       IS DISTINCT FROM '47225b7a9a9c39ef77c0d4acf02169be'
+    OR (SELECT pg_catalog.md5(pg_catalog.regexp_replace(pg_catalog.pg_get_functiondef('public.check_saved_search_limit()'::regprocedure), '\s+', ' ', 'g')))
+       IS DISTINCT FROM 'c0b295790464736f5ead18b83e475a2c'
+    OR (SELECT pg_catalog.md5(pg_catalog.regexp_replace(pg_catalog.pg_get_functiondef('public.update_updated_at_column()'::regprocedure), '\s+', ' ', 'g')))
+       IS DISTINCT FROM '099e7b8f63e5d518296f09bb281cc194' THEN
     RAISE EXCEPTION 'selected_email_trigger_helper_drift';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid='public.email_send_log'::regclass
@@ -120,9 +124,10 @@ BEGIN
     OR NOT pg_catalog.has_table_privilege('service_role','public.email_send_log','UPDATE')
     OR pg_catalog.has_table_privilege('anon','public.email_send_log','SELECT')
     OR pg_catalog.has_table_privilege('authenticated','public.email_send_log','SELECT')
-    OR (SELECT pg_catalog.md5(pg_catalog.string_agg(p.polname||':'||p.polcmd::text||':'||p.polroles::text||':'||coalesce(pg_catalog.pg_get_expr(p.polqual,p.polrelid),'<null>')||':'||coalesce(pg_catalog.pg_get_expr(p.polwithcheck,p.polrelid),'<null>'),'|' ORDER BY p.polname))
+    -- Role names, not OIDs: role OIDs vary by database, so compare names.
+    OR (SELECT pg_catalog.md5(pg_catalog.string_agg(p.polname||':'||p.polcmd::text||':'||(SELECT pg_catalog.string_agg(pg_catalog.pg_get_userbyid(u.u),',' ORDER BY u.u) FROM pg_catalog.unnest(p.polroles) AS u(u))||':'||coalesce(pg_catalog.pg_get_expr(p.polqual,p.polrelid),'<null>')||':'||coalesce(pg_catalog.pg_get_expr(p.polwithcheck,p.polrelid),'<null>'),'|' ORDER BY p.polname))
       FROM pg_catalog.pg_policy p WHERE p.polrelid='public.email_send_log'::regclass)
-      IS DISTINCT FROM '4daa5a716a312fcb9111cd582d3bfc52'
+      IS DISTINCT FROM '83297634e60e2dd53339cff0eff3fafc'
     OR (SELECT pg_catalog.md5(pg_catalog.string_agg(p.polname||':'||p.polcmd::text||':'||p.polroles::text||':'||coalesce(pg_catalog.pg_get_expr(p.polqual,p.polrelid),'<null>')||':'||coalesce(pg_catalog.pg_get_expr(p.polwithcheck,p.polrelid),'<null>'),'|' ORDER BY p.polname))
       FROM pg_catalog.pg_policy p WHERE p.polrelid='public.marketing_leads'::regclass)
       IS DISTINCT FROM '2c6c312e89e53f4855ade87ae82348d5'
