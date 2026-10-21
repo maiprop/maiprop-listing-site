@@ -22,7 +22,7 @@ type FrozenAttempt = {
     p_new_building_id: string;
     p_email: string;
     p_full_name: string;
-    p_phone: string | null;
+    p_phone: string;
     p_notes: string;
   };
   conversationId: string | null;
@@ -200,7 +200,7 @@ export function NewBuildInterestController({
         p_new_building_id: listing.id,
         p_email: canonical.email.trim().toLowerCase(),
         p_full_name: canonical.full_name.trim(),
-        p_phone: canonical.phone?.trim() || null,
+        p_phone: canonical.phone?.trim() ?? "",
         p_notes: canonical.notes.trim(),
       },
     };

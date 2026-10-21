@@ -415,6 +415,48 @@ export type Database = {
         }
         Relationships: []
       }
+      auth_email_dispatch: {
+        Row: {
+          accepted_at: string | null
+          attempt_count: number
+          attempt_started_at: string
+          attempt_token: string
+          created_at: string
+          http_status: number | null
+          result_code: string | null
+          slot: string
+          state: string
+          updated_at: string
+          webhook_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          attempt_count?: number
+          attempt_started_at?: string
+          attempt_token: string
+          created_at?: string
+          http_status?: number | null
+          result_code?: string | null
+          slot: string
+          state: string
+          updated_at?: string
+          webhook_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          attempt_count?: number
+          attempt_started_at?: string
+          attempt_token?: string
+          created_at?: string
+          http_status?: number | null
+          result_code?: string | null
+          slot?: string
+          state?: string
+          updated_at?: string
+          webhook_id?: string
+        }
+        Relationships: []
+      }
       billing_customers: {
         Row: {
           created_at: string
@@ -987,7 +1029,15 @@ export type Database = {
           step?: number | null
           template_name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "email_send_log_first_dispatch_fkey"
+            columns: ["first_dispatch_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_http_dispatches"
+            referencedColumns: ["dispatch_id"]
+          },
+        ]
       }
       email_send_state: {
         Row: {
@@ -2468,6 +2518,66 @@ export type Database = {
         }
         Relationships: []
       }
+      oh_registration_status_events: {
+        Row: {
+          accepted_at: string | null
+          attempt_count: number
+          attempt_started_at: string | null
+          attempt_token: string | null
+          created_at: string
+          event_id: string
+          http_status: number | null
+          listing_id: string | null
+          new_status: string
+          old_status: string
+          registration_id: string | null
+          rejection_reason: string | null
+          requester_id: string | null
+          result_code: string | null
+          state: string
+          timeslot_index: number | null
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          attempt_count?: number
+          attempt_started_at?: string | null
+          attempt_token?: string | null
+          created_at?: string
+          event_id?: string
+          http_status?: number | null
+          listing_id?: string | null
+          new_status: string
+          old_status: string
+          registration_id?: string | null
+          rejection_reason?: string | null
+          requester_id?: string | null
+          result_code?: string | null
+          state?: string
+          timeslot_index?: number | null
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          attempt_count?: number
+          attempt_started_at?: string | null
+          attempt_token?: string | null
+          created_at?: string
+          event_id?: string
+          http_status?: number | null
+          listing_id?: string | null
+          new_status?: string
+          old_status?: string
+          registration_id?: string | null
+          rejection_reason?: string | null
+          requester_id?: string | null
+          result_code?: string | null
+          state?: string
+          timeslot_index?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       open_house_offers: {
         Row: {
           amount: number
@@ -3583,6 +3693,7 @@ export type Database = {
           phone: string | null
           role: Database["public"]["Enums"]["user_role"] | null
           role_switch_audit_id: string | null
+          role_switch_audit_required: boolean
           role_switch_in_progress_at: string | null
           subscription_product_id: string | null
           updated_at: string
@@ -3612,6 +3723,7 @@ export type Database = {
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
           role_switch_audit_id?: string | null
+          role_switch_audit_required?: boolean
           role_switch_in_progress_at?: string | null
           subscription_product_id?: string | null
           updated_at?: string
@@ -3641,6 +3753,7 @@ export type Database = {
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
           role_switch_audit_id?: string | null
+          role_switch_audit_required?: boolean
           role_switch_in_progress_at?: string | null
           subscription_product_id?: string | null
           updated_at?: string
@@ -4317,6 +4430,63 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_http_dispatches: {
+        Row: {
+          application_outcome: string | null
+          application_state: string
+          dispatch_id: string
+          error_code: string | null
+          evidence_conflict: boolean
+          execution_token: string | null
+          finished_at: string | null
+          http_status: number | null
+          integration: string
+          net_request_id: number | null
+          origin: string
+          requested_at: string
+          response_outcome: string | null
+          started_at: string | null
+          summary: Json
+          transport_state: string
+        }
+        Insert: {
+          application_outcome?: string | null
+          application_state?: string
+          dispatch_id?: string
+          error_code?: string | null
+          evidence_conflict?: boolean
+          execution_token?: string | null
+          finished_at?: string | null
+          http_status?: number | null
+          integration: string
+          net_request_id?: number | null
+          origin: string
+          requested_at?: string
+          response_outcome?: string | null
+          started_at?: string | null
+          summary?: Json
+          transport_state?: string
+        }
+        Update: {
+          application_outcome?: string | null
+          application_state?: string
+          dispatch_id?: string
+          error_code?: string | null
+          evidence_conflict?: boolean
+          execution_token?: string | null
+          finished_at?: string | null
+          http_status?: number | null
+          integration?: string
+          net_request_id?: number | null
+          origin?: string
+          requested_at?: string
+          response_outcome?: string | null
+          started_at?: string | null
+          summary?: Json
+          transport_state?: string
+        }
+        Relationships: []
+      }
       storage_cleanup_invocations: {
         Row: {
           completed_at: string | null
@@ -4528,6 +4698,7 @@ export type Database = {
         Row: {
           created_at: string
           direction: string
+          dispatch_id: string | null
           entity_id: string
           entity_type: string
           error_message: string | null
@@ -4539,6 +4710,7 @@ export type Database = {
         Insert: {
           created_at?: string
           direction: string
+          dispatch_id?: string | null
           entity_id: string
           entity_type: string
           error_message?: string | null
@@ -4550,6 +4722,7 @@ export type Database = {
         Update: {
           created_at?: string
           direction?: string
+          dispatch_id?: string | null
           entity_id?: string
           entity_type?: string
           error_message?: string | null
@@ -4558,7 +4731,15 @@ export type Database = {
           records_affected?: number | null
           status?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sync_log_dispatch_id_fkey"
+            columns: ["dispatch_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_http_dispatches"
+            referencedColumns: ["dispatch_id"]
+          },
+        ]
       }
       usage_ai_calls: {
         Row: {
@@ -5776,60 +5957,6 @@ export type Database = {
       }
     }
     Functions: {
-      apply_email_dispatch_result_for_service: {
-        Args: { p_operation_id: string }
-        Returns: Json
-      }
-      begin_email_dispatch_for_service: {
-        Args: { p_operation_id: string; p_attempt_token: string }
-        Returns: Json
-      }
-      get_selected_email_operation_for_service: {
-        Args: { p_entity_id: string; p_producer: string; p_step?: number | null }
-        Returns: Json
-      }
-      list_accepted_unapplied_email_operations_for_service: {
-        Args: { p_limit?: number }
-        Returns: Json
-      }
-      maintain_selected_email_operations_for_service: {
-        Args: { p_limit?: number }
-        Returns: Json
-      }
-      prepare_marketing_followup_for_service: {
-        Args: {
-          p_dispatch_id: string
-          p_execution_token: string
-          p_expected: Json
-          p_lead_id: string
-          p_payload: Json
-          p_step: number
-        }
-        Returns: Json
-      }
-      prepare_saved_search_alert_for_service: {
-        Args: {
-          p_candidate_ids: string[]
-          p_dispatch_id: string
-          p_execution_token: string
-          p_expected: Json
-          p_payload: Json
-          p_search_id: string
-          p_sent_ids: string[]
-        }
-        Returns: Json
-      }
-      record_email_dispatch_result_for_service: {
-        Args: {
-          p_error_code?: string | null
-          p_http_status: number | null
-          p_operation_id: string
-          p_outcome: string
-          p_provider_message_id: string | null
-          p_attempt_token: string
-        }
-        Returns: undefined
-      }
       accept_open_house_offer: {
         Args: { p_offer_id: string }
         Returns: {
@@ -6223,6 +6350,10 @@ export type Database = {
           used: number
         }[]
       }
+      apply_email_dispatch_result_for_service: {
+        Args: { p_operation_id: string }
+        Returns: Json
+      }
       apply_subscription_lapse_controls: {
         Args: { p_user_id: string }
         Returns: Json
@@ -6263,11 +6394,22 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: string
       }
-      begin_role_switch: { Args: never; Returns: undefined }
-      begin_role_switch_for_user: {
-        Args: { _audit_id: string; _user_id: string }
-        Returns: undefined
+      begin_auth_email_dispatch_for_service: {
+        Args: { p_attempt_token: string; p_slot: string; p_webhook_id: string }
+        Returns: Json
       }
+      begin_email_dispatch_for_service: {
+        Args: { p_attempt_token: string; p_operation_id: string }
+        Returns: Json
+      }
+      begin_oh_registration_status_event_for_service: {
+        Args: { p_attempt_token: string; p_event_id: string }
+        Returns: Json
+      }
+      begin_role_switch: { Args: never; Returns: undefined }
+      begin_role_switch_for_user:
+        | { Args: { _user_id: string }; Returns: undefined }
+        | { Args: { _audit_id: string; _user_id: string }; Returns: undefined }
       bulk_update_project_unit_prices: {
         Args: { p_percentage: number; p_project_id: string }
         Returns: number
@@ -6372,6 +6514,18 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      complete_onboarding_role_with_profile_for_user: {
+        Args: {
+          p_city?: string
+          p_display_name?: string
+          p_participant_type: string
+          p_phone?: string
+          p_professional_profile?: Json
+          p_role: Database["public"]["Enums"]["user_role"]
+          p_user_id: string
+        }
+        Returns: Json
       }
       complete_role_switch_reconciliation_attempt: {
         Args: {
@@ -6540,6 +6694,7 @@ export type Database = {
         Args: { p_listing_id: string; p_promotion_type: string }
         Returns: number
       }
+      dearmor: { Args: { "": string }; Returns: string }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -6576,6 +6731,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      finish_scheduled_http_dispatch_for_service: {
+        Args: {
+          p_dispatch_id: string
+          p_error_code?: string
+          p_execution_token: string
+          p_outcome: string
+          p_summary: Json
+        }
+        Returns: undefined
+      }
+      gen_random_uuid: { Args: never; Returns: string }
+      gen_salt: { Args: { "": string }; Returns: string }
       get_account_deletion_storage_objects: {
         Args: { p_user_id: string }
         Returns: {
@@ -6612,6 +6779,22 @@ export type Database = {
           starts_at: string
           status: string
           title: string
+        }[]
+      }
+      get_admin_open_house_pof_reviews: {
+        Args: { p_listing_id?: string }
+        Returns: {
+          created_at: string
+          id: string
+          listing_id: string
+          pof_rejection_reason: string
+          pof_verified_status: string
+          proof_amount: number
+          proof_of_funds_url: string
+          rejection_reason: string
+          requester_id: string
+          status: Database["public"]["Enums"]["oh_registration_status"]
+          updated_at: string
         }[]
       }
       get_agent_data_input_status: {
@@ -6992,6 +7175,21 @@ export type Database = {
           slot_counts: Json
         }[]
       }
+      get_open_house_listing_context: {
+        Args: { p_listing_ids: string[] }
+        Returns: {
+          address: string
+          city: string
+          cover_image_url: string
+          id: string
+          open_house_date: string
+          open_house_settings: Json
+          open_house_transaction_type: string
+          owner_id: string
+          price: number
+          title: string
+        }[]
+      }
       get_open_house_rsvp_monthly_limit: {
         Args: { p_user_id: string }
         Returns: number
@@ -7318,6 +7516,10 @@ export type Database = {
       get_report_monthly_limit: { Args: { p_user_id: string }; Returns: number }
       get_saved_search_limit: { Args: { p_user_id: string }; Returns: number }
       get_search_alert_limit: { Args: { p_user_id: string }; Returns: number }
+      get_selected_email_operation_for_service: {
+        Args: { p_entity_id: string; p_producer: string; p_step?: number }
+        Returns: Json
+      }
       get_valuation_monthly_limit: {
         Args: { p_user_id: string }
         Returns: number
@@ -7461,6 +7663,14 @@ export type Database = {
         Args: { p_bucket: string; p_object_path: string; p_object_url: string }
         Returns: boolean
       }
+      list_accepted_unapplied_email_operations_for_service: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      maintain_selected_email_operations_for_service: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -7471,6 +7681,33 @@ export type Database = {
         Returns: number
       }
       normalize_location_text: { Args: { input: string }; Returns: string }
+      pgp_armor_headers: {
+        Args: { "": string }
+        Returns: Record<string, unknown>[]
+      }
+      prepare_marketing_followup_for_service: {
+        Args: {
+          p_dispatch_id: string
+          p_execution_token: string
+          p_expected: Json
+          p_lead_id: string
+          p_payload: Json
+          p_step: number
+        }
+        Returns: Json
+      }
+      prepare_saved_search_alert_for_service: {
+        Args: {
+          p_candidate_ids: string[]
+          p_dispatch_id: string
+          p_execution_token: string
+          p_expected: Json
+          p_payload: Json
+          p_search_id: string
+          p_sent_ids: string[]
+        }
+        Returns: Json
+      }
       prepare_storage_cleanup_delete: {
         Args: { p_job_id: string; p_lease_token: string }
         Returns: string
@@ -7568,7 +7805,33 @@ export type Database = {
         }
         Returns: Json
       }
+      reconcile_scheduled_http_dispatches_for_service: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
       record_ai_call: { Args: { p_bucket: string }; Returns: Json }
+      record_auth_email_dispatch_result_for_service: {
+        Args: {
+          p_attempt_token: string
+          p_http_status: number
+          p_outcome: string
+          p_result_code: string
+          p_slot: string
+          p_webhook_id: string
+        }
+        Returns: Json
+      }
+      record_email_dispatch_result_for_service: {
+        Args: {
+          p_attempt_token: string
+          p_error_code?: string
+          p_http_status: number
+          p_operation_id: string
+          p_outcome: string
+          p_provider_message_id: string
+        }
+        Returns: undefined
+      }
       record_listing_view: {
         Args: { p_listing_id: string; p_viewer_id?: string }
         Returns: undefined
@@ -7576,6 +7839,16 @@ export type Database = {
       record_listing_view_event: {
         Args: { p_listing_id: string; p_viewer_id?: string }
         Returns: undefined
+      }
+      record_oh_registration_status_event_result_for_service: {
+        Args: {
+          p_attempt_token: string
+          p_event_id: string
+          p_http_status: number
+          p_outcome: string
+          p_result_code: string
+        }
+        Returns: Json
       }
       record_role_switch_audit: {
         Args: {
@@ -7587,16 +7860,28 @@ export type Database = {
         }
         Returns: string
       }
-      record_role_switch_audit_for_user: {
-        Args: {
-          _from_type: string
-          _operation_id: string
-          _switch_kind: string
-          _to_type: string
-          _user_id: string
-        }
-        Returns: string
-      }
+      record_role_switch_audit_for_user:
+        | {
+            Args: {
+              _from_type: string
+              _operation_id: string
+              _switch_kind: string
+              _to_type: string
+              _user_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              _from_type: string
+              _had_active_sub: boolean
+              _sub_cancelled: boolean
+              _switch_kind: string
+              _to_type: string
+              _user_id: string
+            }
+            Returns: string
+          }
       record_user_auth_activity: {
         Args: { p_event_type: string; p_metadata?: Json; p_route?: string }
         Returns: string
@@ -7638,6 +7923,27 @@ export type Database = {
       resolve_subscription_state_for_service: {
         Args: { p_required_stripe_subscription_id?: string; p_user_id: string }
         Returns: Json
+      }
+      review_admin_open_house_pof: {
+        Args: {
+          p_decision: string
+          p_expected_updated_at: string
+          p_reason: string
+          p_registration_id: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          listing_id: string
+          pof_rejection_reason: string
+          pof_verified_status: string
+          proof_amount: number
+          proof_of_funds_url: string
+          rejection_reason: string
+          requester_id: string
+          status: Database["public"]["Enums"]["oh_registration_status"]
+          updated_at: string
+        }[]
       }
       seed_grant_agent_role: {
         Args: { user_ids: string[] }
@@ -7702,6 +8008,10 @@ export type Database = {
         }
         Returns: number
       }
+      start_scheduled_http_dispatch_for_service: {
+        Args: { p_dispatch_id: string; p_integration: string }
+        Returns: Json
+      }
       store_property_report_cache_generation: {
         Args: {
           p_ai: Json
@@ -7751,22 +8061,6 @@ export type Database = {
           p_transaction_type: string
         }
         Returns: string
-      }
-      submit_new_build_enquiry: {
-        Args: {
-          p_email: string
-          p_full_name: string
-          p_new_building_id: string
-          p_notes: string
-          p_phone: string | null
-          p_submission_key: string
-          p_user_id: string
-        }
-        Returns: {
-          created_at: string
-          id: string
-          new_building_id: string
-        }[]
       }
       submit_firesale_interest: {
         Args: {
@@ -7832,6 +8126,22 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      submit_new_build_enquiry: {
+        Args: {
+          p_email: string
+          p_full_name: string
+          p_new_building_id: string
+          p_notes: string
+          p_phone: string
+          p_submission_key: string
+          p_user_id: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          new_building_id: string
+        }[]
       }
       submit_open_house_offer: {
         Args: {
