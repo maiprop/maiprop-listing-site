@@ -66,7 +66,67 @@
       "reason": "Materialized listing versions are isolated in the unexposed private schema with no direct browser-role DML privileges; only allowlisted public fields leave through bounded RPCs.",
       "next_action": "Retain zero direct grants and the raw-table denial plus public-projection staging tests.",
       "review_cadence": "monthly"
-    }
+    },
+  {
+    "match": {
+      "name": "rls_enabled_no_policy",
+      "cache_key_contains": "private_role_switch_rollout_control"
+    },
+    "owner": "auth/platform",
+    "reason": "The role-switch rollout control is an unexposed private singleton with REVOKE ALL from PUBLIC, anon, authenticated, and service_role; RLS with no policy keeps it deny-by-default as defense in depth.",
+    "next_action": "Keep the private-schema placement, zero grants, and the role-switch compatibility tests whenever the bridge changes.",
+    "review_cadence": "monthly"
+  },
+  {
+    "match": {
+      "name": "rls_enabled_no_policy",
+      "cache_key_contains": "private_storage_cleanup_rollout_control"
+    },
+    "owner": "storage/platform",
+    "reason": "The storage cleanup rollout control is an unexposed private singleton with REVOKE ALL from PUBLIC, anon, authenticated, and service_role; RLS with no policy keeps it deny-by-default as defense in depth.",
+    "next_action": "Keep the private-schema placement, zero grants, and the storage capability tests whenever rollout control changes.",
+    "review_cadence": "monthly"
+  },
+  {
+    "match": {
+      "name": "rls_enabled_no_policy",
+      "cache_key_contains": "public_auth_email_dispatch"
+    },
+    "owner": "email/platform",
+    "reason": "The auth email dispatch outbox has REVOKE ALL from PUBLIC, anon, authenticated, and service_role with RLS enabled and no policy, so it is deny-by-default; admission and result recording run only through service_role EXECUTE RPCs.",
+    "next_action": "Keep table grants revoked and retain the dispatch admission lifecycle tests whenever the outbox contract changes.",
+    "review_cadence": "monthly"
+  },
+  {
+    "match": {
+      "name": "rls_enabled_no_policy",
+      "cache_key_contains": "public_oh_registration_status_events"
+    },
+    "owner": "open-house/platform",
+    "reason": "The registration status event outbox has REVOKE ALL from PUBLIC, anon, authenticated, and service_role with RLS enabled and no policy, so it is deny-by-default; only the service RPC, which asserts the service_role claim internally, transitions events.",
+    "next_action": "Keep table grants revoked and retain the status-event lifecycle tests whenever the dispatcher changes.",
+    "review_cadence": "monthly"
+  },
+  {
+    "match": {
+      "name": "rls_enabled_no_policy",
+      "cache_key_contains": "public_scheduled_http_dispatches"
+    },
+    "owner": "dispatch/platform",
+    "reason": "The scheduled HTTP dispatch ledger grants SELECT to service_role only, with RLS enabled and no policy denying anon and authenticated; reconciliation runs only through the service_role EXECUTE RPC.",
+    "next_action": "Keep browser-role grants absent and retain the dispatch tracing and reconciliation tests whenever the ledger changes.",
+    "review_cadence": "monthly"
+  },
+  {
+    "match": {
+      "name": "extension_in_public",
+      "cache_key_contains": "extension_in_public_pgcrypto"
+    },
+    "owner": "platform/security",
+    "reason": "pgcrypto ships in the public schema as a platform default and is load-bearing there: gen_random_uuid() column defaults and the public.digest() release-evidence chain resolve in public across applied migrations, which cannot be rewritten to a new schema.",
+    "next_action": "Keep new crypto use to uuid/digest helpers and revisit schema placement only with a forward migration that preserves the public entry points.",
+    "review_cadence": "monthly"
+  }
   ],
   "review": [
     {
@@ -310,6 +370,76 @@
       "reason": "Listing inserts must call the quota guard for free/pro plan enforcement; the policy uses a cached auth.uid() and a race-resistant helper.",
       "next_action": "Monitor insert latency and keep quota-denial regression tests tied to buyer/seller/agent/developer limits.",
       "review_cadence": "monthly"
-    }
+    },
+  {
+    "match": {
+      "name": "authenticated_security_definer_function_executable",
+      "cache_key_contains": "public_accept_open_house_offer"
+    },
+    "owner": "open-house/security",
+    "reason": "Offer acceptance stays authenticated so hosts can act from the app, while the RPC requires auth.uid(), rejects non-owners, and enforces reveal ordering and deadline gates before mutating.",
+    "next_action": "Keep owner/outsider, ordering, and deadline tests as hard staging gates; never grant this RPC to anon.",
+    "review_cadence": "monthly"
+  },
+  {
+    "match": {
+      "name": "authenticated_security_definer_function_executable",
+      "cache_key_contains": "public_get_admin_open_house_pof_reviews"
+    },
+    "owner": "open-house/security",
+    "reason": "The proof-of-funds review queue is authenticated-executable for app access but raises platform_admin_required unless private.has_platform_admin(auth.uid()); REVOKE ALL from PUBLIC and anon keeps it out of anonymous reach.",
+    "next_action": "Keep platform-admin denial and bounded-result tests tied to this RPC.",
+    "review_cadence": "monthly"
+  },
+  {
+    "match": {
+      "name": "authenticated_security_definer_function_executable",
+      "cache_key_contains": "public_get_open_house_listing_context"
+    },
+    "owner": "open-house/security",
+    "reason": "Listing context requires auth.uid() and returns a row only when the caller owns the listing or holds a registration or bid on it; REVOKE ALL from PUBLIC and anon keeps anonymous callers out.",
+    "next_action": "Keep owner/attendee/outsider context tests as hard staging gates.",
+    "review_cadence": "monthly"
+  },
+  {
+    "match": {
+      "name": "authenticated_security_definer_function_executable",
+      "cache_key_contains": "public_reopen_open_house_offer_selection"
+    },
+    "owner": "open-house/security",
+    "reason": "Reopening offer selection stays authenticated so hosts can act from the app, while the RPC requires auth.uid() and rejects anyone but the listing host.",
+    "next_action": "Keep host/outsider reopen tests tied to this RPC; never grant it to anon.",
+    "review_cadence": "monthly"
+  },
+  {
+    "match": {
+      "name": "authenticated_security_definer_function_executable",
+      "cache_key_contains": "public_review_admin_open_house_pof"
+    },
+    "owner": "open-house/security",
+    "reason": "Proof-of-funds decisions are authenticated-executable for app access but raise platform_admin_required unless private.has_platform_admin(auth.uid()) and validate the verified/rejected decision shape; REVOKE ALL from PUBLIC and anon keeps it out of anonymous reach.",
+    "next_action": "Keep platform-admin denial and decision-validation tests tied to this RPC.",
+    "review_cadence": "monthly"
+  },
+  {
+    "match": {
+      "name": "unindexed_foreign_keys",
+      "cache_key_contains": "email_send_log_first_dispatch_fkey"
+    },
+    "owner": "data/platform",
+    "reason": "The email send log is append-mostly and the parent dispatch ledger is deleted only by retention purges with ON DELETE SET NULL, so the missing covering index is follow-up performance work rather than a release blocker.",
+    "next_action": "Add a covering index on email_send_log(first_dispatch_id), re-measure parent-delete plans, and keep dispatch retention tests green.",
+    "review_cadence": "weekly"
+  },
+  {
+    "match": {
+      "name": "unindexed_foreign_keys",
+      "cache_key_contains": "sync_log_dispatch_id_fkey"
+    },
+    "owner": "data/platform",
+    "reason": "The sync log is append-mostly and the parent dispatch ledger is deleted only by retention purges with ON DELETE SET NULL, so the missing covering index is follow-up performance work rather than a release blocker.",
+    "next_action": "Add a covering index on sync_log(dispatch_id), re-measure parent-delete plans, and keep dispatch reconciliation tests green.",
+    "review_cadence": "weekly"
+  }
   ]
 }

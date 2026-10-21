@@ -151,6 +151,37 @@ describe("supabase advisor debt classification", () => {
     expect(() => assertAdvisorDebtIsActionable(debt)).not.toThrow();
   });
 
+  it("classifies the stage rollout-control, dispatch outbox, open-house RPC, and dispatch FK surfaces", async () => {
+    const repositoryPolicy = await loadAdvisorDebtPolicy(
+      resolve(process.cwd(), "scripts/supabase-advisor-debt-policy.json"),
+    );
+    const lints = [
+      ["rls_enabled_no_policy", "INFO", "rls_enabled_no_policy_private_role_switch_rollout_control"],
+      ["rls_enabled_no_policy", "INFO", "rls_enabled_no_policy_private_storage_cleanup_rollout_control"],
+      ["rls_enabled_no_policy", "INFO", "rls_enabled_no_policy_public_auth_email_dispatch"],
+      ["rls_enabled_no_policy", "INFO", "rls_enabled_no_policy_public_oh_registration_status_events"],
+      ["rls_enabled_no_policy", "INFO", "rls_enabled_no_policy_public_scheduled_http_dispatches"],
+      ["extension_in_public", "WARN", "extension_in_public_pgcrypto"],
+      ["authenticated_security_definer_function_executable", "WARN", "authenticated_security_definer_function_executable_public_accept_open_house_offer_p_offer_id uuid"],
+      ["authenticated_security_definer_function_executable", "WARN", "authenticated_security_definer_function_executable_public_get_admin_open_house_pof_reviews_p_listing_id uuid"],
+      ["authenticated_security_definer_function_executable", "WARN", "authenticated_security_definer_function_executable_public_get_open_house_listing_context_p_listing_ids uuid[]"],
+      ["authenticated_security_definer_function_executable", "WARN", "authenticated_security_definer_function_executable_public_reopen_open_house_offer_selection_p_listing_id uuid"],
+      ["authenticated_security_definer_function_executable", "WARN", "authenticated_security_definer_function_executable_public_review_admin_open_house_pof_p_registration_id uuid, p_decision text, p_reason text, p_expected_updated_at timestamp with time zone"],
+      ["unindexed_foreign_keys", "WARN", "unindexed_foreign_keys_public_email_send_log_email_send_log_first_dispatch_fkey"],
+      ["unindexed_foreign_keys", "WARN", "unindexed_foreign_keys_public_sync_log_sync_log_dispatch_id_fkey"],
+    ].map(([name, level, cache_key]) => ({ name, level, cache_key }));
+
+    const debt = classifyAdvisorDebt(
+      { results: [{ category: "security", lints }] },
+      repositoryPolicy,
+    );
+
+    expect(debt.unknown_count).toBe(0);
+    expect(debt.accepted_count).toBe(6);
+    expect(debt.review_count).toBe(7);
+    expect(() => assertAdvisorDebtIsActionable(debt)).not.toThrow();
+  });
+
   it("treats Supabase performance advisor parser crashes as unavailable evidence only for performance", () => {
     const detail = "Failed to run project advisor lints: ERROR: 42601: syntax error at or near storage.buckets";
 
