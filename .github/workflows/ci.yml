@@ -710,9 +710,25 @@ jobs:
           gh api \
             "repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT_ID" \
             > release-candidate-binding-metadata/artifact.json
-          gh api \
-            "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-            > release-candidate-binding-metadata/run.json
+          metadata_attempt=0
+          while true; do
+            metadata_attempt=$((metadata_attempt + 1))
+            if gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+              > release-candidate-binding-metadata/run.json; then
+              run_status="$(jq -r '.status' release-candidate-binding-metadata/run.json)"
+            else
+              run_status="fetch_failed"
+            fi
+            if [ "$run_status" = "in_progress" ]; then
+              break
+            fi
+            if [ "$metadata_attempt" -ge 9 ]; then
+              echo "::error::Run $GITHUB_RUN_ID never reported in_progress (last status '$run_status')."
+              exit 1
+            fi
+            sleep 10
+          done
           source_tree="$(git rev-parse 'HEAD^{tree}')"
           artifact_name="production-release-candidate-${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}"
           node scripts/create-release-artifact-binding.mjs \
