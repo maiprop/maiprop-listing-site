@@ -704,7 +704,9 @@ describe("Supabase production provider signed-binding contract", () => {
       expect(verification).toContain("--artifact-digest");
       expect(verification).toContain("--file-root");
       expect(verification).toContain('args+=(--file "$file")');
-      expect(verification).toContain("release-manifest.json");
+      expect(verification).toMatch(
+        /verify_binding source release-candidate \\\n\s+evidence\/bindings\/source\/release-artifact-binding\.json \\\n\s+\.github\/workflows\/ci\.yml push "\$SOURCE_RUN_ID" "\$SOURCE_RUN_ATTEMPT" false\n/,
+      );
       expect(verification).toContain("release-candidate-attestation.json");
       expect(verification).toContain("supabase-staging-edge-attestation.json");
       expect(verification).toContain("stripe-live-migration-evidence.json");
