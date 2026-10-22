@@ -889,8 +889,7 @@ jobs:
 
           verify_binding source release-candidate \
             evidence/bindings/source/release-artifact-binding.json \
-            .github/workflows/ci.yml push "$SOURCE_RUN_ID" "$SOURCE_RUN_ATTEMPT" false \
-            release-manifest.json
+            .github/workflows/ci.yml push "$SOURCE_RUN_ID" "$SOURCE_RUN_ATTEMPT" false
           verify_binding staging-aggregate evidence/staging-aggregate \
             evidence/bindings/staging-aggregate/release-artifact-binding.json \
             .github/workflows/stage-release.yml workflow_run \
