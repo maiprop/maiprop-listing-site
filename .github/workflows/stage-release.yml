@@ -484,14 +484,24 @@ jobs:
             selected_artifact_name="$durable_asset"
             selected_source_kind="immutable-github-release"
           elif [ "$durable_status" = "404" ]; then
-            github_api --method GET \
-              "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
-              -f head_sha="$previous_sha" \
-              -f branch=main \
-              -f event=push \
-              -f status=success \
-              -f per_page=100 \
-              > n-minus-one/ci-runs.json
+            # The workflow-runs list has returned transient pages that omit
+            # existing runs; poll briefly before accepting the list.
+            ci_runs_attempt=0
+            while [ "$ci_runs_attempt" -lt 10 ]; do
+              ci_runs_attempt=$((ci_runs_attempt + 1))
+              github_api --method GET \
+                "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+                -f head_sha="$previous_sha" \
+                -f branch=main \
+                -f event=push \
+                -f status=success \
+                -f per_page=100 \
+                > n-minus-one/ci-runs.json
+              if [ "$(jq '.workflow_runs | length' n-minus-one/ci-runs.json)" -gt 0 ]; then
+                break
+              fi
+              sleep 15
+            done
             selected_artifact_id=""
             selected_binding_artifact_id=""
             selected_actor=""
@@ -500,8 +510,18 @@ jobs:
               [ -n "$run_id" ] || continue
               [ "$run_attempt" = "1" ] || continue
               [ "$actor" = "$triggering_actor" ] || continue
-              github_api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" \
-                > n-minus-one/run-artifacts.json
+              # The artifacts list has the same transient-empty behavior;
+              # poll briefly before accepting it.
+              run_artifacts_attempt=0
+              while [ "$run_artifacts_attempt" -lt 6 ]; do
+                run_artifacts_attempt=$((run_artifacts_attempt + 1))
+                github_api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" \
+                  > n-minus-one/run-artifacts.json
+                if [ "$(jq '.artifacts | length' n-minus-one/run-artifacts.json)" -gt 0 ]; then
+                  break
+                fi
+                sleep 10
+              done
               artifact_name="production-release-candidate-${previous_sha}-1"
               binding_name="production-release-candidate-binding-${previous_sha}-1"
               mapfile -t artifact_ids < <(
