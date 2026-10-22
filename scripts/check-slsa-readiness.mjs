@@ -394,7 +394,7 @@ export function checkSlsaReadiness(root = process.cwd(), options = {}) {
     "trusted artifact ID, name, and digest must be provided together.",
     'verificationMode = "prior-run"',
     'verificationMode !== "same-run"',
-    'run?.status !== "in_progress" || run?.conclusion !== null',
+    'run?.status === "completed" || run?.conclusion !== null',
     'run?.status !== "completed" || run?.conclusion !== "success"',
   ]);
   requireMarkers(failures, paths.create, texts.create, [
