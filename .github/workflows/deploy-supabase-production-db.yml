@@ -118,6 +118,7 @@ jobs:
     environment: production
     timeout-minutes: 60
     env:
+      GITHUB_TOKEN: ${{ github.token }}
       PRODUCTION_CALLER_WORKFLOW_PATH: ".github/workflows/deploy-production-release.yml"
       PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"
       RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}

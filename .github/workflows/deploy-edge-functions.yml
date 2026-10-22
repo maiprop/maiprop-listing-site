@@ -131,6 +131,7 @@ jobs:
       edge_attestation_sha256: ${{ steps.edge_attestation.outputs.attestation_sha256 }}
       edge_binding_artifact: ${{ steps.edge_binding.outputs.binding_artifact_name }}
     env:
+      GITHUB_TOKEN: ${{ github.token }}
       PRODUCTION_CALLER_WORKFLOW_PATH: ".github/workflows/deploy-production-release.yml"
       PRODUCTION_PROJECT_REF: "qvvicunqcrwpioqnvzxf"
       RELEASE_EVIDENCE_SIGNING_KEY_ID: ${{ vars.RELEASE_EVIDENCE_SIGNING_KEY_ID }}

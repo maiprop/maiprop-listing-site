@@ -206,6 +206,7 @@ jobs:
       deployment_url: ${{ steps.deployment.outputs.deployment_url }}
       rollback_performed: ${{ steps.evidence.outputs.rollback_performed }}
     env:
+      GITHUB_TOKEN: ${{ github.token }}
       PRODUCTION_PROJECT: "maiprop-listing-site"
       STAGING_PROJECT: "maiprop-listing-site-staging"
       CLOUDFLARE_PAGES_PROJECT_ID: ${{ inputs.production_project_id }}
