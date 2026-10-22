@@ -95,6 +95,8 @@ on:
         required: true
       SUPABASE_ACCESS_TOKEN:
         required: true
+      SUPABASE_DB_PASSWORD:
+        required: true
       VITE_SUPABASE_PROJECT_ID:
         required: true
       VITE_SUPABASE_URL:
@@ -161,6 +163,22 @@ jobs:
           ref: ${{ inputs.release_sha }}
           fetch-depth: 1
           persist-credentials: false
+      - name: Resolve effective production database URL
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SUPABASE_PRODUCTION_DB_URL:-}" ]; then
+            echo "Using configured SUPABASE_PRODUCTION_DB_URL secret."
+          else
+            if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
+              echo "::error::Neither SUPABASE_PRODUCTION_DB_URL nor SUPABASE_DB_PASSWORD is configured."
+              exit 1
+            fi
+            encoded_password="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SUPABASE_DB_PASSWORD")"
+            echo "SUPABASE_PRODUCTION_DB_URL=postgresql://postgres:${encoded_password}@db.qvvicunqcrwpioqnvzxf.supabase.co:5432/postgres" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
@@ -926,7 +944,6 @@ jobs:
           PRODUCTION_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
           SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           if [ "$PRODUCTION_PROJECT_ID" != "$PRODUCTION_PROJECT_REF" ]; then
@@ -937,8 +954,6 @@ jobs:
             > production-supabase-target.json
 
       - name: Capture production migration history
-        env:
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           psql "$SUPABASE_PRODUCTION_DB_URL" \
@@ -976,8 +991,6 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('production-migrations-before.json','utf8'))"
 
       - name: Capture production legacy schema evidence before mutation
-        env:
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           raw_evidence="$(mktemp)"
@@ -1244,8 +1257,6 @@ jobs:
           NODE
 
       - name: Check production role-switch index safety
-        env:
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           raw_state="$(mktemp)"
@@ -1270,8 +1281,6 @@ jobs:
             --release-sha "$RELEASE_SHA"
 
       - name: Dry-run exact staged production migrations
-        env:
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           actual_manifest_sha256="$(sha256sum release-candidate/release-manifest.json | awk '{print $1}')"
@@ -1370,7 +1379,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           lease_args=()
@@ -1479,7 +1487,6 @@ jobs:
           RELEASE_EVIDENCE_SIGNING_KEY: ${{ secrets.RELEASE_EVIDENCE_SIGNING_KEY }}
           SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           lease_args=()
@@ -1719,8 +1726,6 @@ jobs:
           NODE
 
       - name: Require exact production migration parity
-        env:
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           psql "$SUPABASE_PRODUCTION_DB_URL" \
@@ -1784,8 +1789,6 @@ jobs:
           NODE
 
       - name: Require exact role-switch post-apply integrity
-        env:
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           raw_index_state="$(mktemp)"
@@ -1831,8 +1834,6 @@ jobs:
             --release-sha "$RELEASE_SHA"
 
       - name: Require exact legacy schema convergence with staging
-        env:
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           raw_evidence="$(mktemp)"
@@ -1898,7 +1899,6 @@ jobs:
 
       - name: Capture production Supabase index stats
         env:
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
           SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf
         run: npm run capture:supabase-index-stats -- --out supabase-index-stats-production.json
 
@@ -1909,8 +1909,6 @@ jobs:
         run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --index-stats supabase-index-stats-production.json --out supabase-advisor-production-summary.json
 
       - name: Check production schema lint
-        env:
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: npx --no-install supabase --workdir release-candidate db lint --db-url "$SUPABASE_PRODUCTION_DB_URL" --level error --fail-on error
 
       - name: Check production live security posture
@@ -2249,7 +2247,6 @@ jobs:
         if: ${{ always() }}
         env:
           JOB_STATUS: ${{ job.status }}
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           production_history_capture_status="captured"

@@ -104,6 +104,8 @@ on:
         required: true
       SUPABASE_ACCESS_TOKEN:
         required: true
+      SUPABASE_DB_PASSWORD:
+        required: true
       VITE_SUPABASE_PROJECT_ID:
         required: true
       VITE_SUPABASE_URL:
@@ -171,6 +173,22 @@ jobs:
           ref: ${{ inputs.release_sha }}
           fetch-depth: 1
           persist-credentials: false
+      - name: Resolve effective production database URL
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SUPABASE_PRODUCTION_DB_URL:-}" ]; then
+            echo "Using configured SUPABASE_PRODUCTION_DB_URL secret."
+          else
+            if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
+              echo "::error::Neither SUPABASE_PRODUCTION_DB_URL nor SUPABASE_DB_PASSWORD is configured."
+              exit 1
+            fi
+            encoded_password="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SUPABASE_DB_PASSWORD")"
+            echo "SUPABASE_PRODUCTION_DB_URL=postgresql://postgres:${encoded_password}@db.qvvicunqcrwpioqnvzxf.supabase.co:5432/postgres" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
@@ -1248,7 +1266,6 @@ jobs:
       - name: Activate and verify role-switch reconciliation cron
         env:
           GH_TOKEN: ${{ github.token }}
-          SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
           SUPABASE_PROJECT_REF: qvvicunqcrwpioqnvzxf
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
         run: |

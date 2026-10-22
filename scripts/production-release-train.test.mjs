@@ -3717,6 +3717,7 @@ describe("production release train", () => {
     expect(call.secrets).toEqual({
       RELEASE_EVIDENCE_SIGNING_KEY: { required: true },
       SUPABASE_ACCESS_TOKEN: { required: true },
+      SUPABASE_DB_PASSWORD: { required: true },
       VITE_SUPABASE_PROJECT_ID: { required: true },
       VITE_SUPABASE_URL: { required: true },
     });
@@ -3857,9 +3858,9 @@ describe("production release train", () => {
       (step) => step.name === "Upload production database terminal evidence",
     );
     expect(terminalEvidence.if).toBe("${{ always() }}");
-    expect(terminalEvidence.env.SUPABASE_PRODUCTION_DB_URL).toBe(
-      "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
-    );
+    expect(
+      terminalEvidence.env.SUPABASE_PRODUCTION_DB_URL,
+    ).toBeUndefined();
     expect(terminalEvidence.run).toContain(
       'psql "$SUPABASE_PRODUCTION_DB_URL"',
     );
@@ -3971,6 +3972,7 @@ describe("production release train", () => {
     expect(call.secrets).toEqual({
       RELEASE_EVIDENCE_SIGNING_KEY: { required: true },
       SUPABASE_ACCESS_TOKEN: { required: true },
+      SUPABASE_DB_PASSWORD: { required: true },
       VITE_SUPABASE_PROJECT_ID: { required: true },
       VITE_SUPABASE_URL: { required: true },
     });
