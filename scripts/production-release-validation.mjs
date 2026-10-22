@@ -1967,15 +1967,29 @@ async function githubJson(path, token) {
 }
 
 async function workflowRuns({ repository, workflow, sha, token }) {
+  const expectedSha = String(sha ?? "").toLowerCase();
   const query = new URLSearchParams({
     head_sha: sha,
     per_page: "100",
   });
-  const payload = await githubJson(
-    `/repos/${repository}/actions/workflows/${workflow}/runs?${query}`,
-    token,
-  );
-  return payload.workflow_runs ?? [];
+  const path = `/repos/${repository}/actions/workflows/${workflow}/runs?${query}`;
+  // The workflow-runs list endpoint has returned transient pages that omit a
+  // just-completed run; poll briefly for the expected SHA before accepting
+  // the list, so lease revalidations do not fail on a stale read.
+  const attempts = 10;
+  const delayMs = 15_000;
+  let runs = [];
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const payload = await githubJson(path, token);
+    runs = payload.workflow_runs ?? [];
+    if (runs.some((run) => String(run?.head_sha ?? "").toLowerCase() === expectedSha)) {
+      return runs;
+    }
+    if (attempt < attempts) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return runs;
 }
 
 async function jobsForRuns({ repository, runs, token }) {
