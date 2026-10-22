@@ -498,7 +498,8 @@ CI intentionally uses **stub** Supabase URL + key (format-valid placeholders in 
 The manual auction workflow supplies `AUCTION_CI_RUN_ID`, `AUCTION_ARTIFACT`, `AUCTION_PAGES_PROJECT`, and `AUCTION_PAGES_PROJECT_ID` from the reviewed release and existing project configuration. `AUCTION_STAGING_ANON_KEY` and `AUCTION_STAGING_SERVICE_KEY` are resolved only for the fixed isolated staging project, masked, kept within that run, and excluded from evidence. The production Pages deployment receives no service-role binding.
 
 ---
-### Codex/Muse control tooling (observe-ci)
+
+## Codex/Muse control tooling (observe-ci)
 
 | Variable | Purpose | Scope |
 |---|---|---|
