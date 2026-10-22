@@ -129,9 +129,7 @@ describe("production DB advisor workflow", () => {
     expect(productionWorkflow).not.toContain("id-token: write");
     expect(productionWorkflow).not.toContain("artifact-metadata: write");
     expect(productionWorkflow).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
-    expect(terminalEvidence?.env?.SUPABASE_PRODUCTION_DB_URL).toBe(
-      "${{ secrets.SUPABASE_PRODUCTION_DB_URL }}",
-    );
+    expect(terminalEvidence?.env?.SUPABASE_PRODUCTION_DB_URL).toBeUndefined();
     expect(terminalEvidence?.run).toContain('psql "$SUPABASE_PRODUCTION_DB_URL"');
     expect(terminalEvidence?.run).toContain("production-migrations-terminal.json");
     expect(terminalEvidence?.run).toContain("production_history_capture_status");
