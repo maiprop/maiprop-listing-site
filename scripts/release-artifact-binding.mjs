@@ -439,8 +439,8 @@ function assertRunState(binding, run, verificationMode, trustedCurrentRun) {
   ) {
     fail("same-run metadata does not match the trusted current run tuple.");
   }
-  if (run?.status !== "in_progress" || run?.conclusion !== null) {
-    fail("same-run metadata must be in_progress with a null conclusion.");
+  if (run?.status === "completed" || run?.conclusion !== null) {
+    fail("same-run metadata must describe a live run with a null conclusion.");
   }
 }
 

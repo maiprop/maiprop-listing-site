@@ -720,11 +720,11 @@ jobs:
             else
               run_status="fetch_failed"
             fi
-            if [ "$run_status" = "in_progress" ]; then
+            if [ "$run_status" != "completed" ] && [ "$run_status" != "fetch_failed" ]; then
               break
             fi
             if [ "$metadata_attempt" -ge 9 ]; then
-              echo "::error::Run $GITHUB_RUN_ID never reported in_progress (last status '$run_status')."
+              echo "::error::Run $GITHUB_RUN_ID metadata unavailable (last status '$run_status')."
               exit 1
             fi
             sleep 10

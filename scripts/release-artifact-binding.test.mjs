@@ -232,6 +232,16 @@ describe("release artifact binding", () => {
       verificationMode: "same-run",
       trustedCurrentRun,
     })).toMatchObject({ verificationMode: "same-run", runId: "77" });
+    expect(verify(binding, {
+      producerRun: producerRun({ status: "queued", conclusion: null }),
+      verificationMode: "same-run",
+      trustedCurrentRun,
+    })).toMatchObject({ verificationMode: "same-run", runId: "77" });
+    expect(() => verify(binding, {
+      producerRun: producerRun({ status: "completed", conclusion: null }),
+      verificationMode: "same-run",
+      trustedCurrentRun,
+    })).toThrow(/same-run|status|conclusion|metadata/i);
     expect(() => verify(binding, {
       producerRun: producerRun(),
       verificationMode: "same-run",
