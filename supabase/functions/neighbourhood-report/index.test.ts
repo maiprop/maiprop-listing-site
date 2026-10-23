@@ -970,6 +970,95 @@ Deno.test("legacy retries remain rate limited before authentication without quot
   assertEquals(result.osCalls, 0);
 });
 
+Deno.test({
+  name: "stalled OS leg exceeds budget and degrades to AI-only report",
+  // The stalled mock never settles, abandoning fetchWithTimeout's abort
+  // timer by design; in production that timer fires and cleans up.
+  sanitizeOps: false,
+  fn: async () => {
+    const originalFetch = activeFetch;
+    const prevOsUrl = Deno.env.get("MAIPROP_OS_API_URL");
+    const prevOsEmail = Deno.env.get("MAIPROP_OS_EMAIL");
+    const prevOsPassword = Deno.env.get("MAIPROP_OS_PASSWORD");
+    const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+    const prevGemini = Deno.env.get("GEMINI_API_KEY");
+    const prevBudget = Deno.env.get("MAIPROP_OS_WAIT_BUDGET_MS");
+    Deno.env.set("MAIPROP_OS_API_URL", "https://os.test");
+    Deno.env.set("MAIPROP_OS_EMAIL", "os@test.local");
+    Deno.env.set("MAIPROP_OS_PASSWORD", "os-password");
+    Deno.env.set("OPENAI_API_KEY", "openai-test");
+    Deno.env.delete("GEMINI_API_KEY");
+    Deno.env.set("MAIPROP_OS_WAIT_BUDGET_MS", "50");
+    activeFetch = ((input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("/auth/v1/user")) {
+        return Promise.resolve(okJson({ id: "test-user-id", email: "user@test.local" }));
+      }
+      if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+        return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+      }
+      if (url === "https://os.test/auth/login") {
+        return new Promise<Response>(() => {});
+      }
+      if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+        return Promise.resolve(okJson({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                areaName: "Athens",
+                walkabilityScore: 72,
+                pricePerSqmTrend: { current: 3000, oneYearAgo: 2900, threeYearsAgo: 2500, fiveYearsAgo: 2200, changeYoY: 3.4, change5Y: 36.4 },
+                noiseLevel: { score: 60, label: "Busy", notes: "Central estimate." },
+                safetyScore: { score: 70, label: "Good", trend: "Stable", notes: "Central estimate." },
+                developmentProjects: [],
+                demographics: { primaryResidents: "Mixed", avgAge: 40, tourismImpact: "Moderate" },
+                investmentOutlook: { rating: "Good", summary: "Cautious report." },
+                areaHighlights: ["Central urban market"],
+              }),
+            },
+          }],
+        }));
+      }
+      throw new Error(`Unexpected external request: ${url}`);
+    }) as typeof fetch;
+    try {
+      const res = await handler(req("POST", {
+        responseVersion: 2,
+        city: "Athens",
+        address: "Syntagma",
+      }, {
+        authorization: "Bearer [REDACTED]",
+        "x-forwarded-for": "10.9.9.9",
+      }));
+      const body = await jsonBody(res) as {
+        areaName?: string;
+        osMunicipalityStatus?: string;
+        pricePerSqmTrend?: { current?: number | null };
+      };
+      assertEquals(res.status, 200);
+      // Same normalization as an OS outage: no invented market figures,
+      // non-market AI content preserved, existing "error" status reused.
+      assertEquals(body.osMunicipalityStatus, "error");
+      assertEquals(body.pricePerSqmTrend?.current, null);
+      assertEquals(body.areaName, "Athens");
+    } finally {
+      activeFetch = originalFetch;
+      if (prevOsUrl === undefined) Deno.env.delete("MAIPROP_OS_API_URL");
+      else Deno.env.set("MAIPROP_OS_API_URL", prevOsUrl);
+      if (prevOsEmail === undefined) Deno.env.delete("MAIPROP_OS_EMAIL");
+      else Deno.env.set("MAIPROP_OS_EMAIL", prevOsEmail);
+      if (prevOsPassword === undefined) Deno.env.delete("MAIPROP_OS_PASSWORD");
+      else Deno.env.set("MAIPROP_OS_PASSWORD", prevOsPassword);
+      if (prevOpenAI === undefined) Deno.env.delete("OPENAI_API_KEY");
+      else Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+      if (prevGemini === undefined) Deno.env.delete("GEMINI_API_KEY");
+      else Deno.env.set("GEMINI_API_KEY", prevGemini);
+      if (prevBudget === undefined) Deno.env.delete("MAIPROP_OS_WAIT_BUDGET_MS");
+      else Deno.env.set("MAIPROP_OS_WAIT_BUDGET_MS", prevBudget);
+    }
+  },
+});
+
 Deno.test("version 2 still enforces plan permissions before provider work", async () => {
   const result = await scenario({
     version: 2,
