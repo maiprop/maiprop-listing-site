@@ -51,7 +51,7 @@ const PUBLIC_AUCTION_PRODUCER_TIMEOUT_MS = 5_000;
 const AUCTION_REQUEST_TIMEOUT_MS = 5_000;
 const AUCTION_DB_TIMEOUT_MS = 2_500;
 const AUCTION_AUTH_TIMEOUT_MS = 2_500;
-const AUCTION_CACHE_VERSION = "canonical-server-filtered-v15";
+const AUCTION_CACHE_VERSION = "canonical-server-filtered-v16";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const PREMIUM_OWNERSHIP_FILTERS = new Set([
   "full",

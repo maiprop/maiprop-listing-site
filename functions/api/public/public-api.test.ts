@@ -3660,7 +3660,7 @@ describe("public auctions endpoint", () => {
     const cacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(cacheKey.searchParams.get("limit")).toBe("60");
     expect(cacheKey.searchParams.has("day")).toBe(true);
-    expect(cacheKey.searchParams.get("v")).toBe("canonical-server-filtered-v15");
+    expect(cacheKey.searchParams.get("v")).toBe("canonical-server-filtered-v16");
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=30, stale-while-revalidate=60");
     expect(res.headers.get("CDN-Cache-Control")).toBe("no-store");
     const staleSeed = cacheApi.put.mock.calls.find(([request]) =>
