@@ -877,9 +877,30 @@ async function resolveAuctionEntitlement(
     return { limit: freeLimit, authenticated: false, accessToken: null };
   }
 
+  // The identity check and the visible-limit lookup are independent (both
+  // need only the bearer token), so resolve them concurrently: serial
+  // awaits cost up to 2 x AUCTION_AUTH_TIMEOUT_MS on every authenticated
+  // request, and authenticated requests bypass the shared cache below.
+  // Returned outcomes are identical to the previous sequential version in
+  // every branch.
+  async function settleEntitlementCall<T>(
+    work: Promise<T>,
+  ): Promise<{ ok: true; value: T } | { ok: false }> {
+    try {
+      return { ok: true, value: await work };
+    } catch (error) {
+      if (requestSignal.aborted) throw error;
+      return { ok: false };
+    }
+  }
   let validatedAccessToken: string | null = null;
   try {
-    const userResult = await fetchAndConsumeWithAbortableTimeout(
+    // Fire both entitlement lookups together but gate on identity first:
+    // valid tokens pay only the slower of the two lookups instead of
+    // their sum, while invalid tokens return after the identity lookup
+    // alone (the limit lookup settles silently in the background) so
+    // callers never wait on a lookup they cannot use.
+    const userPromise = settleEntitlementCall(fetchAndConsumeWithAbortableTimeout(
       new URL("/auth/v1/user", publicRuntime.url),
       {
         headers: {
@@ -894,17 +915,8 @@ async function resolveAuctionEntitlement(
         payload: response.ok ? await response.json() as { id?: unknown } : null,
       }),
       requestSignal,
-    );
-    const { response: userResponse, payload: user } = userResult;
-    if (!userResponse.ok) {
-      return { limit: freeLimit, authenticated: false, accessToken: null };
-    }
-    if (!user || typeof user.id !== "string" || !USER_ID_RE.test(user.id)) {
-      return { limit: freeLimit, authenticated: false, accessToken: null };
-    }
-    validatedAccessToken = token;
-
-    const limitResult = await fetchAndConsumeWithAbortableTimeout(
+    ));
+    const limitPromise = settleEntitlementCall(fetchAndConsumeWithAbortableTimeout(
       new URL("/rest/v1/rpc/get_current_auction_listing_visible_limit", publicRuntime.url),
       {
         method: "POST",
@@ -922,12 +934,25 @@ async function resolveAuctionEntitlement(
         payload: response.ok ? await response.json() : null,
       }),
       requestSignal,
-    );
-    const { response: limitResponse } = limitResult;
+    ));
+    const userOutcome = await userPromise;
+    const userResult = userOutcome.ok ? userOutcome.value : null;
+    const userPayload = userResult?.response.ok ? userResult.payload : null;
+    if (!userPayload || typeof userPayload.id !== "string" || !USER_ID_RE.test(userPayload.id)) {
+      void limitPromise.catch(() => undefined);
+      return { limit: freeLimit, authenticated: false, accessToken: null };
+    }
+    validatedAccessToken = token;
+
+    const limitOutcome = await limitPromise;
+    if (!limitOutcome.ok) {
+      return { limit: freeLimit, authenticated: true, accessToken: token };
+    }
+    const { response: limitResponse } = limitOutcome.value;
     if (!limitResponse.ok) {
       return { limit: freeLimit, authenticated: true, accessToken: token };
     }
-    const configuredLimit = visibleLimitFromPayload(limitResult.payload);
+    const configuredLimit = visibleLimitFromPayload(limitOutcome.value.payload);
     if (!Number.isFinite(configuredLimit)) {
       return { limit: freeLimit, authenticated: true, accessToken: token };
     }

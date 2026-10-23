@@ -4444,6 +4444,48 @@ describe("public auctions endpoint", () => {
     )).toBe(false);
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
+  it("resolves the auction identity check and visible-limit lookup concurrently", async () => {
+    const events: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/auth/v1/user") {
+        events.push("user-start");
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        events.push("user-end");
+        return new Response(JSON.stringify({ id: "00000000-0000-4000-8000-000000000001" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_current_auction_listing_visible_limit") {
+        events.push("limit-start");
+        return new Response("600", {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.pathname === "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
+        return auctionEnvelopeRows([]);
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=600&page=1&pageSize=20",
+      {
+        headers: { Authorization: "Bearer paid-test-token" },
+        requestEnv: {
+          SUPABASE_URL: `https://${PROJECT_ID}.supabase.co`,
+          SUPABASE_PUBLISHABLE_KEY: "publishable_test_key",
+        },
+      },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(events).toContain("user-start");
+    expect(events).toContain("limit-start");
+    expect(events).toContain("user-end");
+    expect(events.indexOf("limit-start")).toBeLessThan(events.indexOf("user-end"));
+  });
+
 
   it.each([
     { label: "missing", headers: undefined },
@@ -4760,7 +4802,7 @@ describe("public auctions endpoint", () => {
             auction_date: "2026-08-01",
             priority_placement: 0,
           }],
-        }], 2_000, init?.signal);
+        }], 4_000, init?.signal);
       }
       return jsonRows([]);
     }) as unknown as typeof fetch;
