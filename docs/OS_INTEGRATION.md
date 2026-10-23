@@ -171,6 +171,7 @@ The target must be a listing stored by the platform. Arbitrary external IDs are 
 | `MAIPROP_OS_WEBHOOK_SECRET` | receive-from-os         | Validate webhook calls from OS |
 | `GOOGLE_MAPS_API_KEY`     | full-sync-from-os, poll-os-auctions | Optional; Street View cover images for auction listings |
 | `MAIPROP_OS_REPORT_PATH`  | fetch-report-from-os                | Optional legacy non-valuation report URL override (default: `/api/v1/reports/listing`) |
+| `MAIPROP_OS_WAIT_BUDGET_MS` | property-valuation, neighbourhood-report | Optional wall-clock budget (ms) for the whole OS leg; on expiry the function degrades to the AI-only path (default: `12000`) |
 
 ---
 
