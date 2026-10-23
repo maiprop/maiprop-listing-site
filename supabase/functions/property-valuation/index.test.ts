@@ -40,6 +40,7 @@ const withProviders = async (options: {
   ai?: unknown | Response;
   quota?: { allowed: boolean; reason?: string | null };
   quotaResponse?: Response;
+  osStall?: boolean;
   osConfigured?: boolean;
   aiConfigured?: boolean;
   osUrl?: string;
@@ -69,6 +70,7 @@ const withProviders = async (options: {
     if (url === `${options.osUrl ?? "https://os.test"}/auth/login`) { calls.osAuth += 1; calls.order.push("os-auth"); return Promise.resolve(okJson({ data: { token: "os-token" } })); }
     if (url.includes("/api/v1/property/valuation")) {
       calls.osValuation += 1; calls.order.push("os");
+      if (options.osStall) return new Promise<Response>(() => {});
       calls.osBody = JSON.parse(String(init?.body ?? "{}"));
       return Promise.resolve(options.os instanceof Response ? options.os.clone() : okJson({ data: options.os ?? {} }));
     }
@@ -282,6 +284,35 @@ Deno.test("authentication denial performs no OS or AI work", async () => {
     const res = await handler(request(base({ latitude: 37.98, longitude: 23.72, floor: 1, yearBuilt: 2000 }), false));
     assertEquals(res.status, 401); assertEquals(calls.osValuation, 0); assertEquals(calls.ai, 0);
   });
+});
+
+Deno.test({
+  name: "stalled OS valuation exceeds budget and degrades to AI-only",
+  // The stalled mock never settles, abandoning fetchWithTimeout's abort
+  // timer by design; in production that timer fires and cleans up.
+  sanitizeOps: false,
+  fn: async () => {
+    Deno.env.set("MAIPROP_OS_WAIT_BUDGET_MS", "50");
+    try {
+      await withProviders({ osConfigured: true, aiConfigured: true, osStall: true, ai: { estimatedValue: 310000, rangeLow: 300000, rangeHigh: 330000, summary: "AI-only analysis." } }, async (calls) => {
+        const res = await handler(request(base({ latitude: 37.98, longitude: 23.72, floor: 1, yearBuilt: 2005 })));
+        const body = await jsonBody(res) as {
+          estimatedValue?: number;
+          methodUsed?: string;
+          evidence?: { analysis?: string; fields?: Record<string, string> };
+        };
+        assertEquals(res.status, 200);
+        assertEquals(body.estimatedValue, 310000);
+        assertEquals(body.methodUsed, "Unverified AI valuation analysis");
+        assertEquals(body.evidence?.analysis, "ai_estimate");
+        assertEquals(body.evidence?.fields?.estimatedValue, "ai_estimate");
+        assertEquals(calls.osValuation, 1);
+        assertEquals(calls.ai, 1);
+      });
+    } finally {
+      Deno.env.delete("MAIPROP_OS_WAIT_BUDGET_MS");
+    }
+  },
 });
 
 Deno.test("conflicting open-house rental asking values fail before reservation", async () => {

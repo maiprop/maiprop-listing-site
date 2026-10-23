@@ -1,5 +1,5 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { ASYNC_BUDGET_EXCEEDED, fetchWithTimeout, withAsyncBudget } from "../_shared/fetchWithTimeout.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota } from "../_shared/aiUsage.ts";
@@ -15,6 +15,18 @@ const NEW_BUILD_OPENAI_REASONING_EFFORT = "medium";
 const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 const OS_VALUATION_TIMEOUT_MS = 25_000;
 const OS_AUTH_TOKEN_CACHE_TTL_MS = 10 * 60_000;
+/**
+ * Best-effort wall-clock budget for the whole OS leg (auth + valuation).
+ * Exceeding it degrades to the AI-only path — the same response shape as an
+ * OS outage — instead of risking the 45 s client timeout. Tune from the
+ * `osMs` timing logs once percentiles are known.
+ */
+const OS_VALUATION_BUDGET_MS = 12_000;
+
+const resolveOsWaitBudgetMs = (): number => {
+  const raw = Number(Deno.env.get("MAIPROP_OS_WAIT_BUDGET_MS"));
+  return Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : OS_VALUATION_BUDGET_MS;
+};
 const MAX_BUILDING_ALLOWANCE_SQM = 100_000;
 
 const PROPERTY_TYPES = [
@@ -398,6 +410,30 @@ const fetchOsValuationResponse = async (
   }
 };
 
+/**
+ * Best-effort wrapper: bounds the whole OS leg by `resolveOsWaitBudgetMs()`.
+ * On budget expiry it throws so the caller's existing catch block degrades
+ * to the AI-only path with status `"error"` — the same shape as an OS outage.
+ */
+const fetchStructuredOsValuationBudgeted = async (
+  input: StructuredValuationInput,
+): Promise<JsonRecord | null> => {
+  const osStartedAt = Date.now();
+  const osBudgetMs = resolveOsWaitBudgetMs();
+  try {
+    const budgeted = await withAsyncBudget(fetchStructuredOsValuation(input), osBudgetMs);
+    if (budgeted === ASYNC_BUDGET_EXCEEDED) throw new Error(`OS budget exceeded after ${osBudgetMs}ms`);
+    return budgeted;
+  } finally {
+    log.info("property-valuation: OS leg finished", {
+      listingId: input.listingId,
+      city: input.city,
+      osMs: Date.now() - osStartedAt,
+      osBudgetMs,
+    });
+  }
+};
+
 const fetchStructuredOsValuation = async (input: StructuredValuationInput): Promise<JsonRecord | null> => {
   const baseUrl = (Deno.env.get("MAIPROP_OS_API_URL") ?? Deno.env.get("MAIPROP_OS_URL"))?.replace(/\/+$/, "");
   const email = Deno.env.get("MAIPROP_OS_EMAIL");
@@ -756,7 +792,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
     if (!newBuildAiOnly) {
       try {
-        osValuationData = await fetchStructuredOsValuation(structuredValuationInput);
+        osValuationData = await fetchStructuredOsValuationBudgeted(structuredValuationInput);
         osValuationStatus = osValuationData ? "ok" : osValuationStatus === "requested" ? "no_prediction" : osValuationStatus;
       } catch (osError) {
         osValuationStatus = "error";

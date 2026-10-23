@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { resolveOptionalUserId } from "../_shared/optionalAuth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { ASYNC_BUDGET_EXCEEDED, fetchWithTimeout, withAsyncBudget } from "../_shared/fetchWithTimeout.ts";
 import {
   makeRateLimiter,
   tooManyRequestsResponse,
@@ -27,6 +27,18 @@ const neighbourhoodLimiter = makeRateLimiter({
   failClosed: true,
 });
 const OS_MARKET_TIMEOUT_MS = 25_000;
+/**
+ * Best-effort wall-clock budget for the whole OS leg (auth + municipalities
+ * + market report). Exceeding it degrades to the AI-only path — the same
+ * response shape as an OS outage — instead of risking the 45 s client
+ * timeout. Tune from the `osMs` timing logs once percentiles are known.
+ */
+const OS_MARKET_BUDGET_MS = 12_000;
+
+const resolveOsMarketBudgetMs = (): number => {
+  const raw = Number(Deno.env.get("MAIPROP_OS_WAIT_BUDGET_MS"));
+  return Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : OS_MARKET_BUDGET_MS;
+};
 const VETTED_NEIGHBOURHOOD_RULES = buildVettedAnswerRules({
   scope: "neighbourhood intelligence reports",
   timeSensitiveTopics: [
@@ -444,6 +456,30 @@ const findMunicipality = (
   return best && best.score >= 20 ? best.row : null;
 };
 
+/**
+ * Best-effort wrapper: bounds the whole OS leg (auth + municipalities +
+ * market report) by `resolveOsMarketBudgetMs()`. On budget expiry it throws
+ * so the caller's existing catch block degrades to the AI-only path with
+ * status `"error"` — the same shape as an OS outage.
+ */
+const fetchOsMunicipalityContextBudgeted = async (
+  input: Parameters<typeof fetchOsMunicipalityContext>[0],
+): Promise<MunicipalityContext> => {
+  const osStartedAt = Date.now();
+  const osBudgetMs = resolveOsMarketBudgetMs();
+  try {
+    const budgeted = await withAsyncBudget(fetchOsMunicipalityContext(input), osBudgetMs);
+    if (budgeted === ASYNC_BUDGET_EXCEEDED) throw new Error(`OS budget exceeded after ${osBudgetMs}ms`);
+    return budgeted;
+  } finally {
+    log.info("neighbourhood-report: OS leg finished", {
+      city: typeof input.city === "string" ? input.city : undefined,
+      osMs: Date.now() - osStartedAt,
+      osBudgetMs,
+    });
+  }
+};
+
 const fetchOsMunicipalityContext = async (input: {
   city: string;
   address?: unknown;
@@ -837,7 +873,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
     };
 
     try {
-      osMunicipalityContext = await fetchOsMunicipalityContext({
+      osMunicipalityContext = await fetchOsMunicipalityContextBudgeted({
         city: String(city),
         address,
         region,
