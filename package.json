@@ -110,6 +110,7 @@
     "test:deno": "node scripts/run-deno-tests.mjs",
     "test:deno:coverage": "node scripts/run-deno-edge-coverage.mjs",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
+    "check:codex-muse": "node scripts/run-codex-muse-checks.mjs",
     "check:load-test-contract": "node scripts/check-load-test-contract.mjs",
     "check:perf-evidence": "node scripts/perf-evidence-contract.mjs",
     "check:perf-proof": "npm run check:load-test-contract && npm run check:perf-evidence",
