@@ -1579,7 +1579,7 @@ describe("public listings endpoint", () => {
     };
 
     expect(listingCacheUrls.some((url) =>
-      url.searchParams.get("v") === "catalogue-publication-cursor-v7"
+      url.searchParams.get("v") === "catalogue-publication-cursor-v8"
     )).toBe(true);
     expect(res.headers.get("X-Maiprop-Cache-Valid-Until")).toBe(
       cataloguePublicationMetadata().retain_until,

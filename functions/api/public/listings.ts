@@ -60,7 +60,7 @@ const BOOLEAN_FEATURES = new Set([
   "has_cctv", "has_disability_access", "has_structured_cabling", "has_facade",
   "has_night_power", "has_solar_water",
 ]);
-const LISTINGS_CACHE_VERSION = "catalogue-publication-cursor-v7";
+const LISTINGS_CACHE_VERSION = "catalogue-publication-cursor-v8";
 const LISTINGS_CACHE_OPTIONS = {
   edgeTtlSeconds: 60,
   browserTtlSeconds: 30,
