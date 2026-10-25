@@ -2,6 +2,7 @@ import { Capacitor, CapacitorHttp, type HttpResponse } from "@capacitor/core";
 import { getRuntimeValue } from "@/lib/runtimeConfig";
 
 const PUBLIC_API_TIMEOUT_MS = 6_500;
+const PUBLIC_API_TIMEOUT_MESSAGE = "Public API request timed out";
 const NATIVE_PUBLIC_API_ORIGIN =
   getRuntimeValue("VITE_PUBLIC_API_ORIGIN") ??
   getRuntimeValue("VITE_APP_URL") ??
@@ -164,6 +165,10 @@ export function isPublicApiAbort(error: unknown): boolean {
   );
 }
 
+export function isPublicApiTimeoutError(error: unknown): boolean {
+  return error instanceof PublicApiError && error.message === PUBLIC_API_TIMEOUT_MESSAGE;
+}
+
 function linkAbortSignal(source: AbortSignal | undefined, controller: AbortController): () => void {
   if (!source) return () => undefined;
   if (source.aborted) {
@@ -229,7 +234,7 @@ export async function fetchPublicApi<T>(path: string, options: PublicApiOptions 
       if (error instanceof PublicApiError) throw error;
       if (isPublicApiAbort(error)) {
         if (options.signal?.aborted) throw error;
-        if (timedOut) throw new PublicApiError(path, "Public API request timed out");
+        if (timedOut) throw new PublicApiError(path, PUBLIC_API_TIMEOUT_MESSAGE);
       }
       throw error;
     }

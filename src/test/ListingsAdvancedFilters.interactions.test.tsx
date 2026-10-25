@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import { ListingsAdvancedFilters } from "@/components/listings/ListingsAdvancedFilters";
 
@@ -107,8 +107,10 @@ describe("ListingsAdvancedFilters interactions", () => {
 
     fireEvent.change(screen.getByPlaceholderText(/Min m/), { target: { value: "70" } });
     fireEvent.change(screen.getByPlaceholderText(/Max m/), { target: { value: "150" } });
-    expect(setParam).toHaveBeenCalledWith("sqm_min", "70");
-    expect(setParam).toHaveBeenCalledWith("sqm_max", "150");
+    expect((screen.getByPlaceholderText(/Min m/) as HTMLInputElement).value).toBe("70");
+    expect((screen.getByPlaceholderText(/Max m/) as HTMLInputElement).value).toBe("150");
+    expect(setParam).not.toHaveBeenCalledWith("sqm_min", "70");
+    expect(setParam).not.toHaveBeenCalledWith("sqm_max", "150");
 
     const selects = screen.getAllByRole("combobox");
     fireEvent.change(selects[0], { target: { value: "2" } });
@@ -124,6 +126,31 @@ describe("ListingsAdvancedFilters interactions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Parking" }));
     expect(toggleMulti).toHaveBeenCalledWith("features", "has_parking");
+  });
+
+  it("buffers area inputs into one debounced URL update", async () => {
+    renderWithProviders(<ListingsAdvancedFilters filteredCount={12} onClose={vi.fn()} />);
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(screen.getByPlaceholderText(/Min m/), { target: { value: "7" } });
+      fireEvent.change(screen.getByPlaceholderText(/Min m/), { target: { value: "70" } });
+      fireEvent.change(screen.getByPlaceholderText(/Max m/), { target: { value: "150" } });
+      expect(setParam).not.toHaveBeenCalledWith("sqm_min", "7");
+      expect(setParam).not.toHaveBeenCalledWith("sqm_min", "70");
+      expect(setParam).not.toHaveBeenCalledWith("sqm_max", "150");
+      expect(setParams).not.toHaveBeenCalled();
+      await act(async () => {
+        vi.advanceTimersByTime(400);
+      });
+      expect(setParams).toHaveBeenCalledTimes(1);
+      expect(setParams).toHaveBeenCalledWith([
+        ["sqm_min", "70"],
+        ["sqm_max", "150"],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("batches New Building filter URL updates so the listings grid refreshes once", () => {

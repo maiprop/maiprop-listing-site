@@ -142,10 +142,22 @@ type AuctionStreamEnvelope = {
   visibleRows: AuctionRow[];
 };
 
-const FULL_AUCTION_CANDIDATE_LIMITS: AuctionCandidateLimits = {
-  priority: AUCTION_CANDIDATE_LIMIT_MAX,
-  organic: AUCTION_CANDIDATE_LIMIT_MAX,
-};
+function auctionCandidateLimitsForWindow(
+  visibleLimit: number,
+  pageSize: number,
+): AuctionCandidateLimits {
+  const boundedVisible = Number.isFinite(visibleLimit)
+    ? Math.min(Math.max(Math.trunc(visibleLimit), 1), AUCTION_CANDIDATE_LIMIT_MAX)
+    : AUCTION_CANDIDATE_LIMIT_MAX;
+  const boundedPage = Number.isFinite(pageSize)
+    ? Math.max(Math.trunc(pageSize), 0)
+    : 0;
+  const perStream = Math.min(
+    AUCTION_CANDIDATE_LIMIT_MAX,
+    boundedVisible + boundedPage,
+  );
+  return { priority: perStream, organic: perStream };
+}
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -764,6 +776,7 @@ async function fetchDbAuctionStreams(
 
 async function fetchCanonicalAuctionStreams(
   env: PublicApiEnv,
+  limits: AuctionCandidateLimits,
   now: string,
   accessToken: string | null = null,
   filters: AuctionFilters | null = null,
@@ -771,7 +784,7 @@ async function fetchCanonicalAuctionStreams(
 ): Promise<AuctionStreams> {
   const scheduledPool = await fetchDbAuctionStreams(
     env,
-    FULL_AUCTION_CANDIDATE_LIMITS,
+    limits,
     now,
     todayAuctionPoolTag(),
     accessToken,
@@ -781,7 +794,7 @@ async function fetchCanonicalAuctionStreams(
   if (scheduledPool.poolExists) return scheduledPool;
   return fetchDbAuctionStreams(
     env,
-    FULL_AUCTION_CANDIDATE_LIMITS,
+    limits,
     now,
     undefined,
     accessToken,
@@ -997,6 +1010,7 @@ async function fetchPublicAuctionResult(
   const now = new Date(nowMs).toISOString();
   const streams = await fetchCanonicalAuctionStreams(
     env,
+    auctionCandidateLimitsForWindow(requestedLimit, requestedLimit),
     now,
     accessToken,
     null,
@@ -1104,6 +1118,7 @@ async function fetchCanonicalAuctionPage(
   const now = new Date(nowMs).toISOString();
   const streams = await fetchCanonicalAuctionStreams(
     env,
+    auctionCandidateLimitsForWindow(entitlementLimit, pageSize),
     now,
     accessToken,
     filters,
@@ -1427,11 +1442,12 @@ export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promis
     const response = bypassSharedCache || entitlement.authenticated
       ? await produceResponse()
       : await cachedJson(ctx, cacheKey, produceResponse, {
-        edgeTtlSeconds: 60,
+        edgeTtlSeconds: 300,
         browserTtlSeconds: 30,
         staleSeconds: 60,
         staleFallbackSeconds: 120,
         producerTimeoutMs: PUBLIC_AUCTION_PRODUCER_TIMEOUT_MS,
+        disableCdnCache: false,
       });
     return bypassSharedCache || entitlement.authenticated
       ? privateAuctionResponse(response)
