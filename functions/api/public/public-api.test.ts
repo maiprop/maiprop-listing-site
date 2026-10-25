@@ -7,6 +7,7 @@ import {
 import { onRequest as homepageRequest } from "./homepage";
 import { onRequest as listingRequest } from "./listing";
 import { onRequest as listingsRequest } from "./listings";
+import { resetPublicProfileSummaryCacheForTests } from "./_publicProfiles";
 import { onRequest as openHousesRequest } from "./open-houses";
 import { onRequest as similarListingsRequest } from "./similar-listings";
 import {
@@ -659,6 +660,7 @@ function installCatalogueQueryRows(
 beforeEach(() => {
   installCache();
   installSupabaseFetch();
+  resetPublicProfileSummaryCacheForTests();
 });
 
 afterEach(() => {
@@ -1522,6 +1524,23 @@ describe("public listings endpoint", () => {
     expect((staleSeed?.[1] as Response).headers.get("Cache-Control")).toBe("public, max-age=600");
   });
 
+  it("serves repeat anonymous listing reads from the edge cache within the TTL", async () => {
+    const url = "https://portal.maiprop.co/api/public/listings?listing_type=sale&page=1&pageSize=4&cache-heat=1";
+
+    const first = await listingsRequest(makeCtx(url));
+    expect(first.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    expect(first.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=60");
+    const firstBody = await first.json();
+    const upstreamCalls = fetchMock().mock.calls.length;
+
+    const second = await listingsRequest(makeCtx(url));
+
+    expect(second.headers.get("X-Maiprop-Cache")).toBe("HIT");
+    expect(second.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=60");
+    expect(fetchMock().mock.calls).toHaveLength(upstreamCalls);
+    await expect(second.json()).resolves.toEqual(firstBody);
+  });
+
   it("reads active Priority and organic streams in parallel without ranking Spotlight or using default offsets", async () => {
     const catalogueBodies: Array<Record<string, unknown>> = [];
     let listingReadsInFlight = 0;
@@ -1609,7 +1628,7 @@ describe("public listings endpoint", () => {
     });
     expect(body.nextCursor).toBeNull();
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=30, stale-while-revalidate=60");
-    expect(res.headers.get("CDN-Cache-Control")).toBe("no-store");
+    expect(res.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=60");
   });
 
   it("returns a keyset cursor with no duplicates or skips across stable consecutive pages", async () => {
@@ -1829,6 +1848,38 @@ describe("public listings endpoint", () => {
         profiles: null,
         ownerParticipantType: null,
       }),
+    ]);
+  });
+
+  it("skips legacy offset probes on the first page", async () => {
+    const res = await listingsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/listings?listing_type=sale&page=1&pageSize=4",
+    ));
+
+    expect(res.status).toBe(200);
+    expect(fetchMock().mock.calls.filter(([, init]) => init?.method === "HEAD"))
+      .toHaveLength(0);
+  });
+
+  it("reuses public profile summaries within a publication instead of refetching", async () => {
+    const first = await listingsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/listings?listing_type=sale&pageSize=1&sort=newest",
+    ));
+    expect(first.status).toBe(200);
+    const firstBody = await first.json() as { data: Array<{ profiles: unknown }> };
+    expect(firstBody.data).toHaveLength(1);
+    expect(firstBody.data[0].profiles).toMatchObject({ display_name: "Maria Agent" });
+
+    const second = await listingsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/listings?listing_type=sale&pageSize=1&sort=price-asc",
+    ));
+    expect(second.status).toBe(200);
+    const secondBody = await second.json() as { data: Array<{ profiles: unknown }> };
+    expect(secondBody.data).toHaveLength(1);
+    expect(secondBody.data[0].profiles).toMatchObject({ display_name: "Maria Agent" });
+
+    expect(jsonBodiesFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual([
+      { p_user_ids: ["owner-1"] },
     ]);
   });
 
@@ -3372,7 +3423,7 @@ describe("public auctions endpoint", () => {
     const priorityLimits = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")
       .filter((url) => url.searchParams.get("p_stream") === "priority")
       .map((url) => url.searchParams.get("p_limit"));
-    expect(priorityLimits).toEqual(["600"]);
+    expect(priorityLimits).toEqual(["12"]);
   });
 
   it("samples a wider cached DB window and diversifies organic auctions by municipality", async () => {
@@ -3421,8 +3472,8 @@ describe("public auctions endpoint", () => {
     const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
-    expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
-    expect(organicUrl?.searchParams.get("p_limit")).toBe("600");
+    expect(priorityUrl?.searchParams.get("p_limit")).toBe("120");
+    expect(organicUrl?.searchParams.get("p_limit")).toBe("120");
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
@@ -3448,8 +3499,8 @@ describe("public auctions endpoint", () => {
     const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
-    expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
-    expect(organicUrl?.searchParams.get("p_limit")).toBe("600");
+    expect(priorityUrl?.searchParams.get("p_limit")).toBe("120");
+    expect(organicUrl?.searchParams.get("p_limit")).toBe("120");
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
@@ -3493,7 +3544,7 @@ describe("public auctions endpoint", () => {
     const dbUrl = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")[0];
     expect(dbUrl.searchParams.get("p_stream")).toBe("priority");
     expect(dbUrl.searchParams.get("p_pool_tag")).toMatch(/^auction_pool:\d{4}-\d{2}-\d{2}$/);
-    expect(dbUrl.searchParams.get("p_limit")).toBe("600");
+    expect(dbUrl.searchParams.get("p_limit")).toBe("2");
     expect(dbUrl.searchParams.get("p_today")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(dbUrl.searchParams.get("p_now")).toMatch(/T/);
     expect(new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidate_envelope").headers).get("apikey"))
@@ -3572,10 +3623,9 @@ describe("public auctions endpoint", () => {
       if (url.pathname !== "/rest/v1/rpc/get_visible_auction_candidate_envelope") {
         return jsonRows([]);
       }
-      const limit = Number(url.searchParams.get("p_limit") ?? 600);
       return url.searchParams.get("p_stream") === "priority"
-        ? auctionEnvelopeRows(priorityRows.slice(0, limit))
-        : auctionEnvelopeRows(organicRows.slice(0, limit));
+        ? auctionEnvelopeRows(priorityRows)
+        : auctionEnvelopeRows(organicRows);
     }) as unknown as typeof fetch;
 
     const compact = await fetchPublicAuctionRows(env, 6);
@@ -3587,7 +3637,7 @@ describe("public auctions endpoint", () => {
     const requestedLimits = fetchUrls(
       "/rest/v1/rpc/get_visible_auction_candidate_envelope",
     ).map((url) => url.searchParams.get("p_limit"));
-    expect(new Set(requestedLimits)).toEqual(new Set(["600"]));
+    expect(new Set(requestedLimits)).toEqual(new Set(["12", "120"]));
   });
 
   it("keeps the homepage prefix identical to the paginated catalogue for the same revision", async () => {
@@ -3645,6 +3695,23 @@ describe("public auctions endpoint", () => {
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
+  it("serves repeat anonymous auction reads from the edge cache within the TTL", async () => {
+    const url = "https://portal.maiprop.co/api/public/auctions?limit=12&cache-heat=1";
+
+    const first = await auctionsRequest(makeCtx(url));
+    expect(first.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    expect(first.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=60");
+    const firstBody = await first.json();
+    const upstreamCalls = fetchMock().mock.calls.length;
+
+    const second = await auctionsRequest(makeCtx(url));
+
+    expect(second.headers.get("X-Maiprop-Cache")).toBe("HIT");
+    expect(second.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=60");
+    expect(fetchMock().mock.calls).toHaveLength(upstreamCalls);
+    await expect(second.json()).resolves.toEqual(firstBody);
+  });
+
   it("clamps public auction requests and caches by day", async () => {
     const res = await auctionsRequest(makeCtx("https://portal.maiprop.co/api/public/auctions?limit=999"));
     const body = await res.json() as { data: unknown[] };
@@ -3653,8 +3720,8 @@ describe("public auctions endpoint", () => {
     const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
-    expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
-    expect(organicUrl?.searchParams.get("p_limit")).toBe("600");
+    expect(priorityUrl?.searchParams.get("p_limit")).toBe("120");
+    expect(organicUrl?.searchParams.get("p_limit")).toBe("120");
     expect(cacheApi.match).toHaveBeenCalled();
     expect(cacheApi.put).toHaveBeenCalledTimes(2);
     const cacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
@@ -3662,7 +3729,7 @@ describe("public auctions endpoint", () => {
     expect(cacheKey.searchParams.has("day")).toBe(true);
     expect(cacheKey.searchParams.get("v")).toBe("canonical-server-filtered-v16");
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=30, stale-while-revalidate=60");
-    expect(res.headers.get("CDN-Cache-Control")).toBe("no-store");
+    expect(res.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=60");
     const staleSeed = cacheApi.put.mock.calls.find(([request]) =>
       new URL((request as Request).url).searchParams.get("__maiprop_stale") === "1"
     );
@@ -3688,6 +3755,31 @@ describe("public auctions endpoint", () => {
     expect(cacheApi.put).not.toHaveBeenCalled();
   });
 
+  it("derives bounded stream p_limits from the visible window plus page size", async () => {
+    const firstPaint = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=12",
+    ));
+    expect(firstPaint.status).toBe(200);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")
+      .map((url) => url.searchParams.get("p_limit"))).toEqual(["24", "24"]);
+
+    fetchMock().mockClear();
+    const canonical = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=60&page=1&pageSize=60",
+    ));
+    expect(canonical.status).toBe(200);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")
+      .map((url) => url.searchParams.get("p_limit"))).toEqual(["120", "120"]);
+
+    fetchMock().mockClear();
+    const paged = await auctionsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/auctions?limit=60&page=2&pageSize=20",
+    ));
+    expect(paged.status).toBe(200);
+    expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")
+      .map((url) => url.searchParams.get("p_limit"))).toEqual(["80", "80"]);
+  });
+
   it("defaults omitted auction limits to the first-paint window", async () => {
     const res = await auctionsRequest(makeCtx("https://portal.maiprop.co/api/public/auctions"));
     expect(res.status).toBe(200);
@@ -3695,8 +3787,8 @@ describe("public auctions endpoint", () => {
     const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
-    expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
-    expect(organicUrl?.searchParams.get("p_limit")).toBe("600");
+    expect(priorityUrl?.searchParams.get("p_limit")).toBe("120");
+    expect(organicUrl?.searchParams.get("p_limit")).toBe("120");
 
     const cacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(cacheKey.searchParams.get("limit")).toBe("60");
@@ -4194,7 +4286,7 @@ describe("public auctions endpoint", () => {
     expect(body.facets.cities).toEqual(["Athens"]);
     expect(body.stats.mappableCount).toBe(0);
     expect(fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope")
-      .map((url) => url.searchParams.get("p_limit"))).toEqual(["600", "600"]);
+      .map((url) => url.searchParams.get("p_limit"))).toEqual(["70", "70"]);
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
@@ -4872,8 +4964,8 @@ describe("public homepage endpoint", () => {
     const listingUrls = fetchUrls("/rest/v1/rpc/get_visible_auction_candidate_envelope");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "priority");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("p_stream") === "organic");
-    expect(priorityUrl?.searchParams.get("p_limit")).toBe("600");
-    expect(organicUrl?.searchParams.get("p_limit")).toBe("600");
+    expect(priorityUrl?.searchParams.get("p_limit")).toBe("12");
+    expect(organicUrl?.searchParams.get("p_limit")).toBe("12");
     expect(new Headers(initFor("/rest/v1/rpc/get_visible_auction_candidate_envelope").headers)
       .get("Authorization")).toBe("Bearer publishable_test_key");
     expect(fetchUrls("/rest/v1/rpc/get_public_auction_candidates")).toHaveLength(0);

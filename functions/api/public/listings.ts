@@ -62,11 +62,12 @@ const BOOLEAN_FEATURES = new Set([
 ]);
 const LISTINGS_CACHE_VERSION = "catalogue-publication-cursor-v8";
 const LISTINGS_CACHE_OPTIONS = {
-  edgeTtlSeconds: 60,
+  edgeTtlSeconds: 300,
   browserTtlSeconds: 30,
   staleSeconds: 60,
   staleFallbackSeconds: 600,
   producerTimeoutMs: 5_000,
+  disableCdnCache: false,
 };
 const LISTINGS_SUPABASE_TIMEOUT_MS = 4_500;
 const DEFAULT_LOCATION_RADIUS_M = 750;
@@ -785,15 +786,19 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
         ? listingLocationSearchTokenGroups(location)
         : [];
       const streamLimit = Math.min(201, pageSize + 1);
-      const cursor = decodedCursor ?? await catalogueCursorForLegacyOffset(
-        ctx.env,
-        params,
-        sort,
-        legacyOutputOffset,
-        publication.publicationId,
-        publication.snapshotMinute,
-        cursorScope,
-      );
+      // The first page starts at offset zero, so there is no legacy offset to
+      // resolve: skip the stream-count probe entirely on the hottest path.
+      const cursor = decodedCursor ?? (legacyOutputOffset === 0
+        ? null
+        : await catalogueCursorForLegacyOffset(
+          ctx.env,
+          params,
+          sort,
+          legacyOutputOffset,
+          publication.publicationId,
+          publication.snapshotMinute,
+          cursorScope,
+        ));
       const streamResults = await Promise.allSettled([
         fetchCatalogueStream(
           ctx.env,
@@ -856,7 +861,7 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
       const ownerIds = pageResult.data
         .map((row) => row.owner_id)
         .filter((id): id is string => typeof id === "string");
-      const profiles = await fetchPublicProfileSummaries(ctx.env, ownerIds);
+      const profiles = await fetchPublicProfileSummaries(ctx.env, ownerIds, publication.publicationId);
       const data = pageResult.data.map((row) => ({
         ...row,
         profiles: publicProfileDisplay(row.owner_id ? profiles.get(row.owner_id) : null),

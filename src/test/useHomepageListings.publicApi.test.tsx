@@ -228,7 +228,7 @@ describe("homepage public API fallback behavior", () => {
   it("uses a compact deferred auction request for the homepage preview", () => {
     renderHookWithQuery(() => useHomepageAuctionListings({ enabled: false }));
 
-    expect(useAuctionListingsMock).toHaveBeenCalledWith(60, { enabled: false });
+    expect(useAuctionListingsMock).toHaveBeenCalledWith(6, { enabled: false });
   });
 
 });

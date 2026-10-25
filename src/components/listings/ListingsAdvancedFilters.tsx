@@ -3,7 +3,7 @@
  * Reads and writes all filter state via URL params through useListingsFilters().
  * Props are minimal — only filteredCount (for "Show X Results") and onClose.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   SlidersHorizontal, X, Sparkles, ChevronDown, Check,
@@ -141,6 +141,8 @@ const floorLabel = (isGreek: boolean, label: string) => {
   return label;
 };
 
+const ADVANCED_SQM_FILTER_DEBOUNCE_MS = 400;
+
 export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
   const { t, i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
@@ -153,6 +155,27 @@ export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
     minAiScore, minWalkability, proFilterCount,
     isRent, setParam, setParams, toggleMulti, clearAllFilters, getParam, getMulti,
   } = useListingsFilters();
+  const [minSqmInput, setMinSqmInput] = useState(minSqm);
+  const [maxSqmInput, setMaxSqmInput] = useState(maxSqm);
+
+  useEffect(() => {
+    setMinSqmInput(minSqm);
+  }, [minSqm]);
+
+  useEffect(() => {
+    setMaxSqmInput(maxSqm);
+  }, [maxSqm]);
+
+  useEffect(() => {
+    if (minSqmInput === minSqm && maxSqmInput === maxSqm) return;
+    const timer = window.setTimeout(() => {
+      setParams([
+        ["sqm_min", minSqmInput],
+        ["sqm_max", maxSqmInput],
+      ]);
+    }, ADVANCED_SQM_FILTER_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [maxSqm, maxSqmInput, minSqm, minSqmInput, setParams]);
 
   const { config: aiFilterConfig, loading: aiFiltersLoading } = useSmartFilters(
     selectedType, selectedSubtype, selectedListingType
@@ -231,10 +254,10 @@ export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
                     {smartLabel(isGreek, aiFilterConfig.sizeLabel)}
                   </label>
                   <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 border border-border focus-within:border-primary transition-colors">
-                    <input type="number" placeholder={ui(isGreek, "Min m²", "Ελάχ. τ.μ.")} value={minSqm} onChange={e => setParam("sqm_min", e.target.value)}
+                    <input type="number" placeholder={ui(isGreek, "Min m²", "Ελάχ. τ.μ.")} value={minSqmInput} onChange={e => setMinSqmInput(e.target.value)}
                       className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-0 min-w-0" />
                     <span className="text-muted-foreground text-xs font-medium">—</span>
-                    <input type="number" placeholder={ui(isGreek, "Max m²", "Μέγ. τ.μ.")} value={maxSqm} onChange={e => setParam("sqm_max", e.target.value)}
+                    <input type="number" placeholder={ui(isGreek, "Max m²", "Μέγ. τ.μ.")} value={maxSqmInput} onChange={e => setMaxSqmInput(e.target.value)}
                       className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-0 min-w-0" />
                   </div>
                 </div>

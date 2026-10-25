@@ -23,13 +23,15 @@ import { normalizePublicCollectionWindow } from "@/lib/publicCollectionWindow";
  * fallback / sort logic, same staleTime / retry config.
  */
 
-const HOMEPAGE_AUCTION_SOURCE_LIMIT = 60;
+/** Rows shown in the homepage auction preview; the source fetch defaults to this size. */
 const HOMEPAGE_AUCTION_DISPLAY_LIMIT = 6;
 const FEATURED_STALE_TIME_MS = 5 * 60 * 1000;
 const HOMEPAGE_SECTION_TIMEOUT_MS = 5_500;
 
 type HomepageQueryOptions = {
   enabled?: boolean;
+  /** Auction source fetch size override for the homepage preview (defaults to rows displayed). */
+  sourceLimit?: number;
 };
 
 type HomepageOpenHouseWindow = {
@@ -71,7 +73,8 @@ export function useHomepageFeaturedListings(options: HomepageQueryOptions = {}) 
 
 /** Requests only the compact auction preview window needed by the homepage. */
 export function useHomepageAuctionListings(options: HomepageQueryOptions = {}) {
-  const query = useAuctionListings(HOMEPAGE_AUCTION_SOURCE_LIMIT, { enabled: options.enabled ?? true });
+  const sourceLimit = options.sourceLimit ?? HOMEPAGE_AUCTION_DISPLAY_LIMIT;
+  const query = useAuctionListings(sourceLimit, { enabled: options.enabled ?? true });
   const data = useMemo(
     () => (query.data ?? []).slice(0, HOMEPAGE_AUCTION_DISPLAY_LIMIT) as HomepageListing[],
     [query.data],
