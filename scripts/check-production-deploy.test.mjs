@@ -261,6 +261,38 @@ describe("production deploy site-lock smoke helpers", () => {
   });
 });
 
+describe("production deploy app-shell validation", () => {
+  const shell = (rootInner) =>
+    `<!doctype html><html><head><title>mAI prop</title></head><body>` +
+    `<div id="root">${rootInner}</div>` +
+    `<script type="module" crossorigin src="/assets/index-AbC123.js"></script>` +
+    `</body></html>`;
+
+  it("accepts the legacy empty #root shell", async () => {
+    const { validateHtml } = await import("./check-production-deploy.mjs");
+
+    expect(() => validateHtml("https://example.pages.dev", shell(""))).not.toThrow();
+  });
+
+  it("accepts the boot-splash #root shell shipped in index.html", async () => {
+    const { validateHtml } = await import("./check-production-deploy.mjs");
+    const splash =
+      `<div style="min-height: 100vh; display: flex; align-items: center; ` +
+      `justify-content: center; background: #ffffff;">Loading mAI prop…</div>`;
+
+    expect(() => validateHtml("https://example.pages.dev", shell(splash))).not.toThrow();
+  });
+
+  it("rejects HTML without an app #root element", async () => {
+    const { validateHtml } = await import("./check-production-deploy.mjs");
+
+    expect(() => validateHtml(
+      "https://example.pages.dev",
+      `<!doctype html><html><body><div id="app"></div></body></html>`,
+    )).toThrow("is missing #root");
+  });
+});
+
 describe("production deploy public API fixture guard", () => {
   it("uses canonical auction listing UUIDs and only UUID-safe auction fallbacks", async () => {
     const { extractPublicListingIds } = await import(

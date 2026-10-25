@@ -293,9 +293,12 @@ const extractModuleScripts = (html) => {
   );
 };
 
-const validateHtml = (url, html) => {
+export const validateHtml = (url, html) => {
   assertOk(!isSiteLockHtml(html), getSiteLockErrorMessage(url));
-  assertOk(html.includes('<div id="root"></div>'), `${url} is missing #root`);
+  // The app shell renders a static boot splash inside #root (see index.html), so
+  // accept any #root element instead of requiring an empty one. The --browser
+  // check separately proves React mounts content into it.
+  assertOk(html.includes('<div id="root">'), `${url} is missing #root`);
 
   const scripts = extractModuleScripts(html);
   assertOk(scripts.length > 0, `${url} has no module script entrypoint`);
