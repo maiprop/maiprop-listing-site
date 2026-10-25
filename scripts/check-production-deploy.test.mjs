@@ -293,6 +293,21 @@ describe("production deploy app-shell validation", () => {
   });
 });
 
+describe("production deploy CSP parity", () => {
+  it("allowlists every index.html inline style block in style-src-elem", async () => {
+    const { createHash } = await import("node:crypto");
+    const html = readFileSync("index.html", "utf8");
+    const headers = readFileSync("public/_headers", "utf8");
+
+    const blocks = Array.from(html.matchAll(/<style>([\s\S]*?)<\/style>/g), (m) => m[1]);
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const block of blocks) {
+      const digest = createHash("sha256").update(block, "utf8").digest("base64");
+      expect(headers).toContain(`'sha256-${digest}'`);
+    }
+  });
+});
+
 describe("production deploy public API fixture guard", () => {
   it("uses canonical auction listing UUIDs and only UUID-safe auction fallbacks", async () => {
     const { extractPublicListingIds } = await import(
