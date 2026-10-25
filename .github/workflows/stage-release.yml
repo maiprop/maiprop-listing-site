@@ -3184,6 +3184,17 @@ jobs:
           STAGING_MUTATION_ACKNOWLEDGEMENT: ${{ vars.STAGING_MUTATION_ACKNOWLEDGEMENT }}
         run: node scripts/staging-auction-fixtures.mjs seed
 
+      - name: Wait for seeded auction pool to clear the edge cache
+        env:
+          DEPLOYMENT_URL: ${{ needs.cloudflare-staging.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEPLOYMENT_URL" ]; then
+            echo "::error::Auction pool readiness requires the immutable staging deployment URL."
+            exit 1
+          fi
+          node scripts/wait-for-staging-auction-pool.mjs "$DEPLOYMENT_URL"
+
       - name: Run endpoint, route, CWV, and query proofs
         id: proof
         env:
