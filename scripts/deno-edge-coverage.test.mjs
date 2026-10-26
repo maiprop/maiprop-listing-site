@@ -32,6 +32,10 @@ const standardDeno = join(
 );
 const deno = process.env.MAIPROP_DENO ?? standardDeno;
 
+// Deno emits ANSI styling on Windows even when piped; the assertions below
+// match literal child output, so force plain output like run-deno-edge-coverage.mjs does.
+process.env.NO_COLOR ??= "1";
+
 function write(root, path, contents = "export const value = 1;\n") {
   const absolute = join(root, ...path.split("/"));
   mkdirSync(dirname(absolute), { recursive: true });

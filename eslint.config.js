@@ -11,6 +11,7 @@ export default tseslint.config(
       "coverage/**",
       "test-results/**",
       "playwright-report/**",
+      ".worktrees/**",
       ".tmp/**",
       ".superpowers/**",
       "supabase/functions/coverage/**",
