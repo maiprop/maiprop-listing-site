@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   findPublicApiFixtureMarker,
@@ -304,6 +304,18 @@ describe("production deploy CSP parity", () => {
     for (const block of blocks) {
       const digest = createHash("sha256").update(block, "utf8").digest("base64");
       expect(headers).toContain(`'sha256-${digest}'`);
+    }
+    // Vite minifies inline <style> blocks when building index.html, so the
+    // served bytes (and their hash) can differ from source. When a build is
+    // present, the built output must be allowlisted too.
+    if (existsSync("dist/index.html")) {
+      const built = readFileSync("dist/index.html", "utf8");
+      const builtBlocks = Array.from(built.matchAll(/<style>([\s\S]*?)<\/style>/g), (m) => m[1]);
+      expect(builtBlocks.length).toBeGreaterThan(0);
+      for (const block of builtBlocks) {
+        const digest = createHash("sha256").update(block, "utf8").digest("base64");
+        expect(headers).toContain(`'sha256-${digest}'`);
+      }
     }
   });
 });
