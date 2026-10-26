@@ -97,8 +97,6 @@ on:
         required: true
       SUPABASE_DB_PASSWORD:
         required: true
-      SUPABASE_PRODUCTION_DB_URL:
-        required: true
       VITE_SUPABASE_PROJECT_ID:
         required: true
       VITE_SUPABASE_URL:
