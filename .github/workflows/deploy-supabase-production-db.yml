@@ -192,24 +192,39 @@ jobs:
             -H "Accept: application/json" \
             "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf" \
             > "$project_json"
-          resolved_url="$(PROJECT_JSON_FILE="$project_json" DB_PASSWORD="$SUPABASE_DB_PASSWORD" node --input-type=module <<'NODE'
-          import { readFileSync } from "node:fs";
-          const project = JSON.parse(readFileSync(process.env.PROJECT_JSON_FILE, "utf8"));
-          const region = String(project.region ?? "");
-          if (!/^[a-z0-9-]+$/.test(region)) {
-            throw new Error("Could not resolve the production Supabase region.");
-          }
-          const password = encodeURIComponent(process.env.DB_PASSWORD ?? "");
-          if (!password) throw new Error("Production database password is empty.");
-          const url = new URL("postgresql://postgres:postgres@example.invalid/postgres");
-          url.username = "postgres.qvvicunqcrwpioqnvzxf";
-          url.password = password;
-          url.hostname = `aws-0-${region}.pooler.supabase.com`;
-          url.port = "5432";
-          url.searchParams.set("sslmode", "require");
-          process.stdout.write(url.toString());
-          NODE
-          )"
+          api_region="$(PROJECT_JSON_FILE="$project_json" \
+            node scripts/resolve-production-pooler-url.mjs region)"
+          if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "::error::Production database password is empty."
+            exit 1
+          fi
+          resolved_url=""
+          # The pooler host/port serving a tenant varies by project (session vs
+          # transaction pooler, home region). Probe read-only candidates and use
+          # the first that authenticates instead of assuming one endpoint.
+          for candidate in \
+            "aws-0-${api_region}.pooler.supabase.com:5432" \
+            "aws-0-${api_region}.pooler.supabase.com:6543" \
+            "aws-0-eu-central-1.pooler.supabase.com:5432" \
+            "aws-0-eu-central-1.pooler.supabase.com:6543"; do
+            candidate_host="${candidate%%:*}"
+            candidate_port="${candidate##*:}"
+            candidate_url="$(DB_PASSWORD="$SUPABASE_DB_PASSWORD" \
+              node scripts/resolve-production-pooler-url.mjs url \
+                --host "$candidate_host" --port "$candidate_port")"
+            if printf 'SELECT 1' | psql "$candidate_url" \
+              --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align --quiet \
+              > /dev/null 2>&1; then
+              resolved_url="${candidate_url%[?]*}?sslmode=require"
+              echo "Production pooler probe succeeded for ${candidate}."
+              break
+            fi
+            echo "Production pooler probe failed for ${candidate}; trying next candidate."
+          done
+          if [ -z "$resolved_url" ]; then
+            echo "::error::No production pooler candidate authenticated; refusing direct IPv6-only connection."
+            exit 1
+          fi
           echo "::add-mask::$resolved_url"
           echo "SUPABASE_PRODUCTION_DB_URL=$resolved_url" >> "$GITHUB_ENV"
 
