@@ -165,20 +165,53 @@ jobs:
           persist-credentials: false
       - name: Resolve effective production database URL
         env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
         run: |
           set -euo pipefail
           if [ -n "${SUPABASE_PRODUCTION_DB_URL:-}" ]; then
             echo "Using configured SUPABASE_PRODUCTION_DB_URL secret."
-          else
-            if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
-              echo "::error::Neither SUPABASE_PRODUCTION_DB_URL nor SUPABASE_DB_PASSWORD is configured."
-              exit 1
-            fi
-            encoded_password="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$SUPABASE_DB_PASSWORD")"
-            echo "SUPABASE_PRODUCTION_DB_URL=postgresql://postgres:${encoded_password}@db.qvvicunqcrwpioqnvzxf.supabase.co:5432/postgres" >> "$GITHUB_ENV"
+            echo "SUPABASE_PRODUCTION_DB_URL=$SUPABASE_PRODUCTION_DB_URL" >> "$GITHUB_ENV"
+            exit 0
           fi
+          if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "::error::Neither SUPABASE_PRODUCTION_DB_URL nor SUPABASE_DB_PASSWORD is configured."
+            exit 1
+          fi
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN is required to resolve the production pooler endpoint."
+            exit 1
+          fi
+          # Direct db.<ref>.supabase.co connections are unreachable from hosted
+          # runners (IPv6-only); use the Supabase pooler like the staging flow.
+          project_json="$(mktemp "$RUNNER_TEMP/production-project.XXXXXX.json")"
+          trap 'rm -f -- "$project_json"' EXIT
+          curl -fsS --retry 3 --connect-timeout 10 \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Accept: application/json" \
+            "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf" \
+            > "$project_json"
+          resolved_url="$(PROJECT_JSON_FILE="$project_json" DB_PASSWORD="$SUPABASE_DB_PASSWORD" node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          const project = JSON.parse(readFileSync(process.env.PROJECT_JSON_FILE, "utf8"));
+          const region = String(project.region ?? "");
+          if (!/^[a-z0-9-]+$/.test(region)) {
+            throw new Error("Could not resolve the production Supabase region.");
+          }
+          const password = encodeURIComponent(process.env.DB_PASSWORD ?? "");
+          if (!password) throw new Error("Production database password is empty.");
+          const url = new URL("postgresql://postgres:postgres@example.invalid/postgres");
+          url.username = "postgres.qvvicunqcrwpioqnvzxf";
+          url.password = password;
+          url.hostname = `aws-0-${region}.pooler.supabase.com`;
+          url.port = "5432";
+          url.searchParams.set("sslmode", "require");
+          process.stdout.write(url.toString());
+          NODE
+          )"
+          echo "::add-mask::$resolved_url"
+          echo "SUPABASE_PRODUCTION_DB_URL=$resolved_url" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
