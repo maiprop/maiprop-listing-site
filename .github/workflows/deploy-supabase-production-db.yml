@@ -192,8 +192,8 @@ jobs:
             -H "Accept: application/json" \
             "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf" \
             > "$project_json"
-          api_region="$(PROJECT_JSON_FILE="$project_json" \
-            node scripts/resolve-production-pooler-url.mjs region)"
+          api_region="$(node scripts/resolve-production-pooler-url.mjs region \
+            --file "$project_json")"
           if [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then
             echo "::error::Production database password is empty."
             exit 1
@@ -209,7 +209,7 @@ jobs:
             "aws-0-eu-central-1.pooler.supabase.com:6543"; do
             candidate_host="${candidate%%:*}"
             candidate_port="${candidate##*:}"
-            candidate_url="$(DB_PASSWORD="$SUPABASE_DB_PASSWORD" \
+            candidate_url="$(SUPABASE_DB_PASSWORD="$SUPABASE_DB_PASSWORD" \
               node scripts/resolve-production-pooler-url.mjs url \
                 --host "$candidate_host" --port "$candidate_port")"
             if printf 'SELECT 1' | psql "$candidate_url" \

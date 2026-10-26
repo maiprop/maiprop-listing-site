@@ -46,7 +46,7 @@ export function buildPoolerUrl({ password, hostname, port }) {
 
 function printUsageAndThrow() {
   throw new Error(
-    "Usage: resolve-production-pooler-url.mjs region | url --host <pooler-host> --port <5432|6543>",
+    "Usage: resolve-production-pooler-url.mjs region --file <project-json> | url --host <pooler-host> --port <5432|6543>",
   );
 }
 
@@ -54,8 +54,9 @@ async function main(argv = process.argv.slice(2)) {
   const [command, ...rest] = argv;
   if (command === "region") {
     const { readFileSync } = await import("node:fs");
-    const file = process.env.PROJECT_JSON_FILE;
-    if (!file) throw new Error("PROJECT_JSON_FILE is required.");
+    const fileIndex = rest.indexOf("--file");
+    const file = fileIndex === -1 ? undefined : rest[fileIndex + 1];
+    if (!file) throw new Error("The region command requires --file <project-json>.");
     process.stdout.write(readApiRegion(readFileSync(file, "utf8")));
     return;
   }
@@ -68,7 +69,7 @@ async function main(argv = process.argv.slice(2)) {
     }
     if (!host || !port) printUsageAndThrow();
     process.stdout.write(buildPoolerUrl({
-      password: process.env.DB_PASSWORD ?? "",
+      password: process.env.SUPABASE_DB_PASSWORD ?? "",
       hostname: host,
       port,
     }));
