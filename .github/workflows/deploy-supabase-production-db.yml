@@ -200,11 +200,14 @@ jobs:
           fi
           resolved_url=""
           # The pooler host/port serving a tenant varies by project (session vs
-          # transaction pooler, home region). Probe read-only candidates and use
-          # the first that authenticates instead of assuming one endpoint.
+          # transaction pooler, home region, aws-0 vs aws-1 cluster). Probe
+          # read-only candidates and use the first that authenticates instead
+          # of assuming one endpoint.
           for candidate in \
             "aws-0-${api_region}.pooler.supabase.com:5432" \
             "aws-0-${api_region}.pooler.supabase.com:6543" \
+            "aws-1-${api_region}.pooler.supabase.com:5432" \
+            "aws-1-${api_region}.pooler.supabase.com:6543" \
             "aws-0-eu-central-1.pooler.supabase.com:5432" \
             "aws-0-eu-central-1.pooler.supabase.com:6543"; do
             candidate_host="${candidate%%:*}"
