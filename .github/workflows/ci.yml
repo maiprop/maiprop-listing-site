@@ -105,6 +105,9 @@ jobs:
       - name: Check runtime
         run: npm run check:runtime
 
+      - name: Check Codex framework invariants
+        run: npm run check:codex-muse
+
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
 
