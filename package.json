@@ -80,6 +80,7 @@
     "runtime": "node scripts/project-runtime.mjs --",
     "runtime:doctor": "node scripts/project-runtime.mjs --doctor",
     "check:runtime": "node scripts/check-runtime.mjs",
+    "check:codex-muse": "node scripts/run-codex-muse-checks.mjs",
     "check:runtime:local": "node scripts/project-runtime.mjs -- npm run check:runtime",
     "check:secrets": "node scripts/check-secrets.mjs",
     "stripe:setup-catalog": "node scripts/setup-stripe-catalog.mjs",
