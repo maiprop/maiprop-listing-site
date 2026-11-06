@@ -1,4 +1,5 @@
 import { getCheckoutErrorMessage } from "@/lib/checkoutError";
+import { captureIdentityEpoch, isCurrentIdentityEpoch } from "@/lib/identityQueryBoundary";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
@@ -31,6 +32,7 @@ import {
 // ── Audience config ────────────────────────────────────────────────────────────
 
 type AudienceId = PricingAudienceId;
+type LaunchOwner = { token: number; contextKey: string; epoch: number };
 
 const AUDIENCE_TABS: { id: AudienceId; label: string; mobileLabel: string; icon: React.ElementType }[] = [
   { id: "participant",   label: "Buyer / Seller",       mobileLabel: "Buyer",  icon: Home },
@@ -510,6 +512,23 @@ export default function Pricing() {
     contextKey: checkoutContextKey,
     search: searchParams.toString(),
   };
+  const checkoutLaunchSeqRef = useRef(0);
+  const checkoutActiveLaunchRef = useRef<LaunchOwner | null>(null);
+  const portalLaunchSeqRef = useRef(0);
+  const portalActiveLaunchRef = useRef<LaunchOwner | null>(null);
+  const launchEpoch = captureIdentityEpoch();
+  useEffect(() => {
+    const checkoutOwner = checkoutActiveLaunchRef.current;
+    if (checkoutOwner && (checkoutOwner.contextKey !== checkoutContextKey || checkoutOwner.epoch !== launchEpoch)) {
+      checkoutActiveLaunchRef.current = null;
+      setCheckoutLoading(false);
+    }
+    const portalOwner = portalActiveLaunchRef.current;
+    if (portalOwner && (portalOwner.contextKey !== checkoutContextKey || portalOwner.epoch !== launchEpoch)) {
+      portalActiveLaunchRef.current = null;
+      setPortalLoading(false);
+    }
+  }, [checkoutContextKey, launchEpoch]);
   const isCrossAudienceSelection = Boolean(
     user &&
     profile &&
@@ -556,23 +575,43 @@ export default function Pricing() {
       navigate(activeTab === "institutional" ? "/contact" : "/investor-dashboard");
       return;
     }
+    const launchContextKey = checkoutContextKey;
+    const launchIdentityEpoch = captureIdentityEpoch();
+    const launchToken = ++checkoutLaunchSeqRef.current;
+    checkoutActiveLaunchRef.current = { token: launchToken, contextKey: launchContextKey, epoch: launchIdentityEpoch };
+    const isCurrentLaunch = () =>
+      checkoutMountedRef.current &&
+      checkoutActiveLaunchRef.current?.token === launchToken &&
+      checkoutContextRef.current.contextKey === launchContextKey &&
+      isCurrentIdentityEpoch(launchIdentityEpoch);
+    const isOwnedForCleanup = () =>
+      checkoutMountedRef.current &&
+      checkoutActiveLaunchRef.current?.token === launchToken;
     setCheckoutLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         timeout: STRIPE_FUNCTION_TIMEOUT_MS,
         body: { plan: planKey, billing_cycle: billingCycle },
       });
+      if (!isCurrentLaunch()) return;
       if (error || !data?.url) {
+        const message = await getCheckoutErrorMessage(data, error, tr("Could not start checkout"));
+        if (!isCurrentLaunch()) return;
         throw new Error(
-          await getCheckoutErrorMessage(data, error, tr("Could not start checkout")),
+          message
         );
       }
+      if (!isCurrentLaunch()) return;
       window.location.href = data.url;
     } catch (e: unknown) {
+      if (!isCurrentLaunch()) return;
       const msg = e instanceof Error ? e.message : tr("Could not start checkout");
       toast.error(msg);
     } finally {
-      setCheckoutLoading(false);
+      if (isOwnedForCleanup()) {
+        checkoutActiveLaunchRef.current = null;
+        setCheckoutLoading(false);
+      }
     }
   };
 
@@ -581,18 +620,36 @@ export default function Pricing() {
       toast.info(tr("This plan is managed outside Stripe billing."));
       return;
     }
+    const launchContextKey = checkoutContextKey;
+    const launchIdentityEpoch = captureIdentityEpoch();
+    const launchToken = ++portalLaunchSeqRef.current;
+    portalActiveLaunchRef.current = { token: launchToken, contextKey: launchContextKey, epoch: launchIdentityEpoch };
+    const isCurrentLaunch = () =>
+      checkoutMountedRef.current &&
+      portalActiveLaunchRef.current?.token === launchToken &&
+      checkoutContextRef.current.contextKey === launchContextKey &&
+      isCurrentIdentityEpoch(launchIdentityEpoch);
+    const isOwnedForCleanup = () =>
+      checkoutMountedRef.current &&
+      portalActiveLaunchRef.current?.token === launchToken;
     setPortalLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("customer-portal", {
         timeout: STRIPE_FUNCTION_TIMEOUT_MS,
       });
+      if (!isCurrentLaunch()) return;
       if (error || !data?.url) throw new Error(error?.message || tr("Failed to open billing portal"));
+      if (!isCurrentLaunch()) return;
       window.open(data.url, "_blank");
     } catch (e: unknown) {
+      if (!isCurrentLaunch()) return;
       const msg = e instanceof Error ? e.message : tr("Failed to open billing portal");
       toast.error(msg || tr("Failed to open billing portal"));
     } finally {
-      setPortalLoading(false);
+      if (isOwnedForCleanup()) {
+        portalActiveLaunchRef.current = null;
+        setPortalLoading(false);
+      }
     }
   };
 

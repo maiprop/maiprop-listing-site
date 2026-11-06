@@ -1,8 +1,13 @@
 import React from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Route, Routes, useSearchParams } from "react-router-dom";
-import { renderWithProviders } from "@/test/utils";
+import { createTestQueryClient, renderWithProviders } from "@/test/utils";
+import {
+  captureIdentityEpoch,
+  resetIdentityQueryStateForTests,
+  transitionQueryAuthorization,
+} from "@/lib/identityQueryBoundary";
 
 const mocks = vi.hoisted(() => ({
   navigateMock: vi.fn(),
@@ -319,6 +324,7 @@ function ReplacePricingSearch({ next }: { next: string }) {
 }
 
 beforeEach(() => {
+  resetIdentityQueryStateForTests();
   vi.clearAllMocks();
   mocks.holdCheckoutCleanup = false;
   mocks.pendingCheckoutCleanup = null;
@@ -415,6 +421,256 @@ beforeEach(() => {
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
     share: undefined,
+  });
+});
+
+afterEach(() => {
+  resetIdentityQueryStateForTests();
+});
+
+function launchDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+type LaunchOperation = "checkout" | "portal";
+type LaunchReply = { data: { url?: string; error?: string } | null; error: unknown };
+
+async function renderPricingLaunch(operation: LaunchOperation) {
+  const { default: Pricing } = await import("@/pages/Pricing");
+  const auth = {
+    user: { id: "launch-a" },
+    session: pricingSession("launch-a", "launch-session-a"),
+    profile: { role: "agent", participant_type: "agent" },
+    loading: false,
+    profileLoading: false,
+  };
+  mocks.useAuthMock.mockReturnValue(auth);
+  mocks.useSubscriptionMock.mockReturnValue({
+    isPro: operation === "portal", hasStripeBilling: true,
+    loading: false, refreshSubscription: vi.fn(),
+  });
+  const queryClient = createTestQueryClient();
+  transitionQueryAuthorization(queryClient, auth.user.id, "launch-initial");
+  const view = renderWithProviders(<Pricing />, {
+    initialPath: "/pricing?audience=agent", queryClient,
+  });
+  const button = await screen.findByRole("button", {
+    name: operation === "checkout" ? /^Get Agent Pro$/i : /^Manage Subscription$/i,
+  });
+  const rerenderAuth = (next = auth) => {
+    mocks.useAuthMock.mockReturnValue(next);
+    view.rerender(<Pricing />);
+  };
+  const replaceActor = () => rerenderAuth({
+    ...auth, user: { id: "launch-b" }, session: pricingSession("launch-b", "launch-session-b"),
+  });
+  const advanceEpoch = () => transitionQueryAuthorization(queryClient, auth.user.id, "launch-replaced");
+  const start = (pending: ReturnType<typeof launchDeferred<LaunchReply>>, count = 1) => {
+    mocks.invokeMock.mockImplementationOnce(() => pending.promise);
+    fireEvent.click(button);
+    expect(mocks.invokeMock).toHaveBeenCalledTimes(count);
+    expect(mocks.invokeMock).toHaveBeenLastCalledWith(
+      operation === "checkout" ? "create-checkout" : "customer-portal",
+      operation === "checkout"
+        ? { timeout: 20_000, body: { plan: "agent_basic", billing_cycle: "monthly" } }
+        : { timeout: 20_000 },
+    );
+    expect(button).toBeDisabled();
+  };
+  return { ...view, auth, button, rerenderAuth, replaceActor, advanceEpoch, start };
+}
+
+function expectNoLaunchPublication() {
+  expect(window.location.href, "a stale checkout must not navigate").toBe("http://localhost/");
+  expect(window.open, "a stale portal must not open a window").not.toHaveBeenCalled();
+  expect(mocks.toast.error, "a stale launch must not publish an error").not.toHaveBeenCalled();
+  expect(mocks.toast.success).not.toHaveBeenCalled();
+  expect(mocks.toast.info).not.toHaveBeenCalled();
+}
+
+function expectLaunchSuccess(operation: LaunchOperation, url: string) {
+  if (operation === "checkout") {
+    expect(window.location.href).toBe(url);
+    expect(window.open).not.toHaveBeenCalled();
+  } else {
+    expect(window.open).toHaveBeenCalledExactlyOnceWith(url, "_blank");
+    expect(window.location.href).toBe("http://localhost/");
+  }
+  expect(mocks.toast.error).not.toHaveBeenCalled();
+}
+
+describe.each(["checkout", "portal"] as const)("Pricing launch ownership: %s", (operation) => {
+  it("keeps a fresh launch valid after an epoch advance before starting without rerender", async () => {
+    const launch = await renderPricingLaunch(operation);
+    const pending = launchDeferred<LaunchReply>();
+    const epoch = captureIdentityEpoch();
+    launch.advanceEpoch();
+    expect(captureIdentityEpoch()).toBeGreaterThan(epoch);
+    launch.start(pending);
+    expect(launch.button).toBeDisabled();
+    await act(async () => { pending.resolve({ data: { url: "https://stripe.example/fresh-epoch" }, error: null }); });
+    expectLaunchSuccess(operation, "https://stripe.example/fresh-epoch");
+    expect(launch.button).toBeEnabled();
+  });
+
+  it("publishes a current success and releases its loading state", async () => {
+    const launch = await renderPricingLaunch(operation);
+    const pending = launchDeferred<LaunchReply>();
+    launch.start(pending);
+    await act(async () => { pending.resolve({ data: { url: "https://stripe.example/current" }, error: null }); });
+    expectLaunchSuccess(operation, "https://stripe.example/current");
+    expect(launch.button).toBeEnabled();
+  });
+
+  it("preserves current returned error reasons and allows retry", async () => {
+    const launch = await renderPricingLaunch(operation);
+    const pending = launchDeferred<LaunchReply>();
+    launch.start(pending);
+    await act(async () => {
+      pending.resolve({ data: { error: "Current server reason" }, error: { message: "Current portal reason" } });
+    });
+    expect(mocks.toast.error).toHaveBeenCalledExactlyOnceWith(
+      operation === "checkout" ? "Current server reason" : "Current portal reason",
+    );
+    expect(launch.button).toBeEnabled();
+    expect(window.open).not.toHaveBeenCalled();
+    expect(window.location.href).toBe("http://localhost/");
+  });
+
+  it.each(["success", "returned error", "rejection"] as const)(
+    "suppresses stale %s after actor rerender without advancing the epoch", async (outcome) => {
+      const launch = await renderPricingLaunch(operation);
+      const pending = launchDeferred<LaunchReply>();
+      launch.start(pending);
+      const epoch = captureIdentityEpoch();
+      launch.replaceActor();
+      expect(captureIdentityEpoch(), "the auth mock must isolate context from epoch").toBe(epoch);
+      await act(async () => {
+        if (outcome === "rejection") pending.reject(new Error("Old actor rejection"));
+        else pending.resolve(outcome === "success"
+          ? { data: { url: "https://stripe.example/old-actor" }, error: null }
+          : { data: { error: "Old checkout reason" }, error: { message: "Old portal reason" } });
+      });
+      expectNoLaunchPublication();
+    },
+  );
+
+  it.each(["known session", "audience"] as const)("suppresses a success after %s replacement", async (context) => {
+    const launch = await renderPricingLaunch(operation);
+    const pending = launchDeferred<LaunchReply>();
+    launch.start(pending);
+    launch.rerenderAuth(context === "known session"
+      ? { ...launch.auth, session: pricingSession("launch-a", "launch-session-new") }
+      : { ...launch.auth, profile: { role: "developer", participant_type: "developer" } });
+    await act(async () => { pending.resolve({ data: { url: "https://stripe.example/old-context" }, error: null }); });
+    expectNoLaunchPublication();
+  });
+
+  it("keeps a same-known-session access-token refresh valid", async () => {
+    const launch = await renderPricingLaunch(operation);
+    const pending = launchDeferred<LaunchReply>();
+    launch.start(pending);
+    const epoch = captureIdentityEpoch();
+    launch.rerenderAuth({ ...launch.auth, session: pricingSession("launch-a", "launch-session-a", "two") });
+    expect(captureIdentityEpoch()).toBe(epoch);
+    expect(launch.button).toBeDisabled();
+    await act(async () => { pending.resolve({ data: { url: "https://stripe.example/refreshed" }, error: null }); });
+    expectLaunchSuccess(operation, "https://stripe.example/refreshed");
+    expect(launch.button).toBeEnabled();
+  });
+
+  it.each(["success", "rejection"] as const)("suppresses epoch-only %s without rerender and clears still-owned loading", async (outcome) => {
+    const launch = await renderPricingLaunch(operation);
+    const pending = launchDeferred<LaunchReply>();
+    launch.start(pending);
+    const epoch = captureIdentityEpoch();
+    launch.advanceEpoch();
+    expect(captureIdentityEpoch()).toBeGreaterThan(epoch);
+    // No rerender: cleanup ownership must not require the result's epoch freshness.
+    await act(async () => {
+      if (outcome === "rejection") pending.reject(new Error("Old epoch error"));
+      else pending.resolve({ data: { url: "https://stripe.example/old-epoch" }, error: null });
+    });
+    expect(launch.button, "epoch invalidation must not strand its owned spinner").toBeEnabled();
+    expectNoLaunchPublication();
+  });
+
+  it.each(["success", "rejection"] as const)("suppresses %s after unmount", async (outcome) => {
+    const launch = await renderPricingLaunch(operation);
+    const pending = launchDeferred<LaunchReply>();
+    launch.start(pending);
+    launch.unmount();
+    await act(async () => {
+      if (outcome === "rejection") pending.reject(new Error("Unmounted request"));
+      else pending.resolve({ data: { url: "https://stripe.example/unmounted" }, error: null });
+    });
+    expectNoLaunchPublication();
+  });
+
+  it.each(["actor", "epoch"] as const)("releases replaced %s loading and prevents old finally from clearing a newer request", async (context) => {
+    const launch = await renderPricingLaunch(operation);
+    const old = launchDeferred<LaunchReply>();
+    const current = launchDeferred<LaunchReply>();
+    launch.start(old);
+    if (context === "actor") launch.replaceActor();
+    else { launch.advanceEpoch(); launch.rerenderAuth(); }
+    expect(launch.button, "a rerendered replacement must be able to start a new launch").toBeEnabled();
+    launch.start(current, 2);
+    await act(async () => { old.reject(new Error("Old overlapping request")); });
+    expectNoLaunchPublication();
+    expect(launch.button, "old finally must not clear the newer owner's spinner").toBeDisabled();
+    await act(async () => { current.resolve({ data: { url: "https://stripe.example/new-owner" }, error: null }); });
+    expectLaunchSuccess(operation, "https://stripe.example/new-owner");
+    expect(launch.button).toBeEnabled();
+  });
+});
+
+describe("Pricing launch ownership: delayed checkout error decoding", () => {
+  async function beginDecoding() {
+    const launch = await renderPricingLaunch("checkout");
+    const pending = launchDeferred<LaunchReply>();
+    const body = launchDeferred<{ error: string }>();
+    const response = new Response(null, { status: 400 });
+    const json = vi.fn(() => body.promise);
+    const decodedResponse = new Response(null, { status: 400 });
+    vi.spyOn(decodedResponse, "json").mockImplementation(json);
+    vi.spyOn(response, "clone").mockReturnValue(decodedResponse);
+    launch.start(pending);
+    await act(async () => { pending.resolve({ data: null, error: { context: response } }); });
+    expect(json, "the real checkout decoder must enter Response.json before transition").toHaveBeenCalledTimes(1);
+    expect(launch.button).toBeDisabled();
+    return { ...launch, body };
+  }
+
+  it("publishes the current decoded reason and releases loading", async () => {
+    const launch = await beginDecoding();
+    await act(async () => { launch.body.resolve({ error: "Decoded current reason" }); });
+    expect(mocks.toast.error).toHaveBeenCalledExactlyOnceWith("Decoded current reason");
+    expect(launch.button).toBeEnabled();
+  });
+
+  it.each(["actor", "epoch", "unmount"] as const)("suppresses decoded errors after %s transition and preserves cleanup ownership", async (context) => {
+    const launch = await beginDecoding();
+    const newer = launchDeferred<LaunchReply>();
+    if (context === "actor") {
+      launch.replaceActor();
+      expect(launch.button).toBeEnabled();
+      launch.start(newer, 2);
+    } else if (context === "epoch") launch.advanceEpoch();
+    else launch.unmount();
+    await act(async () => { launch.body.resolve({ error: "Decoded stale reason" }); });
+    expectNoLaunchPublication();
+    if (context === "actor") {
+      expect(launch.button, "the delayed old decoder must not clear newer loading").toBeDisabled();
+      await act(async () => { newer.resolve({ data: { url: "https://stripe.example/after-decoder" }, error: null }); });
+      expectLaunchSuccess("checkout", "https://stripe.example/after-decoder");
+      expect(launch.button).toBeEnabled();
+    } else if (context === "epoch") {
+      expect(launch.button, "stale decoding must still release its owned loading").toBeEnabled();
+    }
   });
 });
 
