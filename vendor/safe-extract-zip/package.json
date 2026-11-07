@@ -1,0 +1,19 @@
+{
+  "name": "@maiprop/safe-extract-zip",
+  "version": "2.0.1-maiprop.1",
+  "private": true,
+  "description": "Private hardened fork of extract-zip 2.0.1 for MaiProp (fixes GHSA-7pqw-9j4j-h8q3 and GHSA-jmr9-qjv8-65gv).",
+  "license": "BSD-2-Clause",
+  "main": "index.cjs",
+  "files": [
+    "index.cjs"
+  ],
+  "engines": {
+    "node": ">= 10.17.0"
+  },
+  "dependencies": {
+    "debug": "^4.1.1",
+    "get-stream": "^5.1.0",
+    "yauzl": "^2.10.0"
+  }
+}

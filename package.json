@@ -40,11 +40,10 @@
     "qs": "6.16.1",
     "postcss-selector-parser": "7.1.7",
     "zod": "4.6.6",
+    "extract-zip": "$extract-zip",
+    "sharp": "$sharp",
     "wrangler": {
-      "esbuild": "0.28.2",
-      "miniflare": {
-        "sharp": "0.35.5"
-      }
+      "esbuild": "0.28.2"
     }
   },
   "overridesRationale": {
@@ -57,7 +56,9 @@
     "sucrase": "Tailwind CSS 3 pulls sucrase 3.35, whose CLI declares vulnerable glob 10. Pin only sucrase's glob chain to current compatible patched releases until Tailwind removes the dependency.",
     "source-map-js": "PostCSS and related build tooling resolve source-map-js below the patched 1.2.2 security floor. Pin the compatible patch until their lockfile ranges refresh.",
     "@xmldom/xmldom": "@capacitor/cli pulls plist with vulnerable @xmldom/xmldom. Pin to 0.9.12 to cover GHSA-27p8-2357-5qqv and related advisories until Capacitor refreshes the range.",
-    "wrangler": "Wrangler 4.86.0 bundles esbuild 0.27.3 and miniflare with sharp 0.34.5. Pin the wrangler subtree to esbuild 0.28.2 to cover GHSA-g7r4-m6w7-qqqr and sharp to 0.35.5 to cover GHSA-f88m-g3jw-g9cj until Wrangler refreshes its bundled ranges.",
+    "wrangler": "Wrangler 4.86.0 bundles esbuild 0.27.3. Pin the wrangler subtree to esbuild 0.28.2 to cover GHSA-g7r4-m6w7-qqqr until Wrangler refreshes its bundled range.",
+    "sharp": "Wrangler's miniflare resolves sharp 0.34.5 and scoped overrides are ineffective. Use the root patched sharp dependency for every resolution to cover GHSA-f88m-g3jw-g9cj, GHSA-rgj7-g3m4-5g8c and GHSA-wq5f-xc86-pv6w.",
+    "extract-zip": "Puppeteer browsers 2.13.0 pulls extract-zip 2.0.1 with no patched Node20-compatible release. Override to the private vendored @maiprop/safe-extract-zip 2.0.1-maiprop.1 to fix GHSA-7pqw-9j4j-h8q3 and GHSA-jmr9-qjv8-65gv until upstream ships a fix.",
     "qs": "Express 4 under LHCI resolves qs below the patched 6.16.0 floor (GHSA-x5fp-wj9c-mxmx). Pin to 6.16.1 until the range refreshes.",
     "postcss-selector-parser": "Tailwind CSS 3 pins postcss-selector-parser 6.0.x. Pin to 7.1.7 to cover GHSA-rj75-hqrm-r3gf and GHSA-w9m9-85wc-3x92 until Tailwind refreshes the range.",
     "zod": "LHCI tooling pins zod below the patched 4.6.6 floor (GHSA-mrhx-c7xc-m3w5). Pin to the direct dependency version until those ranges refresh."
@@ -240,6 +241,7 @@
     "zod": "4.6.6"
   },
   "devDependencies": {
+    "extract-zip": "file:vendor/safe-extract-zip",
     "@axe-core/playwright": "^4.12.1",
     "@capacitor/cli": "7.6.8",
     "@cloudflare/workers-types": "^4.20260608.1",
