@@ -63,6 +63,29 @@ for (const name of Object.keys(rationale)) {
   }
 }
 
+// These security floors must hold at every resolution, including hoisted copies.
+for (const { path, version } of findLockedPackages(lock, "sharp")) {
+  const [major, minor, patch] = String(version).split(".").map(Number);
+  if (!(major > 0 || minor > 35 || (minor === 35 && patch >= 5))) {
+    errors.push(`${path} resolves sharp ${version}, below the 0.35.5 security floor.`);
+  }
+}
+
+const extractors = findLockedPackages(lock, "extract-zip");
+if (extractors.length === 0) {
+  errors.push("Puppeteer's patched extract-zip resolution is missing.");
+}
+for (const { path } of extractors) {
+  const entry = lock.packages[path];
+  const target = String(entry.resolved ?? "").replaceAll("\\", "/");
+  const local = lock.packages[target];
+  if (!entry.link || target !== "vendor/safe-extract-zip" ||
+      local?.name !== "@maiprop/safe-extract-zip" ||
+      local?.version !== "2.0.1-maiprop.1") {
+    errors.push(`${path} must link to the reviewed local safe extractor.`);
+  }
+}
+
 if (errors.length > 0) {
   for (const error of errors) {
     console.error(`- ${error}`);
