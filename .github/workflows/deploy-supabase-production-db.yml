@@ -1026,9 +1026,8 @@ jobs:
                       FALSE
                     ),
                     'statements_sha256', encode(
-                      public.digest(
-                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
-                        'sha256'
+                      pg_catalog.sha256(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8')
                       ),
                       'hex'
                     )
@@ -1488,9 +1487,8 @@ jobs:
                       FALSE
                     ),
                     'statements_sha256', encode(
-                      public.digest(
-                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
-                        'sha256'
+                      pg_catalog.sha256(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8')
                       ),
                       'hex'
                     )
@@ -1596,9 +1594,8 @@ jobs:
                       FALSE
                     ),
                     'statements_sha256', encode(
-                      public.digest(
-                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
-                        'sha256'
+                      pg_catalog.sha256(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8')
                       ),
                       'hex'
                     )
@@ -1798,9 +1795,8 @@ jobs:
                       FALSE
                     ),
                     'statements_sha256', encode(
-                      public.digest(
-                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
-                        'sha256'
+                      pg_catalog.sha256(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8')
                       ),
                       'hex'
                     )
@@ -2320,9 +2316,8 @@ jobs:
                       FALSE
                     ),
                     'statements_sha256', encode(
-                      public.digest(
-                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8'),
-                        'sha256'
+                      pg_catalog.sha256(
+                        convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8')
                       ),
                       'hex'
                     )
