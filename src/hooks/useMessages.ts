@@ -645,31 +645,67 @@ export function useSendMessage() {
 export function useMarkMessagesRead(conversationId: string) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const renderActorId = user?.id;
+  const renderConversationId = conversationId;
+  const renderEpoch = captureIdentityEpoch();
   return useMutation({
+    mutationKey: accountQueryKey(
+      renderActorId,
+      "mark-messages-read",
+      renderConversationId,
+      renderEpoch,
+    ),
     mutationFn: async () => {
-      if (!user || !conversationId) return;
-      const { data: msgs } = await supabase
+      if (!renderActorId || !renderConversationId) return;
+      if (!isCurrentIdentityEpoch(renderEpoch))
+        throw new Error("Identity changed");
+      const { data: msgs, error: selectError } = await supabase
         .from("messages")
         .select("id")
-        .eq("conversation_id", conversationId)
-        .neq("sender_id", user.id)
+        .eq("conversation_id", renderConversationId)
+        .neq("sender_id", renderActorId)
         .eq("status", "sent");
+      if (selectError) throw selectError;
       if (!msgs?.length) return;
-      const payload = parseMutationInput(
-        markMessagesReadSchema,
-        { conversationId, messageIds: msgs.map((m) => m.id) },
-        "message read update",
+      const allIds = msgs.map((m) => m.id);
+      const batches: string[][] = [];
+      for (let i = 0; i < allIds.length; i += 250) {
+        batches.push(allIds.slice(i, i + 250));
+      }
+      const validatedBatches = batches.map((batch) =>
+        parseMutationInput(
+          markMessagesReadSchema,
+          { conversationId: renderConversationId, messageIds: batch },
+          "message read update",
+        ),
       );
-      await supabase
-        .from("messages")
-        .update({ status: "read" })
-        .in("id", payload.messageIds);
+      for (const payload of validatedBatches) {
+        if (!isCurrentIdentityEpoch(renderEpoch))
+          throw new Error("Identity changed");
+        const { error: updateError } = await supabase
+          .from("messages")
+          .update({ status: "read" })
+          .in("id", payload.messageIds);
+        if (updateError) throw updateError;
+      }
     },
-    onMutate: () => ({ identityEpoch: captureIdentityEpoch() }),
+    onMutate: () => {
+      if (!renderActorId || !renderConversationId) return undefined;
+      return {
+        messageKey: accountQueryKey(
+          renderActorId,
+          "messages",
+          renderConversationId,
+        ),
+        identityEpoch: renderEpoch,
+      };
+    },
     onSuccess: (_data, _variables, context) => {
-      if (!context || !isCurrentIdentityEpoch(context.identityEpoch)) return;
+      if (!context?.messageKey) return;
+      if (!isCurrentIdentityEpoch(context.identityEpoch)) return;
       queryClient.invalidateQueries({
-        queryKey: accountQueryKey(user?.id, "messages", conversationId),
+        queryKey: context.messageKey,
+        exact: true,
       });
     },
   });

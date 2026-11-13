@@ -43,6 +43,7 @@ import {
   accountQueryKey,
   resetIdentityQueryStateForTests,
   transitionQueryIdentity,
+  transitionQueryAuthorization,
 } from "@/lib/identityQueryBoundary";
 
 const wrapper = () => {
@@ -824,27 +825,242 @@ describe("useSendMessage", () => {
 });
 
 describe("useMarkMessagesRead", () => {
-  it("noop when no msgs to mark (early returns)", async () => {
-    const eq2 = vi.fn().mockResolvedValue({ data: [], error: null });
-    const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
-    const neq = vi.fn().mockReturnValue({ eq: eq1 });
-    fromMock.mockReturnValue({ select: () => ({ eq: () => ({ neq }) }) });
-    const { result } = renderHook(() => useMarkMessagesRead("c-1"), { wrapper: wrapper() });
+  const rows = (count: number) => Array.from({ length: count }, (_, i) => ({ id: "read-id-" + i }));
+  type SelectResult = { data: { id: string }[] | null; error: Error | null };
+  const transport = (selection: SelectResult | Promise<SelectResult>) => {
+    const sent = vi.fn().mockResolvedValue(selection);
+    const sender = vi.fn().mockReturnValue({ eq: sent });
+    const conversation = vi.fn().mockReturnValue({ neq: sender });
+    const select = vi.fn().mockReturnValue({ eq: conversation });
+    const write = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ in: write });
+    fromMock.mockReturnValue({ select, update });
+    return { select, conversation, sender, sent, update, write };
+  };
+  const setup = (conversationId = "c-1") => {
+    const client = createQueryClient();
+    transitionQueryIdentity(client, "u-1");
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const hook = renderHook(({ id }) => useMarkMessagesRead(id), {
+      initialProps: { id: conversationId }, wrapper: wrapperWithClient(client),
+    });
+    return { ...hook, client, invalidate };
+  };
+  const outcome = (promise: Promise<unknown>) => promise.then(
+    value => ({ value, error: null }), error => ({ value: undefined, error }),
+  );
+
+  it("successful empty SELECT writes nothing and invalidates only the initiating exact message key", async () => {
+    const sdk = transport({ data: [], error: null });
+    const { result, invalidate } = setup();
     await act(async () => { await result.current.mutateAsync(); });
-    // No update call — no second .from for "messages" with .update
-    expect(fromMock).toHaveBeenCalledWith("messages");
+    expect(fromMock).toHaveBeenCalledTimes(1);
+    expect(sdk.update).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: messageQueryKey("c-1"), exact: true });
   });
 
-  it("updates status:read for unread messages from other senders", async () => {
-    const sentEq = vi.fn().mockResolvedValue({ data: [{ id: "m-1" }, { id: "m-2" }], error: null });
-    const inFn = vi.fn().mockResolvedValue({ error: null });
-    fromMock.mockImplementation((_t: string) => ({
-      select: () => ({ eq: () => ({ neq: () => ({ eq: sentEq }) }) }),
-      update: () => ({ in: inFn }),
-    }));
-    const { result } = renderHook(() => useMarkMessagesRead("c-1"), { wrapper: wrapper() });
+  it("surfaces a resolved SELECT error without writing or success invalidation", async () => {
+    const error = new Error("receipt SELECT denied");
+    const sdk = transport({ data: null, error });
+    const { result, invalidate } = setup();
+    await act(async () => { await expect(result.current.mutateAsync()).rejects.toBe(error); });
+    await waitFor(() => expect(result.current.error).toBe(error));
+    expect(sdk.select).toHaveBeenCalledWith("id");
+    expect(sdk.conversation).toHaveBeenCalledWith("conversation_id", "c-1");
+    expect(sdk.sender).toHaveBeenCalledWith("sender_id", "u-1");
+    expect(sdk.sent).toHaveBeenCalledWith("status", "sent");
+    expect(sdk.update).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a resolved UPDATE error with unchanged SELECT scope, payload and IDs", async () => {
+    const error = new Error("receipt UPDATE denied");
+    const sdk = transport({ data: [{ id: "m-1" }, { id: "m-2" }], error: null });
+    sdk.write.mockResolvedValue({ error });
+    const { result, invalidate } = setup();
+    await act(async () => { await expect(result.current.mutateAsync()).rejects.toBe(error); });
+    await waitFor(() => expect(result.current.error).toBe(error));
+    expect(sdk.select).toHaveBeenCalledWith("id");
+    expect(sdk.conversation).toHaveBeenCalledWith("conversation_id", "c-1");
+    expect(sdk.sender).toHaveBeenCalledWith("sender_id", "u-1");
+    expect(sdk.sent).toHaveBeenCalledWith("status", "sent");
+    expect(sdk.update).toHaveBeenCalledExactlyOnceWith({ status: "read" });
+    expect(sdk.write).toHaveBeenCalledExactlyOnceWith("id", ["m-1", "m-2"]);
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("retains the small successful write and exact initiating invalidation", async () => {
+    const sdk = transport({ data: [{ id: "m-1" }, { id: "m-2" }], error: null });
+    const { result, invalidate } = setup();
     await act(async () => { await result.current.mutateAsync(); });
-    expect(inFn).toHaveBeenCalledWith("id", ["m-1", "m-2"]);
+    expect(sdk.update).toHaveBeenCalledExactlyOnceWith({ status: "read" });
+    expect(sdk.write).toHaveBeenCalledExactlyOnceWith("id", ["m-1", "m-2"]);
+    expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: messageQueryKey("c-1"), exact: true });
+  });
+
+  it("writes all 251 returned IDs exactly once in batches of at most 250", async () => {
+    const selected = rows(251);
+    const sdk = transport({ data: selected, error: null });
+    const { result, invalidate } = setup();
+    await act(async () => { await result.current.mutateAsync(); });
+    expect(sdk.write).toHaveBeenCalledTimes(2);
+    const batches = sdk.write.mock.calls.map((call: unknown[]) => call[1] as string[]);
+    expect(batches.map(batch => batch.length)).toEqual([250, 1]);
+    expect(batches.flat()).toEqual(selected.map(row => row.id));
+    expect(new Set(batches.flat()).size).toBe(251);
+    expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: messageQueryKey("c-1"), exact: true });
+  });
+
+  it("stops 501 IDs on the second batch error without a third write or success invalidation", async () => {
+    const selected = rows(501);
+    const error = new Error("second batch rejected");
+    const sdk = transport({ data: selected, error: null });
+    sdk.write.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({ error });
+    const { result, invalidate } = setup();
+    await act(async () => { await expect(result.current.mutateAsync()).rejects.toBe(error); });
+    expect(sdk.write).toHaveBeenCalledTimes(2);
+    expect(sdk.write.mock.calls.map((call: unknown[]) => call[1])).toEqual([
+      selected.slice(0, 250).map(row => row.id), selected.slice(250, 500).map(row => row.id),
+    ]);
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("validates every batch before any write when a later row ID is malformed", async () => {
+    const sdk = transport({ data: [...rows(250), { id: "" }], error: null });
+    const { result, invalidate } = setup();
+    await act(async () => { await expect(result.current.mutateAsync()).rejects.toThrow(); });
+    expect(sdk.update).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("does not start transport from an already stale render epoch", async () => {
+    transport({ data: rows(1), error: null });
+    const { result, client, invalidate } = setup();
+    const initiate = result.current.mutateAsync;
+    transitionQueryAuthorization(client, "u-1", "new-permissions");
+    await act(async () => { await outcome(initiate()); });
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it.each(["actor", "authorization"] as const)("stops after SELECT when the real %s epoch transitions", async (change) => {
+    const selection = deferred<SelectResult>();
+    const sdk = transport(selection.promise);
+    const { result, client, invalidate, rerender } = setup();
+    let pending!: ReturnType<typeof outcome>;
+    act(() => { pending = outcome(result.current.mutateAsync()); });
+    await waitFor(() => expect(sdk.sent).toHaveBeenCalledTimes(1));
+    act(() => {
+      if (change === "actor") {
+        transitionQueryIdentity(client, "u-2");
+        useAuthMock.mockReturnValue({ user: { id: "u-2" } });
+      } else {
+        transitionQueryAuthorization(client, "u-1", "profile-hydrated");
+      }
+      rerender({ id: "c-1" });
+    });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    await act(async () => { selection.resolve({ data: rows(1), error: null }); await pending; });
+    expect(sdk.update).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(result.current.isPending).toBe(false);
+  });
+
+  it("does not dispatch a second batch after an actor switch during the first UPDATE", async () => {
+    const firstWrite = deferred<{ error: Error | null }>();
+    const sdk = transport({ data: rows(251), error: null });
+    sdk.write.mockReturnValueOnce(firstWrite.promise);
+    const { result, client, invalidate, rerender } = setup();
+    let pending!: ReturnType<typeof outcome>;
+    act(() => { pending = outcome(result.current.mutateAsync()); });
+    await waitFor(() => expect(sdk.write).toHaveBeenCalledTimes(1));
+    act(() => {
+      transitionQueryIdentity(client, "u-2");
+      useAuthMock.mockReturnValue({ user: { id: "u-2" } });
+      rerender({ id: "c-1" });
+    });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    await act(async () => { firstWrite.resolve({ error: null }); await pending; });
+    expect(sdk.write).toHaveBeenCalledTimes(1);
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("keeps a same-actor conversation A completion owned by A after selecting B", async () => {
+    const firstWrite = deferred<{ error: Error | null }>();
+    const sdk = transport({ data: rows(1), error: null });
+    sdk.write.mockReturnValueOnce(firstWrite.promise);
+    const { result, invalidate, rerender } = setup("conversation-A");
+    let pending!: ReturnType<typeof outcome>;
+    act(() => { pending = outcome(result.current.mutateAsync()); });
+    await waitFor(() => expect(sdk.write).toHaveBeenCalledTimes(1));
+    rerender({ id: "conversation-B" });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    await act(async () => { firstWrite.resolve({ error: null }); expect((await pending).error).toBeNull(); });
+    expect(sdk.conversation).toHaveBeenCalledExactlyOnceWith("conversation_id", "conversation-A");
+    expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: messageQueryKey("conversation-A"), exact: true });
+    expect(result.current.isPending).toBe(false);
+  });
+
+  it("keeps B pending while detached A settles and invalidates only A", async () => {
+    const firstWrite = deferred<{ error: Error | null }>();
+    const secondWrite = deferred<{ error: Error | null }>();
+    const sdk = transport({ data: rows(1), error: null });
+    sdk.write.mockReturnValueOnce(firstWrite.promise).mockReturnValueOnce(secondWrite.promise);
+    const { result, invalidate, rerender } = setup("conversation-A");
+    let pendingA!: ReturnType<typeof outcome>;
+    let pendingB!: ReturnType<typeof outcome>;
+    act(() => { pendingA = outcome(result.current.mutateAsync()); });
+    await waitFor(() => expect(sdk.write).toHaveBeenCalledTimes(1));
+    rerender({ id: "conversation-B" });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    act(() => { pendingB = outcome(result.current.mutateAsync()); });
+    await waitFor(() => expect(sdk.write).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.isPending).toBe(true));
+    await act(async () => { firstWrite.resolve({ error: null }); expect((await pendingA).error).toBeNull(); });
+    expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: messageQueryKey("conversation-A"), exact: true });
+    expect(result.current.isPending).toBe(true);
+    await act(async () => { secondWrite.resolve({ error: null }); expect((await pendingB).error).toBeNull(); });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(invalidate.mock.calls).toEqual([
+      [{ queryKey: messageQueryKey("conversation-A"), exact: true }],
+      [{ queryKey: messageQueryKey("conversation-B"), exact: true }],
+    ]);
+  });
+
+  it("settles a successful mutation without waiting for message refetch", async () => {
+    transport({ data: rows(1), error: null });
+    const refetch = deferred<void>();
+    const { result, invalidate } = setup();
+    invalidate.mockReturnValueOnce(refetch.promise);
+    let pending!: ReturnType<typeof outcome>;
+    act(() => { pending = outcome(result.current.mutateAsync()); });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: messageQueryKey("c-1"), exact: true });
+    await act(async () => { refetch.resolve(); await pending; });
+  });
+
+  it("does not retarget an initiating SELECT when the same actor selects B before it settles", async () => {
+    const selection = deferred<SelectResult>();
+    const sdk = transport(selection.promise);
+    const { result, invalidate, rerender } = setup("conversation-A");
+    let pending!: ReturnType<typeof outcome>;
+    act(() => { pending = outcome(result.current.mutateAsync()); });
+    await waitFor(() => expect(sdk.sent).toHaveBeenCalledTimes(1));
+    rerender({ id: "conversation-B" });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    await act(async () => { selection.resolve({ data: rows(1), error: null }); expect((await pending).error).toBeNull(); });
+    expect(sdk.conversation).toHaveBeenCalledExactlyOnceWith("conversation_id", "conversation-A");
+    expect(sdk.write).toHaveBeenCalledExactlyOnceWith("id", ["read-id-0"]);
+    expect(invalidate).toHaveBeenCalledExactlyOnceWith({ queryKey: messageQueryKey("conversation-A"), exact: true });
+  });
+
+  it.each(["actor", "conversation"] as const)("has no transport when %s is absent", async (missing) => {
+    transport({ data: rows(1), error: null });
+    const client = createQueryClient();
+    if (missing === "actor") useAuthMock.mockReturnValue({ user: null });
+    const { result } = renderHook(() => useMarkMessagesRead(missing === "conversation" ? "" : "c-1"), { wrapper: wrapperWithClient(client) });
+    await act(async () => { await result.current.mutateAsync(); });
+    expect(fromMock).not.toHaveBeenCalled();
   });
 });
 

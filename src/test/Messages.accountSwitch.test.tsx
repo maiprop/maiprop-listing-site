@@ -4,6 +4,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   actor: { id: "A" },
+  sharedConversation: false,
+  markRead: vi.fn(),
   conversationsLoading: false,
   useMessages: vi.fn(),
   send: vi.fn(),
@@ -18,12 +20,12 @@ vi.mock("@/contexts/AuthContext", () => ({
 }));
 vi.mock("@/hooks/useMessages", () => ({
   useConversations: () => ({
-    data: mocks.conversationsLoading ? [] : mocks.actor.id === "A" ? [conversation("A", "B", "a-conv")] : [conversation("C", "D", "c-conv")],
+    data: mocks.conversationsLoading ? [] : mocks.sharedConversation ? [conversation("A", "C", "shared-conv")] : mocks.actor.id === "A" ? [conversation("A", "B", "a-conv")] : [conversation("C", "D", "c-conv")],
     isLoading: mocks.conversationsLoading,
   }),
   useMessages: (id: string) => mocks.useMessages(mocks.actor.id, id),
   useSendMessage: () => ({ mutateAsync: mocks.send, isPending: false }),
-  useMarkMessagesRead: () => ({ mutate: vi.fn(), isPending: false }),
+  useMarkMessagesRead: () => ({ mutate: mocks.markRead, isPending: false }),
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -60,6 +62,7 @@ const deferred = <T,>() => {
 beforeEach(() => {
   mocks.actor = { id: "A" };
   mocks.conversationsLoading = false;
+  mocks.sharedConversation = false;
   vi.clearAllMocks();
   // Any unexpected transport is a hard failure. Only upload is deliberately intercepted.
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("external fetch forbidden"); }));
@@ -211,4 +214,17 @@ it("waits for C's list, then honors a C conversation deep link", async () => {
   view.rerender(<MemoryRouter future={routerFuture} initialEntries={["/messages?conversation=c-conv"]}><Messages /></MemoryRouter>);
   await waitFor(() => expect(mocks.useMessages).toHaveBeenCalledWith("C", "c-conv"));
   expect(mocks.useMessages).not.toHaveBeenCalledWith("C", "a-conv");
+});
+
+it("gives a new actor an initial attempt for a shared conversation and incoming ID", () => {
+  mocks.sharedConversation = true;
+  mocks.useMessages.mockImplementation((_actor: string, id: string) => ({
+    data: id === "shared-conv" ? [{ id: "shared-incoming", sender_id: "third-actor", status: "sent", content: "Shared unread", created_at: "2026-11-12T06:00:00Z", message_attachments: [] }] : [],
+    isLoading: false,
+  }));
+  const view = render(<MemoryRouter future={routerFuture}><Messages /></MemoryRouter>);
+  expect(mocks.markRead).toHaveBeenCalledTimes(1);
+  mocks.actor = { id: "C" };
+  view.rerender(<MemoryRouter future={routerFuture}><Messages /></MemoryRouter>);
+  expect(mocks.markRead).toHaveBeenCalledTimes(2);
 });

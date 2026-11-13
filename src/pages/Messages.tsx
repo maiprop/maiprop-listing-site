@@ -2,9 +2,10 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, Send, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft, Check, CheckCheck, Link2, Copy, ExternalLink } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useConversations, useMessages, useSendMessage, useMarkMessagesRead } from "@/hooks/useMessages";
+import { useTypingPresence } from "@/hooks/useTypingPresence";
+import { useMessageAttachments, type PendingMessageFile } from "@/hooks/useMessageAttachments";
 
 type MsgItem = NonNullable<ReturnType<typeof useMessages>["data"]>[number];
-type PendingMessageFile = { path: string; filename: string; mime_type: string };
 type ConversationDraft = {
   input: string;
   pendingFiles: PendingMessageFile[];
@@ -21,14 +22,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MessageContent } from "@/lib/messageContent";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SignedAttachment } from "@/components/messages/SignedAttachment";
 import { getOtherProfile, getInitials } from "@/lib/messagesHelpers";
-import { MESSAGE_ATTACHMENT_MIME_TYPES, assertAllowedUpload } from "@/lib/uploadValidation";
 import { getListingDetailPath } from "@/lib/listingRoutes";
-
-const TYPING_HEARTBEAT_MS = 750;
+import { captureIdentityEpoch, isCurrentIdentityEpoch } from "@/lib/identityQueryBoundary";
 
 export default function Messages() {
   const { user } = useAuth();
@@ -48,16 +46,7 @@ function MessagesForAccount() {
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [pendingFiles, setPendingFiles] = useState<PendingMessageFile[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [otherIsTyping, setOtherIsTyping] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const typingChannelReadyRef = useRef(false);
-  const typingIntentRef = useRef(false);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const typingHeartbeatRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const remoteTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendInProgressRef = useRef(false);
   const mountedRef = useRef(true);
   const conversationDraftsRef = useRef(new Map<string, ConversationDraft>());
@@ -65,6 +54,11 @@ function MessagesForAccount() {
   const activeConvIdRef = useRef(activeConvId);
   const inputRef = useRef(input);
   const pendingFilesRef = useRef(pendingFiles);
+  const readVisitRef = useRef<{ conversationId: string; identityEpoch: number; attemptedIds: Set<string> }>({
+    conversationId: "",
+    identityEpoch: -1,
+    attemptedIds: new Set<string>(),
+  });
   // Mobile: show list or chat pane
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
 
@@ -75,7 +69,8 @@ function MessagesForAccount() {
 
   const { data: messages = [], isLoading: msgsLoading } = useMessages(activeConvId);
   const sendMessage = useSendMessage();
-  const markAsRead = useMarkMessagesRead(activeConvId);
+  const { mutate: markAsReadMutate, isPending: markAsReadPending } = useMarkMessagesRead(activeConvId);
+  const renderIdentityEpoch = captureIdentityEpoch();
 
   useEffect(() => {
     if (!sendMessage.isPending) sendInProgressRef.current = false;
@@ -114,6 +109,28 @@ function MessagesForAccount() {
     });
   }, [markActiveDraftEdited]);
 
+  const appendUploadedToConversation = (uploadConversationId: string, uploaded: PendingMessageFile[]) => {
+    if (activeConvIdRef.current === uploadConversationId) {
+      updatePendingFiles((current) => [...current, ...uploaded]);
+    } else {
+      const nextRevision =
+        (draftRevisionRef.current.get(uploadConversationId) ?? 0) + 1;
+      draftRevisionRef.current.set(uploadConversationId, nextRevision);
+      const existingDraft = conversationDraftsRef.current.get(uploadConversationId) ?? {
+        input: "",
+        pendingFiles: [],
+        revision: nextRevision - 1,
+      };
+      conversationDraftsRef.current.set(uploadConversationId, {
+        ...existingDraft,
+        pendingFiles: [...existingDraft.pendingFiles, ...uploaded],
+        revision: nextRevision,
+      });
+    }
+  };
+
+  const { uploading, fileInputRef, handleFileSelect } = useMessageAttachments(activeConvId, user, () => mountedRef.current, appendUploadedToConversation);
+
   const selectConversation = useCallback((id: string, showChat: boolean) => {
     if (!id) return;
     const previousId = activeConvIdRef.current;
@@ -144,65 +161,6 @@ function MessagesForAccount() {
     if (showChat) setMobileView("chat");
   }, []);
 
-  const sendTypingState = useCallback(
-    (channel: ReturnType<typeof supabase.channel>, typing: boolean) => {
-      if (!user) return;
-      channel.send({
-        type: "broadcast",
-        event: "typing",
-        payload: { userId: user.id, typing },
-      }).catch(() => undefined);
-    },
-    [user],
-  );
-
-  const scheduleTypingStop = useCallback(
-    (channel: ReturnType<typeof supabase.channel>) => {
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = setTimeout(() => {
-        typingIntentRef.current = false;
-        if (typingHeartbeatRef.current) {
-          clearTimeout(typingHeartbeatRef.current);
-          typingHeartbeatRef.current = null;
-        }
-        if (
-          typingChannelReadyRef.current &&
-          typingChannelRef.current === channel
-        ) {
-          sendTypingState(channel, false);
-        }
-        typingTimeoutRef.current = null;
-      }, 3_000);
-    },
-    [sendTypingState],
-  );
-
-  const publishTypingIntent = useCallback(
-    (channel: ReturnType<typeof supabase.channel>) => {
-      if (typingHeartbeatRef.current) {
-        scheduleTypingStop(channel);
-        return;
-      }
-
-      const publish = () => {
-        if (
-          !typingIntentRef.current ||
-          !typingChannelReadyRef.current ||
-          typingChannelRef.current !== channel
-        ) {
-          typingHeartbeatRef.current = null;
-          return;
-        }
-        sendTypingState(channel, true);
-        typingHeartbeatRef.current = setTimeout(publish, TYPING_HEARTBEAT_MS);
-      };
-
-      publish();
-      scheduleTypingStop(channel);
-    },
-    [scheduleTypingStop, sendTypingState],
-  );
-
   const requestedConversationIsVisible = Boolean(
     requestedConversationId && conversations.some((conversation) => conversation.id === requestedConversationId),
   );
@@ -229,134 +187,32 @@ function MessagesForAccount() {
   }, [messages]);
 
   // Mark messages as read when viewing; only if there are unread from other person
-  const hasUnreadFromOther = messages.some((m) => m.sender_id !== user?.id && m.status === "sent");
   useEffect(() => {
-    if (activeConvId && hasUnreadFromOther && !markAsRead.isPending) {
-      markAsRead.mutate();
+    if (!isCurrentIdentityEpoch(renderIdentityEpoch)) return;
+    const visit = readVisitRef.current;
+    if (visit.conversationId !== activeConvId || visit.identityEpoch !== renderIdentityEpoch) {
+      readVisitRef.current = {
+        conversationId: activeConvId,
+        identityEpoch: renderIdentityEpoch,
+        attemptedIds: new Set<string>(),
+      };
     }
-  }, [activeConvId, hasUnreadFromOther, markAsRead]);
+    if (!activeConvId) return;
+    if (!user) return;
+    if (markAsReadPending) return;
+    const eligibleIds = messages
+      .filter((m) => m.sender_id !== user.id && m.status === "sent")
+      .map((m) => m.id);
+    if (eligibleIds.length === 0) return;
+    const attemptedIds = readVisitRef.current.attemptedIds;
+    if (!eligibleIds.some((id) => !attemptedIds.has(id))) return;
+    if (!isCurrentIdentityEpoch(renderIdentityEpoch)) return;
+    for (const id of eligibleIds) attemptedIds.add(id);
+    if (!isCurrentIdentityEpoch(renderIdentityEpoch)) return;
+    markAsReadMutate();
+  }, [activeConvId, renderIdentityEpoch, messages, user, markAsReadPending, markAsReadMutate]);
 
-  // Typing is a transient event, so use private Broadcast rather than Presence.
-  useEffect(() => {
-    if (typingChannelRef.current) {
-      supabase.removeChannel(typingChannelRef.current);
-      typingChannelRef.current = null;
-    }
-    typingChannelReadyRef.current = false;
-    typingIntentRef.current = false;
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
-    if (typingHeartbeatRef.current) {
-      clearTimeout(typingHeartbeatRef.current);
-      typingHeartbeatRef.current = null;
-    }
-    if (remoteTypingTimeoutRef.current) {
-      clearTimeout(remoteTypingTimeoutRef.current);
-      remoteTypingTimeoutRef.current = null;
-    }
-    setOtherIsTyping(false);
-
-    if (!activeConvId || !user || !session?.access_token) return;
-
-    // Private realtime channel — gated by the realtime.messages SELECT policy
-    // added in 20260627000000_audit_remediations.sql which enforces conversation
-    // participation. Previously the public channel name `typing:<convId>` was
-    // joinable by anyone who knew or guessed a conversation UUID.
-    const channel = supabase.channel(`typing:${activeConvId}`, {
-      config: { broadcast: { self: false }, private: true },
-    });
-    let cancelled = false;
-
-    typingChannelRef.current = channel;
-    const subscribeToTyping = async () => {
-      try {
-        await supabase.realtime.setAuth(session.access_token);
-        if (cancelled) return;
-        channel
-          .on("broadcast", { event: "typing" }, ({ payload }) => {
-            if (cancelled || typingChannelRef.current !== channel) return;
-            const state = payload as { userId?: unknown; typing?: unknown };
-            if (state.userId === user.id || typeof state.typing !== "boolean") return;
-            if (remoteTypingTimeoutRef.current) clearTimeout(remoteTypingTimeoutRef.current);
-            setOtherIsTyping(state.typing);
-            remoteTypingTimeoutRef.current = state.typing
-              ? setTimeout(() => {
-                  if (cancelled || typingChannelRef.current !== channel) return;
-                  setOtherIsTyping(false);
-                  remoteTypingTimeoutRef.current = null;
-                }, 4_000)
-              : null;
-          })
-          .subscribe((status) => {
-            if (cancelled || typingChannelRef.current !== channel) return;
-            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-              typingChannelReadyRef.current = false;
-              typingIntentRef.current = false;
-              typingChannelRef.current = null;
-              if (typingTimeoutRef.current) {
-                clearTimeout(typingTimeoutRef.current);
-                typingTimeoutRef.current = null;
-              }
-              if (typingHeartbeatRef.current) {
-                clearTimeout(typingHeartbeatRef.current);
-                typingHeartbeatRef.current = null;
-              }
-              if (remoteTypingTimeoutRef.current) {
-                clearTimeout(remoteTypingTimeoutRef.current);
-                remoteTypingTimeoutRef.current = null;
-              }
-              setOtherIsTyping(false);
-              void supabase.removeChannel(channel);
-              return;
-            }
-            typingChannelReadyRef.current = status === "SUBSCRIBED";
-            if (status === "SUBSCRIBED" && typingIntentRef.current) {
-              publishTypingIntent(channel);
-            }
-          });
-      } catch {
-        if (!cancelled && typingChannelRef.current === channel) {
-          supabase.removeChannel(channel);
-          typingChannelRef.current = null;
-          typingChannelReadyRef.current = false;
-        }
-      }
-    };
-    void subscribeToTyping();
-
-    return () => {
-      cancelled = true;
-      if (typingChannelReadyRef.current && typingIntentRef.current) {
-        sendTypingState(channel, false);
-      }
-      if (typingChannelRef.current === channel) {
-        typingChannelRef.current = null;
-        supabase.removeChannel(channel);
-      }
-      typingChannelReadyRef.current = false;
-      typingIntentRef.current = false;
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
-      }
-      if (typingHeartbeatRef.current) {
-        clearTimeout(typingHeartbeatRef.current);
-        typingHeartbeatRef.current = null;
-      }
-      if (remoteTypingTimeoutRef.current) {
-        clearTimeout(remoteTypingTimeoutRef.current);
-        remoteTypingTimeoutRef.current = null;
-      }
-    };
-  }, [activeConvId, publishTypingIntent, sendTypingState, session?.access_token, user]);
-
-  const broadcastTyping = () => {
-    typingIntentRef.current = true;
-    if (!typingChannelRef.current || !typingChannelReadyRef.current || !user) return;
-    publishTypingIntent(typingChannelRef.current);
-  };
+  const { otherIsTyping, broadcastTyping, stopTyping } = useTypingPresence(activeConvId, user, session?.access_token);
 
   const handleSend = async () => {
     if (uploading || sendMessage.isPending || sendInProgressRef.current) return;
@@ -366,14 +222,7 @@ function MessagesForAccount() {
     const sendDraftRevision = draftRevisionRef.current.get(sendConversationId) ?? 0;
     const content = input.trim() || (pendingFiles.length > 0 ? "\u{1F4CE}" : "");
     sendInProgressRef.current = true;
-    typingIntentRef.current = false;
-    if (typingHeartbeatRef.current) {
-      clearTimeout(typingHeartbeatRef.current);
-      typingHeartbeatRef.current = null;
-    }
-    if (typingChannelReadyRef.current) {
-      if (typingChannelRef.current) sendTypingState(typingChannelRef.current, false);
-    }
+    stopTyping();
     try {
       await sendMessage.mutateAsync({
         conversation_id: sendConversationId,
@@ -397,72 +246,6 @@ function MessagesForAccount() {
       // The mutation hook reports the delivery error; keep this draft intact.
     } finally {
       if (mountedRef.current) sendInProgressRef.current = false;
-    }
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files?.length || !activeConvId || !user) return;
-    // Validate ALL files up-front against the message-attachment allowlist
-    // and the 10 MB size cap. The <input accept=".."> is a UX hint only.
-    for (let i = 0; i < files.length; i++) {
-      try {
-        assertAllowedUpload(files[i], MESSAGE_ATTACHMENT_MIME_TYPES, {
-          label: "attachment",
-          maxBytes: 10 * 1024 * 1024,
-        });
-      } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : "Unsupported file");
-        e.target.value = "";
-        return;
-      }
-    }
-    const uploadConversationId = activeConvId;
-    const uploaded: PendingMessageFile[] = [];
-    setUploading(true);
-    try {
-      for (let i = 0; i < files.length; i++) {
-        if (!mountedRef.current) return;
-        const f = files[i];
-        const ext = (f.name.split(".").pop() || "bin").toLowerCase();
-        const path = `${user.id}/${uploadConversationId}/${crypto.randomUUID()}.${ext}`;
-        const { error } = await supabase.storage.from("message-attachments").upload(path, f, {
-          contentType: f.type,
-        });
-        if (!mountedRef.current) return;
-        if (error) throw error;
-        uploaded.push({ path, filename: f.name, mime_type: f.type });
-      }
-      if (activeConvIdRef.current === uploadConversationId) {
-        updatePendingFiles((current) => [...current, ...uploaded]);
-      } else {
-        const nextRevision =
-          (draftRevisionRef.current.get(uploadConversationId) ?? 0) + 1;
-        draftRevisionRef.current.set(uploadConversationId, nextRevision);
-        const existingDraft = conversationDraftsRef.current.get(uploadConversationId) ?? {
-          input: "",
-          pendingFiles: [],
-          revision: nextRevision - 1,
-        };
-        conversationDraftsRef.current.set(uploadConversationId, {
-          ...existingDraft,
-          pendingFiles: [...existingDraft.pendingFiles, ...uploaded],
-          revision: nextRevision,
-        });
-      }
-    } catch (err: unknown) {
-      if (!mountedRef.current) return;
-      if (uploaded.length > 0) {
-        await supabase.storage
-          .from("message-attachments")
-          .remove(uploaded.map((file) => file.path));
-      }
-      if (mountedRef.current) toast.error((err instanceof Error ? err.message : null) || "Upload failed");
-    } finally {
-      if (mountedRef.current) {
-        setUploading(false);
-        e.target.value = "";
-      }
     }
   };
 

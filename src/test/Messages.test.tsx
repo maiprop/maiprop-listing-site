@@ -11,7 +11,10 @@
  * mocked so the test focuses on Messages.tsx's own logic, not its dependencies.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useLayoutEffect } from "react";
 import { fireEvent, render, screen, waitFor, within, cleanup } from "@testing-library/react";
+
+const readState = vi.hoisted(() => ({ isPending: false }));
 
 let clipboardWriteText: ReturnType<typeof vi.fn>;
 
@@ -70,7 +73,7 @@ vi.mock("@/hooks/useMessages", () => ({
   useConversations: useConversationsMock,
   useMessages: useMessagesMock,
   useSendMessage: () => ({ mutateAsync: sendMessageMutate, isPending: false }),
-  useMarkMessagesRead: () => ({ mutate: markReadMutate, isPending: false }),
+  useMarkMessagesRead: () => ({ mutate: markReadMutate, isPending: readState.isPending }),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -112,6 +115,8 @@ vi.mock("@/lib/messageContent", () => ({
 }));
 
 import Messages from "@/pages/Messages";
+import { QueryClient } from "@tanstack/react-query";
+import { resetIdentityQueryStateForTests, transitionQueryAuthorization, transitionQueryIdentity } from "@/lib/identityQueryBoundary";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 const ME = { id: "me-id" };
@@ -174,6 +179,8 @@ const MSG_ME = {
 
 beforeEach(() => {
   cleanup();
+  resetIdentityQueryStateForTests();
+  readState.isPending = false;
   sendMessageMutate.mockReset();
   sendMessageMutate.mockResolvedValue({ id: "sent-message" });
   markReadMutate.mockReset();
@@ -291,6 +298,136 @@ describe("Messages — chat thread rendering", () => {
   });
 });
 
+describe("Messages — bounded automatic read receipts", () => {
+  beforeEach(() => {
+    useConversationsMock.mockReturnValue({ data: [CONV_1, CONV_2], isLoading: false });
+    useMessagesMock.mockImplementation((id: string) => ({ data: id === "conv-1" ? [MSG_THEM] : [], isLoading: false }));
+  });
+
+  it("does not repeat an attempted ID after pending, failure settlement, fresh arrays or unrelated renders", () => {
+    const view = render(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    readState.isPending = true;
+    view.rerender(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    readState.isPending = false;
+    useMessagesMock.mockReturnValue({ data: [{ ...MSG_THEM }], isLoading: false });
+    view.rerender(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByPlaceholderText("Type a message..."), { target: { value: "unrelated draft" } });
+    view.rerender(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("attempts a new incoming ID once after the pending attempt settles", () => {
+    const view = render(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    readState.isPending = true;
+    useMessagesMock.mockReturnValue({ data: [MSG_THEM, { ...MSG_THEM, id: "m-new" }], isLoading: false });
+    view.rerender(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    readState.isPending = false;
+    view.rerender(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(2);
+    readState.isPending = true;
+    view.rerender(<Messages />);
+    readState.isPending = false;
+    view.rerender(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores own sent and already-read incoming messages", () => {
+    useMessagesMock.mockReturnValue({ data: [{ ...MSG_ME, status: "sent" }, { ...MSG_THEM, status: "read" }], isLoading: false });
+    const view = render(<Messages />);
+    view.rerender(<Messages />);
+    expect(markReadMutate).not.toHaveBeenCalled();
+  });
+
+  it("clears the committed visit through an empty thread and permits returning to the same unread ID", () => {
+    const view = render(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText("Alice Smith"));
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText("Bob Builder"));
+    expect(markReadMutate).toHaveBeenCalledTimes(2);
+    view.rerender(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(2);
+  });
+
+  it("permits a new attempt for the same actor and ID after a real authorization epoch transition", () => {
+    const client = new QueryClient();
+    transitionQueryIdentity(client, ME.id);
+    const view = render(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    transitionQueryAuthorization(client, ME.id, "profile-hydrated");
+    view.rerender(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(2);
+    readState.isPending = true;
+    view.rerender(<Messages />);
+    readState.isPending = false;
+    view.rerender(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(2);
+    client.clear();
+  });
+
+  it("preserves the visit across mobile Back and reopening the selected thread", () => {
+    render(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByLabelText("Back to conversations"));
+    const bobRow = screen.getAllByText("Bob Builder").find(node => node.closest("button"));
+    expect(bobRow).toBeTruthy();
+    fireEvent.click(bobRow!);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("attempts each populated thread again when switching away and returning", () => {
+    useMessagesMock.mockImplementation((id: string) => ({
+      data: id ? [{ ...MSG_THEM, id: id + "-incoming", conversation_id: id }] : [], isLoading: false,
+    }));
+    const view = render(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText("Alice Smith"));
+    expect(markReadMutate).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByText("Bob Builder"));
+    expect(markReadMutate).toHaveBeenCalledTimes(3);
+    view.rerender(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(3);
+  });
+
+  it("never records or dispatches a render epoch made stale before its committed effect", () => {
+    const client = new QueryClient();
+    transitionQueryIdentity(client, ME.id);
+    function EpochChange({ enabled }: { enabled: boolean }) {
+      useLayoutEffect(() => {
+        if (enabled) transitionQueryAuthorization(client, ME.id, "layout-profile-hydration");
+      }, [enabled]);
+      return null;
+    }
+    function Harness({ change }: { change: boolean }) {
+      return <><Messages /><EpochChange enabled={change} /></>;
+    }
+    readState.isPending = true;
+    const view = render(<Harness change={false} />);
+    expect(markReadMutate).not.toHaveBeenCalled();
+    readState.isPending = false;
+    view.rerender(<Harness change />);
+    expect(markReadMutate).not.toHaveBeenCalled();
+    view.rerender(<Harness change />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    view.rerender(<Harness change />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    client.clear();
+  });
+
+  it("a route remount creates a fresh opportunity for the same unread ID", () => {
+    const view = render(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(1);
+    view.unmount();
+    render(<Messages />);
+    expect(markReadMutate).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("Messages — send + file upload handlers", () => {
   beforeEach(() => {
     useConversationsMock.mockReturnValue({ data: [CONV_1], isLoading: false });
@@ -374,6 +511,25 @@ describe("Messages — send + file upload handlers", () => {
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith(expect.stringMatching(/boom/));
     });
+  });
+
+  it("validates the whole attachment batch before uploading a valid first file", async () => {
+    render(<Messages />);
+    const picker = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const valid = new File(["pdf"], "valid-first.pdf", { type: "application/pdf" });
+    const invalid = new File(["script"], "invalid-second.exe", { type: "application/octet-stream" });
+    Object.defineProperty(picker, "files", { value: [valid, invalid], configurable: true });
+    const reset = vi.spyOn(picker, "value", "set");
+    fireEvent.change(picker);
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
+    expect(toastErrorMock).toHaveBeenCalledWith(expect.stringMatching(/not allowed|unsupported/i));
+    expect(storageUploadMock).not.toHaveBeenCalled();
+    expect(storageRemoveMock).not.toHaveBeenCalled();
+    expect(reset).toHaveBeenCalledWith("");
+    expect(screen.queryByText("valid-first.pdf")).not.toBeInTheDocument();
+    expect(screen.queryByText("invalid-second.exe")).not.toBeInTheDocument();
+    reset.mockRestore();
   });
 
   it("removes already uploaded objects when a later attachment fails", async () => {
