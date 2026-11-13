@@ -66,6 +66,23 @@ jobs:
             exit 1
           fi
 
+      - name: Mask release reason before logging
+        run: |
+          node <<'NODE'
+          try {
+            const event = JSON.parse(require("node:fs").readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
+            const reason = event.inputs?.reason;
+            if (reason === undefined || reason === "") process.exit(0);
+            if (typeof reason !== "string" || /[^\x20-\x7E]/.test(reason) || reason.trim().length < 20 || reason.trim().length > 500) {
+              throw new Error();
+            }
+            const escaped = reason.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+            process.stdout.write("::add-mask::" + escaped + "\n");
+          } catch {
+            process.stderr.write("Invalid release reason input.\n");
+            process.exit(1);
+          }
+          NODE
       - name: Check out the exact release
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
