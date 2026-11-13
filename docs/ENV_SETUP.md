@@ -496,3 +496,14 @@ CI intentionally uses **stub** Supabase URL + key (format-valid placeholders in 
 `GITHUB_REF` is supplied by GitHub Actions and must be `refs/heads/main` for the scoped recovery. `PG_BIN` optionally points the disposable local auction SQL test to PostgreSQL binaries; the test always creates its own local database and does not accept a remote database URL.
 
 The manual auction workflow supplies `AUCTION_CI_RUN_ID`, `AUCTION_ARTIFACT`, `AUCTION_PAGES_PROJECT`, and `AUCTION_PAGES_PROJECT_ID` from the reviewed release and existing project configuration. `AUCTION_STAGING_ANON_KEY` and `AUCTION_STAGING_SERVICE_KEY` are resolved only for the fixed isolated staging project, masked, kept within that run, and excluded from evidence. The production Pages deployment receives no service-role binding.
+
+---
+
+## Codex/Muse control tooling (observe-ci)
+
+| Variable | Purpose | Scope |
+|---|---|---|
+| `CANDIDATE_WORKSPACE` | Test runner-owned local workspace path, automatically set by the runner; not an application/browser variable or credential. | Test runner generated runtime env only; never set manually and never expose through `VITE_*`. |
+| `GH_TOKEN` | Optional read-only GitHub API token for observe-ci; takes precedence over the already documented `GITHUB_TOKEN`. | Protected operator/CI environment only; never source, docs, or browser `VITE_*` bindings. |
+
+`GH_TOKEN` grants no signing/deployment authority. Supply it only through a protected operator/CI environment, never in source, docs, or browser `VITE_*` bindings. Public metadata may be readable without a token within provider rate limits. Do not commit real token values.
