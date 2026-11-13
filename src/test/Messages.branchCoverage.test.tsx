@@ -221,6 +221,59 @@ describe("Messages business branches", () => {
     expect(screen.queryByText("alex-plan.pdf")).not.toBeInTheDocument();
   });
 
+  it("retains an inactive upload and its text when an older send completes", async () => {
+    const second = conversation({
+      id: "conversation-2", participant_b: "second-id",
+      profile_b: { user_id: "second-id", display_name: "Second Agent", avatar_url: null },
+    });
+    const oldSend = deferred<{ id: string }>();
+    const firstUpload = deferred<{ error: null }>();
+    const secondUpload = deferred<{ error: null }>();
+    mocks.useConversations.mockReturnValue({ data: [conversation(), second], isLoading: false });
+    mocks.sendMessage.mutateAsync.mockReturnValueOnce(oldSend.promise);
+    mocks.storageUpload.mockReturnValueOnce(firstUpload.promise).mockReturnValueOnce(secondUpload.promise);
+    renderMessages();
+    const input = await screen.findByPlaceholderText("Type a message...") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "A text being sent" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(mocks.sendMessage.mutateAsync).toHaveBeenCalledWith({
+      conversation_id: "conversation-1", content: "A text being sent", attachmentPaths: undefined,
+    });
+
+    const files = [new File(["one"], "first.pdf", { type: "application/pdf" }),
+      new File(["two"], "second.pdf", { type: "application/pdf" })];
+    Object.defineProperty(fileInput(), "files", { value: files, configurable: true });
+    fireEvent.change(fileInput());
+    expect(mocks.storageUpload).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /Second Agent/i }));
+    fireEvent.change(input, { target: { value: "B draft stays" } });
+
+    await act(async () => { firstUpload.resolve({ error: null }); await firstUpload.promise; });
+    expect(mocks.storageUpload).toHaveBeenCalledTimes(2);
+    await act(async () => { secondUpload.resolve({ error: null }); await secondUpload.promise; });
+    const uploaded = files.map((file, index) => ({
+      path: mocks.storageUpload.mock.calls[index][0] as string, filename: file.name, mime_type: file.type,
+    }));
+    for (const file of uploaded) expect(file.path).toMatch(/^me-id\/conversation-1\/.+\.pdf$/);
+    expect(input.value).toBe("B draft stays");
+    expect(screen.queryByText("first.pdf")).not.toBeInTheDocument();
+    expect(screen.queryByText("second.pdf")).not.toBeInTheDocument();
+
+    await act(async () => { oldSend.resolve({ id: "old-A" }); await oldSend.promise; });
+    fireEvent.click(screen.getByRole("button", { name: /Alex Agent/i }));
+    expect(input.value).toBe("A text being sent");
+    expect(screen.getByText("first.pdf")).toBeInTheDocument();
+    expect(screen.getByText("second.pdf")).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(mocks.sendMessage.mutateAsync).toHaveBeenLastCalledWith({
+      conversation_id: "conversation-1", content: "A text being sent", attachmentPaths: uploaded,
+    });
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: /Second Agent/i }));
+    expect(input.value).toBe("B draft stays");
+    expect(mocks.storageRemove).not.toHaveBeenCalled();
+  });
+
   it("preserves a newer saved draft even when it repeats the text of an in-flight send", async () => {
     const second = conversation({
       id: "conversation-2",
@@ -250,6 +303,86 @@ describe("Messages business branches", () => {
     fireEvent.click(screen.getByRole("button", { name: /Alex Agent/i }));
     expect(input.value).toBe("Message being sent");
   });
+
+  it("keeps retained callbacks from a previous typing channel away from the current timers", async () => {
+    vi.useFakeTimers();
+    const channels = [0, 1].map(() => {
+      let receive!: (message: { payload: { userId: string; typing: boolean } }) => void;
+      let status!: (value: string) => void;
+      const channel = {
+        on: vi.fn((_event: string, _filter: unknown, callback: typeof receive) => { receive = callback; return channel; }),
+        subscribe: vi.fn((callback: typeof status) => { status = callback; callback("SUBSCRIBED"); return channel; }),
+        send: vi.fn().mockResolvedValue("ok"),
+      };
+      return { channel, receive: (typing: boolean) => receive({ payload: { userId: "other-id", typing } }), status: (value: string) => status(value) };
+    });
+    mocks.createChannel.mockReturnValueOnce(channels[0].channel).mockReturnValueOnce(channels[1].channel);
+    mocks.useConversations.mockReturnValue({ data: [conversation(), conversation({
+      id: "conversation-2", participant_b: "second-id",
+      profile_b: { user_id: "second-id", display_name: "Second Agent", avatar_url: null },
+    })], isLoading: false });
+    const view = renderMessages();
+    try {
+      await act(async () => { await Promise.resolve(); });
+      expect(channels[0].channel.subscribe).toHaveBeenCalled();
+      fireEvent.change(screen.getByPlaceholderText("Type a message..."), { target: { value: "A draft" } });
+      fireEvent.click(screen.getByRole("button", { name: /Second Agent/i }));
+      await act(async () => { await Promise.resolve(); });
+      expect(channels[1].channel.subscribe).toHaveBeenCalled();
+      expect(channels[0].channel.send.mock.calls.map(([message]) => message.payload.typing)).toEqual([true, false]);
+      expect(mocks.removeChannel).toHaveBeenCalledWith(channels[0].channel);
+      fireEvent.change(screen.getByPlaceholderText("Type a message..."), { target: { value: "B draft" } });
+      act(() => channels[1].receive(true));
+      expect(screen.getByText("Second Agent is typing...")).toBeInTheDocument();
+      act(() => { channels[0].receive(false); channels[0].status("CHANNEL_ERROR"); });
+      expect(screen.getByText("Second Agent is typing...")).toBeInTheDocument();
+      expect(mocks.removeChannel).not.toHaveBeenCalledWith(channels[1].channel);
+      await act(async () => { await vi.advanceTimersByTimeAsync(750); });
+      expect(channels[1].channel.send.mock.calls.filter(([message]) => message.payload.typing)).toHaveLength(2);
+      await act(async () => { await vi.advanceTimersByTimeAsync(3_249); });
+      expect(screen.getByText("Second Agent is typing...")).toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(screen.queryByText(/is typing/i)).not.toBeInTheDocument();
+      const beforeRetyping = channels[1].channel.send.mock.calls.length;
+      fireEvent.change(screen.getByPlaceholderText("Type a message..."), { target: { value: "B again" } });
+      expect(channels[1].channel.send).toHaveBeenCalledTimes(beforeRetyping + 1);
+      expect(channels[1].channel.send.mock.calls.at(-1)?.[0].payload.typing).toBe(true);
+      view.unmount();
+      expect(channels[1].channel.send).toHaveBeenCalledTimes(beforeRetyping + 2);
+      expect(channels[1].channel.send.mock.calls.at(-1)?.[0].payload.typing).toBe(false);
+      expect(mocks.removeChannel).toHaveBeenCalledWith(channels[1].channel);
+      const sentAtUnmount = channels[1].channel.send.mock.calls.length;
+      act(() => { channels[0].receive(true); channels[1].receive(true); channels[1].status("SUBSCRIBED"); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+      expect(channels[1].channel.send).toHaveBeenCalledTimes(sentAtUnmount);
+      expect(channels[0].channel.send.mock.calls.map(([message]) => message.payload.typing)).toEqual([true, false]);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("sends typing false before the real page mutation and retains the pending idle false", async () => {
+    vi.useFakeTimers();
+    const view = renderMessages();
+    try {
+      await act(async () => { await Promise.resolve(); });
+      expect(mocks.channel.subscribe).toHaveBeenCalled();
+      const input = screen.getByPlaceholderText("Type a message...");
+      fireEvent.change(input, { target: { value: "Send with typing" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(mocks.channel.send.mock.calls.map(([message]) => message.payload.typing)).toEqual([true, false]);
+      expect(mocks.channel.send.mock.invocationCallOrder[1]).toBeLessThan(mocks.sendMessage.mutateAsync.mock.invocationCallOrder[0]);
+      await act(async () => { await vi.advanceTimersByTimeAsync(2_999); });
+      expect(mocks.channel.send.mock.calls.map(([message]) => message.payload.typing)).toEqual([true, false]);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(mocks.channel.send.mock.calls.map(([message]) => message.payload.typing)).toEqual([true, false, false]);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
 
   it("broadcasts typing state, identifies another participant, and clears stale typing timers", async () => {
     renderMessages();

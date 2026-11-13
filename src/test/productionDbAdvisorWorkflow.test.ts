@@ -5,7 +5,70 @@ import yaml from "js-yaml";
 const productionWorkflow = readFileSync(".github/workflows/deploy-supabase-production-db.yml", "utf8");
 const stagingWorkflow = readFileSync(".github/workflows/reusable-supabase-staging.yml", "utf8");
 
+const productionHistorySteps = [
+  "Capture production migration history",
+  "Revalidate current main and mutation lease before database apply",
+  "Apply exact staged production migrations",
+  "Require exact production migration parity",
+  "Create production database terminal evidence",
+];
+const statementsHashExpression =
+  "'statements_sha256', encode(pg_catalog.sha256(convert_to(COALESCE(to_json(statements)::text, '[]'), 'UTF8')), 'hex')";
+
+// SQL whitespace is insignificant outside quoted literals; literal bytes are part
+// of the history contract and must never be normalized (including empty arrays).
+function compactSql(source: string) {
+  return source.replace(/'(?:''|[^'])*'|\s+/g, (token) =>
+    token.startsWith("'") ? token : "",
+  );
+}
+
+function requireStatementsHash(run: string) {
+  const compact = compactSql(run);
+  expect(compact.match(/'statements_sha256',/g)).toHaveLength(1);
+  expect(compact.split(compactSql(statementsHashExpression))).toHaveLength(2);
+  expect(run).not.toMatch(/\bpublic\s*\.\s*digest\s*\(/i);
+}
+
+const productionSteps = (yaml.load(productionWorkflow) as {
+  jobs: { deploy: { steps: Array<{ name?: string; run?: string }> } };
+}).jobs.deploy.steps;
+
 describe("production DB advisor workflow", () => {
+  it.each(productionHistorySteps)("uses the built-in history hash in %s", (name) => {
+    const matches = productionSteps.filter((step) => step.name === name);
+    expect(matches, name).toHaveLength(1);
+    expect(matches[0].run, name).toBeTypeOf("string");
+    requireStatementsHash(matches[0].run!);
+  });
+
+  it.each(productionHistorySteps)("detects missing, reverted and altered history hashes in %s", (name) => {
+    const run = productionSteps.find((step) => step.name === name)?.run;
+    expect(run, name).toBeTypeOf("string");
+    // Mutate the actual parsed step, so every site must be protected individually.
+    const mutations = [
+      run!.replace(/'statements_sha256'/g, "'missing_hash'"),
+      run!.replace(/pg_catalog\.sha256\(/g, "public.digest("),
+      run!.replace(/'hex'/g, "'base64'"),
+      run!.replace(/'UTF8'/g, "'LATIN1'"),
+      run!.replace(/'\[\]'/g, "'[ ]'"),
+    ];
+    for (const mutation of mutations) {
+      expect(mutation).not.toBe(run);
+      expect(() => requireStatementsHash(mutation)).toThrow();
+    }
+  });
+
+  it("accepts SQL whitespace without normalizing string literals", () => {
+    requireStatementsHash(statementsHashExpression.replace(/, /g, ",\n\t"));
+    expect(() => requireStatementsHash(statementsHashExpression.replace("'[]'", "'[ ]'"))).toThrow();
+    expect(() => requireStatementsHash(`${statementsHashExpression}, ${statementsHashExpression}`)).toThrow();
+  });
+
+  it("does not override production connection search paths", () => {
+    expect(productionWorkflow).not.toMatch(/\bPGOPTIONS\b|\bsearch_path\b/i);
+  });
+
   it("promotes exact staged migrations and applies the same hard production gates", () => {
     const parsed = yaml.load(productionWorkflow) as {
       on: {
@@ -73,7 +136,6 @@ describe("production DB advisor workflow", () => {
     expect(productionWorkflow).toContain("production_repair_markers");
     expect(productionWorkflow).toContain("production_execution_drift");
     expect(productionWorkflow).toContain("'statements_sha256', encode(");
-    expect(productionWorkflow).toContain("public.digest(");
     expect(productionWorkflow).toContain(
       "expected.statements_sha256 !== migration.statements_sha256",
     );
