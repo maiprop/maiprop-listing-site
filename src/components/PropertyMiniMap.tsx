@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { ComponentType } from "react";
 import type { MapRef } from "react-map-gl";
+import type { LucideIcon } from "lucide-react";
 import {
   MapPin,
   ExternalLink,
@@ -55,7 +54,7 @@ const POI_CATEGORIES = new Set<POI["category"]>([
 const CATEGORY_META: Record<
   POI["category"],
   {
-    icon: React.ComponentType<any>;
+    icon: LucideIcon;
     label: string;
     colour: string;
     markerColour: string;
@@ -315,11 +314,7 @@ export default function PropertyMiniMap({
   );
   const [shouldLoadMap, setShouldLoadMap] = useState(false);
   const activePoiRequest = useRef(0);
-  const [MapComponents, setMapComponents] = useState<{
-    Map: ComponentType<any>;
-    Marker: ComponentType<any>;
-    NavigationControl: ComponentType<any>;
-  } | null>(null);
+  const [MapComponents, setMapComponents] = useState<Pick<typeof import("react-map-gl"), "Map" | "Marker" | "NavigationControl"> | null>(null);
   const {
     quota: poiQuota,
     quotaLoading: poiQuotaLoading,

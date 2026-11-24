@@ -1,9 +1,9 @@
 {
   "generated_at": "2026-07-29T13:27:47.977Z",
-  "total": 93,
+  "total": 88,
   "by_pattern": {
-    "no-explicit-any-disable": 33,
-    "explicit-any": 60,
+    "no-explicit-any-disable": 32,
+    "explicit-any": 56,
     "ts-ignore": 0
   },
   "files": [
@@ -74,20 +74,6 @@
         {
           "name": "explicit-any",
           "count": 3
-        }
-      ]
-    },
-    {
-      "file": "src/components/PropertyMiniMap.tsx",
-      "total": 5,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 1
-        },
-        {
-          "name": "explicit-any",
-          "count": 4
         }
       ]
     },
