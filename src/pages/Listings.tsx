@@ -54,50 +54,9 @@ import {
 import { mapListingFromCard } from "@/lib/listingsPerformance";
 import { APP_ORIGIN } from "@/lib/config";
 import type { MapPolygon, MapViewportBounds } from "@/components/MapView";
+import { getListingsResultLabel } from "@/pages/listings/listingsResultLabel";
 
 const LISTINGS_NUMERIC_FILTER_DEBOUNCE_MS = 300;
-
-const getListingsResultLabel = ({ // skipcq: JS-R1005 - Result labels intentionally branch by map, area, viewport, and pagination states.
-  viewMode,
-  polygonFilterIds,
-  viewportIds,
-  filtered,
-  mapListings,
-  hasNextPage,
-  isGreek,
-}: {
-  viewMode: "grid" | "split" | "map";
-  polygonFilterIds: Set<string> | null;
-  viewportIds: Set<string> | null;
-  filtered: ListingCardWithRaw[];
-  mapListings: Array<{ id: string }>;
-  hasNextPage: boolean;
-  isGreek: boolean;
-}) => {
-  if (viewMode === "split" && polygonFilterIds !== null) {
-    const count = filtered.filter((property) => polygonFilterIds.has(property.id)).length;
-    const displayCount = `${count}${hasNextPage ? "+" : ""}`;
-    return isGreek ? `${displayCount} στην περιοχή` : `${displayCount} in area`;
-  }
-  if (viewMode === "map" && polygonFilterIds !== null) {
-    const count = filtered.filter((property) => polygonFilterIds.has(property.id)).length;
-    const displayCount = `${count}${hasNextPage ? "+" : ""}`;
-    return isGreek ? `${displayCount} στην περιοχή` : `${displayCount} in area`;
-  }
-  if (viewMode === "split" && viewportIds !== null) {
-    const count = filtered.filter((property) => viewportIds.has(property.id)).length;
-    const displayCount = `${count}${hasNextPage ? "+" : ""}`;
-    return isGreek ? `${displayCount} στον χάρτη` : `${displayCount} in view`;
-  }
-  if (viewMode === "map") {
-    const count = hasNextPage ? `${mapListings.length}+` : String(mapListings.length);
-    return isGreek ? `${count} αποτελέσματα χάρτη` : `${count} map result${mapListings.length !== 1 ? "s" : ""}`;
-  }
-  if (hasNextPage) {
-    return isGreek ? `${filtered.length} φορτωμένα ακίνητα` : `${filtered.length} loaded propert${filtered.length === 1 ? "y" : "ies"}`;
-  }
-  return isGreek ? `${filtered.length} ακίνητα` : `${filtered.length} properties`;
-};
 
 const ListingsResultSummary = (props: Parameters<typeof getListingsResultLabel>[0]) => (
   <span className="font-display font-semibold" aria-live="polite" aria-atomic="true">
