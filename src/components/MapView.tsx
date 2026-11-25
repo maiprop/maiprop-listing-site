@@ -4,6 +4,7 @@ import {
   X, Flame, CheckCircle2, Loader2,
 } from "lucide-react";
 import { MAPBOX_TOKEN } from "@/lib/config";
+import type { MapLayerMouseEvent } from "react-map-gl";
 import {
   type MapListing,
   pointInPolygon,
@@ -330,8 +331,7 @@ export function MapView({
   }, [onPolygonChange, onPolygonFilter]);
 
   // ── Click handler ────────────────────────────────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const onClick = useCallback((event: any) => { // skipcq: JS-R1005 - Map click handler coordinates drawing, clusters, and popup selection.
+  const onClick = useCallback((event: MapLayerMouseEvent) => { // skipcq: JS-R1005 - Map click handler coordinates drawing, clusters, and popup selection.
     const { drawMode, polygonClosed, drawnPoints } = stateRef.current;
 
     if (drawMode && !polygonClosed) {
@@ -382,8 +382,7 @@ export function MapView({
     setPopupInfo(null);
   }, [closePolygon, listingById]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const onMouseMove = useCallback((e: any) => {
+  const onMouseMove = useCallback((e: MapLayerMouseEvent) => {
     const { drawMode, polygonClosed } = stateRef.current;
     if (drawMode && !polygonClosed)
       setHoverPoint([e.lngLat.lng, e.lngLat.lat]);
