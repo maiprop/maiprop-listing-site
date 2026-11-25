@@ -616,7 +616,7 @@ set -euo pipefail
 [ "$1" = "--signal=TERM" ]; shift
 [ "$1" = "--kill-after=1s" ]; shift
 [ "$1" = "6s" ]; shift
-exec /usr/bin/timeout --signal=TERM --kill-after=0.1s 0.1s "$@"
+exec /usr/bin/timeout --signal=TERM --kill-after=0.1s 1s "$@"
 `);
     writeFileSync(phaseScript, `#!/usr/bin/env bash
 set -euo pipefail
