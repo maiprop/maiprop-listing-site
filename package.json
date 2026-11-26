@@ -218,7 +218,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
-    "i18next": "^25.10.5",
+    "i18next": "^27.2.7",
     "i18next-browser-languagedetector": "^8.2.1",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
